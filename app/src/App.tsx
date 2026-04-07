@@ -21,7 +21,9 @@ import "./App.css";
 import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
 import { ProjectHome } from "./screens/ProjectHome";
+import { ProfileBuilder } from "./screens/ProfileBuilder";
 import type { ProjectInfo, ChapterInfo } from "./types/project";
+import type { ProfileType } from "./types/profile";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -35,6 +37,11 @@ function App() {
 
   // Which project is currently open. null = show home screen.
   const [currentProject, setCurrentProject] = useState<ProjectInfo | null>(null);
+
+  // Which top-level view is active: the writing editor or the profile builder.
+  // profileType tracks which tab was clicked so the ProfileBuilder opens on the right type.
+  const [currentView, setCurrentView]   = useState<"editor" | "profiles">("editor");
+  const [profileType, setProfileType]   = useState<ProfileType>("character");
 
   // The list of chapter files found in the project's manuscript/ folder.
   const [chapters, setChapters] = useState<ChapterInfo[]>([]);
@@ -209,6 +216,17 @@ function App() {
     return <ProjectHome onProjectOpen={handleProjectOpen} />;
   }
 
+  // Profile builder view: replaces the entire editor layout
+  if (currentView === "profiles") {
+    return (
+      <ProfileBuilder
+        project={currentProject}
+        initialType={profileType}
+        onBack={() => setCurrentView("editor")}
+      />
+    );
+  }
+
   // ── Project is open: show the three-panel writing editor ──────────────────
   return (
     <div className="flex h-screen overflow-hidden bg-[#070724] text-[#f0f0f5]">
@@ -254,9 +272,14 @@ function App() {
           </NavSection>
 
           <NavSection label="Profiles">
-            <NavItem label="Characters" hint="Character profiles and trait blocks" />
-            <NavItem label="Locations"  hint="Location descriptions and atmosphere notes" />
-            <NavItem label="Lore"       hint="World-building rules and history entries" />
+            <NavItem label="Characters"    hint="Character profiles and trait blocks"
+              onClick={() => { setProfileType("character");    setCurrentView("profiles"); }} />
+            <NavItem label="Relationships" hint="Relationship profiles and dynamic notes"
+              onClick={() => { setProfileType("relationship"); setCurrentView("profiles"); }} />
+            <NavItem label="Locations"     hint="Location descriptions and atmosphere notes"
+              onClick={() => { setProfileType("location");     setCurrentView("profiles"); }} />
+            <NavItem label="Lore"          hint="World-building rules and history entries"
+              onClick={() => { setProfileType("lore");         setCurrentView("profiles"); }} />
           </NavSection>
         </nav>
 
