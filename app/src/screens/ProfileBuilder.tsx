@@ -1677,9 +1677,11 @@ function ToolKit({
                     </label>
 
                     {/* Individual items -- indented under the section header.
-                        ml-3 + border-l creates a visible "child of section" indicator.
-                        pl-3 gives breathing room from the border to the checkbox. */}
-                    <div className="ml-4 border-l border-teal-800/50">
+                        ml-10 (40px) pushes the entire block well past where the
+                        section header checkbox+text begins (~28px), giving a clear
+                        visual indent. The border-l-2 draws a vertical teal guide line
+                        connecting all items back to the section header. */}
+                    <div className="ml-10 border-l-2 border-teal-800/60">
                       {section.items.map(item => (
                         <label
                           key={item.id}
