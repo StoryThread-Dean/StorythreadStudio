@@ -22,8 +22,10 @@ import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
 import { ProjectHome } from "./screens/ProjectHome";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
+import { Settings } from "./screens/Settings";
 import type { ProjectInfo, ChapterInfo } from "./types/project";
 import type { ProfileType } from "./types/profile";
+import type { AssistantResponse } from "./types/ai";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -42,6 +44,18 @@ function App() {
   // profileType tracks which tab was clicked so the ProfileBuilder opens on the right type.
   const [currentView, setCurrentView]   = useState<"editor" | "profiles">("editor");
   const [profileType, setProfileType]   = useState<ProfileType>("character");
+
+  // Settings modal visibility
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Text currently selected in the editor -- drives the AI assistant panel
+  const [selectedText, setSelectedText] = useState("");
+
+  // AI panel state
+  const [aiLoading, setAiLoading]       = useState(false);
+  const [aiResult, setAiResult]         = useState<AssistantResponse | null>(null);
+  const [aiError, setAiError]           = useState<string | null>(null);
+  const [aiTab, setAiTab]               = useState<"readability" | "structure" | "context">("readability");
 
   // The list of chapter files found in the project's manuscript/ folder.
   const [chapters, setChapters] = useState<ChapterInfo[]>([]);
@@ -195,6 +209,35 @@ function App() {
   }, []);
 
 
+  // --- Run a writing assistant on the selected text ---
+  const runAssistant = useCallback(async (assistantId: string) => {
+    if (!selectedText.trim()) return;
+    setAiLoading(true);
+    setAiResult(null);
+    setAiError(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/ai/run-assistant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assistant_id: assistantId, selected_text: selectedText }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail ?? "Assistant failed.");
+      }
+
+      const result: AssistantResponse = await response.json();
+      setAiResult(result);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setAiLoading(false);
+    }
+  }, [selectedText]);
+
+
   // --- Keyboard shortcut: Ctrl+S to save ---
   // useEffect runs this setup once after the first render, and cleans up on unmount.
   useEffect(() => {
@@ -292,8 +335,9 @@ function App() {
 
         <div className="border-t border-[#1e1e4a] px-4 py-3">
           <button
+            onClick={() => setShowSettings(true)}
             className="w-full rounded px-2 py-1.5 text-left text-sm text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-[#f0f0f5]"
-            title="Open project settings"
+            title="Open settings (API key, model selection)"
           >
             ⚙ Settings
           </button>
@@ -371,6 +415,7 @@ function App() {
                 setEditorView(view);
                 editorViewRef.current = view;
               }}
+              onSelectionChange={setSelectedText}
             />
           ) : (
             // No chapter open yet (project has no chapters, or still loading)
@@ -387,44 +432,165 @@ function App() {
       {/* ── RIGHT PANEL: AI Assistant ──────────────────────────────────── */}
       <aside className="flex w-80 shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
 
-        <div className="border-b border-[#1e1e4a] px-4 py-5">
+        <div className="border-b border-[#1e1e4a] px-4 py-3">
           <h2 className="text-sm font-semibold text-[#f0f0f5]">AI Assistant</h2>
           <p className="mt-1 text-xs text-[#8888aa]">
-            Select text in the editor, then choose an assistant. Results
-            appear below -- nothing is applied automatically.
+            Select text in the editor, then choose an assistant.
+            Results appear below -- nothing is applied automatically.
           </p>
         </div>
 
-        <div className="border-b border-[#1e1e4a] px-4 py-3">
-          <div className="flex gap-1.5">
-            <AssistantTab label="Readability" active />
-            <AssistantTab label="Structure" />
-            <AssistantTab label="Context" />
+        {/* Category tabs */}
+        <div className="border-b border-[#1e1e4a] px-4 py-2">
+          <div className="flex gap-1">
+            {(["readability", "structure", "context"] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setAiTab(tab)}
+                className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                  aiTab === tab ? "bg-indigo-600 text-white" : "text-[#8888aa] hover:text-[#f0f0f5]"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
-            Readability Assistants
-          </p>
-          <AssistantButton label="Grammar & Punctuation"
-            hint="Reviews your selected text for grammar and punctuation errors." />
-          <AssistantButton label="Clarity & Consistency"
-            hint="Flags unclear phrasing and inconsistent word choices." />
-          <AssistantButton label="Eliminate Redundancy"
-            hint="Finds repeated words or ideas that can be cut or tightened." />
-          <AssistantButton label="Descriptive Enhancement"
-            hint="Suggests richer sensory or atmospheric details for your selection." />
-
-          <div className="mt-5 rounded border border-[#1e1e4a] bg-[#12122e] p-3">
-            <p className="mb-1 text-xs font-semibold text-[#8888aa]">Output</p>
-            <p className="text-xs leading-relaxed text-[#8888aa]">
-              AI results appear here after you run an assistant. Copy what you
-              like -- nothing changes in your document automatically.
+        {/* Selected text indicator */}
+        <div className="shrink-0 border-b border-[#1e1e4a] px-4 py-2">
+          {selectedText ? (
+            <p className="truncate text-xs text-emerald-400"
+               title={selectedText}>
+              Selected: "{selectedText.slice(0, 60)}{selectedText.length > 60 ? "..." : ""}"
             </p>
-          </div>
+          ) : (
+            <p className="text-xs text-[#3f3f7a]">
+              No text selected -- highlight a passage to enable assistants.
+            </p>
+          )}
+        </div>
+
+        {/* Assistant buttons */}
+        <div className="shrink-0 px-4 py-3">
+          {aiTab === "readability" && (
+            <>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                Readability
+              </p>
+              <AssistantButton label="Grammar & Punctuation"
+                hint="Reviews selected text for grammar, punctuation, and spelling errors."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("grammar_punctuation")} />
+              <AssistantButton label="Clarity & Consistency"
+                hint="Flags unclear phrasing, ambiguous references, and inconsistent word choices."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("clarity_consistency")} />
+              <AssistantButton label="Eliminate Redundancy"
+                hint="Finds repeated words or ideas that can be cut or tightened."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("eliminate_redundancy")} />
+              <AssistantButton label="Descriptive Enhancement"
+                hint="Suggests richer sensory or atmospheric details for the selection."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("descriptive_enhancement")} />
+            </>
+          )}
+          {aiTab === "structure" && (
+            <p className="text-xs text-[#3f3f7a]">
+              Structure assistants are coming in Phase 4.
+            </p>
+          )}
+          {aiTab === "context" && (
+            <p className="text-xs text-[#3f3f7a]">
+              Context assistants are coming in Phase 4.
+            </p>
+          )}
+        </div>
+
+        {/* Output area */}
+        <div className="flex-1 overflow-y-auto border-t border-[#1e1e4a] px-4 py-4">
+          {aiLoading && (
+            <div className="flex items-center gap-2 text-xs text-[#8888aa]">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
+              Running assistant...
+            </div>
+          )}
+
+          {aiError && (
+            <div className="rounded border border-red-800 bg-red-950/40 p-3">
+              <p className="text-xs text-red-300">{aiError}</p>
+              {aiError.includes("API key") && (
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="mt-2 text-xs text-indigo-400 underline"
+                >
+                  Open Settings
+                </button>
+              )}
+            </div>
+          )}
+
+          {aiResult && !aiLoading && (
+            <div>
+              {/* Assistant name + model used */}
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold text-[#f0f0f5]">
+                  {aiResult.assistant_name}
+                </p>
+                <p className="text-xs text-[#3f3f7a]" title={`Model: ${aiResult.model_used}`}>
+                  {aiResult.model_used.split("/").pop()}
+                </p>
+              </div>
+
+              {/* Summary */}
+              <div className="mb-3 rounded border border-[#1e1e4a] bg-[#12122e] p-3">
+                <p className="mb-1 text-xs font-medium text-[#8888aa]">Summary</p>
+                <p className="text-xs leading-relaxed text-[#f0f0f5]">{aiResult.summary}</p>
+              </div>
+
+              {/* Suggestions */}
+              {aiResult.suggestions.map((s, i) => (
+                <div key={i} className="mb-2 rounded border border-[#1e1e4a] bg-[#070724] p-3">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <p className="text-xs font-medium text-indigo-300">{s.label}</p>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(s.content)}
+                      className="text-xs text-[#3f3f7a] transition-colors hover:text-[#8888aa]"
+                      title="Copy this suggestion to clipboard"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#f0f0f5]">
+                    {s.content}
+                  </p>
+                </div>
+              ))}
+
+              {/* Notes */}
+              {aiResult.notes.length > 0 && (
+                <div className="mt-2 rounded border border-[#1e1e4a] p-3">
+                  <p className="mb-1 text-xs font-medium text-[#8888aa]">Notes</p>
+                  {aiResult.notes.map((n, i) => (
+                    <p key={i} className="text-xs leading-relaxed text-[#8888aa]">• {n}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!aiResult && !aiLoading && !aiError && (
+            <p className="text-xs leading-relaxed text-[#3f3f7a]">
+              Results appear here after you run an assistant. Copy what you
+              like -- nothing in your document changes automatically.
+            </p>
+          )}
         </div>
       </aside>
+
+      {/* Settings modal -- rendered as an overlay on top of everything */}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
 
     </div>
   );
@@ -468,23 +634,24 @@ function NavItem({
   );
 }
 
-function AssistantTab({ label, active = false }: { label: string; active?: boolean }) {
-  return (
-    <button
-      className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-        active ? "bg-indigo-600 text-white" : "text-[#8888aa] hover:text-[#f0f0f5]"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
 
-function AssistantButton({ label, hint }: { label: string; hint: string }) {
+function AssistantButton({
+  label,
+  hint,
+  onClick,
+  disabled = false,
+}: {
+  label: string;
+  hint: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
-      className="mb-2 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-left text-xs text-[#f0f0f5] transition-colors hover:border-indigo-500 hover:bg-[#1a1a3a]"
-      title={hint}
+      onClick={onClick}
+      disabled={disabled}
+      className="mb-2 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-left text-xs text-[#f0f0f5] transition-colors hover:border-indigo-500 hover:bg-[#1a1a3a] disabled:cursor-not-allowed disabled:opacity-40"
+      title={disabled ? "Select text in the editor first" : hint}
     >
       {label}
     </button>

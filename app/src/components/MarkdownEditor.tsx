@@ -104,11 +104,12 @@ interface MarkdownEditorProps {
   onChange: () => void;   // Fires on any change -- used to flip isDirty in App
   font: FontValue;        // Current writing font (CSS font-family string)
   onEditorReady: (view: EditorView) => void;  // Called once on mount with the EditorView
+  onSelectionChange?: (selectedText: string) => void;  // Fires when selection changes
 }
 
 
 // ── MarkdownEditor Component ──────────────────────────────────────────────────
-export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady }: MarkdownEditorProps) {
+export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, onSelectionChange }: MarkdownEditorProps) {
   const editorViewRef = useRef<EditorView | null>(null);
 
   // When the font prop changes, hot-swap only the font compartment.
@@ -145,6 +146,15 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady }: 
           onCreateEditor={(view: EditorView) => {
             editorViewRef.current = view;
             onEditorReady(view);
+          }}
+          onUpdate={(viewUpdate) => {
+            // Fire onSelectionChange whenever the selection moves.
+            // This lets the AI panel know what text is highlighted.
+            if (onSelectionChange && viewUpdate.selectionSet) {
+              const sel  = viewUpdate.state.selection.main;
+              const text = viewUpdate.state.sliceDoc(sel.from, sel.to);
+              onSelectionChange(text);
+            }
           }}
           basicSetup={{
             lineNumbers:               false,
