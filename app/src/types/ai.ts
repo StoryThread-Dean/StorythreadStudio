@@ -111,4 +111,9 @@ export interface ProfileChatPayload {
   profile_content: string;
   messages:        ProfileChatMessage[];
   model_id?:       string;
+  // Guide mode fields
+  guide_mode?:   boolean;
+  all_sections?: string[];
+  content_mode?: string;
+  is_blank?:     boolean;
 }

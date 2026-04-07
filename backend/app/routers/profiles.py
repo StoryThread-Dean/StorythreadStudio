@@ -25,6 +25,7 @@
 import os
 import re
 import uuid
+import json as _json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -214,25 +215,90 @@ def _safe_path(profile_dir: str, filename: str) -> str:
 
 # ── Helpers: Parsing ─────────────────────────────────────────────────────────
 
+def _clean_trait_yaml(content: str) -> str:
+    """
+    Pre-process raw trait block YAML to fix the JSON code-block wrapper format.
+
+    When the generate-usage-example AI endpoint returns text, some models wrap
+    the output in a Markdown code block:
+
+        ai_usage_example: ```json
+        {"ai_usage_example": "When generating scenes..."}
+        ```
+
+    This is valid Markdown but INVALID YAML -- yaml.safe_load() chokes on the
+    backticks and fails silently, making ALL trait blocks in the section vanish.
+
+    This function detects that pattern, extracts the actual string value from
+    the JSON, and replaces the whole block with a properly quoted YAML value.
+
+    Why json.dumps() for the replacement?
+    json.dumps() produces a double-quoted string like "When generating..."
+    which is also valid YAML for a string scalar -- no escaping issues.
+    """
+    def _extract_and_replace(match: re.Match) -> str:
+        indent     = match.group(1)   # Leading spaces (e.g. "  ")
+        field_name = match.group(2)   # Field key (e.g. "ai_usage_example")
+        json_body  = match.group(3).strip()
+
+        try:
+            parsed = _json.loads(json_body)
+        except (_json.JSONDecodeError, ValueError):
+            parsed = None
+
+        value = ""
+        if isinstance(parsed, dict):
+            # Try the field name itself first, then common alternatives
+            for key in (field_name, "ai_usage_example", "text", "content"):
+                if key in parsed and isinstance(parsed[key], str):
+                    value = parsed[key]
+                    break
+            if not value:
+                # Take the first string value we find in the dict
+                for v in parsed.values():
+                    if isinstance(v, str):
+                        value = v
+                        break
+        elif isinstance(parsed, str):
+            value = parsed
+
+        # Collapse internal newlines -- multiline values break inline YAML
+        value = " ".join(value.split())
+
+        # json.dumps produces a properly escaped double-quoted YAML string
+        return f"{indent}{field_name}: {_json.dumps(value)}"
+
+    # Pattern: `  field_name: ```[lang]\n{...}\n  ``` `
+    # The JSON body is captured non-greedily between the opening and closing backtick fences.
+    pattern = r'^([ \t]*)(\w+):\s*```[\w]*\s*\n([\s\S]*?)\n[ \t]*```'
+    return re.sub(pattern, _extract_and_replace, content, flags=re.MULTILINE)
+
+
 def _parse_trait_blocks(content: str) -> list[TraitBlock]:
     """
     Parse YAML-formatted trait block entries from a section's text content.
 
-    The format (from the spec) looks like:
+    Expected format (from the spec):
         - trait: observant, punctual, eloquent
           description: She is always on time...
           influence: core
           ai_usage_example: AI should reflect this through deliberate choices...
           notes: optional note
 
-    This IS valid YAML -- a list of dicts -- so we use yaml.safe_load() to parse it.
-    Each dict is converted to a TraitBlock. Unknown fields are ignored.
+    This is valid YAML (a list of dicts), parsed with yaml.safe_load().
+    Before parsing, _clean_trait_yaml() strips any JSON code block wrappers
+    that some AI responses embed in ai_usage_example fields -- those break
+    the YAML parser and would cause all traits in the section to vanish.
 
     Returns an empty list if content is empty or doesn't parse as a trait list.
     """
     content = content.strip()
     if not content:
         return []
+
+    # Strip any JSON code block wrappers BEFORE handing to YAML
+    content = _clean_trait_yaml(content)
+
     try:
         parsed = yaml.safe_load(content)
         if not isinstance(parsed, list):
@@ -242,7 +308,7 @@ def _parse_trait_blocks(content: str) -> list[TraitBlock]:
             if not isinstance(item, dict) or "trait" not in item:
                 continue
             blocks.append(TraitBlock(
-                id=str(uuid.uuid4()),   # Fresh UUID for use as React key
+                id=str(uuid.uuid4()),
                 trait=str(item.get("trait", "")),
                 description=str(item.get("description", "")),
                 influence=str(item.get("influence", "minor")),
@@ -392,12 +458,20 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
         if cfg.has_trait_blocks:
             if section.trait_blocks:
                 for block in section.trait_blocks:
-                    # Write as YAML list entry -- indented continuation lines
+                    # Write as YAML list entry.
+                    #
+                    # ai_usage_example uses json.dumps() to produce a properly
+                    # double-quoted YAML string. This prevents the code-block
+                    # wrapper problem (```json ... ```) and handles any special
+                    # characters (quotes, backslashes, newlines) safely.
+                    # json-encoded strings are valid YAML string scalars.
                     lines += [f"- trait: {block.trait}"]
                     lines += [f"  description: {block.description}"]
                     lines += [f"  influence: {block.influence}"]
                     if block.ai_usage_example:
-                        lines += [f"  ai_usage_example: {block.ai_usage_example}"]
+                        # Collapse newlines -- inline YAML values must be single-line
+                        safe_example = " ".join(block.ai_usage_example.split())
+                        lines += [f"  ai_usage_example: {_json.dumps(safe_example)}"]
                     if block.notes:
                         lines += [f"  notes: {block.notes}"]
                     lines += [""]

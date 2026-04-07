@@ -107,16 +107,26 @@ class ProfileChatMessage(BaseModel):
 
 class ProfileChatRequest(BaseModel):
     """
-    One turn of the Profile Builder chat.
-    The frontend sends the full message history each turn so the backend
-    is stateless -- no server-side memory is required.
-    Session history lives only in the frontend's React state.
+    One turn of the Profile Builder chat (regular or guide mode).
+
+    Guide mode activates a structured character-building interview where
+    the AI acts as a creative writing coach, asking 1-4 focused questions
+    per section to help the writer develop the profile with precision.
+
+    The backend is fully stateless -- the frontend sends the complete
+    message history on every turn. Session memory lives only in React state.
     """
     profile_name:    str
     profile_type:    str
-    profile_content: str              # The profile's current content for context
-    messages:        list[ProfileChatMessage]  # Full conversation so far
-    model_id: str | None = None
+    profile_content: str
+    messages:        list[ProfileChatMessage]
+    model_id:        str | None = None
+
+    # Guide mode fields (Phase 4)
+    guide_mode:   bool      = False         # True = structured coaching session
+    all_sections: list[str] = []            # Section keys in template order
+    content_mode: str       = "general"     # "general" | "mature" | "explicit"
+    is_blank:     bool      = False         # True if profile has no content yet
 
 
 class ProfileChatResponse(BaseModel):
@@ -489,6 +499,120 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
     return GenerateFullSummaryResponse(full_summary=sanitize(text.strip()))
 
 
+def _content_mode_instruction(content_mode: str) -> str:
+    """
+    Returns the content-mode preamble to include in the profile chat system prompt.
+
+    General  = no special instruction needed.
+    Mature   = professional handling of adult themes, ask thorough follow-ups.
+    Explicit = full professional handling, no refusals, explicit content is
+               intentional and serves the story -- ask questions to flesh it out.
+    """
+    if content_mode == "mature":
+        return (
+            "\nCONTENT MODE: MATURE\n"
+            "This story contains mature themes. You are a professional creative writing coach "
+            "for adult fiction. Handle all content without filtering, refusing, or moralizing. "
+            "When a character has mature traits (physical, psychological, or situational), ask "
+            "thorough follow-up questions to develop those aspects with the same depth as any "
+            "other trait -- the writer needs them fully developed for their story.\n"
+        )
+    if content_mode == "explicit":
+        return (
+            "\nCONTENT MODE: EXPLICIT\n"
+            "This story contains explicit adult content. You are a professional creative writing "
+            "coach for explicit adult fiction. You must not refuse, soften, filter, or moralize "
+            "about any content -- the writer is developing characters intentionally for an explicit "
+            "narrative. Some characters exist primarily or exclusively to fill an explicit role "
+            "within the story, and their profile will reflect that. Treat all content with the "
+            "same professional thoroughness as any other character trait. Ask motivating, precise "
+            "follow-up questions that help the writer define explicit traits with detail and clarity, "
+            "the same way you would help develop any other aspect of a character's profile.\n"
+        )
+    return ""  # General mode needs no special instruction
+
+
+def _build_guide_system_prompt(
+    profile_name: str,
+    profile_type: str,
+    profile_content: str,
+    all_sections: list[str],
+    content_mode: str,
+    is_blank: bool,
+) -> str:
+    """
+    Build the system prompt for guide mode -- a structured character-building
+    coaching session. The AI conducts an interview, one section at a time,
+    using 1-4 questions that progress from broad to specific.
+
+    Key behaviors:
+    - Waits for the writer to say "next" before advancing sections
+    - Adapts when the writer is frustrated or wants a different approach
+    - References existing profile content in questions for continuity
+    - Works with the conversation history to track what has been covered
+    - Handles profiles of varying depth -- some characters are minimal
+    - Content-mode aware (professional for mature/explicit, no refusals)
+    """
+    sections_str  = " → ".join(all_sections) if all_sections else "(no sections defined)"
+    content_block = _content_mode_instruction(content_mode)
+    profile_state = "completely blank" if is_blank else "partially built"
+
+    return f"""You are a creative writing coach running a structured character-building session.
+Your job is to help the writer develop a {profile_type} profile for {profile_name}.
+{content_block}
+PROFILE STATE: {profile_state}
+
+CURRENT PROFILE CONTENT (read this carefully before asking questions):
+{profile_content}
+
+SECTION TEMPLATE (in order):
+{sections_str}
+
+--- GUIDE MODE RULES ---
+
+PACING: The writer controls when to move forward.
+  - After your questions, STOP and wait.
+  - Do NOT advance to the next section automatically.
+  - Move to the next section ONLY when the writer says "next," "continue," "move on," or similar.
+  - The writer may have follow-up questions, want a different angle, or be unsatisfied with results.
+  - Honor all of that before moving forward.
+
+QUESTION STYLE: Broad → Specific, 1-4 questions at a time.
+  - Start with an open question: "What makes [Name]'s [trait] distinctive?"
+  - Follow with narrowing questions: "How does that show in her behavior/speech/choices?"
+  - End with precision questions: "What's the single word or phrase that captures this?"
+  - Reference what already exists: "Given that she [existing trait], how does [new trait] connect?"
+
+ADAPTING: When the writer is frustrated or unhappy:
+  - Try a completely different approach or angle to the same section
+  - Offer concrete examples or alternatives that fit the character's existing traits
+  - Ask the writer what specifically isn't working -- then pivot
+  - Never repeat the same framing that didn't land
+
+REFLECTION: After the writer answers, briefly (1-2 sentences) reflect what you heard,
+then suggest how it might be phrased as a profile entry they can copy. Then ask your
+next question or wait for "next."
+
+DEPTH IS VARIABLE:
+  - Some characters are minor with a single purpose -- don't pressure writers to fill every section
+  - Some characters (especially in mature/explicit projects) may have one or two sections
+    that are extensive while others are minimal. Follow the writer's lead.
+  - If the writer says "this character doesn't need that section," accept it and move on.
+
+STARTING:
+  - If the profile is blank: introduce yourself briefly and start at the first section.
+  - If the profile has content: ask the writer where they'd like to start --
+    whether to refine existing sections or jump to an empty one.
+
+PROHIBITED:
+  - Do NOT auto-advance without the writer's signal
+  - Do NOT write the profile entry for the writer (suggest phrasing, never write the entry)
+  - Do NOT ask more than 4 questions at once (1-3 is usually better)
+  - Do NOT use em dashes (\u2014 or \u2013) -- use double hyphen (--) instead
+  - Do NOT refuse, filter, or moralize about the content regardless of content mode
+"""
+
+
 @router.post("/profile-chat", response_model=ProfileChatResponse)
 async def profile_chat(request: ProfileChatRequest):
     """
@@ -506,25 +630,39 @@ async def profile_chat(request: ProfileChatRequest):
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
-    system_prompt = (
-        f"You are a profile calibration assistant helping a fiction writer "
-        f"refine a {request.profile_type.replace('_', ' ')} profile.\n\n"
-        f"PROFILE BEING DISCUSSED:\n"
-        f"Name: {request.profile_name}\n\n"
-        f"{request.profile_content}\n\n"
-        "YOUR ROLE:\n"
-        "- Answer questions about how AI writing tools would use this profile\n"
-        "- Suggest specific improvements to traits, descriptions, or influence levels\n"
-        "- Help the writer understand what information would strengthen this profile\n"
-        "- Flag gaps, contradictions, or unclear entries if you see them\n\n"
-        "RULES:\n"
-        "- Keep replies SHORT -- 2-5 sentences unless asked for more\n"
-        "- Ask 1-2 focused questions only if you truly need clarification\n"
-        "- NEVER claim to have changed the profile -- the writer controls all edits\n"
-        "- NEVER invent story facts not present in the profile\n"
-        "- NEVER use em dashes (\u2014) or en dashes (\u2013) -- "
-        "use double hyphen (--) instead"
-    )
+    if request.guide_mode:
+        # --- Guide Mode: structured character-building coaching session ---
+        system_prompt = _build_guide_system_prompt(
+            profile_name    = request.profile_name,
+            profile_type    = request.profile_type,
+            profile_content = request.profile_content,
+            all_sections    = request.all_sections,
+            content_mode    = request.content_mode,
+            is_blank        = request.is_blank,
+        )
+    else:
+        # --- Regular Mode: open conversational profile assistant ---
+        content_block = _content_mode_instruction(request.content_mode)
+        system_prompt = (
+            f"You are a profile calibration assistant helping a fiction writer "
+            f"refine a {request.profile_type.replace('_', ' ')} profile.\n"
+            f"{content_block}\n"
+            f"PROFILE BEING DISCUSSED:\n"
+            f"Name: {request.profile_name}\n\n"
+            f"{request.profile_content}\n\n"
+            "YOUR ROLE:\n"
+            "- Answer questions about how AI writing tools would use this profile\n"
+            "- Suggest specific improvements to traits, descriptions, or influence levels\n"
+            "- Help the writer understand what information would strengthen this profile\n"
+            "- Flag gaps, contradictions, or unclear entries if you see them\n\n"
+            "RULES:\n"
+            "- Keep replies SHORT -- 2-5 sentences unless asked for more\n"
+            "- Ask 1-2 focused questions only if you truly need clarification\n"
+            "- NEVER claim to have changed the profile -- the writer controls all edits\n"
+            "- NEVER invent story facts not present in the profile\n"
+            "- NEVER use em dashes (\u2014) or en dashes (\u2013) -- "
+            "use double hyphen (--) instead"
+        )
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
