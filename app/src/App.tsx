@@ -281,6 +281,13 @@ function App() {
             <NavItem label="Lore"          hint="World-building rules and history entries"
               onClick={() => { setProfileType("lore");         setCurrentView("profiles"); }} />
           </NavSection>
+
+          <NavSection label="Summaries">
+            <NavItem label="Chapter Summaries" hint="Per-chapter summaries used as AI context"
+              onClick={() => { setProfileType("chapter_summary"); setCurrentView("profiles"); }} />
+            <NavItem label="Scene Summaries"   hint="Per-scene summaries used as AI context"
+              onClick={() => { setProfileType("scene_summary");   setCurrentView("profiles"); }} />
+          </NavSection>
         </nav>
 
         <div className="border-t border-[#1e1e4a] px-4 py-3">

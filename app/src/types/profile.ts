@@ -5,8 +5,14 @@
 
 // ── Enums / Literals ─────────────────────────────────────────────────────────
 
-// The four profile types supported in Phase 2 MVP
-export type ProfileType = "character" | "relationship" | "location" | "lore";
+// All profile types supported in Phase 2 MVP
+export type ProfileType =
+  | "character"
+  | "relationship"
+  | "location"
+  | "lore"
+  | "chapter_summary"
+  | "scene_summary";
 
 // Influence levels used in character and relationship trait blocks.
 // Controls how prominently AI surfaces a trait in suggestions.
@@ -78,6 +84,11 @@ export interface SaveProfilePayload {
   profile: Profile;
 }
 
+export interface ImportProfilePayload {
+  folder_path: string;  // Target project root
+  source_path: string;  // Absolute path to the source .md file
+}
+
 
 // ── Section Config (frontend mirror of backend SECTION_CONFIGS) ───────────────
 // Tells the ProfileBuilder form which sections to render for each profile type,
@@ -125,14 +136,30 @@ export const SECTION_CONFIGS: Record<ProfileType, SectionConfig[]> = {
     { key: "story_relevance",      heading: "Story Relevance",      hasTraitBlocks: false },
     { key: "notes",                heading: "Notes",                hasTraitBlocks: false },
   ],
+  // Chapter and scene summaries have simpler structures -- no trait blocks.
+  // The full_ai_summary field is where the generated summary for AI context will live.
+  chapter_summary: [
+    { key: "overview",          heading: "Chapter Overview",    hasTraitBlocks: false },
+    { key: "key_events",        heading: "Key Events",          hasTraitBlocks: false },
+    { key: "character_moments", heading: "Character Moments",   hasTraitBlocks: false },
+    { key: "notes",             heading: "Notes",               hasTraitBlocks: false },
+  ],
+  scene_summary: [
+    { key: "overview",           heading: "Scene Overview",      hasTraitBlocks: false },
+    { key: "characters_present", heading: "Characters Present",  hasTraitBlocks: false },
+    { key: "setting",            heading: "Setting",             hasTraitBlocks: false },
+    { key: "notes",              heading: "Notes",               hasTraitBlocks: false },
+  ],
 };
 
 // Human-readable labels for each profile type tab
 export const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
-  character:    "Characters",
-  relationship: "Relationships",
-  location:     "Locations",
-  lore:         "Lore",
+  character:       "Characters",
+  relationship:    "Relationships",
+  location:        "Locations",
+  lore:            "Lore",
+  chapter_summary: "Chapter Summaries",
+  scene_summary:   "Scene Summaries",
 };
 
 // Human-readable labels for each influence level, used in the dropdown

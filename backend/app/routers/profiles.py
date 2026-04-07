@@ -20,6 +20,7 @@
 #   GET  /api/profiles/profile ?folder_path=...&type=...&filename=. -- load one
 #   POST /api/profiles/create                                        -- new profile
 #   POST /api/profiles/save                                          -- save profile
+#   POST /api/profiles/import                                        -- import & fork a character
 
 import os
 import re
@@ -86,14 +87,31 @@ SECTION_CONFIGS: dict[str, list[SectionConfig]] = {
         SectionConfig("story_relevance",      "Story Relevance",      False),
         SectionConfig("notes",                "Notes",                False),
     ],
+    # Chapter and scene summaries are simpler -- no trait blocks.
+    # The `full_ai_summary` field on the Profile becomes the actual generated
+    # summary text that will later be used as AI context chips.
+    "chapter_summary": [
+        SectionConfig("overview",           "Chapter Overview",     False),
+        SectionConfig("key_events",         "Key Events",           False),
+        SectionConfig("character_moments",  "Character Moments",    False),
+        SectionConfig("notes",              "Notes",                False),
+    ],
+    "scene_summary": [
+        SectionConfig("overview",            "Scene Overview",       False),
+        SectionConfig("characters_present",  "Characters Present",   False),
+        SectionConfig("setting",             "Setting",              False),
+        SectionConfig("notes",               "Notes",                False),
+    ],
 }
 
 # Maps profile type to its subfolder inside the project
 PROFILE_FOLDERS: dict[str, str] = {
-    "character":    "profiles/characters",
-    "relationship": "profiles/relationships",
-    "location":     "profiles/locations",
-    "lore":         "profiles/lore",
+    "character":       "profiles/characters",
+    "relationship":    "profiles/relationships",
+    "location":        "profiles/locations",
+    "lore":            "profiles/lore",
+    "chapter_summary": "profiles/chapters",
+    "scene_summary":   "profiles/scenes",
 }
 
 VALID_TYPES = set(PROFILE_FOLDERS.keys())
@@ -155,6 +173,11 @@ class SaveProfileRequest(BaseModel):
     folder_path: str
     filename: str
     profile: Profile
+
+
+class ImportProfileRequest(BaseModel):
+    folder_path: str    # Target project root (where the imported copy will live)
+    source_path: str    # Absolute path to the .md file being imported
 
 
 # ── Helpers: Path and Validation ─────────────────────────────────────────────
@@ -557,3 +580,86 @@ async def save_profile(request: SaveProfileRequest):
         raise HTTPException(status_code=500, detail=f"Could not save profile: {e}")
 
     return request.profile
+
+
+@router.post("/import", response_model=Profile)
+async def import_profile(request: ImportProfileRequest):
+    """
+    Imports a character profile from another project as a fully independent copy.
+
+    Rules (from the spec):
+      - Character profiles only (not relationships, locations, or lore)
+      - The copy gets a new profile_id so it has no link to the original
+      - No relationships are auto-imported
+      - The writer can edit the copy freely in the new project
+
+    Steps:
+      1. Read and validate the source file as a character profile
+      2. Parse it into a Profile object
+      3. Regenerate the profile_id (makes it a true independent copy)
+      4. Choose a filename in the target project (handle conflicts)
+      5. Write the new file to the target project's profiles/characters/ folder
+      6. Return the new Profile so the frontend can open it immediately
+    """
+    # 1. Read the source file
+    if not os.path.isfile(request.source_path):
+        raise HTTPException(status_code=404, detail=f"Source file not found: {request.source_path}")
+
+    try:
+        with open(request.source_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not read source file: {e}")
+
+    # 2. Validate it's a character profile by checking the frontmatter type field
+    parts = raw.split("---", 2)
+    if len(parts) < 3:
+        raise HTTPException(status_code=400, detail="Source file has no frontmatter -- not a valid profile.")
+
+    try:
+        meta: dict = yaml.safe_load(parts[1]) or {}
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid frontmatter in source file: {e}")
+
+    if meta.get("type") != "character":
+        raise HTTPException(
+            status_code=400,
+            detail="Only character profiles can be imported. "
+                   f"This file has type: '{meta.get('type', 'unknown')}'"
+        )
+
+    # 3. Parse the full profile
+    source_filename = os.path.basename(request.source_path)
+    profile = _parse_profile_markdown(raw, source_filename, "character")
+
+    # 4. Give it a fresh profile_id -- this makes the copy fully independent
+    profile.profile_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    profile.updated_at = now
+    # Keep created_at from the original so the writer knows when it was first written
+
+    # 5. Choose the destination filename (keep original slug, handle conflicts)
+    target_dir = _profile_dir(request.folder_path, "character")
+    if not os.path.isdir(target_dir):
+        raise HTTPException(status_code=404, detail=f"Characters folder not found in: {request.folder_path}")
+
+    base_slug = source_filename.removesuffix(".md")
+    filename  = f"{base_slug}.md"
+    filepath  = os.path.join(target_dir, filename)
+
+    if os.path.exists(filepath):
+        short_id = str(uuid.uuid4())[:8]
+        filename  = f"{base_slug}-imported-{short_id}.md"
+        filepath  = os.path.join(target_dir, filename)
+
+    profile.filename = filename
+
+    # 6. Write the new file
+    markdown = _generate_profile_markdown(profile, "character")
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(markdown)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not write imported profile: {e}")
+
+    return profile
