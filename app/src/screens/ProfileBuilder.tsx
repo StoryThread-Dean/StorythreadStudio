@@ -1676,16 +1676,20 @@ function ToolKit({
                       </span>
                     </label>
 
-                    {/* Individual items -- indented under the section header.
-                        ml-10 (40px) pushes the entire block well past where the
-                        section header checkbox+text begins (~28px), giving a clear
-                        visual indent. The border-l-2 draws a vertical teal guide line
-                        connecting all items back to the section header. */}
-                    <div className="ml-10 border-l-2 border-teal-800/60">
+                    {/* Individual items -- indented under their section header.
+                        Using inline style (not Tailwind ml-) to guarantee the exact
+                        pixel value makes it into the rendered CSS without being
+                        dropped by Tailwind's class-detection or purge step.
+                        3rem = 48px indent from the left edge of the panel.
+                        The teal border-left draws a vertical line connecting items
+                        to the section header above them. */}
+                    <div
+                      style={{ marginLeft: "3rem", borderLeft: "2px solid rgba(20, 184, 166, 0.35)", paddingLeft: "0.5rem" }}
+                    >
                       {section.items.map(item => (
                         <label
                           key={item.id}
-                          className="flex cursor-pointer items-start gap-2 rounded py-1 pl-3 pr-1 transition-colors hover:bg-teal-900/20"
+                          className="flex cursor-pointer items-start gap-2 rounded py-1 pr-1 transition-colors hover:bg-teal-900/20"
                         >
                           <input
                             type="checkbox"
