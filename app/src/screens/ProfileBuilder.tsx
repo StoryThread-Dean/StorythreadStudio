@@ -1684,7 +1684,7 @@ function ToolKit({
                         The teal border-left draws a vertical line connecting items
                         to the section header above them. */}
                     <div
-                      style={{ marginLeft: "3rem", borderLeft: "2px solid rgba(20, 184, 166, 0.35)", paddingLeft: "0.5rem" }}
+                      style={{ marginLeft: "1.5rem", borderLeft: "2px solid rgba(20, 184, 166, 0.35)", paddingLeft: "0.5rem" }}
                     >
                       {section.items.map(item => (
                         <label
