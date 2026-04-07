@@ -14,8 +14,8 @@
 //   3. As writer edits: update local `profile` state (dirty tracking)
 //   4. On Ctrl+S or Save: POST to backend, mark as saved
 
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
-import { Plus, ChevronLeft, Trash2, Download, Sparkles, Send, Bot, X } from "lucide-react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
+import { Plus, ChevronLeft, Trash2, Download, Sparkles, Send, Bot, X, Settings2, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import type { ProjectInfo } from "../types/project";
@@ -36,6 +36,164 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 const API_BASE = "http://localhost:8000";
+
+
+// ── ToolKit Types ─────────────────────────────────────────────────────────────
+// A ToolkitItem is one selectable row in the ToolKit panel.
+// A ToolkitSection groups related items under a section header checkbox.
+
+interface ToolkitItem {
+  id: string;           // Unique key for selection tracking
+  sectionKey: string;   // Which profile section this belongs to
+  label: string;        // Primary display line (trait name, section heading, etc.)
+  sub: string;          // Secondary display line (start of description)
+  content: string;      // Full text to include in AI context when selected
+}
+
+interface ToolkitSection {
+  key: string;          // Matches the profile section key (e.g. "physical_traits")
+  label: string;        // Human-readable section name (e.g. "Physical Traits")
+  items: ToolkitItem[];
+}
+
+
+// ── ToolKit Helper Functions ──────────────────────────────────────────────────
+// These are module-level (outside the React component) because they are pure
+// functions that don't need component state -- they just transform data.
+
+const SUMMARY_PLACEHOLDER = "_Generated on demand. Editable by writer._";
+
+/**
+ * Format one trait block into a readable text string for AI context.
+ * Includes all filled fields (influence, description, usage example, notes).
+ */
+function formatTraitForContext(block: TraitBlock, sectionHeading: string): string {
+  const lines = [`${sectionHeading} Trait: ${block.trait}`];
+  if (block.influence) lines.push(`Influence: ${block.influence}`);
+  if (block.description.trim()) lines.push(`Description: ${block.description.trim()}`);
+  if (block.ai_usage_example.trim()) lines.push(`AI Usage Hint: ${block.ai_usage_example.trim()}`);
+  if (block.notes.trim()) lines.push(`Notes: ${block.notes.trim()}`);
+  return lines.join("\n");
+}
+
+/**
+ * Build the list of selectable ToolkitSections from the current profile.
+ * Only includes sections and traits that actually have content.
+ * AI summaries are included if they have been generated (not just placeholders).
+ */
+function buildToolkitSections(profile: Profile): ToolkitSection[] {
+  const configs = SECTION_CONFIGS[profile.type as ProfileType] ?? [];
+  const result: ToolkitSection[] = [];
+
+  for (const cfg of configs) {
+    const section = profile.sections[cfg.key];
+    if (!section) continue;
+
+    const items: ToolkitItem[] = [];
+
+    if (cfg.hasTraitBlocks) {
+      // Trait-block sections: one item per trait
+      for (const block of section.trait_blocks) {
+        if (!block.trait.trim() && !block.description.trim()) continue;
+        items.push({
+          id: `trait:${cfg.key}:${block.id}`,
+          sectionKey: cfg.key,
+          label: block.trait || "(untitled)",
+          sub: block.description,
+          content: formatTraitForContext(block, cfg.heading),
+        });
+      }
+    } else {
+      // Plain-text sections: one item for the whole section
+      if (section.content.trim()) {
+        items.push({
+          id: `section:${cfg.key}`,
+          sectionKey: cfg.key,
+          label: cfg.heading,
+          sub: section.content,
+          content: `${cfg.heading}:\n${section.content.trim()}`,
+        });
+      }
+    }
+
+    // Add the section's AI summary if it has been generated
+    const summary = section.ai_summary.trim();
+    if (summary && summary !== SUMMARY_PLACEHOLDER) {
+      items.push({
+        id: `ai-summary:${cfg.key}`,
+        sectionKey: cfg.key,
+        label: `AI Summary: ${cfg.heading}`,
+        sub: summary,
+        content: `AI Summary -- ${cfg.heading}:\n${summary}`,
+      });
+    }
+
+    if (items.length > 0) {
+      result.push({ key: cfg.key, label: cfg.heading, items });
+    }
+  }
+
+  // Full AI Summary as its own section at the bottom
+  const fullSummary = profile.full_ai_summary.trim();
+  if (fullSummary && fullSummary !== SUMMARY_PLACEHOLDER) {
+    result.push({
+      key: "full_ai_summary",
+      label: "Full AI Summary",
+      items: [{
+        id: "full-ai-summary",
+        sectionKey: "full_ai_summary",
+        label: "Full AI Summary",
+        sub: fullSummary,
+        content: `Full AI Summary:\n${fullSummary}`,
+      }],
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Format the selected context items into a single string to send to the AI.
+ *
+ * Default behavior (nothing selected):
+ *   Name + Role + Overview (if filled)
+ *
+ * With selections:
+ *   Name + Role + only the selected items (in section order)
+ *   Overview is NOT included unless explicitly selected.
+ */
+function formatSelectedContext(
+  profile: Profile,
+  toolkitSections: ToolkitSection[],
+  selections: Set<string>
+): string {
+  const header = [
+    `Character: ${profile.name}`,
+    profile.role ? `Role: ${profile.role}` : null,
+  ].filter(Boolean).join("\n");
+
+  if (selections.size === 0) {
+    // Default: include Overview if it has content
+    const overview = profile.sections["overview"];
+    if (overview?.content.trim()) {
+      return `${header}\n\nOverview:\n${overview.content.trim()}`;
+    }
+    return header;
+  }
+
+  // Send only selected items, preserving section order
+  const parts: string[] = [header];
+  for (const section of toolkitSections) {
+    const selected = section.items.filter(item => selections.has(item.id));
+    if (selected.length === 0) continue;
+    for (const item of selected) {
+      parts.push(item.content);
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
 
 // ── Props ────────────────────────────────────────────────────────────────────
 interface ProfileBuilderProps {
@@ -95,12 +253,53 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // When active, the system prompt switches to a focused interview mode.
   const [guideMode, setGuideMode] = useState(false);
 
-  // Reset chat and guide mode when the profile changes
+  // --- ToolKit state ---
+  const [toolkitOpen, setToolkitOpen]             = useState(false);
+  const [toolkitSelections, setToolkitSelections] = useState<Set<string>>(new Set());
+
+  // Rebuild the ToolKit section list whenever the profile changes.
+  // useMemo prevents rebuilding on every render -- only runs when profile changes.
+  const toolkitSections = useMemo(
+    () => profile ? buildToolkitSections(profile) : [],
+    [profile]
+  );
+
+  // Toggle one individual item
+  const handleToolkitToggleItem = useCallback((id: string) => {
+    setToolkitSelections(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Toggle a whole section: all selected → deselect all; else → select all
+  const handleToolkitToggleSection = useCallback((sectionKey: string, sections: ToolkitSection[]) => {
+    setToolkitSelections(prev => {
+      const section = sections.find(s => s.key === sectionKey);
+      if (!section) return prev;
+      const allSelected = section.items.every(item => prev.has(item.id));
+      const next = new Set(prev);
+      if (allSelected) {
+        section.items.forEach(item => next.delete(item.id));
+      } else {
+        section.items.forEach(item => next.add(item.id));
+      }
+      return next;
+    });
+  }, []);
+
+  // Clear all selections → reverts to default Overview behavior
+  const handleToolkitClearAll = useCallback(() => setToolkitSelections(new Set()), []);
+
+  // Reset chat, guide mode, and toolkit when switching profiles
   useEffect(() => {
     setChatMessages([]);
     setChatInput("");
     setChatError(null);
     setGuideMode(false);
+    setToolkitOpen(false);
+    setToolkitSelections(new Set());
   }, [profile?.filename]);
 
 
@@ -613,12 +812,16 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         body: JSON.stringify({
           profile_name:    profile.name,
           profile_type:    profile.type,
-          profile_content: formatProfileForAI(profile),
-          messages:        newMessages,
-          guide_mode:      guideMode,
-          all_sections:    sectionKeys,
-          content_mode:    project.content_mode_default ?? "general",
-          is_blank:        false,
+          // Guide mode needs full profile context to plan the session.
+          // Regular mode sends only what the writer selected in the ToolKit.
+          profile_content: guideMode
+            ? formatProfileForAI(profile)
+            : formatSelectedContext(profile, toolkitSections, toolkitSelections),
+          messages:     newMessages,
+          guide_mode:   guideMode,
+          all_sections: sectionKeys,
+          content_mode: project.content_mode_default ?? "general",
+          is_blank:     false,
         }),
       });
 
@@ -1116,6 +1319,20 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           <div ref={chatEndRef} />
         </div>
 
+        {/* ToolKit -- only shown in regular mode (guide mode uses full profile) */}
+        {!guideMode && (
+          <ToolKit
+            profile={profile}
+            toolkitSections={toolkitSections}
+            selections={toolkitSelections}
+            open={toolkitOpen}
+            onToggleOpen={() => setToolkitOpen(o => !o)}
+            onToggleItem={handleToolkitToggleItem}
+            onToggleSection={(key) => handleToolkitToggleSection(key, toolkitSections)}
+            onClearAll={handleToolkitClearAll}
+          />
+        )}
+
         {/* Chat input */}
         <div className="border-t border-[#1e1e4a] p-3">
           <div className="flex gap-2">
@@ -1138,12 +1355,17 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             </button>
           </div>
           {chatMessages.length > 0 && (
-            <button
-              onClick={() => { setChatMessages([]); setChatError(null); }}
-              className="mt-1.5 text-xs text-[#3f3f7a] transition-colors hover:text-[#8888aa]"
-            >
-              Clear conversation
-            </button>
+            // Flush right so it can't be accidentally clicked while reaching for Send.
+            // Rose color signals a destructive action clearly without being alarming.
+            <div className="mt-1.5 flex justify-end">
+              <button
+                onClick={() => { setChatMessages([]); setChatError(null); }}
+                className="text-xs text-rose-700 transition-colors hover:text-rose-400"
+                title="Clear the conversation history and start fresh"
+              >
+                Clear conversation
+              </button>
+            </div>
           )}
         </div>
       </aside>
@@ -1256,6 +1478,166 @@ function ProfileSectionEditor({
           minRows={2}
         />
       </div>
+    </div>
+  );
+}
+
+
+// ── ToolKit Component ─────────────────────────────────────────────────────────
+// The context selection panel above the chat input.
+// Lets the writer choose exactly which profile sections and traits to send
+// to the AI with each message, instead of the AI receiving everything at once.
+//
+// Teal/emerald color scheme distinguishes it visually from the rest of the panel.
+// Max height 45vh before becoming internally scrollable.
+
+interface ToolKitProps {
+  profile: Profile | null;
+  toolkitSections: ToolkitSection[];
+  selections: Set<string>;
+  open: boolean;
+  onToggleOpen: () => void;
+  onToggleItem: (id: string) => void;
+  onToggleSection: (sectionKey: string) => void;
+  onClearAll: () => void;
+}
+
+function ToolKit({
+  profile,
+  toolkitSections,
+  selections,
+  open,
+  onToggleOpen,
+  onToggleItem,
+  onToggleSection,
+  onClearAll,
+}: ToolKitProps) {
+  const totalSelected = selections.size;
+
+  return (
+    <div className="border-y border-teal-800/40 bg-teal-950/40">
+
+      {/* ── Collapsed bar (always visible) ─────────────────────────────────
+          Shows the panel name, selected item count, and expand/collapse arrow.
+          Clicking anywhere on this bar toggles the panel open or closed.      */}
+      <button
+        onClick={onToggleOpen}
+        className="flex w-full items-center justify-between px-3 py-2 transition-colors hover:bg-teal-900/20"
+        title="Select which profile sections to send as AI context"
+      >
+        <div className="flex items-center gap-2">
+          <Settings2 size={12} className="shrink-0 text-teal-400" />
+          <span className="text-xs font-semibold text-teal-300">ToolKit</span>
+
+          {/* Selection count badge -- shows when something is selected */}
+          {totalSelected > 0 ? (
+            <span className="rounded-full bg-teal-700/50 px-1.5 py-0.5 text-xs font-medium text-teal-200">
+              {totalSelected} selected
+            </span>
+          ) : (
+            <span className="text-xs text-teal-700">
+              {profile ? "Overview (default)" : "open a profile"}
+            </span>
+          )}
+        </div>
+
+        <ChevronDown
+          size={12}
+          className={`shrink-0 text-teal-600 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* ── Expanded panel ──────────────────────────────────────────────── */}
+      {open && (
+        <div className="border-t border-teal-800/30">
+
+          {/* Description */}
+          <div className="px-3 pb-1.5 pt-2">
+            <p className="text-xs leading-relaxed text-teal-600">
+              Choose what context the AI receives with each message.
+              Name and Role are always included.
+              With nothing selected, Overview is sent automatically if filled.
+            </p>
+          </div>
+
+          {/* Clear all -- only visible when something is selected */}
+          {totalSelected > 0 && (
+            <div className="flex justify-end px-3 pb-1">
+              <button
+                onClick={onClearAll}
+                className="text-xs text-teal-700 transition-colors hover:text-teal-400"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {/* Item list -- scrollable once content exceeds 45% of viewport height */}
+          {!profile ? (
+            <p className="px-3 pb-3 text-xs text-teal-800">
+              Open a profile to see available context options.
+            </p>
+          ) : toolkitSections.length === 0 ? (
+            <p className="px-3 pb-3 text-xs text-teal-800">
+              No filled sections yet. Add content to the profile to see options here.
+            </p>
+          ) : (
+            <div className="max-h-[45vh] overflow-y-auto px-2 pb-2">
+              {toolkitSections.map(section => {
+                // Section header is "checked" only when ALL items in it are selected.
+                // If partial or none, it shows unchecked.
+                const allChecked = section.items.every(item => selections.has(item.id));
+
+                return (
+                  <div key={section.key} className="mb-1.5">
+
+                    {/* Section header checkbox -- selects/clears all items in this section */}
+                    <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 transition-colors hover:bg-teal-900/20">
+                      <input
+                        type="checkbox"
+                        checked={allChecked}
+                        onChange={() => onToggleSection(section.key)}
+                        className="shrink-0 accent-teal-500"
+                      />
+                      <span className="text-xs font-semibold text-teal-300">
+                        {section.label}
+                        <span className="ml-1 font-normal text-teal-700">
+                          ({section.items.length})
+                        </span>
+                      </span>
+                    </label>
+
+                    {/* Individual items within the section -- indented */}
+                    {section.items.map(item => (
+                      <label
+                        key={item.id}
+                        className="flex cursor-pointer items-start gap-2 rounded py-1 pl-5 pr-1 transition-colors hover:bg-teal-900/20"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selections.has(item.id)}
+                          onChange={() => onToggleItem(item.id)}
+                          className="mt-0.5 shrink-0 accent-teal-500"
+                        />
+                        <div className="min-w-0">
+                          {/* Primary line: trait name or section heading */}
+                          <p className="truncate text-xs text-teal-100">{item.label}</p>
+                          {/* Secondary line: start of the description */}
+                          {item.sub && (
+                            <p className="truncate text-xs text-teal-700">
+                              {item.sub.slice(0, 75)}{item.sub.length > 75 ? "..." : ""}
+                            </p>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
