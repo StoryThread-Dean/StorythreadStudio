@@ -159,6 +159,55 @@ async def run_completion(
     return result
 
 
+async def run_chat(
+    api_key: str,
+    model_id: str,
+    system_prompt: str,
+    messages: list[dict],
+) -> str:
+    """
+    Send a multi-turn chat completion request to OpenRouter and return
+    the assistant's reply as a plain string.
+
+    Used by the Profile Builder chat panel, where the writer has a
+    back-and-forth conversation about a profile.
+
+    `messages` is a list of {"role": "user"|"assistant", "content": str}
+    dicts in chronological order. The system prompt is always prepended.
+
+    Unlike run_completion(), we return the raw text (not parsed JSON)
+    because profile chat replies are conversational, not structured data.
+    """
+    from app.ai.sanitizer import sanitize
+
+    payload = {
+        "model": model_id,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            *messages,
+        ],
+    }
+
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+        response = await client.post(
+            f"{OPENROUTER_BASE}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type":  "application/json",
+                "HTTP-Referer":  "http://localhost:1420",
+                "X-Title":       "StoryForge",
+            },
+            json=payload,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+    raw_reply = data["choices"][0]["message"]["content"]
+
+    # Apply the em dash sanitizer -- same rule applies to chat responses
+    return sanitize(raw_reply)
+
+
 def _per_million(price_str: str) -> float:
     """
     Convert an OpenRouter price string (cost per token as a string like "0.000002")
