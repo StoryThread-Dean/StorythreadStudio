@@ -1,0 +1,38 @@
+# ── Python Backend ────────────────────────────────────────────────────────────
+# .venv is the virtual environment uv creates -- contains all Python packages.
+# Never commit this: it's large, machine-specific, and reproducible via uv sync.
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.ruff_cache/
+
+# ── Frontend / Node ───────────────────────────────────────────────────────────
+# node_modules contains all npm packages -- reproducible via npm install.
+app/node_modules/
+app/dist/
+app/dist-ssr/
+*.local
+
+# ── Tauri / Rust ──────────────────────────────────────────────────────────────
+# Rust build artifacts -- large and fully reproducible via cargo build.
+app/src-tauri/target/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── OS Files ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Secrets (never commit these) ──────────────────────────────────────────────
+# The user's OpenRouter API key will be stored here locally.
+.env
+.env.local
+*.env
+
+# ── StoryForge Writing Projects ───────────────────────────────────────────────
+# The .storyforge folder inside each writing project holds the SQLite database,
+# cache files, and logs. These are generated at runtime, not source code.
+**/.storyforge/
