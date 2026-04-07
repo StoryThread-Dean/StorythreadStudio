@@ -610,6 +610,17 @@ PROHIBITED:
   - Do NOT ask more than 4 questions at once (1-3 is usually better)
   - Do NOT use em dashes (\u2014 or \u2013) -- use double hyphen (--) instead
   - Do NOT refuse, filter, or moralize about the content regardless of content mode
+
+CHAT FORMAT -- THIS IS MANDATORY. VIOLATIONS MAKE THE CHAT UNREADABLE:
+  - Write SHORT, plain conversational text. This is a CHAT, not a document.
+  - NO markdown formatting of any kind: no **bold**, no *italic*, no # headers,
+    no bullet lists (- or *), no numbered lists, no horizontal rules (---).
+  - NO long overviews or summaries. If you need to acknowledge what's built,
+    do it in ONE sentence maximum.
+  - Maximum 3 sentences of context before asking your question(s).
+  - Ask 1-2 questions per message. Not 3. Not 4. 1 or 2.
+  - Write like you are texting a friend who happens to know fiction writing well.
+  - If you catch yourself writing a list, STOP. Convert it to one focused question instead.
 """
 
 
@@ -656,12 +667,15 @@ async def profile_chat(request: ProfileChatRequest):
             "- Help the writer understand what information would strengthen this profile\n"
             "- Flag gaps, contradictions, or unclear entries if you see them\n\n"
             "RULES:\n"
-            "- Keep replies SHORT -- 2-5 sentences unless asked for more\n"
-            "- Ask 1-2 focused questions only if you truly need clarification\n"
             "- NEVER claim to have changed the profile -- the writer controls all edits\n"
             "- NEVER invent story facts not present in the profile\n"
-            "- NEVER use em dashes (\u2014) or en dashes (\u2013) -- "
-            "use double hyphen (--) instead"
+            "- NEVER use em dashes (\u2014) or en dashes (\u2013) -- use double hyphen (--) instead\n\n"
+            "CHAT FORMAT -- MANDATORY:\n"
+            "- Write SHORT, plain conversational text. This is a CHAT window, not a document.\n"
+            "- NO markdown: no **bold**, no *italic*, no # headers, no bullet lists, no --- rules.\n"
+            "- Keep replies to 2-4 sentences maximum unless the writer specifically asks for more.\n"
+            "- Ask 1-2 questions max per message.\n"
+            "- Write like you are texting a knowledgeable friend, not writing a report."
         )
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]

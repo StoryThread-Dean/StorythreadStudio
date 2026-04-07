@@ -990,7 +990,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       {/* The chat is session-only. History lives in React state.
           When you close the Profile Builder, the conversation is cleared.
           The AI never auto-updates your profile fields -- all edits are manual. */}
-      <aside className="flex w-72 shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
+      <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
 
         <div className="border-b border-[#1e1e4a] px-4 py-3">
           <div className="flex items-center justify-between">
@@ -1023,35 +1023,69 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         {/* Chat history */}
         <div className="flex-1 overflow-y-auto px-3 py-3">
           {!profile && (
-            <p className="text-xs text-[#3f3f7a]">Open a profile to start chatting.</p>
+            <p className="text-center text-xs text-[#3f3f7a]">Open a profile to start chatting.</p>
           )}
 
           {profile && chatMessages.length === 0 && (
-            <div className="text-center">
-              <p className="text-xs text-[#3f3f7a]">
-                Chat about <span className="text-[#8888aa]">{profile.name}</span>.
-              </p>
-              <p className="mt-1 text-xs text-[#3f3f7a]">
-                Try: "How would AI use the core traits?" or
-                "What's missing from this profile?"
-              </p>
+            <div className="flex flex-col items-center gap-3 pt-4 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-900/40 text-indigo-400">
+                <Bot size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-[#8888aa]">Profile Chat</p>
+                <p className="mt-1 text-xs text-[#3f3f7a]">
+                  Ask about {profile.name}, or click{" "}
+                  <span className="text-indigo-400">Help Me Build</span> to start a guided session.
+                </p>
+              </div>
+              <div className="w-full rounded border border-[#1e1e4a] bg-[#070724] p-2.5 text-left">
+                <p className="mb-1 text-xs font-medium text-[#8888aa]">Try asking:</p>
+                {[
+                  "How would AI use the core traits?",
+                  "What's missing from this profile?",
+                  "How does her voice trait affect dialogue?",
+                ].map(q => (
+                  <button
+                    key={q}
+                    onClick={() => { setChatInput(q); }}
+                    className="mt-1 block w-full rounded px-2 py-1 text-left text-xs text-[#3f3f7a] transition-colors hover:bg-[#1e1e4a] hover:text-[#8888aa]"
+                  >
+                    "{q}"
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {chatMessages.map((msg, i) => (
             <div
               key={i}
-              className={`mb-3 ${msg.role === "user" ? "text-right" : "text-left"}`}
+              className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
+              {/* AI avatar dot -- shown on the left for AI messages */}
+              {msg.role === "assistant" && (
+                <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-indigo-400">
+                  <Bot size={11} />
+                </div>
+              )}
+
+              {/* Message bubble */}
               <div
-                className={`inline-block max-w-[90%] rounded px-3 py-2 text-xs leading-relaxed ${
+                className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                   msg.role === "user"
-                    ? "bg-indigo-600/30 text-indigo-100"
-                    : "border border-[#1e1e4a] bg-[#12122e] text-[#f0f0f5]"
+                    ? "rounded-tr-sm bg-indigo-600 text-white"          // Writer: right, indigo
+                    : "rounded-tl-sm border border-[#1e1e4a] bg-[#12122e] text-[#f0f0f5]"  // AI: left, dark panel
                 }`}
               >
                 {msg.content}
               </div>
+
+              {/* Writer avatar dot -- shown on the right for user messages */}
+              {msg.role === "user" && (
+                <div className="ml-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-800/60 text-indigo-300">
+                  <span className="text-xs font-bold">W</span>
+                </div>
+              )}
             </div>
           ))}
 
