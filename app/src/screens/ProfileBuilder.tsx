@@ -15,7 +15,7 @@
 //   4. On Ctrl+S or Save: POST to backend, mark as saved
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, ChevronLeft, Trash2, Download } from "lucide-react";
+import { Plus, ChevronLeft, Trash2, Download, Sparkles, Send } from "lucide-react";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import type { ProjectInfo } from "../types/project";
 import type {
@@ -26,6 +26,7 @@ import type {
   ProfileType,
   InfluenceLevel,
 } from "../types/profile";
+import type { ProfileChatMessage } from "../types/ai";
 import {
   SECTION_CONFIGS,
   PROFILE_TYPE_LABELS,
@@ -74,6 +75,27 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   profileRef.current = profile;
   const isDirtyRef = useRef(false);
   isDirtyRef.current = isDirty;
+
+  // --- Phase 4: Generation state ---
+  // Tracks which field is currently being generated so we can show a spinner
+  // and disable double-clicks. Format: "section_key" or "section_key:block_id"
+  const [generatingField, setGeneratingField] = useState<string | null>(null);
+
+  // --- Phase 4: Profile Builder Chat state ---
+  // The chat is session-only -- history lives in React state, never on the server.
+  // When the component unmounts (writer navigates away), the conversation is gone.
+  const [chatMessages, setChatMessages]   = useState<ProfileChatMessage[]>([]);
+  const [chatInput, setChatInput]         = useState("");
+  const [chatLoading, setChatLoading]     = useState(false);
+  const [chatError, setChatError]         = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset chat when the profile changes
+  useEffect(() => {
+    setChatMessages([]);
+    setChatInput("");
+    setChatError(null);
+  }, [profile?.filename]);
 
 
   // --- Fetch profile list whenever the type tab changes ---
@@ -339,6 +361,203 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       };
     });
     setIsDirty(true);
+  }
+
+
+  // --- Format the current profile into a readable text block for AI context ---
+  // Used by both generate-full-summary and the chat system prompt.
+  function formatProfileForAI(p: Profile): string {
+    const configs = SECTION_CONFIGS[p.type as ProfileType] ?? [];
+    const lines: string[] = [`Profile: ${p.name} (${p.type})`, `Role: ${p.role || "unspecified"}`, ""];
+
+    for (const cfg of configs) {
+      const section = p.sections[cfg.key];
+      if (!section) continue;
+      lines.push(`## ${cfg.heading}`);
+      if (cfg.hasTraitBlocks && section.trait_blocks.length > 0) {
+        for (const block of section.trait_blocks) {
+          lines.push(`- ${block.trait} [${block.influence}]: ${block.description}`);
+          if (block.ai_usage_example) lines.push(`  Usage: ${block.ai_usage_example}`);
+        }
+      } else if (section.content) {
+        lines.push(section.content);
+      }
+      lines.push("");
+    }
+
+    if (p.full_ai_summary) {
+      lines.push("## Full AI Summary");
+      lines.push(p.full_ai_summary);
+    }
+
+    return lines.join("\n");
+  }
+
+
+  // --- Generate ai_usage_example for a trait block ---
+  async function generateUsageExample(sectionKey: string, block: TraitBlock, sectionHeading: string) {
+    if (!profile) return;
+    const fieldKey = `${sectionKey}:${block.id}`;
+    setGeneratingField(fieldKey);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/generate-usage-example`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_name:    profile.name,
+          profile_type:    profile.type,
+          section_heading: sectionHeading,
+          trait:           block.trait,
+          description:     block.description,
+          influence:       block.influence,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Generation failed.");
+      }
+
+      const data = await res.json();
+      // Update the trait block's ai_usage_example field in state
+      updateTraitBlock(sectionKey, block.id, { ai_usage_example: data.ai_usage_example });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate usage example.");
+    } finally {
+      setGeneratingField(null);
+    }
+  }
+
+
+  // --- Generate AI summary for one section ---
+  async function generateSectionSummary(sectionKey: string, sectionHeading: string) {
+    if (!profile) return;
+    setGeneratingField(sectionKey);
+    setError(null);
+
+    const section = profile.sections[sectionKey];
+    // Format the section content for the AI
+    const cfg = (SECTION_CONFIGS[profile.type as ProfileType] ?? [])
+      .find(c => c.key === sectionKey);
+
+    let contentText = "";
+    if (cfg?.hasTraitBlocks && section.trait_blocks.length > 0) {
+      contentText = section.trait_blocks
+        .map(b => `- ${b.trait} [${b.influence}]: ${b.description}`)
+        .join("\n");
+    } else {
+      contentText = section.content;
+    }
+
+    if (!contentText.trim()) {
+      setError("Section is empty -- add some content before generating a summary.");
+      setGeneratingField(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/generate-section-summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_name:    profile.name,
+          profile_type:    profile.type,
+          section_heading: sectionHeading,
+          section_content: contentText,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Generation failed.");
+      }
+
+      const data = await res.json();
+      updateSection(sectionKey, { ai_summary: data.section_summary });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate section summary.");
+    } finally {
+      setGeneratingField(null);
+    }
+  }
+
+
+  // --- Generate the full profile AI summary ---
+  async function generateFullSummary() {
+    if (!profile) return;
+    setGeneratingField("full_summary");
+    setError(null);
+
+    const contentText = formatProfileForAI(profile);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/generate-full-summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_name:    profile.name,
+          profile_type:    profile.type,
+          profile_content: contentText,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Generation failed.");
+      }
+
+      const data = await res.json();
+      updateProfileField("full_ai_summary", data.full_summary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate full summary.");
+    } finally {
+      setGeneratingField(null);
+    }
+  }
+
+
+  // --- Send a chat message to the Profile Builder chat ---
+  async function sendChatMessage() {
+    if (!profile || !chatInput.trim() || chatLoading) return;
+
+    const userMessage: ProfileChatMessage = { role: "user", content: chatInput.trim() };
+    const newMessages = [...chatMessages, userMessage];
+
+    setChatMessages(newMessages);
+    setChatInput("");
+    setChatLoading(true);
+    setChatError(null);
+
+    // Scroll to the bottom after adding the user message
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/profile-chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_name:    profile.name,
+          profile_type:    profile.type,
+          profile_content: formatProfileForAI(profile),
+          messages:        newMessages,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Chat request failed.");
+      }
+
+      const data = await res.json();
+      setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Chat request failed.");
+    } finally {
+      setChatLoading(false);
+    }
   }
 
 
@@ -629,6 +848,9 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     onAddTraitBlock={() => addTraitBlock(cfg.key)}
                     onUpdateTraitBlock={(id, updates) => updateTraitBlock(cfg.key, id, updates)}
                     onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
+                    onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
+                    onGenerateUsageExample={(block) => generateUsageExample(cfg.key, block, cfg.heading)}
+                    generatingField={generatingField}
                   />
                 );
               })}
@@ -645,18 +867,15 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                       ? "Scene Summary"
                       : "Full AI Summary"}
                   </h2>
-                  <span
-                    className="text-xs text-[#3f3f7a]"
-                    title={
-                      profile.type === "chapter_summary" || profile.type === "scene_summary"
-                        ? "This is the summary text used as AI context. Write it manually or generate it in Phase 4."
-                        : "This section is generated by AI on demand (Phase 4). You can edit it manually."
-                    }
+                  <button
+                    onClick={generateFullSummary}
+                    disabled={generatingField === "full_summary"}
+                    className="flex items-center gap-1 rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Generate this summary using AI based on the profile content above"
                   >
-                    {profile.type === "chapter_summary" || profile.type === "scene_summary"
-                      ? "Used as AI context chip"
-                      : "AI-generated"}
-                  </span>
+                    <Sparkles size={11} />
+                    {generatingField === "full_summary" ? "Generating..." : "Generate"}
+                  </button>
                 </div>
                 <textarea
                   value={profile.full_ai_summary}
@@ -679,25 +898,101 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       </main>
 
 
-      {/* ── RIGHT PANEL: Calibration Chat (Phase 4 placeholder) ─────────── */}
+      {/* ── RIGHT PANEL: Profile Builder Chat ─────────────────────────── */}
+      {/* The chat is session-only. History lives in React state.
+          When you close the Profile Builder, the conversation is cleared.
+          The AI never auto-updates your profile fields -- all edits are manual. */}
       <aside className="flex w-72 shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
-        <div className="border-b border-[#1e1e4a] px-4 py-5">
+
+        <div className="border-b border-[#1e1e4a] px-4 py-3">
           <h2 className="text-sm font-semibold text-[#f0f0f5]">Profile Chat</h2>
           <p className="mt-1 text-xs text-[#8888aa]">
-            Conversational profile calibration. Ask questions, refine traits,
-            and explore how AI interprets this profile.
+            Ask how AI interprets this profile, refine traits, and brainstorm.
+            Session-only -- nothing is auto-applied.
           </p>
         </div>
-        <div className="flex flex-1 items-center justify-center px-4">
-          <div className="text-center">
-            <p className="text-xs text-[#3f3f7a]">
-              Profile chat is coming in Phase 4.
-            </p>
-            <p className="mt-1 text-xs text-[#3f3f7a]">
-              It will let you refine this profile through conversation
-              without auto-updating any of your written fields.
-            </p>
+
+        {/* Chat history */}
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          {!profile && (
+            <p className="text-xs text-[#3f3f7a]">Open a profile to start chatting.</p>
+          )}
+
+          {profile && chatMessages.length === 0 && (
+            <div className="text-center">
+              <p className="text-xs text-[#3f3f7a]">
+                Chat about <span className="text-[#8888aa]">{profile.name}</span>.
+              </p>
+              <p className="mt-1 text-xs text-[#3f3f7a]">
+                Try: "How would AI use the core traits?" or
+                "What's missing from this profile?"
+              </p>
+            </div>
+          )}
+
+          {chatMessages.map((msg, i) => (
+            <div
+              key={i}
+              className={`mb-3 ${msg.role === "user" ? "text-right" : "text-left"}`}
+            >
+              <div
+                className={`inline-block max-w-[90%] rounded px-3 py-2 text-xs leading-relaxed ${
+                  msg.role === "user"
+                    ? "bg-indigo-600/30 text-indigo-100"
+                    : "border border-[#1e1e4a] bg-[#12122e] text-[#f0f0f5]"
+                }`}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ))}
+
+          {chatLoading && (
+            <div className="flex items-center gap-2 text-xs text-[#8888aa]">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
+              Thinking...
+            </div>
+          )}
+
+          {chatError && (
+            <div className="rounded border border-red-800 bg-red-950/40 p-2">
+              <p className="text-xs text-red-300">{chatError}</p>
+            </div>
+          )}
+
+          {/* Invisible element used to scroll to the bottom */}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Chat input */}
+        <div className="border-t border-[#1e1e4a] p-3">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChatMessage()}
+              placeholder={profile ? "Ask about this profile..." : "Open a profile first"}
+              disabled={!profile || chatLoading}
+              className="flex-1 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <button
+              onClick={sendChatMessage}
+              disabled={!profile || !chatInput.trim() || chatLoading}
+              className="flex items-center justify-center rounded border border-[#1e1e4a] p-1.5 text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Send message (Enter)"
+            >
+              <Send size={13} />
+            </button>
           </div>
+          {chatMessages.length > 0 && (
+            <button
+              onClick={() => { setChatMessages([]); setChatError(null); }}
+              className="mt-1.5 text-xs text-[#3f3f7a] transition-colors hover:text-[#8888aa]"
+            >
+              Clear conversation
+            </button>
+          )}
         </div>
       </aside>
 
@@ -720,9 +1015,14 @@ interface ProfileSectionEditorProps {
   onAddTraitBlock: () => void;
   onUpdateTraitBlock: (id: string, updates: Partial<TraitBlock>) => void;
   onRemoveTraitBlock: (id: string) => void;
+  // Phase 4 generation callbacks
+  onGenerateSectionSummary: () => void;
+  onGenerateUsageExample: (block: TraitBlock) => void;
+  generatingField: string | null;
 }
 
 function ProfileSectionEditor({
+  sectionKey,
   heading,
   hasTraitBlocks,
   section,
@@ -731,7 +1031,12 @@ function ProfileSectionEditor({
   onAddTraitBlock,
   onUpdateTraitBlock,
   onRemoveTraitBlock,
+  onGenerateSectionSummary,
+  onGenerateUsageExample,
+  generatingField,
 }: ProfileSectionEditorProps) {
+  const isGeneratingSummary = generatingField === sectionKey;
+
   return (
     <div className="mb-6">
       {/* Section heading */}
@@ -753,6 +1058,8 @@ function ProfileSectionEditor({
               block={block}
               onUpdate={updates => onUpdateTraitBlock(block.id, updates)}
               onRemove={() => onRemoveTraitBlock(block.id)}
+              onGenerateUsageExample={() => onGenerateUsageExample(block)}
+              isGenerating={generatingField === `${sectionKey}:${block.id}`}
             />
           ))}
           <button
@@ -778,17 +1085,20 @@ function ProfileSectionEditor({
       <div className="rounded border border-[#1e1e4a] bg-[#070724] p-3">
         <div className="mb-1.5 flex items-center justify-between">
           <p className="text-xs font-medium text-[#8888aa]">AI Summary: {heading}</p>
-          <span
-            className="text-xs text-[#3f3f7a]"
-            title="This field is intended for AI-generated summaries (Phase 4). You can write here manually."
+          <button
+            onClick={onGenerateSectionSummary}
+            disabled={isGeneratingSummary}
+            className="flex items-center gap-1 rounded border border-[#1e1e4a] px-1.5 py-0.5 text-xs text-[#3f3f7a] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Generate this section summary using AI"
           >
-            AI-generated
-          </span>
+            <Sparkles size={10} />
+            {isGeneratingSummary ? "Generating..." : "Generate"}
+          </button>
         </div>
         <textarea
           value={section.ai_summary}
           onChange={e => onAiSummaryChange(e.target.value)}
-          placeholder="AI summary generated on demand in Phase 4. Editable by you."
+          placeholder="Click Generate to create an AI summary, or write one manually."
           rows={2}
           className="w-full resize-y rounded border border-[#1e1e4a] bg-[#0d0d2b] px-2 py-1.5 text-xs text-[#8888aa] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
         />
@@ -806,9 +1116,11 @@ interface TraitBlockCardProps {
   block: TraitBlock;
   onUpdate: (updates: Partial<TraitBlock>) => void;
   onRemove: () => void;
+  onGenerateUsageExample: () => void;
+  isGenerating: boolean;
 }
 
-function TraitBlockCard({ block, onUpdate, onRemove }: TraitBlockCardProps) {
+function TraitBlockCard({ block, onUpdate, onRemove, onGenerateUsageExample, isGenerating }: TraitBlockCardProps) {
   return (
     <div className="mb-3 rounded border border-[#1e1e4a] bg-[#0d0d2b] p-3">
 
@@ -867,14 +1179,25 @@ function TraitBlockCard({ block, onUpdate, onRemove }: TraitBlockCardProps) {
 
       {/* AI Usage Example */}
       <div className="mb-2 rounded border border-[#1e1e4a] bg-[#070724] p-2">
-        <label className="mb-0.5 block text-xs text-[#8888aa]">
-          AI Usage Example
-          <span className="ml-1 text-[#3f3f7a]">-- how AI should apply this trait in suggestions</span>
-        </label>
+        <div className="mb-0.5 flex items-center justify-between">
+          <label className="text-xs text-[#8888aa]">
+            AI Usage Example
+            <span className="ml-1 text-[#3f3f7a]">-- how AI should apply this trait</span>
+          </label>
+          <button
+            onMouseDown={(e) => { e.preventDefault(); onGenerateUsageExample(); }}
+            disabled={isGenerating || !block.trait.trim() || !block.description.trim()}
+            className="flex items-center gap-0.5 rounded border border-[#1e1e4a] px-1.5 py-0.5 text-xs text-[#3f3f7a] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+            title="Generate an AI usage example for this trait (requires trait name and description)"
+          >
+            <Sparkles size={10} />
+            {isGenerating ? "..." : "Generate"}
+          </button>
+        </div>
         <textarea
           value={block.ai_usage_example}
           onChange={e => onUpdate({ ai_usage_example: e.target.value })}
-          placeholder="Generated by AI on demand in Phase 4. You can write here manually."
+          placeholder="Click Generate to create an example, or write one manually."
           rows={2}
           className="w-full resize-y rounded border border-[#1e1e4a] bg-[#0d0d2b] px-2 py-1.5 text-xs text-[#8888aa] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
         />

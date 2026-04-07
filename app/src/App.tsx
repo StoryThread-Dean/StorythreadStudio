@@ -25,7 +25,7 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { Settings } from "./screens/Settings";
 import type { ProjectInfo, ChapterInfo } from "./types/project";
 import type { ProfileType } from "./types/profile";
-import type { AssistantResponse } from "./types/ai";
+import type { AssistantResponse, ContextChip } from "./types/ai";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -56,6 +56,13 @@ function App() {
   const [aiResult, setAiResult]         = useState<AssistantResponse | null>(null);
   const [aiError, setAiError]           = useState<string | null>(null);
   const [aiTab, setAiTab]               = useState<"readability" | "structure" | "context">("readability");
+
+  // Context chips -- profile summaries the writer explicitly attaches to AI requests.
+  // Only the chips the writer has added are sent with each assistant call.
+  const [contextChips, setContextChips] = useState<ContextChip[]>([]);
+
+  // Whether the context chip picker panel is open
+  const [showChipPicker, setShowChipPicker] = useState(false);
 
   // The list of chapter files found in the project's manuscript/ folder.
   const [chapters, setChapters] = useState<ChapterInfo[]>([]);
@@ -220,7 +227,11 @@ function App() {
       const response = await fetch(`${API_BASE}/api/ai/run-assistant`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assistant_id: assistantId, selected_text: selectedText }),
+        body: JSON.stringify({
+          assistant_id:  assistantId,
+          selected_text: selectedText,
+          context_chips: contextChips,   // Pass any attached profile context chips
+        }),
       });
 
       if (!response.ok) {
@@ -235,7 +246,7 @@ function App() {
     } finally {
       setAiLoading(false);
     }
-  }, [selectedText]);
+  }, [selectedText, contextChips]);
 
 
   // --- Keyboard shortcut: Ctrl+S to save ---
@@ -497,14 +508,106 @@ function App() {
             </>
           )}
           {aiTab === "structure" && (
-            <p className="text-xs text-[#3f3f7a]">
-              Structure assistants are coming in Phase 4.
-            </p>
+            <>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                Structure
+              </p>
+              <AssistantButton label="Dialogue Authenticity"
+                hint="Checks whether dialogue sounds natural, distinct, and free of on-the-nose exposition."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("dialogue_authenticity")} />
+              <AssistantButton label="POV Consistency"
+                hint="Detects point-of-view drift, head-hopping, and information the POV character couldn't know."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("pov_consistency")} />
+              <AssistantButton label="Tone & Voice Consistency"
+                hint="Checks whether the narrative tone and voice stay consistent throughout the passage."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("tone_voice_consistency")} />
+              <AssistantButton label="Character Development"
+                hint="Analyzes the passage for character growth, revelation, or missed development opportunities."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("character_development")} />
+            </>
           )}
           {aiTab === "context" && (
-            <p className="text-xs text-[#3f3f7a]">
-              Context assistants are coming in Phase 4.
-            </p>
+            <>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                Context
+              </p>
+              <AssistantButton label="Character Consistency"
+                hint="Checks whether characters behave consistently with their established traits. Works best with context chips attached."
+                disabled={!selectedText || aiLoading}
+                onClick={() => runAssistant("character_consistency")} />
+
+              {/* ── Context Chips Section ─────────────────────────────────────
+                  Context chips let the writer explicitly attach profile
+                  summaries to AI requests. The AI only sees what's attached --
+                  it never has implicit access to the full project.
+              ──────────────────────────────────────────────────────────────── */}
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                    Attached Context
+                  </p>
+                  <button
+                    onClick={() => setShowChipPicker(prev => !prev)}
+                    className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300"
+                    title="Attach a profile summary as context for AI assistants"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {/* Chip picker -- shows when "+ Add" is clicked */}
+                {showChipPicker && currentProject && (
+                  <ChipPicker
+                    rootPath={currentProject.root_path}
+                    existingChips={contextChips}
+                    onAdd={(chip) => {
+                      setContextChips(prev => [...prev, chip]);
+                      setShowChipPicker(false);
+                    }}
+                    onClose={() => setShowChipPicker(false)}
+                  />
+                )}
+
+                {/* Active context chips */}
+                {contextChips.length === 0 ? (
+                  <p className="text-xs text-[#3f3f7a]">
+                    No context attached. Add profile summaries to give the AI
+                    relevant story context.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {contextChips.map((chip, i) => (
+                      <div key={i}
+                        className="flex items-center justify-between rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1">
+                        <div>
+                          <span className="text-xs font-medium text-indigo-300">{chip.name}</span>
+                          <span className="ml-1.5 text-xs text-[#3f3f7a]">
+                            {chip.type.replace("_", " ")}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
+                          className="text-xs text-[#3f3f7a] transition-colors hover:text-red-400"
+                          title="Remove this context chip"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setContextChips([])}
+                      className="mt-1 text-xs text-[#3f3f7a] transition-colors hover:text-red-400"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
 
@@ -657,5 +760,109 @@ function AssistantButton({
     </button>
   );
 }
+
+// ── ChipPicker ────────────────────────────────────────────────────────────────
+// A small inline panel that lets the writer pick a profile to attach as a
+// context chip. It fetches the profile list on mount and shows it grouped by type.
+// When the writer clicks a profile, we fetch its full_ai_summary to use as
+// the chip content.
+
+interface ChipPickerProps {
+  rootPath: string;
+  existingChips: ContextChip[];
+  onAdd: (chip: ContextChip) => void;
+  onClose: () => void;
+}
+
+function ChipPicker({ rootPath, existingChips, onAdd, onClose }: ChipPickerProps) {
+  const [loading, setLoading] = useState(false);
+  const [profileType, setProfileType] = useState("character");
+  const [profiles, setProfiles] = useState<{ filename: string; name: string }[]>([]);
+  const [adding, setAdding] = useState<string | null>(null);
+
+  // Fetch the profile list when the selected type changes
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ folder_path: rootPath, type: profileType });
+    fetch(`${API_BASE}/api/profiles/list?${params}`)
+      .then(r => r.json())
+      .then(data => setProfiles(Array.isArray(data) ? data : []))
+      .catch(() => setProfiles([]))
+      .finally(() => setLoading(false));
+  }, [profileType, rootPath]);
+
+  async function pickProfile(filename: string, name: string) {
+    setAdding(filename);
+    try {
+      // Check if already attached
+      if (existingChips.some(c => c.name === name && c.type === profileType)) {
+        onClose();
+        return;
+      }
+      // Fetch the full profile to get its summary
+      const params = new URLSearchParams({ folder_path: rootPath, type: profileType, filename });
+      const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`);
+      const profile = await res.json();
+      // Use full_ai_summary if available, otherwise a note that it's empty
+      const content = profile.full_ai_summary?.trim()
+        || `[No AI summary generated yet for ${name}. Generate one in the Profile Builder.]`;
+      onAdd({ type: profileType, name, content });
+    } catch {
+      onClose();
+    } finally {
+      setAdding(null);
+    }
+  }
+
+  const types = ["character", "relationship", "location", "lore", "chapter_summary", "scene_summary"];
+
+  return (
+    <div className="mb-3 rounded border border-indigo-800/50 bg-[#0a0a28] p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold text-indigo-300">Attach Profile Context</p>
+        <button onClick={onClose} className="text-xs text-[#3f3f7a] hover:text-[#8888aa]">✕</button>
+      </div>
+
+      {/* Type selector */}
+      <select
+        value={profileType}
+        onChange={e => setProfileType(e.target.value)}
+        className="mb-2 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-xs text-[#f0f0f5] outline-none focus:border-indigo-500"
+      >
+        {types.map(t => (
+          <option key={t} value={t}>{t.replace("_", " ")}</option>
+        ))}
+      </select>
+
+      {/* Profile list */}
+      {loading ? (
+        <p className="text-xs text-[#3f3f7a]">Loading...</p>
+      ) : profiles.length === 0 ? (
+        <p className="text-xs text-[#3f3f7a]">No profiles of this type found.</p>
+      ) : (
+        <div className="flex max-h-32 flex-col gap-0.5 overflow-y-auto">
+          {profiles.map(p => {
+            const alreadyAdded = existingChips.some(c => c.name === p.name && c.type === profileType);
+            return (
+              <button
+                key={p.filename}
+                onClick={() => !alreadyAdded && pickProfile(p.filename, p.name)}
+                disabled={alreadyAdded || adding === p.filename}
+                className={`rounded px-2 py-1 text-left text-xs transition-colors ${
+                  alreadyAdded
+                    ? "text-[#3f3f7a] cursor-not-allowed"
+                    : "text-[#f0f0f5] hover:bg-indigo-600/20 hover:text-indigo-300"
+                }`}
+              >
+                {adding === p.filename ? "Adding..." : alreadyAdded ? `${p.name} ✓` : p.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default App;

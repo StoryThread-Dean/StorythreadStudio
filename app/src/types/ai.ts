@@ -54,8 +54,61 @@ export interface AssistantResponse {
   had_em_dashes: boolean;
 }
 
+// ── Context Chips ─────────────────────────────────────────────────────────────
+
+// A context chip is a piece of profile content the writer explicitly attaches
+// to an AI assistant request. The AI only sees what the writer chooses to share.
+export interface ContextChip {
+  type: string;    // "character" | "relationship" | "location" | "lore" | etc.
+  name: string;    // Display name, e.g. "Elara Voss"
+  content: string; // The profile summary or relevant text to include
+}
+
 export interface RunAssistantPayload {
   assistant_id: string;
   selected_text: string;
   model_id?: string;
+  context_chips?: ContextChip[];  // Phase 4: explicitly attached profile context
+}
+
+// ── Phase 4 Generation Payloads ───────────────────────────────────────────────
+
+export interface GenerateUsageExamplePayload {
+  profile_name:    string;
+  profile_type:    string;
+  section_heading: string;
+  trait:           string;
+  description:     string;
+  influence:       string;
+  model_id?:       string;
+}
+
+export interface GenerateSectionSummaryPayload {
+  profile_name:    string;
+  profile_type:    string;
+  section_heading: string;
+  section_content: string;
+  model_id?:       string;
+}
+
+export interface GenerateFullSummaryPayload {
+  profile_name:    string;
+  profile_type:    string;
+  profile_content: string;
+  model_id?:       string;
+}
+
+// ── Profile Builder Chat ───────────────────────────────────────────────────────
+
+export interface ProfileChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ProfileChatPayload {
+  profile_name:    string;
+  profile_type:    string;
+  profile_content: string;
+  messages:        ProfileChatMessage[];
+  model_id?:       string;
 }
