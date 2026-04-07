@@ -21,8 +21,11 @@ import "./App.css";
 import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
 import { ProjectHome } from "./screens/ProjectHome";
-import type { ProjectInfo } from "./types/project";
+import type { ProjectInfo, ChapterInfo } from "./types/project";
 import type { EditorView } from "@codemirror/view";
+
+// The base URL for all API calls to the Python FastAPI backend.
+const API_BASE = "http://localhost:8000";
 
 
 // ── App Component ────────────────────────────────────────────────────────────
@@ -33,8 +36,24 @@ function App() {
   // Which project is currently open. null = show home screen.
   const [currentProject, setCurrentProject] = useState<ProjectInfo | null>(null);
 
+  // The list of chapter files found in the project's manuscript/ folder.
+  const [chapters, setChapters] = useState<ChapterInfo[]>([]);
+
+  // The chapter currently open in the editor.
+  const [currentChapter, setCurrentChapter] = useState<ChapterInfo | null>(null);
+
+  // The content loaded from disk for the current chapter.
+  // This is passed to MarkdownEditor as its initial content.
+  const [chapterContent, setChapterContent] = useState<string>("");
+
+  // True while a chapter is being fetched from the backend.
+  const [isLoadingChapter, setIsLoadingChapter] = useState(false);
+
   // True when the writer has typed something since the last save.
   const [isDirty, setIsDirty] = useState(false);
+
+  // Any error message to show in the editor area (e.g. save failed).
+  const [editorError, setEditorError] = useState<string | null>(null);
 
   // The currently selected writing font.
   const [currentFont, setCurrentFont] = useState<FontValue>(FONT_OPTIONS[0].value);
@@ -44,29 +63,132 @@ function App() {
   const [editorView, setEditorView] = useState<EditorView | null>(null);
 
   // Ref for use inside callbacks -- gives the latest value without stale closures.
+  // A "stale closure" is when a function captures an old version of a variable.
+  // The ref always points to the current value, even inside older closures.
   const editorViewRef = useRef<EditorView | null>(null);
+  const currentChapterRef = useRef<ChapterInfo | null>(null);
+  const currentProjectRef = useRef<ProjectInfo | null>(null);
 
-  // Called by ProjectHome when a project is successfully created or opened.
-  const handleProjectOpen = useCallback((project: ProjectInfo) => {
-    setCurrentProject(project);
-    setIsDirty(false); // Reset dirty state for the new project
+  // Keep refs in sync with state on every render.
+  // This lets our event listeners (Ctrl+S) always see the latest values.
+  currentChapterRef.current  = currentChapter;
+  currentProjectRef.current  = currentProject;
+
+
+  // --- Load a chapter from the backend ---
+  // Fetches the file content for a given chapter and updates the editor.
+  // useCallback memoizes this function so it doesn't get recreated every render.
+  const loadChapter = useCallback(async (chapter: ChapterInfo, project: ProjectInfo) => {
+    setIsLoadingChapter(true);
+    setEditorError(null);
+
+    try {
+      const params = new URLSearchParams({
+        folder_path: project.root_path,
+        filename:    chapter.filename,
+      });
+
+      const response = await fetch(`${API_BASE}/api/documents/chapter?${params}`);
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail ?? "Failed to load chapter.");
+      }
+
+      const data = await response.json();
+
+      // Update the content and mark the chapter as current.
+      // The editor uses `key={currentChapter.filename}` so changing
+      // currentChapter causes a full remount with the new content.
+      setChapterContent(data.content);
+      setCurrentChapter(chapter);
+      setIsDirty(false);
+
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not load chapter.");
+    } finally {
+      setIsLoadingChapter(false);
+    }
   }, []);
 
-  // Called by MarkdownEditor every time the writer types anything.
+
+  // --- Called by ProjectHome when a project is opened or created ---
+  // Fetches the chapter list, then auto-opens the first chapter.
+  const handleProjectOpen = useCallback(async (project: ProjectInfo) => {
+    setCurrentProject(project);
+    setChapters([]);
+    setCurrentChapter(null);
+    setChapterContent("");
+    setIsDirty(false);
+    setEditorError(null);
+
+    try {
+      const params = new URLSearchParams({ folder_path: project.root_path });
+      const response = await fetch(`${API_BASE}/api/documents/chapters?${params}`);
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail ?? "Failed to load chapter list.");
+      }
+
+      const chapterList: ChapterInfo[] = await response.json();
+      setChapters(chapterList);
+
+      // Auto-open the first chapter if any exist
+      if (chapterList.length > 0) {
+        await loadChapter(chapterList[0], project);
+      }
+
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not load project chapters.");
+    }
+  }, [loadChapter]);
+
+
+  // --- Called by MarkdownEditor every time the writer types anything ---
   const handleContentChange = useCallback(() => {
     setIsDirty(true);
   }, []);
 
-  // Reads current content from CodeMirror and "saves" it.
-  // File I/O will be added in the next step -- for now just clears the dirty flag.
-  const handleSave = useCallback(() => {
-    const currentContent = editorViewRef.current?.state.doc.toString() ?? "";
-    // TODO: POST /api/documents/{id} to write file to disk
-    console.log("Saved (in-memory only):", currentContent.slice(0, 60) + "...");
-    setIsDirty(false);
+
+  // --- Save the current chapter to disk ---
+  // Reads the current editor content and POSTs it to the backend.
+  const handleSave = useCallback(async () => {
+    const view    = editorViewRef.current;
+    const chapter = currentChapterRef.current;
+    const project = currentProjectRef.current;
+
+    // Nothing to save if no chapter is open
+    if (!view || !chapter || !project) return;
+
+    const content = view.state.doc.toString();
+    setEditorError(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/documents/chapter`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          folder_path: project.root_path,
+          filename:    chapter.filename,
+          content,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail ?? "Save failed.");
+      }
+
+      setIsDirty(false);
+
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not save chapter.");
+    }
   }, []);
 
-  // Keyboard shortcut: Ctrl+S to save.
+
+  // --- Keyboard shortcut: Ctrl+S to save ---
   // useEffect runs this setup once after the first render, and cleans up on unmount.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -79,10 +201,6 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleSave]);
 
-  // Initial editor content -- used once when the editor first mounts.
-  // CodeMirror owns the text after that.
-  const initialContent = "# Chapter 1\n\nStart writing here...\n";
-
 
   // ── CONDITIONAL RENDERING -- safe to do here because all hooks are above ──
 
@@ -91,7 +209,7 @@ function App() {
     return <ProjectHome onProjectOpen={handleProjectOpen} />;
   }
 
-  // Project is open: show the three-panel writing editor
+  // ── Project is open: show the three-panel writing editor ──────────────────
   return (
     <div className="flex h-screen overflow-hidden bg-[#070724] text-[#f0f0f5]">
 
@@ -108,14 +226,33 @@ function App() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-4">
+
+          {/* Manuscript section -- real chapter list from disk */}
           <NavSection label="Manuscript">
-            <NavItem label="Chapter 1" hint="Click to open this chapter in the editor" active />
-            <NavItem label="Chapter 2" hint="Click to open this chapter in the editor" />
+            {chapters.length === 0 && (
+              <p className="px-2 text-xs text-[#3f3f7a]">No chapters found.</p>
+            )}
+            {chapters.map((chapter) => (
+              <NavItem
+                key={chapter.filename}
+                label={chapter.title}
+                hint={`Open ${chapter.filename} in the editor`}
+                active={currentChapter?.filename === chapter.filename}
+                onClick={() => {
+                  // Don't reload if this chapter is already open
+                  if (currentChapter?.filename !== chapter.filename) {
+                    loadChapter(chapter, currentProject);
+                  }
+                }}
+              />
+            ))}
           </NavSection>
+
           <NavSection label="Notes">
             <NavItem label="Outline"     hint="Story structure and plot notes" />
             <NavItem label="Style Guide" hint="Rules for tone, voice, and punctuation" />
           </NavSection>
+
           <NavSection label="Profiles">
             <NavItem label="Characters" hint="Character profiles and trait blocks" />
             <NavItem label="Locations"  hint="Location descriptions and atmosphere notes" />
@@ -139,7 +276,9 @@ function App() {
 
         {/* Chapter title bar + save indicator */}
         <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
-          <span className="text-sm font-medium text-[#f0f0f5]">Chapter 1</span>
+          <span className="text-sm font-medium text-[#f0f0f5]">
+            {currentChapter ? currentChapter.title : "No chapter open"}
+          </span>
           <div className="flex items-center gap-2">
             {isDirty ? (
               <span className="flex items-center gap-1.5 text-xs text-amber-400"
@@ -149,21 +288,30 @@ function App() {
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-xs text-emerald-500"
-                title="All changes are saved. Manual save only -- no autosave.">
+                title="All changes are saved to disk. Manual save only -- no autosave.">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 Saved
               </span>
             )}
             <button
               onClick={handleSave}
-              disabled={!isDirty}
+              disabled={!isDirty || !currentChapter}
               className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
-              title="Save the current chapter (Ctrl+S)"
+              title="Save the current chapter to disk (Ctrl+S)"
             >
               Save
             </button>
           </div>
         </div>
+
+        {/* Error banner -- shown when save or load fails */}
+        {editorError && (
+          <div className="shrink-0 border-b border-red-800 bg-red-950/40 px-4 py-2">
+            <p className="text-xs text-red-300">
+              <span className="font-semibold">Error: </span>{editorError}
+            </p>
+          </div>
+        )}
 
         {/* Formatting toolbar */}
         <EditorToolbar
@@ -172,17 +320,36 @@ function App() {
           onFontChange={setCurrentFont}
         />
 
-        {/* Markdown editor */}
+        {/* Editor area -- loading state or the actual editor */}
         <div className="flex-1 overflow-hidden">
-          <MarkdownEditor
-            defaultValue={initialContent}
-            onChange={handleContentChange}
-            font={currentFont}
-            onEditorReady={(view) => {
-              setEditorView(view);
-              editorViewRef.current = view;
-            }}
-          />
+          {isLoadingChapter ? (
+            // Loading placeholder shown while the chapter file is being fetched
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-[#8888aa]">Loading chapter...</p>
+            </div>
+          ) : currentChapter ? (
+            // key={currentChapter.filename} forces a full remount when the chapter
+            // changes. This is the correct way to reset an uncontrolled component
+            // (CodeMirror) with new content -- instead of trying to imperatively
+            // push new content into the editor, we simply unmount and remount it.
+            <MarkdownEditor
+              key={currentChapter.filename}
+              defaultValue={chapterContent}
+              onChange={handleContentChange}
+              font={currentFont}
+              onEditorReady={(view) => {
+                setEditorView(view);
+                editorViewRef.current = view;
+              }}
+            />
+          ) : (
+            // No chapter open yet (project has no chapters, or still loading)
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-[#8888aa]">
+                Select a chapter from the left panel to start writing.
+              </p>
+            </div>
+          )}
         </div>
       </main>
 
@@ -247,9 +414,20 @@ function NavSection({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-function NavItem({ label, hint, active = false }: { label: string; hint: string; active?: boolean }) {
+function NavItem({
+  label,
+  hint,
+  active = false,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <button
+      onClick={onClick}
       className={`mb-0.5 w-full rounded px-2 py-1.5 text-left text-sm transition-colors ${
         active ? "bg-indigo-600/20 text-indigo-300" : "text-[#f0f0f5] hover:bg-[#12122e]"
       }`}

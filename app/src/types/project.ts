@@ -36,3 +36,12 @@ export interface CreateProjectPayload {
 export interface OpenProjectPayload {
   folder_path: string;
 }
+
+// --- ChapterInfo ---
+// Metadata about one chapter file, returned by GET /api/documents/chapters.
+// The editor uses this to build the chapter list in the left nav panel.
+export interface ChapterInfo {
+  filename: string;   // e.g. "01-chapter-one.md"
+  title: string;      // e.g. "Chapter One"
+  path: string;       // Full absolute path on disk
+}
