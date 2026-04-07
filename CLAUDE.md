@@ -24,8 +24,11 @@ All items shipped:
 ### Phase 2 -- Complete
 All items shipped: character/relationship/location/lore profiles, chapter and scene summary files, Profile Builder UI (3-panel), trait blocks with influence scale, AI summary placeholder fields, character profile import/fork.
 
-### Phase 3 -- Next
-OpenRouter integration: API key storage, model listing, connection test, assistant execution pipeline, AI response panel, no-em-dash sanitizer. First assistants: Grammar & Punctuation, Clarity & Consistency, Eliminate Redundancy, Descriptive Enhancement.
+### Phase 3 -- Complete
+All items shipped: OpenRouter integration, API key storage (masked, ~/.storyforge/settings.json), model listing, connection test, assistant execution pipeline, em dash sanitizer at all 3 layers, Settings modal, live AI panel with text selection + copy buttons. First 4 assistants: Grammar & Punctuation, Clarity & Consistency, Eliminate Redundancy, Descriptive Enhancement.
+
+### Phase 4 -- Next
+Profile-aware AI: explicit context attachment, context chips, generate ai_usage_example into trait blocks, generate section/full profile summaries, Profile Builder chat, chapter/scene summary generation. Second-wave assistants: Dialogue Authenticity, POV Consistency, Tone and Voice Consistency, Character Development, Character Consistency.
 
 ---
 

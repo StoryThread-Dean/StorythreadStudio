@@ -39,23 +39,24 @@ Built:
 Deliverable:
 - usable context and profile system -- DELIVERED
 
-## Phase 3: OpenRouter Integration
-Build:
-- API key storage
-- model listing
-- connection test
-- assistant execution pipeline
-- AI response panel
-- no-em-dash sanitizer
+## Phase 3: OpenRouter Integration -- COMPLETE
+Built:
+- API key storage in ~/.storyforge/settings.json
+- model listing from OpenRouter (populates Settings model picker)
+- connection test endpoint
+- assistant execution pipeline (run-assistant, sanitize, return structured JSON)
+- live AI response panel with text selection indicator, loading state, copy buttons
+- no-em-dash sanitizer at all 3 layers (prompt, sanitizer.py, style guide)
+- Settings modal (API key with masking, model picker, test connection)
 
-Start with assistants:
+First-wave assistants shipped:
 - Grammar and Punctuation
 - Clarity and Consistency
 - Eliminate Redundancy
 - Descriptive Enhancement
 
 Deliverable:
-- first end-to-end AI workflow
+- first end-to-end AI workflow -- DELIVERED
 
 ## Phase 4: Profile Aware AI
 Build:
