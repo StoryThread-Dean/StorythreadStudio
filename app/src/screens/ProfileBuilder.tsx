@@ -64,6 +64,44 @@ interface ToolkitSection {
 const SUMMARY_PLACEHOLDER = "_Generated on demand. Editable by writer._";
 
 /**
+ * Extract readable plain text from an AI summary field.
+ * AI summaries are sometimes stored with a JSON code block wrapper:
+ *   ```json
+ *   {"section_summary": "actual text here"}
+ *   ```
+ * This strips the wrapper and returns just the readable text.
+ * If the content is not JSON-wrapped, it's returned as-is.
+ */
+function extractSummaryText(raw: string): string {
+  if (!raw.trim()) return "";
+
+  // Try extracting from ```json { "key": "value" } ``` fenced block
+  const fenceMatch = raw.match(
+    /```(?:json)?\s*\{[\s\S]*?"(?:section_summary|full_summary|ai_usage_example)":\s*"([\s\S]*?)"\s*\}\s*```/
+  );
+  if (fenceMatch) {
+    return fenceMatch[1]
+      .replace(/\\n/g, " ")
+      .replace(/\\"/g, '"')
+      .trim();
+  }
+
+  // Try parsing as raw JSON (no fences)
+  try {
+    const str = raw.trim();
+    if (str.startsWith("{")) {
+      const parsed = JSON.parse(str);
+      for (const key of ["section_summary", "full_summary", "ai_usage_example"]) {
+        if (typeof parsed[key] === "string") return parsed[key].trim();
+      }
+    }
+  } catch {}
+
+  // Not JSON -- return as-is (plain text summaries written by the writer)
+  return raw.trim();
+}
+
+/**
  * Format one trait block into a readable text string for AI context.
  * Includes all filled fields (influence, description, usage example, notes).
  */
@@ -104,27 +142,34 @@ function buildToolkitSections(profile: Profile): ToolkitSection[] {
         });
       }
     } else {
-      // Plain-text sections: one item for the whole section
+      // Plain-text sections: one item for the whole section.
+      // Label shows the START of the content, not the heading again
+      // (showing the heading twice -- as section header AND item label -- is confusing).
       if (section.content.trim()) {
+        const text = section.content.trim();
+        const preview = text.slice(0, 55) + (text.length > 55 ? "..." : "");
         items.push({
           id: `section:${cfg.key}`,
           sectionKey: cfg.key,
-          label: cfg.heading,
-          sub: section.content,
-          content: `${cfg.heading}:\n${section.content.trim()}`,
+          label: preview,   // First words of actual content -- not the heading
+          sub: "",          // No sub needed -- the label already shows the content
+          content: `${cfg.heading}:\n${text}`,
         });
       }
     }
 
-    // Add the section's AI summary if it has been generated
-    const summary = section.ai_summary.trim();
-    if (summary && summary !== SUMMARY_PLACEHOLDER) {
+    // Add the section's AI summary if it has been generated.
+    // Strip any JSON code block wrapper so the display shows readable text,
+    // and the content sent to AI is clean plain text too.
+    const rawSummary = section.ai_summary.trim();
+    if (rawSummary && rawSummary !== SUMMARY_PLACEHOLDER) {
+      const cleanSummary = extractSummaryText(rawSummary);
       items.push({
         id: `ai-summary:${cfg.key}`,
         sectionKey: cfg.key,
         label: `AI Summary: ${cfg.heading}`,
-        sub: summary,
-        content: `AI Summary -- ${cfg.heading}:\n${summary}`,
+        sub: cleanSummary,
+        content: `AI Summary -- ${cfg.heading}:\n${cleanSummary}`,
       });
     }
 
@@ -133,18 +178,21 @@ function buildToolkitSections(profile: Profile): ToolkitSection[] {
     }
   }
 
-  // Full AI Summary as its own section at the bottom
-  const fullSummary = profile.full_ai_summary.trim();
-  if (fullSummary && fullSummary !== SUMMARY_PLACEHOLDER) {
+  // Full AI Summary as its own section at the bottom.
+  // Extract clean text from any JSON wrapper before displaying or sending.
+  const rawFull = profile.full_ai_summary.trim();
+  if (rawFull && rawFull !== SUMMARY_PLACEHOLDER) {
+    const cleanFull = extractSummaryText(rawFull);
+    const preview = cleanFull.slice(0, 55) + (cleanFull.length > 55 ? "..." : "");
     result.push({
       key: "full_ai_summary",
       label: "Full AI Summary",
       items: [{
         id: "full-ai-summary",
         sectionKey: "full_ai_summary",
-        label: "Full AI Summary",
-        sub: fullSummary,
-        content: `Full AI Summary:\n${fullSummary}`,
+        label: preview,
+        sub: "",
+        content: `Full AI Summary:\n${cleanFull}`,
       }],
     });
   }
@@ -1335,15 +1383,36 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
 
         {/* Chat input */}
         <div className="border-t border-[#1e1e4a] p-3">
-          <div className="flex gap-2">
-            <input
-              type="text"
+          {/* items-end aligns the Send button to the bottom of the textarea */}
+          <div className="flex items-end gap-2">
+            <textarea
               value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChatMessage()}
-              placeholder={profile ? "Ask about this profile..." : "Open a profile first"}
+              onChange={e => {
+                setChatInput(e.target.value);
+                // Auto-expand up to 7 lines then scroll.
+                // Each line is ~20px; add 12px for top/bottom padding.
+                const el = e.target;
+                el.style.height = "auto";
+                const maxH = 7 * 20 + 12;
+                el.style.height = Math.min(el.scrollHeight, maxH) + "px";
+                el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+              }}
+              onKeyDown={e => {
+                // Enter sends, Shift+Enter inserts a line break
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendChatMessage();
+                }
+              }}
+              placeholder={
+                profile
+                  ? "Ask about this profile... (Enter to send, Shift+Enter for new line)"
+                  : "Open a profile first"
+              }
               disabled={!profile || chatLoading}
-              className="flex-1 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              rows={3}
+              style={{ resize: "none", overflowY: "hidden" }}
+              className="flex-1 rounded border border-[#1e1e4a] bg-[#1e1e48] px-2 py-2 text-xs text-[#f0f0f5] placeholder-[#6666a0] outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <button
               onClick={sendChatMessage}
@@ -1607,30 +1676,34 @@ function ToolKit({
                       </span>
                     </label>
 
-                    {/* Individual items within the section -- indented */}
-                    {section.items.map(item => (
-                      <label
-                        key={item.id}
-                        className="flex cursor-pointer items-start gap-2 rounded py-1 pl-5 pr-1 transition-colors hover:bg-teal-900/20"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selections.has(item.id)}
-                          onChange={() => onToggleItem(item.id)}
-                          className="mt-0.5 shrink-0 accent-teal-500"
-                        />
-                        <div className="min-w-0">
-                          {/* Primary line: trait name or section heading */}
-                          <p className="truncate text-xs text-teal-100">{item.label}</p>
-                          {/* Secondary line: start of the description */}
-                          {item.sub && (
-                            <p className="truncate text-xs text-teal-700">
-                              {item.sub.slice(0, 75)}{item.sub.length > 75 ? "..." : ""}
-                            </p>
-                          )}
-                        </div>
-                      </label>
-                    ))}
+                    {/* Individual items -- indented under the section header.
+                        ml-3 + border-l creates a visible "child of section" indicator.
+                        pl-3 gives breathing room from the border to the checkbox. */}
+                    <div className="ml-4 border-l border-teal-800/50">
+                      {section.items.map(item => (
+                        <label
+                          key={item.id}
+                          className="flex cursor-pointer items-start gap-2 rounded py-1 pl-3 pr-1 transition-colors hover:bg-teal-900/20"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selections.has(item.id)}
+                            onChange={() => onToggleItem(item.id)}
+                            className="mt-0.5 shrink-0 accent-teal-500"
+                          />
+                          <div className="min-w-0">
+                            {/* Primary line: trait name or content preview */}
+                            <p className="truncate text-xs text-teal-100">{item.label}</p>
+                            {/* Secondary line: description start (shown only if present) */}
+                            {item.sub && (
+                              <p className="truncate text-xs text-teal-700">
+                                {item.sub.slice(0, 70)}{item.sub.length > 70 ? "..." : ""}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
