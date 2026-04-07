@@ -6,7 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-This repository is currently in **Phase 0 (Design Freeze)**. All files are planning documentation only -- no application code exists yet. The full spec lives across `01-product-scope.md` through `06-roadmap-and-mvp-plan.md`. The next step is finalizing wireframes before Phase 1 (foundation build) begins.
+**Current phase: Phase 2 (Profile System) -- in progress.**
+
+Phase 0 (design freeze) and Phase 1 (local desktop foundation) are complete and merged into `main`.
+
+### Phase 1 -- Complete
+All items shipped:
+- Tauri shell + React scaffold (three-panel layout)
+- FastAPI backend with CORS, health check, projects router, documents router
+- Project create and open (OS folder picker, project.json, full folder structure)
+- Dynamic chapter list (reads manuscript/ from disk)
+- CodeMirror Markdown editor with formatting toolbar and font selector
+- Real file save -- Ctrl+S and Save button write to disk via POST /api/documents/chapter
+- Unsaved-changes indicator (amber dot)
+- Session undo/redo (CodeMirror history)
+
+### Phase 2 -- In Progress
+Building the profile system: character, relationship, location, and lore profiles; trait blocks; influence scale; Profile Builder UI; chapter and scene summary files.
 
 ---
 

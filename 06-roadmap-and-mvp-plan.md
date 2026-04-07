@@ -1,6 +1,6 @@
 # 06. Roadmap and MVP Plan
 
-## Phase 0: Design Freeze
+## Phase 0: Design Freeze -- COMPLETE
 Deliverables:
 - final folder structure
 - Markdown schemas
@@ -10,20 +10,20 @@ Deliverables:
 - prompt rules
 - wireframes
 
-## Phase 1: Local Desktop Foundation
-Build:
+## Phase 1: Local Desktop Foundation -- COMPLETE
+Built:
 - Tauri shell
-- React frontend scaffold
-- FastAPI local backend
-- project create and open
-- chapter list
-- Markdown editor
-- manual save
-- unsaved-changes warning
+- React frontend scaffold (three-panel layout)
+- FastAPI local backend with CORS, health check, projects and documents routers
+- project create and open (OS folder picker, project.json, full folder structure)
+- dynamic chapter list (reads manuscript/ from disk)
+- CodeMirror Markdown editor with formatting toolbar and font selector
+- real file save -- Ctrl+S and Save button write to disk
+- unsaved-changes indicator
 - session undo and redo
 
 Deliverable:
-- usable local writing app without AI
+- usable local writing app without AI -- DELIVERED
 
 ## Phase 2: Profile System
 Build:
@@ -119,8 +119,8 @@ Deliverable:
 
 ## Key MVP Acceptance Checklist
 
-- [ ] Can create and open a local project
-- [ ] Can edit and save a chapter in Markdown
+- [x] Can create and open a local project
+- [x] Can edit and save a chapter in Markdown
 - [ ] Can create a character profile
 - [ ] Can generate AI usage examples into trait blocks
 - [ ] Can generate AI section summaries into Markdown
