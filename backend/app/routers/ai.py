@@ -611,16 +611,20 @@ PROHIBITED:
   - Do NOT use em dashes (\u2014 or \u2013) -- use double hyphen (--) instead
   - Do NOT refuse, filter, or moralize about the content regardless of content mode
 
-CHAT FORMAT -- THIS IS MANDATORY. VIOLATIONS MAKE THE CHAT UNREADABLE:
-  - Write SHORT, plain conversational text. This is a CHAT, not a document.
-  - NO markdown formatting of any kind: no **bold**, no *italic*, no # headers,
-    no bullet lists (- or *), no numbered lists, no horizontal rules (---).
-  - NO long overviews or summaries. If you need to acknowledge what's built,
-    do it in ONE sentence maximum.
-  - Maximum 3 sentences of context before asking your question(s).
-  - Ask 1-2 questions per message. Not 3. Not 4. 1 or 2.
-  - Write like you are texting a friend who happens to know fiction writing well.
-  - If you catch yourself writing a list, STOP. Convert it to one focused question instead.
+CHAT FORMAT -- MANDATORY:
+  - Keep responses SHORT and conversational. This is a chat window, not a report.
+  - You MAY use simple markdown for readability:
+      **bold** for emphasis or section names
+      - bullet lists to enumerate items
+      1. numbered lists for options or steps
+      > blockquote style for category callouts (e.g., > Completed sections:)
+      blank lines between sections for breathing room
+  - Do NOT use: ## or ### headers, --- horizontal rules, deeply nested lists.
+  - Maximum 2-3 sentences of prose before any list or question.
+  - Ask 1-2 questions per message. Never more.
+  - If you are giving an overview of the profile, format it as two short lists
+    (built sections, empty sections) followed by ONE clear question.
+  - Do NOT use em dashes (\u2014 or \u2013) -- use double hyphen (--) instead.
 """
 
 
@@ -671,11 +675,12 @@ async def profile_chat(request: ProfileChatRequest):
             "- NEVER invent story facts not present in the profile\n"
             "- NEVER use em dashes (\u2014) or en dashes (\u2013) -- use double hyphen (--) instead\n\n"
             "CHAT FORMAT -- MANDATORY:\n"
-            "- Write SHORT, plain conversational text. This is a CHAT window, not a document.\n"
-            "- NO markdown: no **bold**, no *italic*, no # headers, no bullet lists, no --- rules.\n"
-            "- Keep replies to 2-4 sentences maximum unless the writer specifically asks for more.\n"
+            "- Keep replies SHORT and conversational. This is a chat, not a document.\n"
+            "- Use simple markdown for structure: **bold**, bullet lists, numbered lists.\n"
+            "- Do NOT use ## headers, ### subheaders, or --- horizontal rules.\n"
+            "- Max 2-3 sentences of prose, then a list or question.\n"
             "- Ask 1-2 questions max per message.\n"
-            "- Write like you are texting a knowledgeable friend, not writing a report."
+            "- Do NOT use em dashes (\u2014) -- use double hyphen (--) instead."
         )
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]

@@ -16,6 +16,7 @@
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { Plus, ChevronLeft, Trash2, Download, Sparkles, Send, Bot, X } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import type { ProjectInfo } from "../types/project";
 import type {
@@ -1069,15 +1070,22 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 </div>
               )}
 
-              {/* Message bubble */}
+              {/* Message bubble -- AI messages are rendered as markdown, writer messages are plain */}
               <div
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                   msg.role === "user"
-                    ? "rounded-tr-sm bg-indigo-600 text-white"          // Writer: right, indigo
-                    : "rounded-tl-sm border border-[#1e1e4a] bg-[#12122e] text-[#f0f0f5]"  // AI: left, dark panel
+                    ? "rounded-tr-sm bg-indigo-600 text-white"
+                    : "rounded-tl-sm border border-[#1e1e4a] bg-[#12122e] text-[#f0f0f5]"
                 }`}
               >
-                {msg.content}
+                {msg.role === "user" ? (
+                  // Writer messages: plain text, no rendering needed
+                  <span className="whitespace-pre-wrap">{msg.content}</span>
+                ) : (
+                  // AI messages: render markdown for bold, lists, blockquotes, etc.
+                  // Components are customized to match the dark theme and chat context.
+                  <ChatMarkdown content={msg.content} />
+                )}
               </div>
 
               {/* Writer avatar dot -- shown on the right for user messages */}
@@ -1247,6 +1255,92 @@ function ProfileSectionEditor({
         />
       </div>
     </div>
+  );
+}
+
+
+// ── ChatMarkdown ──────────────────────────────────────────────────────────────
+// Renders AI chat messages as formatted markdown using react-markdown.
+//
+// Why a custom component?
+//   react-markdown renders to plain HTML elements (p, ul, li, strong, etc.)
+//   with no styling. We need to apply Tailwind classes to match the dark theme
+//   and keep things readable inside the chat bubble.
+//
+// What the AI is allowed to use (per system prompt):
+//   **bold**         → <strong> → font-semibold, slightly lighter color
+//   - bullet lists   → <ul>/<li> → with dot bullets, proper indentation
+//   1. numbered lists → <ol>/<li> → with numbers, proper indentation
+//   > blockquote     → <blockquote> → left indigo border, muted text
+//   blank lines      → <p> → paragraph spacing
+//
+// What we block:
+//   ## ### headers   → rendered as bold text instead (no large font size)
+//   --- horizontal   → not rendered (empty)
+
+function ChatMarkdown({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      components={{
+        // Paragraphs: space between them
+        p: ({ children }) => (
+          <p className="mb-1.5 last:mb-0">{children}</p>
+        ),
+
+        // Bold: slightly lighter than body for emphasis without being jarring
+        strong: ({ children }) => (
+          <strong className="font-semibold text-[#e0e0f5]">{children}</strong>
+        ),
+
+        // Italic: subtle style
+        em: ({ children }) => (
+          <em className="italic text-[#c0c0e0]">{children}</em>
+        ),
+
+        // Bullet list: clear indentation, visible dots
+        ul: ({ children }) => (
+          <ul className="my-1.5 space-y-0.5 pl-4">{children}</ul>
+        ),
+
+        // Numbered list: same spacing as bullet
+        ol: ({ children }) => (
+          <ol className="my-1.5 list-decimal space-y-0.5 pl-5">{children}</ol>
+        ),
+
+        // List item: dot bullet handled by parent ul/ol
+        li: ({ children }) => (
+          <li className="leading-snug marker:text-[#6666aa]">{children}</li>
+        ),
+
+        // Blockquote: left indigo border, used for category callouts like
+        // "> Completed sections:" -- gives a nice visual section break
+        blockquote: ({ children }) => (
+          <blockquote className="my-1.5 border-l-2 border-indigo-500 pl-3 text-[#9999bb]">
+            {children}
+          </blockquote>
+        ),
+
+        // Headings (## ###): AI isn't supposed to use these per the system prompt,
+        // but if it does, render them as bold text instead of large font sizes
+        // so they don't break the chat bubble layout.
+        h1: ({ children }) => <p className="font-semibold text-[#e0e0f5]">{children}</p>,
+        h2: ({ children }) => <p className="font-semibold text-[#e0e0f5]">{children}</p>,
+        h3: ({ children }) => <p className="font-semibold text-[#d0d0f0]">{children}</p>,
+
+        // Horizontal rule (---): AI isn't supposed to use these either.
+        // Render as a subtle divider if they slip through.
+        hr: () => <hr className="my-2 border-[#2a2a4a]" />,
+
+        // Inline code: monospace pill for any code snippets
+        code: ({ children }) => (
+          <code className="rounded bg-[#070724] px-1 py-0.5 font-mono text-xs text-[#a5b4fc]">
+            {children}
+          </code>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
   );
 }
 
