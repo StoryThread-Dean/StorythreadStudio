@@ -540,12 +540,14 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           s => s.content.trim().length > 0 || s.trait_blocks.length > 0
         );
 
+    // The opening message is kept deliberately short.
+    // A long prompt here invites the AI to give a full profile overview,
+    // which is the exact bad behavior we're trying to prevent.
+    // The system prompt handles the session opening -- we just need to signal
+    // "has content" vs "blank" so the AI asks the right first question.
     const openingMessage = hasContent
-      ? `I'd like your help developing ${profile.name}'s profile further. ` +
-        `Please look at what I've already built and ask me where I'd like to start -- ` +
-        `whether that's refining an existing section or working on something that's still empty.`
-      : `I'd like to build ${profile.name}'s profile from scratch. ` +
-        `Please guide me through it section by section, starting from the beginning.`;
+      ? `Let's work on ${profile.name}'s profile.`
+      : `Let's build ${profile.name}'s profile from scratch.`;
 
     // Pre-populate the chat with the user's opening message and immediately send it
     const firstMessage = { role: "user" as const, content: openingMessage };
