@@ -217,28 +217,35 @@ def _safe_path(profile_dir: str, filename: str) -> str:
 
 def _clean_trait_yaml(content: str) -> str:
     """
-    Pre-process raw trait block YAML to fix the JSON code-block wrapper format.
+    Pre-process raw trait block YAML to fix two classes of problems that cause
+    yaml.safe_load() to fail, silently returning [] and making all traits vanish.
 
-    When the generate-usage-example AI endpoint returns text, some models wrap
-    the output in a Markdown code block:
-
+    PROBLEM 1 -- JSON code block wrappers in ai_usage_example fields:
         ai_usage_example: ```json
         {"ai_usage_example": "When generating scenes..."}
         ```
+    This is valid Markdown but INVALID YAML. We extract the string value and
+    replace the whole block with a properly double-quoted YAML scalar.
 
-    This is valid Markdown but INVALID YAML -- yaml.safe_load() chokes on the
-    backticks and fails silently, making ALL trait blocks in the section vanish.
+    PROBLEM 2 -- Unquoted plain scalars containing ': ' (colon-space):
+        notes: Overall: She presents an imposing figure...
+        description: Her mantra is: "never give up..."
+    In YAML, a plain (unquoted) scalar cannot contain ': ' because YAML
+    interprets it as the start of a nested mapping key. We quote these values
+    with json.dumps() so YAML reads them as literal strings.
 
-    This function detects that pattern, extracts the actual string value from
-    the JSON, and replaces the whole block with a properly quoted YAML value.
+    Why json.dumps() throughout?
+    json.dumps() produces a valid JSON double-quoted string, which is ALSO
+    valid YAML for a string scalar -- fully portable with proper escaping.
 
-    Why json.dumps() for the replacement?
-    json.dumps() produces a double-quoted string like "When generating..."
-    which is also valid YAML for a string scalar -- no escaping issues.
+    Order matters: fix code blocks FIRST (so the quoted results of step 1 are
+    already properly formatted before step 2 sees them).
     """
-    def _extract_and_replace(match: re.Match) -> str:
-        indent     = match.group(1)   # Leading spaces (e.g. "  ")
-        field_name = match.group(2)   # Field key (e.g. "ai_usage_example")
+
+    # --- PASS 1: Strip JSON code block wrappers ---
+    def _extract_json_block(match: re.Match) -> str:
+        indent     = match.group(1)
+        field_name = match.group(2)
         json_body  = match.group(3).strip()
 
         try:
@@ -248,13 +255,11 @@ def _clean_trait_yaml(content: str) -> str:
 
         value = ""
         if isinstance(parsed, dict):
-            # Try the field name itself first, then common alternatives
-            for key in (field_name, "ai_usage_example", "text", "content"):
+            for key in (field_name, "ai_usage_example", "section_summary", "text", "content"):
                 if key in parsed and isinstance(parsed[key], str):
                     value = parsed[key]
                     break
             if not value:
-                # Take the first string value we find in the dict
                 for v in parsed.values():
                     if isinstance(v, str):
                         value = v
@@ -262,16 +267,39 @@ def _clean_trait_yaml(content: str) -> str:
         elif isinstance(parsed, str):
             value = parsed
 
-        # Collapse internal newlines -- multiline values break inline YAML
-        value = " ".join(value.split())
-
-        # json.dumps produces a properly escaped double-quoted YAML string
+        value = " ".join(value.split())   # Collapse internal newlines
         return f"{indent}{field_name}: {_json.dumps(value)}"
 
-    # Pattern: `  field_name: ```[lang]\n{...}\n  ``` `
-    # The JSON body is captured non-greedily between the opening and closing backtick fences.
-    pattern = r'^([ \t]*)(\w+):\s*```[\w]*\s*\n([\s\S]*?)\n[ \t]*```'
-    return re.sub(pattern, _extract_and_replace, content, flags=re.MULTILINE)
+    code_block_pattern = r'^([ \t]*)(\w+):\s*```[\w]*\s*\n([\s\S]*?)\n[ \t]*```'
+    content = re.sub(code_block_pattern, _extract_json_block, content, flags=re.MULTILINE)
+
+    # --- PASS 2: Quote unquoted values that contain ': ' ---
+    # In YAML block mappings, a plain scalar value that contains ': ' is
+    # ambiguous -- YAML may interpret it as a nested key-value pair.
+    # We quote any such values that aren't already wrapped in double quotes.
+    def _quote_colon_values(match: re.Match) -> str:
+        indent = match.group(1)
+        key    = match.group(2)
+        value  = match.group(3)
+
+        # Already a properly double-quoted scalar? Leave it alone.
+        # (json.dumps results from pass 1 land here as already-quoted)
+        if value.startswith('"') and value.endswith('"'):
+            return match.group(0)
+
+        # Contains ': ' which YAML could misread as a mapping indicator?
+        if ': ' in value:
+            safe = " ".join(value.split())   # Normalize whitespace
+            return f"{indent}{key}: {_json.dumps(safe)}"
+
+        return match.group(0)
+
+    # Only match INDENTED lines (block mapping values inside a list entry).
+    # Lines starting at column 0 (like '- trait:') use '^-' and won't match.
+    colon_value_pattern = r'^([ \t]+)(\w+): (.+)$'
+    content = re.sub(colon_value_pattern, _quote_colon_values, content, flags=re.MULTILINE)
+
+    return content
 
 
 def _parse_trait_blocks(content: str) -> list[TraitBlock]:
@@ -465,15 +493,20 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
                     # wrapper problem (```json ... ```) and handles any special
                     # characters (quotes, backslashes, newlines) safely.
                     # json-encoded strings are valid YAML string scalars.
+                    # All string values are written as JSON double-quoted strings.
+                    # This prevents YAML parsing failures caused by ': ' in values
+                    # (e.g. "notes: Overall: She presents..." breaks yaml.safe_load).
+                    # json.dumps() produces valid YAML string scalars with proper escaping.
+                    safe_description = " ".join(block.description.split())
                     lines += [f"- trait: {block.trait}"]
-                    lines += [f"  description: {block.description}"]
+                    lines += [f"  description: {_json.dumps(safe_description)}"]
                     lines += [f"  influence: {block.influence}"]
                     if block.ai_usage_example:
-                        # Collapse newlines -- inline YAML values must be single-line
                         safe_example = " ".join(block.ai_usage_example.split())
                         lines += [f"  ai_usage_example: {_json.dumps(safe_example)}"]
                     if block.notes:
-                        lines += [f"  notes: {block.notes}"]
+                        safe_notes = " ".join(block.notes.split())
+                        lines += [f"  notes: {_json.dumps(safe_notes)}"]
                     lines += [""]
             else:
                 lines += [""]
