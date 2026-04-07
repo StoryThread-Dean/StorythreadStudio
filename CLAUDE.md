@@ -21,8 +21,11 @@ All items shipped:
 - Unsaved-changes indicator (amber dot)
 - Session undo/redo (CodeMirror history)
 
-### Phase 2 -- In Progress
-Building the profile system: character, relationship, location, and lore profiles; trait blocks; influence scale; Profile Builder UI; chapter and scene summary files.
+### Phase 2 -- Complete
+All items shipped: character/relationship/location/lore profiles, chapter and scene summary files, Profile Builder UI (3-panel), trait blocks with influence scale, AI summary placeholder fields, character profile import/fork.
+
+### Phase 3 -- Next
+OpenRouter integration: API key storage, model listing, connection test, assistant execution pipeline, AI response panel, no-em-dash sanitizer. First assistants: Grammar & Punctuation, Clarity & Consistency, Eliminate Redundancy, Descriptive Enhancement.
 
 ---
 

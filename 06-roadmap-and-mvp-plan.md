@@ -25,22 +25,19 @@ Built:
 Deliverable:
 - usable local writing app without AI -- DELIVERED
 
-## Phase 2: Profile System
-Build:
-- character profiles
-- relationship profiles
-- location profiles
-- lore profiles
-- chapter summary files
-- scene summary files
-- Profile Builder UI
-- structured trait blocks
-- influence scale for character and relationship profiles
-- import and fork character profiles
-- generated AI content sections in Markdown
+## Phase 2: Profile System -- COMPLETE
+Built:
+- character, relationship, location, lore profiles
+- chapter summary and scene summary files
+- Profile Builder UI (3-panel: type/list, editor, Phase 4 chat placeholder)
+- structured trait blocks with influence scale
+- AI summary placeholder fields in every section
+- import and fork character profiles (independent copy, new profile_id)
+- backend parse/generate Markdown with YAML frontmatter
+- config-driven section layout per profile type
 
 Deliverable:
-- usable context and profile system
+- usable context and profile system -- DELIVERED
 
 ## Phase 3: OpenRouter Integration
 Build:
