@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers -- each router handles one area of the API.
 # As we build more features, we'll add more routers here.
-from app.routers import projects, documents
+from app.routers import projects, documents, profiles
 
 
 # --- Create the FastAPI App ---
@@ -90,6 +90,7 @@ async def health_check():
 # every route URL in that router automatically.
 app.include_router(projects.router)
 app.include_router(documents.router)
+app.include_router(profiles.router)
 
 
 # --- What Comes Next ---
