@@ -27,8 +27,26 @@ All items shipped: character/relationship/location/lore profiles, chapter and sc
 ### Phase 3 -- Complete
 All items shipped: OpenRouter integration, API key storage (masked, ~/.storyforge/settings.json), model listing, connection test, assistant execution pipeline, em dash sanitizer at all 3 layers, Settings modal, live AI panel with text selection + copy buttons. First 4 assistants: Grammar & Punctuation, Clarity & Consistency, Eliminate Redundancy, Descriptive Enhancement.
 
-### Phase 4 -- Next
-Profile-aware AI: explicit context attachment, context chips, generate ai_usage_example into trait blocks, generate section/full profile summaries, Profile Builder chat, chapter/scene summary generation. Second-wave assistants: Dialogue Authenticity, POV Consistency, Tone and Voice Consistency, Character Development, Character Consistency.
+### Phase 4 -- Complete (spec items shipped; quality polish required before Phase 5)
+All items shipped: context chips, generate ai_usage_example into trait blocks, generate section/full profile summaries, Profile Builder chat + guide mode, react-markdown rendering in chat, 5 second-wave assistants (Dialogue Authenticity, POV Consistency, Tone & Voice Consistency, Character Development, Character Consistency).
+
+**Quality rating: C- on Profile Builder and AI chat interaction.** The spec is met but the spirit -- how the AI actually interacts with profiles and guides the writer -- is not yet at the intended quality. This must be addressed before moving to Phase 5.
+
+Critical bugs also fixed this session:
+- YAML parsing failure: trait blocks with JSON code block wrappers in ai_usage_example, or colon-space in description/notes values, caused yaml.safe_load() to silently return empty (all traits hidden). Fixed with _clean_trait_yaml() two-pass pre-processor in profiles.py.
+- Profile Markdown writer now uses json.dumps() for all string fields to prevent future YAML breakage.
+
+### Phase 4 Polish -- MUST COMPLETE BEFORE PHASE 5
+- Profile Builder visual design and UX needs a full quality pass
+- AI guide mode conversation quality: too formal, too long, not truly conversational
+- Guide mode opening response still tends toward structured overviews instead of a single focused question
+- Context chips UX in the editor AI panel needs polish
+- Guide mode needs a "current section" indicator
+- AI in guide mode should reference the writer's previous answers to feel like a real conversation
+- Resizable or collapsible right panel chat window
+
+### Phase 5 -- Next (after polish)
+Content mode settings + model routing + allowlist/blocklist.
 
 ---
 
