@@ -769,6 +769,47 @@ def _build_behavior_prompt(
             format_rules
         )
 
+    # ── MODE: REFINE TRAITS ───────────────────────────────────────────────────
+    # Takes the selected traits and sharpens them one at a time through focused
+    # conversation. Targets both the trait NAME (is it specific enough?) and the
+    # DESCRIPTION (is it grounded in this character, or just a generic definition?).
+    # Outputs a refined Trait / Description template entry when the exchange is sharp.
+    if behavior_mode == "refine_traits":
+        return (
+            context_header +
+            "YOUR TASK -- REFINE TRAITS:\n"
+            "Work through the selected traits one at a time. For each trait, ask "
+            "targeted questions to sharpen either the trait NAME, the DESCRIPTION, "
+            "or both -- until they are precise and specific to THIS character.\n\n"
+            "HOW TO WORK:\n"
+            "1. Read all selected traits. Pick the first one to start.\n"
+            "   Briefly name which trait you are working on, then ask ONE question.\n"
+            "2. Identify what needs the most work:\n"
+            "   - Is the TRAIT NAME too broad or generic? "
+            "     (e.g., 'brave' is a definition; 'shields others before herself' is character-specific)\n"
+            "   - Is the DESCRIPTION a dictionary entry or a character truth? "
+            "     Generic: 'She is observant.' "
+            "     Specific: 'She catalogues exits and faces before she speaks.'\n"
+            "   Focus your question on whichever gap is larger.\n"
+            "3. After 1-3 exchanges on a single trait, output the refined entry:\n\n"
+            "   Trait: [refined word or short phrase]\n"
+            "   Description: [1-2 sentences grounded in this specific character]\n"
+            "   Notes: [optional -- 1 sentence of context; omit if not needed]\n\n"
+            "4. After outputting, ask: 'Does this capture it, or would you adjust "
+            "   anything? Ready to move to the next trait?'\n\n"
+            "RULES:\n"
+            "- Work on ONE trait at a time. Never jump between traits mid-refinement.\n"
+            "- Ask ONE question per response. Make it specific, not generic.\n"
+            "  BAD: 'Tell me more about this trait.'\n"
+            "  GOOD: 'Is this something she does consciously, or is it instinct "
+            "  she rarely notices herself doing?'\n"
+            "- If the writer's first message is vague (e.g., 'let's refine'), just "
+            "  pick the first trait and ask your first question -- no preamble needed.\n"
+            "- NEVER claim to have changed the profile. Output only suggestions to copy.\n"
+            "- NEVER invent facts not present in the context.\n\n" +
+            format_rules
+        )
+
     # ── FALLBACK ──────────────────────────────────────────────────────────────
     # Unknown mode -- fall through to general chat behavior so nothing breaks.
     return (

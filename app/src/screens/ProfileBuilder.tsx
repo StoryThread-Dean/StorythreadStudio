@@ -1481,8 +1481,13 @@ const BEHAVIOR_MODES: { id: string; label: string; description: string }[] = [
     label: "Interpret Profile",
     description: "AI reads selected context and explains how AI writing tools would use each piece -- what they'd surface, avoid, or misread.",
   },
+  {
+    id: "refine_traits",
+    label: "Refine Traits",
+    description: "Sharpens selected traits one at a time. AI asks focused questions to make the trait name and description more specific and character-grounded.",
+  },
   // Future modes added here:
-  // { id: "refine_traits",  label: "Refine Traits",  description: "..." },
+  // { id: "ask_clarifying", label: "Ask Clarifying Questions", description: "..." },
   // { id: "check_consistency", ... }
 ];
 
