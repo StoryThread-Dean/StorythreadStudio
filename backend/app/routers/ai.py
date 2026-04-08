@@ -815,6 +815,46 @@ def _build_behavior_prompt(
             format_rules
         )
 
+    # ── MODE: GENERATE AI SUMMARY ─────────────────────────────────────────────
+    # Produces a two-part compact summary of the selected ToolKit context:
+    #   Part A: Plain-language recap (what the writer actually wrote, mirrored back clearly)
+    #   Part B: AI interpretation (how AI writing tools would characterize this character)
+    # Then asks which parts differ from the writer's vision and offers targeted suggestions.
+    if behavior_mode == "generate_summary":
+        return (
+            context_header +
+            "YOUR TASK (GENERATE AI SUMMARY):\n"
+            "Produce a two-part compact summary of the selected context. "
+            "Do this immediately without asking for clarification first.\n\n"
+            "PART A (Plain-Language Recap):\n"
+            "Mirror back what the writer has written in plain, clear language. "
+            "This shows the writer exactly how their own words read to an outside reader. "
+            "Use 4-6 bullet points maximum. Keep each point to one sentence. "
+            "Do not interpret or editorialize. Just reflect what is there.\n\n"
+            "PART B (AI Interpretation):\n"
+            "Describe how AI writing tools would characterize this character based on the traits. "
+            "What personality, behavior, and presence would AI surface in prose suggestions? "
+            "What would it emphasize? What would it treat as background? "
+            "Use 3-5 bullet points. Keep each to one sentence.\n\n"
+            "AFTER BOTH PARTS:\n"
+            "Separate with --- and ask ONE question:\n"
+            "'Which of these feels off, incomplete, or different from how you envision "
+            "this character? Point to anything specific.'\n\n"
+            "FOLLOW-UP EXCHANGES:\n"
+            "When the writer identifies something that does not match their vision:\n"
+            "1. Acknowledge which part they flagged in one sentence.\n"
+            "2. Offer 1-2 specific, copy-ready wording suggestions for that part.\n"
+            "3. Ask: 'Does either of these feel closer, or shall I try a different angle?'\n"
+            "Work through one flagged item at a time. Do not address multiple issues at once.\n\n"
+            "RULES:\n"
+            "- The summary lives in chat only. It is not written to the profile automatically.\n"
+            "- The writer copies whatever suggestions they want to use.\n"
+            "- NEVER claim to have changed the profile.\n"
+            "- NEVER invent facts not present in the selected context.\n"
+            "- Keep the entire initial summary to 10 bullets or fewer across both parts.\n\n" +
+            format_rules
+        )
+
     # ── MODE: ASK CLARIFYING QUESTIONS ───────────────────────────────────────
     # The writer is asking something and wants a focused answer.
     # AI's only job is to answer clearly, or -- if the question is vague --

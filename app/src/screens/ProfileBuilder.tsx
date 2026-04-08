@@ -1491,6 +1491,11 @@ const BEHAVIOR_MODES: { id: string; label: string; description: string }[] = [
     label: "Ask Clarifying Questions",
     description: "Writer asks a question, AI answers it directly. If the question is vague, AI offers 2-3 framings first. No unsolicited observations or suggestions.",
   },
+  {
+    id: "generate_summary",
+    label: "Generate AI Summary",
+    description: "Produces a two-part summary: plain-language recap of what you wrote, then how AI writing tools would interpret it. Asks what feels off, then offers targeted suggestions.",
+  },
   // Future modes added here:
   // { id: "check_consistency", ... }
 ];
