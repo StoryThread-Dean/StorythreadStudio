@@ -1511,28 +1511,10 @@ function AiBehaviorPanel({ currentMode, open, onToggleOpen, onSelectMode }: AiBe
   return (
     <div className="border-b border-teal-800/40 bg-teal-950/40">
 
-      {/* Collapsed bar */}
-      <button
-        onClick={onToggleOpen}
-        className="flex w-full items-center justify-between px-3 py-2 transition-colors hover:bg-teal-900/20"
-        title="Select the AI's behavior mode for this chat session"
-      >
-        <div className="flex items-center gap-2">
-          <Bot size={12} className="shrink-0 text-teal-400" />
-          <span className="text-xs font-semibold text-teal-300">AI Behavior</span>
-          <span className="rounded-full bg-teal-700/40 px-2 py-0.5 text-xs text-teal-200">
-            {current.label}
-          </span>
-        </div>
-        <ChevronDown
-          size={12}
-          className={`shrink-0 text-teal-600 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {/* Expanded mode list */}
+      {/* Expanded mode list -- rendered ABOVE the toggle bar so the bar
+          stays anchored at the bottom and doesn't jump when opening/closing */}
       {open && (
-        <div className="border-t border-teal-800/30 px-2 pb-2 pt-1.5">
+        <div className="border-b border-teal-800/30 px-2 pb-2 pt-1.5">
           <p className="mb-2 px-1 text-xs text-teal-600">
             Choose what the AI should do with the context you've selected.
             Switching mode clears the current conversation.
@@ -1564,6 +1546,26 @@ function AiBehaviorPanel({ currentMode, open, onToggleOpen, onSelectMode }: AiBe
           })}
         </div>
       )}
+
+      {/* Toggle bar -- always at the BOTTOM so its position stays fixed
+          relative to the chat input regardless of expanded state */}
+      <button
+        onClick={onToggleOpen}
+        className="flex w-full items-center justify-between px-3 py-2 transition-colors hover:bg-teal-900/20"
+        title="Select the AI's behavior mode for this chat session"
+      >
+        <div className="flex items-center gap-2">
+          <Bot size={12} className="shrink-0 text-teal-400" />
+          <span className="text-xs font-semibold text-teal-300">AI Behavior</span>
+          <span className="rounded-full bg-teal-700/40 px-2 py-0.5 text-xs text-teal-200">
+            {current.label}
+          </span>
+        </div>
+        <ChevronDown
+          size={12}
+          className={`shrink-0 text-teal-600 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
     </div>
   );
 }
@@ -1603,39 +1605,10 @@ function ToolKit({
   return (
     <div className="border-y border-teal-800/40 bg-teal-950/40">
 
-      {/* ── Collapsed bar (always visible) ─────────────────────────────────
-          Shows the panel name, selected item count, and expand/collapse arrow.
-          Clicking anywhere on this bar toggles the panel open or closed.      */}
-      <button
-        onClick={onToggleOpen}
-        className="flex w-full items-center justify-between px-3 py-2 transition-colors hover:bg-teal-900/20"
-        title="Select which profile sections to send as AI context"
-      >
-        <div className="flex items-center gap-2">
-          <Settings2 size={12} className="shrink-0 text-teal-400" />
-          <span className="text-xs font-semibold text-teal-300">ToolKit</span>
-
-          {/* Selection count badge -- shows when something is selected */}
-          {totalSelected > 0 ? (
-            <span className="rounded-full bg-teal-700/50 px-1.5 py-0.5 text-xs font-medium text-teal-200">
-              {totalSelected} selected
-            </span>
-          ) : (
-            <span className="text-xs text-teal-700">
-              {profile ? "Overview (default)" : "open a profile"}
-            </span>
-          )}
-        </div>
-
-        <ChevronDown
-          size={12}
-          className={`shrink-0 text-teal-600 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {/* ── Expanded panel ──────────────────────────────────────────────── */}
+      {/* ── Expanded panel -- rendered ABOVE the toggle bar so the bar
+          stays anchored at the bottom and doesn't jump when panels switch */}
       {open && (
-        <div className="border-t border-teal-800/30">
+        <div className="border-b border-teal-800/30">
 
           {/* Description */}
           <div className="px-3 pb-1.5 pt-2">
@@ -1734,6 +1707,33 @@ function ToolKit({
           )}
         </div>
       )}
+
+      {/* ── Toggle bar -- always at the BOTTOM so its position stays fixed */}
+      <button
+        onClick={onToggleOpen}
+        className="flex w-full items-center justify-between px-3 py-2 transition-colors hover:bg-teal-900/20"
+        title="Select which profile sections to send as AI context"
+      >
+        <div className="flex items-center gap-2">
+          <Settings2 size={12} className="shrink-0 text-teal-400" />
+          <span className="text-xs font-semibold text-teal-300">ToolKit</span>
+
+          {totalSelected > 0 ? (
+            <span className="rounded-full bg-teal-700/50 px-1.5 py-0.5 text-xs font-medium text-teal-200">
+              {totalSelected} selected
+            </span>
+          ) : (
+            <span className="text-xs text-teal-700">
+              {profile ? "Overview (default)" : "open a profile"}
+            </span>
+          )}
+        </div>
+
+        <ChevronDown
+          size={12}
+          className={`shrink-0 text-teal-600 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
     </div>
   );
 }
