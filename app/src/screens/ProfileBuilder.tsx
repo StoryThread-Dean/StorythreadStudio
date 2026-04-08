@@ -1486,8 +1486,12 @@ const BEHAVIOR_MODES: { id: string; label: string; description: string }[] = [
     label: "Refine Traits",
     description: "Sharpens selected traits one at a time. AI asks focused questions to make the trait name and description more specific and character-grounded.",
   },
+  {
+    id: "ask_clarifying",
+    label: "Ask Clarifying Questions",
+    description: "Writer asks a question, AI answers it directly. If the question is vague, AI offers 2-3 framings first. No unsolicited observations or suggestions.",
+  },
   // Future modes added here:
-  // { id: "ask_clarifying", label: "Ask Clarifying Questions", description: "..." },
   // { id: "check_consistency", ... }
 ];
 

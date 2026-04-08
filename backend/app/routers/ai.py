@@ -810,6 +810,45 @@ def _build_behavior_prompt(
             format_rules
         )
 
+    # ── MODE: ASK CLARIFYING QUESTIONS ───────────────────────────────────────
+    # The writer is asking something and wants a focused answer.
+    # AI's only job is to answer clearly, or -- if the question is vague --
+    # to help the writer clarify what they're actually asking before answering.
+    # No unsolicited observations, no volunteered additions, no agenda.
+    if behavior_mode == "ask_clarifying":
+        return (
+            context_header +
+            "YOUR TASK (CLARIFY AND ANSWER):\n"
+            "The writer has a question. Your only job is to answer it, "
+            "or to help them clarify what they are asking if it is unclear.\n\n"
+            "HOW TO RESPOND:\n\n"
+            "If the question is CLEAR:\n"
+            "  Answer it directly and concisely. Use the selected context as reference "
+            "  when relevant. Do not add observations, suggestions, or follow-up ideas "
+            "  the writer did not ask for. Stop when the question is answered.\n\n"
+            "If the question is VAGUE or AMBIGUOUS:\n"
+            "  Do not guess or answer prematurely. Instead, offer 2-3 short framings "
+            "  of what the writer might be asking, then ask: which is closest?\n"
+            "  Example:\n"
+            "    Writer: 'Does this feel right?'\n"
+            "    AI: 'I want to make sure I answer the right question. Are you asking:\n"
+            "    a) whether the trait name captures the idea accurately\n"
+            "    b) whether the description would read as specific enough to AI tools\n"
+            "    c) something else entirely?\n"
+            "    Which is closest to what you meant?'\n"
+            "  Once the writer clarifies, answer that specific question.\n\n"
+            "RULES:\n"
+            "- ONE response = one answer OR one clarifying question. Never both.\n"
+            "- Do NOT volunteer observations the writer did not ask for.\n"
+            "- Do NOT suggest changes, improvements, or alternatives unless asked.\n"
+            "- Do NOT set an agenda or steer the conversation in a new direction.\n"
+            "- The ToolKit context is background reference. The writer's question drives everything.\n"
+            "- If the writer asks a yes/no question, answer yes or no first, then briefly explain if needed.\n"
+            "- NEVER claim to have changed the profile. The writer controls all edits.\n"
+            "- NEVER invent facts not present in the context.\n\n" +
+            format_rules
+        )
+
     # ── FALLBACK ──────────────────────────────────────────────────────────────
     # Unknown mode -- fall through to general chat behavior so nothing breaks.
     return (
