@@ -107,26 +107,25 @@ class ProfileChatMessage(BaseModel):
 
 class ProfileChatRequest(BaseModel):
     """
-    One turn of the Profile Builder chat (regular or guide mode).
-
-    Guide mode activates a structured character-building interview where
-    the AI acts as a creative writing coach, asking 1-4 focused questions
-    per section to help the writer develop the profile with precision.
+    One turn of the Profile Builder chat.
 
     The backend is fully stateless -- the frontend sends the complete
-    message history on every turn. Session memory lives only in React state.
+    message history and selected context on every turn.
+    Session history lives only in React state.
+
+    behavior_mode controls which system prompt the backend uses.
+    Supported values (more added over time):
+      "general"          -- open-ended conversation, no specific task
+      "interpret_profile" -- AI reads selected context and explains how
+                             AI writing tools would use each piece
     """
     profile_name:    str
     profile_type:    str
-    profile_content: str
+    profile_content: str              # Only the ToolKit-selected context
     messages:        list[ProfileChatMessage]
     model_id:        str | None = None
-
-    # Guide mode fields (Phase 4)
-    guide_mode:   bool      = False         # True = structured coaching session
-    all_sections: list[str] = []            # Section keys in template order
-    content_mode: str       = "general"     # "general" | "mature" | "explicit"
-    is_blank:     bool      = False         # True if profile has no content yet
+    behavior_mode:   str        = "general"   # Which AI behavior is active
+    content_mode:    str        = "general"   # "general" | "mature" | "explicit"
 
 
 class ProfileChatResponse(BaseModel):
@@ -674,60 +673,121 @@ RESPONSE FORMAT:
 """
 
 
+def _build_behavior_prompt(
+    behavior_mode:   str,
+    profile_name:    str,
+    profile_type:    str,
+    profile_content: str,
+    content_mode:    str,
+) -> str:
+    """
+    Return the system prompt for the requested behavior mode.
+
+    Each mode has a single, well-defined job. The writer selects the mode
+    in the AI Behavior panel; the ToolKit provides what context to send.
+    Adding a new mode = adding one branch here and one entry in the frontend list.
+
+    Shared rules applied to every mode:
+    - No em dashes -- use double hyphen (--)
+    - No markdown ## headers or --- horizontal rules
+    - Writer controls all edits; AI only suggests
+    - Content mode aware (general/mature/explicit)
+    """
+    content_block = _content_mode_instruction(content_mode)
+    profile_label = profile_type.replace("_", " ").title()
+
+    # ── SHARED CONTEXT BLOCK ─────────────────────────────────────────────────
+    # Injected at the top of every mode so the AI always knows who it's helping.
+    context_header = (
+        f"You are helping a fiction writer with a {profile_label} profile "
+        f"for the character/subject: {profile_name}.\n"
+        f"{content_block}\n"
+        f"SELECTED CONTEXT (from the writer's ToolKit selection):\n"
+        f"{profile_content}\n\n"
+    )
+
+    # ── SHARED FORMAT RULES ───────────────────────────────────────────────────
+    format_rules = (
+        "FORMAT RULES (apply to every response):\n"
+        "- No em dashes (\u2014 or \u2013) -- use double hyphen (--) instead.\n"
+        "- No ## or ### headers. No --- horizontal rules.\n"
+        "- Use **bold** for trait names or key terms. Bullet lists for structure.\n"
+        "- Keep responses concise. 1-2 sentences per point.\n"
+        "- Ask at most ONE question per response.\n"
+    )
+
+    # ── MODE: GENERAL CHAT ────────────────────────────────────────────────────
+    # Open-ended conversation. Writer asks, AI responds. No specific task agenda.
+    if behavior_mode == "general":
+        return (
+            context_header +
+            "YOUR ROLE: Answer the writer's questions about this profile openly. "
+            "You may offer observations, suggestions, or comparisons, but only "
+            "when directly relevant to what was asked. Do not set an agenda.\n\n"
+            "RULES:\n"
+            "- NEVER claim to have changed the profile -- writer controls all edits.\n"
+            "- NEVER invent facts not present in the context.\n\n" +
+            format_rules
+        )
+
+    # ── MODE: INTERPRET PROFILE ───────────────────────────────────────────────
+    # AI reads the selected context and explains how AI writing tools would use
+    # each piece: what they'd surface, what they'd treat as background, and where
+    # the text is ambiguous or could be misread. Ends with one refinement offer.
+    if behavior_mode == "interpret_profile":
+        return (
+            context_header +
+            "YOUR TASK -- INTERPRET PROFILE:\n"
+            "For each section, trait, or item in the selected context above, provide:\n"
+            "1. **Would actively surface** -- what AI writing tools would foreground "
+            "   in prose suggestions based on this text\n"
+            "2. **Would treat as background** -- what they'd keep present but passive\n"
+            "3. **Ambiguous or imprecise** -- where the text could be misread, "
+            "   is too vague, or leaves room for unintended interpretation\n"
+            "4. **Suggested improvement** -- one specific wording change that would "
+            "   make this entry cleaner and more useful to AI tools\n\n"
+            "After covering all items, ask the writer which specific entry they want "
+            "to refine first.\n\n"
+            "RULES:\n"
+            "- Go item by item -- do NOT collapse everything into a single summary.\n"
+            "- Keep each of the four points to 1-2 sentences maximum.\n"
+            "- If an item is already clear and well-scoped, say so briefly and move on.\n"
+            "- NEVER claim to have changed the profile.\n"
+            "- NEVER invent facts not present in the context.\n\n" +
+            format_rules
+        )
+
+    # ── FALLBACK ──────────────────────────────────────────────────────────────
+    # Unknown mode -- fall through to general chat behavior so nothing breaks.
+    return (
+        context_header +
+        "YOUR ROLE: Answer the writer's questions about this profile. "
+        "Be concise and helpful.\n\n" +
+        format_rules
+    )
+
+
 @router.post("/profile-chat", response_model=ProfileChatResponse)
 async def profile_chat(request: ProfileChatRequest):
     """
-    One turn of the Profile Builder conversational chat.
+    Profile Builder chat -- routes to a behavior-specific system prompt.
 
-    The writer uses this to ask questions about how AI interprets their profile,
-    refine traits through conversation, and explore what the profile communicates.
+    The behavior_mode field controls what the AI is trying to do this session.
+    Each mode has a distinct system prompt tuned for that specific task.
+    New modes are added over time without changing this routing structure.
 
-    This chat is SESSION-ONLY -- no state is stored on the server.
-    The frontend sends the full message history on every turn.
-    When the Profile Builder closes, the conversation is gone.
-
-    No profile fields are updated automatically from this chat.
-    The writer must manually apply any suggestions they want to keep.
+    Session-only: no state on the server. Frontend sends full history each turn.
+    Writer controls all profile edits -- AI only suggests, never writes directly.
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
-    if request.guide_mode:
-        # --- Guide Mode: structured character-building coaching session ---
-        system_prompt = _build_guide_system_prompt(
-            profile_name    = request.profile_name,
-            profile_type    = request.profile_type,
-            profile_content = request.profile_content,
-            all_sections    = request.all_sections,
-            content_mode    = request.content_mode,
-            is_blank        = request.is_blank,
-        )
-    else:
-        # --- Regular Mode: open conversational profile assistant ---
-        content_block = _content_mode_instruction(request.content_mode)
-        system_prompt = (
-            f"You are a profile calibration assistant helping a fiction writer "
-            f"refine a {request.profile_type.replace('_', ' ')} profile.\n"
-            f"{content_block}\n"
-            f"PROFILE BEING DISCUSSED:\n"
-            f"Name: {request.profile_name}\n\n"
-            f"{request.profile_content}\n\n"
-            "YOUR ROLE:\n"
-            "- Answer questions about how AI writing tools would use this profile\n"
-            "- Suggest specific improvements to traits, descriptions, or influence levels\n"
-            "- Help the writer understand what information would strengthen this profile\n"
-            "- Flag gaps, contradictions, or unclear entries if you see them\n\n"
-            "RULES:\n"
-            "- NEVER claim to have changed the profile -- the writer controls all edits\n"
-            "- NEVER invent story facts not present in the profile\n"
-            "- NEVER use em dashes (\u2014) or en dashes (\u2013) -- use double hyphen (--) instead\n\n"
-            "CHAT FORMAT -- MANDATORY:\n"
-            "- Keep replies SHORT and conversational. This is a chat, not a document.\n"
-            "- Use simple markdown for structure: **bold**, bullet lists, numbered lists.\n"
-            "- Do NOT use ## headers, ### subheaders, or --- horizontal rules.\n"
-            "- Max 2-3 sentences of prose, then a list or question.\n"
-            "- Ask 1-2 questions max per message.\n"
-            "- Do NOT use em dashes (\u2014) -- use double hyphen (--) instead."
-        )
+    system_prompt = _build_behavior_prompt(
+        behavior_mode  = request.behavior_mode,
+        profile_name   = request.profile_name,
+        profile_type   = request.profile_type,
+        profile_content = request.profile_content,
+        content_mode   = request.content_mode,
+    )
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
 

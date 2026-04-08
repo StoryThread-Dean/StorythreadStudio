@@ -15,7 +15,7 @@
 //   4. On Ctrl+S or Save: POST to backend, mark as saved
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
-import { Plus, ChevronLeft, Trash2, Download, Sparkles, Send, Bot, X, Settings2, ChevronDown } from "lucide-react";
+import { Plus, ChevronLeft, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import type { ProjectInfo } from "../types/project";
@@ -297,9 +297,13 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   const [chatError, setChatError]         = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Guide mode -- structured character-building coaching session.
-  // When active, the system prompt switches to a focused interview mode.
-  const [guideMode, setGuideMode] = useState(false);
+  // --- AI Behavior mode ---
+  // Controls which system prompt the backend uses for the chat.
+  // "general" = open-ended conversation (default)
+  // "interpret_profile" = AI reads selected context and explains how AI tools would use it
+  // More modes added over time via the AiBehavior panel.
+  const [behaviorMode, setBehaviorMode] = useState("general");
+  const [behaviorPanelOpen, setBehaviorPanelOpen] = useState(false);
 
   // --- ToolKit state ---
   const [toolkitOpen, setToolkitOpen]             = useState(false);
@@ -340,12 +344,13 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // Clear all selections → reverts to default Overview behavior
   const handleToolkitClearAll = useCallback(() => setToolkitSelections(new Set()), []);
 
-  // Reset chat, guide mode, and toolkit when switching profiles
+  // Reset chat, behavior mode, and toolkit when switching profiles
   useEffect(() => {
     setChatMessages([]);
     setChatInput("");
     setChatError(null);
-    setGuideMode(false);
+    setBehaviorMode("general");
+    setBehaviorPanelOpen(false);
     setToolkitOpen(false);
     setToolkitSelections(new Set());
   }, [profile?.filename]);
@@ -771,72 +776,9 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   }
 
 
-  // --- Activate Guide Mode ---
-  // Sends the first automated message that opens the coaching session.
-  // Detects whether the profile is blank or has existing content to decide
-  // what to ask first.
-  async function activateGuideMode() {
-    if (!profile) return;
-    setGuideMode(true);
-    setChatMessages([]);
-    setChatError(null);
-
-    // Determine if the profile is effectively blank
-    const hasContent = profile.full_ai_summary.trim().length > 0
-      || Object.values(profile.sections).some(
-          s => s.content.trim().length > 0 || s.trait_blocks.length > 0
-        );
-
-    // The opening message is kept deliberately short.
-    // A long prompt here invites the AI to give a full profile overview,
-    // which is the exact bad behavior we're trying to prevent.
-    // The system prompt handles the session opening -- we just need to signal
-    // "has content" vs "blank" so the AI asks the right first question.
-    const openingMessage = hasContent
-      ? `Let's work on ${profile.name}'s profile.`
-      : `Let's build ${profile.name}'s profile from scratch.`;
-
-    // Pre-populate the chat with the user's opening message and immediately send it
-    const firstMessage = { role: "user" as const, content: openingMessage };
-    setChatMessages([firstMessage]);
-    setChatLoading(true);
-
-    const sectionKeys = (SECTION_CONFIGS[profile.type as ProfileType] ?? []).map(c => c.key);
-
-    try {
-      const res = await fetch(`${API_BASE}/api/ai/profile-chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile_name:    profile.name,
-          profile_type:    profile.type,
-          profile_content: formatProfileForAI(profile),
-          messages:        [firstMessage],
-          guide_mode:      true,
-          all_sections:    sectionKeys,
-          content_mode:    project.content_mode_default ?? "general",
-          is_blank:        !hasContent,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Guide mode failed to start.");
-      }
-
-      const data = await res.json();
-      setChatMessages([firstMessage, { role: "assistant", content: data.reply }]);
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    } catch (err) {
-      setChatError(err instanceof Error ? err.message : "Could not start guide mode.");
-      setGuideMode(false);
-    } finally {
-      setChatLoading(false);
-    }
-  }
-
-
-  // --- Send a chat message to the Profile Builder chat ---
+  // --- Send a chat message ---
+  // Packages the writer's message with the current behavior mode and ToolKit context,
+  // sends it to the backend, and appends the AI reply to the chat history.
   async function sendChatMessage() {
     if (!profile || !chatInput.trim() || chatLoading) return;
 
@@ -848,28 +790,21 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     setChatLoading(true);
     setChatError(null);
 
-    // Scroll to the bottom after adding the user message
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
     try {
-      const sectionKeys = (SECTION_CONFIGS[profile.type as ProfileType] ?? []).map(c => c.key);
-
       const res = await fetch(`${API_BASE}/api/ai/profile-chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile_name:    profile.name,
           profile_type:    profile.type,
-          // Guide mode needs full profile context to plan the session.
-          // Regular mode sends only what the writer selected in the ToolKit.
-          profile_content: guideMode
-            ? formatProfileForAI(profile)
-            : formatSelectedContext(profile, toolkitSections, toolkitSelections),
-          messages:     newMessages,
-          guide_mode:   guideMode,
-          all_sections: sectionKeys,
-          content_mode: project.content_mode_default ?? "general",
-          is_blank:     false,
+          // ToolKit selection always controls what context gets sent.
+          // The behavior mode controls HOW the AI responds to that context.
+          profile_content: formatSelectedContext(profile, toolkitSections, toolkitSelections),
+          messages:        newMessages,
+          behavior_mode:   behaviorMode,
+          content_mode:    project.content_mode_default ?? "general",
         }),
       });
 
@@ -1003,18 +938,6 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           </span>
           <div className="flex items-center gap-2">
             {/* Guide Mode Button -- opens the AI character-building coach in the right panel */}
-            {profile && (
-              <button
-                onClick={activateGuideMode}
-                disabled={chatLoading}
-                className="flex items-center gap-1.5 rounded border border-indigo-800/60 bg-indigo-900/20 px-2.5 py-1 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:bg-indigo-900/40 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Open an AI-guided character-building session in the chat panel. The coach will ask focused questions to help you develop this profile section by section."
-              >
-                <Bot size={12} />
-                Help Me Build This Character
-              </button>
-            )}
-
             {profile && (
               isDirty ? (
                 <span className="flex items-center gap-1.5 text-xs text-amber-400">
@@ -1247,30 +1170,9 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
 
         <div className="border-b border-[#1e1e4a] px-4 py-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f0f0f5]">Profile Chat</h2>
-            {guideMode && (
-              <div className="flex items-center gap-2">
-                {/* Guide mode active badge */}
-                <span className="flex items-center gap-1 rounded border border-indigo-800/50 bg-indigo-900/30 px-2 py-0.5 text-xs text-indigo-300">
-                  <Bot size={10} /> Guide Mode
-                </span>
-                {/* Exit guide mode */}
-                <button
-                  onClick={() => { setGuideMode(false); setChatMessages([]); setChatError(null); }}
-                  className="rounded p-0.5 text-[#3f3f7a] transition-colors hover:text-[#8888aa]"
-                  title="Exit guide mode and clear the conversation"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            )}
-          </div>
+          <h2 className="text-sm font-semibold text-[#f0f0f5]">Profile Chat</h2>
           <p className="mt-1 text-xs text-[#8888aa]">
-            {guideMode
-              ? "AI is guiding you through this profile section by section. Say \"next\" to advance."
-              : "Ask how AI interprets this profile, refine traits, and brainstorm. Session-only."
-            }
+            Session-only. Use ToolKit to select context and AI Behavior to set the mode.
           </p>
         </div>
 
@@ -1288,8 +1190,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               <div>
                 <p className="text-sm font-medium text-[#8888aa]">Profile Chat</p>
                 <p className="mt-1 text-xs text-[#3f3f7a]">
-                  Ask about {profile.name}, or click{" "}
-                  <span className="text-indigo-400">Help Me Build</span> to start a guided session.
+                  Select context in ToolKit, pick a mode in AI Behavior, then type your question.
                 </p>
               </div>
               <div className="w-full rounded border border-[#1e1e4a] bg-[#070724] p-2.5 text-left">
@@ -1367,19 +1268,31 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           <div ref={chatEndRef} />
         </div>
 
-        {/* ToolKit -- only shown in regular mode (guide mode uses full profile) */}
-        {!guideMode && (
-          <ToolKit
-            profile={profile}
-            toolkitSections={toolkitSections}
-            selections={toolkitSelections}
-            open={toolkitOpen}
-            onToggleOpen={() => setToolkitOpen(o => !o)}
-            onToggleItem={handleToolkitToggleItem}
-            onToggleSection={(key) => handleToolkitToggleSection(key, toolkitSections)}
-            onClearAll={handleToolkitClearAll}
-          />
-        )}
+        {/* AI Behavior -- selects the AI's intent mode for this conversation */}
+        <AiBehaviorPanel
+          currentMode={behaviorMode}
+          open={behaviorPanelOpen}
+          onToggleOpen={() => setBehaviorPanelOpen(o => !o)}
+          onSelectMode={(mode) => {
+            setBehaviorMode(mode);
+            setBehaviorPanelOpen(false);
+            // Clear chat when switching modes -- new mode = fresh context
+            setChatMessages([]);
+            setChatError(null);
+          }}
+        />
+
+        {/* ToolKit -- context selection (always shown, applies to all modes) */}
+        <ToolKit
+          profile={profile}
+          toolkitSections={toolkitSections}
+          selections={toolkitSelections}
+          open={toolkitOpen}
+          onToggleOpen={() => setToolkitOpen(o => !o)}
+          onToggleItem={handleToolkitToggleItem}
+          onToggleSection={(key) => handleToolkitToggleSection(key, toolkitSections)}
+          onClearAll={handleToolkitClearAll}
+        />
 
         {/* Chat input */}
         <div className="border-t border-[#1e1e4a] p-3">
@@ -1547,6 +1460,98 @@ function ProfileSectionEditor({
           minRows={2}
         />
       </div>
+    </div>
+  );
+}
+
+
+// ── AiBehaviorPanel ───────────────────────────────────────────────────────────
+// Lets the writer select the AI's intent mode for the current chat session.
+// Each mode routes to a different system prompt on the backend.
+// Only one mode is active at a time. Switching mode clears the chat.
+
+const BEHAVIOR_MODES: { id: string; label: string; description: string }[] = [
+  {
+    id: "general",
+    label: "General Chat",
+    description: "Open-ended conversation. Ask anything about this profile.",
+  },
+  {
+    id: "interpret_profile",
+    label: "Interpret Profile",
+    description: "AI reads selected context and explains how AI writing tools would use each piece -- what they'd surface, avoid, or misread.",
+  },
+  // Future modes added here:
+  // { id: "refine_traits",  label: "Refine Traits",  description: "..." },
+  // { id: "check_consistency", ... }
+];
+
+interface AiBehaviorPanelProps {
+  currentMode: string;
+  open: boolean;
+  onToggleOpen: () => void;
+  onSelectMode: (mode: string) => void;
+}
+
+function AiBehaviorPanel({ currentMode, open, onToggleOpen, onSelectMode }: AiBehaviorPanelProps) {
+  const current = BEHAVIOR_MODES.find(m => m.id === currentMode) ?? BEHAVIOR_MODES[0];
+
+  return (
+    <div className="border-b border-teal-800/40 bg-teal-950/40">
+
+      {/* Collapsed bar */}
+      <button
+        onClick={onToggleOpen}
+        className="flex w-full items-center justify-between px-3 py-2 transition-colors hover:bg-teal-900/20"
+        title="Select the AI's behavior mode for this chat session"
+      >
+        <div className="flex items-center gap-2">
+          <Bot size={12} className="shrink-0 text-teal-400" />
+          <span className="text-xs font-semibold text-teal-300">AI Behavior</span>
+          <span className="rounded-full bg-teal-700/40 px-2 py-0.5 text-xs text-teal-200">
+            {current.label}
+          </span>
+        </div>
+        <ChevronDown
+          size={12}
+          className={`shrink-0 text-teal-600 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* Expanded mode list */}
+      {open && (
+        <div className="border-t border-teal-800/30 px-2 pb-2 pt-1.5">
+          <p className="mb-2 px-1 text-xs text-teal-600">
+            Choose what the AI should do with the context you've selected.
+            Switching mode clears the current conversation.
+          </p>
+          {BEHAVIOR_MODES.map(mode => {
+            const isActive = mode.id === currentMode;
+            return (
+              <button
+                key={mode.id}
+                onClick={() => onSelectMode(mode.id)}
+                className={`mb-1 w-full rounded px-2 py-2 text-left transition-colors ${
+                  isActive
+                    ? "bg-teal-700/30 text-teal-100"
+                    : "text-teal-300 hover:bg-teal-900/30"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {isActive && (
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-400" />
+                  )}
+                  {!isActive && (
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-800" />
+                  )}
+                  <span className="text-xs font-medium">{mode.label}</span>
+                </div>
+                <p className="mt-0.5 pl-3.5 text-xs text-teal-600">{mode.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
