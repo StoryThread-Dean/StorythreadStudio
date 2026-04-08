@@ -697,8 +697,17 @@ def _build_behavior_prompt(
     profile_label = profile_type.replace("_", " ").title()
 
     # ── SHARED CONTEXT BLOCK ─────────────────────────────────────────────────
-    # Injected at the top of every mode so the AI always knows who it's helping.
+    # The punctuation rule is the FIRST thing the model reads -- before any
+    # context, instructions, or mode-specific content. This placement is
+    # intentional: models follow rules more reliably when they appear at the
+    # top of the prompt before any other instructions pull their attention.
+    # This block is shared by every behavior mode automatically.
     context_header = (
+        "PUNCTUATION RULE -- NO EXCEPTIONS: Never use em dashes (\u2014) or "
+        "en dashes (\u2013) anywhere in your response. "
+        "Use commas, parentheses, colons, or semicolons instead (depending on "
+        "the context). This applies to every sentence, list item, and suggestion "
+        "you write.\n\n"
         f"You are helping a fiction writer with a {profile_label} profile "
         f"for the character/subject: {profile_name}.\n"
         f"{content_block}\n"
@@ -707,13 +716,16 @@ def _build_behavior_prompt(
     )
 
     # ── SHARED FORMAT RULES ───────────────────────────────────────────────────
+    # Appended to every mode. The em-dash rule at the top of context_header
+    # is the primary enforcement; this is a secondary reminder.
     format_rules = (
-        "FORMAT RULES (apply to every response):\n"
-        "- No em dashes (\u2014 or \u2013) -- use double hyphen (--) instead.\n"
+        "FORMAT RULES:\n"
         "- No ## or ### headers. No --- horizontal rules.\n"
         "- Use **bold** for trait names or key terms. Bullet lists for structure.\n"
         "- Keep responses concise. 1-2 sentences per point.\n"
         "- Ask at most ONE question per response.\n"
+        "- Reminder: no em dashes (\u2014) or en dashes (\u2013). "
+        "Use commas, parentheses, colons, or semicolons instead.\n"
     )
 
     # ── MODE: GENERAL CHAT ────────────────────────────────────────────────────
