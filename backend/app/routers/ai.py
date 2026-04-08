@@ -720,7 +720,12 @@ def _build_behavior_prompt(
     # is the primary enforcement; this is a secondary reminder.
     format_rules = (
         "FORMAT RULES:\n"
-        "- No ## or ### headers. No horizontal rules.\n"
+        "- No ## or ### headers.\n"
+        "- Use --- on its own line to visually separate distinct parts of a response. "
+        "Examples: separate a summary block from a closing question; "
+        "separate an analysis from a suggestion; separate one topic from the next.\n"
+        "- Leave a blank line between each paragraph or separate thought. "
+        "Do not run different ideas together as one continuous block of text.\n"
         "- Use **bold** for trait names or key terms. Bullet lists for structure.\n"
         "- Keep responses concise. 1-2 sentences per point.\n"
         "- Ask at most ONE question per response.\n"

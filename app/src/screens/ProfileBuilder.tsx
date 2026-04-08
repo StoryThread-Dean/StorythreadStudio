@@ -1797,16 +1797,20 @@ function ChatMarkdown({ content }: { content: string }) {
           </blockquote>
         ),
 
-        // Headings (## ###): AI isn't supposed to use these per the system prompt,
-        // but if it does, render them as bold text instead of large font sizes
-        // so they don't break the chat bubble layout.
+        // Headings (## ###): not used in the chat system prompts.
+        // Render as bold text if the model produces them anyway,
+        // so they don't break the chat bubble layout with large font sizes.
         h1: ({ children }) => <p className="font-semibold text-[#e0e0f5]">{children}</p>,
         h2: ({ children }) => <p className="font-semibold text-[#e0e0f5]">{children}</p>,
         h3: ({ children }) => <p className="font-semibold text-[#d0d0f0]">{children}</p>,
 
-        // Horizontal rule (---): AI isn't supposed to use these either.
-        // Render as a subtle divider if they slip through.
-        hr: () => <hr className="my-2 border-[#2a2a4a]" />,
+        // Horizontal rule (---): now actively encouraged in format_rules as
+        // a visual separator between distinct sections of a response.
+        // Rendered as a gradient line that fades at the edges -- visible but
+        // not harsh against the dark chat bubble background.
+        hr: () => (
+          <div className="my-3 h-px bg-gradient-to-r from-transparent via-[#3a3a6a] to-transparent" />
+        ),
 
         // Inline code: monospace pill for any code snippets
         code: ({ children }) => (
