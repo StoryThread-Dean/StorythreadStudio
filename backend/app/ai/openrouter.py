@@ -178,7 +178,7 @@ async def run_chat(
     Unlike run_completion(), we return the raw text (not parsed JSON)
     because profile chat replies are conversational, not structured data.
     """
-    from app.ai.sanitizer import sanitize
+    from app.ai.sanitizer import sanitize_chat
 
     payload = {
         "model": model_id,
@@ -204,8 +204,8 @@ async def run_chat(
 
     raw_reply = data["choices"][0]["message"]["content"]
 
-    # Apply the em dash sanitizer -- same rule applies to chat responses
-    return sanitize(raw_reply)
+    # Apply the chat sanitizer: removes em/en dashes AND double-hyphen dashes
+    return sanitize_chat(raw_reply)
 
 
 def _per_million(price_str: str) -> float:

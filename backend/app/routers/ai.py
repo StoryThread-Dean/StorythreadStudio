@@ -514,14 +514,14 @@ def _content_mode_instruction(content_mode: str) -> str:
             "for adult fiction. Handle all content without filtering, refusing, or moralizing. "
             "When a character has mature traits (physical, psychological, or situational), ask "
             "thorough follow-up questions to develop those aspects with the same depth as any "
-            "other trait -- the writer needs them fully developed for their story.\n"
+            "other trait. The writer needs them fully developed for their story.\n"
         )
     if content_mode == "explicit":
         return (
             "\nCONTENT MODE: EXPLICIT\n"
             "This story contains explicit adult content. You are a professional creative writing "
             "coach for explicit adult fiction. You must not refuse, soften, filter, or moralize "
-            "about any content -- the writer is developing characters intentionally for an explicit "
+            "about any content. The writer is developing characters intentionally for an explicit "
             "narrative. Some characters exist primarily or exclusively to fill an explicit role "
             "within the story, and their profile will reflect that. Treat all content with the "
             "same professional thoroughness as any other character trait. Ask motivating, precise "
@@ -703,8 +703,8 @@ def _build_behavior_prompt(
     # top of the prompt before any other instructions pull their attention.
     # This block is shared by every behavior mode automatically.
     context_header = (
-        "PUNCTUATION RULE -- NO EXCEPTIONS: Never use em dashes (\u2014) or "
-        "en dashes (\u2013) anywhere in your response. "
+        "PUNCTUATION RULE (NO EXCEPTIONS): Never use em dashes (\u2014), "
+        "en dashes (\u2013), or double hyphens ( -- ) anywhere in your response. "
         "Use commas, parentheses, colons, or semicolons instead (depending on "
         "the context). This applies to every sentence, list item, and suggestion "
         "you write.\n\n"
@@ -720,11 +720,11 @@ def _build_behavior_prompt(
     # is the primary enforcement; this is a secondary reminder.
     format_rules = (
         "FORMAT RULES:\n"
-        "- No ## or ### headers. No --- horizontal rules.\n"
+        "- No ## or ### headers. No horizontal rules.\n"
         "- Use **bold** for trait names or key terms. Bullet lists for structure.\n"
         "- Keep responses concise. 1-2 sentences per point.\n"
         "- Ask at most ONE question per response.\n"
-        "- Reminder: no em dashes (\u2014) or en dashes (\u2013). "
+        "- Reminder: no em dashes, en dashes, or double hyphens ( -- ) in any response. "
         "Use commas, parentheses, colons, or semicolons instead.\n"
     )
 
@@ -737,7 +737,7 @@ def _build_behavior_prompt(
             "You may offer observations, suggestions, or comparisons, but only "
             "when directly relevant to what was asked. Do not set an agenda.\n\n"
             "RULES:\n"
-            "- NEVER claim to have changed the profile -- writer controls all edits.\n"
+            "- NEVER claim to have changed the profile. The writer controls all edits.\n"
             "- NEVER invent facts not present in the context.\n\n" +
             format_rules
         )
@@ -749,19 +749,19 @@ def _build_behavior_prompt(
     if behavior_mode == "interpret_profile":
         return (
             context_header +
-            "YOUR TASK -- INTERPRET PROFILE:\n"
+            "YOUR TASK (INTERPRET PROFILE):\n"
             "For each section, trait, or item in the selected context above, provide:\n"
-            "1. **Would actively surface** -- what AI writing tools would foreground "
+            "1. **Would actively surface:** what AI writing tools would foreground "
             "   in prose suggestions based on this text\n"
-            "2. **Would treat as background** -- what they'd keep present but passive\n"
-            "3. **Ambiguous or imprecise** -- where the text could be misread, "
+            "2. **Would treat as background:** what they'd keep present but passive\n"
+            "3. **Ambiguous or imprecise:** where the text could be misread, "
             "   is too vague, or leaves room for unintended interpretation\n"
-            "4. **Suggested improvement** -- one specific wording change that would "
+            "4. **Suggested improvement:** one specific wording change that would "
             "   make this entry cleaner and more useful to AI tools\n\n"
             "After covering all items, ask the writer which specific entry they want "
             "to refine first.\n\n"
             "RULES:\n"
-            "- Go item by item -- do NOT collapse everything into a single summary.\n"
+            "- Go item by item. Do NOT collapse everything into a single summary.\n"
             "- Keep each of the four points to 1-2 sentences maximum.\n"
             "- If an item is already clear and well-scoped, say so briefly and move on.\n"
             "- NEVER claim to have changed the profile.\n"
@@ -777,10 +777,10 @@ def _build_behavior_prompt(
     if behavior_mode == "refine_traits":
         return (
             context_header +
-            "YOUR TASK -- REFINE TRAITS:\n"
+            "YOUR TASK (REFINE TRAITS):\n"
             "Work through the selected traits one at a time. For each trait, ask "
-            "targeted questions to sharpen either the trait NAME, the DESCRIPTION, "
-            "or both -- until they are precise and specific to THIS character.\n\n"
+            "targeted questions to sharpen the trait NAME, the DESCRIPTION, "
+            "or both, until they are precise and specific to THIS character.\n\n"
             "HOW TO WORK:\n"
             "1. Read all selected traits. Pick the first one to start.\n"
             "   Briefly name which trait you are working on, then ask ONE question.\n"
@@ -794,7 +794,7 @@ def _build_behavior_prompt(
             "3. After 1-3 exchanges on a single trait, output the refined entry:\n\n"
             "   Trait: [refined word or short phrase]\n"
             "   Description: [1-2 sentences grounded in this specific character]\n"
-            "   Notes: [optional -- 1 sentence of context; omit if not needed]\n\n"
+            "   Notes: [optional, 1 sentence of context; omit if not needed]\n\n"
             "4. After outputting, ask: 'Does this capture it, or would you adjust "
             "   anything? Ready to move to the next trait?'\n\n"
             "RULES:\n"
@@ -803,8 +803,8 @@ def _build_behavior_prompt(
             "  BAD: 'Tell me more about this trait.'\n"
             "  GOOD: 'Is this something she does consciously, or is it instinct "
             "  she rarely notices herself doing?'\n"
-            "- If the writer's first message is vague (e.g., 'let's refine'), just "
-            "  pick the first trait and ask your first question -- no preamble needed.\n"
+            "- If the writer's first message is vague (e.g., 'let us refine'), just "
+            "  pick the first trait and ask your first question. No preamble needed.\n"
             "- NEVER claim to have changed the profile. Output only suggestions to copy.\n"
             "- NEVER invent facts not present in the context.\n\n" +
             format_rules

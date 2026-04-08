@@ -54,6 +54,36 @@ def contains_em_dash(text: str) -> bool:
     return "\u2014" in text or "\u2013" in text
 
 
+def sanitize_chat(text: str) -> str:
+    """
+    Sanitize a profile chat response.
+
+    Applies two passes:
+      1. sanitize() -- converts actual em/en dash characters to ', '
+      2. Replaces ' -- ' (double hyphen with spaces) with ', '
+
+    Why the second pass?
+    The writing assistants use ' -- ' as an approved alternative to em dashes
+    in prose suggestions, so we can't remove it globally. But in the profile
+    chat, ' -- ' is almost always being used as a dash substitute (connector,
+    elaboration, or parenthetical) where a comma or colon is more appropriate.
+    Replacing it here enforces the "use commas, parentheses, colons, or
+    semicolons instead" rule that the prompt instructs but models often ignore.
+
+    Note: this does NOT affect the writing assistant pipeline, which uses
+    sanitize() and sanitize_dict() separately.
+    """
+    # Pass 1: replace actual em/en dash characters
+    text = sanitize(text)
+    # Pass 2: replace double-hyphen dash constructs with a comma
+    # ' -- ' → ', '  (connector/elaborator use)
+    # ' --\n' → ':\n' (list intro use)
+    import re
+    text = re.sub(r'\s--\s', ', ', text)
+    text = re.sub(r'\s--\n', ':\n', text)
+    return text
+
+
 def sanitize_dict(data: dict) -> dict:
     """
     Recursively walk a nested dict/list structure and sanitize all string values.
