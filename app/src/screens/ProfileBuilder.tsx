@@ -1170,7 +1170,18 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
 
         <div className="border-b border-[#1e1e4a] px-4 py-3">
-          <h2 className="text-sm font-semibold text-[#f0f0f5]">Profile Chat</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#f0f0f5]">Profile Chat</h2>
+            {chatMessages.length > 0 && (
+              <button
+                onClick={() => { setChatMessages([]); setChatError(null); }}
+                className="text-xs text-rose-700 transition-colors hover:text-rose-400"
+                title="Clear the conversation history and start fresh"
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <p className="mt-1 text-xs text-[#8888aa]">
             Session-only. Use ToolKit to select context and AI Behavior to set the mode.
           </p>
@@ -1272,7 +1283,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         <AiBehaviorPanel
           currentMode={behaviorMode}
           open={behaviorPanelOpen}
-          onToggleOpen={() => setBehaviorPanelOpen(o => !o)}
+          onToggleOpen={() => { setBehaviorPanelOpen(o => !o); setToolkitOpen(false); }}
           onSelectMode={(mode) => {
             setBehaviorMode(mode);
             setBehaviorPanelOpen(false);
@@ -1288,7 +1299,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           toolkitSections={toolkitSections}
           selections={toolkitSelections}
           open={toolkitOpen}
-          onToggleOpen={() => setToolkitOpen(o => !o)}
+          onToggleOpen={() => { setToolkitOpen(o => !o); setBehaviorPanelOpen(false); }}
           onToggleItem={handleToolkitToggleItem}
           onToggleSection={(key) => handleToolkitToggleSection(key, toolkitSections)}
           onClearAll={handleToolkitClearAll}
@@ -1336,19 +1347,6 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               <Send size={13} />
             </button>
           </div>
-          {chatMessages.length > 0 && (
-            // Flush right so it can't be accidentally clicked while reaching for Send.
-            // Rose color signals a destructive action clearly without being alarming.
-            <div className="mt-1.5 flex justify-end">
-              <button
-                onClick={() => { setChatMessages([]); setChatError(null); }}
-                className="text-xs text-rose-700 transition-colors hover:text-rose-400"
-                title="Clear the conversation history and start fresh"
-              >
-                Clear conversation
-              </button>
-            </div>
-          )}
         </div>
       </aside>
 
