@@ -982,6 +982,67 @@ def _build_behavior_prompt(
             format_rules
         )
 
+    # ── MODE: CHECK CONSISTENCY ───────────────────────────────────────────────
+    # Reads the selected profile context and flags three types of problems:
+    #   1. Contradictions -- traits that directly conflict with each other
+    #   2. Cancellations -- overlapping traits that neutralize each other's usefulness
+    #   3. Influence mismatches -- influence level doesn't match how the trait is written
+    # Output is a concise problem list, not a summary or rewrite.
+    if behavior_mode == "check_consistency":
+        return (
+            context_header +
+            "YOUR TASK (CHECK CONSISTENCY):\n"
+            "Read the selected profile context and identify three types of problems. "
+            "Do NOT summarize the profile. Do NOT rewrite anything. "
+            "Only flag issues -- the writer decides what to fix.\n\n"
+
+            "PROBLEM TYPE 1: CONTRADICTIONS\n"
+            "Two traits that directly conflict with each other in a way that would "
+            "confuse AI writing tools or produce inconsistent character behavior.\n"
+            "Example: 'Deeply introverted, avoids crowds' alongside "
+            "'Thrives on social performance, energized by attention'\n"
+            "These are not the same as complexity or contradiction the writer intends "
+            "(a character can be shy AND perform publicly -- but only if the description "
+            "explains the tension). Flag it if the tension is unexplained.\n\n"
+
+            "PROBLEM TYPE 2: OVERLAPPING TRAITS THAT CANCEL EACH OTHER\n"
+            "Two traits so similar they compete rather than add depth, or one so broad "
+            "it absorbs the other and makes the second one redundant.\n"
+            "Example: 'Pragmatic' AND 'Practical' AND 'Results-focused' -- these are "
+            "three ways of saying the same thing. Only one is needed; the others dilute it.\n\n"
+
+            "PROBLEM TYPE 3: INFLUENCE LEVEL MISMATCHES\n"
+            "The influence level assigned (foreshadowing/background/minor/major/core) "
+            "does not match how the trait is described in the text.\n"
+            "Examples of mismatches:\n"
+            "  - Description says 'She does this constantly, it defines her every action' "
+            "    but influence is set to 'minor'\n"
+            "  - Description says 'An occasional tendency, rarely surfaces' "
+            "    but influence is set to 'core'\n"
+            "Flag the mismatch and briefly explain which direction is off.\n\n"
+
+            "OUTPUT FORMAT:\n"
+            "If problems are found, list them:\n\n"
+            "  Contradiction: [trait A] vs [trait B]\n"
+            "  Why it matters: [one sentence]\n\n"
+            "  Overlap: [trait A] and [trait B] (and [trait C] if applicable)\n"
+            "  Why it matters: [one sentence]\n\n"
+            "  Influence mismatch: [trait name] -- labeled [current level] but reads as [suggested level]\n"
+            "  Why it matters: [one sentence]\n\n"
+            "If NO problems are found in a category, say:\n"
+            "  'No contradictions found.' / 'No overlaps found.' / 'Influence levels look appropriate.'\n\n"
+            "After the list, ask: 'Which of these would you like to address first, "
+            "or would you like to explain any of the flagged items?'\n\n"
+
+            "RULES:\n"
+            "- Flag problems only. Do NOT suggest rewrites or replacement text unprompted.\n"
+            "- If the writer explains that a flagged tension is intentional, acknowledge it "
+            "and remove it from the concern list.\n"
+            "- Do NOT invent problems that are not clearly present in the context.\n"
+            "- NEVER claim to have changed the profile.\n\n" +
+            format_rules
+        )
+
     # ── MODE: ASK CLARIFYING QUESTIONS ───────────────────────────────────────
     # The writer is asking something and wants a focused answer.
     # AI's only job is to answer clearly, or -- if the question is vague --

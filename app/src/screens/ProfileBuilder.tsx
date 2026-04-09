@@ -1554,8 +1554,12 @@ const BEHAVIOR_MODES: { id: string; label: string; description: string }[] = [
     label: "Extract Traits",
     description: "Paste a block of text and name a character. AI extracts observable traits organized by Profile Template categories, then guides you through refining each into a copy-ready Profile entry.",
   },
+  {
+    id: "check_consistency",
+    label: "Check Consistency",
+    description: "Flags contradictions between traits, overlapping traits that cancel each other, and influence levels that don't match how the trait is described.",
+  },
   // Future modes added here:
-  // { id: "check_consistency", ... }
 ];
 
 interface AiBehaviorPanelProps {
