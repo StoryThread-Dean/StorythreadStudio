@@ -876,64 +876,109 @@ def _build_behavior_prompt(
 
     # ── MODE: EXTRACT TRAITS ──────────────────────────────────────────────────
     # Writer pastes a block of text and names a character.
-    # AI reads the text, identifies observable traits for that character only,
-    # and organizes them under the Profile Template category names.
-    # Then guides the writer through refining one trait at a time into a
-    # copy-ready Profile Template entry.
+    # AI extracts PERMANENT or HABITUAL traits only -- not temporary scene states.
+    # Each category has its own rules for what counts as a valid extraction.
     if behavior_mode == "extract_traits":
-        # Build the category list from the section labels passed by the frontend.
-        # Formatted as a numbered list so the AI knows exactly what to look for.
-        categories = "\n".join(
-            f"  {i+1}. {label}"
-            for i, label in enumerate(section_labels)
-        )
         return (
             context_header +
-            f"YOUR TASK (EXTRACT TRAITS):\n"
-            f"The writer will paste a block of text and name a specific character. "
-            f"Your job is to read that text and extract observable traits for that "
-            f"character only, organized under the Profile Template categories below.\n\n"
-            f"PROFILE TEMPLATE CATEGORIES (use these exact headings):\n"
-            f"{categories}\n\n"
-            "EXTRACTION RULES:\n"
-            "- Extract ONLY what is directly observable in the provided text.\n"
-            "- If multiple characters appear, focus ONLY on the one the writer named.\n"
-            "- Do NOT summarize or recap the text.\n"
-            "- Do NOT guess, assume, or infer beyond what the text shows.\n"
-            "- Do NOT go off on tangents or add context the writer did not provide.\n"
-            "- Each extracted item is a short, precise observation: 3-8 words maximum.\n"
-            "  Good: 'Faint scar on left hand' / 'Quick to anger under pressure'\n"
-            "  Bad: 'She seems to be someone who gets angry when things do not go her way'\n"
-            "- If a category has no observable traits in the text, list it as: "
-            "'None found in provided text'\n\n"
-            "OUTPUT FORMAT (use this structure exactly):\n"
-            "Brief 1-sentence acknowledgement of the character and text.\n"
+            "YOUR TASK (EXTRACT TRAITS):\n"
+            "The writer will paste a block of text and name a specific character. "
+            "Read the text carefully and extract traits for THAT CHARACTER ONLY, "
+            "organized under the categories below.\n\n"
+            "BEFORE EXTRACTING ANYTHING, ask yourself this test question:\n"
+            "  'Would this trait still describe the character if the scene were "
+            "completely different?'\n"
+            "  If YES: it belongs in the list.\n"
+            "  If NO (it's a condition of this specific scene): leave it out.\n\n"
+
+            "CATEGORY-BY-CATEGORY RULES:\n\n"
+
+            "Physical Traits:\n"
+            "  EXTRACT: permanent or recurring physical features -- hair (color, length, "
+            "typical style), eye color and shape, skin tone, height/build impression, "
+            "distinguishing marks (scars, birthmarks), facial features, age appearance.\n"
+            "  DO NOT EXTRACT: what is happening to the character in this scene "
+            "(restraints, injuries, clothing unless it is their signature style, "
+            "temporary states like cold/dirty/bleeding/exposed). A character "
+            "being bound is not a physical trait. Porcelain skin smudged with soot "
+            "is a scene condition, not a physical trait.\n"
+            "  EXAMPLE GOOD: 'Scar on left temple' / 'Long brown hair, worn loose or pinned'\n"
+            "  EXAMPLE BAD: 'Bound wrists in shackles' / 'Body cold and exposed'\n\n"
+
+            "Personality Traits:\n"
+            "  EXTRACT: consistent behavioral patterns shown or implied across the text -- "
+            "how the character repeatedly relates to others, recurring decision-making "
+            "tendencies, stable emotional patterns.\n"
+            "  DO NOT EXTRACT: single reactions to unique circumstances. One angry moment "
+            "is not a personality trait unless the text shows this is typical.\n"
+            "  TEST: 'Does the text show this as a pattern, or just once?'\n\n"
+
+            "Motivations:\n"
+            "  EXTRACT: deep, fundamental drives that would exist across many different "
+            "scenes -- core desires, long-term goals, what the character fundamentally "
+            "wants or fears beyond this moment.\n"
+            "  DO NOT EXTRACT: immediate scene-level wants tied to the current situation "
+            "('wants to escape the chains'). Ask: 'Would this motivation exist if this "
+            "specific scene had never happened?'\n"
+            "  EXAMPLE GOOD: 'Seeks autonomy over her own life' / 'Desires to reclaim respect'\n"
+            "  EXAMPLE BAD: 'Wants to be untied' / 'Seeks escape from this room'\n\n"
+
+            "Voice Notes:\n"
+            "  EXTRACT: habitual speech patterns -- how the character typically speaks "
+            "across different situations (tone with authority figures vs. allies, "
+            "vocabulary level, pace, recurring verbal habits, default emotional register).\n"
+            "  DO NOT EXTRACT: single vocal events. A character shouting once in 5,000 "
+            "words is not a voice trait. Only extract if the text shows it as typical.\n"
+            "  EXAMPLE GOOD: 'Speaks with quiet authority' / 'Guarded and clipped with strangers'\n"
+            "  EXAMPLE BAD: 'Shouts in a shrill voice' (if it happened once)\n\n"
+
+            "Hidden and Subtle Traits:\n"
+            "  EXTRACT: traits the character does not openly acknowledge -- contradictions "
+            "between their stated feelings and their actions, behaviors that hint at "
+            "something deeper, subtle tells that other characters or the reader notice "
+            "but the character themselves may not, self-deception, hidden vulnerabilities "
+            "that surface indirectly.\n"
+            "  DO NOT EXTRACT: explicit narrator foreshadowing (the author's voice, "
+            "not a character trait). Look for what the character DOES vs what they SAY.\n"
+            "  EXAMPLE GOOD: 'Outward submission masks calculation' / "
+            "'Controls surroundings when feeling powerless'\n\n"
+
+            "For any other category not listed above, apply the same permanent/habitual "
+            "test: only extract what would describe the character across multiple scenes.\n\n"
+
+            "GENERAL RULES:\n"
+            "- Focus ONLY on the character the writer named.\n"
+            "- Each item: 3-8 words, precise and specific.\n"
+            "- If a category yields nothing valid: list it as 'None found in provided text'\n"
+            "- Do NOT summarize the text. Do NOT guess or infer beyond what is shown.\n\n"
+
+            "OUTPUT FORMAT:\n"
+            "One sentence acknowledging the character and text.\n"
             "Then for each category:\n"
             "  [Category Name]:\n"
-            "  - [short observation]\n"
-            "  - [short observation]\n"
-            "  ...\n\n"
+            "  - [extracted item]\n"
+            "  - [extracted item]\n\n"
             "---\n\n"
-            "After the full extraction, ask: 'Which of these traits would you like "
-            "to develop into a Profile entry first?'\n\n"
+            "After the full extraction, ask: 'Which of these would you like to develop "
+            "into a Profile entry first?'\n\n"
+
             "AFTER WRITER PICKS A TRAIT:\n"
             "1. Acknowledge the chosen trait in one sentence.\n"
-            "2. Provide 3-5 brief options (1-2 sentences each) that range from "
-            "more literal to more interpretive expressions of that trait.\n"
-            "3. Ask the writer to choose one or offer their own wording.\n\n"
-            "AFTER WRITER CONFIRMS THEIR CHOICE:\n"
+            "2. Offer 3-5 brief options (1-2 sentences each) ranging from literal "
+            "to more interpretive expressions of that trait.\n"
+            "3. Ask the writer to choose one or provide their own direction.\n\n"
+
+            "AFTER WRITER CONFIRMS:\n"
             "Produce the Profile Template entry:\n\n"
             "  Trait: [1-6 word phrase, precise and AI-prompt friendly]\n"
-            "  Description: [2-6 sentences maximum, grounded in this character]\n\n"
-            "Then say: 'Want to refine this further, or move to the next trait from "
-            "the list?' (The extracted list stays available for the rest of this session.)\n\n"
-            "OPTIONAL -- if the writer asks for a summary or a scene/dialogue example:\n"
-            "Provide it briefly, based only on what was extracted. Then return to the "
-            "trait-building workflow.\n\n"
+            "  Description: [2-6 sentences, grounded in this character]\n\n"
+            "Then: 'Want to refine this, or move to the next trait from the list?'\n"
+            "(The full extracted list stays available for the rest of this session.)\n\n"
+
             "RULES:\n"
-            "- NEVER claim to have changed the profile. The writer copies what they want.\n"
-            "- NEVER invent traits not observable in the provided text.\n"
-            "- NEVER extend the Description past 6 sentences.\n\n" +
+            "- NEVER claim to have changed the profile. Writer copies what they want.\n"
+            "- NEVER invent traits not present in the provided text.\n"
+            "- NEVER exceed 6 sentences in any Description.\n\n" +
             format_rules
         )
 
