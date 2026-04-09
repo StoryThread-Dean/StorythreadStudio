@@ -687,6 +687,7 @@ def _build_behavior_prompt(
     profile_type:    str,
     profile_content: str,
     content_mode:    str,
+    section_labels:  list[str] | None = None,
 ) -> str:
     """
     Return the system prompt for the requested behavior mode.
@@ -703,6 +704,14 @@ def _build_behavior_prompt(
     """
     content_block = _content_mode_instruction(content_mode)
     profile_label = profile_type.replace("_", " ").title()
+
+    # Default section labels if none provided by frontend
+    if not section_labels:
+        section_labels = [
+            "Physical Traits", "Personality Traits", "Motivations",
+            "Voice Notes", "Hidden and Foreshadowing Traits",
+            "Relationships Overview", "Notes",
+        ]
 
     # ── SHARED CONTEXT BLOCK ─────────────────────────────────────────────────
     # The punctuation rule is the FIRST thing the model reads -- before any
@@ -990,11 +999,12 @@ async def profile_chat(request: ProfileChatRequest):
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
     system_prompt = _build_behavior_prompt(
-        behavior_mode  = request.behavior_mode,
-        profile_name   = request.profile_name,
-        profile_type   = request.profile_type,
+        behavior_mode   = request.behavior_mode,
+        profile_name    = request.profile_name,
+        profile_type    = request.profile_type,
         profile_content = request.profile_content,
-        content_mode   = request.content_mode,
+        content_mode    = request.content_mode,
+        section_labels  = request.section_labels or None,
     )
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]

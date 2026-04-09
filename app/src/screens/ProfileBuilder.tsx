@@ -792,36 +792,64 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
 
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
+    // Abort controller lets us cancel the request if it takes too long.
+    // 90 seconds is generous -- large text extractions can take 30-60s.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90_000);
+
     try {
       const res = await fetch(`${API_BASE}/api/ai/profile-chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           profile_name:    profile.name,
           profile_type:    profile.type,
-          // ToolKit selection always controls what context gets sent.
-          // The behavior mode controls HOW the AI responds to that context.
           profile_content: formatSelectedContext(profile, toolkitSections, toolkitSelections),
           messages:        newMessages,
           behavior_mode:   behaviorMode,
           content_mode:    project.content_mode_default ?? "general",
-          // Send current section labels so backend uses the live template structure.
-          // If SECTION_CONFIGS changes in the future, the backend adapts automatically.
-          section_labels: (SECTION_CONFIGS[profile.type as ProfileType] ?? []).map(c => c.heading),
+          section_labels:  (SECTION_CONFIGS[profile.type as ProfileType] ?? []).map(c => c.heading),
         }),
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Chat request failed.");
+        // Try to parse a JSON error detail from the backend.
+        // If the response isn't JSON (e.g. a crash or 413 from uvicorn),
+        // fall back to a helpful message based on the HTTP status.
+        let detail = `Server returned ${res.status}.`;
+        try {
+          const errBody = await res.json();
+          detail = errBody.detail ?? detail;
+        } catch {
+          if (res.status === 413) {
+            detail = "The text you sent is too large for the server to process. Try a shorter excerpt (1,000-2,000 words is ideal).";
+          } else if (res.status === 502 || res.status === 503) {
+            detail = "The AI service returned an error. The text may be too long for the selected model's context window. Try a shorter excerpt or switch to a model with a larger context window in Settings.";
+          }
+        }
+        throw new Error(detail);
       }
 
       const data = await res.json();
       setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (err) {
-      setChatError(err instanceof Error ? err.message : "Chat request failed.");
+      if (err instanceof Error && err.name === "AbortError") {
+        setChatError(
+          "The request timed out after 90 seconds. The text block may be too large for the AI to process in time. " +
+          "Try a shorter excerpt (1,000-2,000 words works well for Extract Traits)."
+        );
+      } else if (err instanceof TypeError && err.message.toLowerCase().includes("failed to fetch")) {
+        setChatError(
+          "Could not reach the backend server. Check that the backend is running on port 8000. " +
+          "If it is running, the text block may be too large -- try a shorter excerpt."
+        );
+      } else {
+        setChatError(err instanceof Error ? err.message : "Chat request failed.");
+      }
     } finally {
+      clearTimeout(timeoutId);
       setChatLoading(false);
     }
   }
@@ -1310,8 +1338,9 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
 
         {/* Chat input */}
         <div className="border-t border-[#1e1e4a] p-3">
-          {/* items-end aligns the Send button to the bottom of the textarea */}
-          <div className="flex items-end gap-2">
+          {/* items-end aligns the Send button to the bottom of the textarea.
+              relative enables the character counter to position absolutely. */}
+          <div className="relative flex items-end gap-2">
             <textarea
               value={chatInput}
               onChange={e => {
@@ -1339,8 +1368,31 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               disabled={!profile || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
-              className="flex-1 rounded border border-[#1e1e4a] bg-[#1e1e48] px-2 py-2 text-xs text-[#f0f0f5] placeholder-[#6666a0] outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`flex-1 rounded border px-2 py-2 text-xs text-[#f0f0f5] placeholder-[#6666a0] outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50 bg-[#1e1e48] ${
+                chatInput.length > 6000
+                  ? "border-red-600"
+                  : chatInput.length > 3000
+                  ? "border-amber-600"
+                  : "border-[#1e1e4a]"
+              }`}
             />
+            {/* Character counter -- turns amber above 3,000 chars, red above 6,000.
+                Very large text blocks (10,000+ chars) risk hitting model context limits
+                or causing fetch timeouts. 1,000-2,000 words is the practical sweet spot
+                for Extract Traits. */}
+            {chatInput.length > 500 && (
+              <div className={`absolute bottom-1 right-14 text-xs ${
+                chatInput.length > 6000
+                  ? "text-red-400"
+                  : chatInput.length > 3000
+                  ? "text-amber-500"
+                  : "text-[#3f3f7a]"
+              }`}>
+                {chatInput.length.toLocaleString()} chars
+                {chatInput.length > 6000 && " — may be too large"}
+                {chatInput.length > 3000 && chatInput.length <= 6000 && " — getting large"}
+              </div>
+            )}
             <button
               onClick={sendChatMessage}
               disabled={!profile || !chatInput.trim() || chatLoading}
