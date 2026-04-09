@@ -89,27 +89,40 @@
  * ============
  * Applied globally to every element on the page.
  *
- * box-sizing: border-box -- means an element's width and height INCLUDE
- * its padding and border. Without this, adding padding to a div makes it
- * bigger than you expect, which causes layout headaches.
+ * IMPORTANT: These rules are inside @layer base, which has LOWER priority
+ * than @layer utilities (where Tailwind puts px-*, py-*, ml-*, etc.).
+ * This is the correct Tailwind v4 approach -- if this block were unlayered
+ * (outside any @layer), "padding: 0" would silently override EVERY Tailwind
+ * spacing utility across the entire app, because unlayered CSS always wins
+ * over layered CSS regardless of specificity. That was the root cause of the
+ * padding-not-rendering bug we saw in the Settings modal, ToolKit, and elsewhere.
+ *
+ * Rule of thumb for Tailwind v4: reset/base styles → @layer base.
+ *                                 utility overrides → @layer utilities.
+ *                                 Nothing should be unlayered.
  */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 /*
  * Make the root elements fill the entire browser window.
  * "overflow: hidden" on the root prevents outer scrollbars from
  * appearing -- each panel manages its own scrolling independently.
+ * Also inside @layer base so utility classes can override if needed.
  */
-html,
-body,
-#root {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
 }
