@@ -5,11 +5,13 @@
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 export interface AppSettings {
-  openrouter_api_key: string;   // Masked display value ("sk-or-...xyz" or "")
+  openrouter_api_key:     string;    // Masked display value ("sk-or-...xyz" or "")
   openrouter_api_key_set: boolean;
-  default_model: string;
-  content_mode: string;
-  cost_tier: string;
+  default_model:          string;
+  content_mode:           string;    // "general" | "mature" | "explicit"
+  cost_tier:              string;    // "free" | "budget" | "standard" | "premium"
+  text_only_filter:       boolean;   // hide non-text output models
+  starred_models:         string[];  // user-pinned model IDs
 }
 
 export interface UpdateSettingsPayload {
@@ -27,6 +29,8 @@ export interface ModelInfo {
   context_length: number;
   cost_input_per_million: number;
   cost_output_per_million: number;
+  output_modalities: string[];  // e.g. ["text"] or ["text","image"]
+  is_free: boolean;             // true if :free suffix or zero cost
 }
 
 // ── Assistants ────────────────────────────────────────────────────────────────

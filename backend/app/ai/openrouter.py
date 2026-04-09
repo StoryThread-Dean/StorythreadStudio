@@ -42,14 +42,29 @@ async def list_models(api_key: str) -> list[dict]:
 
     models = []
     for m in data.get("data", []):
-        pricing = m.get("pricing", {})
+        pricing      = m.get("pricing", {})
+        architecture = m.get("architecture", {})
+        model_id     = m.get("id", "")
+
+        # Output modalities tell us whether this model produces text only or
+        # also image/audio/video output. We use this for the text-only filter
+        # in Settings. Default to ["text"] if the field is absent.
+        output_modalities: list[str] = architecture.get("output_modalities", ["text"])
+
+        cost_in = _per_million(pricing.get("prompt", "0"))
+
+        # Free models are identified either by the ":free" suffix in the model ID
+        # or by having a zero input cost. Both signals are equivalent.
+        is_free = model_id.endswith(":free") or cost_in == 0.0
+
         models.append({
-            "id":                      m.get("id", ""),
-            "name":                    m.get("name", m.get("id", "")),
+            "id":                      model_id,
+            "name":                    m.get("name", model_id),
             "context_length":          m.get("context_length", 0),
-            # Pricing is per token; we convert to per million for readability
-            "cost_input_per_million":  _per_million(pricing.get("prompt", "0")),
+            "cost_input_per_million":  cost_in,
             "cost_output_per_million": _per_million(pricing.get("completion", "0")),
+            "output_modalities":       output_modalities,
+            "is_free":                 is_free,
         })
 
     # Sort by name for a clean UI list

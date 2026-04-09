@@ -170,6 +170,8 @@ class ModelInfo(BaseModel):
     context_length: int
     cost_input_per_million: float
     cost_output_per_million: float
+    output_modalities: list[str] = ["text"]  # e.g. ["text"] or ["text", "image"]
+    is_free: bool = False                     # True if id ends in :free or cost == 0
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

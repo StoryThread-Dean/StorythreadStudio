@@ -23,9 +23,18 @@ SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 # Default values used when settings.json doesn't exist yet or is missing a key
 DEFAULT_SETTINGS: dict = {
     "openrouter_api_key": "",
-    "default_model": "openai/gpt-4o-mini",
-    "content_mode": "general",
-    "cost_tier": "balanced",
+    "default_model":      "openai/gpt-4o-mini",
+    "content_mode":       "general",
+    # cost_tier: which price tier to filter models by in the Settings picker.
+    # Values: "free" | "budget" | "standard" | "premium"
+    # "standard" is the default -- shows all models up to ~$15/M input tokens.
+    "cost_tier":          "standard",
+    # text_only_filter: when True, the model picker hides models that output
+    # non-text content (images, audio, video). Writers don't need these.
+    "text_only_filter":   True,
+    # starred_models: list of model IDs the writer has pinned as favorites.
+    # Stored as a JSON array (list of strings).
+    "starred_models":     [],
 }
 
 
