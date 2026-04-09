@@ -126,6 +126,14 @@ class ProfileChatRequest(BaseModel):
     model_id:        str | None = None
     behavior_mode:   str        = "general"   # Which AI behavior is active
     content_mode:    str        = "general"   # "general" | "mature" | "explicit"
+    # Section labels from the frontend SECTION_CONFIGS -- passed so the backend
+    # always uses the current template structure without hardcoding section names.
+    # Defaults cover the standard character profile if not provided.
+    section_labels:  list[str]  = [
+        "Physical Traits", "Personality Traits", "Motivations",
+        "Voice Notes", "Hidden and Foreshadowing Traits",
+        "Relationships Overview", "Notes",
+    ]
 
 
 class ProfileChatResponse(BaseModel):
@@ -852,6 +860,69 @@ def _build_behavior_prompt(
             "- NEVER claim to have changed the profile.\n"
             "- NEVER invent facts not present in the selected context.\n"
             "- Keep the entire initial summary to 10 bullets or fewer across both parts.\n\n" +
+            format_rules
+        )
+
+    # ── MODE: EXTRACT TRAITS ──────────────────────────────────────────────────
+    # Writer pastes a block of text and names a character.
+    # AI reads the text, identifies observable traits for that character only,
+    # and organizes them under the Profile Template category names.
+    # Then guides the writer through refining one trait at a time into a
+    # copy-ready Profile Template entry.
+    if behavior_mode == "extract_traits":
+        # Build the category list from the section labels passed by the frontend.
+        # Formatted as a numbered list so the AI knows exactly what to look for.
+        categories = "\n".join(
+            f"  {i+1}. {label}"
+            for i, label in enumerate(section_labels)
+        )
+        return (
+            context_header +
+            f"YOUR TASK (EXTRACT TRAITS):\n"
+            f"The writer will paste a block of text and name a specific character. "
+            f"Your job is to read that text and extract observable traits for that "
+            f"character only, organized under the Profile Template categories below.\n\n"
+            f"PROFILE TEMPLATE CATEGORIES (use these exact headings):\n"
+            f"{categories}\n\n"
+            "EXTRACTION RULES:\n"
+            "- Extract ONLY what is directly observable in the provided text.\n"
+            "- If multiple characters appear, focus ONLY on the one the writer named.\n"
+            "- Do NOT summarize or recap the text.\n"
+            "- Do NOT guess, assume, or infer beyond what the text shows.\n"
+            "- Do NOT go off on tangents or add context the writer did not provide.\n"
+            "- Each extracted item is a short, precise observation: 3-8 words maximum.\n"
+            "  Good: 'Faint scar on left hand' / 'Quick to anger under pressure'\n"
+            "  Bad: 'She seems to be someone who gets angry when things do not go her way'\n"
+            "- If a category has no observable traits in the text, list it as: "
+            "'None found in provided text'\n\n"
+            "OUTPUT FORMAT (use this structure exactly):\n"
+            "Brief 1-sentence acknowledgement of the character and text.\n"
+            "Then for each category:\n"
+            "  [Category Name]:\n"
+            "  - [short observation]\n"
+            "  - [short observation]\n"
+            "  ...\n\n"
+            "---\n\n"
+            "After the full extraction, ask: 'Which of these traits would you like "
+            "to develop into a Profile entry first?'\n\n"
+            "AFTER WRITER PICKS A TRAIT:\n"
+            "1. Acknowledge the chosen trait in one sentence.\n"
+            "2. Provide 3-5 brief options (1-2 sentences each) that range from "
+            "more literal to more interpretive expressions of that trait.\n"
+            "3. Ask the writer to choose one or offer their own wording.\n\n"
+            "AFTER WRITER CONFIRMS THEIR CHOICE:\n"
+            "Produce the Profile Template entry:\n\n"
+            "  Trait: [1-6 word phrase, precise and AI-prompt friendly]\n"
+            "  Description: [2-6 sentences maximum, grounded in this character]\n\n"
+            "Then say: 'Want to refine this further, or move to the next trait from "
+            "the list?' (The extracted list stays available for the rest of this session.)\n\n"
+            "OPTIONAL -- if the writer asks for a summary or a scene/dialogue example:\n"
+            "Provide it briefly, based only on what was extracted. Then return to the "
+            "trait-building workflow.\n\n"
+            "RULES:\n"
+            "- NEVER claim to have changed the profile. The writer copies what they want.\n"
+            "- NEVER invent traits not observable in the provided text.\n"
+            "- NEVER extend the Description past 6 sentences.\n\n" +
             format_rules
         )
 

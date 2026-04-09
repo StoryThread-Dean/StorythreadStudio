@@ -805,6 +805,9 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           messages:        newMessages,
           behavior_mode:   behaviorMode,
           content_mode:    project.content_mode_default ?? "general",
+          // Send current section labels so backend uses the live template structure.
+          // If SECTION_CONFIGS changes in the future, the backend adapts automatically.
+          section_labels: (SECTION_CONFIGS[profile.type as ProfileType] ?? []).map(c => c.heading),
         }),
       });
 
@@ -1493,6 +1496,11 @@ const BEHAVIOR_MODES: { id: string; label: string; description: string }[] = [
     id: "generate_summary",
     label: "Generate AI Summary",
     description: "Produces a two-part summary: plain-language recap of what you wrote, then how AI writing tools would interpret it. Asks what feels off, then offers targeted suggestions.",
+  },
+  {
+    id: "extract_traits",
+    label: "Extract Traits",
+    description: "Paste a block of text and name a character. AI extracts observable traits organized by Profile Template categories, then guides you through refining each into a copy-ready Profile entry.",
   },
   // Future modes added here:
   // { id: "check_consistency", ... }
