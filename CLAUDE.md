@@ -45,6 +45,18 @@ Critical bugs also fixed this session:
 - AI in guide mode should reference the writer's previous answers to feel like a real conversation
 - Resizable or collapsible right panel chat window
 
+### Phase 4 Polish -- Completed Items
+- ToolKit context selector (teal collapsible panel, grouped by section, section checkboxes, correct indentation)
+- AI Behavior mode system replacing single-purpose chat (General Chat, Interpret Profile, Refine Traits, Ask Clarifying Questions, Generate AI Summary, Extract Traits, Check Consistency)
+- Guide Mode removed and absorbed into AI Behavior modes
+- Chat formatting fixed: react-markdown rendering, --- separators, blank line paragraphs
+- Chat textarea expanded: 3-row default, auto-expand to 7 lines, lighter background
+- Em-dash enforcement: moved to top of every prompt, added sanitize_chat() in openrouter.py
+- Double-hyphen (--) also banned from chat prompts and replaced by sanitize_chat()
+- Settings expansion: tier slider (Free/Budget/Standard/Premium), text-only filter toggle, Staff Picks + My Favorites + All Models picker, content mode radio buttons, starred models persistence
+- Root cause fix: CSS reset `* { padding: 0 }` was unlayered, overriding all Tailwind spacing utilities. Fixed by wrapping in `@layer base`.
+- Extract Traits mode: per-category rules for permanent vs temporary traits (Physical, Personality, Voice, Motivations, Hidden/Subtle)
+
 ### Phase 5 -- Next (after polish)
 Content mode settings + model routing + allowlist/blocklist.
 
