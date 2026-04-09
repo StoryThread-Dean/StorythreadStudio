@@ -251,8 +251,11 @@ export function Settings({ onClose }: SettingsProps) {
       {/* Modal -- wider and scrollable for expanded content */}
       <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] shadow-2xl">
 
-        {/* Sticky header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] px-6 py-4">
+        {/* Sticky header -- inline padding to bypass Tailwind purge */}
+        <div
+          className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a]"
+          style={{ padding: "1rem 1.5rem" }}
+        >
           <h2 className="text-base font-semibold text-[#f0f0f5]">Settings</h2>
           <button
             onClick={onClose}
@@ -263,8 +266,8 @@ export function Settings({ onClose }: SettingsProps) {
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        {/* Scrollable body -- inline padding to bypass Tailwind purge */}
+        <div className="flex-1 overflow-y-auto" style={{ padding: "1.25rem 1.5rem" }}>
           {loading ? (
             <p className="text-sm text-[#8888aa]">Loading settings...</p>
           ) : (
@@ -556,8 +559,8 @@ export function Settings({ onClose }: SettingsProps) {
           )}
         </div>
 
-        {/* Sticky footer -- feedback and save */}
-        <div className="shrink-0 border-t border-[#1e1e4a] px-6 py-4">
+        {/* Sticky footer -- inline padding to bypass Tailwind purge */}
+        <div className="shrink-0 border-t border-[#1e1e4a]" style={{ padding: "1rem 1.5rem" }}>
           {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
           {saved && !error && (
             <p className="mb-2 flex items-center gap-1.5 text-xs text-emerald-400">
