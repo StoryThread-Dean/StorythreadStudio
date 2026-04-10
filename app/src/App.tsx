@@ -574,33 +574,40 @@ function App() {
 
                 {/* Active context chips */}
                 {contextChips.length === 0 ? (
-                  <p className="text-xs text-[#3f3f7a]">
-                    No context attached. Add profile summaries to give the AI
-                    relevant story context.
+                  <p className="text-xs leading-relaxed text-[#3f3f7a]">
+                    No context attached. Click "+ Add" to attach a profile summary.
+                    The AI only sees what you share -- nothing is attached automatically.
                   </p>
                 ) : (
                   <div className="flex flex-col gap-1">
-                    {contextChips.map((chip, i) => (
-                      <div key={i}
-                        className="flex items-center justify-between rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1">
-                        <div>
-                          <span className="text-xs font-medium text-indigo-300">{chip.name}</span>
-                          <span className="ml-1.5 text-xs text-[#3f3f7a]">
-                            {chip.type.replace("_", " ")}
-                          </span>
+                    {contextChips.map((chip, i) => {
+                      const color = chipTypeColor(chip.type);
+                      const label = chipTypeLabel(chip.type);
+                      return (
+                        <div key={i}
+                          className="flex items-center justify-between rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5">
+                          <div className="flex min-w-0 items-center gap-2">
+                            {/* Color-coded type badge */}
+                            <span className={`shrink-0 rounded border px-1.5 py-0.5 text-xs ${color}`}>
+                              {label}
+                            </span>
+                            <span className="truncate text-xs font-medium text-[#f0f0f5]">
+                              {chip.name}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
+                            className="ml-2 shrink-0 text-xs text-[#3f3f7a] transition-colors hover:text-red-400"
+                            title="Remove this context chip"
+                          >
+                            ×
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
-                          className="text-xs text-[#3f3f7a] transition-colors hover:text-red-400"
-                          title="Remove this context chip"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <button
                       onClick={() => setContextChips([])}
-                      className="mt-1 text-xs text-[#3f3f7a] transition-colors hover:text-red-400"
+                      className="mt-0.5 text-xs text-[#3f3f7a] transition-colors hover:text-red-400"
                     >
                       Clear all
                     </button>
@@ -761,6 +768,30 @@ function AssistantButton({
   );
 }
 
+// ── Context chip type config ──────────────────────────────────────────────────
+// Human-readable labels and color styles for each profile type.
+// Used in both the chip picker and the attached chip display.
+
+const CHIP_TYPES: { id: string; label: string; color: string }[] = [
+  { id: "character",       label: "Character",       color: "text-indigo-300 border-indigo-700/50 bg-indigo-900/20"  },
+  { id: "relationship",    label: "Relationship",    color: "text-violet-300  border-violet-700/50  bg-violet-900/20"  },
+  { id: "location",        label: "Location",        color: "text-teal-300    border-teal-700/50    bg-teal-900/20"    },
+  { id: "lore",            label: "Lore",            color: "text-amber-300   border-amber-700/50   bg-amber-900/20"   },
+  { id: "chapter_summary", label: "Chapter Summary", color: "text-sky-300     border-sky-700/50     bg-sky-900/20"     },
+  { id: "scene_summary",   label: "Scene Summary",   color: "text-emerald-300 border-emerald-700/50 bg-emerald-900/20" },
+];
+
+function chipTypeColor(type: string): string {
+  return CHIP_TYPES.find(t => t.id === type)?.color
+    ?? "text-[#8888aa] border-[#1e1e4a] bg-[#12122e]";
+}
+
+function chipTypeLabel(type: string): string {
+  return CHIP_TYPES.find(t => t.id === type)?.label
+    ?? type.replace(/_/g, " ");
+}
+
+
 // ── ChipPicker ────────────────────────────────────────────────────────────────
 // A small inline panel that lets the writer pick a profile to attach as a
 // context chip. It fetches the profile list on mount and shows it grouped by type.
@@ -805,7 +836,7 @@ function ChipPicker({ rootPath, existingChips, onAdd, onClose }: ChipPickerProps
       const profile = await res.json();
       // Use full_ai_summary if available, otherwise a note that it's empty
       const content = profile.full_ai_summary?.trim()
-        || `[No AI summary generated yet for ${name}. Generate one in the Profile Builder.]`;
+        || `[No AI summary generated yet for ${name}. Open Profile Builder and click Generate on the Full AI Summary field.]`;
       onAdd({ type: profileType, name, content });
     } catch {
       onClose();
@@ -814,33 +845,41 @@ function ChipPicker({ rootPath, existingChips, onAdd, onClose }: ChipPickerProps
     }
   }
 
-  const types = ["character", "relationship", "location", "lore", "chapter_summary", "scene_summary"];
+  const typeColor = chipTypeColor(profileType);
 
   return (
     <div className="mb-3 rounded border border-indigo-800/50 bg-[#0a0a28] p-3">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold text-indigo-300">Attach Profile Context</p>
+        <p className="text-xs font-semibold text-indigo-300">Attach Context</p>
         <button onClick={onClose} className="text-xs text-[#3f3f7a] hover:text-[#8888aa]">✕</button>
       </div>
 
-      {/* Type selector */}
-      <select
-        value={profileType}
-        onChange={e => setProfileType(e.target.value)}
-        className="mb-2 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-xs text-[#f0f0f5] outline-none focus:border-indigo-500"
-      >
-        {types.map(t => (
-          <option key={t} value={t}>{t.replace("_", " ")}</option>
+      {/* Profile type tabs -- button group instead of a raw select */}
+      <div className="mb-2 flex flex-wrap gap-1">
+        {CHIP_TYPES.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setProfileType(t.id)}
+            className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+              profileType === t.id
+                ? t.color
+                : "border-[#1e1e4a] text-[#3f3f7a] hover:text-[#8888aa]"
+            }`}
+          >
+            {t.label}
+          </button>
         ))}
-      </select>
+      </div>
 
       {/* Profile list */}
       {loading ? (
-        <p className="text-xs text-[#3f3f7a]">Loading...</p>
+        <p className="py-1 text-xs text-[#3f3f7a]">Loading...</p>
       ) : profiles.length === 0 ? (
-        <p className="text-xs text-[#3f3f7a]">No profiles of this type found.</p>
+        <p className="py-1 text-xs text-[#3f3f7a]">
+          No {chipTypeLabel(profileType).toLowerCase()} profiles found in this project.
+        </p>
       ) : (
-        <div className="flex max-h-32 flex-col gap-0.5 overflow-y-auto">
+        <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
           {profiles.map(p => {
             const alreadyAdded = existingChips.some(c => c.name === p.name && c.type === profileType);
             return (
@@ -848,13 +887,19 @@ function ChipPicker({ rootPath, existingChips, onAdd, onClose }: ChipPickerProps
                 key={p.filename}
                 onClick={() => !alreadyAdded && pickProfile(p.filename, p.name)}
                 disabled={alreadyAdded || adding === p.filename}
-                className={`rounded px-2 py-1 text-left text-xs transition-colors ${
+                className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
                   alreadyAdded
-                    ? "text-[#3f3f7a] cursor-not-allowed"
-                    : "text-[#f0f0f5] hover:bg-indigo-600/20 hover:text-indigo-300"
+                    ? "text-[#3f3f7a]"
+                    : "text-[#f0f0f5] hover:bg-indigo-600/20"
                 }`}
               >
-                {adding === p.filename ? "Adding..." : alreadyAdded ? `${p.name} ✓` : p.name}
+                {/* Color dot matching the chip type */}
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full border ${typeColor}`} />
+                {adding === p.filename
+                  ? "Adding..."
+                  : alreadyAdded
+                  ? <><span className="opacity-50">{p.name}</span><span className="ml-auto text-emerald-600">✓</span></>
+                  : p.name}
               </button>
             );
           })}
