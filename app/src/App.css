@@ -61,21 +61,40 @@
 
 
 /*
- * Text Selection Color
- * =====================
- * We use the browser's native selection (drawSelection: false in CodeMirror)
- * because CodeMirror's custom selection drawing doesn't render reliably in
- * Tauri's WebView for within-line selections.
+ * CodeMirror Selection Styling
+ * ============================
+ * With drawSelection: true, CodeMirror draws its own selection using
+ * .cm-selectionBackground divs positioned in a selection layer behind the text.
+ * This persists even when the editor loses focus (unlike browser native ::selection).
  *
- * ::selection styles the highlight the browser draws when you drag over text.
- * The -webkit- prefix is required for WebKit/Blink-based WebViews (which
- * Tauri uses on Windows via WebView2/Chromium).
+ * The key issue: .cm-selectionBackground sits in a layer BEHIND .cm-line elements.
+ * If .cm-line or .cm-activeLine has an opaque background, it covers the selection.
+ * Fix: ensure .cm-selectionBackground has the right z-index and line backgrounds
+ * are transparent or semi-transparent where they'd overlap.
  *
- * Color: vivid indigo-blue (#3a5bbf) -- clearly visible against #070724.
+ * Also keep ::selection as a fallback for any text outside CodeMirror.
  */
+
+/* CodeMirror drawn selection: force visible above line backgrounds */
+.cm-selectionLayer .cm-selectionBackground {
+  background-color: #3a5bbf !important;
+}
+
+/* The active line highlight must not be fully opaque or it covers the selection.
+   Use a semi-transparent version so selection shows through. */
+.cm-activeLine {
+  background-color: rgba(13, 13, 43, 0.5) !important;
+}
+
+/* Ensure .cm-line backgrounds don't cover the selection layer */
+.cm-line {
+  background-color: transparent !important;
+}
+
+/* Browser native selection: fallback for text outside CodeMirror */
 ::selection {
   background-color: #3a5bbf;
-  color: inherit;  /* Don't change text color -- just highlight behind it */
+  color: inherit;
 }
 
 ::-webkit-selection {
