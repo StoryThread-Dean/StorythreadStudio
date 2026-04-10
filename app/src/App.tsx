@@ -25,7 +25,9 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { Settings } from "./screens/Settings";
 import type { ProjectInfo, ChapterInfo } from "./types/project";
 import type { ProfileType } from "./types/profile";
-import type { AssistantResponse, ContextChip } from "./types/ai";
+import type { ContextChip, EditorChatMessage, EditorChatCategory } from "./types/ai";
+import { ChatMarkdown } from "./components/ChatMarkdown";
+import { Bot, Send } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -51,11 +53,13 @@ function App() {
   // Text currently selected in the editor -- drives the AI assistant panel
   const [selectedText, setSelectedText] = useState("");
 
-  // AI panel state
-  const [aiLoading, setAiLoading]       = useState(false);
-  const [aiResult, setAiResult]         = useState<AssistantResponse | null>(null);
-  const [aiError, setAiError]           = useState<string | null>(null);
-  const [aiTab, setAiTab]               = useState<"readability" | "structure" | "context">("readability");
+  // Writing Companion (editor chat) state
+  const [chatCategory, setChatCategory] = useState<EditorChatCategory>("readability");
+  const [chatMessages, setChatMessages] = useState<EditorChatMessage[]>([]);
+  const [chatInput, setChatInput]       = useState("");
+  const [chatLoading, setChatLoading]   = useState(false);
+  const [chatError, setChatError]       = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   // Context chips -- profile summaries the writer explicitly attaches to AI requests.
   // Only the chips the writer has added are sent with each assistant call.
@@ -217,38 +221,86 @@ function App() {
 
 
   // --- Run a writing assistant on the selected text ---
-  const runAssistant = useCallback(async (assistantId: string) => {
-    if (!selectedText.trim()) return;
-    setAiLoading(true);
-    setAiResult(null);
-    setAiError(null);
+  // --- Send a message in the Writing Companion chat ---
+  // Determines context (selected text vs full chapter), builds the payload,
+  // and appends the AI reply to the conversation history.
+  const sendEditorChat = useCallback(async () => {
+    if (!chatInput.trim() || chatLoading) return;
+
+    // Determine text context: selected text OR full chapter
+    const selected = selectedText.trim();
+    let textContent: string;
+    let isFullChapter: boolean;
+
+    if (selected) {
+      textContent = selected;
+      isFullChapter = false;
+    } else {
+      const view = editorViewRef.current;
+      if (!view) {
+        setChatError("No chapter is open. Open a chapter to use the Writing Companion.");
+        return;
+      }
+      textContent = view.state.doc.toString();
+      isFullChapter = true;
+    }
+
+    const userMsg: EditorChatMessage = { role: "user", content: chatInput.trim() };
+    const newMessages = [...chatMessages, userMsg];
+    setChatMessages(newMessages);
+    setChatInput("");
+    setChatLoading(true);
+    setChatError(null);
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90_000);
 
     try {
-      const response = await fetch(`${API_BASE}/api/ai/run-assistant`, {
+      const res = await fetch(`${API_BASE}/api/ai/editor-chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
-          assistant_id:  assistantId,
-          selected_text: selectedText,
-          context_chips: contextChips,   // Pass any attached profile context chips
-          project_path:  currentProjectRef.current?.root_path ?? null,
-          content_mode:  currentProjectRef.current?.content_mode_default ?? "general",
+          category:        chatCategory,
+          text_content:    textContent,
+          is_full_chapter: isFullChapter,
+          messages:        newMessages,
+          context_chips:   contextChips,
+          content_mode:    currentProjectRef.current?.content_mode_default ?? "general",
+          project_path:    currentProjectRef.current?.root_path ?? null,
         }),
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail ?? "Assistant failed.");
+      if (!res.ok) {
+        let detail = `Server returned ${res.status}.`;
+        try {
+          const errBody = await res.json();
+          detail = errBody.detail ?? detail;
+        } catch {
+          if (res.status === 502 || res.status === 503) {
+            detail = "The AI service returned an error. The text may exceed the model's context window.";
+          }
+        }
+        throw new Error(detail);
       }
 
-      const result: AssistantResponse = await response.json();
-      setAiResult(result);
+      const data = await res.json();
+      setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (err) {
-      setAiError(err instanceof Error ? err.message : "Something went wrong.");
+      if (err instanceof Error && err.name === "AbortError") {
+        setChatError("Request timed out after 90 seconds. Try a shorter text selection.");
+      } else if (err instanceof TypeError && err.message.toLowerCase().includes("failed to fetch")) {
+        setChatError("Could not reach the backend. Check that it is running on port 8000.");
+      } else {
+        setChatError(err instanceof Error ? err.message : "Chat request failed.");
+      }
     } finally {
-      setAiLoading(false);
+      clearTimeout(timeoutId);
+      setChatLoading(false);
     }
-  }, [selectedText, contextChips]);
+  }, [chatInput, chatMessages, chatCategory, selectedText, contextChips, chatLoading]);
 
 
   // --- Keyboard shortcut: Ctrl+S to save ---
@@ -442,14 +494,25 @@ function App() {
       </main>
 
 
-      {/* ── RIGHT PANEL: AI Assistant ──────────────────────────────────── */}
-      <aside className="flex w-80 shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
+      {/* ── RIGHT PANEL: Writing Companion ──────────────────────────────── */}
+      <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
 
+        {/* Header + clear */}
         <div className="border-b border-[#1e1e4a] px-4 py-3">
-          <h2 className="text-sm font-semibold text-[#f0f0f5]">AI Assistant</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#f0f0f5]">Writing Companion</h2>
+            {chatMessages.length > 0 && (
+              <button
+                onClick={() => { setChatMessages([]); setChatError(null); }}
+                className="text-xs text-rose-700 transition-colors hover:text-rose-400"
+                title="Clear conversation"
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <p className="mt-1 text-xs text-[#8888aa]">
-            Select text in the editor, then choose an assistant.
-            Results appear below -- nothing is applied automatically.
+            Pick a focus area, then ask about your writing. AI reviews selected text or the full chapter.
           </p>
         </div>
 
@@ -459,9 +522,15 @@ function App() {
             {(["readability", "structure", "context"] as const).map(tab => (
               <button
                 key={tab}
-                onClick={() => setAiTab(tab)}
+                onClick={() => {
+                  if (tab !== chatCategory) {
+                    setChatCategory(tab);
+                    setChatMessages([]);
+                    setChatError(null);
+                  }
+                }}
                 className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
-                  aiTab === tab ? "bg-indigo-600 text-white" : "text-[#8888aa] hover:text-[#f0f0f5]"
+                  chatCategory === tab ? "bg-indigo-600 text-white" : "text-[#8888aa] hover:text-[#f0f0f5]"
                 }`}
               >
                 {tab}
@@ -470,235 +539,183 @@ function App() {
           </div>
         </div>
 
-        {/* Selected text indicator */}
+        {/* Context indicator -- what text the AI will see */}
         <div className="shrink-0 border-b border-[#1e1e4a] px-4 py-2">
           {selectedText ? (
-            <p className="truncate text-xs text-emerald-400"
-               title={selectedText}>
-              Selected: "{selectedText.slice(0, 60)}{selectedText.length > 60 ? "..." : ""}"
+            <p className="truncate text-xs text-emerald-400" title={selectedText}>
+              Using selected text ({selectedText.length.toLocaleString()} chars)
+            </p>
+          ) : currentChapter ? (
+            <p className="text-xs text-amber-400">
+              Using full chapter (no text selected)
             </p>
           ) : (
             <p className="text-xs text-[#3f3f7a]">
-              No text selected -- highlight a passage to enable assistants.
+              Open a chapter to start
             </p>
           )}
         </div>
 
-        {/* Assistant buttons */}
-        <div className="shrink-0 px-4 py-3">
-          {aiTab === "readability" && (
-            <>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
-                Readability
-              </p>
-              <AssistantButton label="Grammar & Punctuation"
-                hint="Reviews selected text for grammar, punctuation, and spelling errors."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("grammar_punctuation")} />
-              <AssistantButton label="Clarity & Consistency"
-                hint="Flags unclear phrasing, ambiguous references, and inconsistent word choices."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("clarity_consistency")} />
-              <AssistantButton label="Eliminate Redundancy"
-                hint="Finds repeated words or ideas that can be cut or tightened."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("eliminate_redundancy")} />
-              <AssistantButton label="Descriptive Enhancement"
-                hint="Suggests richer sensory or atmospheric details for the selection."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("descriptive_enhancement")} />
-            </>
-          )}
-          {aiTab === "structure" && (
-            <>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
-                Structure
-              </p>
-              <AssistantButton label="Dialogue Authenticity"
-                hint="Checks whether dialogue sounds natural, distinct, and free of on-the-nose exposition."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("dialogue_authenticity")} />
-              <AssistantButton label="POV Consistency"
-                hint="Detects point-of-view drift, head-hopping, and information the POV character couldn't know."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("pov_consistency")} />
-              <AssistantButton label="Tone & Voice Consistency"
-                hint="Checks whether the narrative tone and voice stay consistent throughout the passage."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("tone_voice_consistency")} />
-              <AssistantButton label="Character Development"
-                hint="Analyzes the passage for character growth, revelation, or missed development opportunities."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("character_development")} />
-            </>
-          )}
-          {aiTab === "context" && (
-            <>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
-                Context
-              </p>
-              <AssistantButton label="Character Consistency"
-                hint="Checks whether characters behave consistently with their established traits. Works best with context chips attached."
-                disabled={!selectedText || aiLoading}
-                onClick={() => runAssistant("character_consistency")} />
+        {/* Context chips -- always visible on all tabs */}
+        <div className="shrink-0 border-b border-[#1e1e4a] px-3 py-2">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-xs text-[#8888aa]">
+              Context: {contextChips.length === 0 ? "none attached" : `${contextChips.length} profile${contextChips.length > 1 ? "s" : ""}`}
+            </p>
+            <button
+              onClick={() => setShowChipPicker(prev => !prev)}
+              className="rounded border border-[#1e1e4a] px-1.5 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300"
+              title="Attach a profile as context"
+            >
+              + Add
+            </button>
+          </div>
 
-              {/* ── Context Chips Section ─────────────────────────────────────
-                  Context chips let the writer explicitly attach profile
-                  summaries to AI requests. The AI only sees what's attached --
-                  it never has implicit access to the full project.
-              ──────────────────────────────────────────────────────────────── */}
-              <div className="mt-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
-                    Attached Context
-                  </p>
+          {showChipPicker && currentProject && (
+            <ChipPicker
+              rootPath={currentProject.root_path}
+              seriesPath={currentProject.series_path}
+              existingChips={contextChips}
+              onAdd={(chip) => { setContextChips(prev => [...prev, chip]); setShowChipPicker(false); }}
+              onClose={() => setShowChipPicker(false)}
+            />
+          )}
+
+          {contextChips.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {contextChips.map((chip, i) => (
+                <span key={i} className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs ${chipTypeColor(chip.type)}`}>
+                  {chip.name}
                   <button
-                    onClick={() => setShowChipPicker(prev => !prev)}
-                    className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300"
-                    title="Attach a profile summary as context for AI assistants"
+                    onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
+                    className="text-[#3f3f7a] hover:text-red-400"
                   >
-                    + Add
+                    ×
                   </button>
-                </div>
-
-                {/* Chip picker -- shows when "+ Add" is clicked */}
-                {showChipPicker && currentProject && (
-                  <ChipPicker
-                    rootPath={currentProject.root_path}
-                    seriesPath={currentProject.series_path}
-                    existingChips={contextChips}
-                    onAdd={(chip) => {
-                      setContextChips(prev => [...prev, chip]);
-                      setShowChipPicker(false);
-                    }}
-                    onClose={() => setShowChipPicker(false)}
-                  />
-                )}
-
-                {/* Active context chips */}
-                {contextChips.length === 0 ? (
-                  <p className="text-xs leading-relaxed text-[#3f3f7a]">
-                    No context attached. Click "+ Add" to attach a profile summary.
-                    The AI only sees what you share -- nothing is attached automatically.
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {contextChips.map((chip, i) => {
-                      const color = chipTypeColor(chip.type);
-                      const label = chipTypeLabel(chip.type);
-                      return (
-                        <div key={i}
-                          className="flex items-center justify-between rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5">
-                          <div className="flex min-w-0 items-center gap-2">
-                            {/* Color-coded type badge */}
-                            <span className={`shrink-0 rounded border px-1.5 py-0.5 text-xs ${color}`}>
-                              {label}
-                            </span>
-                            <span className="truncate text-xs font-medium text-[#f0f0f5]">
-                              {chip.name}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
-                            className="ml-2 shrink-0 text-xs text-[#3f3f7a] transition-colors hover:text-red-400"
-                            title="Remove this context chip"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      );
-                    })}
-                    <button
-                      onClick={() => setContextChips([])}
-                      className="mt-0.5 text-xs text-[#3f3f7a] transition-colors hover:text-red-400"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                )}
-              </div>
-            </>
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
-        {/* Output area */}
-        <div className="flex-1 overflow-y-auto border-t border-[#1e1e4a] px-4 py-4">
-          {aiLoading && (
-            <div className="flex items-center gap-2 text-xs text-[#8888aa]">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
-              Running assistant...
+        {/* Chat history */}
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          {/* Empty state with tab-specific suggestions */}
+          {chatMessages.length === 0 && !chatLoading && !chatError && (
+            <div className="flex flex-col items-center gap-3 pt-4 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-900/40 text-indigo-400">
+                <Bot size={20} />
+              </div>
+              <p className="text-sm font-medium text-[#8888aa]">Writing Companion</p>
+              <div className="w-full rounded border border-[#1e1e4a] bg-[#070724] p-2.5 text-left">
+                <p className="mb-1 text-xs font-medium text-[#8888aa]">Try asking:</p>
+                {(chatCategory === "readability" ? [
+                  "Check this paragraph for grammar issues",
+                  "Is this passage too wordy?",
+                  "How can I make this clearer?",
+                ] : chatCategory === "structure" ? [
+                  "Does the dialogue sound natural?",
+                  "Is the POV consistent here?",
+                  "How's the pacing in this section?",
+                ] : [
+                  "Is this character behaving consistently?",
+                  "Does this match the setting we established?",
+                  "Check for lore contradictions",
+                ]).map(q => (
+                  <button
+                    key={q}
+                    onClick={() => setChatInput(q)}
+                    className="mt-1 block w-full rounded px-2 py-1 text-left text-xs text-[#3f3f7a] transition-colors hover:bg-[#1e1e4a] hover:text-[#8888aa]"
+                  >
+                    "{q}"
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
-          {aiError && (
-            <div className="rounded border border-red-800 bg-red-950/40 p-3">
-              <p className="text-xs text-red-300">{aiError}</p>
-              {aiError.includes("API key") && (
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="mt-2 text-xs text-indigo-400 underline"
-                >
+          {/* Chat messages */}
+          {chatMessages.map((msg, i) => (
+            <div key={i} className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" && (
+                <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-indigo-400">
+                  <Bot size={11} />
+                </div>
+              )}
+              <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                msg.role === "user"
+                  ? "rounded-tr-sm bg-indigo-600 text-white"
+                  : "rounded-tl-sm border border-[#1e1e4a] bg-[#12122e] text-[#f0f0f5]"
+              }`}>
+                {msg.role === "user" ? (
+                  <span className="whitespace-pre-wrap">{msg.content}</span>
+                ) : (
+                  <ChatMarkdown content={msg.content} />
+                )}
+              </div>
+              {msg.role === "user" && (
+                <div className="ml-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-800/60 text-indigo-300">
+                  <span className="text-xs font-bold">W</span>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {chatLoading && (
+            <div className="flex items-center gap-2 text-xs text-[#8888aa]">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
+              Thinking...
+            </div>
+          )}
+
+          {chatError && (
+            <div className="rounded border border-red-800 bg-red-950/40 p-2">
+              <p className="text-xs text-red-300">{chatError}</p>
+              {chatError.includes("API key") && (
+                <button onClick={() => setShowSettings(true)} className="mt-1 text-xs text-indigo-400 underline">
                   Open Settings
                 </button>
               )}
             </div>
           )}
 
-          {aiResult && !aiLoading && (
-            <div>
-              {/* Assistant name + model used */}
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs font-semibold text-[#f0f0f5]">
-                  {aiResult.assistant_name}
-                </p>
-                <p className="text-xs text-[#3f3f7a]" title={`Model: ${aiResult.model_used}`}>
-                  {aiResult.model_used.split("/").pop()}
-                </p>
-              </div>
+          <div ref={chatEndRef} />
+        </div>
 
-              {/* Summary */}
-              <div className="mb-3 rounded border border-[#1e1e4a] bg-[#12122e] p-3">
-                <p className="mb-1 text-xs font-medium text-[#8888aa]">Summary</p>
-                <p className="text-xs leading-relaxed text-[#f0f0f5]">{aiResult.summary}</p>
-              </div>
-
-              {/* Suggestions */}
-              {aiResult.suggestions.map((s, i) => (
-                <div key={i} className="mb-2 rounded border border-[#1e1e4a] bg-[#070724] p-3">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <p className="text-xs font-medium text-indigo-300">{s.label}</p>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(s.content)}
-                      className="text-xs text-[#3f3f7a] transition-colors hover:text-[#8888aa]"
-                      title="Copy this suggestion to clipboard"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                  <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#f0f0f5]">
-                    {s.content}
-                  </p>
-                </div>
-              ))}
-
-              {/* Notes */}
-              {aiResult.notes.length > 0 && (
-                <div className="mt-2 rounded border border-[#1e1e4a] p-3">
-                  <p className="mb-1 text-xs font-medium text-[#8888aa]">Notes</p>
-                  {aiResult.notes.map((n, i) => (
-                    <p key={i} className="text-xs leading-relaxed text-[#8888aa]">• {n}</p>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {!aiResult && !aiLoading && !aiError && (
-            <p className="text-xs leading-relaxed text-[#3f3f7a]">
-              Results appear here after you run an assistant. Copy what you
-              like -- nothing in your document changes automatically.
-            </p>
-          )}
+        {/* Chat input */}
+        <div className="border-t border-[#1e1e4a] p-3">
+          <div className="relative flex items-end gap-2">
+            <textarea
+              value={chatInput}
+              onChange={e => {
+                setChatInput(e.target.value);
+                const el = e.target;
+                el.style.height = "auto";
+                const maxH = 7 * 20 + 12;
+                el.style.height = Math.min(el.scrollHeight, maxH) + "px";
+                el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+              }}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendEditorChat();
+                }
+              }}
+              placeholder={currentChapter ? "Ask about your writing... (Enter to send)" : "Open a chapter first"}
+              disabled={!currentChapter || chatLoading}
+              rows={3}
+              style={{ resize: "none", overflowY: "hidden" }}
+              className="flex-1 rounded border border-[#1e1e4a] bg-[#1e1e48] px-2 py-2 text-xs text-[#f0f0f5] placeholder-[#6666a0] outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <button
+              onClick={sendEditorChat}
+              disabled={!currentChapter || !chatInput.trim() || chatLoading}
+              className="flex items-center justify-center rounded border border-[#1e1e4a] p-1.5 text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Send (Enter)"
+            >
+              <Send size={13} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -747,29 +764,6 @@ function NavItem({
   );
 }
 
-
-function AssistantButton({
-  label,
-  hint,
-  onClick,
-  disabled = false,
-}: {
-  label: string;
-  hint: string;
-  onClick?: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="mb-2 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-left text-xs text-[#f0f0f5] transition-colors hover:border-indigo-500 hover:bg-[#1a1a3a] disabled:cursor-not-allowed disabled:opacity-40"
-      title={disabled ? "Select text in the editor first" : hint}
-    >
-      {label}
-    </button>
-  );
-}
 
 // ── Context chip type config ──────────────────────────────────────────────────
 // Human-readable labels and color styles for each profile type.

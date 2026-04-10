@@ -1369,3 +1369,162 @@ async def profile_chat(request: ProfileChatRequest):
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
     return ProfileChatResponse(reply=reply)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PHASE 5E: WRITING COMPANION (Editor Chat)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EditorChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class EditorChatRequest(BaseModel):
+    """One turn of the Writing Companion chat in the main editor."""
+    category:        str                     # "readability" | "structure" | "context"
+    text_content:    str                     # Selected text OR full chapter
+    is_full_chapter: bool = False
+    messages:        list[EditorChatMessage]
+    context_chips:   list[ContextChip] = []
+    model_id:        str | None = None
+    content_mode:    str = "general"
+    project_path:    str | None = None
+
+
+class EditorChatResponse(BaseModel):
+    reply: str
+
+
+def _build_editor_chat_prompt(
+    category: str,
+    text_content: str,
+    is_full_chapter: bool,
+    context_chips: list[ContextChip],
+    content_mode: str,
+) -> str:
+    """Build category-specific system prompt for the Writing Companion."""
+    content_block = _content_mode_instruction(content_mode)
+
+    text_frame = (
+        "FULL CHAPTER (reviewing the entire chapter):"
+        if is_full_chapter else
+        "SELECTED PASSAGE (the writer highlighted this for review):"
+    )
+
+    chips_block = ""
+    if context_chips:
+        lines = ["ATTACHED PROFILE CONTEXT:\n"]
+        for chip in context_chips:
+            lines.append(f"[{chip.type.replace('_', ' ').title()}: {chip.name}]")
+            lines.append(chip.content.strip())
+            lines.append("")
+        chips_block = "\n".join(lines) + "\n---\n\n"
+
+    header = (
+        "PUNCTUATION RULE (NO EXCEPTIONS): Never use em dashes (\u2014), "
+        "en dashes (\u2013), or double hyphens ( -- ) anywhere in your response. "
+        "Use commas, parentheses, colons, or semicolons instead.\n\n"
+        f"You are a writing companion for a fiction writer.\n"
+        f"{content_block}\n"
+        f"{chips_block}"
+        f"{text_frame}\n"
+        f"{text_content}\n\n"
+    )
+
+    response_rules = (
+        "RESPONSE RULES:\n"
+        "- Conversational tone. This is a chat, not a report.\n"
+        "- Use markdown: **bold**, bullet lists, blockquotes for rewrites.\n"
+        "- No ## or ### headers. Use --- to separate sections.\n"
+        "- At most ONE follow-up question per response.\n"
+        "- Address what was asked, then stop. Do not volunteer extra analysis.\n"
+        "- Rewrites go in a blockquote so the writer can copy easily.\n"
+        "- No em dashes, en dashes, or double hyphens.\n"
+    )
+
+    if category == "readability":
+        return (
+            header +
+            "YOUR FOCUS: READABILITY\n"
+            "Comprehensive prose editor covering:\n"
+            "- Grammar and punctuation\n"
+            "- Clarity and consistency\n"
+            "- Redundancy and filler\n"
+            "- Descriptive quality and imagery\n\n"
+            "If the writer says 'check this' without specifying, "
+            "cover all four areas briefly.\n\n" +
+            response_rules
+        )
+
+    if category == "structure":
+        return (
+            header +
+            "YOUR FOCUS: STRUCTURE AND CRAFT\n"
+            "Structural editor covering:\n"
+            "- Dialogue authenticity and distinct character voices\n"
+            "- POV consistency\n"
+            "- Tone and voice consistency\n"
+            "- Character development through action and choice\n"
+            "- Pacing (scenes that drag, transitions that rush)\n\n"
+            "If the writer says 'check this' without specifying, "
+            "focus on the most prominent structural issue.\n\n" +
+            response_rules
+        )
+
+    if category == "context":
+        return (
+            header +
+            "YOUR FOCUS: CONTEXT AND CONSISTENCY\n"
+            "Continuity editor checking text against attached profiles:\n"
+            "- Character consistency (actions vs established traits)\n"
+            "- Relationship continuity\n"
+            "- Setting consistency\n"
+            "- Lore accuracy\n\n"
+            "If no profile context is attached, work with what is "
+            "observable in the text itself.\n\n" +
+            response_rules
+        )
+
+    return header + "Answer the writer's questions about this text.\n\n" + response_rules
+
+
+@router.post("/editor-chat", response_model=EditorChatResponse)
+async def editor_chat(request: EditorChatRequest):
+    """Writing Companion chat endpoint for the main editor panel."""
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    settings = load_settings()
+    _validate_model_content_mode(settings, model_id, request.content_mode)
+    _validate_model_allowed(settings, model_id)
+
+    max_len = 50_000 if request.is_full_chapter else 8_000
+    if len(request.text_content) > max_len:
+        label = "chapter" if request.is_full_chapter else "selection"
+        raise HTTPException(
+            status_code=400,
+            detail=f"The {label} is too long ({len(request.text_content):,} chars, "
+                   f"max {max_len:,}). Try a shorter passage."
+        )
+
+    system_prompt = _build_editor_chat_prompt(
+        category        = request.category,
+        text_content    = request.text_content,
+        is_full_chapter = request.is_full_chapter,
+        context_chips   = request.context_chips,
+        content_mode    = request.content_mode,
+    )
+
+    story_context = _build_story_context(request.project_path)
+    if story_context:
+        system_prompt = story_context + system_prompt
+
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+    try:
+        reply = await run_chat(api_key=api_key, model_id=model_id,
+                               system_prompt=system_prompt, messages=messages)
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+
+    return EditorChatResponse(reply=reply)

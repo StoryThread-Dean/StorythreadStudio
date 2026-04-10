@@ -20,8 +20,8 @@
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
+import { ChatMarkdown } from "../components/ChatMarkdown";
 import type { ProjectInfo } from "../types/project";
 import type {
   Profile,
@@ -202,36 +202,7 @@ function AutoTextarea({
 }
 
 
-// ── ChatMarkdown ─────────────────────────────────────────────────────────────
-// Renders AI messages as Markdown with theme-appropriate styling.
-
-function ChatMarkdown({ content }: { content: string }) {
-  return (
-    <ReactMarkdown
-      components={{
-        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-        strong: ({ children }) => <strong className="font-semibold text-indigo-300">{children}</strong>,
-        em: ({ children }) => <em className="italic text-[#ccccdd]">{children}</em>,
-        ul: ({ children }) => <ul className="mb-2 ml-4 list-disc last:mb-0">{children}</ul>,
-        ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal last:mb-0">{children}</ol>,
-        li: ({ children }) => <li className="mb-0.5">{children}</li>,
-        hr: () => <hr className="my-2 border-[#1e1e4a]" />,
-        blockquote: ({ children }) => (
-          <blockquote className="my-1 border-l-2 border-indigo-600/50 pl-2 text-[#aaaacc]">
-            {children}
-          </blockquote>
-        ),
-        code: ({ children }) => (
-          <code className="rounded bg-[#1a1a3a] px-1 py-0.5 text-xs text-indigo-300">
-            {children}
-          </code>
-        ),
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  );
-}
+// ChatMarkdown is now imported from components/ChatMarkdown.tsx (shared with App.tsx)
 
 
 // ── Props ────────────────────────────────────────────────────────────────────

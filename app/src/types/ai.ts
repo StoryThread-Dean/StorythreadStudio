@@ -136,3 +136,26 @@ export interface ProfileChatPayload {
   behavior_mode?:  ProfileBehaviorMode;
   content_mode?:   string;
 }
+
+
+// ── Writing Companion (Editor Chat) ───────────────────────────────────────────
+
+// The three focus categories for the main editor's Writing Companion panel.
+// Each category sets the AI's area of expertise for the conversation.
+export type EditorChatCategory = "readability" | "structure" | "context";
+
+export interface EditorChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface EditorChatPayload {
+  category:        EditorChatCategory;
+  text_content:    string;          // Selected text OR full chapter
+  is_full_chapter: boolean;
+  messages:        EditorChatMessage[];
+  context_chips?:  ContextChip[];
+  model_id?:       string;
+  content_mode?:   string;
+  project_path?:   string;
+}
