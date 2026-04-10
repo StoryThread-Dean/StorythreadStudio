@@ -163,13 +163,13 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
             highlightSelectionMatches: true,
             searchKeymap:              true,
             history:                   true,
-            // drawSelection: false -- let the browser draw selection natively.
-            // When true, CodeMirror hides the browser's selection and draws its
-            // own using .cm-selectionBackground divs. In Tauri's WebView this
-            // custom drawing doesn't appear correctly for within-line selections.
-            // With false, the browser's built-in highlight is used instead,
-            // which we style with ::selection CSS in App.css.
-            drawSelection:             false,
+            // drawSelection: true -- CodeMirror draws its own selection using
+            // .cm-selectionBackground divs. Previously false because highlights
+            // weren't rendering, but that was caused by the unlayered CSS reset
+            // overriding Tailwind. Now that the reset is in @layer base, it works.
+            // Key benefit: selection STAYS VISIBLE when editor loses focus
+            // (e.g., when clicking into the Writing Companion chat panel).
+            drawSelection:             true,
             dropCursor:                true,
             autocompletion:            false,
             indentOnInput:             false,
