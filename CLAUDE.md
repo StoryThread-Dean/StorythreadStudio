@@ -44,10 +44,14 @@ Context chips, ai_usage_example generation, section/full summaries, Profile Buil
 - **Settings UI: Model Routing section**: allowlist, blocklist, per-model content modes configuration
 - **Expanded chip types**: series_character, series_relationship, series_location, series_lore
 
-### Phase 5E -- Writing Companion -- Next
-- Unified design language for editor and profile right panels
-- Chat interface in main editor
-- Level 1-2 AI capabilities wired up
+### Phase 5E -- Writing Companion -- Complete
+- Chat-based editor right panel replaces button-based assistant UI
+- 3 category tabs (Readability / Structure / Context) with conversational AI responses
+- No selection = full chapter context; text selected = only that text
+- ChatMarkdown extracted to shared component (used by both editor and Profile Builder)
+- POST /api/ai/editor-chat endpoint with category-specific system prompts
+- Context chips always visible on all tabs
+- Multi-turn conversation with session history
 
 ---
 
