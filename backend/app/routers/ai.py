@@ -734,36 +734,54 @@ def _build_behavior_prompt(
         f"{profile_content}\n\n"
     )
 
-    # ── SHARED FORMAT RULES ───────────────────────────────────────────────────
-    # Appended to every mode. The em-dash rule at the top of context_header
-    # is the primary enforcement; this is a secondary reminder.
+    # ── FORMAT RULES: STRUCTURED modes ────────────────────────────────────────
+    # Used by analysis and task-driven modes (interpret, extract, check, etc.)
+    # These modes produce structured output (lists, sections, template entries)
+    # so formatting markup is appropriate and expected.
     format_rules = (
         "FORMAT RULES:\n"
         "- No ## or ### headers.\n"
         "- Use --- on its own line to visually separate distinct parts of a response. "
         "Examples: separate a summary block from a closing question; "
         "separate an analysis from a suggestion; separate one topic from the next.\n"
-        "- Leave a blank line between each paragraph or separate thought. "
-        "Do not run different ideas together as one continuous block of text.\n"
+        "- Leave a blank line between each paragraph or separate thought.\n"
         "- Use **bold** for trait names or key terms. Bullet lists for structure.\n"
         "- Keep responses concise. 1-2 sentences per point.\n"
         "- Ask at most ONE question per response.\n"
-        "- Reminder: no em dashes, en dashes, or double hyphens ( -- ) in any response. "
+        "- No em dashes, en dashes, or double hyphens in any response. "
+        "Use commas, parentheses, colons, or semicolons instead.\n"
+    )
+
+    # ── FORMAT RULES: CONVERSATIONAL modes ────────────────────────────────────
+    # Used by general chat and ask_clarifying, where natural back-and-forth
+    # is the goal. No headers, no bullets, no structured output -- just prose.
+    # Brevity is the primary quality signal here. If the response looks like a
+    # document (headers, sections, nested bullets), it has failed this rule.
+    conversational_rules = (
+        "RESPONSE STYLE:\n"
+        "- Plain conversational prose only. No headers. No bullet lists. No bold terms.\n"
+        "- Maximum 3 sentences per response unless the writer explicitly asks for detail.\n"
+        "- Do NOT give an overview, summary, or breakdown of the profile unless asked.\n"
+        "- First message in conversation: answer the question directly. Nothing more.\n"
+        "- Ask at most ONE question per response. Often none is the right choice.\n"
+        "- No em dashes, en dashes, or double hyphens in any response. "
         "Use commas, parentheses, colons, or semicolons instead.\n"
     )
 
     # ── MODE: GENERAL CHAT ────────────────────────────────────────────────────
     # Open-ended conversation. Writer asks, AI responds. No specific task agenda.
+    # Conversational rules apply -- responses should feel like a quick back-and-forth,
+    # not a formal editorial report. Short. Direct. One thought at a time.
     if behavior_mode == "general":
         return (
             context_header +
-            "YOUR ROLE: Answer the writer's questions about this profile openly. "
-            "You may offer observations, suggestions, or comparisons, but only "
-            "when directly relevant to what was asked. Do not set an agenda.\n\n"
+            "YOUR ROLE: Answer the writer's questions about this profile directly. "
+            "Offer an observation or suggestion only when it directly addresses what was asked. "
+            "Do not volunteer analysis, summaries, or improvements that were not requested.\n\n"
             "RULES:\n"
             "- NEVER claim to have changed the profile. The writer controls all edits.\n"
             "- NEVER invent facts not present in the context.\n\n" +
-            format_rules
+            conversational_rules
         )
 
     # ── MODE: INTERPRET PROFILE ───────────────────────────────────────────────
@@ -1079,7 +1097,7 @@ def _build_behavior_prompt(
             "- Yes/no questions get yes or no first, then one sentence of explanation at most.\n"
             "- NEVER claim to have changed the profile. The writer controls all edits.\n"
             "- NEVER invent facts not present in the context.\n\n" +
-            format_rules
+            conversational_rules
         )
 
     # ── FALLBACK ──────────────────────────────────────────────────────────────

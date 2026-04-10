@@ -15,7 +15,7 @@
 //   4. On Ctrl+S or Save: POST to backend, mark as saved
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
-import { Plus, ChevronLeft, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import type { ProjectInfo } from "../types/project";
@@ -305,6 +305,15 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   const [behaviorMode, setBehaviorMode] = useState("general");
   const [behaviorPanelOpen, setBehaviorPanelOpen] = useState(false);
 
+  // --- Focused section ---
+  // Tracks which section the writer is currently working in (based on last focus).
+  // Shown in the chat header so the AI can contextualize replies.
+  const [focusedSection, setFocusedSection] = useState<{ key: string; heading: string } | null>(null);
+
+  // --- Right panel collapse ---
+  // When collapsed, the chat panel shrinks to a narrow strip showing only the toggle.
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+
   // --- ToolKit state ---
   const [toolkitOpen, setToolkitOpen]             = useState(false);
   const [toolkitSelections, setToolkitSelections] = useState<Set<string>>(new Set());
@@ -344,7 +353,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // Clear all selections → reverts to default Overview behavior
   const handleToolkitClearAll = useCallback(() => setToolkitSelections(new Set()), []);
 
-  // Reset chat, behavior mode, and toolkit when switching profiles
+  // Reset chat, behavior mode, toolkit, and focused section when switching profiles
   useEffect(() => {
     setChatMessages([]);
     setChatInput("");
@@ -353,6 +362,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     setBehaviorPanelOpen(false);
     setToolkitOpen(false);
     setToolkitSelections(new Set());
+    setFocusedSection(null);
   }, [profile?.filename]);
 
 
@@ -1146,6 +1156,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
                     onGenerateUsageExample={(block) => generateUsageExample(cfg.key, block, cfg.heading)}
                     generatingField={generatingField}
+                    onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
                   />
                 );
               })}
@@ -1197,21 +1208,60 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       {/* ── RIGHT PANEL: Profile Builder Chat ─────────────────────────── */}
       {/* The chat is session-only. History lives in React state.
           When you close the Profile Builder, the conversation is cleared.
-          The AI never auto-updates your profile fields -- all edits are manual. */}
-      <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
+          The AI never auto-updates your profile fields -- all edits are manual.
 
-        <div className="border-b border-[#1e1e4a] px-4 py-3">
+          The panel collapses to a narrow strip (showing only a toggle button)
+          when the writer wants more center-panel space for editing. */}
+      <aside className={`flex shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b] transition-all duration-200 ${chatCollapsed ? "w-10" : "w-[380px]"}`}>
+
+        {/* Collapsed view: just a vertical toggle button */}
+        {chatCollapsed ? (
+          <button
+            onClick={() => setChatCollapsed(false)}
+            className="flex h-full w-full flex-col items-center justify-center gap-2 text-[#3f3f7a] transition-colors hover:bg-[#12122e] hover:text-[#8888aa]"
+            title="Expand the Profile Chat panel"
+          >
+            {/* Rotated label so it reads top-to-bottom */}
+            <span className="text-xs font-medium" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
+              Profile Chat
+            </span>
+          </button>
+        ) : (
+        <>
+
+        <div className="border-b border-[#1e1e4a] px-3 py-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f0f0f5]">Profile Chat</h2>
-            {chatMessages.length > 0 && (
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="shrink-0 text-sm font-semibold text-[#f0f0f5]">Profile Chat</h2>
+              {/* Focused section indicator -- shows which section the writer is currently in */}
+              {focusedSection && (
+                <span
+                  className="truncate rounded-full border border-indigo-800/50 bg-indigo-900/20 px-2 py-0.5 text-xs text-indigo-400"
+                  title={`Writer is focused on the "${focusedSection.heading}" section`}
+                >
+                  {focusedSection.heading}
+                </span>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {chatMessages.length > 0 && (
+                <button
+                  onClick={() => { setChatMessages([]); setChatError(null); }}
+                  className="text-xs text-rose-700 transition-colors hover:text-rose-400"
+                  title="Clear the conversation history and start fresh"
+                >
+                  Clear
+                </button>
+              )}
+              {/* Collapse button -- shrinks panel to a narrow strip */}
               <button
-                onClick={() => { setChatMessages([]); setChatError(null); }}
-                className="text-xs text-rose-700 transition-colors hover:text-rose-400"
-                title="Clear the conversation history and start fresh"
+                onClick={() => setChatCollapsed(true)}
+                className="rounded p-0.5 text-[#3f3f7a] transition-colors hover:bg-[#12122e] hover:text-[#8888aa]"
+                title="Collapse the chat panel to make more room for editing"
               >
-                Clear
+                <ChevronRight size={14} />
               </button>
-            )}
+            </div>
           </div>
           <p className="mt-1 text-xs text-[#8888aa]">
             Session-only. Use ToolKit to select context and AI Behavior to set the mode.
@@ -1403,6 +1453,8 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             </button>
           </div>
         </div>
+        </> /* end of expanded chat panel */
+        )}
       </aside>
 
     </div>
@@ -1428,6 +1480,9 @@ interface ProfileSectionEditorProps {
   onGenerateSectionSummary: () => void;
   onGenerateUsageExample: (block: TraitBlock) => void;
   generatingField: string | null;
+  // Called when the writer focuses on any input inside this section.
+  // Used to update the focused section indicator in the chat panel.
+  onFocus: () => void;
 }
 
 function ProfileSectionEditor({
@@ -1443,11 +1498,14 @@ function ProfileSectionEditor({
   onGenerateSectionSummary,
   onGenerateUsageExample,
   generatingField,
+  onFocus,
 }: ProfileSectionEditorProps) {
   const isGeneratingSummary = generatingField === sectionKey;
 
   return (
-    <div className="mb-6">
+    // onFocus bubbles up from any input inside this section.
+    // This tells the chat panel which section the writer is currently working on.
+    <div className="mb-6" onFocus={onFocus}>
       {/* Section heading */}
       <h2 className="mb-3 border-b border-[#1e1e4a] pb-1 text-sm font-semibold text-[#f0f0f5]">
         {heading}
