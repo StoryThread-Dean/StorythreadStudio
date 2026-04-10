@@ -972,13 +972,19 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       {/* ── CENTER PANEL: Profile Editor ───────────────────────────────── */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
-        {/* Title bar */}
+        {/* Title bar: shows the open profile name, type badge, save state, and save button */}
         <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
-          <span className="text-sm font-medium text-[#f0f0f5]">
-            {profile ? profile.name : "Profile Builder"}
-          </span>
-          <div className="flex items-center gap-2">
-            {/* Guide Mode Button -- opens the AI character-building coach in the right panel */}
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-medium text-[#f0f0f5]">
+              {profile ? profile.name : "Profile Builder"}
+            </span>
+            {profile && (
+              <span className="shrink-0 rounded-full border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa]">
+                {PROFILE_TYPE_LABELS[profile.type as ProfileType] ?? profile.type}
+              </span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
             {profile && (
               isDirty ? (
                 <span className="flex items-center gap-1.5 text-xs text-amber-400">
@@ -1001,7 +1007,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               Save
             </button>
           </div>
-        </div>
+        </div>  {/* end title bar */}
 
         {/* Error banner */}
         {error && (
@@ -1161,22 +1167,32 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 );
               })}
 
-              {/* Full AI Summary / Generated Summary
+              {/* ── Full AI Summary / Generated Summary ────────────────────────────
+                  This is the primary output field -- the content that gets attached
+                  as a context chip when the writer uses this profile in the editor.
+                  Teal color treatment distinguishes it visually as an AI output field.
                   For chapter/scene types this field IS the usable summary.
-                  For other types it's a generated AI profile summary. */}
-              <div className="mb-6">
+                  For other types it's a multi-paragraph AI profile synthesis. */}
+              <div className="mb-6 rounded border border-teal-800/40 bg-teal-950/20 p-4">
                 <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-[#f0f0f5]">
-                    {profile.type === "chapter_summary"
-                      ? "Chapter Summary"
-                      : profile.type === "scene_summary"
-                      ? "Scene Summary"
-                      : "Full AI Summary"}
-                  </h2>
+                  <div>
+                    <h2 className="text-sm font-semibold text-teal-200">
+                      {profile.type === "chapter_summary"
+                        ? "Chapter Summary"
+                        : profile.type === "scene_summary"
+                        ? "Scene Summary"
+                        : "Full AI Summary"}
+                    </h2>
+                    <p className="mt-0.5 text-xs text-teal-700">
+                      {profile.type === "chapter_summary" || profile.type === "scene_summary"
+                        ? "Used as AI context when attached as a context chip in the editor."
+                        : "Attached as a context chip in the editor. Generate after filling in the sections above."}
+                    </p>
+                  </div>
                   <button
                     onClick={generateFullSummary}
                     disabled={generatingField === "full_summary"}
-                    className="flex items-center gap-1 rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex shrink-0 items-center gap-1 rounded border border-teal-700/50 px-2 py-0.5 text-xs text-teal-400 transition-colors hover:border-teal-500 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
                     title="Generate this summary using AI based on the profile content above"
                   >
                     <Sparkles size={11} />
@@ -1194,7 +1210,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                       ? "Write a concise summary of this scene for use as AI context..."
                       : "Click Generate to create a full AI profile summary, or write one manually."
                   }
-                  className="w-full rounded border border-[#1e1e4a] bg-[#0d0d2b] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-teal-800/40 bg-[#0a1a1a] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-teal-600"
                   minRows={4}
                 />
               </div>
@@ -1506,10 +1522,11 @@ function ProfileSectionEditor({
     // onFocus bubbles up from any input inside this section.
     // This tells the chat panel which section the writer is currently working on.
     <div className="mb-6" onFocus={onFocus}>
-      {/* Section heading */}
-      <h2 className="mb-3 border-b border-[#1e1e4a] pb-1 text-sm font-semibold text-[#f0f0f5]">
-        {heading}
-      </h2>
+      {/* Section heading: indigo left accent + label */}
+      <div className="mb-3 flex items-center gap-2.5 border-b border-[#1e1e4a] pb-2">
+        <span className="h-4 w-0.5 shrink-0 rounded-full bg-indigo-600/70" />
+        <h2 className="text-sm font-semibold text-[#f0f0f5]">{heading}</h2>
+      </div>
 
       {hasTraitBlocks ? (
         // Trait block section
