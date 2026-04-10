@@ -36,28 +36,23 @@ Critical bugs also fixed this session:
 - YAML parsing failure: trait blocks with JSON code block wrappers in ai_usage_example, or colon-space in description/notes values, caused yaml.safe_load() to silently return empty (all traits hidden). Fixed with _clean_trait_yaml() two-pass pre-processor in profiles.py.
 - Profile Markdown writer now uses json.dumps() for all string fields to prevent future YAML breakage.
 
-### Phase 4 Polish -- MUST COMPLETE BEFORE PHASE 5
-- Profile Builder visual design and UX needs a full quality pass
-- AI guide mode conversation quality: too formal, too long, not truly conversational
-- Guide mode opening response still tends toward structured overviews instead of a single focused question
-- Context chips UX in the editor AI panel needs polish
-- Guide mode needs a "current section" indicator
-- AI in guide mode should reference the writer's previous answers to feel like a real conversation
-- Resizable or collapsible right panel chat window
+### Phase 4 Polish -- Complete
+All polish items shipped and merged to main (branch: phase-4-polish).
 
-### Phase 4 Polish -- Completed Items
-- ToolKit context selector (teal collapsible panel, grouped by section, section checkboxes, correct indentation)
-- AI Behavior mode system replacing single-purpose chat (General Chat, Interpret Profile, Refine Traits, Ask Clarifying Questions, Generate AI Summary, Extract Traits, Check Consistency)
-- Guide Mode removed and absorbed into AI Behavior modes
-- Chat formatting fixed: react-markdown rendering, --- separators, blank line paragraphs
-- Chat textarea expanded: 3-row default, auto-expand to 7 lines, lighter background
-- Em-dash enforcement: moved to top of every prompt, added sanitize_chat() in openrouter.py
-- Double-hyphen (--) also banned from chat prompts and replaced by sanitize_chat()
-- Settings expansion: tier slider (Free/Budget/Standard/Premium), text-only filter toggle, Staff Picks + My Favorites + All Models picker, content mode radio buttons, starred models persistence
-- Root cause fix: CSS reset `* { padding: 0 }` was unlayered, overriding all Tailwind spacing utilities. Fixed by wrapping in `@layer base`.
-- Extract Traits mode: per-category rules for permanent vs temporary traits (Physical, Personality, Voice, Motivations, Hidden/Subtle)
+**Completed this session:**
+- Chat behavior mode quality: split format_rules into structured vs conversational variants; general and ask_clarifying modes now use conversational_rules (plain prose, max 3 sentences, no headers/bullets, no unsolicited overview)
+- Context chips UX: replaced raw type select with colored button group (indigo/violet/teal/amber/sky/emerald per type); attached chips show type badge + profile name; better empty state text
+- Focused section indicator: indigo badge in chat panel header shows which profile section the writer is currently editing
+- Right panel collapse: ChevronRight toggle shrinks chat to a narrow strip, giving writer more center-panel space
+- Profile Builder visual pass: section headings have indigo left accent stripe; Full AI Summary section has distinct teal card with subtitle; title bar shows profile type badge; stale "Guide Mode Button" comment removed
 
-### Phase 5 -- Next (after polish)
+**Previously completed:**
+- ToolKit context selector, AI Behavior mode system (7 modes), Guide Mode absorbed into behavior modes
+- Chat formatting (react-markdown), chat textarea auto-expand, em-dash + double-hyphen enforcement
+- Settings expansion (tier slider, Staff Picks, starred models, content mode)
+- CSS reset bug fix, Extract Traits category-specific rules
+
+### Phase 5 -- Next
 Content mode settings + model routing + allowlist/blocklist.
 
 ---
