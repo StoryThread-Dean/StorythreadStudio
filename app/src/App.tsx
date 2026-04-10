@@ -231,6 +231,8 @@ function App() {
           assistant_id:  assistantId,
           selected_text: selectedText,
           context_chips: contextChips,   // Pass any attached profile context chips
+          project_path:  currentProjectRef.current?.root_path ?? null,
+          content_mode:  currentProjectRef.current?.content_mode_default ?? "general",
         }),
       });
 
@@ -563,6 +565,7 @@ function App() {
                 {showChipPicker && currentProject && (
                   <ChipPicker
                     rootPath={currentProject.root_path}
+                    seriesPath={currentProject.series_path}
                     existingChips={contextChips}
                     onAdd={(chip) => {
                       setContextChips(prev => [...prev, chip]);
@@ -773,12 +776,17 @@ function AssistantButton({
 // Used in both the chip picker and the attached chip display.
 
 const CHIP_TYPES: { id: string; label: string; color: string }[] = [
-  { id: "character",       label: "Character",       color: "text-indigo-300 border-indigo-700/50 bg-indigo-900/20"  },
-  { id: "relationship",    label: "Relationship",    color: "text-violet-300  border-violet-700/50  bg-violet-900/20"  },
-  { id: "location",        label: "Location",        color: "text-teal-300    border-teal-700/50    bg-teal-900/20"    },
-  { id: "lore",            label: "Lore",            color: "text-amber-300   border-amber-700/50   bg-amber-900/20"   },
-  { id: "chapter_summary", label: "Chapter Summary", color: "text-sky-300     border-sky-700/50     bg-sky-900/20"     },
-  { id: "scene_summary",   label: "Scene Summary",   color: "text-emerald-300 border-emerald-700/50 bg-emerald-900/20" },
+  { id: "character",              label: "Character",              color: "text-indigo-300 border-indigo-700/50 bg-indigo-900/20"  },
+  { id: "relationship",           label: "Relationship",           color: "text-violet-300  border-violet-700/50  bg-violet-900/20"  },
+  { id: "location",               label: "Location",               color: "text-teal-300    border-teal-700/50    bg-teal-900/20"    },
+  { id: "lore",                   label: "Lore",                   color: "text-amber-300   border-amber-700/50   bg-amber-900/20"   },
+  { id: "chapter_summary",        label: "Chapter Summary",        color: "text-sky-300     border-sky-700/50     bg-sky-900/20"     },
+  { id: "scene_summary",          label: "Scene Summary",          color: "text-emerald-300 border-emerald-700/50 bg-emerald-900/20" },
+  // Series canonical profiles -- attached from the series source toggle in ChipPicker
+  { id: "series_character",       label: "Series Character",       color: "text-indigo-200 border-indigo-600/50 bg-indigo-800/20"  },
+  { id: "series_relationship",    label: "Series Relationship",    color: "text-violet-200  border-violet-600/50  bg-violet-800/20"  },
+  { id: "series_location",        label: "Series Location",        color: "text-teal-200    border-teal-600/50    bg-teal-800/20"    },
+  { id: "series_lore",            label: "Series Lore",            color: "text-amber-200   border-amber-600/50   bg-amber-800/20"   },
 ];
 
 function chipTypeColor(type: string): string {
@@ -800,50 +808,81 @@ function chipTypeLabel(type: string): string {
 
 interface ChipPickerProps {
   rootPath: string;
+  seriesPath?: string | null;
   existingChips: ContextChip[];
   onAdd: (chip: ContextChip) => void;
   onClose: () => void;
 }
 
-function ChipPicker({ rootPath, existingChips, onAdd, onClose }: ChipPickerProps) {
+function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: ChipPickerProps) {
   const [loading, setLoading] = useState(false);
   const [profileType, setProfileType] = useState("character");
   const [profiles, setProfiles] = useState<{ filename: string; name: string }[]>([]);
   const [adding, setAdding] = useState<string | null>(null);
 
-  // Fetch the profile list when the selected type changes
+  // "suggested" chips: auto-fetched character profiles shown at the top as ghost chips
+  const [suggested, setSuggested] = useState<{ filename: string; name: string; type: string }[]>([]);
+  const [suggestedLoaded, setSuggestedLoaded] = useState(false);
+
+  // Whether we're browsing series canonical profiles vs local project profiles
+  const [source, setSource] = useState<"project" | "series">("project");
+  const hasSeries = Boolean(seriesPath);
+
+  // On mount, auto-suggest character profiles from the project
+  useEffect(() => {
+    if (suggestedLoaded) return;
+    const params = new URLSearchParams({ folder_path: rootPath, type: "character" });
+    fetch(`${API_BASE}/api/profiles/list?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setSuggested(data.map((p: { filename: string; name: string }) => ({
+            filename: p.filename, name: p.name, type: "character",
+          })));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSuggestedLoaded(true));
+  }, [rootPath, suggestedLoaded]);
+
+  // Fetch the profile list when the selected type or source changes
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({ folder_path: rootPath, type: profileType });
+    const folderPath = source === "series" && seriesPath ? seriesPath : rootPath;
+    const params = new URLSearchParams({ folder_path: folderPath, type: profileType });
     fetch(`${API_BASE}/api/profiles/list?${params}`)
       .then(r => r.json())
       .then(data => setProfiles(Array.isArray(data) ? data : []))
       .catch(() => setProfiles([]))
       .finally(() => setLoading(false));
-  }, [profileType, rootPath]);
+  }, [profileType, rootPath, seriesPath, source]);
 
-  async function pickProfile(filename: string, name: string) {
+  async function pickProfile(filename: string, name: string, fromSource?: "project" | "series") {
     setAdding(filename);
+    const chipType = source === "series" ? `series_${profileType}` : profileType;
     try {
-      // Check if already attached
-      if (existingChips.some(c => c.name === name && c.type === profileType)) {
+      if (existingChips.some(c => c.name === name && c.type === chipType)) {
         onClose();
         return;
       }
-      // Fetch the full profile to get its summary
-      const params = new URLSearchParams({ folder_path: rootPath, type: profileType, filename });
+      const folderPath = (fromSource ?? source) === "series" && seriesPath ? seriesPath : rootPath;
+      const params = new URLSearchParams({ folder_path: folderPath, type: profileType, filename });
       const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`);
       const profile = await res.json();
-      // Use full_ai_summary if available, otherwise a note that it's empty
       const content = profile.full_ai_summary?.trim()
         || `[No AI summary generated yet for ${name}. Open Profile Builder and click Generate on the Full AI Summary field.]`;
-      onAdd({ type: profileType, name, content });
+      onAdd({ type: chipType, name, content });
     } catch {
       onClose();
     } finally {
       setAdding(null);
     }
   }
+
+  // Filter suggested chips: only show ones not already attached
+  const unattachedSuggested = suggested.filter(
+    s => !existingChips.some(c => c.name === s.name && (c.type === s.type || c.type === `series_${s.type}`))
+  );
 
   const typeColor = chipTypeColor(profileType);
 
@@ -854,7 +893,53 @@ function ChipPicker({ rootPath, existingChips, onAdd, onClose }: ChipPickerProps
         <button onClick={onClose} className="text-xs text-[#3f3f7a] hover:text-[#8888aa]">✕</button>
       </div>
 
-      {/* Profile type tabs -- button group instead of a raw select */}
+      {/* Suggested chips -- ghost chips shown at top for quick attachment */}
+      {unattachedSuggested.length > 0 && (
+        <div className="mb-2">
+          <p className="mb-1 text-xs text-[#3f3f7a]">Suggested</p>
+          <div className="flex flex-wrap gap-1">
+            {unattachedSuggested.map(s => (
+              <button
+                key={`suggest-${s.filename}`}
+                onClick={() => pickProfile(s.filename, s.name, "project")}
+                disabled={adding === s.filename}
+                className="rounded border border-dashed border-indigo-700/40 px-2 py-0.5 text-xs text-indigo-400/60 transition-colors hover:border-indigo-500 hover:text-indigo-300"
+                title={`Suggested: ${s.name} (click to attach)`}
+              >
+                {adding === s.filename ? "..." : s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Source toggle: Project vs Series (only when project is in a series) */}
+      {hasSeries && (
+        <div className="mb-2 flex gap-1">
+          <button
+            onClick={() => setSource("project")}
+            className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+              source === "project"
+                ? "border-indigo-600 bg-indigo-900/30 text-indigo-300"
+                : "border-[#1e1e4a] text-[#3f3f7a] hover:text-[#8888aa]"
+            }`}
+          >
+            This Book
+          </button>
+          <button
+            onClick={() => setSource("series")}
+            className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+              source === "series"
+                ? "border-teal-600 bg-teal-900/30 text-teal-300"
+                : "border-[#1e1e4a] text-[#3f3f7a] hover:text-[#8888aa]"
+            }`}
+          >
+            Series Profiles
+          </button>
+        </div>
+      )}
+
+      {/* Profile type tabs */}
       <div className="mb-2 flex flex-wrap gap-1">
         {CHIP_TYPES.map(t => (
           <button
@@ -876,12 +961,14 @@ function ChipPicker({ rootPath, existingChips, onAdd, onClose }: ChipPickerProps
         <p className="py-1 text-xs text-[#3f3f7a]">Loading...</p>
       ) : profiles.length === 0 ? (
         <p className="py-1 text-xs text-[#3f3f7a]">
-          No {chipTypeLabel(profileType).toLowerCase()} profiles found in this project.
+          No {chipTypeLabel(profileType).toLowerCase()} profiles found
+          {source === "series" ? " in this series" : " in this project"}.
         </p>
       ) : (
         <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
           {profiles.map(p => {
-            const alreadyAdded = existingChips.some(c => c.name === p.name && c.type === profileType);
+            const chipType = source === "series" ? `series_${profileType}` : profileType;
+            const alreadyAdded = existingChips.some(c => c.name === p.name && c.type === chipType);
             return (
               <button
                 key={p.filename}
@@ -893,7 +980,6 @@ function ChipPicker({ rootPath, existingChips, onAdd, onClose }: ChipPickerProps
                     : "text-[#f0f0f5] hover:bg-indigo-600/20"
                 }`}
               >
-                {/* Color dot matching the chip type */}
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full border ${typeColor}`} />
                 {adding === p.filename
                   ? "Adding..."

@@ -782,3 +782,236 @@ async def import_profile(request: ImportProfileRequest):
         raise HTTPException(status_code=500, detail=f"Could not write imported profile: {e}")
 
     return profile
+
+
+# ── Arc Files ────────────────────────────────────────────────────────────────
+# Arc files hold per-book character changes that overlay on series-level
+# canonical profiles. They use the same Markdown format as regular profiles
+# but live in profiles/arcs/<type>/ inside a book folder.
+#
+# When AI needs context, it receives the merged result: canonical profile
+# fields as the base, with arc file fields overriding where present.
+
+# Maps profile type to its arc subfolder inside a book project
+ARC_FOLDERS: dict[str, str] = {
+    "character":    "profiles/arcs/characters",
+    "relationship": "profiles/arcs/relationships",
+}
+
+ARC_TYPES = set(ARC_FOLDERS.keys())
+
+
+def _arc_dir(folder_path: str, profile_type: str) -> str:
+    """Returns the absolute path to the arc subfolder for a given profile type."""
+    return os.path.join(folder_path, ARC_FOLDERS[profile_type])
+
+
+@router.get("/arc/list", response_model=list[ProfileListItem])
+async def list_arcs(folder_path: str, type: str):
+    """
+    List all arc files for a given profile type in the book's arcs folder.
+    Returns an empty list if the arcs folder doesn't exist (standalone project).
+    """
+    if type not in ARC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Arc files not supported for type: {type}")
+
+    arc_path = _arc_dir(folder_path, type)
+
+    if not os.path.isdir(arc_path):
+        return []
+
+    items: list[ProfileListItem] = []
+    with os.scandir(arc_path) as entries:
+        for entry in entries:
+            if not (entry.is_file() and entry.name.endswith(".md")):
+                continue
+            try:
+                with open(entry.path, "r", encoding="utf-8") as f:
+                    raw = f.read()
+                parts = raw.split("---", 2)
+                meta: dict = yaml.safe_load(parts[1]) if len(parts) >= 3 else {}
+                items.append(ProfileListItem(
+                    filename=entry.name,
+                    name=str(meta.get("name", entry.name.removesuffix(".md"))),
+                    type=type,
+                    role=str(meta.get("role", "")),
+                    status=str(meta.get("status", "active")),
+                ))
+            except Exception:
+                continue
+
+    items.sort(key=lambda p: p.name.lower())
+    return items
+
+
+@router.get("/arc/profile", response_model=Profile)
+async def load_arc(folder_path: str, type: str, filename: str):
+    """Load a single arc file from the book's arcs folder."""
+    if type not in ARC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Arc files not supported for type: {type}")
+
+    arc_path = _arc_dir(folder_path, type)
+    filepath = _safe_path(arc_path, filename)
+
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail=f"Arc file not found: {filename}")
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        raw = f.read()
+
+    return _parse_profile_markdown(raw, filename, type)
+
+
+@router.post("/arc/create", response_model=Profile)
+async def create_arc(request: CreateProfileRequest):
+    """
+    Create a new arc file in the book's arcs folder.
+    Same shape as a regular profile but stored in profiles/arcs/<type>/.
+    """
+    if request.type not in ARC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Arc files not supported for type: {request.type}")
+
+    arc_path = _arc_dir(request.folder_path, request.type)
+    os.makedirs(arc_path, exist_ok=True)
+
+    slug = _slugify(request.name)
+    filename = f"{slug}.md"
+    filepath = os.path.join(arc_path, filename)
+
+    if os.path.exists(filepath):
+        raise HTTPException(status_code=409, detail=f"An arc file named '{filename}' already exists.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    section_configs = SECTION_CONFIGS.get(request.type, [])
+
+    profile = Profile(
+        profile_id=str(uuid.uuid4()),
+        type=request.type,
+        name=request.name,
+        role=request.role,
+        filename=filename,
+        sections={
+            cfg.key: ProfileSection(content="", trait_blocks=[], ai_summary="")
+            for cfg in section_configs
+        },
+        created_at=now,
+        updated_at=now,
+    )
+
+    markdown = _generate_profile_markdown(profile, request.type)
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(markdown)
+
+    return profile
+
+
+@router.post("/arc/save", response_model=Profile)
+async def save_arc(request: SaveProfileRequest):
+    """Save an arc file back to disk (same as save_profile but for arcs folder)."""
+    ptype = request.profile.type
+    if ptype not in ARC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Arc files not supported for type: {ptype}")
+
+    arc_path = _arc_dir(request.folder_path, ptype)
+    filepath = _safe_path(arc_path, request.filename)
+
+    request.profile.updated_at = datetime.now(timezone.utc).isoformat()
+
+    markdown = _generate_profile_markdown(request.profile, ptype)
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(markdown)
+
+    return request.profile
+
+
+# ── Profile Merge Logic ──────────────────────────────────────────────────────
+# Merges a canonical (series-level) profile with a book-level arc file.
+# The arc file's non-empty fields override the canonical profile's fields.
+# Trait blocks from the arc file are appended (not replaced) so the writer
+# can add book-specific traits while keeping the canonical ones.
+
+def merge_profile_with_arc(canonical: Profile, arc: Profile) -> Profile:
+    """
+    Merge a canonical profile with a book-level arc overlay.
+
+    Rules:
+      - Arc's frontmatter fields override canonical if non-empty
+      - For each section: arc content overrides canonical content if non-empty
+      - Arc trait blocks are appended to canonical trait blocks
+      - Arc ai_summary overrides canonical ai_summary if non-empty
+      - Arc full_ai_summary overrides canonical if non-empty
+    """
+    merged_sections: dict[str, ProfileSection] = {}
+
+    for key, canon_section in canonical.sections.items():
+        arc_section = arc.sections.get(key)
+
+        if arc_section is None:
+            merged_sections[key] = canon_section
+            continue
+
+        # Arc content overrides canonical content if non-empty
+        content = arc_section.content if arc_section.content.strip() else canon_section.content
+
+        # Append arc trait blocks to canonical trait blocks
+        trait_blocks = list(canon_section.trait_blocks) + list(arc_section.trait_blocks)
+
+        # Arc AI summary overrides canonical if non-empty
+        ai_summary = arc_section.ai_summary if arc_section.ai_summary.strip() else canon_section.ai_summary
+
+        merged_sections[key] = ProfileSection(
+            content=content,
+            trait_blocks=trait_blocks,
+            ai_summary=ai_summary,
+        )
+
+    return Profile(
+        profile_id=canonical.profile_id,
+        type=canonical.type,
+        name=arc.name if arc.name.strip() else canonical.name,
+        role=arc.role if arc.role.strip() else canonical.role,
+        status=arc.status if arc.status.strip() else canonical.status,
+        tags=arc.tags if arc.tags else canonical.tags,
+        filename=canonical.filename,
+        sections=merged_sections,
+        full_ai_summary=arc.full_ai_summary if arc.full_ai_summary.strip() else canonical.full_ai_summary,
+        created_at=canonical.created_at,
+        updated_at=arc.updated_at,
+    )
+
+
+@router.get("/merged", response_model=Profile)
+async def load_merged_profile(
+    series_path: str, book_path: str, type: str, filename: str
+):
+    """
+    Load a canonical profile merged with its book-level arc file (if one exists).
+
+    The canonical profile lives in the series profiles/ folder.
+    The arc file lives in the book's profiles/arcs/ folder with the same filename.
+    If no arc file exists, returns the canonical profile as-is.
+    """
+    if type not in ARC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Merge not supported for type: {type}")
+
+    # Load canonical profile from the series
+    canonical_dir = _profile_dir(series_path, type)
+    canonical_path = _safe_path(canonical_dir, filename)
+
+    if not os.path.isfile(canonical_path):
+        raise HTTPException(status_code=404, detail=f"Canonical profile not found: {filename}")
+
+    with open(canonical_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    canonical = _parse_profile_markdown(raw, filename, type)
+
+    # Try to load the arc file from the book
+    arc_filepath = os.path.join(_arc_dir(book_path, type), filename)
+    if not os.path.isfile(arc_filepath):
+        return canonical
+
+    with open(arc_filepath, "r", encoding="utf-8") as f:
+        raw = f.read()
+    arc = _parse_profile_markdown(raw, filename, type)
+
+    return merge_profile_with_arc(canonical, arc)

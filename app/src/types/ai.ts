@@ -12,6 +12,9 @@ export interface AppSettings {
   cost_tier:              string;    // "free" | "budget" | "standard" | "premium"
   text_only_filter:       boolean;   // hide non-text output models
   starred_models:         string[];  // user-pinned model IDs
+  model_allowlist:        string[];  // if non-empty, only these models can be used
+  model_blocklist:        string[];  // excluded models (ignored if allowlist set)
+  model_content_modes:    Record<string, string[]>;  // model ID -> allowed content modes
 }
 
 export interface UpdateSettingsPayload {

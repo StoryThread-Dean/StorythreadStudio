@@ -92,9 +92,12 @@ Project has a default content mode and requests may override it.
 
 ## Routing Architecture
 
-### MVP Behavior
-- one active user-selected model
-- app built to support future multi-model routing
+### Current Behavior (Phase 5D)
+- one active user-selected model with routing validation
+- content mode validation: `_validate_model_content_mode()` checks `model_content_modes` in settings
+- model allowlist/blocklist: `_validate_model_allowed()` enforces lists stored in settings
+- content_mode passed from frontend per request, validated before AI call
+- story context auto-injected: `_build_story_context()` reads series.json + project.json
 
 ### Local Request Classification
 Before sending a request, classify:
@@ -105,13 +108,15 @@ Before sending a request, classify:
 - cost tier preference
 
 ### Candidate Model Filtering
-Future routing should filter by:
-- content compatibility
+Active filters (implemented):
+- content compatibility (model_content_modes in settings)
+- allowlist and blocklist (model_allowlist, model_blocklist in settings)
+
+Future filters:
 - structured output support
 - context size
-- allowlist and blocklist
 - cost tier
-- user settings
+- automatic model selection by task type
 
 ### Fallback Rule
 If no eligible model exists for a request, do not silently degrade. Show a clear message instead.
@@ -185,10 +190,10 @@ The project style guide should record that em dashes are never allowed.
 }
 ```
 
-### Trait Example Response
+### Usage Preview Response (Phase 5B -- replaces old Trait Example)
 ```json
 {
-  "ai_usage_example": "Short example of how AI should use this trait in context."
+  "preview": "Prose explanation of how AI interprets and uses this trait in context."
 }
 ```
 

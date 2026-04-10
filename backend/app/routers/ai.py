@@ -22,6 +22,8 @@ from app.ai.assistants import ASSISTANT_BY_ID, ASSISTANTS
 from app.ai.openrouter import run_completion, run_chat, list_models
 from app.ai.sanitizer import sanitize
 import httpx
+import json
+import os
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -47,6 +49,8 @@ class RunAssistantRequest(BaseModel):
     selected_text: str                  # The text the writer has highlighted in the editor
     model_id: str | None = None         # Optional override; falls back to settings default
     context_chips: list[ContextChip] = []  # Explicitly attached profile context (Phase 4)
+    project_path: str | None = None     # Project root path -- used to inject series/book context
+    content_mode: str = "general"       # "general" | "mature" | "explicit" -- for routing
 
 
 # ── Phase 4 Generation Models ─────────────────────────────────────────────────
@@ -67,6 +71,40 @@ class GenerateUsagePreviewRequest(BaseModel):
 
 class GenerateUsagePreviewResponse(BaseModel):
     usage_preview: str
+
+
+class TrimTraitRequest(BaseModel):
+    """
+    Asks AI to rewrite a wordy/bloated trait description more concisely.
+    Triggered when the word count gauge hits Wordy or Bloated.
+    """
+    profile_name:    str
+    profile_type:    str
+    section_heading: str
+    trait:           str
+    description:     str
+    importance:      str   # core|present|background|contextual|hidden
+    word_count:      int
+    model_id: str | None = None
+
+
+class TrimTraitResponse(BaseModel):
+    trimmed: str
+
+
+class AuditImportanceRequest(BaseModel):
+    """
+    Sends all trait blocks for a profile to AI, which flags mismatched
+    importance levels -- e.g. a 'background' trait that reads like 'core'.
+    """
+    profile_name:    str
+    profile_type:    str
+    trait_blocks: list[dict]   # [{trait, description, importance, section_heading}, ...]
+    model_id: str | None = None
+
+
+class AuditImportanceResponse(BaseModel):
+    flags: list[dict]   # [{trait, current_importance, suggested_importance, reason}, ...]
 
 
 class GenerateSectionSummaryRequest(BaseModel):
@@ -126,6 +164,7 @@ class ProfileChatRequest(BaseModel):
     model_id:        str | None = None
     behavior_mode:   str        = "general"   # Which AI behavior is active
     content_mode:    str        = "general"   # "general" | "mature" | "explicit"
+    project_path:    str | None = None        # Project root -- used for story context injection
     # Section labels from the frontend SECTION_CONFIGS -- passed so the backend
     # always uses the current template structure without hardcoding section names.
     # Defaults cover the standard character profile if not provided.
@@ -273,6 +312,12 @@ async def run_assistant(request: RunAssistantRequest):
 
     model_id = request.model_id or settings.get("default_model", "openai/gpt-4o-mini")
 
+    # 3b. Content mode routing: check if the resolved model supports the requested mode
+    _validate_model_content_mode(settings, model_id, request.content_mode)
+
+    # 3c. Allowlist/blocklist filtering
+    _validate_model_allowed(settings, model_id)
+
     # 4. Build the user message.
     # If the writer has attached context chips, prepend them before the selected text.
     # This is the "explicit context attachment" rule from the spec -- the AI never
@@ -292,12 +337,15 @@ async def run_assistant(request: RunAssistantRequest):
         f"Please review the following passage:\n\n---\n{selected}\n---"
     )
 
-    # 5. Call OpenRouter
+    # 5. Call OpenRouter -- prepend story context to the system prompt if available
+    story_context = _build_story_context(request.project_path)
+    system_prompt = story_context + assistant.system_prompt if story_context else assistant.system_prompt
+
     try:
         result = await run_completion(
             api_key=api_key,
             model_id=model_id,
-            system_prompt=assistant.system_prompt,
+            system_prompt=system_prompt,
             user_message=user_message,
         )
     except httpx.HTTPStatusError as e:
@@ -329,12 +377,139 @@ async def run_assistant(request: RunAssistantRequest):
     )
 
 
+# ── Content Mode and Model Routing ────────────────────────────────────────────
+# These helpers validate that a model is eligible for the requested content mode
+# and is not blocked by the user's allowlist/blocklist settings.
+
+VALID_CONTENT_MODES = {"general", "mature", "explicit"}
+
+
+def _validate_model_content_mode(settings: dict, model_id: str, content_mode: str) -> None:
+    """
+    Check that the model supports the requested content mode.
+
+    Uses the model_content_modes setting to determine compatibility.
+    Models not listed in model_content_modes default to ["general"] only.
+    If the content mode is "general", all models pass (it's the baseline).
+    """
+    if content_mode not in VALID_CONTENT_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown content mode: '{content_mode}'. Must be general, mature, or explicit."
+        )
+
+    # "general" mode is always allowed -- every model can handle it
+    if content_mode == "general":
+        return
+
+    # Check the model's allowed modes from settings
+    model_modes = settings.get("model_content_modes", {})
+    allowed = model_modes.get(model_id, ["general"])
+
+    if content_mode not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"The model '{model_id}' is not configured for '{content_mode}' content. "
+                f"Its allowed modes are: {', '.join(allowed)}. "
+                "Update the model's content modes in Settings, or switch to a compatible model."
+            ),
+        )
+
+
+def _validate_model_allowed(settings: dict, model_id: str) -> None:
+    """
+    Check allowlist/blocklist. If allowlist is non-empty, only those models
+    can be used. Otherwise, blocklisted models are rejected.
+    """
+    allowlist = settings.get("model_allowlist", [])
+    blocklist = settings.get("model_blocklist", [])
+
+    if allowlist and model_id not in allowlist:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"The model '{model_id}' is not on the allowlist. "
+                "Update your model allowlist in Settings, or switch to an allowed model."
+            ),
+        )
+
+    if blocklist and model_id in blocklist:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"The model '{model_id}' is on the blocklist. "
+                "Remove it from the blocklist in Settings, or switch to a different model."
+            ),
+        )
+
+
+# ── Story Context Injection ───────────────────────────────────────────────────
+# Reads series.json + project.json and builds a STORY CONTEXT block that gets
+# prepended to AI system prompts. Book-level non-null values override series.
+# This gives AI awareness of genre, tone, pacing, and other story settings.
+
+from app.routers.series import read_series_settings
+
+
+def _build_story_context(project_path: str | None) -> str:
+    """
+    Build a STORY CONTEXT block from series.json + project.json.
+
+    Override logic: if a book-level field is non-null/non-empty, it overrides
+    the series-level value. This lets individual books customize tone, pacing, etc.
+
+    Returns an empty string if no project path is provided or no settings exist.
+    """
+    if not project_path:
+        return ""
+
+    # Read project.json
+    project_file = os.path.join(project_path, "project.json")
+    project_data: dict = {}
+    if os.path.exists(project_file):
+        try:
+            with open(project_file, "r", encoding="utf-8") as f:
+                project_data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Read series.json if the project belongs to a series
+    series_path = project_data.get("series_path", "")
+    series_data = read_series_settings(series_path) if series_path else None
+
+    # Merge: book-level overrides series-level for these fields
+    context_fields = ["genre", "subgenre", "tone", "pacing", "target_audience", "content_mode", "keywords"]
+
+    merged: dict[str, str] = {}
+    for field in context_fields:
+        series_val = (series_data or {}).get(field, "")
+        book_val = project_data.get(field, None)
+        # Book overrides series if non-null and non-empty
+        val = book_val if (book_val is not None and book_val != "") else series_val
+        if val and val != "":
+            # Convert lists to comma-separated strings
+            if isinstance(val, list):
+                val = ", ".join(str(v) for v in val)
+            merged[field] = str(val)
+
+    if not merged:
+        return ""
+
+    # Build the block
+    lines = ["STORY CONTEXT (auto-injected from project/series settings):"]
+    for key, val in merged.items():
+        label = key.replace("_", " ").title()
+        lines.append(f"  {label}: {val}")
+    lines.append("")
+
+    return "\n".join(lines) + "\n"
+
+
 # ── Phase 4: Profile Generation Endpoints ────────────────────────────────────
 # These endpoints are called from the Profile Builder to generate AI content
 # for designated fields (usage previews, section summaries, full profile
 # summaries). Usage previews are shown on demand, not stored.
-
-import json as _json
 
 
 def _resolve_model_and_key(model_id_override: str | None) -> tuple[str, str]:
@@ -366,7 +541,7 @@ def _extract_text_field(result: dict, field_name: str) -> str:
     # the model puts it in "summary" instead.
     summary = result.get("summary", "")
     try:
-        parsed = _json.loads(summary)
+        parsed = json.loads(summary)
         if isinstance(parsed, dict) and field_name in parsed:
             return parsed[field_name]
     except (ValueError, TypeError):
@@ -376,7 +551,7 @@ def _extract_text_field(result: dict, field_name: str) -> str:
     if suggestions and isinstance(suggestions[0], dict):
         content = suggestions[0].get("content", "")
         try:
-            parsed = _json.loads(content)
+            parsed = json.loads(content)
             if isinstance(parsed, dict) and field_name in parsed:
                 return parsed[field_name]
         except (ValueError, TypeError):
@@ -430,6 +605,138 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
 
     text = _extract_text_field(result, "usage_preview")
     return GenerateUsagePreviewResponse(usage_preview=sanitize(text.strip()))
+
+
+# ── Word count "Good" ranges per importance (mirrors frontend GAUGE_THRESHOLDS) ──
+# Used by the Trim tool to tell AI the ideal word range for a given importance level.
+_GOOD_RANGES: dict[str, str] = {
+    "core":       "41-120",
+    "present":    "31-100",
+    "background": "21-60",
+    "contextual": "16-40",
+    "hidden":     "any length",
+}
+
+
+@router.post("/trim-trait", response_model=TrimTraitResponse)
+async def trim_trait(request: TrimTraitRequest):
+    """
+    Suggest a more concise rewrite of a wordy/bloated trait description.
+
+    The writer triggers this when the word gauge hits Wordy or Bloated.
+    AI rewrites the description to land in the "Good" range while keeping
+    all the key details the AI needs at that importance level.
+    """
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    good_range = _GOOD_RANGES.get(request.importance, "30-80")
+
+    system_prompt = (
+        "You are a concise editor for a fiction writer's character profiles.\n\n"
+        "The writer has a trait description that is too long for its importance level. "
+        "Rewrite it to be more concise while preserving every key detail that AI needs "
+        "to write this character accurately.\n\n"
+        "Guidelines:\n"
+        f"- This is a {request.importance} trait. Ideal word range: {good_range} words.\n"
+        f"- Current word count: {request.word_count}.\n"
+        "- Keep the voice and style consistent with the original.\n"
+        "- Do not invent new details. Only compress what exists.\n"
+        "- Preserve the most important behavioral or narrative hooks.\n\n"
+        "PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013). "
+        "Use double hyphen (--) instead. No exceptions.\n\n"
+        'Return ONLY valid JSON: {"trimmed": "your rewritten text here"}. No extra text.'
+    )
+
+    user_message = (
+        f"Character: {request.profile_name} ({request.profile_type})\n"
+        f"Section: {request.section_heading}\n"
+        f"Trait(s): {request.trait}\n"
+        f"Importance: {request.importance}\n"
+        f"Current description ({request.word_count} words):\n"
+        f"{request.description}\n\n"
+        f"Rewrite this to land within {good_range} words."
+    )
+
+    try:
+        result = await run_completion(api_key=api_key, model_id=model_id,
+                                      system_prompt=system_prompt, user_message=user_message)
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+
+    text = _extract_text_field(result, "trimmed")
+    return TrimTraitResponse(trimmed=sanitize(text.strip()))
+
+
+@router.post("/audit-importance", response_model=AuditImportanceResponse)
+async def audit_importance(request: AuditImportanceRequest):
+    """
+    Analyze all trait blocks in a profile and flag mismatched importance levels.
+
+    For example: a 'background' trait with rich emotional hooks should be 'core',
+    or a 'core' trait with a vague one-liner should be fleshed out or downgraded.
+    """
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    # Format the trait blocks as a readable list for the AI
+    blocks_text = ""
+    for b in request.trait_blocks:
+        blocks_text += (
+            f"- Section: {b.get('section_heading', 'unknown')}\n"
+            f"  Trait: {b.get('trait', '')}\n"
+            f"  Importance: {b.get('importance', 'background')}\n"
+            f"  Description: {b.get('description', '')}\n\n"
+        )
+
+    system_prompt = (
+        "You are a profile calibration assistant for a fiction writer.\n\n"
+        "Review all trait blocks below and flag any where the importance level "
+        "seems mismatched with the description content.\n\n"
+        "Importance levels:\n"
+        "  core = central to identity/narrative, always in AI context\n"
+        "  present = regularly relevant, included when character is in scene\n"
+        "  background = canon but rarely surfaced, only when directly relevant\n"
+        "  contextual = situational, only when writer explicitly attaches\n"
+        "  hidden = writer-only notes, never sent to AI\n\n"
+        "Flag examples:\n"
+        "- A 'background' trait with strong emotional hooks -> suggest 'core' or 'present'\n"
+        "- A 'core' trait with a vague one-liner -> suggest adding detail or downgrading\n"
+        "- A 'hidden' trait that would improve AI accuracy -> suggest 'contextual' or higher\n\n"
+        "Only flag genuine mismatches. If everything looks reasonable, return an empty list.\n\n"
+        "PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013). "
+        "Use double hyphen (--) instead. No exceptions.\n\n"
+        "Return ONLY valid JSON:\n"
+        '{"flags": [{"trait": "trait name", "current_importance": "level", '
+        '"suggested_importance": "level", "reason": "short explanation"}, ...]}\n'
+        "If no issues, return: {\"flags\": []}"
+    )
+
+    user_message = (
+        f"Profile: {request.profile_name} ({request.profile_type})\n\n"
+        f"Trait blocks:\n{blocks_text}\n"
+        "Review these and flag any importance level mismatches."
+    )
+
+    try:
+        result = await run_completion(api_key=api_key, model_id=model_id,
+                                      system_prompt=system_prompt, user_message=user_message)
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+
+    # Parse the flags array from the AI response
+    raw_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+    try:
+        parsed = json.loads(raw_text)
+        flags = parsed.get("flags", [])
+    except json.JSONDecodeError:
+        flags = []
+
+    # Sanitize all text in flags
+    for flag in flags:
+        for key in ("trait", "reason"):
+            if key in flag and isinstance(flag[key], str):
+                flag[key] = sanitize(flag[key])
+
+    return AuditImportanceResponse(flags=flags)
 
 
 @router.post("/generate-section-summary", response_model=GenerateSectionSummaryResponse)
@@ -1040,7 +1347,7 @@ async def profile_chat(request: ProfileChatRequest):
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
-    system_prompt = _build_behavior_prompt(
+    behavior_prompt = _build_behavior_prompt(
         behavior_mode   = request.behavior_mode,
         profile_name    = request.profile_name,
         profile_type    = request.profile_type,
@@ -1048,6 +1355,10 @@ async def profile_chat(request: ProfileChatRequest):
         content_mode    = request.content_mode,
         section_labels  = request.section_labels or None,
     )
+
+    # Prepend story context (series/book settings) if a project path is provided
+    story_context = _build_story_context(request.project_path)
+    system_prompt = story_context + behavior_prompt if story_context else behavior_prompt
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
 

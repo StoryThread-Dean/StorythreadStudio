@@ -80,6 +80,14 @@ class OpenProjectRequest(BaseModel):
     folder_path: str    # Absolute path to an existing project folder
 
 
+class CreateBookInSeriesRequest(BaseModel):
+    """Data the frontend sends when creating a new book inside a series."""
+    series_path: str    # Absolute path to the series folder
+    title: str          # Book title (e.g. "The Ashen Crown")
+    description: str = ""
+    folder_name: str = ""  # Optional custom folder name; defaults to title
+
+
 class ProjectResponse(BaseModel):
     """Data sent back to the frontend after create or open succeeds."""
     project_id: str
@@ -88,6 +96,8 @@ class ProjectResponse(BaseModel):
     root_path: str
     content_mode_default: str
     default_model: str | None
+    series_id: str | None = None
+    series_path: str | None = None
     created_at: str
     updated_at: str
 
@@ -176,6 +186,8 @@ async def create_project(request: CreateProjectRequest):
         "root_path":            folder,
         "content_mode_default": "general",
         "default_model":        None,
+        "series_id":            None,
+        "series_path":          None,
         "model_routing_enabled": True,
         "allow_explicit_routing": True,
         "cost_tier":            "balanced",
@@ -214,3 +226,91 @@ async def open_project(request: OpenProjectRequest):
     data["root_path"] = folder
 
     return ProjectResponse(**data)
+
+
+# --- POST /api/projects/create-in-series ---
+@router.post("/create-in-series", response_model=ProjectResponse)
+async def create_book_in_series(request: CreateBookInSeriesRequest):
+    """
+    Create a new book project inside an existing series folder.
+
+    Similar to create_project but:
+      - The book folder is created inside the series folder
+      - project.json includes series_id and series_path linking it to the series
+      - An arcs/ subfolder is added under profiles/ for per-book character arcs
+    """
+    series_path = request.series_path
+
+    if not os.path.exists(series_path):
+        raise HTTPException(status_code=400, detail=f"Series folder not found: {series_path}")
+
+    # Read series.json to get the series_id
+    series_file = os.path.join(series_path, "series.json")
+    if not os.path.exists(series_file):
+        raise HTTPException(
+            status_code=400,
+            detail="Not a valid series folder (no series.json found)."
+        )
+
+    try:
+        with open(series_file, "r", encoding="utf-8") as f:
+            series_data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"series.json is malformed: {e}")
+
+    series_id = series_data.get("series_id", "")
+
+    # Determine the book folder name
+    folder_name = request.folder_name.strip() if request.folder_name.strip() else request.title
+    book_folder = os.path.join(series_path, folder_name)
+
+    # Check if a project already exists there
+    if os.path.exists(os.path.join(book_folder, "project.json")):
+        raise HTTPException(
+            status_code=409,
+            detail="A book project already exists in this folder."
+        )
+
+    # Create the standard project folders + arcs subfolder for per-book character arcs
+    book_folders = PROJECT_FOLDERS + [
+        "profiles/arcs/characters",
+        "profiles/arcs/relationships",
+    ]
+    for subfolder in book_folders:
+        os.makedirs(os.path.join(book_folder, subfolder), exist_ok=True)
+
+    # Write starter files
+    for relative_path, content in STARTER_FILES.items():
+        file_path = os.path.join(book_folder, relative_path)
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    # Build project metadata linked to the series
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Inherit content_mode from series if set, otherwise default to "general"
+    content_mode = series_data.get("content_mode", "general") or "general"
+
+    project_data = {
+        "project_id":           str(uuid.uuid4()),
+        "title":                request.title,
+        "description":          request.description,
+        "root_path":            book_folder,
+        "content_mode_default": content_mode,
+        "default_model":        None,
+        "series_id":            series_id,
+        "series_path":          series_path,
+        "model_routing_enabled": True,
+        "allow_explicit_routing": True,
+        "cost_tier":            "balanced",
+        "active_style_guide":   "notes/style-guide.md",
+        "created_at":           now,
+        "updated_at":           now,
+    }
+
+    # Write project.json
+    project_file = os.path.join(book_folder, "project.json")
+    with open(project_file, "w", encoding="utf-8") as f:
+        json.dump(project_data, f, indent=2)
+
+    return ProjectResponse(**project_data)

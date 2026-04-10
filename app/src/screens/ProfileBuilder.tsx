@@ -19,7 +19,7 @@
 //   - ToolKit removed (replaced by auto-suggest in Phase 5D)
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
-import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import type { ProjectInfo } from "../types/project";
@@ -279,6 +279,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // Behavior mode (4 modes: chat, extract_traits, check_consistency, refine)
   const [behaviorMode, setBehaviorMode] = useState<ProfileBehaviorMode>("chat");
   const [behaviorPanelOpen, setBehaviorPanelOpen] = useState(false);
+
+  // Importance Audit state -- AI reviews all trait blocks for importance mismatches
+  const [auditFlags, setAuditFlags] = useState<{ trait: string; current_importance: string; suggested_importance: string; reason: string }[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   // Focused section indicator
   const [focusedSection, setFocusedSection] = useState<{ key: string; heading: string } | null>(null);
@@ -614,6 +619,58 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   }
 
 
+  // ── Importance Audit Handler ──────────────────────────────────────────────
+  // Collects all trait blocks across all sections and sends them to AI for review.
+
+  async function runImportanceAudit() {
+    if (!profile) return;
+    setAuditLoading(true);
+    setAuditOpen(true);
+    setAuditFlags([]);
+
+    // Gather every trait block with its section heading
+    const allBlocks: { trait: string; description: string; importance: string; section_heading: string }[] = [];
+    const sections = SECTION_CONFIGS[profile.type] ?? [];
+    for (const cfg of sections) {
+      const section = profile.sections[cfg.key];
+      if (!section?.trait_blocks) continue;
+      for (const block of section.trait_blocks) {
+        allBlocks.push({
+          trait: block.trait,
+          description: block.description,
+          importance: block.importance,
+          section_heading: cfg.heading,
+        });
+      }
+    }
+
+    if (allBlocks.length === 0) {
+      setAuditFlags([]);
+      setAuditLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/audit-importance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_name: profile.name,
+          profile_type: profile.type,
+          trait_blocks: allBlocks,
+        }),
+      });
+      if (!res.ok) throw new Error("Audit request failed");
+      const data = await res.json();
+      setAuditFlags(data.flags ?? []);
+    } catch {
+      setAuditFlags([{ trait: "Error", current_importance: "", suggested_importance: "", reason: "Audit failed. Check your API key and model settings." }]);
+    } finally {
+      setAuditLoading(false);
+    }
+  }
+
+
   // ── Chat Handler ─────────────────────────────────────────────────────────
 
   async function sendChatMessage() {
@@ -649,6 +706,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           behavior_mode: behaviorMode,
           content_mode: project.content_mode_default ?? "general",
           section_labels: sections.map(c => c.heading),
+          project_path: project.root_path,
         }),
       });
 
@@ -949,6 +1007,56 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 </div>
               </div>
 
+              {/* Importance Audit button + results */}
+              {sections.some(s => s.hasTraitBlocks) && (
+                <div className="mb-6">
+                  <button
+                    onClick={runImportanceAudit}
+                    disabled={auditLoading}
+                    className="flex items-center gap-1.5 rounded border border-teal-700/50 px-3 py-1.5 text-xs text-teal-400 transition-colors hover:border-teal-500 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="AI reviews all traits and flags importance level mismatches"
+                  >
+                    <Sparkles size={11} />
+                    {auditLoading ? "Auditing..." : "Audit Importance Levels"}
+                  </button>
+
+                  {auditOpen && (
+                    <div className="mt-3 rounded border border-teal-800/40 bg-teal-950/20 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-medium text-teal-300">Importance Audit Results</p>
+                        <button
+                          onClick={() => setAuditOpen(false)}
+                          className="text-xs text-teal-700 hover:text-teal-400"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      {auditLoading ? (
+                        <p className="text-xs text-teal-600 animate-pulse">Analyzing trait blocks...</p>
+                      ) : auditFlags.length === 0 ? (
+                        <p className="text-xs text-teal-500">All importance levels look reasonable. No mismatches found.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {auditFlags.map((flag, i) => (
+                            <div key={i} className="rounded border border-teal-800/30 bg-[#0d0d2b] p-2">
+                              <div className="mb-1 flex items-center gap-2 text-xs">
+                                <span className="font-medium text-teal-200">{flag.trait}</span>
+                                {flag.current_importance && flag.suggested_importance && (
+                                  <span className="text-teal-600">
+                                    {flag.current_importance} → {flag.suggested_importance}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs leading-relaxed text-teal-400/80">{flag.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Profile sections */}
               {sections.map(cfg => {
                 const section = profile.sections[cfg.key] ?? {
@@ -961,6 +1069,8 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     heading={cfg.heading}
                     hasTraitBlocks={cfg.hasTraitBlocks}
                     section={section}
+                    profileName={profile.name}
+                    profileType={profile.type}
                     onContentChange={content => updateSection(cfg.key, { content })}
                     onAiSummaryChange={ai_summary => updateSection(cfg.key, { ai_summary })}
                     onAddTraitBlock={() => addTraitBlock(cfg.key)}
@@ -1249,6 +1359,8 @@ interface ProfileSectionEditorProps {
   heading: string;
   hasTraitBlocks: boolean;
   section: ProfileSection;
+  profileName: string;
+  profileType: string;
   onContentChange: (content: string) => void;
   onAiSummaryChange: (ai_summary: string) => void;
   onAddTraitBlock: () => void;
@@ -1264,6 +1376,8 @@ function ProfileSectionEditor({
   heading,
   hasTraitBlocks,
   section,
+  profileName,
+  profileType,
   onContentChange,
   onAiSummaryChange,
   onAddTraitBlock,
@@ -1294,6 +1408,9 @@ function ProfileSectionEditor({
             <TraitBlockCard
               key={block.id}
               block={block}
+              profileName={profileName}
+              profileType={profileType}
+              sectionHeading={heading}
               onUpdate={updates => onUpdateTraitBlock(block.id, updates)}
               onRemove={() => onRemoveTraitBlock(block.id)}
             />
@@ -1349,12 +1466,83 @@ function ProfileSectionEditor({
 
 interface TraitBlockCardProps {
   block: TraitBlock;
+  profileName: string;
+  profileType: string;
+  sectionHeading: string;
   onUpdate: (updates: Partial<TraitBlock>) => void;
   onRemove: () => void;
 }
 
-function TraitBlockCard({ block, onUpdate, onRemove }: TraitBlockCardProps) {
+function TraitBlockCard({ block, profileName, profileType, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
   const wordCount = countWords(block.description);
+
+  // AI Trim tool -- suggests a concise rewrite when description is wordy/bloated
+  const [trimText, setTrimText] = useState("");
+  const [trimLoading, setTrimLoading] = useState(false);
+  const [trimOpen, setTrimOpen] = useState(false);
+
+  const gaugeInfo = getGaugeLevel(wordCount, block.importance);
+  const showTrimButton = gaugeInfo.level === "wordy" || gaugeInfo.level === "bloated";
+
+  const generateTrim = async () => {
+    if (!block.trait.trim() || !block.description.trim()) return;
+    setTrimLoading(true);
+    setTrimOpen(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/trim-trait`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_name: profileName,
+          profile_type: profileType,
+          section_heading: sectionHeading,
+          trait: block.trait,
+          description: block.description,
+          importance: block.importance,
+          word_count: wordCount,
+        }),
+      });
+      if (!res.ok) throw new Error("Trim request failed");
+      const data = await res.json();
+      setTrimText(data.trimmed ?? "");
+    } catch {
+      setTrimText("Failed to generate trim suggestion. Check your API key and model settings.");
+    } finally {
+      setTrimLoading(false);
+    }
+  };
+
+  // "How AI uses this" preview -- on-demand AI explanation of this trait's importance
+  const [previewText, setPreviewText] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  const generatePreview = async () => {
+    if (!block.trait.trim() || !block.description.trim()) return;
+    setPreviewLoading(true);
+    setPreviewOpen(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/generate-usage-preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_name: profileName,
+          profile_type: profileType,
+          section_heading: sectionHeading,
+          trait: block.trait,
+          description: block.description,
+          importance: block.importance,
+        }),
+      });
+      if (!res.ok) throw new Error("Preview generation failed");
+      const data = await res.json();
+      setPreviewText(data.usage_preview ?? "");
+    } catch {
+      setPreviewText("Failed to generate preview. Check your API key and model settings.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   return (
     <div className="mb-3 rounded border border-[#1e1e4a] bg-[#0d0d2b] p-3">
@@ -1383,6 +1571,16 @@ function TraitBlockCard({ block, onUpdate, onRemove }: TraitBlockCardProps) {
           className="min-w-0 flex-1 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
         />
 
+        {/* "How AI uses this" button -- generates on-demand prose explanation */}
+        <button
+          onClick={generatePreview}
+          disabled={previewLoading || !block.trait.trim() || !block.description.trim()}
+          className="shrink-0 rounded p-1 text-[#3f3f7a] transition-colors hover:text-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
+          title="How AI uses this trait (generates a preview explanation)"
+        >
+          <Sparkles size={12} />
+        </button>
+
         {/* Delete button */}
         <button
           onClick={onRemove}
@@ -1402,8 +1600,75 @@ function TraitBlockCard({ block, onUpdate, onRemove }: TraitBlockCardProps) {
         className="mb-1 w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
       />
 
-      {/* Word count gauge */}
-      <WordGauge wordCount={wordCount} importance={block.importance} />
+      {/* Word count gauge + trim button when wordy/bloated */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <WordGauge wordCount={wordCount} importance={block.importance} />
+        </div>
+        {showTrimButton && (
+          <button
+            onClick={generateTrim}
+            disabled={trimLoading}
+            className="mt-1 flex shrink-0 items-center gap-1 rounded border border-amber-700/50 px-1.5 py-0.5 text-xs text-amber-400 transition-colors hover:border-amber-500 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+            title="AI suggests a more concise version of this description"
+          >
+            <Scissors size={10} />
+            {trimLoading ? "Trimming..." : "Trim"}
+          </button>
+        )}
+      </div>
+
+      {/* AI Trim suggestion -- expandable area */}
+      {trimOpen && (
+        <div className="mt-2 rounded border border-amber-800/40 bg-amber-950/20 p-2.5">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-xs font-medium text-amber-400">Trim Suggestion</p>
+            <button
+              onClick={() => setTrimOpen(false)}
+              className="text-xs text-amber-700 hover:text-amber-400"
+            >
+              Close
+            </button>
+          </div>
+          {trimLoading ? (
+            <p className="text-xs text-amber-600 animate-pulse">Generating trim...</p>
+          ) : (
+            <>
+              <p className="mb-2 text-xs leading-relaxed text-amber-200/80">{trimText}</p>
+              <button
+                onClick={() => {
+                  onUpdate({ description: trimText });
+                  setTrimOpen(false);
+                }}
+                className="rounded border border-amber-700/50 px-2 py-0.5 text-xs text-amber-300 transition-colors hover:border-amber-500 hover:bg-amber-900/30 hover:text-amber-100"
+                title="Replace the current description with this trimmed version"
+              >
+                Apply
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* "How AI uses this" preview -- expandable area below gauge */}
+      {previewOpen && (
+        <div className="mt-2 rounded border border-indigo-800/40 bg-indigo-950/20 p-2.5">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-xs font-medium text-indigo-400">How AI uses this</p>
+            <button
+              onClick={() => setPreviewOpen(false)}
+              className="text-xs text-indigo-700 hover:text-indigo-400"
+            >
+              Close
+            </button>
+          </div>
+          {previewLoading ? (
+            <p className="text-xs text-indigo-600 animate-pulse">Generating preview...</p>
+          ) : (
+            <p className="text-xs leading-relaxed text-indigo-200/80">{previewText}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -19,8 +19,64 @@ export interface ProjectInfo {
   root_path:            string;   // Absolute path on the user's machine
   content_mode_default: string;   // "general" | "mature" | "explicit"
   default_model:        string | null;
+  series_id:            string | null;  // Links to parent series (null = standalone)
+  series_path:          string | null;  // Absolute path to the series folder
   created_at:           string;   // ISO datetime string
   updated_at:           string;
+}
+
+
+// --- SeriesInfo ---
+// Represents a StoryForge book series.
+// Series hold canonical profiles and shared settings across multiple books.
+export interface SeriesInfo {
+  series_id:       string;
+  name:            string;
+  genre:           string;
+  subgenre:        string;
+  tone:            string;
+  pacing:          string;
+  target_audience: string;
+  content_mode:    string;   // "general" | "mature" | "explicit"
+  keywords:        string[];
+  root_path:       string;   // Absolute path to the series folder
+  created_at:      string;
+  updated_at:      string;
+}
+
+
+// --- CreateSeriesPayload ---
+// What we send to POST /api/series/create
+export interface CreateSeriesPayload {
+  folder_path: string;
+  name:        string;
+  genre?:      string;
+  subgenre?:   string;
+  tone?:       string;
+  pacing?:     string;
+  target_audience?: string;
+  content_mode?: string;
+  keywords?:   string[];
+}
+
+
+// --- CreateBookInSeriesPayload ---
+// What we send to POST /api/projects/create-in-series
+export interface CreateBookInSeriesPayload {
+  series_path: string;
+  title:       string;
+  description?: string;
+  folder_name?: string;
+}
+
+
+// --- BookListItem ---
+// One book found inside a series, returned by POST /api/series/list-books
+export interface BookListItem {
+  project_id:  string;
+  title:       string;
+  folder_name: string;
+  root_path:   string;
 }
 
 // --- CreateProjectPayload ---

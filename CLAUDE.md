@@ -6,34 +6,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Current phase: Phase 5A (AI Respec -- Profile Builder Rebuild) -- in progress.**
+**Current phase: Phase 5E (AI Respec -- Writing Companion) -- next.**
 
-Phases 0-4 are complete and merged into `main`. Phase 5 was redesigned into an AI Respec with 5 sub-phases (5A-5E). Full plan in `.claude/plans/polished-moseying-shannon.md`.
+Phases 0-4 and 5A-5D are complete and merged into `main`. Phase 5 was redesigned into an AI Respec with 5 sub-phases (5A-5E). Full plan in `.claude/plans/polished-moseying-shannon.md`.
 
 ### Phases 1-3 -- Complete
 Core app: Tauri shell + React scaffold, FastAPI backend, project create/open, CodeMirror Markdown editor, file save, profiles (character/relationship/location/lore/summaries), OpenRouter integration, 9 writing assistants, Settings modal, em dash enforcement.
 
 ### Phase 4 + Polish -- Complete
-Context chips, ai_usage_example generation, section/full summaries, Profile Builder chat with 7 behavior modes, ToolKit context selector, visual polish pass. All merged to main.
+Context chips, ai_usage_example generation, section/full summaries, Profile Builder chat with 7 behavior modes, ToolKit context selector, visual polish pass.
 
 ### Phase 5A -- Profile Builder Rebuild -- Complete
-Major respec of how AI integrates with StoryForge. Key changes shipped:
 - **Importance levels** replace influence scale: Core / Present / Background / Contextual / Hidden
 - **Description-only trait blocks**: ai_usage_example and notes fields removed from TraitBlock
-- **Adaptive word count gauge**: per-importance thresholds with visual color-coded bar (Sparse/Basic/Good/Detailed/Wordy/Bloated)
+- **Adaptive word count gauge**: per-importance thresholds with visual color-coded bar
 - **4 simplified behavior modes** replace 7: Chat, Refine, Extract Traits, Check Consistency
-- **ProfileBuilder.tsx rebuilt from scratch**: cleaner code, new trait block cards, word gauge component
-- **Backend updated**: profiles.py reads old `influence` format + writes new `importance` format, ai.py endpoint renamed to `generate-usage-preview`, behavior prompts updated for importance terminology
-- **TypeScript types updated**: ImportanceLevel, ProfileBehaviorMode, GenerateUsagePreviewPayload replace old types
-- **Backward compatible**: old profiles load correctly, importance auto-migrated from influence on read
+- **ProfileBuilder.tsx rebuilt from scratch**, backend backward-compatible (old influence auto-migrated)
 
-### Phase 5B -- Next
-AI tools: Trim tool, Importance Audit, "How AI uses this" preview, series settings injection.
+### Phase 5B -- AI Tools -- Complete
+- **"How AI uses this" preview**: Sparkles button on TraitBlockCard, expandable prose explanation via `/generate-usage-preview`
+- **AI Trim tool**: Scissors button at Wordy/Bloated gauge, `/trim-trait` endpoint, Apply button replaces description
+- **AI Importance Audit**: profile-level audit button, `/audit-importance` endpoint flags importance mismatches
 
-### Remaining Sub-phases
-- **5C:** Series/Book directory structure (series.json, canonical profiles, arc files, merge logic)
-- **5D:** Toolkit & Routing (auto-suggest, content mode routing, allowlist/blocklist)
-- **5E:** Writing Companion (unified design for editor right panel, chat in main editor)
+### Phase 5C -- Series/Book Structure -- Complete
+- **series.py router**: `/api/series/create`, `/open`, `/list-books` for managing book series
+- **Book-in-series creation**: `/api/projects/create-in-series` with arcs/ subfolder, series_id/series_path in project.json
+- **Arc files**: `/api/profiles/arc/list`, `/arc/profile`, `/arc/create`, `/arc/save` for per-book character arcs
+- **Profile merge**: `merge_profile_with_arc()` overlays book arc on canonical profile, `/api/profiles/merged` endpoint
+- **Story context injection**: `_build_story_context()` reads series.json + project.json, auto-injects into AI system prompts
+- **ProjectHome.tsx rebuilt**: series creation, browsing, book-in-series flows
+
+### Phase 5D -- Toolkit & Routing -- Complete
+- **Auto-suggest ChipPicker**: character profiles shown as ghost chips on mount, one-click attach
+- **Series source toggle**: "This Book" vs "Series Profiles" in ChipPicker for series projects
+- **Content mode routing**: `_validate_model_content_mode()` validates model supports requested mode
+- **Model allowlist/blocklist**: `_validate_model_allowed()` enforced in run-assistant, stored in settings
+- **Settings UI: Model Routing section**: allowlist, blocklist, per-model content modes configuration
+- **Expanded chip types**: series_character, series_relationship, series_location, series_lore
+
+### Phase 5E -- Writing Companion -- Next
+- Unified design language for editor and profile right panels
+- Chat interface in main editor
+- Level 1-2 AI capabilities wired up
 
 ---
 
