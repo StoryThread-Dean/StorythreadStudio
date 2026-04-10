@@ -6,54 +6,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Current phase: Phase 2 (Profile System) -- in progress.**
+**Current phase: Phase 5A (AI Respec -- Profile Builder Rebuild) -- in progress.**
 
-Phase 0 (design freeze) and Phase 1 (local desktop foundation) are complete and merged into `main`.
+Phases 0-4 are complete and merged into `main`. Phase 5 was redesigned into an AI Respec with 5 sub-phases (5A-5E). Full plan in `.claude/plans/polished-moseying-shannon.md`.
 
-### Phase 1 -- Complete
-All items shipped:
-- Tauri shell + React scaffold (three-panel layout)
-- FastAPI backend with CORS, health check, projects router, documents router
-- Project create and open (OS folder picker, project.json, full folder structure)
-- Dynamic chapter list (reads manuscript/ from disk)
-- CodeMirror Markdown editor with formatting toolbar and font selector
-- Real file save -- Ctrl+S and Save button write to disk via POST /api/documents/chapter
-- Unsaved-changes indicator (amber dot)
-- Session undo/redo (CodeMirror history)
+### Phases 1-3 -- Complete
+Core app: Tauri shell + React scaffold, FastAPI backend, project create/open, CodeMirror Markdown editor, file save, profiles (character/relationship/location/lore/summaries), OpenRouter integration, 9 writing assistants, Settings modal, em dash enforcement.
 
-### Phase 2 -- Complete
-All items shipped: character/relationship/location/lore profiles, chapter and scene summary files, Profile Builder UI (3-panel), trait blocks with influence scale, AI summary placeholder fields, character profile import/fork.
+### Phase 4 + Polish -- Complete
+Context chips, ai_usage_example generation, section/full summaries, Profile Builder chat with 7 behavior modes, ToolKit context selector, visual polish pass. All merged to main.
 
-### Phase 3 -- Complete
-All items shipped: OpenRouter integration, API key storage (masked, ~/.storyforge/settings.json), model listing, connection test, assistant execution pipeline, em dash sanitizer at all 3 layers, Settings modal, live AI panel with text selection + copy buttons. First 4 assistants: Grammar & Punctuation, Clarity & Consistency, Eliminate Redundancy, Descriptive Enhancement.
+### Phase 5A -- Profile Builder Rebuild -- Complete
+Major respec of how AI integrates with StoryForge. Key changes shipped:
+- **Importance levels** replace influence scale: Core / Present / Background / Contextual / Hidden
+- **Description-only trait blocks**: ai_usage_example and notes fields removed from TraitBlock
+- **Adaptive word count gauge**: per-importance thresholds with visual color-coded bar (Sparse/Basic/Good/Detailed/Wordy/Bloated)
+- **4 simplified behavior modes** replace 7: Chat, Refine, Extract Traits, Check Consistency
+- **ProfileBuilder.tsx rebuilt from scratch**: cleaner code, new trait block cards, word gauge component
+- **Backend updated**: profiles.py reads old `influence` format + writes new `importance` format, ai.py endpoint renamed to `generate-usage-preview`, behavior prompts updated for importance terminology
+- **TypeScript types updated**: ImportanceLevel, ProfileBehaviorMode, GenerateUsagePreviewPayload replace old types
+- **Backward compatible**: old profiles load correctly, importance auto-migrated from influence on read
 
-### Phase 4 -- Complete (spec items shipped; quality polish required before Phase 5)
-All items shipped: context chips, generate ai_usage_example into trait blocks, generate section/full profile summaries, Profile Builder chat + guide mode, react-markdown rendering in chat, 5 second-wave assistants (Dialogue Authenticity, POV Consistency, Tone & Voice Consistency, Character Development, Character Consistency).
+### Phase 5B -- Next
+AI tools: Trim tool, Importance Audit, "How AI uses this" preview, series settings injection.
 
-**Quality rating: C- on Profile Builder and AI chat interaction.** The spec is met but the spirit -- how the AI actually interacts with profiles and guides the writer -- is not yet at the intended quality. This must be addressed before moving to Phase 5.
-
-Critical bugs also fixed this session:
-- YAML parsing failure: trait blocks with JSON code block wrappers in ai_usage_example, or colon-space in description/notes values, caused yaml.safe_load() to silently return empty (all traits hidden). Fixed with _clean_trait_yaml() two-pass pre-processor in profiles.py.
-- Profile Markdown writer now uses json.dumps() for all string fields to prevent future YAML breakage.
-
-### Phase 4 Polish -- Complete
-All polish items shipped and merged to main (branch: phase-4-polish).
-
-**Completed this session:**
-- Chat behavior mode quality: split format_rules into structured vs conversational variants; general and ask_clarifying modes now use conversational_rules (plain prose, max 3 sentences, no headers/bullets, no unsolicited overview)
-- Context chips UX: replaced raw type select with colored button group (indigo/violet/teal/amber/sky/emerald per type); attached chips show type badge + profile name; better empty state text
-- Focused section indicator: indigo badge in chat panel header shows which profile section the writer is currently editing
-- Right panel collapse: ChevronRight toggle shrinks chat to a narrow strip, giving writer more center-panel space
-- Profile Builder visual pass: section headings have indigo left accent stripe; Full AI Summary section has distinct teal card with subtitle; title bar shows profile type badge; stale "Guide Mode Button" comment removed
-
-**Previously completed:**
-- ToolKit context selector, AI Behavior mode system (7 modes), Guide Mode absorbed into behavior modes
-- Chat formatting (react-markdown), chat textarea auto-expand, em-dash + double-hyphen enforcement
-- Settings expansion (tier slider, Staff Picks, starred models, content mode)
-- CSS reset bug fix, Extract Traits category-specific rules
-
-### Phase 5 -- Next
-Content mode settings + model routing + allowlist/blocklist.
+### Remaining Sub-phases
+- **5C:** Series/Book directory structure (series.json, canonical profiles, arc files, merge logic)
+- **5D:** Toolkit & Routing (auto-suggest, content mode routing, allowlist/blocklist)
+- **5E:** Writing Companion (unified design for editor right panel, chat in main editor)
 
 ---
 
@@ -193,11 +173,12 @@ Full folder schema is in `02-architecture-and-storage.md`.
 
 AI output may only be written directly to these **designated generated-content fields** in Markdown:
 
-- `ai_usage_example` (inside character trait blocks)
 - `ai_profile_summary`
 - `ai_section_summary`
 - `chapter_summary`
 - `scene_summary`
+
+Note: `ai_usage_example` was removed in Phase 5A. The "How AI uses this" preview is now generated on demand and shown in a popover -- not stored in Markdown.
 
 AI must **never silently overwrite** human-authored prose, profile descriptions, notes, or story drafts. All other AI output goes to the side panel only, where the writer copies it manually.
 
@@ -253,12 +234,16 @@ Favor **longer, clearly annotated code** over compact, clever code. A function w
 
 | Phase | Goal |
 |---|---|
-| 0 | Design freeze: schemas, wireframes, routing rules (current) |
+| 0 | Design freeze: schemas, wireframes, routing rules |
 | 1 | Tauri shell + React scaffold + FastAPI + Markdown editor (no AI) |
 | 2 | Profile system: character, relationship, location, lore, summaries |
-| 3 | OpenRouter integration + first AI assistants (Grammar, Clarity, Redundancy, Descriptive) |
+| 3 | OpenRouter integration + first AI assistants |
 | 4 | Profile-aware AI: context attachment, summaries, Profile Builder chat |
-| 5 | Content mode settings + model routing + allowlist/blocklist |
+| 5A | AI Respec: Profile Builder rebuild (importance levels, word gauge, simplified modes) |
+| 5B | AI tools: trim, audit, usage preview, series context injection |
+| 5C | Series/Book structure: series.json, canonical profiles, arc files |
+| 5D | Toolkit & routing: auto-suggest, content mode routing, allowlist/blocklist |
+| 5E | Writing Companion: unified editor right panel, chat in main editor |
 | 6 | Export, polish, summary quality tuning |
 
 Full phase details and the MVP acceptance checklist are in `06-roadmap-and-mvp-plan.md`.
@@ -271,7 +256,7 @@ Full phase details and the MVP acceptance checklist are in `06-roadmap-and-mvp-p
 |---|---|
 | `01-product-scope.md` | Core goals, writing philosophy, locked rules, non-goals |
 | `02-architecture-and-storage.md` | Folder structure, editor behavior, storage responsibilities |
-| `03-profile-builder-spec.md` | Profile types, sections, trait block format, influence scale |
+| `03-profile-builder-spec.md` | Profile types, sections, trait block format, importance levels |
 | `04-ai-assistants-and-routing.md` | Assistant categories, output schemas, routing architecture, em dash enforcement |
 | `05-api-ui-and-data-models.md` | FastAPI endpoints, SQLite schema, screen layout plan |
 | `06-roadmap-and-mvp-plan.md` | Build phases, first 10 tasks, MVP acceptance checklist |

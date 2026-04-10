@@ -51,22 +51,22 @@ class RunAssistantRequest(BaseModel):
 
 # ── Phase 4 Generation Models ─────────────────────────────────────────────────
 
-class GenerateUsageExampleRequest(BaseModel):
+class GenerateUsagePreviewRequest(BaseModel):
     """
-    Asks the AI to write an ai_usage_example for one trait block.
-    The example explains HOW the AI should apply this trait in writing suggestions.
+    Asks the AI to generate a prose explanation of how this trait's importance
+    level affects AI behavior. Shown on demand in the UI, not stored in YAML.
     """
     profile_name:    str
     profile_type:    str
     section_heading: str
     trait:           str
     description:     str
-    influence:       str
+    importance:      str   # core|present|background|contextual|hidden
     model_id: str | None = None
 
 
-class GenerateUsageExampleResponse(BaseModel):
-    ai_usage_example: str
+class GenerateUsagePreviewResponse(BaseModel):
+    usage_preview: str
 
 
 class GenerateSectionSummaryRequest(BaseModel):
@@ -331,8 +331,8 @@ async def run_assistant(request: RunAssistantRequest):
 
 # ── Phase 4: Profile Generation Endpoints ────────────────────────────────────
 # These endpoints are called from the Profile Builder to generate AI content
-# directly into designated Markdown fields (ai_usage_example, section summaries,
-# full profile summaries). This is the ONLY place AI writes back to profiles.
+# for designated fields (usage previews, section summaries, full profile
+# summaries). Usage previews are shown on demand, not stored.
 
 import json as _json
 
@@ -385,27 +385,32 @@ def _extract_text_field(result: dict, field_name: str) -> str:
     return summary
 
 
-@router.post("/generate-usage-example", response_model=GenerateUsageExampleResponse)
-async def generate_usage_example(request: GenerateUsageExampleRequest):
+@router.post("/generate-usage-preview", response_model=GenerateUsagePreviewResponse)
+async def generate_usage_preview(request: GenerateUsagePreviewRequest):
     """
-    Generate an ai_usage_example for one trait block in a profile.
+    Generate a prose explanation of how a trait's importance level affects AI behavior.
 
-    The ai_usage_example tells AI writing tools HOW to apply this trait
-    in suggestions -- it's a behavioral instruction, not a restatement
-    of the trait. Written to the trait block's ai_usage_example field.
-    The writer can edit it afterward.
+    Unlike the old ai_usage_example (which was stored in YAML), this preview
+    is generated on demand and shown in a popover -- not persisted. It helps
+    the writer understand what their importance setting actually means for
+    this specific trait.
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
     system_prompt = (
         "You are a profile calibration assistant for a fiction writer.\n\n"
-        "Write a brief ai_usage_example for a character trait. "
-        "This is a 1-3 sentence instruction telling AI writing tools HOW to "
-        "use this trait when making suggestions -- be specific and behavioral, "
-        "not just a restatement of the trait.\n\n"
+        "Explain in 2-3 sentences how this trait's importance level will affect "
+        "AI writing behavior. Be specific to this trait -- not generic. "
+        "Write in second person ('Because this trait is marked Core, AI will...').\n\n"
+        "Importance levels:\n"
+        "  core = always in AI context, central to every scene with this character\n"
+        "  present = included when character is in scene, regularly visible\n"
+        "  background = included only when directly relevant, rarely surfaced\n"
+        "  contextual = included only when writer explicitly attaches it\n"
+        "  hidden = never sent to AI, writer-only reference\n\n"
         "PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013). "
         "Use double hyphen (--) instead. No exceptions.\n\n"
-        'Return ONLY valid JSON: {"ai_usage_example": "your text here"}. No extra text.'
+        'Return ONLY valid JSON: {"usage_preview": "your text here"}. No extra text.'
     )
 
     user_message = (
@@ -413,10 +418,8 @@ async def generate_usage_example(request: GenerateUsageExampleRequest):
         f"Section: {request.section_heading}\n"
         f"Trait(s): {request.trait}\n"
         f"Description: {request.description}\n"
-        f"Influence: {request.influence} "
-        f"(foreshadowing=rarely direct, background=rarely mentioned, "
-        f"minor=subtle, major=regularly visible, core=central to identity)\n\n"
-        "Write the ai_usage_example."
+        f"Importance: {request.importance}\n\n"
+        "Explain how AI will use this trait at this importance level."
     )
 
     try:
@@ -425,8 +428,8 @@ async def generate_usage_example(request: GenerateUsageExampleRequest):
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
-    text = _extract_text_field(result, "ai_usage_example")
-    return GenerateUsageExampleResponse(ai_usage_example=sanitize(text.strip()))
+    text = _extract_text_field(result, "usage_preview")
+    return GenerateUsagePreviewResponse(usage_preview=sanitize(text.strip()))
 
 
 @router.post("/generate-section-summary", response_model=GenerateSectionSummaryResponse)
@@ -470,7 +473,7 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
 async def generate_full_summary(request: GenerateFullSummaryRequest):
     """
     Generate a full synthesized AI summary for an entire profile.
-    For character profiles: multi-paragraph, reflecting trait influence weights.
+    For character profiles: multi-paragraph, reflecting trait importance weights.
     For other types: shorter, focused on what is most useful for writing AI.
     This is the primary content used when the writer attaches a profile as a
     context chip to an AI assistant request.
@@ -482,7 +485,7 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
         "Write a full AI summary of a story profile to be used as writing context.\n\n"
         "For CHARACTER profiles:\n"
         "- Multiple paragraphs synthesizing all sections\n"
-        "- Core traits get more emphasis than minor/background ones\n"
+        "- Core/present traits get more emphasis than background/contextual ones\n"
         "- Include motivations, voice, and relationship context if present\n"
         "- Write in third person, as a briefing about the character\n\n"
         "For LOCATION, LORE, RELATIONSHIP profiles:\n"
@@ -768,127 +771,79 @@ def _build_behavior_prompt(
         "Use commas, parentheses, colons, or semicolons instead.\n"
     )
 
-    # ── MODE: GENERAL CHAT ────────────────────────────────────────────────────
-    # Open-ended conversation. Writer asks, AI responds. No specific task agenda.
-    # Conversational rules apply -- responses should feel like a quick back-and-forth,
-    # not a formal editorial report. Short. Direct. One thought at a time.
-    if behavior_mode == "general":
+    # ── MODE: CHAT ─────────────────────────────────────────────────────────────
+    # Open-ended conversation about the profile. Writer asks, AI responds.
+    # Conversational rules: short, direct, no structured output. If the writer's
+    # question is vague, help them clarify before answering. No unsolicited
+    # analysis, summaries, or improvement suggestions.
+    if behavior_mode in ("chat", "general", "ask_clarifying"):
         return (
             context_header +
             "YOUR ROLE: Answer the writer's questions about this profile directly. "
             "Offer an observation or suggestion only when it directly addresses what was asked. "
             "Do not volunteer analysis, summaries, or improvements that were not requested.\n\n"
+            "If the question is VAGUE or AMBIGUOUS:\n"
+            "  Offer 2-3 one-line framings of what the writer might mean, then ask which is closest.\n"
+            "  Once they clarify, answer in 1-3 sentences. Stop.\n\n"
             "RULES:\n"
             "- NEVER claim to have changed the profile. The writer controls all edits.\n"
-            "- NEVER invent facts not present in the context.\n\n" +
+            "- NEVER invent facts not present in the context.\n"
+            "- Yes/no questions get yes or no first, then one sentence of explanation at most.\n\n" +
             conversational_rules
         )
 
-    # ── MODE: INTERPRET PROFILE ───────────────────────────────────────────────
-    # AI reads the selected context and explains how AI writing tools would use
-    # each piece: what they'd surface, what they'd treat as background, and where
-    # the text is ambiguous or could be misread. Ends with one refinement offer.
-    if behavior_mode == "interpret_profile":
+    # ── MODE: REFINE ─────────────────────────────────────────────────────────
+    # All-purpose trait and profile improvement mode. Combines three capabilities:
+    #   1. Interpret: explain how AI would use each trait at its importance level
+    #   2. Sharpen: refine trait names and descriptions through Q&A
+    #   3. Summarize: produce a plain-language recap + AI interpretation on request
+    # Works one trait at a time. Outputs copy-ready suggestions, never writes directly.
+    if behavior_mode in ("refine", "refine_traits", "interpret_profile", "generate_summary"):
         return (
             context_header +
-            "YOUR TASK (INTERPRET PROFILE):\n"
-            "For each section, trait, or item in the selected context above, provide:\n"
-            "1. **Would actively surface:** what AI writing tools would foreground "
-            "   in prose suggestions based on this text\n"
-            "2. **Would treat as background:** what they'd keep present but passive\n"
-            "3. **Ambiguous or imprecise:** where the text could be misread, "
-            "   is too vague, or leaves room for unintended interpretation\n"
-            "4. **Suggested improvement:** one specific wording change that would "
-            "   make this entry cleaner and more useful to AI tools\n\n"
-            "After covering all items, ask the writer which specific entry they want "
-            "to refine first.\n\n"
-            "RULES:\n"
-            "- Go item by item. Do NOT collapse everything into a single summary.\n"
-            "- Keep each of the four points to 1-2 sentences maximum.\n"
-            "- If an item is already clear and well-scoped, say so briefly and move on.\n"
-            "- NEVER claim to have changed the profile.\n"
-            "- NEVER invent facts not present in the context.\n\n" +
-            format_rules
-        )
+            "YOUR TASK (REFINE):\n"
+            "Help the writer improve their profile traits. You have three capabilities "
+            "and should choose the right one based on what the writer asks:\n\n"
 
-    # ── MODE: REFINE TRAITS ───────────────────────────────────────────────────
-    # Takes the selected traits and sharpens them one at a time through focused
-    # conversation. Targets both the trait NAME (is it specific enough?) and the
-    # DESCRIPTION (is it grounded in this character, or just a generic definition?).
-    # Outputs a refined Trait / Description template entry when the exchange is sharp.
-    if behavior_mode == "refine_traits":
-        return (
-            context_header +
-            "YOUR TASK (REFINE TRAITS):\n"
-            "Work through the selected traits one at a time. For each trait, ask "
-            "targeted questions to sharpen the trait NAME, the DESCRIPTION, "
-            "or both, until they are precise and specific to THIS character.\n\n"
-            "HOW TO WORK:\n"
-            "1. Read all selected traits. Pick the first one to start.\n"
-            "   Briefly name which trait you are working on, then ask ONE question.\n"
-            "2. Identify what needs the most work:\n"
-            "   - Is the TRAIT NAME too broad or generic? "
-            "     (e.g., 'brave' is a definition; 'shields others before herself' is character-specific)\n"
-            "   - Is the DESCRIPTION a dictionary entry or a character truth? "
-            "     Generic: 'She is observant.' "
-            "     Specific: 'She catalogues exits and faces before she speaks.'\n"
-            "   Focus your question on whichever gap is larger.\n"
-            "3. After 1-3 exchanges on a single trait, output the refined entry:\n\n"
-            "   Trait: [refined word or short phrase]\n"
-            "   Description: [1-2 sentences grounded in this specific character]\n"
-            "   Notes: [optional, 1 sentence of context; omit if not needed]\n\n"
-            "4. After outputting, ask: 'Does this capture it, or would you adjust "
-            "   anything? Ready to move to the next trait?'\n\n"
+            "CAPABILITY 1: INTERPRET\n"
+            "When the writer asks how AI would use a trait, or wants to understand "
+            "the effect of an importance level:\n"
+            "- For each trait: what AI would actively surface vs treat as background\n"
+            "- Flag anything ambiguous or imprecise that could be misread\n"
+            "- Suggest one specific wording improvement per trait\n"
+            "- Go item by item, not as a collapsed summary\n\n"
+
+            "CAPABILITY 2: SHARPEN\n"
+            "When the writer wants to refine specific traits:\n"
+            "- Work on ONE trait at a time\n"
+            "- Is the TRAIT NAME too broad? ('brave' is generic; "
+            "'shields others before herself' is character-specific)\n"
+            "- Is the DESCRIPTION a dictionary entry or a character truth? "
+            "(Generic: 'She is observant.' Specific: 'She catalogues exits and faces "
+            "before she speaks.')\n"
+            "- After 1-3 exchanges, output a refined entry:\n"
+            "  Trait: [refined phrase]\n"
+            "  Description: [1-2 sentences grounded in this character]\n"
+            "- Ask: 'Does this capture it? Ready for the next trait?'\n\n"
+
+            "CAPABILITY 3: SUMMARIZE\n"
+            "When the writer asks for a summary or overview:\n"
+            "- Part A: Plain-language recap (4-6 bullets, what the writer wrote, mirrored back)\n"
+            "- Part B: AI interpretation (3-5 bullets, how AI tools would characterize this)\n"
+            "- Then ask which parts feel off or different from the writer's vision\n"
+            "- Work through flagged items one at a time with copy-ready suggestions\n\n"
+
+            "HOW TO START:\n"
+            "- If the writer's first message is specific ('refine this trait', 'how would AI "
+            "use my physical traits'), jump straight into the relevant capability.\n"
+            "- If the writer's first message is vague ('let's refine'), pick the first trait "
+            "and ask your first question. No preamble.\n\n"
+
             "RULES:\n"
-            "- Work on ONE trait at a time. Never jump between traits mid-refinement.\n"
-            "- Ask ONE question per response. Make it specific, not generic.\n"
-            "  BAD: 'Tell me more about this trait.'\n"
-            "  GOOD: 'Is this something she does consciously, or is it instinct "
-            "  she rarely notices herself doing?'\n"
-            "- If the writer's first message is vague (e.g., 'let us refine'), just "
-            "  pick the first trait and ask your first question. No preamble needed.\n"
+            "- ONE question per response. Make it specific, not generic.\n"
             "- NEVER claim to have changed the profile. Output only suggestions to copy.\n"
-            "- NEVER invent facts not present in the context.\n\n" +
-            format_rules
-        )
-
-    # ── MODE: GENERATE AI SUMMARY ─────────────────────────────────────────────
-    # Produces a two-part compact summary of the selected ToolKit context:
-    #   Part A: Plain-language recap (what the writer actually wrote, mirrored back clearly)
-    #   Part B: AI interpretation (how AI writing tools would characterize this character)
-    # Then asks which parts differ from the writer's vision and offers targeted suggestions.
-    if behavior_mode == "generate_summary":
-        return (
-            context_header +
-            "YOUR TASK (GENERATE AI SUMMARY):\n"
-            "Produce a two-part compact summary of the selected context. "
-            "Do this immediately without asking for clarification first.\n\n"
-            "PART A (Plain-Language Recap):\n"
-            "Mirror back what the writer has written in plain, clear language. "
-            "This shows the writer exactly how their own words read to an outside reader. "
-            "Use 4-6 bullet points maximum. Keep each point to one sentence. "
-            "Do not interpret or editorialize. Just reflect what is there.\n\n"
-            "PART B (AI Interpretation):\n"
-            "Describe how AI writing tools would characterize this character based on the traits. "
-            "What personality, behavior, and presence would AI surface in prose suggestions? "
-            "What would it emphasize? What would it treat as background? "
-            "Use 3-5 bullet points. Keep each to one sentence.\n\n"
-            "AFTER BOTH PARTS:\n"
-            "Separate with --- and ask ONE question:\n"
-            "'Which of these feels off, incomplete, or different from how you envision "
-            "this character? Point to anything specific.'\n\n"
-            "FOLLOW-UP EXCHANGES:\n"
-            "When the writer identifies something that does not match their vision:\n"
-            "1. Acknowledge which part they flagged in one sentence.\n"
-            "2. Offer 1-2 specific, copy-ready wording suggestions for that part.\n"
-            "3. Ask: 'Does either of these feel closer, or shall I try a different angle?'\n"
-            "Work through one flagged item at a time. Do not address multiple issues at once.\n\n"
-            "RULES:\n"
-            "- The summary lives in chat only. It is not written to the profile automatically.\n"
-            "- The writer copies whatever suggestions they want to use.\n"
-            "- NEVER claim to have changed the profile.\n"
-            "- NEVER invent facts not present in the selected context.\n"
-            "- Keep the entire initial summary to 10 bullets or fewer across both parts.\n\n" +
+            "- NEVER invent facts not present in the context.\n"
+            "- Keep each point to 1-2 sentences maximum.\n\n" +
             format_rules
         )
 
@@ -1004,7 +959,7 @@ def _build_behavior_prompt(
     # Reads the selected profile context and flags three types of problems:
     #   1. Contradictions -- traits that directly conflict with each other
     #   2. Cancellations -- overlapping traits that neutralize each other's usefulness
-    #   3. Influence mismatches -- influence level doesn't match how the trait is written
+    #   3. Importance mismatches -- importance level doesn't match how the trait is written
     # Output is a concise problem list, not a summary or rewrite.
     if behavior_mode == "check_consistency":
         return (
@@ -1029,14 +984,14 @@ def _build_behavior_prompt(
             "Example: 'Pragmatic' AND 'Practical' AND 'Results-focused' -- these are "
             "three ways of saying the same thing. Only one is needed; the others dilute it.\n\n"
 
-            "PROBLEM TYPE 3: INFLUENCE LEVEL MISMATCHES\n"
-            "The influence level assigned (foreshadowing/background/minor/major/core) "
+            "PROBLEM TYPE 3: IMPORTANCE LEVEL MISMATCHES\n"
+            "The importance level assigned (core/present/background/contextual/hidden) "
             "does not match how the trait is described in the text.\n"
             "Examples of mismatches:\n"
             "  - Description says 'She does this constantly, it defines her every action' "
-            "    but influence is set to 'minor'\n"
+            "    but importance is set to 'background'\n"
             "  - Description says 'An occasional tendency, rarely surfaces' "
-            "    but influence is set to 'core'\n"
+            "    but importance is set to 'core'\n"
             "Flag the mismatch and briefly explain which direction is off.\n\n"
 
             "OUTPUT FORMAT:\n"
@@ -1045,10 +1000,10 @@ def _build_behavior_prompt(
             "  Why it matters: [one sentence]\n\n"
             "  Overlap: [trait A] and [trait B] (and [trait C] if applicable)\n"
             "  Why it matters: [one sentence]\n\n"
-            "  Influence mismatch: [trait name] -- labeled [current level] but reads as [suggested level]\n"
+            "  Importance mismatch: [trait name] -- labeled [current level] but reads as [suggested level]\n"
             "  Why it matters: [one sentence]\n\n"
             "If NO problems are found in a category, say:\n"
-            "  'No contradictions found.' / 'No overlaps found.' / 'Influence levels look appropriate.'\n\n"
+            "  'No contradictions found.' / 'No overlaps found.' / 'Importance levels look appropriate.'\n\n"
             "After the list, ask: 'Which of these would you like to address first, "
             "or would you like to explain any of the flagged items?'\n\n"
 
@@ -1059,45 +1014,6 @@ def _build_behavior_prompt(
             "- Do NOT invent problems that are not clearly present in the context.\n"
             "- NEVER claim to have changed the profile.\n\n" +
             format_rules
-        )
-
-    # ── MODE: ASK CLARIFYING QUESTIONS ───────────────────────────────────────
-    # The writer is asking something and wants a focused answer.
-    # AI's only job is to answer clearly, or -- if the question is vague --
-    # to help the writer clarify what they're actually asking before answering.
-    # No unsolicited observations, no volunteered additions, no agenda.
-    if behavior_mode == "ask_clarifying":
-        return (
-            context_header +
-            "YOUR TASK (CLARIFY AND ANSWER):\n"
-            "The writer has a question. Your only job is to answer it, "
-            "or to help them clarify what they are asking if it is unclear.\n\n"
-            "HOW TO RESPOND:\n\n"
-            "If the question is CLEAR:\n"
-            "  Answer in 1-3 sentences. Stop. Do not elaborate further.\n"
-            "  Use the selected context as reference when relevant.\n"
-            "  Do not add observations, suggestions, or follow-up ideas the writer did not ask for.\n\n"
-            "If the question is VAGUE or AMBIGUOUS:\n"
-            "  Offer 2-3 one-line framings of what the writer might mean, then ask which is closest.\n"
-            "  Once they clarify, answer in 1-3 sentences. Stop.\n"
-            "  Example:\n"
-            "    Writer: 'Does this feel right?'\n"
-            "    AI: 'Are you asking: (a) whether the trait name is precise enough, "
-            "(b) whether the description is specific to this character, or (c) something else? "
-            "Which is closest?'\n\n"
-            "LENGTH RULE (most important):\n"
-            "  Every response must be 3 sentences or fewer.\n"
-            "  If a thorough answer truly needs more, give the key point in 2 sentences "
-            "  and offer: 'Want me to go deeper on any part of this?'\n"
-            "  Never fill more than a few lines. Brevity is the goal.\n\n"
-            "RULES:\n"
-            "- ONE response = one answer OR one clarifying question. Never both.\n"
-            "- Do NOT volunteer observations the writer did not ask for.\n"
-            "- Do NOT suggest changes or alternatives unless explicitly asked.\n"
-            "- Yes/no questions get yes or no first, then one sentence of explanation at most.\n"
-            "- NEVER claim to have changed the profile. The writer controls all edits.\n"
-            "- NEVER invent facts not present in the context.\n\n" +
-            conversational_rules
         )
 
     # ── FALLBACK ──────────────────────────────────────────────────────────────

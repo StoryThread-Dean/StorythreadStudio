@@ -117,7 +117,10 @@ PROFILE_FOLDERS: dict[str, str] = {
 
 VALID_TYPES = set(PROFILE_FOLDERS.keys())
 
-VALID_INFLUENCE = {"foreshadowing", "background", "minor", "major", "core"}
+# The five importance levels control how (and whether) a trait is sent to AI.
+# Core = always in prompt, highest priority position.
+# Hidden = writer-only notes, never sent to the AI API.
+VALID_IMPORTANCE = {"core", "present", "background", "contextual", "hidden"}
 
 
 # ── Pydantic Models ───────────────────────────────────────────────────────────
@@ -127,9 +130,7 @@ class TraitBlock(BaseModel):
     id: str                   # UUID used as a React key (not stored in YAML)
     trait: str                # The trait name(s), e.g. "observant, punctual, eloquent"
     description: str          # Human-written description
-    influence: str            # Influence level: foreshadowing|background|minor|major|core
-    ai_usage_example: str = ""  # How AI should use this trait (often AI-generated)
-    notes: str = ""           # Optional supporting notes
+    importance: str           # core|present|background|contextual|hidden
 
 
 class ProfileSection(BaseModel):
@@ -302,6 +303,26 @@ def _clean_trait_yaml(content: str) -> str:
     return content
 
 
+# Map old influence values to new importance levels.
+# Old: foreshadowing|background|minor|major|core
+# New: core|present|background|contextual|hidden
+_INFLUENCE_TO_IMPORTANCE: dict[str, str] = {
+    "core":           "core",
+    "major":          "present",
+    "minor":          "background",
+    "background":     "contextual",
+    "foreshadowing":  "hidden",
+}
+
+
+def _migrate_influence(raw: str) -> str:
+    """Convert an old influence level or new importance level to a valid importance value."""
+    raw = raw.strip().lower()
+    if raw in VALID_IMPORTANCE:
+        return raw
+    return _INFLUENCE_TO_IMPORTANCE.get(raw, "background")
+
+
 def _parse_trait_blocks(content: str) -> list[TraitBlock]:
     """
     Parse YAML-formatted trait block entries from a section's text content.
@@ -335,13 +356,16 @@ def _parse_trait_blocks(content: str) -> list[TraitBlock]:
         for item in parsed:
             if not isinstance(item, dict) or "trait" not in item:
                 continue
+            # Backward compat: read "importance" first, fall back to old
+            # "influence" field. Map old influence values to new importance
+            # levels so legacy profiles load correctly.
+            raw_level = str(item.get("importance", "") or item.get("influence", "background"))
+            importance = _migrate_influence(raw_level)
             blocks.append(TraitBlock(
                 id=str(uuid.uuid4()),
                 trait=str(item.get("trait", "")),
                 description=str(item.get("description", "")),
-                influence=str(item.get("influence", "minor")),
-                ai_usage_example=str(item.get("ai_usage_example", "")),
-                notes=str(item.get("notes", "")),
+                importance=importance,
             ))
         return blocks
     except yaml.YAMLError:
@@ -487,26 +511,14 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
             if section.trait_blocks:
                 for block in section.trait_blocks:
                     # Write as YAML list entry.
-                    #
-                    # ai_usage_example uses json.dumps() to produce a properly
-                    # double-quoted YAML string. This prevents the code-block
-                    # wrapper problem (```json ... ```) and handles any special
-                    # characters (quotes, backslashes, newlines) safely.
-                    # json-encoded strings are valid YAML string scalars.
-                    # All string values are written as JSON double-quoted strings.
-                    # This prevents YAML parsing failures caused by ': ' in values
-                    # (e.g. "notes: Overall: She presents..." breaks yaml.safe_load).
-                    # json.dumps() produces valid YAML string scalars with proper escaping.
+                    # description uses json.dumps() to produce a properly
+                    # double-quoted YAML string -- prevents YAML parsing failures
+                    # caused by ': ' in values (e.g. "Overall: She presents..."
+                    # would break yaml.safe_load without quoting).
                     safe_description = " ".join(block.description.split())
                     lines += [f"- trait: {block.trait}"]
                     lines += [f"  description: {_json.dumps(safe_description)}"]
-                    lines += [f"  influence: {block.influence}"]
-                    if block.ai_usage_example:
-                        safe_example = " ".join(block.ai_usage_example.split())
-                        lines += [f"  ai_usage_example: {_json.dumps(safe_example)}"]
-                    if block.notes:
-                        safe_notes = " ".join(block.notes.split())
-                        lines += [f"  notes: {_json.dumps(safe_notes)}"]
+                    lines += [f"  importance: {block.importance}"]
                     lines += [""]
             else:
                 lines += [""]

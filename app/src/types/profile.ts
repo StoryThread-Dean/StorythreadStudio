@@ -14,14 +14,15 @@ export type ProfileType =
   | "chapter_summary"
   | "scene_summary";
 
-// Influence levels used in character and relationship trait blocks.
-// Controls how prominently AI surfaces a trait in suggestions.
-export type InfluenceLevel =
-  | "foreshadowing"  // exists but should rarely be mentioned directly
-  | "background"     // exists in canon, rarely surfaced
-  | "minor"          // subtle but valid when context supports it
-  | "major"          // regularly relevant or behaviorally significant
-  | "core";          // central to identity, motivation, or narrative role
+// Importance levels control how (and whether) a trait is sent to the AI.
+// Core = always in prompt at highest priority.
+// Hidden = writer-only reference, never sent to the API.
+export type ImportanceLevel =
+  | "core"           // central to identity, always in AI context
+  | "present"        // regularly relevant, included when character is in scene
+  | "background"     // canon but rarely surfaced, included only when directly relevant
+  | "contextual"     // situational, included only when writer explicitly attaches
+  | "hidden";        // writer-only notes, never sent to AI
 
 
 // ── Core Data Models ─────────────────────────────────────────────────────────
@@ -29,12 +30,10 @@ export type InfluenceLevel =
 // One trait entry within a trait-block section.
 // A block may represent a single trait or a grouped set of related traits.
 export interface TraitBlock {
-  id: string;                // UUID used as React key (not stored in Markdown)
-  trait: string;             // e.g. "observant, punctual, eloquent"
-  description: string;       // Human-written description of the trait
-  influence: InfluenceLevel;
-  ai_usage_example: string;  // How AI should apply this trait (often AI-generated)
-  notes: string;             // Optional supporting clarification
+  id: string;                  // UUID used as React key (not stored in Markdown)
+  trait: string;               // e.g. "observant, punctual, eloquent"
+  description: string;         // Human-written description of the trait
+  importance: ImportanceLevel; // Controls AI visibility and prompt position
 }
 
 // One section of a profile (e.g. "Physical Traits", "Overview")
@@ -162,11 +161,11 @@ export const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
   scene_summary:   "Scene Summaries",
 };
 
-// Human-readable labels for each influence level, used in the dropdown
-export const INFLUENCE_LABELS: Record<InfluenceLevel, string> = {
-  foreshadowing: "Foreshadowing -- exists but rarely surfaced directly",
-  background:    "Background -- in canon but rarely mentioned",
-  minor:         "Minor -- subtle, used when context supports it",
-  major:         "Major -- regularly relevant or visible",
-  core:          "Core -- central to identity or narrative role",
+// Human-readable labels for each importance level, used in the dropdown
+export const IMPORTANCE_LABELS: Record<ImportanceLevel, string> = {
+  core:        "Core -- always in AI context, central to identity",
+  present:     "Present -- included when character is in scene",
+  background:  "Background -- included only when directly relevant",
+  contextual:  "Contextual -- included only when explicitly attached",
+  hidden:      "Hidden -- writer-only, never sent to AI",
 };

@@ -58,6 +58,13 @@ export interface AssistantResponse {
   had_em_dashes: boolean;
 }
 
+// ── Importance Levels ─────────────────────────────────────────────────────────
+// Controls how (and whether) a trait is sent to the AI.
+// Core = always in prompt at highest priority.
+// Hidden = writer-only, never sent to the API.
+
+export type ImportanceLevel = "core" | "present" | "background" | "contextual" | "hidden";
+
 // ── Context Chips ─────────────────────────────────────────────────────────────
 
 // A context chip is a piece of profile content the writer explicitly attaches
@@ -72,18 +79,18 @@ export interface RunAssistantPayload {
   assistant_id: string;
   selected_text: string;
   model_id?: string;
-  context_chips?: ContextChip[];  // Phase 4: explicitly attached profile context
+  context_chips?: ContextChip[];
 }
 
-// ── Phase 4 Generation Payloads ───────────────────────────────────────────────
+// ── Profile Builder: Generation Payloads ─────────────────────────────────────
 
-export interface GenerateUsageExamplePayload {
+export interface GenerateUsagePreviewPayload {
   profile_name:    string;
   profile_type:    string;
   section_heading: string;
   trait:           string;
   description:     string;
-  influence:       string;
+  importance:      ImportanceLevel;
   model_id?:       string;
 }
 
@@ -102,7 +109,15 @@ export interface GenerateFullSummaryPayload {
   model_id?:       string;
 }
 
-// ── Profile Builder Chat ───────────────────────────────────────────────────────
+// ── Profile Builder: Chat ─────────────────────────────────────────────────────
+
+// The four behavior modes for the Profile Companion chat panel.
+// "chat" = open conversation (replaces old general + ask_clarifying)
+// "extract_traits" = paste text, AI pulls out traits
+// "check_consistency" = flag contradictions, overlaps, importance mismatches
+// "refine" = sharpen traits, interpret importance, summarize (replaces old
+//            refine_traits + interpret_profile + generate_summary)
+export type ProfileBehaviorMode = "chat" | "extract_traits" | "check_consistency" | "refine";
 
 export interface ProfileChatMessage {
   role: "user" | "assistant";
@@ -115,9 +130,6 @@ export interface ProfileChatPayload {
   profile_content: string;
   messages:        ProfileChatMessage[];
   model_id?:       string;
-  // Guide mode fields
-  guide_mode?:   boolean;
-  all_sections?: string[];
-  content_mode?: string;
-  is_blank?:     boolean;
+  behavior_mode?:  ProfileBehaviorMode;
+  content_mode?:   string;
 }

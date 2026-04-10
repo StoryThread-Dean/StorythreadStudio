@@ -1,14 +1,14 @@
 # 04. AI Assistants and Routing
 
-## AI Philosophy
+## AI Philosophy (Updated Phase 5)
 
-AI should act as:
-- reviewer
-- editor
-- analyzer
-- context-aware brainstorming partner
+AI is an **active participant in the entire creative process**:
+- reviewer and editor (Level 1: Smart Advisor)
+- on-demand co-writer for profiles and summaries (Level 2: On-Demand Co-Writer)
+- collaborative draft generator (Level 3: Collaborative Draft -- Phase 6)
+- proactive observer (Level 4: Proactive Observer -- post-MVP)
 
-AI should not become the primary story writer unless explicitly asked.
+AI should not become the primary story writer unless explicitly asked. The writer always controls when and what AI produces.
 
 ## Core AI Rules
 
@@ -76,7 +76,6 @@ Each assistant should declare its working scope:
 
 ### Allowed Direct Markdown Writes
 Only for explicit generation actions targeting designated AI fields:
-- trait `ai_usage_example`
 - profile section AI summary
 - full profile AI summary
 - chapter summary

@@ -48,12 +48,13 @@ The chat does **not** auto-write back into human-authored profile fields.
 
 However, the system **may write generated AI content into dedicated Markdown fields** when the writer explicitly invokes generation for that field.
 
-Examples:
-- `ai_usage_example`
+Designated AI write-back fields:
 - `ai_profile_summary`
 - `ai_section_summary`
 - `chapter_summary`
 - `scene_summary`
+
+Note: `ai_usage_example` was removed in Phase 5A. The "How AI uses this" preview is now generated on demand and displayed in the UI, not stored in Markdown.
 
 This means:
 - human trait descriptions remain authored and controlled by the writer
@@ -111,40 +112,33 @@ Recommended MVP sections:
 - Story Relevance
 - Notes
 
-## Influence Scale
+## Importance Levels (Phase 5A)
 
-Used in MVP primarily for:
-- Character profiles
-- Relationship profiles
+Controls how (and whether) a trait is sent to the AI. Replaces the old influence scale.
 
 ### Levels
-- Foreshadowing
-- Background
-- Minor
-- Major
 - Core
+- Present
+- Background
+- Contextual
+- Hidden
 
 ### Meanings
 
-#### Foreshadowing
-This exists and affects reactions, decisions, or subtext, but should usually never be mentioned directly unless the current context strongly justifies it.
+#### Core
+Central to identity, motivation, or narrative role. Always included in AI context at the highest prompt position.
 
-Examples:
-- hidden PTSD trigger
-- secret ulterior motive
-- undisclosed history with another character
+#### Present
+Regularly relevant or behaviorally significant. Included when the character is in a scene.
 
 #### Background
-Exists in canon but should rarely be surfaced directly.
+Exists in canon but rarely surfaced. Included only when directly relevant to the current context.
 
-#### Minor
-Subtle but valid, used when context supports it.
+#### Contextual
+Situational details. Included only when the writer explicitly attaches it as context.
 
-#### Major
-Regularly relevant, visible, or behaviorally significant.
-
-#### Core
-Central to identity, motivation, or narrative role.
+#### Hidden
+Writer-only reference notes. Never sent to the AI API. Any length allowed.
 
 ## Trait Block Rules
 
@@ -154,33 +148,35 @@ A trait block may be:
 
 This avoids over-fragmenting fiction details.
 
-### Trait Block Fields
-- `trait`
-- `description`
-- `influence`
-- `ai_usage_example`
-- `notes` (optional)
+### Trait Block Fields (Phase 5A)
+- `trait` -- trait name(s), e.g. "observant, punctual, eloquent"
+- `description` -- human-written description of the trait
+- `importance` -- core | present | background | contextual | hidden
+
+Fields removed in Phase 5A: `ai_usage_example` (now on-demand preview), `notes` (description-only blocks).
 
 ### Example
 
 ```md
 - trait: observant, punctual, eloquent
-  description: She is the textbook example of someone always on time and has her things together.
-  influence: core
-  ai_usage_example: AI should reflect this through precise dialogue, orderly behavior, and strong situational awareness.
-  notes: More behavioral than self-descriptive.
+  description: "She is the textbook example of someone always on time and has her things together."
+  importance: core
 ```
 
-## AI Usage Example Rules
+### Adaptive Word Count Gauge (Phase 5A)
 
-### Generation
-- always AI-generated from the trait entry
-- generated on demand only
-- written into the Markdown file field for that trait block
-- editable by the writer
+Each trait block shows a visual word count gauge below the description textarea. Thresholds are adaptive per importance level -- higher importance tolerates more words because core traits need more detail for AI to use well. Hidden traits have no gauge.
 
-### Purpose
-This helps the writer understand how AI is likely to use the trait in downstream prompts and suggestions.
+| Level | Sparse | Basic | Good | Detailed | Wordy | Bloated |
+|-------|--------|-------|------|----------|-------|---------|
+| Core | 0-15 | 16-40 | 41-120 | 121-200 | 201-350 | 351+ |
+| Present | 0-10 | 11-30 | 31-100 | 101-175 | 176-300 | 301+ |
+| Background | 0-5 | 6-20 | 21-60 | 61-100 | 101-150 | 151+ |
+| Contextual | 0-5 | 6-15 | 16-40 | 41-75 | 76-120 | 121+ |
+
+## "How AI Uses This" Preview (Phase 5A)
+
+Replaces the old `ai_usage_example` field. On-demand button generates a short prose explanation of how this trait's importance level affects AI behavior. Generated via AI, shown in a popover -- not stored in Markdown.
 
 ## AI Summary Behavior
 
@@ -193,7 +189,7 @@ Generated on demand only.
 For character profiles, the full summary should:
 - use multiple paragraphs
 - synthesize all sections
-- reflect weighted trait influence
+- reflect weighted trait importance
 - include relationship context if connected
 - read as a seamless AI recap of the character
 

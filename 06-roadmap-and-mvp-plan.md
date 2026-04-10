@@ -58,18 +58,19 @@ First-wave assistants shipped:
 Deliverable:
 - first end-to-end AI workflow -- DELIVERED
 
-## Phase 4: Profile Aware AI
-Build:
-- explicit context attachment
-- context chips
+## Phase 4: Profile Aware AI -- COMPLETE
+Built:
+- explicit context attachment (context chips)
 - generate AI usage example into trait blocks
 - generate section summaries into Markdown
 - generate full profile summaries into Markdown
-- Profile Builder chat
-- chapter summary generation
-- scene summary generation
+- Profile Builder chat with 7 behavior modes
+- ToolKit context selector
+- react-markdown chat rendering, chat textarea auto-expand
+- Settings expansion (tier slider, starred models, content mode)
+- Phase 4 Polish: conversational rules, context chip UX, focused section indicator, right panel collapse, visual pass
 
-Add assistants:
+Second-wave assistants shipped:
 - Dialogue Authenticity
 - POV Consistency
 - Tone and Voice Consistency
@@ -77,18 +78,52 @@ Add assistants:
 - Character Consistency
 
 Deliverable:
-- context-aware AI help across writing and profiles
+- context-aware AI help across writing and profiles -- DELIVERED
 
-## Phase 5: Content and Routing Awareness
-Build:
-- content mode settings
-- route preview
-- allowlist and blocklist
-- explicit-content-aware filtering
-- task-aware routing groundwork
+## Phase 5: AI Respec (redesigned from original Phase 5)
+
+The original Phase 5 scope (content mode routing) was expanded into a full AI integration redesign. Broken into 5 sub-phases:
+
+### Phase 5A: Profile Builder Rebuild -- COMPLETE
+Built:
+- importance levels replace influence scale (core/present/background/contextual/hidden)
+- description-only trait blocks (ai_usage_example and notes removed)
+- adaptive word count gauge per importance level
+- 4 simplified behavior modes (chat/refine/extract_traits/check_consistency)
+- ProfileBuilder.tsx rebuilt from scratch
+- backend backward-compatible read (old influence auto-migrated)
+- generate-usage-preview endpoint replaces generate-usage-example
 
 Deliverable:
-- first version of content and content-aware model selection
+- cleaner, simpler profile editing with importance-aware word guidance -- DELIVERED
+
+### Phase 5B: AI Tools
+Build:
+- AI Trim tool (fires at wordy/bloated threshold, suggests concise rewrite)
+- AI Importance Audit (flags mismatched importance levels across traits)
+- "How AI uses this" preview (on-demand prose explanation per trait)
+- Series settings injection into AI prompts
+
+### Phase 5C: Series/Book Structure
+Build:
+- series folder creation and series.json
+- book-within-series creation
+- canonical series-level profiles + per-book arc files
+- profile merge logic (canonical + arc overlay)
+- series settings with book-level IsNull overrides
+
+### Phase 5D: Toolkit and Routing
+Build:
+- auto-suggest Toolkit (pre-populates context chips based on task type)
+- content mode routing (original Phase 5 scope)
+- model allowlist and blocklist
+- expanded context types (series settings, arc files, chapter text)
+
+### Phase 5E: Writing Companion
+Build:
+- unified design language for editor and profile right panels
+- chat interface in main editor
+- Level 1-2 AI capabilities wired up
 
 ## Phase 6: Export and Polish
 Build:
@@ -98,11 +133,12 @@ Build:
 - better error handling
 - summary quality tuning
 - relationship-aware full profile summaries
+- Level 3 Collaborative Draft capabilities
 
 Deliverable:
 - coherent private-use MVP ready for later public GitHub packaging
 
-## Suggested First 10 Build Tasks
+## Suggested First 10 Build Tasks (historical -- all complete)
 
 1. Create repository and base project structure.
 2. Stand up Tauri shell and React UI.
@@ -112,22 +148,23 @@ Deliverable:
 6. Add unsaved changes and session undo and redo.
 7. Implement profile file creation and parsing.
 8. Build character Profile Builder UI first.
-9. Add trait blocks and influence scale.
-10. Add AI generation for `ai_usage_example` and section summaries.
+9. Add trait blocks and importance levels (originally influence scale, migrated in 5A).
+10. Add AI generation for section summaries.
 
 ## Key MVP Acceptance Checklist
 
 - [x] Can create and open a local project
 - [x] Can edit and save a chapter in Markdown
-- [ ] Can create a character profile
-- [ ] Can generate AI usage examples into trait blocks
-- [ ] Can generate AI section summaries into Markdown
-- [ ] Can use profile calibration chat without persistent memory
-- [ ] Can run selected-text assistants from the writing screen
-- [ ] Can attach context explicitly
-- [ ] Can import and fork a character profile from another project
+- [x] Can create a character profile
+- [x] Can generate AI section summaries into Markdown
+- [x] Can use profile calibration chat without persistent memory
+- [x] Can run selected-text assistants from the writing screen
+- [x] Can attach context explicitly
+- [x] Can import and fork a character profile from another project
+- [x] AI output never contains em dashes
+- [ ] Can create a book series with shared profiles
 - [ ] Can export full manuscript
-- [ ] AI output never contains em dashes
+- [ ] Content mode routing functional
 
 ## Final MVP Boundaries
 

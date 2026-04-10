@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(claude update:*)",
       "Bash(npm --version)",
       "Bash(rustc --version)",
       "Bash(cargo --version)",
@@ -11,7 +12,8 @@
       "Bash(export PATH=\"$PATH:/c/Users/DeanPeterson/.cargo/bin:/c/Program Files/nodejs\")",
       "Bash(npx tsc:*)",
       "Bash(./node_modules/.bin/tsc --noEmit)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(uv run:*)"
     ]
   }
 }
