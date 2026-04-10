@@ -54,7 +54,8 @@ function App() {
   const [selectedText, setSelectedText] = useState("");
 
   // Writing Companion (editor chat) state
-  const [chatCategory, setChatCategory] = useState<EditorChatCategory>("readability");
+  // null = no category selected (general chat mode); string = structured review mode
+  const [chatCategory, setChatCategory] = useState<EditorChatCategory>(null);
   const [chatMessages, setChatMessages] = useState<EditorChatMessage[]>([]);
   const [chatInput, setChatInput]       = useState("");
   const [chatLoading, setChatLoading]   = useState(false);
@@ -262,7 +263,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          category:        chatCategory,
+          category:        chatCategory ?? "chat",
           text_content:    textContent,
           is_full_chapter: isFullChapter,
           messages:        newMessages,
@@ -512,21 +513,29 @@ function App() {
             )}
           </div>
           <p className="mt-1 text-xs text-[#8888aa]">
-            Pick a focus area, then ask about your writing. AI reviews selected text or the full chapter.
+            {chatCategory
+              ? `Focus: ${chatCategory}. Click tab again to return to general chat.`
+              : "General chat. Click a tab for structured feedback."}
           </p>
         </div>
 
-        {/* Category tabs */}
+        {/* Category tabs -- toggleable: click active tab to deselect (return to general chat) */}
         <div className="border-b border-[#1e1e4a] px-4 py-2">
           <div className="flex gap-1">
             {(["readability", "structure", "context"] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => {
-                  if (tab !== chatCategory) {
+                  if (chatCategory === tab) {
+                    // Toggle off: return to general chat (no clearing)
+                    setChatCategory(null);
+                  } else {
+                    // Switch categories: clear chat only when going from one category to another
+                    if (chatCategory !== null) {
+                      setChatMessages([]);
+                      setChatError(null);
+                    }
                     setChatCategory(tab);
-                    setChatMessages([]);
-                    setChatError(null);
                   }
                 }}
                 className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
@@ -609,7 +618,11 @@ function App() {
               <p className="text-sm font-medium text-[#8888aa]">Writing Companion</p>
               <div className="w-full rounded border border-[#1e1e4a] bg-[#070724] p-2.5 text-left">
                 <p className="mb-1 text-xs font-medium text-[#8888aa]">Try asking:</p>
-                {(chatCategory === "readability" ? [
+                {(chatCategory === null ? [
+                  "What do you think of this passage?",
+                  "Help me brainstorm what happens next",
+                  "How could I make this scene stronger?",
+                ] : chatCategory === "readability" ? [
                   "Check this paragraph for grammar issues",
                   "Is this passage too wordy?",
                   "How can I make this clearer?",

@@ -1432,15 +1432,53 @@ def _build_editor_chat_prompt(
         f"{text_content}\n\n"
     )
 
-    response_rules = (
+    # ── GENERAL CHAT (no category selected) ─────────────────────────────────
+    # Open writing conversation. No structured format. Just helpful and direct.
+    general_rules = (
         "RESPONSE RULES:\n"
         "- Conversational tone. This is a chat, not a report.\n"
-        "- Use markdown: **bold**, bullet lists, blockquotes for rewrites.\n"
+        "- Use markdown: **bold**, bullet lists, blockquotes.\n"
         "- No ## or ### headers. Use --- to separate sections.\n"
         "- At most ONE follow-up question per response.\n"
-        "- Address what was asked, then stop. Do not volunteer extra analysis.\n"
-        "- Rewrites go in a blockquote so the writer can copy easily.\n"
+        "- Address what was asked, then stop.\n"
         "- No em dashes, en dashes, or double hyphens.\n"
+    )
+
+    if category == "chat":
+        return (
+            header +
+            "YOUR ROLE: General writing companion.\n"
+            "Answer the writer's questions about this text openly and helpfully. "
+            "You may discuss craft, suggest ideas, answer questions about the story, "
+            "or help brainstorm. No specific structured format required.\n\n" +
+            general_rules
+        )
+
+    # ── STRUCTURED RESPONSE RULES (used by all three categories) ──────────
+    # When a category IS selected, AI gives specific, actionable feedback
+    # with quoted passages, labeled points, and before/after comparisons.
+    structured_rules = (
+        "RESPONSE FORMAT (MANDATORY when reviewing text):\n"
+        "For each point you make, follow this structure:\n\n"
+        "1. **Quote the specific passage** you are commenting on using a blockquote:\n"
+        "   > original text from the passage\n\n"
+        "2. **Label your point** with one of these tags:\n"
+        "   - **Praise**: something that works well (be specific about WHY)\n"
+        "   - **Issue**: a problem to address (name the exact problem)\n"
+        "   - **Suggestion**: a concrete change (provide a rewritten version)\n\n"
+        "3. For **Suggestions**, always provide the rewritten version in a blockquote:\n"
+        "   > suggested rewrite here\n"
+        "   followed by a brief explanation of why this version is better.\n\n"
+        "Use --- between different points to keep them visually separate.\n\n"
+        "RULES:\n"
+        "- Be SPECIFIC. 'The pacing feels rushed' is not helpful. "
+        "'The transition between her waking up and discovering she is queen "
+        "happens in one sentence; expanding this to 2-3 beats would build tension' IS helpful.\n"
+        "- ALWAYS quote the exact text you are referring to.\n"
+        "- Limit to 3-5 points per response. Quality over quantity.\n"
+        "- At most ONE follow-up question per response.\n"
+        "- No em dashes, en dashes, or double hyphens.\n"
+        "- No ## or ### headers.\n"
     )
 
     if category == "readability":
@@ -1448,13 +1486,13 @@ def _build_editor_chat_prompt(
             header +
             "YOUR FOCUS: READABILITY\n"
             "Comprehensive prose editor covering:\n"
-            "- Grammar and punctuation\n"
-            "- Clarity and consistency\n"
-            "- Redundancy and filler\n"
-            "- Descriptive quality and imagery\n\n"
+            "- Grammar and punctuation errors\n"
+            "- Unclear phrasing and ambiguous references\n"
+            "- Redundant words or repeated ideas\n"
+            "- Opportunities for richer descriptive language\n\n"
             "If the writer says 'check this' without specifying, "
-            "cover all four areas briefly.\n\n" +
-            response_rules
+            "cover all four areas. Limit to the 3-5 most impactful findings.\n\n" +
+            structured_rules
         )
 
     if category == "structure":
@@ -1463,13 +1501,13 @@ def _build_editor_chat_prompt(
             "YOUR FOCUS: STRUCTURE AND CRAFT\n"
             "Structural editor covering:\n"
             "- Dialogue authenticity and distinct character voices\n"
-            "- POV consistency\n"
+            "- POV consistency and head-hopping\n"
             "- Tone and voice consistency\n"
             "- Character development through action and choice\n"
-            "- Pacing (scenes that drag, transitions that rush)\n\n"
+            "- Pacing (rushed transitions, dragging scenes, balance)\n\n"
             "If the writer says 'check this' without specifying, "
-            "focus on the most prominent structural issue.\n\n" +
-            response_rules
+            "focus on the 3-5 most prominent structural issues.\n\n" +
+            structured_rules
         )
 
     if category == "context":
@@ -1477,16 +1515,17 @@ def _build_editor_chat_prompt(
             header +
             "YOUR FOCUS: CONTEXT AND CONSISTENCY\n"
             "Continuity editor checking text against attached profiles:\n"
-            "- Character consistency (actions vs established traits)\n"
-            "- Relationship continuity\n"
-            "- Setting consistency\n"
-            "- Lore accuracy\n\n"
-            "If no profile context is attached, work with what is "
-            "observable in the text itself.\n\n" +
-            response_rules
+            "- Character consistency (actions and speech vs established traits)\n"
+            "- Relationship dynamics (interactions match established dynamics)\n"
+            "- Setting consistency (descriptions match established locations)\n"
+            "- Lore accuracy (facts match established world-building)\n\n"
+            "If no profile context is attached, work from what is observable "
+            "in the text itself. Always quote the specific passage that concerns you.\n\n" +
+            structured_rules
         )
 
-    return header + "Answer the writer's questions about this text.\n\n" + response_rules
+    # Fallback
+    return header + "Answer the writer's questions about this text.\n\n" + general_rules
 
 
 @router.post("/editor-chat", response_model=EditorChatResponse)
@@ -1498,7 +1537,7 @@ async def editor_chat(request: EditorChatRequest):
     _validate_model_content_mode(settings, model_id, request.content_mode)
     _validate_model_allowed(settings, model_id)
 
-    max_len = 50_000 if request.is_full_chapter else 8_000
+    max_len = 100_000 if request.is_full_chapter else 30_000
     if len(request.text_content) > max_len:
         label = "chapter" if request.is_full_chapter else "selection"
         raise HTTPException(

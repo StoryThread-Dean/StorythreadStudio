@@ -142,7 +142,8 @@ export interface ProfileChatPayload {
 
 // The three focus categories for the main editor's Writing Companion panel.
 // Each category sets the AI's area of expertise for the conversation.
-export type EditorChatCategory = "readability" | "structure" | "context";
+// null = no category selected (general chat mode)
+export type EditorChatCategory = "readability" | "structure" | "context" | null;
 
 export interface EditorChatMessage {
   role: "user" | "assistant";
