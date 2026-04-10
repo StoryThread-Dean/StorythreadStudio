@@ -80,6 +80,11 @@ export function Settings({ onClose }: SettingsProps) {
   // Content mode
   const [contentMode, setContentMode]     = useState("general");
 
+  // Model routing: allowlist, blocklist, per-model content modes
+  const [modelAllowlist, setModelAllowlist]     = useState("");
+  const [modelBlocklist, setModelBlocklist]     = useState("");
+  const [modelContentModes, setModelContentModes] = useState("");
+
   // UI state
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
@@ -132,6 +137,17 @@ export function Settings({ onClose }: SettingsProps) {
         setStarredModels(data.starred_models ?? []);
         setContentMode(data.content_mode ?? "general");
 
+        // Model routing state: convert arrays/dicts to text for editing
+        setModelAllowlist((data.model_allowlist ?? []).join("\n"));
+        setModelBlocklist((data.model_blocklist ?? []).join("\n"));
+        // Convert {modelId: ["general","mature"]} to "modelId: general, mature\n..."
+        const modesObj = data.model_content_modes ?? {};
+        setModelContentModes(
+          Object.entries(modesObj)
+            .map(([id, modes]) => `${id}: ${(modes as string[]).join(", ")}`)
+            .join("\n")
+        );
+
         if (data.openrouter_api_key_set) {
           fetchModels();
         }
@@ -175,12 +191,31 @@ export function Settings({ onClose }: SettingsProps) {
     setError(null);
 
     try {
+      // Parse allowlist/blocklist from newline-separated text to arrays
+      const parsedAllowlist = modelAllowlist.split("\n").map(s => s.trim()).filter(Boolean);
+      const parsedBlocklist = modelBlocklist.split("\n").map(s => s.trim()).filter(Boolean);
+
+      // Parse content modes: "model-id: general, mature" -> {modelId: ["general","mature"]}
+      const parsedContentModes: Record<string, string[]> = {};
+      for (const line of modelContentModes.split("\n")) {
+        const colonIdx = line.indexOf(":");
+        if (colonIdx < 0) continue;
+        const modelId = line.slice(0, colonIdx).trim();
+        const modes = line.slice(colonIdx + 1).split(",").map(s => s.trim()).filter(Boolean);
+        if (modelId && modes.length > 0) {
+          parsedContentModes[modelId] = modes;
+        }
+      }
+
       const payload: Record<string, unknown> = {
-        default_model:    selectedModel,
-        cost_tier:        costTier,
-        text_only_filter: textOnlyFilter,
-        starred_models:   starredModels,
-        content_mode:     contentMode,
+        default_model:        selectedModel,
+        cost_tier:            costTier,
+        text_only_filter:     textOnlyFilter,
+        starred_models:       starredModels,
+        content_mode:         contentMode,
+        model_allowlist:      parsedAllowlist,
+        model_blocklist:      parsedBlocklist,
+        model_content_modes:  parsedContentModes,
       };
 
       if (apiKeyInput.trim()) {
@@ -545,14 +580,64 @@ export function Settings({ onClose }: SettingsProps) {
               </section>
 
 
-              {/* ── SECTION 3: App Preferences ────────────────────────────── */}
+              {/* ── SECTION 3: Model Routing ─────────────────────────────── */}
               <section>
                 <h3 className="mb-4 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
-                  App Preferences
+                  Model Routing
                 </h3>
-                <p className="text-xs text-[#3f3f7a]">
-                  Additional preferences will appear here in future updates.
-                </p>
+
+                {/* Allowlist */}
+                <div className="mb-5">
+                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                    Model Allowlist
+                  </label>
+                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                    If set, only these models can be used. One model ID per line. Leave empty to allow all models.
+                  </p>
+                  <textarea
+                    value={modelAllowlist}
+                    onChange={e => setModelAllowlist(e.target.value)}
+                    rows={3}
+                    placeholder={"e.g.\nanthropic/claude-3.5-sonnet\nopenai/gpt-4o-mini"}
+                    className="w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                {/* Blocklist */}
+                <div className="mb-5">
+                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                    Model Blocklist
+                  </label>
+                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                    These models are excluded from selection. Ignored if allowlist is set. One model ID per line.
+                  </p>
+                  <textarea
+                    value={modelBlocklist}
+                    onChange={e => setModelBlocklist(e.target.value)}
+                    rows={3}
+                    placeholder="e.g.\ngoogle/gemma-2-9b-it:free"
+                    className="w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                {/* Per-model content modes */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                    Model Content Modes
+                  </label>
+                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                    Configure which content modes each model supports. Format: one entry per line as
+                    <code className="mx-1 text-indigo-400">model-id: general, mature, explicit</code>
+                    Models not listed default to "general" only.
+                  </p>
+                  <textarea
+                    value={modelContentModes}
+                    onChange={e => setModelContentModes(e.target.value)}
+                    rows={4}
+                    placeholder={"e.g.\nanthropic/claude-3.5-sonnet: general, mature\ndeepseek/deepseek-chat: general, mature, explicit"}
+                    className="w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                  />
+                </div>
               </section>
 
             </div>

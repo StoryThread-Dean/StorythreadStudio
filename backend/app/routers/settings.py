@@ -30,16 +30,22 @@ class SettingsResponse(BaseModel):
     cost_tier:              str
     text_only_filter:       bool
     starred_models:         list[str]
+    model_allowlist:        list[str]
+    model_blocklist:        list[str]
+    model_content_modes:    dict[str, list[str]]
 
 
 class UpdateSettingsRequest(BaseModel):
     """Fields the frontend can update. All optional -- only provided fields are changed."""
-    openrouter_api_key: str | None       = None
-    default_model:      str | None       = None
-    content_mode:       str | None       = None
-    cost_tier:          str | None       = None
-    text_only_filter:   bool | None      = None
-    starred_models:     list[str] | None = None
+    openrouter_api_key:  str | None                   = None
+    default_model:       str | None                   = None
+    content_mode:        str | None                   = None
+    cost_tier:           str | None                   = None
+    text_only_filter:    bool | None                  = None
+    starred_models:      list[str] | None             = None
+    model_allowlist:     list[str] | None             = None
+    model_blocklist:     list[str] | None             = None
+    model_content_modes: dict[str, list[str]] | None  = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -62,6 +68,9 @@ async def get_settings():
         cost_tier              = settings.get("cost_tier", "standard"),
         text_only_filter       = settings.get("text_only_filter", True),
         starred_models         = settings.get("starred_models", []),
+        model_allowlist        = settings.get("model_allowlist", []),
+        model_blocklist        = settings.get("model_blocklist", []),
+        model_content_modes    = settings.get("model_content_modes", {}),
     )
 
 
@@ -86,6 +95,12 @@ async def update_settings(request: UpdateSettingsRequest):
         settings["text_only_filter"] = request.text_only_filter
     if request.starred_models is not None:
         settings["starred_models"] = request.starred_models
+    if request.model_allowlist is not None:
+        settings["model_allowlist"] = request.model_allowlist
+    if request.model_blocklist is not None:
+        settings["model_blocklist"] = request.model_blocklist
+    if request.model_content_modes is not None:
+        settings["model_content_modes"] = request.model_content_modes
 
     save_settings(settings)
 
@@ -98,6 +113,9 @@ async def update_settings(request: UpdateSettingsRequest):
         cost_tier              = settings.get("cost_tier", "standard"),
         text_only_filter       = settings.get("text_only_filter", True),
         starred_models         = settings.get("starred_models", []),
+        model_allowlist        = settings.get("model_allowlist", []),
+        model_blocklist        = settings.get("model_blocklist", []),
+        model_content_modes    = settings.get("model_content_modes", {}),
     )
 
 

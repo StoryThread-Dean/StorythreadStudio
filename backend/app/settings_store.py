@@ -35,6 +35,16 @@ DEFAULT_SETTINGS: dict = {
     # starred_models: list of model IDs the writer has pinned as favorites.
     # Stored as a JSON array (list of strings).
     "starred_models":     [],
+    # model_allowlist: if non-empty, ONLY these models can be used.
+    # Takes precedence over blocklist. Empty = no restriction.
+    "model_allowlist":    [],
+    # model_blocklist: these models are excluded from selection.
+    # Ignored if allowlist is non-empty.
+    "model_blocklist":    [],
+    # model_content_modes: maps model IDs to their allowed content modes.
+    # e.g. {"anthropic/claude-3.5-sonnet": ["general", "mature"]}
+    # Models not listed default to ["general"] only.
+    "model_content_modes": {},
 }
 
 

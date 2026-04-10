@@ -97,27 +97,40 @@ Built:
 Deliverable:
 - cleaner, simpler profile editing with importance-aware word guidance -- DELIVERED
 
-### Phase 5B: AI Tools
-Build:
-- AI Trim tool (fires at wordy/bloated threshold, suggests concise rewrite)
-- AI Importance Audit (flags mismatched importance levels across traits)
-- "How AI uses this" preview (on-demand prose explanation per trait)
-- Series settings injection into AI prompts
+### Phase 5B: AI Tools -- COMPLETE
+Built:
+- "How AI uses this" preview (Sparkles button, on-demand prose explanation via /generate-usage-preview)
+- AI Trim tool (Scissors button at Wordy/Bloated gauge, /trim-trait endpoint, Apply replaces description)
+- AI Importance Audit (profile-level audit button, /audit-importance flags importance mismatches)
 
-### Phase 5C: Series/Book Structure
-Build:
-- series folder creation and series.json
-- book-within-series creation
-- canonical series-level profiles + per-book arc files
-- profile merge logic (canonical + arc overlay)
+Deliverable:
+- on-demand AI tools for profile quality improvement -- DELIVERED
+
+### Phase 5C: Series/Book Structure -- COMPLETE
+Built:
+- series.py router: /api/series/create, /open, /list-books
+- book-within-series creation: /api/projects/create-in-series with arcs/ subfolder
+- canonical series-level profiles + per-book arc file CRUD (/arc/list, /arc/profile, /arc/create, /arc/save)
+- profile merge logic: merge_profile_with_arc() overlays book arc on canonical, /api/profiles/merged endpoint
 - series settings with book-level IsNull overrides
+- story context injection: _build_story_context() reads series.json + project.json, auto-injects into AI system prompts
+- ProjectHome.tsx rebuilt with series creation, browsing, and book-in-series flows
 
-### Phase 5D: Toolkit and Routing
-Build:
-- auto-suggest Toolkit (pre-populates context chips based on task type)
-- content mode routing (original Phase 5 scope)
-- model allowlist and blocklist
-- expanded context types (series settings, arc files, chapter text)
+Deliverable:
+- multi-book series with shared canonical profiles and per-book arcs -- DELIVERED
+
+### Phase 5D: Toolkit and Routing -- COMPLETE
+Built:
+- auto-suggest ChipPicker: character profiles shown as ghost chips on mount, one-click attach
+- series source toggle: "This Book" vs "Series Profiles" in ChipPicker for series projects
+- content mode routing: _validate_model_content_mode() checks model supports requested mode
+- model allowlist/blocklist: _validate_model_allowed() enforced in run-assistant, stored in settings
+- Settings UI: Model Routing section with allowlist, blocklist, per-model content modes
+- expanded context chip types: series_character, series_relationship, series_location, series_lore
+- content_mode and project_path passed from frontend to run-assistant
+
+Deliverable:
+- smart context suggestions and content-aware model routing -- DELIVERED
 
 ### Phase 5E: Writing Companion
 Build:
@@ -162,9 +175,9 @@ Deliverable:
 - [x] Can attach context explicitly
 - [x] Can import and fork a character profile from another project
 - [x] AI output never contains em dashes
-- [ ] Can create a book series with shared profiles
+- [x] Can create a book series with shared profiles
 - [ ] Can export full manuscript
-- [ ] Content mode routing functional
+- [x] Content mode routing functional
 
 ## Final MVP Boundaries
 
