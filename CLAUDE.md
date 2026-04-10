@@ -46,12 +46,21 @@ Context chips, ai_usage_example generation, section/full summaries, Profile Buil
 
 ### Phase 5E -- Writing Companion -- Complete
 - Chat-based editor right panel replaces button-based assistant UI
-- 3 category tabs (Readability / Structure / Context) with conversational AI responses
+- 3 category tabs (Readability / Structure / Context) **toggleable**: click to activate structured feedback, click again to return to general chat
 - No selection = full chapter context; text selected = only that text
 - ChatMarkdown extracted to shared component (used by both editor and Profile Builder)
 - POST /api/ai/editor-chat endpoint with category-specific system prompts
 - Context chips always visible on all tabs
 - Multi-turn conversation with session history
+- Character limits: 30K selected text, 100K full chapter
+- Structured feedback: AI quotes specific passages, labels as Praise/Issue/Suggestion, provides before/after rewrites
+- General chat mode (no tab selected): open conversational, no structured format
+- Selection highlight persists when clicking into chat panel (drawSelection: true, transparent line backgrounds)
+
+### Post-5E Polish
+- Fixed AI copying instruction template into output (prompt used example-based format instead of numbered template)
+- Fixed numbered list resets in AI responses (--- separators replace numbered lists)
+- Fixed selection highlight only showing on paragraph edges (transparent .cm-line backgrounds, semi-transparent .cm-activeLine)
 
 ---
 
