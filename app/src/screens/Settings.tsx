@@ -16,18 +16,28 @@ import { useState, useEffect, useCallback } from "react";
 import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star } from "lucide-react";
 import type { AppSettings, ModelInfo } from "../types/ai";
 
-// Providers known to enforce content moderation that blocks explicit content.
-// OpenRouter's is_moderated field is unreliable, so we also check provider prefix.
+// ── Content Mode Model Filtering (shared logic with ProjectSettings) ─────────
 const MODERATED_PROVIDERS = [
-  "openai/",
-  "anthropic/",
-  "google/",
-  "cohere/",
+  "openai/", "anthropic/", "google/", "cohere/",
 ];
 
-function isModelModerated(m: ModelInfo): boolean {
-  if (m.is_moderated) return true;
-  return MODERATED_PROVIDERS.some(prefix => m.id.startsWith(prefix));
+const EXPLICIT_ALLOWED_PROVIDERS = [
+  "mistralai/", "deepseek/", "x-ai/", "meta-llama/", "qwen/",
+  "nothingiisreal/", "nousresearch/", "cognitivecomputations/",
+  "thedrummer/", "sao10k/", "anthracite-org/", "venice/",
+  "eva-unit-01/", "microsoft/", "01-ai/", "liquid/", "ai21/",
+];
+
+function filterModelByContentMode(m: ModelInfo, mode: string): boolean {
+  if (mode === "general") return true;
+  if (mode === "mature") {
+    if (m.is_moderated) return false;
+    return !MODERATED_PROVIDERS.some(p => m.id.startsWith(p));
+  }
+  if (mode === "explicit") {
+    return EXPLICIT_ALLOWED_PROVIDERS.some(p => m.id.startsWith(p));
+  }
+  return true;
 }
 
 const API_BASE = "http://localhost:8000";
@@ -115,8 +125,8 @@ export function Settings({ onClose }: SettingsProps) {
     const textOk = !textOnlyFilter
       || m.output_modalities.every(mod => mod === "text")
       || m.output_modalities.length === 0;
-    // Content mode filter: explicit mode hides moderated models + known moderated providers
-    const contentOk = contentMode !== "explicit" || !isModelModerated(m);
+    // Content mode filter: mature hides strict providers, explicit whitelists known unmoderated
+    const contentOk = filterModelByContentMode(m, contentMode);
     return modelPassesTier(m, costTier) && textOk && contentOk;
   });
 

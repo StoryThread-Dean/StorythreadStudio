@@ -15,20 +15,62 @@ import type { ModelInfo } from "../types/ai";
 
 const API_BASE = "http://localhost:8000";
 
-// Providers known to enforce content moderation that blocks explicit content.
-// OpenRouter's is_moderated field is unreliable (many moderated models report
-// false), so we also check the provider prefix in the model ID.
-// This list should be reviewed periodically as provider policies change.
+// ── Content Mode Model Filtering ──────────────────────────────────────────────
+// OpenRouter's is_moderated flag is unreliable. Instead, we use two approaches:
+//
+// MATURE mode: blacklist known strict providers (hides ~50 models)
+// EXPLICIT mode: whitelist known unmoderated providers (shows only ~50-80 models)
+//
+// The whitelist approach for explicit is more aggressive but more accurate.
+// Writers can still type any model ID manually if they know a specific model works.
+// These lists should be reviewed periodically as providers change.
+//
+// Sources: NovelCrafter NSFW docs, OpenRouter roleplay collection, community reports.
+
 const MODERATED_PROVIDERS = [
-  "openai/",       // All OpenAI models refuse explicit content
-  "anthropic/",    // Claude models filter explicit content
-  "google/",       // Gemini models refuse explicit content
-  "cohere/",       // Command models filter explicit content
+  "openai/",
+  "anthropic/",
+  "google/",
+  "cohere/",
 ];
 
-function isModelModerated(m: ModelInfo): boolean {
-  if (m.is_moderated) return true;
-  return MODERATED_PROVIDERS.some(prefix => m.id.startsWith(prefix));
+// Providers known to allow explicit/NSFW content without content filtering.
+// Used for explicit mode whitelist -- only these providers are shown.
+const EXPLICIT_ALLOWED_PROVIDERS = [
+  "mistralai/",          // Mistral models (most are unmoderated)
+  "deepseek/",           // DeepSeek models
+  "x-ai/",              // Grok (known for explicit prose)
+  "meta-llama/",         // Llama models (open source, unmoderated)
+  "qwen/",              // Qwen models
+  "nothingiisreal/",    // NiR creative writing models
+  "nousresearch/",      // Nous Research models
+  "cognitivecomputations/", // Cognitive Computations (Dolphin etc.)
+  "thedrummer/",        // TheDrummer creative models
+  "sao10k/",            // Sao10K models
+  "anthracite-org/",    // Anthracite models
+  "venice/",            // Venice AI (explicitly uncensored)
+  "eva-unit-01/",       // Eva models
+  "microsoft/",         // Phi models (generally unmoderated)
+  "01-ai/",             // Yi models
+  "liquid/",            // Liquid AI
+  "ai21/",              // AI21 (generally permissive)
+];
+
+function filterModelByContentMode(m: ModelInfo, contentMode: string): boolean {
+  if (contentMode === "general") return true;
+
+  if (contentMode === "mature") {
+    // Mature: hide known strict providers
+    if (m.is_moderated) return false;
+    return !MODERATED_PROVIDERS.some(prefix => m.id.startsWith(prefix));
+  }
+
+  if (contentMode === "explicit") {
+    // Explicit: whitelist only -- show ONLY known unmoderated providers
+    return EXPLICIT_ALLOWED_PROVIDERS.some(prefix => m.id.startsWith(prefix));
+  }
+
+  return true;
 }
 
 // ── Cost estimate ranges per tier ─────────────────────────────────────────────
@@ -317,7 +359,12 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   Choose a specific model for this project. Leave blank to use the global default.
                   {contentMode === "explicit" && (
                     <span className="ml-1 text-amber-500">
-                      Filtered to unmoderated models (explicit mode).
+                      Showing only unmoderated models (explicit mode).
+                    </span>
+                  )}
+                  {contentMode === "mature" && (
+                    <span className="ml-1 text-amber-500">
+                      Hiding known moderated providers (mature mode).
                     </span>
                   )}
                 </p>
@@ -329,11 +376,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   >
                     <option value="">Use global default</option>
                     {models
-                      .filter(m => {
-                        // Explicit mode: hide moderated models AND known moderated providers
-                        if (contentMode === "explicit" && isModelModerated(m)) return false;
-                        return true;
-                      })
+                      .filter(m => filterModelByContentMode(m, contentMode))
                       .map(m => (
                       <option key={m.id} value={m.id}>
                         {m.name}
