@@ -93,6 +93,31 @@ export interface OpenProjectPayload {
   folder_path: string;
 }
 
+// --- RecentProject ---
+// One entry from the recent projects list, returned by GET /api/projects/recent.
+// The dashboard shows these sorted by last_opened so the writer can quickly
+// reopen a project without navigating to its folder.
+export interface RecentProject {
+  project_id:   string;
+  title:        string;
+  root_path:    string;
+  content_mode: string;
+  series_name:  string | null;
+  last_opened:  string;    // ISO datetime
+  exists:       boolean;   // false if the folder has been deleted/moved
+}
+
+// --- UpdateProjectSettingsPayload ---
+// What we send to PUT /api/projects/settings
+export interface UpdateProjectSettingsPayload {
+  root_path:             string;   // Required: identifies which project
+  title?:                string;
+  description?:          string;
+  content_mode_default?: string;
+  cost_tier?:            string;
+  default_model?:        string;
+}
+
 // --- ChapterInfo ---
 // Metadata about one chapter file, returned by GET /api/documents/chapters.
 // The editor uses this to build the chapter list in the left nav panel.

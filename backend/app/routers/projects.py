@@ -18,6 +18,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
+from app.recent_projects import load_recent, track_project, remove_project
 from pydantic import BaseModel
 
 
@@ -202,6 +203,14 @@ async def create_project(request: CreateProjectRequest):
         # indent=2 makes the file human-readable (pretty-printed)
         json.dump(project_data, f, indent=2)
 
+    # Track in recent projects so it appears on the dashboard next launch
+    track_project(
+        project_id=project_data["project_id"],
+        title=project_data["title"],
+        root_path=folder,
+        content_mode=project_data.get("content_mode_default", "general"),
+    )
+
     return ProjectResponse(**project_data)
 
 
@@ -224,6 +233,15 @@ async def open_project(request: OpenProjectRequest):
 
     # Patch root_path in case the project was moved since it was created
     data["root_path"] = folder
+
+    # Track in recent projects
+    track_project(
+        project_id=data.get("project_id", ""),
+        title=data.get("title", ""),
+        root_path=folder,
+        content_mode=data.get("content_mode_default", "general"),
+        series_name=data.get("series_name"),
+    )
 
     return ProjectResponse(**data)
 
@@ -313,4 +331,95 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
     with open(project_file, "w", encoding="utf-8") as f:
         json.dump(project_data, f, indent=2)
 
+    # Track in recent projects
+    track_project(
+        project_id=project_data["project_id"],
+        title=project_data["title"],
+        root_path=book_folder,
+        content_mode=content_mode,
+        series_name=series_data.get("name"),
+    )
+
     return ProjectResponse(**project_data)
+
+
+# ── Recent Projects + Project Settings ─────────────────────────────────────
+
+class RecentProjectItem(BaseModel):
+    project_id:   str
+    title:        str
+    root_path:    str
+    content_mode: str
+    series_name:  str | None
+    last_opened:  str
+    exists:       bool
+
+
+class UpdateProjectSettingsRequest(BaseModel):
+    """Fields the frontend can update in project.json. All optional."""
+    root_path:            str              # Required: identifies which project
+    title:                str | None = None
+    description:          str | None = None
+    content_mode_default: str | None = None
+    cost_tier:            str | None = None
+    default_model:        str | None = None
+
+
+@router.get("/recent", response_model=list[RecentProjectItem])
+async def get_recent_projects():
+    """Return the list of recently opened projects, sorted by last opened."""
+    entries = load_recent()
+    return [RecentProjectItem(**e) for e in entries if "project_id" in e]
+
+
+@router.delete("/recent/{project_id}")
+async def remove_recent_project(project_id: str):
+    """Remove a project from the recent list (does not delete files)."""
+    remove_project(project_id)
+    return {"status": "ok"}
+
+
+@router.get("/settings")
+async def get_project_settings(root_path: str):
+    """Read and return the full project.json for a given project."""
+    data = _read_project_json(root_path)
+    data["root_path"] = root_path
+    return data
+
+
+@router.put("/settings")
+async def update_project_settings(request: UpdateProjectSettingsRequest):
+    """Update specific fields in a project's project.json file."""
+    root_path = request.root_path
+    project_file = os.path.join(root_path, "project.json")
+
+    if not os.path.isfile(project_file):
+        raise HTTPException(status_code=404, detail="project.json not found.")
+
+    # Read current
+    try:
+        with open(project_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"project.json is malformed: {e}")
+
+    # Update only provided fields
+    if request.title is not None:
+        data["title"] = request.title
+    if request.description is not None:
+        data["description"] = request.description
+    if request.content_mode_default is not None:
+        data["content_mode_default"] = request.content_mode_default
+    if request.cost_tier is not None:
+        data["cost_tier"] = request.cost_tier
+    if request.default_model is not None:
+        data["default_model"] = request.default_model
+
+    data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Write back
+    with open(project_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+    data["root_path"] = root_path
+    return data

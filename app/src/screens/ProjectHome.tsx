@@ -9,7 +9,7 @@
 // All data flows through the FastAPI backend -- the frontend never touches
 // the filesystem directly.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type {
   ProjectInfo,
@@ -19,6 +19,7 @@ import type {
   CreateSeriesPayload,
   CreateBookInSeriesPayload,
   BookListItem,
+  RecentProject,
 } from "../types/project";
 
 const API_BASE = "http://localhost:8000";
@@ -34,6 +35,16 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
   // Shared state
   const [error, setError]     = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Recent projects -- fetched on mount from storyforge.json
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/projects/recent`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setRecentProjects(Array.isArray(data) ? data : []))
+      .catch(() => setRecentProjects([]));
+  }, []);
 
   // ── Standalone project flow ────────────────────────────────────────────────
   const [newTitle, setNewTitle]               = useState("");
@@ -257,6 +268,62 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
         </p>
       </div>
 
+
+      {/* ── Recent Projects ──────────────────────────────────────────────── */}
+      {isMainMenu && recentProjects.length > 0 && (
+        <div className="mb-6 w-full max-w-sm">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#3f3f7a]">
+            Recent Projects
+          </p>
+          <div className="flex flex-col gap-1">
+            {recentProjects.map(rp => (
+              <button
+                key={rp.project_id}
+                disabled={!rp.exists || loading}
+                onClick={async () => {
+                  if (!rp.exists) return;
+                  setLoading(true);
+                  setError(null);
+                  try {
+                    const res = await fetch(`${API_BASE}/api/projects/open`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ folder_path: rp.root_path }),
+                    });
+                    if (!res.ok) { const e = await res.json(); throw new Error(e.detail ?? "Failed."); }
+                    const project: ProjectInfo = await res.json();
+                    onProjectOpen(project);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Could not open project.");
+                  } finally { setLoading(false); }
+                }}
+                className={`flex items-center justify-between rounded border px-3 py-2 text-left transition-colors ${
+                  rp.exists
+                    ? "border-[#1e1e4a] bg-[#0d0d2b] hover:border-indigo-500 hover:bg-[#12122e]"
+                    : "cursor-not-allowed border-[#1e1e4a] bg-[#0a0a1a] opacity-50"
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className={`truncate text-sm font-medium ${rp.exists ? "text-[#f0f0f5]" : "text-[#3f3f7a]"}`}>
+                    {rp.title}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {rp.series_name && (
+                      <span className="text-xs text-teal-600">{rp.series_name}</span>
+                    )}
+                    <span className="text-xs text-[#3f3f7a]">
+                      {rp.content_mode !== "general" ? rp.content_mode : ""}
+                    </span>
+                  </div>
+                </div>
+                {!rp.exists && (
+                  <span className="shrink-0 text-xs text-red-700">(not found)</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Main Menu ─────────────────────────────────────────────────────── */}
       {isMainMenu && (
