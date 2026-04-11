@@ -11,6 +11,7 @@
 import { useState, useEffect } from "react";
 import { X, ChevronDown, HelpCircle } from "lucide-react";
 import type { ProjectInfo } from "../types/project";
+import type { ModelInfo } from "../types/ai";
 
 const API_BASE = "http://localhost:8000";
 
@@ -47,7 +48,11 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   const [title, setTitle]             = useState(project.title);
   const [description, setDescription] = useState(project.description);
   const [contentMode, setContentMode] = useState(project.content_mode_default);
-  const [costTier, setCostTier]       = useState("standard"); // loaded from project.json
+  const [costTier, setCostTier]       = useState("standard");
+  const [projectModel, setProjectModel] = useState(project.default_model ?? "");
+
+  // Model list for the per-project picker
+  const [models, setModels] = useState<ModelInfo[]>([]);
 
   // Help guide expanded state
   const [showGuide, setShowGuide] = useState(false);
@@ -57,7 +62,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   const [saved, setSaved]     = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
-  // Load full project.json on mount to get cost_tier (not in ProjectInfo)
+  // Load full project.json + model list on mount
   useEffect(() => {
     async function loadProjectSettings() {
       try {
@@ -66,10 +71,21 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
         if (res.ok) {
           const data = await res.json();
           setCostTier(data.cost_tier ?? "standard");
+          setProjectModel(data.default_model ?? "");
         }
       } catch { /* use defaults */ }
     }
+    async function loadModels() {
+      try {
+        const res = await fetch(`${API_BASE}/api/ai/models`);
+        if (res.ok) {
+          const data: ModelInfo[] = await res.json();
+          setModels(data);
+        }
+      } catch { /* models optional */ }
+    }
     loadProjectSettings();
+    loadModels();
   }, [project.root_path]);
 
 
@@ -89,6 +105,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           description:          description,
           content_mode_default: contentMode,
           cost_tier:            costTier,
+          default_model:        projectModel || null,  // empty string = use global
         }),
       });
 
@@ -270,6 +287,42 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   <option value="standard">Standard ($1-15/M input)</option>
                   <option value="premium">Premium (all models)</option>
                 </select>
+              </div>
+
+              {/* Per-Project Model Selection */}
+              <div className="mb-5">
+                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Project Model</label>
+                <p className="mb-2 text-xs text-[#3f3f7a]">
+                  Choose a specific model for this project. Leave blank to use the global default from Settings.
+                </p>
+                {models.length > 0 ? (
+                  <select
+                    value={projectModel}
+                    onChange={e => setProjectModel(e.target.value)}
+                    className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Use global default</option>
+                    {models.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {m.is_free ? " (free)" : ` ($${m.cost_input_per_million.toFixed(2)}/M)`}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={projectModel}
+                    onChange={e => setProjectModel(e.target.value)}
+                    placeholder="e.g. anthropic/claude-3.5-sonnet (leave blank for global)"
+                    className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                  />
+                )}
+                {projectModel && (
+                  <p className="mt-1 text-xs text-emerald-600">
+                    This project will use {projectModel.split("/").pop()} for all AI requests.
+                  </p>
+                )}
               </div>
             </section>
 

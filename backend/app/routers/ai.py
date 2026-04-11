@@ -389,8 +389,16 @@ def _validate_model_content_mode(settings: dict, model_id: str, content_mode: st
     Check that the model supports the requested content mode.
 
     Uses the model_content_modes setting to determine compatibility.
-    Models not listed in model_content_modes default to ["general"] only.
-    If the content mode is "general", all models pass (it's the baseline).
+    Models NOT listed in model_content_modes are ALLOWED for all content modes
+    by default. Only models explicitly configured with a restricted list are checked.
+
+    This is an "opt-in restriction" model, not "opt-in permission":
+    - If you don't configure anything: all models work with all content modes.
+    - If you add a model to model_content_modes with specific modes: only those modes are allowed.
+
+    Why this default? Most models handle mature/explicit content. Requiring writers
+    to manually configure every model's content modes before using explicit mode
+    creates a confusing barrier. Only restrict models known to refuse certain content.
     """
     if content_mode not in VALID_CONTENT_MODES:
         raise HTTPException(
@@ -398,21 +406,24 @@ def _validate_model_content_mode(settings: dict, model_id: str, content_mode: st
             detail=f"Unknown content mode: '{content_mode}'. Must be general, mature, or explicit."
         )
 
-    # "general" mode is always allowed -- every model can handle it
+    # "general" mode is always allowed
     if content_mode == "general":
         return
 
-    # Check the model's allowed modes from settings
+    # Check the model's allowed modes from settings.
+    # If the model is NOT in the config at all, it's allowed for everything.
     model_modes = settings.get("model_content_modes", {})
-    allowed = model_modes.get(model_id, ["general"])
+    if model_id not in model_modes:
+        return  # Not configured = no restriction = all modes allowed
 
+    allowed = model_modes[model_id]
     if content_mode not in allowed:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"The model '{model_id}' is not configured for '{content_mode}' content. "
-                f"Its allowed modes are: {', '.join(allowed)}. "
-                "Update the model's content modes in Settings, or switch to a compatible model."
+                f"The model '{model_id}' is restricted to '{', '.join(allowed)}' content modes "
+                f"(configured in Settings > Model Routing). "
+                f"Remove the restriction or switch to a different model."
             ),
         )
 

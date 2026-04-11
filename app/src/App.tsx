@@ -276,6 +276,9 @@ function App() {
           is_full_chapter: isFullChapter,
           messages:        newMessages,
           context_chips:   contextChips,
+          // Per-project model: if set in Project Settings, overrides the global default.
+          // null/undefined = backend falls back to global settings.
+          model_id:        currentProjectRef.current?.default_model || undefined,
           content_mode:    currentProjectRef.current?.content_mode_default ?? "general",
           project_path:    currentProjectRef.current?.root_path ?? null,
         }),
