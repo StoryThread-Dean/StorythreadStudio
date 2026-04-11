@@ -289,11 +289,21 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 </select>
               </div>
 
-              {/* Per-Project Model Selection */}
+              {/* Per-Project Model Selection
+                  Auto-filtered by content mode:
+                  - General: all models shown
+                  - Mature: all models shown (most handle mature content)
+                  - Explicit: only unmoderated models shown (moderated ones refuse explicit)
+              */}
               <div className="mb-5">
                 <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Project Model</label>
                 <p className="mb-2 text-xs text-[#3f3f7a]">
-                  Choose a specific model for this project. Leave blank to use the global default from Settings.
+                  Choose a specific model for this project. Leave blank to use the global default.
+                  {contentMode === "explicit" && (
+                    <span className="ml-1 text-amber-500">
+                      Filtered to unmoderated models (explicit mode).
+                    </span>
+                  )}
                 </p>
                 {models.length > 0 ? (
                   <select
@@ -302,7 +312,13 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
                   >
                     <option value="">Use global default</option>
-                    {models.map(m => (
+                    {models
+                      .filter(m => {
+                        // Explicit mode: hide moderated models (they refuse explicit content)
+                        if (contentMode === "explicit" && m.is_moderated) return false;
+                        return true;
+                      })
+                      .map(m => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                         {m.is_free ? " (free)" : ` ($${m.cost_input_per_million.toFixed(2)}/M)`}

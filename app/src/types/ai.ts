@@ -34,6 +34,7 @@ export interface ModelInfo {
   cost_output_per_million: number;
   output_modalities: string[];  // e.g. ["text"] or ["text","image"]
   is_free: boolean;             // true if :free suffix or zero cost
+  is_moderated: boolean;        // true if model has content filters (refuses explicit)
 }
 
 // ── Assistants ────────────────────────────────────────────────────────────────

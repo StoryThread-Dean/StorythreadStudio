@@ -101,7 +101,9 @@ export function Settings({ onClose }: SettingsProps) {
     const textOk = !textOnlyFilter
       || m.output_modalities.every(mod => mod === "text")
       || m.output_modalities.length === 0;
-    return modelPassesTier(m, costTier) && textOk;
+    // Content mode filter: explicit mode hides moderated models (they refuse explicit content)
+    const contentOk = contentMode !== "explicit" || !m.is_moderated;
+    return modelPassesTier(m, costTier) && textOk && contentOk;
   });
 
   // Is the selected model outside the current tier/filter? (show warning)

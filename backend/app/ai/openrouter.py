@@ -53,9 +53,15 @@ async def list_models(api_key: str) -> list[dict]:
 
         cost_in = _per_million(pricing.get("prompt", "0"))
 
-        # Free models are identified either by the ":free" suffix in the model ID
-        # or by having a zero input cost. Both signals are equivalent.
+        # Free models: ":free" suffix in ID or zero input cost.
         is_free = model_id.endswith(":free") or cost_in == 0.0
+
+        # Moderation: top_provider.is_moderated tells us if the model has
+        # content filters. Moderated models refuse or heavily soften explicit
+        # content. We use this to auto-filter the model list by content mode.
+        # Default to False (unmoderated) if the field is absent.
+        top_provider = m.get("top_provider", {}) or {}
+        is_moderated = bool(top_provider.get("is_moderated", False))
 
         models.append({
             "id":                      model_id,
@@ -65,6 +71,7 @@ async def list_models(api_key: str) -> list[dict]:
             "cost_output_per_million": _per_million(pricing.get("completion", "0")),
             "output_modalities":       output_modalities,
             "is_free":                 is_free,
+            "is_moderated":            is_moderated,
         })
 
     # Sort by name for a clean UI list

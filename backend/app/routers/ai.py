@@ -211,6 +211,7 @@ class ModelInfo(BaseModel):
     cost_output_per_million: float
     output_modalities: list[str] = ["text"]  # e.g. ["text"] or ["text", "image"]
     is_free: bool = False                     # True if id ends in :free or cost == 0
+    is_moderated: bool = False                # True if model has content filters (refuses explicit)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
