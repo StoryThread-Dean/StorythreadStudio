@@ -761,13 +761,27 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
     system_prompt = (
-        "You are a profile summarization assistant for a fiction writer.\n\n"
-        "Write a compact AI summary of one profile section. "
-        "This will be used as context for AI writing tools -- make it dense "
-        "with useful information, not padded prose. Think of it as a briefing "
-        "note. Length: 2-4 sentences.\n\n"
-        "PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013). "
-        "Use double hyphen (--) instead. No exceptions.\n\n"
+        "You are converting a fiction writer's profile notes into an AI-prompt-friendly "
+        "summary that other AI writing tools will use as context.\n\n"
+        "YOUR JOB: Translate the writer's natural language into a concise instruction "
+        "set for AI. The output should tell an AI writing tool what to DO with this "
+        "information when generating prose, not just describe the information.\n\n"
+        "IMPORTANCE WEIGHTING:\n"
+        "- Traits marked 'core' or 'present' are defining. Lead with them.\n"
+        "- Traits marked 'background' or 'contextual' are supporting details. "
+        "  Mention them as influence, not as focus.\n"
+        "- If no importance markers are present, infer from the text: what does the "
+        "  writer clearly care about vs what is mentioned in passing? A detail "
+        "  described in one sentence is background. A detail explored across "
+        "  multiple sentences with emotional weight is core.\n\n"
+        "FORMAT: 2-4 sentences. Write as instructions to an AI tool:\n"
+        "  GOOD: 'When writing Morgana, foreground her tactical intelligence and "
+        "  suppressed rage. Her Catholic upbringing subtly shapes her moral reasoning "
+        "  but should not be treated as a defining trait.'\n"
+        "  BAD: 'Morgana is a Catholic queen who was imprisoned. She is intelligent "
+        "  and angry.'\n\n"
+        "PUNCTUATION: Never use em dashes (\u2014), en dashes (\u2013), or double "
+        "hyphens ( -- ). Use commas, colons, or semicolons instead.\n\n"
         'Return ONLY valid JSON: {"section_summary": "your text here"}. No extra text.'
     )
 
@@ -775,7 +789,8 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
         f"Profile: {request.profile_name} ({request.profile_type})\n"
         f"Section: {request.section_heading}\n\n"
         f"Content:\n{request.section_content}\n\n"
-        "Write a compact summary of this section."
+        "Convert this into an AI-prompt-friendly summary. Distinguish what the writer "
+        "clearly emphasizes from what is mentioned only in passing."
     )
 
     try:
@@ -800,24 +815,64 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
     system_prompt = (
-        "You are a profile summarization assistant for a fiction writer.\n\n"
-        "Write a full AI summary of a story profile to be used as writing context.\n\n"
-        "For CHARACTER profiles:\n"
-        "- Multiple paragraphs synthesizing all sections\n"
-        "- Core/present traits get more emphasis than background/contextual ones\n"
-        "- Include motivations, voice, and relationship context if present\n"
-        "- Write in third person, as a briefing about the character\n\n"
-        "For LOCATION, LORE, RELATIONSHIP profiles:\n"
-        "- 1-2 focused paragraphs emphasizing what a writing AI most needs to know\n\n"
-        "PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013). "
-        "Use double hyphen (--) instead. No exceptions.\n\n"
-        'Return ONLY valid JSON: {"full_summary": "your text here"}. No extra text.'
+        "You are helping a fiction writer refine their character profile's Overview "
+        "into a version that AI writing tools will interpret accurately.\n\n"
+
+        "YOUR JOB: Read the writer's Overview (their own words describing this "
+        "character) and produce a refined version where the writer's vision and "
+        "AI's interpretation are as closely aligned as possible.\n\n"
+
+        "STEP 1 -- RELEVANCE AUDIT:\n"
+        "Before refining anything, check each passage in the Overview for relevance.\n"
+        "A passage belongs in the Overview ONLY if it directly contributes to "
+        "understanding who this character is: their personality, identity, how they "
+        "think, how they feel, what shapes their behavior.\n\n"
+        "- If a detail is CONNECTED to the character's identity (e.g., 'Her Catholic "
+        "  upbringing shapes her moral reasoning'), KEEP it and refine it.\n"
+        "- If a detail is DISCONNECTED (e.g., 'She was raised Catholic' with no "
+        "  explanation of how it affects her), FLAG it at the end of your response "
+        "  with a note: 'Consider moving to Traits (Background) or adding context "
+        "  for why this matters to the character.'\n"
+        "- Story plot details do NOT belong in the Overview unless they directly "
+        "  explain something about the character's personality or identity.\n\n"
+
+        "STEP 2 -- REFINE THE RELEVANT CONTENT:\n"
+        "For everything that passes the relevance check, rewrite it into "
+        "AI-prompt-friendly language. This means:\n"
+        "- The character's personality should be clearly expressed: who they are "
+        "  as a person, how they think, what emotional patterns they carry.\n"
+        "- Core identity: what defines them at their center.\n"
+        "- Behavioral tendencies: how they typically act, react, relate to others.\n"
+        "- Motivations that are central to their identity (not plot-specific goals).\n"
+        "- Background influences framed as exactly that: 'Her [detail] subtly "
+        "  influences her [behavior], though it rarely surfaces directly.'\n\n"
+
+        "OUTPUT FORMAT:\n"
+        "First: the refined Overview text (multiple paragraphs, AI-friendly language).\n"
+        "Then, if any passages were flagged: a section starting with "
+        "'--- Suggestions ---' listing what should be reconsidered.\n\n"
+
+        "FOR LOCATION, LORE, RELATIONSHIP PROFILES:\n"
+        "1-2 paragraphs focused on what an AI writing tool needs to know when "
+        "writing scenes involving this element. Same relevance audit applies.\n\n"
+
+        "TONE: You are a collaborator helping the writer see their character through "
+        "AI's eyes. Be direct and practical, but supportive. The goal is helping the "
+        "writer's vision come through clearly, not replacing their voice.\n\n"
+
+        "PUNCTUATION: Never use em dashes (\u2014), en dashes (\u2013), or double "
+        "hyphens ( -- ). Use commas, colons, or semicolons instead.\n\n"
+
+        'Return ONLY valid JSON: {"full_summary": "your text here"}. No extra text. '
+        'Include the --- Suggestions --- section inside the same string if applicable.'
     )
 
     user_message = (
         f"Profile: {request.profile_name} ({request.profile_type})\n\n"
         f"Full content:\n{request.profile_content}\n\n"
-        "Write the full AI summary."
+        "Refine this Overview into an AI-prompt-friendly version. "
+        "Audit each passage for relevance first. Flag anything disconnected. "
+        "Then refine the relevant content so AI's interpretation matches the writer's vision."
     )
 
     try:
