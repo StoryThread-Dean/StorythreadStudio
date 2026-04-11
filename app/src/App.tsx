@@ -23,11 +23,12 @@ import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/Editor
 import { ProjectHome } from "./screens/ProjectHome";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { Settings } from "./screens/Settings";
-import type { ProjectInfo, ChapterInfo } from "./types/project";
+import { ProjectSettings } from "./screens/ProjectSettings";
+import type { ProjectInfo, ChapterInfo, RecentProject } from "./types/project";
 import type { ProfileType } from "./types/profile";
 import type { ContextChip, EditorChatMessage, EditorChatCategory } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
-import { Bot, Send } from "lucide-react";
+import { Bot, Send, ChevronDown, Settings2 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -49,6 +50,13 @@ function App() {
 
   // Settings modal visibility
   const [showSettings, setShowSettings] = useState(false);
+
+  // Project settings modal visibility (separate from global Settings)
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
+
+  // Project switcher dropdown
+  const [showSwitcher, setShowSwitcher]   = useState(false);
+  const [switcherProjects, setSwitcherProjects] = useState<RecentProject[]>([]);
 
   // Text currently selected in the editor -- drives the AI assistant panel
   const [selectedText, setSelectedText] = useState("");
@@ -343,13 +351,90 @@ function App() {
       {/* ── LEFT PANEL: Navigation Sidebar ─────────────────────────────── */}
       <aside className="flex w-64 shrink-0 flex-col border-r border-[#1e1e4a] bg-[#0d0d2b]">
 
-        <div className="border-b border-[#1e1e4a] px-4 py-5">
+        <div className="border-b border-[#1e1e4a] px-4 py-4">
           <h1 className="text-lg font-semibold tracking-wide text-[#f0f0f5]">
             StoryForge
           </h1>
-          <p className="mt-0.5 truncate text-xs text-[#8888aa]" title={currentProject.title}>
-            {currentProject.title}
-          </p>
+
+          {/* Project title + switcher dropdown + settings gear */}
+          <div className="relative mt-1">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  // Fetch recent projects when opening the switcher
+                  if (!showSwitcher) {
+                    fetch(`${API_BASE}/api/projects/recent`)
+                      .then(r => r.ok ? r.json() : [])
+                      .then(data => setSwitcherProjects(Array.isArray(data) ? data : []))
+                      .catch(() => setSwitcherProjects([]));
+                  }
+                  setShowSwitcher(s => !s);
+                }}
+                className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-[#12122e]"
+                title="Switch to a different project"
+              >
+                <span className="truncate text-xs text-[#8888aa]">{currentProject.title}</span>
+                <ChevronDown size={10} className="shrink-0 text-[#3f3f7a]" />
+              </button>
+              <button
+                onClick={() => setShowProjectSettings(true)}
+                className="shrink-0 rounded p-1 text-[#3f3f7a] transition-colors hover:bg-[#12122e] hover:text-[#8888aa]"
+                title="Project settings"
+              >
+                <Settings2 size={12} />
+              </button>
+            </div>
+
+            {/* Project switcher dropdown */}
+            {showSwitcher && (
+              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded border border-[#1e1e4a] bg-[#0d0d2b] shadow-xl">
+                {switcherProjects.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-[#3f3f7a]">No recent projects</p>
+                ) : (
+                  switcherProjects.filter(p => p.exists).map(rp => (
+                    <button
+                      key={rp.project_id}
+                      onClick={async () => {
+                        setShowSwitcher(false);
+                        if (rp.root_path === currentProject.root_path) return;
+                        try {
+                          const res = await fetch(`${API_BASE}/api/projects/open`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ folder_path: rp.root_path }),
+                          });
+                          if (!res.ok) throw new Error("Failed to switch.");
+                          const proj: ProjectInfo = await res.json();
+                          handleProjectOpen(proj);
+                        } catch {
+                          // Fallback: go to ProjectHome
+                          setCurrentProject(null);
+                        }
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-[#12122e] ${
+                        rp.root_path === currentProject.root_path
+                          ? "text-indigo-300"
+                          : "text-[#f0f0f5]"
+                      }`}
+                    >
+                      <p className="truncate font-medium">{rp.title}</p>
+                      {rp.series_name && (
+                        <p className="truncate text-[#3f3f7a]">{rp.series_name}</p>
+                      )}
+                    </button>
+                  ))
+                )}
+                <div className="border-t border-[#1e1e4a]">
+                  <button
+                    onClick={() => { setShowSwitcher(false); setCurrentProject(null); }}
+                    className="w-full px-3 py-2 text-left text-xs text-[#3f3f7a] transition-colors hover:bg-[#12122e] hover:text-[#8888aa]"
+                  >
+                    Back to Dashboard
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-4">
@@ -734,6 +819,18 @@ function App() {
 
       {/* Settings modal -- rendered as an overlay on top of everything */}
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+
+      {/* Project settings modal */}
+      {showProjectSettings && currentProject && (
+        <ProjectSettings
+          project={currentProject}
+          onClose={() => setShowProjectSettings(false)}
+          onProjectUpdated={(updated) => {
+            setCurrentProject(updated);
+            setShowProjectSettings(false);
+          }}
+        />
+      )}
 
     </div>
   );
