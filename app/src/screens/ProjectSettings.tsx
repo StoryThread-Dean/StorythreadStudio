@@ -15,6 +15,22 @@ import type { ModelInfo } from "../types/ai";
 
 const API_BASE = "http://localhost:8000";
 
+// Providers known to enforce content moderation that blocks explicit content.
+// OpenRouter's is_moderated field is unreliable (many moderated models report
+// false), so we also check the provider prefix in the model ID.
+// This list should be reviewed periodically as provider policies change.
+const MODERATED_PROVIDERS = [
+  "openai/",       // All OpenAI models refuse explicit content
+  "anthropic/",    // Claude models filter explicit content
+  "google/",       // Gemini models refuse explicit content
+  "cohere/",       // Command models filter explicit content
+];
+
+function isModelModerated(m: ModelInfo): boolean {
+  if (m.is_moderated) return true;
+  return MODERATED_PROVIDERS.some(prefix => m.id.startsWith(prefix));
+}
+
 // ── Cost estimate ranges per tier ─────────────────────────────────────────────
 // These are high-level educational estimates, not exact prices.
 // "startup" = building 5-8 profiles + world-building + writing 3-5 chapters with AI
@@ -314,8 +330,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     <option value="">Use global default</option>
                     {models
                       .filter(m => {
-                        // Explicit mode: hide moderated models (they refuse explicit content)
-                        if (contentMode === "explicit" && m.is_moderated) return false;
+                        // Explicit mode: hide moderated models AND known moderated providers
+                        if (contentMode === "explicit" && isModelModerated(m)) return false;
                         return true;
                       })
                       .map(m => (
