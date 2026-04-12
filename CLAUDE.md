@@ -205,13 +205,11 @@ AI output may only be written directly to these **designated generated-content f
 - `chapter_summary`
 - `scene_summary`
 
-Note: `ai_usage_example` was removed in Phase 5A. The "How AI uses this" preview is now generated on demand and shown in a popover -- not stored in Markdown.
-
 AI must **never silently overwrite** human-authored prose, profile descriptions, notes, or story drafts. All other AI output goes to the side panel only, where the writer copies it manually.
 
 ### The Em Dash Rule
 
-**AI must never output em dashes (`--` is fine; `--` is not).** This is a locked product rule enforced at three layers:
+**AI must never output em dashes (`,;:` is fine; `--` is not).** This is a locked product rule enforced at three layers:
 
 1. **Prompt layer** -- every system prompt explicitly bans em dashes
 2. **Sanitizer layer** -- post-process all model output to detect and replace em dashes before displaying
@@ -249,7 +247,7 @@ Favor **longer, clearly annotated code** over compact, clever code. A function w
 
 ## UI Design Direction
 
-- **Dark mode only** -- deep navy-black background (inspired by Quarkle.ai, approximately `#070724`), white/light text, high contrast. No light mode in MVP.
+- **Dark mode** -- Charcoal-black background #0F172A (approximately `#1A1A1A`), off-white `#F0F0F0`/light `#E0E0E0` text, secondary text `#60A5FA`, Accent: #22C55E, high contrast. 
 - **shadcn/ui** with Tailwind CSS for all components -- clean, modern, fully customizable
 - **Three-panel layout** on the main writing screen: left navigation panel, center Markdown editor, right AI assistant panel
 - **Embedded UX hints** are a first-class design feature: tooltips, contextual help text, and onboarding cues built into the UI from the start -- both to help the fiction writer use the app and to help the developer understand what each UI piece does
