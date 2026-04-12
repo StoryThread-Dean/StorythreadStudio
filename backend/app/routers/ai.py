@@ -1111,12 +1111,37 @@ def _build_behavior_prompt(
         f"{content_block}\n"
         f"SELECTED CONTEXT (from the writer's ToolKit selection):\n"
         f"{profile_content}\n\n"
+        f"{writing_principles}"
+    )
+
+    # ── CHARACTER WRITING PRINCIPLES ────────────────────────────────────────────
+    # Injected into every mode's prompt so AI's suggestions always reflect
+    # professional fiction writing standards. Sourced from writing communities,
+    # NovelCrafter, Sudowrite, and published craft advice.
+    writing_principles = (
+        "CHARACTER WRITING PRINCIPLES (apply when making suggestions or evaluating text):\n"
+        "- DISTINCT VOICES: each character should have unique vocabulary, sentence "
+        "structure, speaking cadence, and mannerisms. If you remove dialogue tags, "
+        "a reader should still know who is speaking.\n"
+        "- SHOW, DON'T TELL: favor physical reactions and behavior over stated emotions. "
+        "'Her hand shook' over 'She felt afraid.' 'He looked away' over 'He was ashamed.'\n"
+        "- INTERNAL CONTRADICTIONS: real characters contain contradictions. A brave person "
+        "with a secret cowardice. A kind person capable of cruelty. Push for depth.\n"
+        "- THE LIE THEY TELL THEMSELVES: the most compelling characters believe something "
+        "about themselves or the world that isn't true. This lie often drives the entire arc.\n"
+        "- MORALLY GREY: avoid one-dimensional portrayals. Protagonists should have genuine "
+        "flaws; antagonists should have understandable motivations.\n"
+        "- POSITIVE FRAMING: when helping the writer build a profile, tell them what TO "
+        "include, not what to avoid. 'Add a specific fear that contradicts her bravery' "
+        "is better than 'Don't make her too perfect.'\n"
+        "- AVOID AI-ISMS: never use overused AI phrases in your own responses. The most "
+        "common offenders: 'tapestry of,' 'symphony of,' 'stark contrast,' 'send shivers "
+        "down,' 'palpable tension,' 'steeled herself,' 'flickered,' 'heart pounded,' "
+        "'a testament to,' 'unspoken,' 'etched,' 'enigmatic,' 'delve,' 'beacon of.'\n\n"
     )
 
     # ── FORMAT RULES: STRUCTURED modes ────────────────────────────────────────
     # Used by analysis and task-driven modes (interpret, extract, check, etc.)
-    # These modes produce structured output (lists, sections, template entries)
-    # so formatting markup is appropriate and expected.
     format_rules = (
         "FORMAT RULES:\n"
         "- No ## or ### headers.\n"
@@ -1202,6 +1227,11 @@ def _build_behavior_prompt(
             "  - Personality should be clearly expressed\n"
             "  - Core identity should be prominent\n"
             "  - Background influences framed as 'subtly influences' not 'defines'\n"
+            "  - Push for DEPTH: internal contradictions, 'the lie they tell themselves,' "
+            "    moral complexity. If the character reads as one-dimensional, suggest "
+            "    where a contradiction or hidden flaw would add realism.\n"
+            "  - Use SHOW language: suggest behavioral descriptions over stated emotions. "
+            "    'She catalogs exits before she speaks' instead of 'She is cautious.'\n"
             "  - Offer 2-3 rephrasing options, not just one\n"
             "  - PRESERVE THE WRITER'S LEVEL OF DETAIL. If they wrote 3 paragraphs, "
             "    the refined version should be approximately 3 paragraphs. Do not compress.\n\n"
