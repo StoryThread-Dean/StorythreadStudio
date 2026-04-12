@@ -1,12 +1,14 @@
-# routers/documents.py -- Chapter File API
-# ==========================================
-# This router handles reading and writing the actual Markdown chapter files
-# that live inside a project's manuscript/ folder.
+# routers/documents.py -- Chapter & Note File API
+# ==================================================
+# This router handles reading and writing the Markdown files that make up
+# a project's content: chapters in manuscript/ and notes in notes/.
 #
 # Routes defined here:
 #   GET  /api/documents/chapters?folder_path=...              -- list all chapters
 #   GET  /api/documents/chapter?folder_path=...&filename=...  -- load one chapter
 #   POST /api/documents/chapter                               -- save a chapter to disk
+#   GET  /api/documents/note?folder_path=...&filename=...     -- load one note file
+#   POST /api/documents/note                                  -- save a note file to disk
 #
 # Why a separate router from projects.py?
 # projects.py handles the project container (create, open, metadata).
@@ -198,5 +200,88 @@ async def save_chapter(request: SaveChapterRequest):
     return SaveChapterResponse(
         filename=request.filename,
         path=chapter_path,
+        message=f"Saved {request.filename} successfully.",
+    )
+
+
+# --- Notes ---
+# Notes are Markdown files in the project's notes/ folder.
+# Unlike chapters, notes are freeform reference documents: outline, style guide,
+# themes, etc. They use the same load/save pattern as chapters but read from
+# a different folder.
+
+def _notes_dir(folder_path: str) -> str:
+    """Returns the absolute path to the notes/ folder inside a project."""
+    return os.path.join(folder_path, "notes")
+
+
+# --- GET /api/documents/note ---
+@router.get("/note", response_model=LoadChapterResponse)
+async def load_note(folder_path: str, filename: str):
+    """
+    Reads and returns the full Markdown content of one note file.
+
+    The frontend calls this when the writer clicks "Outline" or "Style Guide"
+    in the left nav panel. Same security and error handling as load_chapter.
+    """
+    notes = _notes_dir(folder_path)
+    note_path = os.path.realpath(os.path.join(notes, filename))
+    safe_root = os.path.realpath(notes)
+
+    # Reject any path that escapes the notes/ folder
+    if not note_path.startswith(safe_root + os.sep) and note_path != safe_root:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+
+    if not os.path.isfile(note_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Note not found: {filename}"
+        )
+
+    try:
+        with open(note_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not read file: {e}")
+
+    return LoadChapterResponse(
+        filename=filename,
+        title=_title_from_file(note_path, filename),
+        content=content,
+        path=note_path,
+    )
+
+
+# --- POST /api/documents/note ---
+@router.post("/note", response_model=SaveChapterResponse)
+async def save_note(request: SaveChapterRequest):
+    """
+    Writes note content to disk, overwriting the existing file.
+
+    Called when the writer saves while editing a note (Outline, Style Guide, etc.).
+    Same security and error handling as save_chapter.
+    """
+    notes = _notes_dir(request.folder_path)
+    note_path = os.path.realpath(os.path.join(notes, request.filename))
+    safe_root = os.path.realpath(notes)
+
+    if not note_path.startswith(safe_root + os.sep) and note_path != safe_root:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+
+    if not os.path.isdir(notes):
+        raise HTTPException(
+            status_code=404,
+            detail=f"notes/ folder not found in: {request.folder_path}"
+        )
+
+    try:
+        with open(note_path, "w", encoding="utf-8") as f:
+            f.write(request.content)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not write file: {e}")
+
+    return SaveChapterResponse(
+        filename=request.filename,
+        path=note_path,
         message=f"Saved {request.filename} successfully.",
     )

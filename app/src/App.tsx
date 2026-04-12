@@ -24,6 +24,7 @@ import { ProjectHome } from "./screens/ProjectHome";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
+import { ExportModal } from "./components/ExportModal";
 import type { ProjectInfo, ChapterInfo, RecentProject } from "./types/project";
 import type { ProfileType } from "./types/profile";
 import type { ContextChip, EditorChatMessage, EditorChatCategory } from "./types/ai";
@@ -43,9 +44,9 @@ function App() {
   // Which project is currently open. null = show home screen.
   const [currentProject, setCurrentProject] = useState<ProjectInfo | null>(null);
 
-  // Which top-level view is active: the writing editor or the profile builder.
+  // Which top-level view is active: the writing editor, profile builder, or notes editor.
   // profileType tracks which tab was clicked so the ProfileBuilder opens on the right type.
-  const [currentView, setCurrentView]   = useState<"editor" | "profiles">("editor");
+  const [currentView, setCurrentView]   = useState<"editor" | "profiles" | "notes">("editor");
   const [profileType, setProfileType]   = useState<ProfileType>("character");
 
   // Settings modal visibility
@@ -53,6 +54,9 @@ function App() {
 
   // Project settings modal visibility (separate from global Settings)
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+
+  // Export modal visibility
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Project switcher dropdown
   const [showSwitcher, setShowSwitcher]   = useState(false);
@@ -90,6 +94,15 @@ function App() {
   // True while a chapter is being fetched from the backend.
   const [isLoadingChapter, setIsLoadingChapter] = useState(false);
 
+  // The note file currently open in the editor (e.g. outline.md, style-guide.md).
+  const [currentNote, setCurrentNote] = useState<{ filename: string; title: string } | null>(null);
+
+  // The content loaded from disk for the current note.
+  const [noteContent, setNoteContent] = useState<string>("");
+
+  // True while a note is being fetched from the backend.
+  const [isLoadingNote, setIsLoadingNote] = useState(false);
+
   // True when the writer has typed something since the last save.
   const [isDirty, setIsDirty] = useState(false);
 
@@ -109,11 +122,15 @@ function App() {
   const editorViewRef = useRef<EditorView | null>(null);
   const currentChapterRef = useRef<ChapterInfo | null>(null);
   const currentProjectRef = useRef<ProjectInfo | null>(null);
+  const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
+  const currentViewRef = useRef<"editor" | "profiles" | "notes">("editor");
 
   // Keep refs in sync with state on every render.
   // This lets our event listeners (Ctrl+S) always see the latest values.
   currentChapterRef.current  = currentChapter;
   currentProjectRef.current  = currentProject;
+  currentNoteRef.current     = currentNote;
+  currentViewRef.current     = currentView;
 
 
   // --- Load a chapter from the backend ---
@@ -143,12 +160,50 @@ function App() {
       // currentChapter causes a full remount with the new content.
       setChapterContent(data.content);
       setCurrentChapter(chapter);
+      setCurrentView("editor");
       setIsDirty(false);
 
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not load chapter.");
     } finally {
       setIsLoadingChapter(false);
+    }
+  }, []);
+
+
+  // --- Load a note file from the backend ---
+  // Same pattern as loadChapter but reads from notes/ instead of manuscript/.
+  // Switches the center panel to notes view.
+  const loadNote = useCallback(async (filename: string, title: string, project: ProjectInfo | null) => {
+    if (!project) return;
+
+    setIsLoadingNote(true);
+    setEditorError(null);
+
+    try {
+      const params = new URLSearchParams({
+        folder_path: project.root_path,
+        filename,
+      });
+
+      const response = await fetch(`${API_BASE}/api/documents/note?${params}`);
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail ?? "Failed to load note.");
+      }
+
+      const data = await response.json();
+
+      setNoteContent(data.content);
+      setCurrentNote({ filename, title });
+      setCurrentView("notes");
+      setIsDirty(false);
+
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not load note.");
+    } finally {
+      setIsLoadingNote(false);
     }
   }, []);
 
@@ -192,26 +247,43 @@ function App() {
   }, []);
 
 
-  // --- Save the current chapter to disk ---
-  // Reads the current editor content and POSTs it to the backend.
+  // --- Save the current document (chapter or note) to disk ---
+  // Reads the current editor content and POSTs it to the appropriate backend endpoint.
+  // The view ref tells us whether we're saving a chapter or a note.
   const handleSave = useCallback(async () => {
     const view    = editorViewRef.current;
-    const chapter = currentChapterRef.current;
     const project = currentProjectRef.current;
+    const activeView = currentViewRef.current;
 
-    // Nothing to save if no chapter is open
-    if (!view || !chapter || !project) return;
+    if (!view || !project) return;
+
+    // Determine which endpoint and filename to use based on the active view
+    const note    = currentNoteRef.current;
+    const chapter = currentChapterRef.current;
+
+    let endpoint: string;
+    let filename: string;
+
+    if (activeView === "notes" && note) {
+      endpoint = `${API_BASE}/api/documents/note`;
+      filename = note.filename;
+    } else if (chapter) {
+      endpoint = `${API_BASE}/api/documents/chapter`;
+      filename = chapter.filename;
+    } else {
+      return; // Nothing to save
+    }
 
     const content = view.state.doc.toString();
     setEditorError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/documents/chapter`, {
+      const response = await fetch(endpoint, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           folder_path: project.root_path,
-          filename:    chapter.filename,
+          filename,
           content,
         }),
       });
@@ -224,7 +296,7 @@ function App() {
       setIsDirty(false);
 
     } catch (err) {
-      setEditorError(err instanceof Error ? err.message : "Could not save chapter.");
+      setEditorError(err instanceof Error ? err.message : "Could not save.");
     }
   }, []);
 
@@ -464,8 +536,12 @@ function App() {
           </NavSection>
 
           <NavSection label="Notes">
-            <NavItem label="Outline"     hint="Story structure and plot notes" />
-            <NavItem label="Style Guide" hint="Rules for tone, voice, and punctuation" />
+            <NavItem label="Outline"     hint="Story structure and plot notes"
+              active={currentView === "notes" && currentNote?.filename === "outline.md"}
+              onClick={() => loadNote("outline.md", "Outline", currentProject)} />
+            <NavItem label="Style Guide" hint="Rules for tone, voice, and punctuation"
+              active={currentView === "notes" && currentNote?.filename === "style-guide.md"}
+              onClick={() => loadNote("style-guide.md", "Style Guide", currentProject)} />
           </NavSection>
 
           <NavSection label="Profiles">
@@ -499,13 +575,15 @@ function App() {
       </aside>
 
 
-      {/* ── CENTER PANEL: Writing Editor ───────────────────────────────── */}
+      {/* ── CENTER PANEL: Writing Editor (chapters or notes) ─────────── */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
-        {/* Chapter title bar + save indicator */}
+        {/* Title bar + save indicator -- shows chapter title or note title */}
         <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
           <span className="text-sm font-medium text-[#f0f0f5]">
-            {currentChapter ? currentChapter.title : "No chapter open"}
+            {currentView === "notes"
+              ? (currentNote ? currentNote.title : "No note open")
+              : (currentChapter ? currentChapter.title : "No chapter open")}
           </span>
           <div className="flex items-center gap-2">
             {isDirty ? (
@@ -523,11 +601,18 @@ function App() {
             )}
             <button
               onClick={handleSave}
-              disabled={!isDirty || !currentChapter}
+              disabled={!isDirty || (currentView === "notes" ? !currentNote : !currentChapter)}
               className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
-              title="Save the current chapter to disk (Ctrl+S)"
+              title="Save to disk (Ctrl+S)"
             >
               Save
+            </button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5]"
+              title="Export manuscript to the exports/ folder"
+            >
+              Export
             </button>
           </div>
         </div>
@@ -548,36 +633,64 @@ function App() {
           onFontChange={setCurrentFont}
         />
 
-        {/* Editor area -- loading state or the actual editor */}
+        {/* Editor area -- renders either a chapter or a note depending on currentView */}
         <div className="flex-1 overflow-hidden">
-          {isLoadingChapter ? (
-            // Loading placeholder shown while the chapter file is being fetched
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-[#8888aa]">Loading chapter...</p>
-            </div>
-          ) : currentChapter ? (
-            // key={currentChapter.filename} forces a full remount when the chapter
-            // changes. This is the correct way to reset an uncontrolled component
-            // (CodeMirror) with new content -- instead of trying to imperatively
-            // push new content into the editor, we simply unmount and remount it.
-            <MarkdownEditor
-              key={currentChapter.filename}
-              defaultValue={chapterContent}
-              onChange={handleContentChange}
-              font={currentFont}
-              onEditorReady={(view) => {
-                setEditorView(view);
-                editorViewRef.current = view;
-              }}
-              onSelectionChange={setSelectedText}
-            />
+          {currentView === "notes" ? (
+            // ── Notes editor ──
+            isLoadingNote ? (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-[#8888aa]">Loading note...</p>
+              </div>
+            ) : currentNote ? (
+              // key includes "note-" prefix so switching between a chapter and note
+              // with the same filename still triggers a remount.
+              <MarkdownEditor
+                key={`note-${currentNote.filename}`}
+                defaultValue={noteContent}
+                onChange={handleContentChange}
+                font={currentFont}
+                onEditorReady={(view) => {
+                  setEditorView(view);
+                  editorViewRef.current = view;
+                }}
+                onSelectionChange={setSelectedText}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-[#8888aa]">
+                  Select a note from the left panel.
+                </p>
+              </div>
+            )
           ) : (
-            // No chapter open yet (project has no chapters, or still loading)
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-[#8888aa]">
-                Select a chapter from the left panel to start writing.
-              </p>
-            </div>
+            // ── Chapter editor ──
+            isLoadingChapter ? (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-[#8888aa]">Loading chapter...</p>
+              </div>
+            ) : currentChapter ? (
+              // key={currentChapter.filename} forces a full remount when the chapter
+              // changes. This is the correct way to reset an uncontrolled component
+              // (CodeMirror) with new content -- instead of trying to imperatively
+              // push new content into the editor, we simply unmount and remount it.
+              <MarkdownEditor
+                key={currentChapter.filename}
+                defaultValue={chapterContent}
+                onChange={handleContentChange}
+                font={currentFont}
+                onEditorReady={(view) => {
+                  setEditorView(view);
+                  editorViewRef.current = view;
+                }}
+                onSelectionChange={setSelectedText}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-[#8888aa]">
+                  Select a chapter from the left panel to start writing.
+                </p>
+              </div>
+            )
           )}
         </div>
       </main>
@@ -832,6 +945,14 @@ function App() {
             setCurrentProject(updated);
             setShowProjectSettings(false);
           }}
+        />
+      )}
+
+      {/* Export modal */}
+      {showExportModal && currentProject && (
+        <ExportModal
+          project={currentProject}
+          onClose={() => setShowExportModal(false)}
         />
       )}
 
