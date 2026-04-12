@@ -1094,30 +1094,10 @@ def _build_behavior_prompt(
             "Relationships Overview", "Notes",
         ]
 
-    # ── SHARED CONTEXT BLOCK ─────────────────────────────────────────────────
-    # The punctuation rule is the FIRST thing the model reads -- before any
-    # context, instructions, or mode-specific content. This placement is
-    # intentional: models follow rules more reliably when they appear at the
-    # top of the prompt before any other instructions pull their attention.
-    # This block is shared by every behavior mode automatically.
-    context_header = (
-        "PUNCTUATION RULE (NO EXCEPTIONS): Never use em dashes (\u2014), "
-        "en dashes (\u2013), or double hyphens ( -- ) anywhere in your response. "
-        "Use commas, parentheses, colons, or semicolons instead (depending on "
-        "the context). This applies to every sentence, list item, and suggestion "
-        "you write.\n\n"
-        f"You are helping a fiction writer with a {profile_label} profile "
-        f"for the character/subject: {profile_name}.\n"
-        f"{content_block}\n"
-        f"SELECTED CONTEXT (from the writer's ToolKit selection):\n"
-        f"{profile_content}\n\n"
-        f"{writing_principles}"
-    )
-
     # ── CHARACTER WRITING PRINCIPLES ────────────────────────────────────────────
+    # Defined BEFORE context_header because context_header references it.
     # Injected into every mode's prompt so AI's suggestions always reflect
-    # professional fiction writing standards. Sourced from writing communities,
-    # NovelCrafter, Sudowrite, and published craft advice.
+    # professional fiction writing standards.
     writing_principles = (
         "CHARACTER WRITING PRINCIPLES (apply when making suggestions or evaluating text):\n"
         "- DISTINCT VOICES: each character should have unique vocabulary, sentence "
@@ -1138,6 +1118,23 @@ def _build_behavior_prompt(
         "common offenders: 'tapestry of,' 'symphony of,' 'stark contrast,' 'send shivers "
         "down,' 'palpable tension,' 'steeled herself,' 'flickered,' 'heart pounded,' "
         "'a testament to,' 'unspoken,' 'etched,' 'enigmatic,' 'delve,' 'beacon of.'\n\n"
+    )
+
+    # ── SHARED CONTEXT BLOCK ─────────────────────────────────────────────────
+    # The punctuation rule is the FIRST thing the model reads. writing_principles
+    # is appended at the end so every mode inherits it automatically.
+    context_header = (
+        "PUNCTUATION RULE (NO EXCEPTIONS): Never use em dashes (\u2014), "
+        "en dashes (\u2013), or double hyphens ( -- ) anywhere in your response. "
+        "Use commas, parentheses, colons, or semicolons instead (depending on "
+        "the context). This applies to every sentence, list item, and suggestion "
+        "you write.\n\n"
+        f"You are helping a fiction writer with a {profile_label} profile "
+        f"for the character/subject: {profile_name}.\n"
+        f"{content_block}\n"
+        f"SELECTED CONTEXT (from the writer's ToolKit selection):\n"
+        f"{profile_content}\n\n"
+        f"{writing_principles}"
     )
 
     # ── FORMAT RULES: STRUCTURED modes ────────────────────────────────────────
