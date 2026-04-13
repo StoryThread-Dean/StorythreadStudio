@@ -1010,11 +1010,20 @@ const CHIP_TYPES: { id: string; label: string; color: string }[] = [
   { id: "lore",                   label: "Lore",                   color: "text-amber-300   border-amber-700/50   bg-amber-900/20"   },
   { id: "chapter_summary",        label: "Chapter Summary",        color: "text-sky-300     border-sky-700/50     bg-sky-900/20"     },
   { id: "scene_summary",          label: "Scene Summary",          color: "text-emerald-300 border-emerald-700/50 bg-emerald-900/20" },
+  // Notes -- outline and style guide documents from the notes/ folder
+  { id: "note",                   label: "Note",                   color: "text-rose-300    border-rose-700/50    bg-rose-900/20"    },
   // Series canonical profiles -- attached from the series source toggle in ChipPicker
   { id: "series_character",       label: "Series Character",       color: "text-indigo-200 border-indigo-600/50 bg-indigo-800/20"  },
   { id: "series_relationship",    label: "Series Relationship",    color: "text-violet-200  border-violet-600/50  bg-violet-800/20"  },
   { id: "series_location",        label: "Series Location",        color: "text-teal-200    border-teal-600/50    bg-teal-800/20"    },
   { id: "series_lore",            label: "Series Lore",            color: "text-amber-200   border-amber-600/50   bg-amber-800/20"   },
+];
+
+// Known note files in the project's notes/ folder.
+// These are created by the project init and can be attached as context chips.
+const NOTE_FILES = [
+  { filename: "outline.md",      name: "Outline" },
+  { filename: "style-guide.md",  name: "Style Guide" },
 ];
 
 function chipTypeColor(type: string): string {
@@ -1107,6 +1116,32 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
     }
   }
 
+  // Fetch a note file's content and attach it as a "note" context chip.
+  // Uses the /api/documents/note endpoint instead of the profiles API.
+  async function pickNote(filename: string, name: string) {
+    setAdding(filename);
+    try {
+      if (existingChips.some(c => c.name === name && c.type === "note")) {
+        onClose();
+        return;
+      }
+      const params = new URLSearchParams({ folder_path: rootPath, filename });
+      const res = await fetch(`${API_BASE}/api/documents/note?${params}`);
+      if (!res.ok) {
+        onClose();
+        return;
+      }
+      const data = await res.json();
+      const content = (data.content || "").trim()
+        || `[${name} is empty. Open it from the sidebar Notes section and add content.]`;
+      onAdd({ type: "note", name, content });
+    } catch {
+      onClose();
+    } finally {
+      setAdding(null);
+    }
+  }
+
   // Filter suggested chips: only show ones not already attached
   const unattachedSuggested = suggested.filter(
     s => !existingChips.some(c => c.name === s.name && (c.type === s.type || c.type === `series_${s.type}`))
@@ -1167,9 +1202,10 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
         </div>
       )}
 
-      {/* Profile type tabs */}
+      {/* Profile type tabs + Notes tab */}
       <div className="mb-2 flex flex-wrap gap-1">
-        {CHIP_TYPES.map(t => (
+        {/* Profile type tabs -- only show directly pickable types (not series_* or note) */}
+        {CHIP_TYPES.filter(t => !t.id.startsWith("series_") && t.id !== "note").map(t => (
           <button
             key={t.id}
             onClick={() => setProfileType(t.id)}
@@ -1182,10 +1218,47 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
             {t.label}
           </button>
         ))}
+        {/* Notes tab -- shows outline and style guide from the notes/ folder */}
+        <button
+          onClick={() => setProfileType("notes")}
+          className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+            profileType === "notes"
+              ? "text-rose-300 border-rose-700/50 bg-rose-900/20"
+              : "border-[#1e1e4a] text-[#3f3f7a] hover:text-[#8888aa]"
+          }`}
+        >
+          Notes
+        </button>
       </div>
 
-      {/* Profile list */}
-      {loading ? (
+      {/* Content list -- either profiles or notes depending on active tab */}
+      {profileType === "notes" ? (
+        // Notes list: hardcoded note files from the project's notes/ folder
+        <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
+          {NOTE_FILES.map(n => {
+            const alreadyAdded = existingChips.some(c => c.name === n.name && c.type === "note");
+            return (
+              <button
+                key={n.filename}
+                onClick={() => !alreadyAdded && pickNote(n.filename, n.name)}
+                disabled={alreadyAdded || adding === n.filename}
+                className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
+                  alreadyAdded
+                    ? "text-[#3f3f7a]"
+                    : "text-[#f0f0f5] hover:bg-indigo-600/20"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-rose-300 border-rose-700/50 bg-rose-900/20" />
+                {adding === n.filename
+                  ? "Adding..."
+                  : alreadyAdded
+                  ? <><span className="opacity-50">{n.name}</span><span className="ml-auto text-emerald-600">✓</span></>
+                  : n.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : loading ? (
         <p className="py-1 text-xs text-[#3f3f7a]">Loading...</p>
       ) : profiles.length === 0 ? (
         <p className="py-1 text-xs text-[#3f3f7a]">

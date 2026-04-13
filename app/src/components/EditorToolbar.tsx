@@ -174,32 +174,66 @@ function wrapSelection(
 
 
 // ── prefixLine ────────────────────────────────────────────────────────────────
-// Adds or removes a prefix at the start of the current line.
+// Adds or removes a prefix at the start of each line in the selection.
 // Used for headings (# ## ###) and lists (- and 1.).
 // Toggles off if the same prefix is already there.
-// Replaces a different prefix if the line already has one.
+// Replaces a different prefix if a line already has one.
+//
+// When multiple lines are selected, every line gets the same treatment.
+// For numbered lists (1. prefix), each line gets an incrementing number.
+// The toggle decision is based on whether ALL selected lines already have
+// the prefix -- if they all do, remove it; otherwise add/replace on each line.
 function prefixLine(view: EditorView, prefix: string, saved: SavedSelection) {
-  const line = view.state.doc.lineAt(saved.from);
-  const lineText = line.text;
+  const doc = view.state.doc;
+  const firstLine = doc.lineAt(saved.from);
+  const lastLine  = doc.lineAt(saved.to);
 
-  if (lineText.startsWith(prefix)) {
-    // Same prefix already -- remove it (toggle off)
-    view.dispatch({
-      changes: { from: line.from, to: line.from + prefix.length, insert: "" },
-    });
-  } else {
-    const existing = lineText.match(/^(#{1,6} |- |\d+\. )/);
-    if (existing) {
-      // Different prefix exists -- replace it
-      view.dispatch({
-        changes: { from: line.from, to: line.from + existing[0].length, insert: prefix },
-      });
+  // Collect all lines in the selection range
+  const lines: { from: number; to: number; text: string; number: number }[] = [];
+  for (let ln = firstLine.number; ln <= lastLine.number; ln++) {
+    const line = doc.line(ln);
+    lines.push({ from: line.from, to: line.to, text: line.text, number: ln });
+  }
+
+  // Decide toggle direction: if EVERY line already has this prefix, remove all.
+  // For numbered lists, check if each line starts with any "N. " pattern.
+  const isNumbered = /^\d+\. $/.test(prefix);
+  const allHavePrefix = lines.every((l) =>
+    isNumbered ? /^\d+\. /.test(l.text) : l.text.startsWith(prefix)
+  );
+
+  // Build all changes in one transaction so undo is a single step.
+  // Process lines bottom-to-top so earlier changes don't shift later positions.
+  const changes: { from: number; to: number; insert: string }[] = [];
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+
+    if (allHavePrefix) {
+      // Toggle off: remove the existing prefix from each line
+      const match = isNumbered
+        ? line.text.match(/^(\d+\. )/)
+        : line.text.startsWith(prefix) ? [prefix] : null;
+      if (match) {
+        const removeLen = match[0].length;
+        changes.push({ from: line.from, to: line.from + removeLen, insert: "" });
+      }
     } else {
-      // No prefix -- add one
-      view.dispatch({
-        changes: { from: line.from, insert: prefix },
-      });
+      // Add or replace: put the correct prefix on each line
+      const linePrefix = isNumbered ? `${i + 1}. ` : prefix;
+      const existing = line.text.match(/^(#{1,6} |- |\d+\. )/);
+      if (existing) {
+        // Replace whatever prefix is already there
+        changes.push({ from: line.from, to: line.from + existing[0].length, insert: linePrefix });
+      } else {
+        // No prefix yet -- insert one
+        changes.push({ from: line.from, to: line.from, insert: linePrefix });
+      }
     }
+  }
+
+  if (changes.length > 0) {
+    view.dispatch({ changes });
   }
 
   view.focus();
