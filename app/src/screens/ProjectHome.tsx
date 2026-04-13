@@ -20,9 +20,81 @@ import type {
   CreateBookInSeriesPayload,
   BookListItem,
   RecentProject,
+  OutlineTemplateType,
 } from "../types/project";
 
 const API_BASE = "http://localhost:8000";
+
+
+// ── TemplateTypePicker ─────────────────────────────────────────────────────────
+// A small radio-group used in both the standalone and book-in-series creation
+// forms. The writer picks which outline scaffold (Novel vs Short Story) gets
+// seeded into notes/outline.md. Keeping it inline here rather than in a
+// separate file because it's only used in this screen.
+//
+// Each option has a one-line "what it's for" hint so first-time writers have
+// enough context to choose. As new template types get added, extend the
+// TEMPLATE_OPTIONS array below -- the radio group renders from it.
+const TEMPLATE_OPTIONS: { value: OutlineTemplateType; label: string; hint: string }[] = [
+  {
+    value: "novel",
+    label: "Novel",
+    hint: "Full novel scaffold with three-act structure. Good for fiction and fantasy.",
+  },
+  {
+    value: "short_story",
+    label: "Short Story",
+    hint: "Tight 2k-10k scaffold with Seven-Point, Freytag, and more. Pick one, delete the rest.",
+  },
+];
+
+function TemplateTypePicker({
+  value,
+  onChange,
+  accent = "indigo",
+}: {
+  value: OutlineTemplateType;
+  onChange: (v: OutlineTemplateType) => void;
+  accent?: "indigo" | "teal";
+}) {
+  // Tailwind doesn't pick up dynamic class names, so we switch the accent
+  // color explicitly based on the "accent" prop. Indigo for standalone
+  // projects, teal for books-in-series -- matching the existing color scheme.
+  const accentClass = accent === "teal" ? "accent-teal-500" : "accent-indigo-500";
+
+  return (
+    <div className="mb-4">
+      <label className="mb-1 block text-xs font-medium text-[#8888aa]">
+        Outline Template
+      </label>
+      <p className="mb-2 text-xs text-[#3f3f7a]">
+        Seeds notes/outline.md with a starting scaffold. You can swap templates
+        later from the editor toolbar.
+      </p>
+      <div className="flex flex-col gap-1.5">
+        {TEMPLATE_OPTIONS.map(opt => (
+          <label
+            key={opt.value}
+            className="flex cursor-pointer items-start gap-2 rounded border border-[#1e1e4a] bg-[#12122e] p-2 transition-colors hover:border-[#3f3f7a]"
+          >
+            <input
+              type="radio"
+              name="outlineTemplate"
+              value={opt.value}
+              checked={value === opt.value}
+              onChange={() => onChange(opt.value)}
+              className={`mt-0.5 ${accentClass}`}
+            />
+            <div>
+              <p className="text-xs font-medium text-[#f0f0f5]">{opt.label}</p>
+              <p className="text-xs text-[#8888aa]">{opt.hint}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 
 interface ProjectHomeProps {
@@ -51,6 +123,10 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
   const [newDescription, setNewDescription]   = useState("");
   const [newProjectStep, setNewProjectStep]   = useState<"idle" | "naming" | "creating">("idle");
   const [pendingFolderPath, setPendingFolderPath] = useState<string | null>(null);
+  // Which outline scaffold the writer wants in notes/outline.md. Defaults to
+  // "novel" because that's the common case; they can swap later via the
+  // editor-toolbar [+ New Template] button or Project Settings.
+  const [newTemplateType, setNewTemplateType] = useState<OutlineTemplateType>("novel");
 
   // ── Series flow ────────────────────────────────────────────────────────────
   // "seriesStep" controls which sub-screen is shown:
@@ -69,6 +145,8 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
   const [newSeriesTone, setNewSeriesTone]   = useState("");
   const [newBookTitle, setNewBookTitle]     = useState("");
   const [newBookDesc, setNewBookDesc]       = useState("");
+  // Template choice for the book-in-series flow -- same options as standalone.
+  const [newBookTemplateType, setNewBookTemplateType] = useState<OutlineTemplateType>("novel");
   const [seriesFolderPath, setSeriesFolderPath] = useState<string | null>(null);
 
 
@@ -81,6 +159,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
     setPendingFolderPath(selected);
     setNewTitle("");
     setNewDescription("");
+    setNewTemplateType("novel");   // Reset to the default each time the form opens
     setNewProjectStep("naming");
   }
 
@@ -94,6 +173,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
         folder_path: pendingFolderPath,
         title: newTitle.trim(),
         description: newDescription.trim(),
+        template_type: newTemplateType,
       };
       const res = await fetch(`${API_BASE}/api/projects/create`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -229,6 +309,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
         series_path: activeSeries.root_path,
         title: newBookTitle.trim(),
         description: newBookDesc.trim(),
+        template_type: newBookTemplateType,
       };
       const res = await fetch(`${API_BASE}/api/projects/create-in-series`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -411,7 +492,13 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
             type="text" value={newDescription} onChange={e => setNewDescription(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleNewProjectCreate()}
             placeholder="A short description of your story"
-            className="mb-5 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            className="mb-4 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          />
+
+          <TemplateTypePicker
+            value={newTemplateType}
+            onChange={setNewTemplateType}
+            accent="indigo"
           />
 
           <div className="flex gap-3">
@@ -539,7 +626,12 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
           {/* New Book form (inline) */}
           {seriesStep === "browsing" && (
             <button
-              onClick={() => { setNewBookTitle(""); setNewBookDesc(""); setSeriesStep("naming_book"); }}
+              onClick={() => {
+                setNewBookTitle("");
+                setNewBookDesc("");
+                setNewBookTemplateType("novel");   // Reset to default on open
+                setSeriesStep("naming_book");
+              }}
               disabled={loading}
               className="w-full rounded border border-dashed border-teal-700/50 px-4 py-3 text-left text-xs text-teal-400 transition-colors hover:border-teal-500 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
             >

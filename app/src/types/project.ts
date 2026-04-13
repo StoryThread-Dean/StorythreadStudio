@@ -9,6 +9,12 @@
 // These types mirror the Pydantic models in backend/app/routers/projects.py
 // so both sides agree on what data looks like.
 
+// --- OutlineTemplateType ---
+// The scaffolds available for notes/outline.md. Extended later as we add
+// Save the Cat, Hero's Journey, etc. Keep in sync with VALID_OUTLINE_TEMPLATES
+// in backend/app/routers/projects.py.
+export type OutlineTemplateType = "novel" | "short_story";
+
 // --- ProjectInfo ---
 // Represents an open StoryForge writing project.
 // This is what the backend returns after create or open.
@@ -21,6 +27,9 @@ export interface ProjectInfo {
   default_model:        string | null;
   series_id:            string | null;  // Links to parent series (null = standalone)
   series_path:          string | null;  // Absolute path to the series folder
+  // Which outline scaffold was last applied. May be null on older projects
+  // created before this field existed -- treat null as unknown (not an error).
+  outline_template:     OutlineTemplateType | null;
   created_at:           string;   // ISO datetime string
   updated_at:           string;
 }
@@ -67,6 +76,7 @@ export interface CreateBookInSeriesPayload {
   title:       string;
   description?: string;
   folder_name?: string;
+  template_type?: OutlineTemplateType;  // Defaults to "novel" on the backend
 }
 
 
@@ -85,6 +95,21 @@ export interface CreateProjectPayload {
   folder_path: string;
   title:       string;
   description: string;
+  template_type?: OutlineTemplateType;  // Defaults to "novel" on the backend
+}
+
+// --- ApplyOutlineTemplatePayload / Response ---
+// POST /api/projects/apply-outline-template -- overwrites notes/outline.md
+// with a freshly-rendered scaffold of the chosen type. Used by the editor
+// toolbar [+ New Template] button and the same control in Project Settings.
+export interface ApplyOutlineTemplatePayload {
+  root_path:     string;
+  template_type: OutlineTemplateType;
+}
+
+export interface ApplyOutlineTemplateResponse {
+  content:          string;                // New outline.md body (for editor refresh)
+  template_applied: OutlineTemplateType;   // Echo of what got written
 }
 
 // --- OpenProjectPayload ---
