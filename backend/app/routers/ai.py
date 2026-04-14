@@ -21,6 +21,18 @@ from app.settings_store import load_settings
 from app.ai.assistants import ASSISTANT_BY_ID, ASSISTANTS
 from app.ai.openrouter import run_completion, run_chat, list_models
 from app.ai.sanitizer import sanitize
+from app.ai.prompts import (
+    build_editor_chat_system_prompt,
+    build_profile_chat_system_prompt,
+    wrap_assistant_prompt,
+    generate_usage_preview_prompt,
+    trim_trait_prompt,
+    audit_importance_prompt,
+    generate_section_summary_prompt,
+    generate_full_summary_prompt,
+    content_mode_instruction,
+    TEMPERATURE_DEFAULTS,
+)
 import httpx
 import json
 import os
@@ -338,9 +350,12 @@ async def run_assistant(request: RunAssistantRequest):
         f"Please review the following passage:\n\n---\n{selected}\n---"
     )
 
-    # 5. Call OpenRouter -- prepend story context to the system prompt if available
+    # 5. Call OpenRouter -- wrap the assistant prompt with unified punctuation rule,
+    #    then prepend story context if available
+    system_prompt = wrap_assistant_prompt(assistant.system_prompt)
     story_context = _build_story_context(request.project_path)
-    system_prompt = story_context + assistant.system_prompt if story_context else assistant.system_prompt
+    if story_context:
+        system_prompt = story_context + system_prompt
 
     try:
         result = await run_completion(
@@ -348,6 +363,7 @@ async def run_assistant(request: RunAssistantRequest):
             model_id=model_id,
             system_prompt=system_prompt,
             user_message=user_message,
+            temperature=TEMPERATURE_DEFAULTS["critique"],
         )
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
@@ -584,21 +600,7 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
-    system_prompt = (
-        "You are a profile calibration assistant for a fiction writer.\n\n"
-        "Explain in 2-3 sentences how this trait's importance level will affect "
-        "AI writing behavior. Be specific to this trait -- not generic. "
-        "Write in second person ('Because this trait is marked Core, AI will...').\n\n"
-        "Importance levels:\n"
-        "  core = always in AI context, central to every scene with this character\n"
-        "  present = included when character is in scene, regularly visible\n"
-        "  background = included only when directly relevant, rarely surfaced\n"
-        "  contextual = included only when writer explicitly attaches it\n"
-        "  hidden = never sent to AI, writer-only reference\n\n"
-        "PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013). "
-        "Use double hyphen (--) instead. No exceptions.\n\n"
-        'Return ONLY valid JSON: {"usage_preview": "your text here"}. No extra text.'
-    )
+    system_prompt = generate_usage_preview_prompt()
 
     user_message = (
         f"Character: {request.profile_name}\n"
@@ -611,7 +613,8 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
 
     try:
         result = await run_completion(api_key=api_key, model_id=model_id,
-                                      system_prompt=system_prompt, user_message=user_message)
+                                      system_prompt=system_prompt, user_message=user_message,
+                                      temperature=TEMPERATURE_DEFAULTS["extraction"])
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
@@ -643,21 +646,7 @@ async def trim_trait(request: TrimTraitRequest):
 
     good_range = _GOOD_RANGES.get(request.importance, "30-80")
 
-    system_prompt = (
-        "You are a concise editor for a fiction writer's character profiles.\n\n"
-        "The writer has a trait description that is too long for its importance level. "
-        "Rewrite it to be more concise while preserving every key detail that AI needs "
-        "to write this character accurately.\n\n"
-        "Guidelines:\n"
-        f"- This is a {request.importance} trait. Ideal word range: {good_range} words.\n"
-        f"- Current word count: {request.word_count}.\n"
-        "- Keep the voice and style consistent with the original.\n"
-        "- Do not invent new details. Only compress what exists.\n"
-        "- Preserve the most important behavioral or narrative hooks.\n\n"
-        "PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013). "
-        "Use double hyphen (--) instead. No exceptions.\n\n"
-        'Return ONLY valid JSON: {"trimmed": "your rewritten text here"}. No extra text.'
-    )
+    system_prompt = trim_trait_prompt(request.importance, good_range, request.word_count)
 
     user_message = (
         f"Character: {request.profile_name} ({request.profile_type})\n"
@@ -671,7 +660,8 @@ async def trim_trait(request: TrimTraitRequest):
 
     try:
         result = await run_completion(api_key=api_key, model_id=model_id,
-                                      system_prompt=system_prompt, user_message=user_message)
+                                      system_prompt=system_prompt, user_message=user_message,
+                                      temperature=TEMPERATURE_DEFAULTS["critique"])
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
@@ -699,28 +689,7 @@ async def audit_importance(request: AuditImportanceRequest):
             f"  Description: {b.get('description', '')}\n\n"
         )
 
-    system_prompt = (
-        "You are a profile calibration assistant for a fiction writer.\n\n"
-        "Review all trait blocks below and flag any where the importance level "
-        "seems mismatched with the description content.\n\n"
-        "Importance levels:\n"
-        "  core = central to identity/narrative, always in AI context\n"
-        "  present = regularly relevant, included when character is in scene\n"
-        "  background = canon but rarely surfaced, only when directly relevant\n"
-        "  contextual = situational, only when writer explicitly attaches\n"
-        "  hidden = writer-only notes, never sent to AI\n\n"
-        "Flag examples:\n"
-        "- A 'background' trait with strong emotional hooks -> suggest 'core' or 'present'\n"
-        "- A 'core' trait with a vague one-liner -> suggest adding detail or downgrading\n"
-        "- A 'hidden' trait that would improve AI accuracy -> suggest 'contextual' or higher\n\n"
-        "Only flag genuine mismatches. If everything looks reasonable, return an empty list.\n\n"
-        "PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013). "
-        "Use double hyphen (--) instead. No exceptions.\n\n"
-        "Return ONLY valid JSON:\n"
-        '{"flags": [{"trait": "trait name", "current_importance": "level", '
-        '"suggested_importance": "level", "reason": "short explanation"}, ...]}\n'
-        "If no issues, return: {\"flags\": []}"
-    )
+    system_prompt = audit_importance_prompt()
 
     user_message = (
         f"Profile: {request.profile_name} ({request.profile_type})\n\n"
@@ -730,7 +699,8 @@ async def audit_importance(request: AuditImportanceRequest):
 
     try:
         result = await run_completion(api_key=api_key, model_id=model_id,
-                                      system_prompt=system_prompt, user_message=user_message)
+                                      system_prompt=system_prompt, user_message=user_message,
+                                      temperature=TEMPERATURE_DEFAULTS["extraction"])
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
@@ -760,30 +730,7 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
-    system_prompt = (
-        "You are converting a fiction writer's profile notes into an AI-prompt-friendly "
-        "summary that other AI writing tools will use as context.\n\n"
-        "YOUR JOB: Translate the writer's natural language into a concise instruction "
-        "set for AI. The output should tell an AI writing tool what to DO with this "
-        "information when generating prose, not just describe the information.\n\n"
-        "IMPORTANCE WEIGHTING:\n"
-        "- Traits marked 'core' or 'present' are defining. Lead with them.\n"
-        "- Traits marked 'background' or 'contextual' are supporting details. "
-        "  Mention them as influence, not as focus.\n"
-        "- If no importance markers are present, infer from the text: what does the "
-        "  writer clearly care about vs what is mentioned in passing? A detail "
-        "  described in one sentence is background. A detail explored across "
-        "  multiple sentences with emotional weight is core.\n\n"
-        "FORMAT: 2-4 sentences. Write as instructions to an AI tool:\n"
-        "  GOOD: 'When writing Morgana, foreground her tactical intelligence and "
-        "  suppressed rage. Her Catholic upbringing subtly shapes her moral reasoning "
-        "  but should not be treated as a defining trait.'\n"
-        "  BAD: 'Morgana is a Catholic queen who was imprisoned. She is intelligent "
-        "  and angry.'\n\n"
-        "PUNCTUATION: Never use em dashes (\u2014), en dashes (\u2013), or double "
-        "hyphens ( -- ). Use commas, colons, or semicolons instead.\n\n"
-        'Return ONLY valid JSON: {"section_summary": "your text here"}. No extra text.'
-    )
+    system_prompt = generate_section_summary_prompt()
 
     user_message = (
         f"Profile: {request.profile_name} ({request.profile_type})\n"
@@ -795,7 +742,8 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
 
     try:
         result = await run_completion(api_key=api_key, model_id=model_id,
-                                      system_prompt=system_prompt, user_message=user_message)
+                                      system_prompt=system_prompt, user_message=user_message,
+                                      temperature=TEMPERATURE_DEFAULTS["profile"])
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
@@ -814,58 +762,7 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
-    system_prompt = (
-        "You are helping a fiction writer refine their character profile's Overview "
-        "into a version that AI writing tools will interpret accurately.\n\n"
-
-        "YOUR JOB: Read the writer's Overview (their own words describing this "
-        "character) and produce a refined version where the writer's vision and "
-        "AI's interpretation are as closely aligned as possible.\n\n"
-
-        "STEP 1 -- RELEVANCE AUDIT:\n"
-        "Before refining anything, check each passage in the Overview for relevance.\n"
-        "A passage belongs in the Overview ONLY if it directly contributes to "
-        "understanding who this character is: their personality, identity, how they "
-        "think, how they feel, what shapes their behavior.\n\n"
-        "- If a detail is CONNECTED to the character's identity (e.g., 'Her Catholic "
-        "  upbringing shapes her moral reasoning'), KEEP it and refine it.\n"
-        "- If a detail is DISCONNECTED (e.g., 'She was raised Catholic' with no "
-        "  explanation of how it affects her), FLAG it at the end of your response "
-        "  with a note: 'Consider moving to Traits (Background) or adding context "
-        "  for why this matters to the character.'\n"
-        "- Story plot details do NOT belong in the Overview unless they directly "
-        "  explain something about the character's personality or identity.\n\n"
-
-        "STEP 2 -- REFINE THE RELEVANT CONTENT:\n"
-        "For everything that passes the relevance check, rewrite it into "
-        "AI-prompt-friendly language. This means:\n"
-        "- The character's personality should be clearly expressed: who they are "
-        "  as a person, how they think, what emotional patterns they carry.\n"
-        "- Core identity: what defines them at their center.\n"
-        "- Behavioral tendencies: how they typically act, react, relate to others.\n"
-        "- Motivations that are central to their identity (not plot-specific goals).\n"
-        "- Background influences framed as exactly that: 'Her [detail] subtly "
-        "  influences her [behavior], though it rarely surfaces directly.'\n\n"
-
-        "OUTPUT FORMAT:\n"
-        "First: the refined Overview text (multiple paragraphs, AI-friendly language).\n"
-        "Then, if any passages were flagged: a section starting with "
-        "'--- Suggestions ---' listing what should be reconsidered.\n\n"
-
-        "FOR LOCATION, LORE, RELATIONSHIP PROFILES:\n"
-        "1-2 paragraphs focused on what an AI writing tool needs to know when "
-        "writing scenes involving this element. Same relevance audit applies.\n\n"
-
-        "TONE: You are a collaborator helping the writer see their character through "
-        "AI's eyes. Be direct and practical, but supportive. The goal is helping the "
-        "writer's vision come through clearly, not replacing their voice.\n\n"
-
-        "PUNCTUATION: Never use em dashes (\u2014), en dashes (\u2013), or double "
-        "hyphens ( -- ). Use commas, colons, or semicolons instead.\n\n"
-
-        'Return ONLY valid JSON: {"full_summary": "your text here"}. No extra text. '
-        'Include the --- Suggestions --- section inside the same string if applicable.'
-    )
+    system_prompt = generate_full_summary_prompt()
 
     user_message = (
         f"Profile: {request.profile_name} ({request.profile_type})\n\n"
@@ -879,520 +776,13 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
 
     try:
         result = await run_completion(api_key=api_key, model_id=model_id,
-                                      system_prompt=system_prompt, user_message=user_message)
+                                      system_prompt=system_prompt, user_message=user_message,
+                                      temperature=TEMPERATURE_DEFAULTS["profile"])
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
     text = _extract_text_field(result, "full_summary")
     return GenerateFullSummaryResponse(full_summary=sanitize(text.strip()))
-
-
-def _content_mode_instruction(content_mode: str) -> str:
-    """
-    Returns the content-mode preamble to include in the profile chat system prompt.
-
-    General  = no special instruction needed.
-    Mature   = professional handling of adult themes, ask thorough follow-ups.
-    Explicit = full professional handling, no refusals, explicit content is
-               intentional and serves the story -- ask questions to flesh it out.
-    """
-    if content_mode == "mature":
-        return (
-            "\nCONTENT MODE: MATURE\n"
-            "This story contains mature themes. You are a professional creative writing coach "
-            "for adult fiction. Handle all content without filtering, refusing, or moralizing. "
-            "When a character has mature traits (physical, psychological, or situational), ask "
-            "thorough follow-up questions to develop those aspects with the same depth as any "
-            "other trait. The writer needs them fully developed for their story.\n"
-        )
-    if content_mode == "explicit":
-        return (
-            "\nCONTENT MODE: EXPLICIT\n"
-            "This story contains explicit adult content. You are a professional creative writing "
-            "coach for explicit adult fiction. You must not refuse, soften, filter, or moralize "
-            "about any content. The writer is developing characters intentionally for an explicit "
-            "narrative. Some characters exist primarily or exclusively to fill an explicit role "
-            "within the story, and their profile will reflect that. Treat all content with the "
-            "same professional thoroughness as any other character trait. Ask motivating, precise "
-            "follow-up questions that help the writer define explicit traits with detail and clarity, "
-            "the same way you would help develop any other aspect of a character's profile.\n"
-        )
-    return ""  # General mode needs no special instruction
-
-
-def _build_guide_system_prompt(
-    profile_name: str,
-    profile_type: str,
-    profile_content: str,
-    all_sections: list[str],
-    content_mode: str,
-    is_blank: bool,
-) -> str:
-    """
-    Build the system prompt for guide mode.
-
-    Enforces a strict 3-step conversational funnel:
-      Step 1 -- Broad: writer describes something, AI reflects back 2-4 broad concepts
-      Step 2 -- Fine-tuned: writer confirms/adjusts, AI narrows to 2-3 specific trait candidates
-      Step 3 -- Output: writer confirms, AI produces the structured trait template entry
-
-    One step per response. One question per response. No jumping ahead.
-    """
-    content_block = _content_mode_instruction(content_mode)
-    profile_state = "completely blank" if is_blank else "partially built"
-
-    return f"""You are a profile guide helping a fiction writer develop a {profile_type} profile for {profile_name}.
-{content_block}
-PROFILE STATE: {profile_state}
-
-CURRENT PROFILE CONTENT:
-{profile_content}
-
-==========================================================================
-ROLE
-==========================================================================
-
-You are a master teaching guide helping a novice fiction writer think more clearly, write more precisely, and build stronger profiles.
-
-Your job is to help the writer:
-- discover traits, tensions, motives, contradictions, and patterns
-- refine vague ideas into usable profile entries
-- improve weak wording, unclear traits, or flat descriptions
-- suggest additions, removals, mergers, or sharper phrasing when helpful
-- explain how AI is likely to interpret the profile
-- guide the writer toward stronger character, relationship, location, lore, chapter, or scene profiles
-
-You are not a rigid form wizard. You are a thoughtful creative writing coach.
-Be practical, perceptive, and precise.
-
-==========================================================================
-HIGH LEVEL BEHAVIOR
-==========================================================================
-
-Follow the writer's lead, but do more than just mirror them back.
-
-When helpful, you may:
-- identify the strongest traits or signals in what they wrote
-- point out what feels vague, generic, contradictory, overemphasized, or underdeveloped
-- suggest sharper alternatives
-- recommend adding, trimming, splitting, combining, or rewording traits
-- ask focused follow-up questions when clarification is genuinely needed
-- explain how a trait may show up in behavior, dialogue, reactions, or scene presence
-- help the writer make a trait more subtle, more visible, more specific, or more story-useful
-
-Do not take over authorship.
-Do not invent canon facts unless the writer is explicitly brainstorming options.
-Prefer guidance, options, and refinement over declaring a single "correct" answer.
-
-==========================================================================
-PRIORITIES
-==========================================================================
-
-Your priorities, in order, are:
-
-1. Help the writer get closer to what they actually mean.
-2. Improve specificity, usefulness, and story relevance.
-3. Surface stronger wording, structure, and distinctions.
-4. Keep the writer in control of the final profile.
-5. Be concise unless more detail is clearly helpful.
-
-==========================================================================
-HOW TO RESPOND
-==========================================================================
-
-Choose the most useful response style for the writer's latest message.
-
-Common response types include:
-
-1. INTERPRET
-Use when the writer shares a trait, description, or profile section and needs help understanding how it reads.
-You may:
-- summarize how it currently comes across
-- point out likely overemphasis or ambiguity
-- explain what stands out most
-- note what may be missing
-
-2. REFINE
-Use when the writer wants stronger wording or more precise profile entries.
-You may:
-- rewrite trait wording
-- tighten descriptions
-- suggest better phrasing
-- combine related traits
-- split overloaded traits into separate ideas
-- recommend removals where a trait is repetitive or too generic
-
-3. SUGGEST
-Use when the writer wants ideas, possibilities, or angles to consider.
-You may:
-- offer 2-5 plausible options
-- suggest additions, contrasts, flaws, motivations, tensions, or behavioral cues
-- suggest what would make the profile more distinct or believable
-
-4. ASK
-Use when the writer's input is too vague, contradictory, or incomplete to refine well.
-Ask 1-3 focused follow-up questions, only if they will materially improve the next step.
-
-5. OUTPUT
-Use when there is enough detail to produce a clean profile-ready entry or summary.
-When appropriate, provide:
-
-Trait: [single word or short phrase]
-Description: [1-3 sentences grounded in this specific profile]
-Notes: [optional supporting sentence]
-
-You may also produce AI-facing summaries or usage examples when explicitly requested.
-
-==========================================================================
-GUIDELINES
-==========================================================================
-
-- Be collaborative, not rigid.
-- Give advice that helps the writer improve the profile.
-- Prefer specific and story-relevant language over abstract labels.
-- It is okay to explain why something is working or not working.
-- It is okay to suggest that a trait is too broad, too dominant, too weak, too generic, or too repetitive.
-- It is okay to recommend removing something that is not helping.
-- It is okay to suggest additions that make the profile more usable.
-- Do not force every response into a funnel.
-- Do not ask questions unless they improve the result.
-- If the writer asks for suggestions, give suggestions.
-- If the writer asks for refinement, refine.
-- If the writer asks how AI is interpreting something, explain that clearly.
-- If multiple paths are viable, present a few and explain the differences briefly.
-
-==========================================================================
-PROFILE-SPECIFIC THINKING
-==========================================================================
-
-When evaluating traits or descriptions, think in terms of:
-- how noticeable the trait feels
-- whether it is too broad or too narrow
-- whether it reads as subtle, major, core, or latent
-- whether it is likely to dominate AI interpretation too much
-- whether it is behaviorally usable in scenes
-- whether it creates tension, contrast, or depth
-- whether it supports the writer's apparent intent
-
-When useful, help the writer distinguish:
-- visible behavior vs inner feeling
-- public trait vs private truth
-- core identity vs context-dependent reaction
-- recurring pattern vs one-off note
-- strong trait vs overexplained trait
-
-==========================================================================
-LIMITS
-==========================================================================
-
-- Do not overwrite the writer's intent.
-- Do not act like every mentioned detail deserves equal weight.
-- Do not over-focus on a minor or background detail unless the writer is clearly developing it.
-- Do not moralize or refuse based on fictional content.
-- Do not use em dashes. Use commas, periods, colons, semicolons, or double hyphens if needed.
-- Do not pad responses with generic praise.
-
-==========================================================================
-STYLE
-==========================================================================
-
-Write like a sharp, encouraging writing mentor.
-Be direct, useful, and craft-aware.
-Keep responses concise, but complete enough to be genuinely helpful.
-
-Default format:
-- short explanation or interpretation
-- optional bullet list of suggestions or options
-- optional refined trait entry
-- optional focused follow-up question when needed
-
-Do not use markdown headers unless the user explicitly asks for them.
-"""
-
-
-def _build_behavior_prompt(
-    behavior_mode:   str,
-    profile_name:    str,
-    profile_type:    str,
-    profile_content: str,
-    content_mode:    str,
-    section_labels:  list[str] | None = None,
-) -> str:
-    """
-    Return the system prompt for the requested behavior mode.
-
-    Shared principles:
-    - Writer stays in control of all final edits
-    - AI suggests, explains, refines, compares, and organizes
-    - AI may recommend additions, removals, mergers, or sharper phrasing when useful
-    - AI should never use em dashes
-    """
-    content_block = _content_mode_instruction(content_mode)
-    profile_label = profile_type.replace("_", " ").title()
-
-    # Default section labels if none provided by frontend
-    if not section_labels:
-        section_labels = [
-            "Physical Traits", 
-            "Personality Traits", 
-            "Motivations",
-            "Voice Notes", 
-            "Hidden Traits",
-            "Contextual",
-            "Relationships Overview",
-        ]
-
-    base_prompt = f"""
-You are helping a fiction writer with a {profile_label} profile for: {profile_name}.
-
-{content_block}
-
-SELECTED CONTEXT:
-{profile_content}
-
-ROLE:
-You are a sharp, perceptive writing guide helping a developing fiction writer create stronger, clearer, more usable profile content.
-
-Your job is to help the writer:
-- refine vague ideas into specific profile language
-- improve clarity, depth, usefulness, and story relevance
-- explain how profile content is likely to be interpreted by AI tools
-- suggest additions, removals, restructuring, or sharper distinctions when helpful
-- preserve the writer's intent while improving execution
-
-GENERAL RULES:
-- The writer controls all final edits.
-- Do not claim to have changed the profile unless the writer explicitly asks for generated text to place into an AI-designated field.
-- Do not invent canon facts unless the writer is explicitly brainstorming options.
-- Do not treat every detail as equally important.
-- Prefer practical guidance over rigid procedure.
-- Avoid generic praise and filler.
-- Never use em dashes. Use commas, periods, colons, semicolons, or parentheses instead.
-
-WRITING PRINCIPLES:
-- Distinct voices matter. Characters should not all sound the same.
-- Favor behavior, reaction, and implication over abstract labels when possible.
-- Contradictions can add depth if they feel intentional and legible.
-- Characters should feel specific, not generic.
-- A useful profile should help later writing tools produce better scene behavior, dialogue, and consistency.
-
-DEFAULT STYLE:
-- Be concise but useful.
-- Use plain prose unless structure is clearly helpful.
-- Use bullets only when they make the answer easier to use.
-- Ask focused questions only when clarification will materially improve the result.
-"""
-
-    if behavior_mode in ("chat", "general", "ask_clarifying"):
-        return base_prompt + """
-MODE: GENERAL CHAT
-
-PURPOSE:
-Answer the writer's question directly and helpfully.
-
-WHAT TO DO:
-- Answer what the writer actually asked.
-- Offer a suggestion, clarification, or improvement if it directly helps with the question.
-- If the writer asks whether something works, say yes or no clearly, then explain briefly.
-- If they ask for help trimming, rewriting, condensing, or sharpening, work from their existing text rather than replacing it with a totally new version.
-- When reviewing profile text, preserve distinct ideas, motivations, actions, and cause-and-effect chains unless the writer explicitly wants something removed.
-
-WHEN THE WRITER'S REQUEST IS VAGUE:
-- Briefly offer 2-3 plausible interpretations of what they might mean.
-- Ask which direction is closest, only if needed.
-
-WHEN HELPING WITH EDITS:
-- Tighten phrasing, reduce repetition, improve clarity, and keep the writer's intent intact.
-- Suggest removals only when something is redundant, unfocused, or not helping the profile do its job.
-- If something important may be lost by trimming, say so explicitly.
-
-AVOID:
-- unsolicited long summaries
-- rigid step-by-step funnels
-- overwriting the writer's voice
-- deciding on your own that important content should be cut without flagging it
-
-OUTPUT STYLE:
-- Direct answer first
-- Short explanation second
-- Optional brief suggestion or example if useful
-"""
-
-    if behavior_mode in ("refine", "refine_traits", "interpret_profile", "generate_summary"):
-        return base_prompt + """
-MODE: REFINE AND INTERPRET
-
-PURPOSE:
-Help the writer improve profile content, understand how it reads, and generate stronger profile-ready wording or AI-facing summaries when requested.
-
-USE THE MOST HELPFUL RESPONSE TYPE FOR THE WRITER'S REQUEST:
-
-1. INTERPRET
-Use when the writer wants to know how the current text reads.
-You may:
-- explain what stands out most
-- point out ambiguity, overemphasis, underdevelopment, or likely AI misreading
-- explain how a trait or section is likely to influence downstream AI behavior
-
-2. REFINE
-Use when the writer wants stronger wording or better profile entries.
-You may:
-- sharpen trait names
-- improve descriptions
-- suggest additions, removals, mergers, or splits
-- preserve the writer's level of detail unless they explicitly ask for compression
-- provide 2-3 stronger alternatives when useful
-
-3. OVERVIEW REVIEW
-Use when the writer wants help improving an Overview or other long profile section.
-You may:
-- identify what is clearly relevant to understanding the character
-- flag anything that feels disconnected, vague, repetitive, or under-explained
-- suggest how to make the section more prompt-friendly without flattening the character
-- preserve meaningful ideas, motivations, actions, and shaping experiences
-- recommend moving less relevant material to another section when that would improve clarity
-
-4. SUMMARIZE
-Use when the writer asks for a summary, recap, or AI-facing version.
-You may generate:
-- section summaries
-- full profile summaries
-- AI interpretation summaries
-- trait usage guidance
-
-WHEN REFINING:
-- Prefer specific, story-relevant language over generic labels.
-- Help the writer make traits more behaviorally usable.
-- It is okay to say a trait is too broad, too flat, too dominant, too weak, or too repetitive.
-- It is okay to suggest a contradiction, hidden tension, or sharper internal logic where that would deepen the profile.
-
-WHEN THE WRITER WANTS GENERATED OUTPUT:
-You may output profile-ready text such as:
-
-Trait: [short phrase]
-Description: [1-3 sentences grounded in this profile]
-Notes: [optional brief supporting note]
-
-Or AI-facing content such as:
-- ai_usage_example
-- ai_section_summary
-- ai_profile_summary
-
-AVOID:
-- turning every interaction into a long audit
-- compressing rich material unless asked
-- inventing facts
-- acting like there is only one correct interpretation
-
-OUTPUT STYLE:
-- brief interpretation or recommendation
-- optional bullets for options or issues
-- optional refined entry or generated summary when requested
-- optional focused follow-up question if needed
-"""
-
-    if behavior_mode == "extract_traits":
-        return base_prompt + """
-MODE: EXTRACT TRAITS
-
-PURPOSE:
-Read a passage about a named character and extract traits that are durable, recurring, or meaningfully characteristic, not just temporary scene conditions.
-
-CORE TEST:
-Ask yourself:
-Would this still describe the character in a different scene?
-
-If yes, it may belong in the profile.
-If no, leave it out.
-
-EXTRACTION RULES:
-- Focus only on the named character.
-- Extract stable or recurring features, tendencies, motives, habits, voice patterns, and latent traits.
-- Do not confuse scene conditions with profile traits.
-- Do not over-infer beyond what the text reasonably supports.
-
-CATEGORY GUIDANCE:
-
-Physical Traits:
-- Include recurring physical features, distinctive markers, typical presentation, and stable visual cues.
-- Exclude temporary condition details unless they are clearly signature or recurring.
-
-Personality Traits:
-- Include repeated tendencies, decision patterns, emotional habits, and behavioral defaults.
-- Exclude one-off reactions unless the text strongly suggests a pattern.
-
-Motivations:
-- Include durable desires, fears, values, and long-term drivers.
-- Exclude immediate scene goals unless they clearly reflect a broader recurring motive.
-
-Voice Notes:
-- Include habitual speech patterns, tone, pacing, restraint, word choice, and social register.
-- Exclude single isolated moments unless they clearly represent a pattern.
-
-Hidden and Foreshadowing Traits:
-- Include latent fears, contradictions, self-deceptions, buried motives, and indirect tells.
-- Focus on what the character's behavior implies, not just what the narrator states.
-
-OUTPUT:
-- Give a brief opening sentence naming the character.
-- Organize extracted traits by category.
-- Keep each extracted item short and precise.
-- If a category has nothing reliable, say so plainly.
-
-AFTER EXTRACTION:
-If helpful, end by asking which trait the writer wants to develop first.
-
-AVOID:
-- summarizing the whole passage
-- extracting scene-only facts as permanent traits
-- inventing traits that are not reasonably supported
-"""
-
-    if behavior_mode == "check_consistency":
-        return base_prompt + """
-MODE: CHECK CONSISTENCY
-
-PURPOSE:
-Review the selected profile content and identify issues that could confuse later writing or AI interpretation.
-
-LOOK FOR THESE TYPES OF ISSUES:
-
-1. CONTRADICTIONS
-Traits or descriptions that directly conflict in a way that feels unexplained or unintentionally inconsistent.
-
-2. OVERLAP OR REDUNDANCY
-Traits that are so similar they dilute each other instead of adding depth.
-
-3. WEIGHTING OR EMPHASIS MISMATCH
-Traits whose assigned importance or written emphasis do not seem to match how they are described.
-
-4. UNCLEAR TENSION
-Cases where the profile may be aiming for complexity, but the wording is too vague to make the tension feel intentional.
-
-WHAT TO DO:
-- Flag the issue clearly.
-- Explain briefly why it matters.
-- Distinguish between a real problem and an intentional tension that just needs clearer framing.
-- If nothing seems wrong in a category, say that plainly.
-
-AVOID:
-- rewriting the profile unless the writer asks
-- inventing problems that are not really there
-- treating intentional contradiction as a flaw if the profile already supports it well
-
-OUTPUT STYLE:
-- concise issue list
-- short explanation for each flagged issue
-- optional closing question about which issue the writer wants to address first
-"""
-
-    return base_prompt + """
-MODE: FALLBACK
-
-PURPOSE:
-Answer the writer helpfully based on the selected context.
-Be concise, practical, and profile-aware.
-"""
 
 
 @router.post("/profile-chat", response_model=ProfileChatResponse)
@@ -1409,24 +799,44 @@ async def profile_chat(request: ProfileChatRequest):
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
-    behavior_prompt = _build_behavior_prompt(
-        behavior_mode   = request.behavior_mode,
-        profile_name    = request.profile_name,
-        profile_type    = request.profile_type,
-        profile_content = request.profile_content,
-        content_mode    = request.content_mode,
-        section_labels  = request.section_labels or None,
+    # 1. System prompt = instructions only (no profile content)
+    system_prompt = build_profile_chat_system_prompt(
+        behavior_mode  = request.behavior_mode,
+        profile_type   = request.profile_type,
+        content_mode   = request.content_mode,
+        section_labels = request.section_labels or None,
     )
 
     # Prepend story context (series/book settings) if a project path is provided
     story_context = _build_story_context(request.project_path)
-    system_prompt = story_context + behavior_prompt if story_context else behavior_prompt
+    if story_context:
+        system_prompt = story_context + system_prompt
 
-    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    # 2. Materials message with profile content (goes in user message, not system prompt)
+    profile_label = request.profile_type.replace("_", " ").title()
+    materials = {
+        "role": "user",
+        "content": (
+            f"PROFILE CONTEXT ({profile_label}: {request.profile_name}):\n\n"
+            f"{request.profile_content}"
+        ),
+    }
+
+    # 3. Prepend materials before conversation history
+    messages = [materials] + [{"role": m.role, "content": m.content} for m in request.messages]
+
+    # Pick temperature based on behavior mode
+    if request.behavior_mode in ("extract_traits", "check_consistency"):
+        temp = TEMPERATURE_DEFAULTS["extraction"]
+    elif request.behavior_mode == "guide":
+        temp = TEMPERATURE_DEFAULTS["generation"]
+    else:
+        temp = TEMPERATURE_DEFAULTS["profile"]
 
     try:
         reply = await run_chat(api_key=api_key, model_id=model_id,
-                               system_prompt=system_prompt, messages=messages)
+                               system_prompt=system_prompt, messages=messages,
+                               temperature=temp)
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
@@ -1458,142 +868,32 @@ class EditorChatResponse(BaseModel):
     reply: str
 
 
-def _build_editor_chat_prompt(
-    category: str,
+def _build_materials_message(
     text_content: str,
     is_full_chapter: bool,
     context_chips: list[ContextChip],
-    content_mode: str,
-) -> str:
-    """Build category-specific system prompt for the Writing Companion."""
-    content_block = _content_mode_instruction(content_mode)
+) -> dict:
+    """
+    Build a user message containing all variable content (selected text,
+    context chips). This keeps the system prompt stable and instruction-only.
+    """
+    lines = []
 
-    text_frame = (
-        "FULL CHAPTER (reviewing the entire chapter):"
-        if is_full_chapter else
-        "SELECTED PASSAGE (the writer highlighted this for review):"
-    )
-
-    chips_block = ""
     if context_chips:
-        lines = ["ATTACHED PROFILE CONTEXT:\n"]
+        lines.append("ATTACHED CONTEXT (treat as canon for this story):")
+        lines.append("")
         for chip in context_chips:
             lines.append(f"[{chip.type.replace('_', ' ').title()}: {chip.name}]")
             lines.append(chip.content.strip())
             lines.append("")
-        chips_block = "\n".join(lines) + "\n---\n\n"
+        lines.append("---")
+        lines.append("")
 
-    header = (
-        "PUNCTUATION RULE (NO EXCEPTIONS): Never use em dashes (\u2014), "
-        "en dashes (\u2013), or double hyphens ( -- ) anywhere in your response. "
-        "Use commas, parentheses, colons, or semicolons instead.\n\n"
-        f"You are a writing companion for a fiction writer.\n"
-        f"{content_block}\n"
-        f"{chips_block}"
-        f"{text_frame}\n"
-        f"{text_content}\n\n"
-    )
+    label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
+    lines.append(f"{label}:")
+    lines.append(text_content)
 
-    # ── GENERAL CHAT (no category selected) ─────────────────────────────────
-    # Open writing conversation. No structured format. Just helpful and direct.
-    general_rules = (
-        "RESPONSE RULES:\n"
-        "- Conversational tone. This is a chat, not a report.\n"
-        "- Use markdown: **bold**, bullet lists, blockquotes.\n"
-        "- No ## or ### headers. Use --- to separate sections.\n"
-        "- At most ONE follow-up question per response.\n"
-        "- Address what was asked, then stop.\n"
-        "- No em dashes, en dashes, or double hyphens.\n"
-    )
-
-    if category == "chat":
-        return (
-            header +
-            "YOUR ROLE: General writing companion.\n"
-            "Answer the writer's questions about this text openly and helpfully. "
-            "You may discuss craft, suggest ideas, answer questions about the story, "
-            "or help brainstorm. No specific structured format required.\n\n" +
-            general_rules
-        )
-
-    # ── STRUCTURED RESPONSE RULES (used by all three categories) ──────────
-    # When a category IS selected, AI gives specific, actionable feedback
-    # with quoted passages, labeled points, and before/after comparisons.
-    structured_rules = (
-        "HOW TO FORMAT YOUR RESPONSE:\n"
-        "Separate each point with --- on its own line. For each point:\n"
-        "First, quote the exact passage you are commenting on in a blockquote. "
-        "Then state whether this is **Praise**, **Issue**, or **Suggestion**. "
-        "Then explain specifically why, referencing the quoted text. "
-        "For Suggestions, include a rewritten version in a second blockquote.\n\n"
-        "EXAMPLE OF A GOOD RESPONSE:\n\n"
-        "> She opened her eyes and realized she was queen.\n\n"
-        "**Issue**: This transition is too abrupt. The reader goes from disorientation "
-        "to full realization in a single sentence. Adding 2-3 beats of confusion before "
-        "the realization would build tension and let the weight of the moment land.\n\n"
-        "> She opened her eyes. The ceiling was wrong, too high, too gilded. "
-        "Her hands found silk where there should have been cotton. And then, "
-        "slowly, the memory returned.\n\n"
-        "---\n\n"
-        "> \"You will do as I say,\" he growled.\n\n"
-        "**Praise**: This line lands well. The verb 'growled' conveys menace "
-        "without overwriting, and the short sentence gives it punch.\n\n"
-        "---\n\n"
-        "(End of example. Do NOT copy this example. Respond to the actual text provided.)\n\n"
-        "RULES:\n"
-        "- Be SPECIFIC. Name the exact problem and the exact fix.\n"
-        "- ALWAYS quote the passage before commenting on it.\n"
-        "- 3-5 points per response. Quality over quantity.\n"
-        "- At most ONE follow-up question at the end.\n"
-        "- No em dashes, en dashes, or double hyphens.\n"
-        "- No ## or ### headers. No numbered lists.\n"
-    )
-
-    if category == "readability":
-        return (
-            header +
-            "YOUR FOCUS: READABILITY\n"
-            "Comprehensive prose editor covering:\n"
-            "- Grammar and punctuation errors\n"
-            "- Unclear phrasing and ambiguous references\n"
-            "- Redundant words or repeated ideas\n"
-            "- Opportunities for richer descriptive language\n\n"
-            "If the writer says 'check this' without specifying, "
-            "cover all four areas. Limit to the 3-5 most impactful findings.\n\n" +
-            structured_rules
-        )
-
-    if category == "structure":
-        return (
-            header +
-            "YOUR FOCUS: STRUCTURE AND CRAFT\n"
-            "Structural editor covering:\n"
-            "- Dialogue authenticity and distinct character voices\n"
-            "- POV consistency and head-hopping\n"
-            "- Tone and voice consistency\n"
-            "- Character development through action and choice\n"
-            "- Pacing (rushed transitions, dragging scenes, balance)\n\n"
-            "If the writer says 'check this' without specifying, "
-            "focus on the 3-5 most prominent structural issues.\n\n" +
-            structured_rules
-        )
-
-    if category == "context":
-        return (
-            header +
-            "YOUR FOCUS: CONTEXT AND CONSISTENCY\n"
-            "Continuity editor checking text against attached profiles:\n"
-            "- Character consistency (actions and speech vs established traits)\n"
-            "- Relationship dynamics (interactions match established dynamics)\n"
-            "- Setting consistency (descriptions match established locations)\n"
-            "- Lore accuracy (facts match established world-building)\n\n"
-            "If no profile context is attached, work from what is observable "
-            "in the text itself. Always quote the specific passage that concerns you.\n\n" +
-            structured_rules
-        )
-
-    # Fallback
-    return header + "Answer the writer's questions about this text.\n\n" + general_rules
+    return {"role": "user", "content": "\n".join(lines)}
 
 
 @router.post("/editor-chat", response_model=EditorChatResponse)
@@ -1614,23 +914,37 @@ async def editor_chat(request: EditorChatRequest):
                    f"max {max_len:,}). Try a shorter passage."
         )
 
-    system_prompt = _build_editor_chat_prompt(
-        category        = request.category,
-        text_content    = request.text_content,
-        is_full_chapter = request.is_full_chapter,
-        context_chips   = request.context_chips,
-        content_mode    = request.content_mode,
+    # 1. System prompt = instructions only (no story text, no chips)
+    system_prompt = build_editor_chat_system_prompt(
+        category     = request.category,
+        content_mode = request.content_mode,
     )
 
+    # Prepend story context if available
     story_context = _build_story_context(request.project_path)
     if story_context:
         system_prompt = story_context + system_prompt
 
-    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    # 2. Build a "materials" user message with all variable content
+    materials = _build_materials_message(
+        text_content    = request.text_content,
+        is_full_chapter = request.is_full_chapter,
+        context_chips   = request.context_chips,
+    )
+
+    # 3. Prepend materials before the conversation history
+    messages = [materials] + [{"role": m.role, "content": m.content} for m in request.messages]
+
+    # Pick temperature: structured categories get lower randomness
+    temp = (
+        TEMPERATURE_DEFAULTS["generation"] if request.category == "chat"
+        else TEMPERATURE_DEFAULTS["critique"]
+    )
 
     try:
         reply = await run_chat(api_key=api_key, model_id=model_id,
-                               system_prompt=system_prompt, messages=messages)
+                               system_prompt=system_prompt, messages=messages,
+                               temperature=temp)
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 

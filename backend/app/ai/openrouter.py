@@ -101,6 +101,7 @@ async def run_completion(
     model_id: str,
     system_prompt: str,
     user_message: str,
+    temperature: float | None = None,
 ) -> dict:
     """
     Send a chat completion request to OpenRouter and return the parsed result.
@@ -131,6 +132,11 @@ async def run_completion(
         # Not all OpenRouter models support this; we fall back gracefully.
         "response_format": {"type": "json_object"},
     }
+
+    # Include temperature only when explicitly provided.
+    # Omitting it lets OpenRouter use the model's default.
+    if temperature is not None:
+        payload["temperature"] = temperature
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         response = await client.post(
@@ -186,6 +192,7 @@ async def run_chat(
     model_id: str,
     system_prompt: str,
     messages: list[dict],
+    temperature: float | None = None,
 ) -> str:
     """
     Send a multi-turn chat completion request to OpenRouter and return
@@ -209,6 +216,10 @@ async def run_chat(
             *messages,
         ],
     }
+
+    # Include temperature only when explicitly provided.
+    if temperature is not None:
+        payload["temperature"] = temperature
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         response = await client.post(

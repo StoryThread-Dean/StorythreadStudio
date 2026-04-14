@@ -9,8 +9,8 @@
 #   - description tooltip shown in the UI
 #   - system_prompt  the full instruction sent to the model
 #
-# CRITICAL: Every system prompt must include the no-em-dash instruction.
-# This is layer 1 of the three-layer em dash enforcement rule.
+# The unified punctuation rule is applied by wrap_assistant_prompt() in prompts.py
+# when the router calls run_completion(). This is layer 1 of three-layer enforcement.
 # (Layer 2 = sanitizer.py. Layer 3 = style guide Markdown file.)
 #
 # Output format: all assistants return JSON matching the "revision" schema:
@@ -35,14 +35,6 @@ class AssistantDef:
     description: str
     system_prompt: str
 
-
-# ── The no-em-dash instruction appended to every system prompt ────────────────
-# Kept as a constant so it's easy to update in one place if the wording changes.
-_NO_EM_DASH = (
-    "IMPORTANT PUNCTUATION RULE: Never use em dashes (\u2014) or en dashes (\u2013) "
-    "in your response. If you need a dash, use a double hyphen (--) instead. "
-    "This rule has no exceptions."
-)
 
 # ── JSON output instruction appended to every system prompt ───────────────────
 _JSON_FORMAT = (
@@ -74,8 +66,6 @@ Guidelines:
 - Each suggestion should show a corrected version of the affected sentence or passage.
 - Keep explanations brief and specific.
 
-{_NO_EM_DASH}
-
 {_JSON_FORMAT}""",
     ),
 
@@ -94,8 +84,6 @@ Guidelines:
 - Do not suggest changes just because a different phrasing sounds better to you.
 - If the text is already clear, say so in the summary.
 - Each suggestion should show the specific passage and a clearer alternative.
-
-{_NO_EM_DASH}
 
 {_JSON_FORMAT}""",
     ),
@@ -116,8 +104,6 @@ Guidelines:
 - Each suggestion should show the redundant passage and a tightened version.
 - Explain briefly WHY something is redundant (e.g. "stated twice", "implied by context").
 
-{_NO_EM_DASH}
-
 {_JSON_FORMAT}""",
     ),
 
@@ -136,8 +122,6 @@ Guidelines:
 - Suggestions should feel like they belong in the same voice as the original text.
 - Offer 1-3 specific enhanced versions of sentences or passages.
 - If the text is already richly descriptive, say so and note what works well.
-
-{_NO_EM_DASH}
 
 {_JSON_FORMAT}""",
     ),
@@ -165,8 +149,6 @@ Guidelines:
 - If the dialogue is already strong, say so and note what works.
 - Each suggestion should show the original and an improved version.
 
-{_NO_EM_DASH}
-
 {_JSON_FORMAT}""",
     ),
 
@@ -190,8 +172,6 @@ Guidelines:
 - Flag specific sentences or phrases that violate it.
 - Suggest minimal fixes that preserve the author's intent.
 - If POV is consistent throughout, say so clearly.
-
-{_NO_EM_DASH}
 
 {_JSON_FORMAT}""",
     ),
@@ -217,8 +197,6 @@ Guidelines:
 - Each suggestion should point to the specific phrase or sentence causing the break.
 - If the tone is consistent, say so and note what gives the passage its character.
 
-{_NO_EM_DASH}
-
 {_JSON_FORMAT}""",
     ),
 
@@ -243,8 +221,6 @@ Guidelines:
 - Each suggestion should be specific: "In the line '...', consider showing X instead of stating Y."
 - If the characterization is already strong, say so and explain why it works.
 
-{_NO_EM_DASH}
-
 {_JSON_FORMAT}""",
     ),
 
@@ -268,8 +244,6 @@ Guidelines:
 - If no profile context is attached, infer personality from what is shown in the passage itself.
 - Be specific: name the character and the specific inconsistency you found.
 - Avoid over-flagging intentional surprises or growth moments -- context matters.
-
-{_NO_EM_DASH}
 
 {_JSON_FORMAT}""",
     ),

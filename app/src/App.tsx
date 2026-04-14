@@ -208,6 +208,44 @@ function App() {
   }, []);
 
 
+  // --- Create a new chapter file and open it in the editor ---
+  const handleCreateChapter = useCallback(async () => {
+    if (!currentProject) return;
+
+    const title = window.prompt("Chapter title:", `Chapter ${chapters.length + 1}`);
+    if (!title || !title.trim()) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/documents/create-chapter`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          folder_path: currentProject.root_path,
+          title: title.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail ?? "Failed to create chapter.");
+      }
+
+      const data = await response.json();
+      const newChapter: ChapterInfo = {
+        filename: data.filename,
+        title: data.title,
+        path: data.path,
+      };
+
+      // Add to chapter list and open it
+      setChapters((prev) => [...prev, newChapter].sort((a, b) => a.filename.localeCompare(b.filename)));
+      loadChapter(newChapter, currentProject);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not create chapter.");
+    }
+  }, [currentProject, chapters.length, loadChapter]);
+
+
   // --- Called by ProjectHome when a project is opened or created ---
   // Fetches the chapter list, then auto-opens the first chapter.
   const handleProjectOpen = useCallback(async (project: ProjectInfo) => {
@@ -526,8 +564,9 @@ function App() {
                 hint={`Open ${chapter.filename} in the editor`}
                 active={currentChapter?.filename === chapter.filename}
                 onClick={() => {
-                  // Don't reload if this chapter is already open
-                  if (currentChapter?.filename !== chapter.filename) {
+                  // Don't reload if this chapter is already open AND we're in editor view.
+                  // If we're in notes/profiles view, always switch back to the editor.
+                  if (currentView !== "editor" || currentChapter?.filename !== chapter.filename) {
                     loadChapter(chapter, currentProject);
                   }
                 }}
@@ -586,6 +625,13 @@ function App() {
               : (currentChapter ? currentChapter.title : "No chapter open")}
           </span>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleCreateChapter}
+              className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-emerald-500 hover:text-emerald-400"
+              title="Create a new chapter in manuscript/"
+            >
+              + New Chapter
+            </button>
             {isDirty ? (
               <span className="flex items-center gap-1.5 text-xs text-amber-400"
                 title="You have unsaved changes. Press Ctrl+S to save.">
