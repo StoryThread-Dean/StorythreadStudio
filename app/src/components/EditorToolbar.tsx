@@ -17,7 +17,7 @@
 import {
   Bold, Italic, Underline, Strikethrough,
   Eraser, Heading1, Heading2, Heading3,
-  List, ListOrdered, ChevronDown,
+  List, ListOrdered, ChevronDown, FilePlus2,
 } from "lucide-react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
@@ -43,6 +43,10 @@ interface EditorToolbarProps {
   editorView: EditorView | null;
   currentFont: FontValue;
   onFontChange: (font: FontValue) => void;
+  // When present, a [+ New Template] button appears on the right side of the
+  // toolbar. The parent should only pass this when notes/outline.md is the
+  // active file -- the toolbar itself doesn't know about filenames.
+  onNewTemplate?: () => void;
 }
 
 
@@ -271,7 +275,7 @@ function clearFormatting(view: EditorView, saved: SavedSelection) {
 
 
 // ── EditorToolbar Component ───────────────────────────────────────────────────
-export function EditorToolbar({ editorView, currentFont, onFontChange }: EditorToolbarProps) {
+export function EditorToolbar({ editorView, currentFont, onFontChange, onNewTemplate }: EditorToolbarProps) {
   const view = editorView;
 
   // Snapshot the current selection from the editor.
@@ -329,6 +333,19 @@ export function EditorToolbar({ editorView, currentFont, onFontChange }: EditorT
         captureSelection={captureSelection} />
 
       <div className="flex-1" />
+
+      {/* [+ New Template] -- only visible when notes/outline.md is the open file.
+          The parent controls visibility by passing or omitting onNewTemplate. */}
+      {onNewTemplate && (
+        <button
+          onClick={onNewTemplate}
+          title="Apply a different outline template (overwrites current outline)"
+          className="mr-2 flex items-center gap-1 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5]"
+        >
+          <FilePlus2 size={12} />
+          <span>+ New Template</span>
+        </button>
+      )}
 
       {/* Font Selector */}
       <div className="relative flex items-center">

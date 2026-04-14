@@ -25,7 +25,7 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
-import type { ProjectInfo, ChapterInfo, RecentProject } from "./types/project";
+import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import type { ProfileType } from "./types/profile";
 import type { ContextChip, EditorChatMessage, EditorChatCategory } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
@@ -57,6 +57,12 @@ function App() {
 
   // Export modal visibility
   const [showExportModal, setShowExportModal] = useState(false);
+
+  // Outline template switcher dialog -- triggered by [+ New Template] in the
+  // toolbar when notes/outline.md is the active file.
+  const [showTemplateDialog, setShowTemplateDialog]       = useState(false);
+  const [templateDialogChoice, setTemplateDialogChoice]   = useState<OutlineTemplateType>("novel");
+  const [templateDialogLoading, setTemplateDialogLoading] = useState(false);
 
   // Project switcher dropdown
   const [showSwitcher, setShowSwitcher]   = useState(false);
@@ -337,6 +343,49 @@ function App() {
       setEditorError(err instanceof Error ? err.message : "Could not save.");
     }
   }, []);
+
+
+  // --- Apply a new outline template (overwrites notes/outline.md) ---
+  // Called from the template-switch confirmation dialog. Sends the chosen
+  // template type to the backend, which regenerates outline.md and returns
+  // the new content so we can reload the editor without a full refresh.
+  const handleApplyTemplate = useCallback(async () => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+
+    setTemplateDialogLoading(true);
+    setEditorError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/projects/apply-outline-template`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          root_path:     project.root_path,
+          template_type: templateDialogChoice,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Failed to apply template.");
+      }
+
+      const data = await res.json();
+
+      // Reload the outline in the notes editor. Setting noteContent + toggling
+      // currentNote triggers a MarkdownEditor remount via the key prop.
+      setNoteContent(data.content);
+      setCurrentNote({ filename: "outline.md", title: "Outline" });
+      setIsDirty(false);
+      setShowTemplateDialog(false);
+
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not apply template.");
+    } finally {
+      setTemplateDialogLoading(false);
+    }
+  }, [templateDialogChoice]);
 
 
   // --- Run a writing assistant on the selected text ---
@@ -672,11 +721,17 @@ function App() {
           </div>
         )}
 
-        {/* Formatting toolbar */}
+        {/* Formatting toolbar -- onNewTemplate only passed when outline.md is
+            the active file so the [+ New Template] button appears contextually */}
         <EditorToolbar
           editorView={editorView}
           currentFont={currentFont}
           onFontChange={setCurrentFont}
+          onNewTemplate={
+            currentView === "notes" && currentNote?.filename === "outline.md"
+              ? () => setShowTemplateDialog(true)
+              : undefined
+          }
         />
 
         {/* Editor area -- renders either a chapter or a note depending on currentView */}
@@ -1000,6 +1055,77 @@ function App() {
           project={currentProject}
           onClose={() => setShowExportModal(false)}
         />
+      )}
+
+      {/* Outline template switch dialog -- shown when the writer clicks
+          [+ New Template] in the toolbar while editing notes/outline.md.
+          Lets them pick Novel or Short Story, warns about overwrite, and
+          calls the backend to regenerate the outline file. */}
+      {showTemplateDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] p-6 shadow-xl">
+            <h2 className="mb-1 text-sm font-semibold text-[#f0f0f5]">
+              Apply Outline Template
+            </h2>
+            <p className="mb-4 text-xs text-[#8888aa]">
+              Choose a template to regenerate <span className="text-[#f0f0f5]">notes/outline.md</span>.
+            </p>
+
+            {/* Warning banner */}
+            <div className="mb-4 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
+              <p className="text-xs font-medium text-amber-400">
+                This will overwrite the current outline.
+              </p>
+              <p className="mt-0.5 text-xs text-amber-600">
+                Any existing content in outline.md will be replaced. This cannot be undone.
+              </p>
+            </div>
+
+            {/* Template radio options */}
+            <div className="mb-4 flex flex-col gap-1.5">
+              {([
+                { value: "novel" as OutlineTemplateType, label: "Novel", hint: "Full novel scaffold with three-act structure. Good for fiction and fantasy." },
+                { value: "short_story" as OutlineTemplateType, label: "Short Story", hint: "Tight 2k-10k scaffold with Seven-Point, Freytag, and more. Pick one, delete the rest." },
+              ]).map(opt => (
+                <label
+                  key={opt.value}
+                  className="flex cursor-pointer items-start gap-2 rounded border border-[#1e1e4a] bg-[#12122e] p-2 transition-colors hover:border-[#3f3f7a]"
+                >
+                  <input
+                    type="radio"
+                    name="templateSwitch"
+                    value={opt.value}
+                    checked={templateDialogChoice === opt.value}
+                    onChange={() => setTemplateDialogChoice(opt.value)}
+                    className="mt-0.5 accent-indigo-500"
+                  />
+                  <div>
+                    <p className="text-xs font-medium text-[#f0f0f5]">{opt.label}</p>
+                    <p className="text-xs text-[#8888aa]">{opt.hint}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleApplyTemplate}
+                disabled={templateDialogLoading}
+                className="flex-1 rounded bg-indigo-600 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {templateDialogLoading ? "Applying..." : "Apply Template"}
+              </button>
+              <button
+                onClick={() => setShowTemplateDialog(false)}
+                disabled={templateDialogLoading}
+                className="rounded border border-[#1e1e4a] px-4 py-2 text-sm text-[#8888aa] transition-colors hover:border-[#3f3f7a] hover:text-[#f0f0f5]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

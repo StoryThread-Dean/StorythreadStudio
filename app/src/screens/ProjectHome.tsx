@@ -663,6 +663,12 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                 className="mb-4 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
               />
 
+              <TemplateTypePicker
+                value={newBookTemplateType}
+                onChange={setNewBookTemplateType}
+                accent="teal"
+              />
+
               <div className="flex gap-3">
                 <button
                   onClick={handleCreateBookInSeries}

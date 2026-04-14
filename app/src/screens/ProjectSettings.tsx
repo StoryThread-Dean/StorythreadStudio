@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from "react";
 import { X, ChevronDown, HelpCircle } from "lucide-react";
-import type { ProjectInfo } from "../types/project";
+import type { ProjectInfo, OutlineTemplateType } from "../types/project";
 import type { ModelInfo } from "../types/ai";
 
 const API_BASE = "http://localhost:8000";
@@ -112,6 +112,18 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   // Model list for the per-project picker
   const [models, setModels] = useState<ModelInfo[]>([]);
 
+  // Outline template section -- tracks the current template and lets the writer
+  // swap it. The initial value comes from project.json (may be null for older
+  // projects created before templates existed).
+  const [templateChoice, setTemplateChoice] = useState<OutlineTemplateType>(
+    project.outline_template ?? "novel"
+  );
+  const [templateApplying, setTemplateApplying] = useState(false);
+  const [templateApplied, setTemplateApplied]   = useState(false);
+  // True after the writer changes the radio, before they click Apply.
+  // Prevents flashing "Applied!" from a previous run.
+  const templateDirty = templateChoice !== (project.outline_template ?? "novel");
+
   // Help guide expanded state
   const [showGuide, setShowGuide] = useState(false);
 
@@ -186,6 +198,44 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
       setError(err instanceof Error ? err.message : "Could not save.");
     } finally {
       setSaving(false);
+    }
+  }
+
+
+  // --- Apply outline template ---
+  // Regenerates notes/outline.md with the selected template. This is a
+  // separate action from Save because it overwrites a file -- the writer
+  // must explicitly confirm it.
+  async function handleApplyTemplate() {
+    setTemplateApplying(true);
+    setTemplateApplied(false);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/projects/apply-outline-template`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          root_path:     project.root_path,
+          template_type: templateChoice,
+        }),
+      });
+
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.detail ?? "Failed to apply template.");
+      }
+
+      setTemplateApplied(true);
+      // Update the parent's project info so outline_template stays in sync.
+      onProjectUpdated({
+        ...project,
+        outline_template: templateChoice,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not apply template.");
+    } finally {
+      setTemplateApplying(false);
     }
   }
 
@@ -289,6 +339,67 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     Series path: {project.series_path}
                   </p>
                 </div>
+              )}
+            </section>
+
+
+            {/* ── Outline Template ─────────────────────────────────────── */}
+            <section>
+              <h3 className="mb-3 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                Outline Template
+              </h3>
+              <p className="mb-3 text-xs text-[#3f3f7a]">
+                Choose which scaffold to use for notes/outline.md. Applying a
+                new template will <span className="text-amber-500">overwrite</span> the
+                current outline file.
+              </p>
+
+              {/* Template radio options */}
+              <div className="mb-3 flex flex-col gap-1.5">
+                {([
+                  { value: "novel" as OutlineTemplateType, label: "Novel", hint: "Full three-act scaffold for fiction and fantasy novels." },
+                  { value: "short_story" as OutlineTemplateType, label: "Short Story", hint: "Tight 2k-10k scaffold with Seven-Point, Freytag, and more." },
+                ]).map(opt => (
+                  <label
+                    key={opt.value}
+                    className="flex cursor-pointer items-start gap-2 rounded border border-[#1e1e4a] bg-[#12122e] p-2 transition-colors hover:border-[#3f3f7a]"
+                  >
+                    <input
+                      type="radio"
+                      name="outlineTemplate"
+                      value={opt.value}
+                      checked={templateChoice === opt.value}
+                      onChange={() => { setTemplateChoice(opt.value); setTemplateApplied(false); }}
+                      className="mt-0.5 accent-indigo-500"
+                    />
+                    <div>
+                      <p className="text-xs font-medium text-[#f0f0f5]">{opt.label}</p>
+                      <p className="text-xs text-[#8888aa]">{opt.hint}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {/* Apply button + warning -- only shown when the choice differs from
+                  the currently applied template */}
+              {templateDirty && (
+                <div className="mb-2 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
+                  <p className="text-xs text-amber-400">
+                    Applying will replace the current outline.md. This cannot be undone.
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={handleApplyTemplate}
+                disabled={templateApplying || (!templateDirty && !templateApplied)}
+                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {templateApplying ? "Applying..." : "Apply Template"}
+              </button>
+
+              {templateApplied && !templateDirty && (
+                <span className="ml-2 text-xs text-emerald-400">Template applied.</span>
               )}
             </section>
 
