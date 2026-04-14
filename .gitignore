@@ -36,3 +36,4 @@ Thumbs.db
 # The .storyforge folder inside each writing project holds the SQLite database,
 # cache files, and logs. These are generated at runtime, not source code.
 **/.storyforge/
+.claude/settings.local.json

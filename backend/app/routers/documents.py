@@ -58,6 +58,19 @@ class SaveChapterResponse(BaseModel):
     message: str
 
 
+class CreateChapterRequest(BaseModel):
+    """What the frontend sends when the writer creates a new chapter."""
+    folder_path: str   # The project's root directory
+    title: str         # e.g. "The Storm" -- used for filename and heading
+
+
+class CreateChapterResponse(BaseModel):
+    """Returned after a new chapter is created on disk."""
+    filename: str
+    title: str
+    path: str
+
+
 # --- Helpers ---
 
 def _manuscript_dir(folder_path: str) -> str:
@@ -201,6 +214,60 @@ async def save_chapter(request: SaveChapterRequest):
         filename=request.filename,
         path=chapter_path,
         message=f"Saved {request.filename} successfully.",
+    )
+
+
+# --- POST /api/documents/create-chapter ---
+@router.post("/create-chapter", response_model=CreateChapterResponse)
+async def create_chapter(request: CreateChapterRequest):
+    """
+    Create a new chapter file in the manuscript/ folder.
+
+    The filename is auto-generated from the existing chapter count so chapters
+    stay in numeric order (e.g. 03-the-storm.md). The file starts with a
+    # heading matching the title the writer provided.
+    """
+    manuscript = _manuscript_dir(request.folder_path)
+
+    if not os.path.isdir(manuscript):
+        raise HTTPException(
+            status_code=404,
+            detail=f"manuscript/ folder not found in: {request.folder_path}"
+        )
+
+    # Count existing .md files to determine the next chapter number
+    existing = [
+        f for f in os.listdir(manuscript)
+        if f.endswith(".md") and os.path.isfile(os.path.join(manuscript, f))
+    ]
+    next_num = len(existing) + 1
+
+    # Convert the title to a filename-safe slug: "The Storm" -> "the-storm"
+    slug = re.sub(r"[^a-z0-9]+", "-", request.title.lower()).strip("-")
+    if not slug:
+        slug = "untitled"
+    filename = f"{next_num:02d}-{slug}.md"
+
+    chapter_path = os.path.join(manuscript, filename)
+
+    # Don't overwrite if a file with this name somehow already exists
+    if os.path.exists(chapter_path):
+        raise HTTPException(
+            status_code=409,
+            detail=f"A file named {filename} already exists."
+        )
+
+    # Write the new chapter with a heading
+    try:
+        with open(chapter_path, "w", encoding="utf-8") as f:
+            f.write(f"# {request.title}\n\n")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not create file: {e}")
+
+    return CreateChapterResponse(
+        filename=filename,
+        title=request.title,
+        path=os.path.realpath(chapter_path),
     )
 
 
