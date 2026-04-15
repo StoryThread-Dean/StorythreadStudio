@@ -19,7 +19,7 @@
 //   - ToolKit removed (replaced by auto-suggest in Phase 5D)
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
-import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X } from "lucide-react";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { ChatMarkdown } from "../components/ChatMarkdown";
 import type { ProjectInfo } from "../types/project";
@@ -38,6 +38,8 @@ import {
   IMPORTANCE_LABELS,
 } from "../types/profile";
 import { v4 as uuidv4 } from "uuid";
+import { IMPORTANCE_HELP, getSectionHelp } from "../data/profileHelp";
+import type { ImportanceLevelHelp, SectionHelp } from "../data/profileHelp";
 
 const API_BASE = "http://localhost:8000";
 
@@ -152,10 +154,12 @@ function formatProfileForAI(p: Profile): string {
     lines.push("");
   }
 
-  if (p.full_ai_summary) {
-    lines.push("## Full AI Summary");
-    lines.push(p.full_ai_summary);
-  }
+  // NOTE: full_ai_summary is intentionally NOT included here. It's a
+  // synthesized rephrasing of the same traits listed above. Including both
+  // would double-weight every trait -- the AI would see "strawberry blonde
+  // hair" in the raw traits AND the summary's rephrased version, causing
+  // it to over-emphasize those details. The raw traits with importance
+  // labels are the authoritative source for profile chat.
 
   return lines.join("\n");
 }
@@ -1362,10 +1366,15 @@ function ProfileSectionEditor({
 
   return (
     <div className="mb-6" onFocus={onFocus}>
-      {/* Section heading with indigo accent */}
+      {/* Section heading with indigo accent + help icon for text sections */}
       <div className="mb-3 flex items-center gap-2.5 border-b border-[#1e1e4a] pb-2">
         <span className="h-4 w-0.5 shrink-0 rounded-full bg-indigo-600/70" />
         <h2 className="text-sm font-semibold text-[#f0f0f5]">{heading}</h2>
+        {/* (?) icon -- shows writing tips with Poor/Good/Great examples.
+            Only renders if help content exists for this section. */}
+        {!hasTraitBlocks && (
+          <SectionHelpPopover profileType={profileType} sectionKey={sectionKey} />
+        )}
       </div>
 
       {hasTraitBlocks ? (
@@ -1381,6 +1390,7 @@ function ProfileSectionEditor({
               block={block}
               profileName={profileName}
               profileType={profileType}
+              sectionKey={sectionKey}
               sectionHeading={heading}
               onUpdate={updates => onUpdateTraitBlock(block.id, updates)}
               onRemove={() => onRemoveTraitBlock(block.id)}
@@ -1431,6 +1441,151 @@ function ProfileSectionEditor({
 }
 
 
+// ── ImportanceHelpPopover ─────────────────────────────────────────────────────
+// Clickable (?) icon next to the importance dropdown in TraitBlockCard.
+// Shows a short summary of what the current importance level does, then a
+// detailed explanation with a section-specific example so the writer can see
+// how importance applies differently for Physical Traits vs Voice Notes, etc.
+//
+// Uses a toggle pattern: click (?) to open, click X or the icon again to close.
+
+function ImportanceHelpPopover({
+  importance,
+  sectionKey,
+}: {
+  importance: ImportanceLevel;
+  sectionKey: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const help: ImportanceLevelHelp | undefined = IMPORTANCE_HELP[importance];
+
+  if (!help) return null;
+
+  // Find the best example for this section. Fall back to the first available
+  // example if the section key doesn't have one (e.g. a future section type).
+  const example =
+    help.examples[sectionKey] ??
+    Object.values(help.examples)[0] ??
+    "";
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="shrink-0 rounded p-0.5 text-[#3f3f7a] transition-colors hover:text-indigo-400"
+        title={`Help: ${importance} importance level`}
+      >
+        <HelpCircle size={12} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-6 z-30 w-72 rounded-lg border border-[#1e1e4a] bg-[#0a0a20] p-3 shadow-xl">
+          {/* Header */}
+          <div className="mb-2 flex items-start justify-between">
+            <p className="text-xs font-semibold text-indigo-300">
+              {importance.charAt(0).toUpperCase() + importance.slice(1)} Importance
+            </p>
+            <button
+              onClick={() => setOpen(false)}
+              className="rounded p-0.5 text-[#3f3f7a] hover:text-[#f0f0f5]"
+            >
+              <X size={10} />
+            </button>
+          </div>
+
+          {/* Summary */}
+          <p className="mb-2 text-xs font-medium text-[#f0f0f5]">{help.summary}</p>
+
+          {/* Detail */}
+          <p className="mb-3 text-xs leading-relaxed text-[#8888aa]">{help.detail}</p>
+
+          {/* Section-specific example */}
+          {example && (
+            <div className="rounded border border-[#1e1e4a] bg-[#12122e] p-2">
+              <p className="mb-1 text-xs font-medium text-[#8888aa]">Example for this section:</p>
+              <p className="whitespace-pre-line text-xs leading-relaxed text-[#c0c0d0]">{example}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ── SectionHelpPopover ───────────────────────────────────────────────────────
+// Clickable (?) icon next to text section headings (Overview, Notes, etc.).
+// Shows what the writer should put in the field, plus Poor / Good / Great
+// example tiers so they can see the spectrum from "AI will struggle" to
+// "AI will nail this."
+
+function SectionHelpPopover({
+  profileType,
+  sectionKey,
+}: {
+  profileType: string;
+  sectionKey: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const help: SectionHelp | null = getSectionHelp(profileType, sectionKey);
+
+  // No help content for this section -- don't render the icon at all.
+  // This keeps the UI clean for sections we haven't written help for yet.
+  if (!help) return null;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="shrink-0 rounded p-0.5 text-[#3f3f7a] transition-colors hover:text-indigo-400"
+        title="Writing tips for this section"
+      >
+        <HelpCircle size={12} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-6 z-30 max-h-[28rem] w-80 overflow-y-auto rounded-lg border border-[#1e1e4a] bg-[#0a0a20] p-3 shadow-xl">
+          {/* Header */}
+          <div className="mb-2 flex items-start justify-between">
+            <p className="text-xs font-semibold text-indigo-300">Writing Tips</p>
+            <button
+              onClick={() => setOpen(false)}
+              className="rounded p-0.5 text-[#3f3f7a] hover:text-[#f0f0f5]"
+            >
+              <X size={10} />
+            </button>
+          </div>
+
+          {/* What to put */}
+          <p className="mb-3 text-xs leading-relaxed text-[#f0f0f5]">{help.whatToPut}</p>
+
+          {/* Poor example */}
+          <div className="mb-2 rounded border border-red-900/40 bg-red-950/20 p-2">
+            <p className="mb-1 text-xs font-medium text-red-400">Needs Work</p>
+            <p className="mb-1 text-xs italic text-red-300/70">"{help.poorExample}"</p>
+            <p className="text-xs text-red-400/60">{help.poorWhy}</p>
+          </div>
+
+          {/* Good example */}
+          <div className="mb-2 rounded border border-amber-800/40 bg-amber-950/20 p-2">
+            <p className="mb-1 text-xs font-medium text-amber-400">Good</p>
+            <p className="mb-1 text-xs italic text-amber-200/70">"{help.goodExample}"</p>
+            <p className="text-xs text-amber-400/60">{help.goodWhy}</p>
+          </div>
+
+          {/* Great example */}
+          <div className="rounded border border-emerald-800/40 bg-emerald-950/20 p-2">
+            <p className="mb-1 text-xs font-medium text-emerald-400">Great</p>
+            <p className="mb-1 text-xs italic text-emerald-200/70">"{help.greatExample}"</p>
+            <p className="text-xs text-emerald-400/60">{help.greatWhy}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ── TraitBlockCard ────────────────────────────────────────────────────────────
 // Renders one trait block with importance selector, trait name, description
 // textarea, and adaptive word count gauge.
@@ -1439,12 +1594,13 @@ interface TraitBlockCardProps {
   block: TraitBlock;
   profileName: string;
   profileType: string;
+  sectionKey: string;
   sectionHeading: string;
   onUpdate: (updates: Partial<TraitBlock>) => void;
   onRemove: () => void;
 }
 
-function TraitBlockCard({ block, profileName, profileType, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
+function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
   const wordCount = countWords(block.description);
 
   // AI Trim tool -- suggests a concise rewrite when description is wordy/bloated
@@ -1532,6 +1688,9 @@ function TraitBlockCard({ block, profileName, profileType, sectionHeading, onUpd
             </option>
           ))}
         </select>
+
+        {/* (?) help icon -- explains this importance level with section-specific examples */}
+        <ImportanceHelpPopover importance={block.importance} sectionKey={sectionKey} />
 
         {/* Trait name */}
         <input

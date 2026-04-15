@@ -175,9 +175,16 @@ async def run_completion(
     # Apply sanitizer to all string fields in the parsed response
     parsed = sanitize_dict(parsed)
 
-    # Ensure the schema has all required keys (fill in defaults if missing)
+    # Build the result with all required keys filled in, but also keep
+    # every key from the model's original parsed JSON. Generation endpoints
+    # ask for specific keys like "section_summary" or "full_summary" that
+    # don't match the standard revision schema ("summary", "suggestions").
+    # By spreading **parsed first, then overlaying the schema defaults,
+    # we preserve those extra keys so _extract_text_field() in ai.py can
+    # find them directly.
     result = {
-        "summary":       parsed.get("summary", ""),
+        **parsed,                                          # Keep ALL original keys
+        "summary":       parsed.get("summary", ""),        # Default if not present
         "suggestions":   parsed.get("suggestions", []),
         "notes":         parsed.get("notes", []),
         "model_used":    model_id,

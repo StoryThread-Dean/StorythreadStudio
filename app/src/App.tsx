@@ -81,8 +81,27 @@ function App() {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   // Context chips -- profile summaries the writer explicitly attaches to AI requests.
-  // Only the chips the writer has added are sent with each assistant call.
   const [contextChips, setContextChips] = useState<ContextChip[]>([]);
+
+  // ── Materials tracking ──────────────────────────────────────────────────────
+  // These track what's already been sent in the current conversation so we
+  // don't resend the same chapter text + chips on every turn. "Established"
+  // means it was sent in a prior turn and is already in the conversation history.
+  //
+  // When the writer clicks Clear or switches categories, everything resets.
+  // When new chips are added or a different text selection is made mid-convo,
+  // only the NEW materials get sent on the next turn.
+
+  // Toggle: whether to include the chapter text at all (default ON).
+  // When OFF the AI responds based on the writer's message + any chips only.
+  const [includeChapter, setIncludeChapter] = useState(true);
+
+  // Set of chip keys (type+name) that have been sent in a prior turn.
+  // These show as muted in the UI -- still "in play" but not re-sent.
+  const [establishedChipKeys, setEstablishedChipKeys] = useState<Set<string>>(new Set());
+
+  // True after chapter text has been sent at least once in this conversation.
+  const [chapterEstablished, setChapterEstablished] = useState(false);
 
   // Whether the context chip picker panel is open
   const [showChipPicker, setShowChipPicker] = useState(false);
@@ -388,30 +407,43 @@ function App() {
   }, [templateDialogChoice]);
 
 
-  // --- Run a writing assistant on the selected text ---
   // --- Send a message in the Writing Companion chat ---
-  // Determines context (selected text vs full chapter), builds the payload,
-  // and appends the AI reply to the conversation history.
+  // Only sends materials (chapter text + context chips) that are NEW -- things
+  // the AI hasn't seen yet in this conversation. Materials from prior turns are
+  // already in the conversation history and don't need to be resent.
+  //
+  // "Established" = sent in a prior turn (muted in UI, still in AI memory).
+  // "New"         = first time being sent (bright in UI, included in payload).
   const sendEditorChat = useCallback(async () => {
     if (!chatInput.trim() || chatLoading) return;
 
-    // Determine text context: selected text OR full chapter
+    // ── Determine what text to send (if any) ──────────────────────────────
+    // Selected text is always "new" (it's a fresh passage the writer highlighted).
+    // Full chapter text is sent only if: toggle is ON and it hasn't been established yet.
     const selected = selectedText.trim();
-    let textContent: string;
-    let isFullChapter: boolean;
+    let textContent = "";
+    let isFullChapter = false;
 
     if (selected) {
+      // Writer highlighted specific text -- always send it (it's new context)
       textContent = selected;
       isFullChapter = false;
-    } else {
+    } else if (includeChapter && !chapterEstablished) {
+      // No selection, chapter toggle ON, chapter not yet sent in this convo
       const view = editorViewRef.current;
-      if (!view) {
-        setChatError("No chapter is open. Open a chapter to use the Writing Companion.");
-        return;
+      if (view) {
+        textContent = view.state.doc.toString();
+        isFullChapter = true;
       }
-      textContent = view.state.doc.toString();
-      isFullChapter = true;
     }
+    // Otherwise: no text sent. Either toggle is OFF, or chapter was already
+    // established in a prior turn. The AI still has it from history.
+
+    // ── Determine which chips are new ─────────────────────────────────────
+    // Only send chips that haven't been established yet in this conversation.
+    const newChips = contextChips.filter(
+      chip => !establishedChipKeys.has(`${chip.type}:${chip.name}`)
+    );
 
     const userMsg: EditorChatMessage = { role: "user", content: chatInput.trim() };
     const newMessages = [...chatMessages, userMsg];
@@ -434,9 +466,7 @@ function App() {
           text_content:    textContent,
           is_full_chapter: isFullChapter,
           messages:        newMessages,
-          context_chips:   contextChips,
-          // Per-project model: if set in Project Settings, overrides the global default.
-          // null/undefined = backend falls back to global settings.
+          context_chips:   newChips,
           model_id:        currentProjectRef.current?.default_model || undefined,
           content_mode:    currentProjectRef.current?.content_mode_default ?? "general",
           project_path:    currentProjectRef.current?.root_path ?? null,
@@ -459,6 +489,20 @@ function App() {
       const data = await res.json();
       setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+
+      // ── Mark materials as established after successful send ────────────
+      // These will show as muted in the UI and won't be resent on future turns.
+      if (textContent) {
+        setChapterEstablished(true);
+      }
+      if (newChips.length > 0) {
+        setEstablishedChipKeys(prev => {
+          const next = new Set(prev);
+          for (const chip of newChips) next.add(`${chip.type}:${chip.name}`);
+          return next;
+        });
+      }
+
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         setChatError("Request timed out after 90 seconds. Try a shorter text selection.");
@@ -471,7 +515,7 @@ function App() {
       clearTimeout(timeoutId);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, chatCategory, selectedText, contextChips, chatLoading]);
+  }, [chatInput, chatMessages, chatCategory, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys]);
 
 
   // --- Keyboard shortcut: Ctrl+S to save ---
@@ -806,7 +850,7 @@ function App() {
             <h2 className="text-sm font-semibold text-[#f0f0f5]">Writing Companion</h2>
             {chatMessages.length > 0 && (
               <button
-                onClick={() => { setChatMessages([]); setChatError(null); }}
+                onClick={() => { setChatMessages([]); setChatError(null); setEstablishedChipKeys(new Set()); setChapterEstablished(false); }}
                 className="text-xs text-rose-700 transition-colors hover:text-rose-400"
                 title="Clear conversation"
               >
@@ -832,10 +876,12 @@ function App() {
                     // Toggle off: return to general chat (no clearing)
                     setChatCategory(null);
                   } else {
-                    // Switch categories: clear chat only when going from one category to another
+                    // Switch categories: clear chat + reset materials tracking
                     if (chatCategory !== null) {
                       setChatMessages([]);
                       setChatError(null);
+                      setEstablishedChipKeys(new Set());
+                      setChapterEstablished(false);
                     }
                     setChatCategory(tab);
                   }
@@ -850,16 +896,42 @@ function App() {
           </div>
         </div>
 
-        {/* Context indicator -- what text the AI will see */}
+        {/* Context indicator -- what text the AI will see + chapter toggle */}
         <div className="shrink-0 border-b border-[#1e1e4a] px-4 py-2">
           {selectedText ? (
-            <p className="truncate text-xs text-emerald-400" title={selectedText}>
-              Using selected text ({selectedText.length.toLocaleString()} chars)
+            // Writer has text selected -- that always gets sent (bright)
+            <p className={`truncate text-xs ${chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
+              {chapterEstablished ? "Selection (new context)" : "Using selected text"} ({selectedText.length.toLocaleString()} chars)
             </p>
           ) : currentChapter ? (
-            <p className="text-xs text-amber-400">
-              Using full chapter (no text selected)
-            </p>
+            // No selection -- show chapter toggle
+            <div className="flex items-center justify-between">
+              <p className={`text-xs ${
+                !includeChapter
+                  ? "text-[#3f3f7a]"
+                  : chapterEstablished
+                    ? "text-amber-700"
+                    : "text-amber-400"
+              }`}>
+                {!includeChapter
+                  ? "Chapter text not included"
+                  : chapterEstablished
+                    ? "Chapter text (established)"
+                    : "Full chapter will be sent"}
+              </p>
+              <label
+                className="flex cursor-pointer items-center gap-1.5"
+                title="When off, AI responds based on your message and attached context only"
+              >
+                <span className="text-xs text-[#3f3f7a]">Include chapter</span>
+                <div
+                  className={`relative h-4 w-7 rounded-full transition-colors ${includeChapter ? "bg-indigo-600" : "bg-[#1e1e4a]"}`}
+                  onClick={() => setIncludeChapter(v => !v)}
+                >
+                  <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${includeChapter ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                </div>
+              </label>
+            </div>
           ) : (
             <p className="text-xs text-[#3f3f7a]">
               Open a chapter to start
@@ -894,17 +966,27 @@ function App() {
 
           {contextChips.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {contextChips.map((chip, i) => (
-                <span key={i} className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs ${chipTypeColor(chip.type)}`}>
-                  {chip.name}
-                  <button
-                    onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
-                    className="text-[#3f3f7a] hover:text-red-400"
+              {contextChips.map((chip, i) => {
+                // Established chips (already sent in a prior turn) show muted --
+                // they're still "in play" in the AI's memory from the conversation
+                // history, but won't be resent. New chips show bright/full color.
+                const isEstablished = establishedChipKeys.has(`${chip.type}:${chip.name}`);
+                return (
+                  <span
+                    key={i}
+                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-opacity ${chipTypeColor(chip.type)} ${isEstablished ? "opacity-40" : ""}`}
+                    title={isEstablished ? `${chip.name} (established -- already in conversation)` : chip.name}
                   >
-                    ×
-                  </button>
-                </span>
-              ))}
+                    {chip.name}
+                    <button
+                      onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
+                      className="text-[#3f3f7a] hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>

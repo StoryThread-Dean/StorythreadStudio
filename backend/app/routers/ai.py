@@ -559,14 +559,26 @@ def _resolve_model_and_key(model_id_override: str | None) -> tuple[str, str]:
 
 def _extract_text_field(result: dict, field_name: str) -> str:
     """
-    Try to extract a specific field from a JSON-formatted model response.
-    Falls back to the summary field if the specific field isn't found.
-    This handles cases where the model wraps the response in our standard schema
-    instead of the simpler single-field format we requested.
+    Extract a specific text field from the model response dict.
+
+    Generation endpoints ask the model for JSON like {"section_summary": "..."}
+    or {"full_summary": "..."}. run_completion() now preserves all original keys
+    from the model's parsed JSON in the result dict, so the simplest path is
+    checking the top-level keys first.
+
+    Fallback chain:
+      1. result[field_name]          -- direct key (most common, now that run_completion preserves them)
+      2. json.loads(result["summary"]) -> [field_name]  -- model put it inside summary as nested JSON
+      3. suggestions[0].content      -- model used the revision schema instead
+      4. result["summary"]           -- last resort, return whatever summary holds
     """
-    # The result from run_completion uses the standard revision schema.
-    # For generation endpoints we ask for {"field_name": "..."} but sometimes
-    # the model puts it in "summary" instead.
+    # 1. Direct key -- the model returned {"section_summary": "..."} and
+    #    run_completion preserved it in the result dict.
+    direct = result.get(field_name)
+    if direct and isinstance(direct, str):
+        return direct
+
+    # 2. Nested JSON inside summary -- some models double-wrap their response
     summary = result.get("summary", "")
     try:
         parsed = json.loads(summary)
@@ -574,7 +586,8 @@ def _extract_text_field(result: dict, field_name: str) -> str:
             return parsed[field_name]
     except (ValueError, TypeError):
         pass
-    # Check suggestions[0].content as another fallback
+
+    # 3. Suggestions fallback -- model used revision schema instead of our format
     suggestions = result.get("suggestions", [])
     if suggestions and isinstance(suggestions[0], dict):
         content = suggestions[0].get("content", "")
@@ -585,6 +598,8 @@ def _extract_text_field(result: dict, field_name: str) -> str:
         except (ValueError, TypeError):
             if content:
                 return content
+
+    # 4. Last resort
     return summary
 
 
@@ -812,18 +827,23 @@ async def profile_chat(request: ProfileChatRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
-    # 2. Materials message with profile content (goes in user message, not system prompt)
-    profile_label = request.profile_type.replace("_", " ").title()
-    materials = {
-        "role": "user",
-        "content": (
-            f"PROFILE CONTEXT ({profile_label}: {request.profile_name}):\n\n"
-            f"{request.profile_content}"
-        ),
-    }
+    # 2. Materials message with profile content -- only on the first turn.
+    #    The frontend sends profile_content on the initial message and omits it
+    #    on follow-ups (it's already in the conversation history from turn 1).
+    conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
-    # 3. Prepend materials before conversation history
-    messages = [materials] + [{"role": m.role, "content": m.content} for m in request.messages]
+    if request.profile_content.strip():
+        profile_label = request.profile_type.replace("_", " ").title()
+        materials = {
+            "role": "user",
+            "content": (
+                f"PROFILE CONTEXT ({profile_label}: {request.profile_name}):\n\n"
+                f"{request.profile_content}"
+            ),
+        }
+        messages = [materials] + conversation
+    else:
+        messages = conversation
 
     # Pick temperature based on behavior mode
     if request.behavior_mode in ("extract_traits", "check_consistency"):
@@ -925,15 +945,24 @@ async def editor_chat(request: EditorChatRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
-    # 2. Build a "materials" user message with all variable content
-    materials = _build_materials_message(
-        text_content    = request.text_content,
-        is_full_chapter = request.is_full_chapter,
-        context_chips   = request.context_chips,
-    )
+    # 2. Build a "materials" user message with variable content -- but only if
+    #    the frontend actually sent something new. On follow-up turns the frontend
+    #    omits text_content and chips that were already sent in a prior turn (they're
+    #    already in the conversation history). Skipping the materials message here
+    #    avoids resending the same chapter + profiles on every single turn.
+    has_new_materials = bool(request.text_content.strip()) or bool(request.context_chips)
 
-    # 3. Prepend materials before the conversation history
-    messages = [materials] + [{"role": m.role, "content": m.content} for m in request.messages]
+    conversation = [{"role": m.role, "content": m.content} for m in request.messages]
+
+    if has_new_materials:
+        materials = _build_materials_message(
+            text_content    = request.text_content,
+            is_full_chapter = request.is_full_chapter,
+            context_chips   = request.context_chips,
+        )
+        messages = [materials] + conversation
+    else:
+        messages = conversation
 
     # Pick temperature: structured categories get lower randomness
     temp = (
