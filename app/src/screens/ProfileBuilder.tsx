@@ -40,6 +40,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { IMPORTANCE_HELP, getSectionHelp } from "../data/profileHelp";
 import type { ImportanceLevelHelp, SectionHelp } from "../data/profileHelp";
+import { formatProfileForAI } from "../utils/profileFormat";
 
 const API_BASE = "http://localhost:8000";
 
@@ -134,35 +135,9 @@ function countWords(text: string): number {
   return trimmed.split(/\s+/).length;
 }
 
-// Format the current profile into a readable text block for AI context.
-// Used by generate-full-summary and the chat system prompt.
-function formatProfileForAI(p: Profile): string {
-  const configs = SECTION_CONFIGS[p.type as ProfileType] ?? [];
-  const lines: string[] = [`Profile: ${p.name} (${p.type})`, `Role: ${p.role || "unspecified"}`, ""];
-
-  for (const cfg of configs) {
-    const section = p.sections[cfg.key];
-    if (!section) continue;
-    lines.push(`## ${cfg.heading}`);
-    if (cfg.hasTraitBlocks && section.trait_blocks.length > 0) {
-      for (const block of section.trait_blocks) {
-        lines.push(`- ${block.trait} [${block.importance}]: ${block.description}`);
-      }
-    } else if (section.content) {
-      lines.push(section.content);
-    }
-    lines.push("");
-  }
-
-  // NOTE: full_ai_summary is intentionally NOT included here. It's a
-  // synthesized rephrasing of the same traits listed above. Including both
-  // would double-weight every trait -- the AI would see "strawberry blonde
-  // hair" in the raw traits AND the summary's rephrased version, causing
-  // it to over-emphasize those details. The raw traits with importance
-  // labels are the authoritative source for profile chat.
-
-  return lines.join("\n");
-}
+// formatProfileForAI is imported from utils/profileFormat.ts -- single source
+// of truth for how profiles are represented in AI prompts. Used here for
+// generate-full-summary and the profile chat system.
 
 // ── AutoTextarea ─────────────────────────────────────────────────────────────
 // A textarea that auto-expands to fit its content, preventing unnecessary

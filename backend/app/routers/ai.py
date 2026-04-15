@@ -909,9 +909,14 @@ def _build_materials_message(
         lines.append("---")
         lines.append("")
 
-    label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
-    lines.append(f"{label}:")
-    lines.append(text_content)
+    # Only include the text section if there's actual text. When the writer
+    # has Include Chapter toggled OFF and nothing selected, text_content is
+    # empty -- adding an empty "SELECTED PASSAGE:" header confuses the AI
+    # into thinking the context failed to load.
+    if text_content.strip():
+        label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
+        lines.append(f"{label}:")
+        lines.append(text_content)
 
     return {"role": "user", "content": "\n".join(lines)}
 

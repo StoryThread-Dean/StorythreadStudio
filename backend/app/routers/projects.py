@@ -453,6 +453,8 @@ class UpdateProjectSettingsRequest(BaseModel):
     root_path:            str              # Required: identifies which project
     title:                str | None = None
     description:          str | None = None
+    genre:                str | None = None
+    tone:                 str | None = None
     content_mode_default: str | None = None
     cost_tier:            str | None = None
     default_model:        str | None = None
@@ -611,6 +613,10 @@ async def update_project_settings(request: UpdateProjectSettingsRequest):
         data["title"] = request.title
     if request.description is not None:
         data["description"] = request.description
+    if request.genre is not None:
+        data["genre"] = request.genre
+    if request.tone is not None:
+        data["tone"] = request.tone
     if request.content_mode_default is not None:
         data["content_mode_default"] = request.content_mode_default
     if request.cost_tier is not None:
