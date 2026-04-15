@@ -105,6 +105,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   // Editable fields (initialized from current project)
   const [title, setTitle]             = useState(project.title);
   const [description, setDescription] = useState(project.description);
+  const [genre, setGenre]             = useState("");
+  const [tone, setTone]               = useState("");
   const [contentMode, setContentMode] = useState(project.content_mode_default);
   const [costTier, setCostTier]       = useState("standard");
   const [projectModel, setProjectModel] = useState(project.default_model ?? "");
@@ -140,6 +142,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
         const res = await fetch(`${API_BASE}/api/projects/settings?${params}`);
         if (res.ok) {
           const data = await res.json();
+          setGenre(data.genre ?? "");
+          setTone(data.tone ?? "");
           setCostTier(data.cost_tier ?? "standard");
           setProjectModel(data.default_model ?? "");
         }
@@ -173,6 +177,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           root_path:            project.root_path,
           title:                title.trim() || project.title,
           description:          description,
+          genre:                genre,
+          tone:                 tone,
           content_mode_default: contentMode,
           cost_tier:            costTier,
           default_model:        projectModel || null,  // empty string = use global
@@ -326,6 +332,34 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   onChange={e => setDescription(e.target.value)}
                   rows={3}
                   className="w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Genre</label>
+                <p className="mb-1 text-xs text-[#3f3f7a]">
+                  Auto-injected into AI prompts as story context.
+                </p>
+                <input
+                  type="text"
+                  value={genre}
+                  onChange={e => setGenre(e.target.value)}
+                  placeholder="e.g. epic fantasy, sci-fi thriller, contemporary romance"
+                  className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Tone</label>
+                <p className="mb-1 text-xs text-[#3f3f7a]">
+                  Auto-injected into AI prompts as story context.
+                </p>
+                <input
+                  type="text"
+                  value={tone}
+                  onChange={e => setTone(e.target.value)}
+                  placeholder="e.g. dark, atmospheric, slow burn, humorous"
+                  className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
                 />
               </div>
 

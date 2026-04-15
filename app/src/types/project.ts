@@ -138,6 +138,8 @@ export interface UpdateProjectSettingsPayload {
   root_path:             string;   // Required: identifies which project
   title?:                string;
   description?:          string;
+  genre?:                string;
+  tone?:                 string;
   content_mode_default?: string;
   cost_tier?:            string;
   default_model?:        string;

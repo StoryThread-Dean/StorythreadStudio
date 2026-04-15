@@ -29,6 +29,7 @@ import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } fro
 import type { ProfileType } from "./types/profile";
 import type { ContextChip, EditorChatMessage, EditorChatCategory } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
+import { formatProfileForAI } from "./utils/profileFormat";
 import { Bot, Send, ChevronDown, Settings2 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
@@ -1360,8 +1361,10 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
       const params = new URLSearchParams({ folder_path: folderPath, type: profileType, filename });
       const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`);
       const profile = await res.json();
-      const content = profile.full_ai_summary?.trim()
-        || `[No AI summary generated yet for ${name}. Open Profile Builder and click Generate on the Full AI Summary field.]`;
+      // Format the full profile (traits + overview + notes) for AI context.
+      // Uses the same formatter as Profile Builder chat so both paths send
+      // consistent, importance-labeled content -- not the AI summary.
+      const content = formatProfileForAI(profile);
       onAdd({ type: chipType, name, content });
     } catch {
       onClose();
