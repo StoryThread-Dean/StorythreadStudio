@@ -14,14 +14,24 @@
 # API docs: https://openrouter.ai/docs
 
 import json
+import logging
+import time
 import httpx
 from app.ai.sanitizer import sanitize_dict, contains_em_dash
 
 # OpenRouter's base URL and model list endpoint
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
-# HTTP timeout for AI calls -- 60s to allow for slow/large model responses
-REQUEST_TIMEOUT = 60.0
+# HTTP timeout for AI calls -- 180s gives heavy requests (multi-profile
+# consistency checks, outline-vs-profiles comparisons) room to finish on
+# slower or busier model providers. The frontend uses a matching 180s
+# abort timer, and shows a [Cancel] button after 20s for impatient users.
+REQUEST_TIMEOUT = 180.0
+
+# Logger for AI-call observability. Every call records prompt size and
+# elapsed time so timeouts can be correlated with payload bulk or specific
+# models. Logs land in the backend console (uvicorn captures stdout/stderr).
+log = logging.getLogger(__name__)
 
 
 async def list_models(api_key: str) -> list[dict]:
@@ -138,20 +148,41 @@ async def run_completion(
     if temperature is not None:
         payload["temperature"] = temperature
 
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        response = await client.post(
-            f"{OPENROUTER_BASE}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type":  "application/json",
-                # OpenRouter recommends these headers for tracking
-                "HTTP-Referer":  "http://localhost:1420",
-                "X-Title":       "StoryForge",
-            },
-            json=payload,
+    # --- Observability: measure payload size + elapsed time ---
+    # Logged no matter what happens (success, timeout, HTTP error) so we
+    # can correlate slow/failing calls with payload bulk or specific models.
+    # Character count is a cheap proxy for token count (~4 chars/token).
+    prompt_chars = len(system_prompt) + len(user_message)
+    start_time   = time.monotonic()
+    call_status  = "ok"  # overridden in except blocks below
+
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            response = await client.post(
+                f"{OPENROUTER_BASE}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type":  "application/json",
+                    # OpenRouter recommends these headers for tracking
+                    "HTTP-Referer":  "http://localhost:1420",
+                    "X-Title":       "StoryForge",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.TimeoutException:
+        call_status = "timeout"
+        raise
+    except httpx.HTTPStatusError as e:
+        call_status = f"http_{e.response.status_code}"
+        raise
+    finally:
+        elapsed = time.monotonic() - start_time
+        log.info(
+            "run_completion model=%s prompt_chars=%d elapsed=%.2fs status=%s",
+            model_id, prompt_chars, elapsed, call_status,
         )
-        response.raise_for_status()
-        data = response.json()
 
     # Extract the text content from the first choice
     raw_content = data["choices"][0]["message"]["content"]
@@ -228,19 +259,39 @@ async def run_chat(
     if temperature is not None:
         payload["temperature"] = temperature
 
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        response = await client.post(
-            f"{OPENROUTER_BASE}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type":  "application/json",
-                "HTTP-Referer":  "http://localhost:1420",
-                "X-Title":       "StoryForge",
-            },
-            json=payload,
+    # --- Observability: same pattern as run_completion ---
+    # Sum all message lengths (system + every turn) for a true payload size
+    # since chat conversations grow each turn.
+    prompt_chars = len(system_prompt) + sum(len(m.get("content", "")) for m in messages)
+    start_time   = time.monotonic()
+    call_status  = "ok"
+
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            response = await client.post(
+                f"{OPENROUTER_BASE}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type":  "application/json",
+                    "HTTP-Referer":  "http://localhost:1420",
+                    "X-Title":       "StoryForge",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.TimeoutException:
+        call_status = "timeout"
+        raise
+    except httpx.HTTPStatusError as e:
+        call_status = f"http_{e.response.status_code}"
+        raise
+    finally:
+        elapsed = time.monotonic() - start_time
+        log.info(
+            "run_chat model=%s prompt_chars=%d turns=%d elapsed=%.2fs status=%s",
+            model_id, prompt_chars, len(messages), elapsed, call_status,
         )
-        response.raise_for_status()
-        data = response.json()
 
     raw_reply = data["choices"][0]["message"]["content"]
 

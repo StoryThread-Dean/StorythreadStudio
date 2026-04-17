@@ -28,12 +28,20 @@ export function formatProfileForAI(p: Profile): string {
   for (const cfg of configs) {
     const section = p.sections[cfg.key];
     if (!section) continue;
+
+    // Decide if this section has any content worth sending. An empty section
+    // still has a configured key but no trait blocks and no text -- we skip
+    // those entirely rather than sending a lone heading that burns tokens.
+    const hasTraits = cfg.hasTraitBlocks && section.trait_blocks.length > 0;
+    const hasText   = !cfg.hasTraitBlocks && section.content && section.content.trim().length > 0;
+    if (!hasTraits && !hasText) continue;
+
     lines.push(`## ${cfg.heading}`);
-    if (cfg.hasTraitBlocks && section.trait_blocks.length > 0) {
+    if (hasTraits) {
       for (const block of section.trait_blocks) {
         lines.push(`- ${block.trait} [${block.importance}]: ${block.description}`);
       }
-    } else if (section.content) {
+    } else if (hasText) {
       lines.push(section.content);
     }
     lines.push("");

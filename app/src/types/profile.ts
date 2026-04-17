@@ -135,8 +135,11 @@ export const SECTION_CONFIGS: Record<ProfileType, SectionConfig[]> = {
     { key: "story_relevance",      heading: "Story Relevance",      hasTraitBlocks: false },
     { key: "notes",                heading: "Notes",                hasTraitBlocks: false },
   ],
-  // Chapter and scene summaries have simpler structures -- no trait blocks.
-  // The full_ai_summary field is where the generated summary for AI context will live.
+  // Chapter/scene summary profile types are dormant in the profile builder.
+  // Phase 6 moved chapter summaries to plain Markdown files (summaries/chapters/)
+  // edited via a standalone CodeMirror view, not via this profile config.
+  // The entries below exist only so legacy chapter_summary and scene_summary
+  // profile files (if any) still render in the Profile Builder.
   chapter_summary: [
     { key: "overview",          heading: "Chapter Overview",    hasTraitBlocks: false },
     { key: "key_events",        heading: "Key Events",          hasTraitBlocks: false },

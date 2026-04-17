@@ -22,6 +22,8 @@ import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
 import { ProjectHome } from "./screens/ProjectHome";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
+import { SummaryView }    from "./components/SummaryView";
+import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "./components/RightPanelResizer";
 import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
@@ -45,10 +47,27 @@ function App() {
   // Which project is currently open. null = show home screen.
   const [currentProject, setCurrentProject] = useState<ProjectInfo | null>(null);
 
-  // Which top-level view is active: the writing editor, profile builder, or notes editor.
-  // profileType tracks which tab was clicked so the ProfileBuilder opens on the right type.
-  const [currentView, setCurrentView]   = useState<"editor" | "profiles" | "notes">("editor");
+  // Which top-level view is active: the writing editor, profile builder, notes
+  // editor, or chapter-summary editor. ProfileBuilder gets "profiles" because
+  // it's a completely separate screen; chapter_summary is rendered in the
+  // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
+  const [currentView, setCurrentView]   = useState<
+    "editor" | "profiles" | "notes" | "chapter_summary"
+  >("editor");
   const [profileType, setProfileType]   = useState<ProfileType>("character");
+
+  // --- Manuscript tree state (Phase 6) ---
+  // expandedChapters: which chapter rows show their Chapter Summary child.
+  //   A Set makes add/remove O(1).
+  // currentSummaryChapter: which chapter's summary is open (null when not in
+  //   summary view). Used both to load the right summary file and to give the
+  //   parent chapter row a subtle highlight while the child summary is active.
+  const [expandedChapters, setExpandedChapters]           = useState<Set<string>>(new Set());
+  const [currentSummaryChapter, setCurrentSummaryChapter] = useState<string | null>(null);
+
+  // Writing Companion panel width -- toggle between compact and wide, persisted
+  // to localStorage so the writer's preference survives restarts.
+  const writingCompanionPanel = useRightPanelWidth("storyforge.writingCompanion.width");
 
   // Settings modal visibility
   const [showSettings, setShowSettings] = useState(false);
@@ -80,6 +99,17 @@ function App() {
   const [chatLoading, setChatLoading]   = useState(false);
   const [chatError, setChatError]       = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  // --- Cancel-in-flight chat request ---
+  // chatAbortRef holds the AbortController for the currently running fetch so
+  // a [Cancel] button can tear it down. chatCanCancel flips to true after 20s
+  // of waiting so the button only appears once the writer has genuinely been
+  // left hanging (prevents button-flicker on fast responses). chatManualCancelRef
+  // lets the catch block tell the difference between "user cancelled" and
+  // "timed out after 180s" so we can show the right error message.
+  const chatAbortRef        = useRef<AbortController | null>(null);
+  const chatManualCancelRef = useRef(false);
+  const [chatCanCancel, setChatCanCancel] = useState(false);
 
   // Context chips -- profile summaries the writer explicitly attaches to AI requests.
   const [contextChips, setContextChips] = useState<ContextChip[]>([]);
@@ -149,7 +179,9 @@ function App() {
   const currentChapterRef = useRef<ChapterInfo | null>(null);
   const currentProjectRef = useRef<ProjectInfo | null>(null);
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
-  const currentViewRef = useRef<"editor" | "profiles" | "notes">("editor");
+  const currentViewRef = useRef<
+    "editor" | "profiles" | "notes" | "chapter_summary"
+  >("editor");
 
   // Keep refs in sync with state on every render.
   // This lets our event listeners (Ctrl+S) always see the latest values.
@@ -231,6 +263,32 @@ function App() {
     } finally {
       setIsLoadingNote(false);
     }
+  }, []);
+
+
+  // --- Phase 6: Manuscript tree handlers ---
+
+  // Toggle a chapter's expanded state. Expanding reveals the Chapter Summary
+  // child row; collapsing hides it. No network calls needed.
+  const toggleChapterExpanded = useCallback((chapterFilename: string) => {
+    setExpandedChapters(prev => {
+      const next = new Set(prev);
+      if (next.has(chapterFilename)) {
+        next.delete(chapterFilename);
+      } else {
+        next.add(chapterFilename);
+      }
+      return next;
+    });
+  }, []);
+
+  // Open the chapter summary for a chapter. The summary file lives at
+  // <project>/summaries/chapters/<chapter-stem>.md. SummaryView handles the
+  // "no file yet" empty state, so we always navigate even if the file is
+  // missing on disk.
+  const openChapterSummary = useCallback((chapterFilename: string) => {
+    setCurrentSummaryChapter(chapterFilename);
+    setCurrentView("chapter_summary");
   }, []);
 
 
@@ -454,8 +512,18 @@ function App() {
     setChatError(null);
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
+    // --- Cancellation + timeout setup ---
+    // controller: can be aborted by the hard 180s timer OR by the user clicking [Cancel].
+    // cancelButtonTimer: reveals the [Cancel] button after 20s of waiting --
+    //   long enough that quick responses don't show the button at all, short
+    //   enough that impatient writers aren't stuck staring at "Thinking..."
+    // hardTimeoutTimer: safety net matching the backend REQUEST_TIMEOUT (180s).
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90_000);
+    chatAbortRef.current        = controller;
+    chatManualCancelRef.current = false;
+    setChatCanCancel(false);
+    const cancelButtonTimer = setTimeout(() => setChatCanCancel(true), 20_000);
+    const hardTimeoutTimer  = setTimeout(() => controller.abort(), 180_000);
 
     try {
       const res = await fetch(`${API_BASE}/api/ai/editor-chat`, {
@@ -506,17 +574,38 @@ function App() {
 
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
-        setChatError("Request timed out after 90 seconds. Try a shorter text selection.");
+        // Abort could be user-cancel OR the 180s hard timeout. The ref flag
+        // tells us which so we can show an actionable message either way.
+        if (chatManualCancelRef.current) {
+          setChatError("Request cancelled. Rephrase your message and try again.");
+        } else {
+          setChatError("Request timed out after 180 seconds. Try fewer attachments or a shorter selection.");
+        }
       } else if (err instanceof TypeError && err.message.toLowerCase().includes("failed to fetch")) {
         setChatError("Could not reach the backend. Check that it is running on port 8000.");
       } else {
         setChatError(err instanceof Error ? err.message : "Chat request failed.");
       }
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(cancelButtonTimer);
+      clearTimeout(hardTimeoutTimer);
+      chatAbortRef.current        = null;
+      chatManualCancelRef.current = false;
+      setChatCanCancel(false);
       setChatLoading(false);
     }
   }, [chatInput, chatMessages, chatCategory, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys]);
+
+
+  // --- Cancel an in-flight chat request ---
+  // Called when the writer clicks the [Cancel] button that appears after 20s.
+  // We set the manual-cancel flag BEFORE calling abort() so the catch block
+  // in sendEditorChat knows this wasn't a timeout and shows the right message.
+  const cancelEditorChat = useCallback(() => {
+    if (!chatAbortRef.current) return;
+    chatManualCancelRef.current = true;
+    chatAbortRef.current.abort();
+  }, []);
 
 
   // --- Keyboard shortcut: Ctrl+S to save ---
@@ -646,26 +735,39 @@ function App() {
 
         <nav className="flex-1 overflow-y-auto px-2 py-4">
 
-          {/* Manuscript section -- real chapter list from disk */}
+          {/* Manuscript section -- Phase 6 nested tree:
+              Each chapter is a collapsible row. Expanding reveals a single
+              "Chapter Summary" child. Clicking the chapter name opens the
+              chapter in the editor; clicking the summary child opens the
+              summary editor. Expanded state lives in App-level state so it
+              persists as the writer navigates between views. */}
           <NavSection label="Manuscript">
             {chapters.length === 0 && (
               <p className="px-2 text-xs text-[#3f3f7a]">No chapters found.</p>
             )}
-            {chapters.map((chapter) => (
-              <NavItem
-                key={chapter.filename}
-                label={chapter.title}
-                hint={`Open ${chapter.filename} in the editor`}
-                active={currentChapter?.filename === chapter.filename}
-                onClick={() => {
-                  // Don't reload if this chapter is already open AND we're in editor view.
-                  // If we're in notes/profiles view, always switch back to the editor.
-                  if (currentView !== "editor" || currentChapter?.filename !== chapter.filename) {
-                    loadChapter(chapter, currentProject);
-                  }
-                }}
-              />
-            ))}
+            {chapters.map((chapter) => {
+              const isExpanded        = expandedChapters.has(chapter.filename);
+              const isActiveChapter   = currentView === "editor" && currentChapter?.filename === chapter.filename;
+              const isSummaryAncestor = currentView === "chapter_summary" && currentSummaryChapter === chapter.filename;
+
+              return (
+                <ChapterNavRow
+                  key={chapter.filename}
+                  chapter={chapter}
+                  isExpanded={isExpanded}
+                  isActiveChapter={isActiveChapter}
+                  isSummaryAncestor={isSummaryAncestor}
+                  isChapterSummaryActive={isSummaryAncestor}
+                  onToggleExpand={() => toggleChapterExpanded(chapter.filename)}
+                  onOpenChapter={() => {
+                    if (currentView !== "editor" || currentChapter?.filename !== chapter.filename) {
+                      loadChapter(chapter, currentProject);
+                    }
+                  }}
+                  onOpenChapterSummary={() => openChapterSummary(chapter.filename)}
+                />
+              );
+            })}
           </NavSection>
 
           <NavSection label="Notes">
@@ -688,11 +790,13 @@ function App() {
               onClick={() => { setProfileType("lore");         setCurrentView("profiles"); }} />
           </NavSection>
 
+          {/* Scene Summaries remain reachable here for legacy profile access.
+              Chapter summaries moved to the nested Manuscript tree in Phase 6
+              (plain-Markdown files under summaries/chapters/ via SummaryView),
+              so the old profile-builder link for them has been removed. */}
           <NavSection label="Summaries">
-            <NavItem label="Chapter Summaries" hint="Per-chapter summaries used as AI context"
-              onClick={() => { setProfileType("chapter_summary"); setCurrentView("profiles"); }} />
-            <NavItem label="Scene Summaries"   hint="Per-scene summaries used as AI context"
-              onClick={() => { setProfileType("scene_summary");   setCurrentView("profiles"); }} />
+            <NavItem label="Scene Summaries" hint="Per-scene summaries used as AI context"
+              onClick={() => { setProfileType("scene_summary"); setCurrentView("profiles"); }} />
           </NavSection>
         </nav>
 
@@ -707,6 +811,25 @@ function App() {
         </div>
       </aside>
 
+
+      {/*
+        Phase 6: when the writer is viewing a chapter summary, swap the center
+        editor + Writing Companion panels for the full-width SummaryView. The
+        left-nav stays mounted so the writer can navigate between summaries,
+        chapters, and other views without losing context. The Writing
+        Companion is intentionally hidden here -- summaries are structured
+        continuity editing, not prose drafting, so the chat panel would only
+        distract.
+      */}
+      {currentView === "chapter_summary" && currentSummaryChapter ? (
+        <SummaryView
+          project={currentProject}
+          chapterFile={currentSummaryChapter}
+          font={currentFont}
+          onBack={() => setCurrentView("editor")}
+        />
+      ) : (
+      <>
 
       {/* ── CENTER PANEL: Writing Editor (chapters or notes) ─────────── */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -842,8 +965,13 @@ function App() {
       </main>
 
 
-      {/* ── RIGHT PANEL: Writing Companion ──────────────────────────────── */}
-      <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b]">
+      {/* ── RIGHT PANEL: Writing Companion ────────────────────────────────
+          Width is toggleable (compact / wide) via the resizer pinned to the
+          left edge; preference persists via localStorage. `relative` so the
+          absolutely-positioned resizer anchors inside this aside. */}
+      <aside className={`relative flex ${RIGHT_PANEL_CLASS[writingCompanionPanel.width]} shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b] transition-[width] duration-200`}>
+
+        <RightPanelResizer width={writingCompanionPanel.width} setWidth={writingCompanionPanel.setWidth} />
 
         {/* Header + clear */}
         <div className="border-b border-[#1e1e4a] px-4 py-3">
@@ -972,13 +1100,33 @@ function App() {
                 // they're still "in play" in the AI's memory from the conversation
                 // history, but won't be resent. New chips show bright/full color.
                 const isEstablished = establishedChipKeys.has(`${chip.type}:${chip.name}`);
+
+                // Size indicator: chip content length in characters. Large chips
+                // (especially location/lore profiles with many filled sections)
+                // can push requests over the model's context window or timeout.
+                // Ring color warns the writer when a chip is unusually large.
+                const size = chip.content.length;
+                const sizeLabel =
+                  size >= 1000 ? `${(size / 1000).toFixed(1)}k` : String(size);
+                const isLarge = size > 6000;    // Noticeable
+                const isHuge  = size > 12000;   // Likely to cause slow/timeout
+
+                const tooltip = [
+                  chip.name,
+                  `${size.toLocaleString()} chars`,
+                  isEstablished ? "Established in conversation" : "Will be sent this turn",
+                  isHuge ? "⚠ Very large -- may cause slow responses or timeouts" :
+                    isLarge ? "Large -- takes up significant context" : "",
+                ].filter(Boolean).join(" • ");
+
                 return (
                   <span
                     key={i}
-                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-opacity ${chipTypeColor(chip.type)} ${isEstablished ? "opacity-40" : ""}`}
-                    title={isEstablished ? `${chip.name} (established -- already in conversation)` : chip.name}
+                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-opacity ${chipTypeColor(chip.type)} ${isEstablished ? "opacity-40" : ""} ${isHuge ? "ring-1 ring-red-500" : isLarge ? "ring-1 ring-amber-500" : ""}`}
+                    title={tooltip}
                   >
                     {chip.name}
+                    <span className="text-[10px] opacity-60">({sizeLabel})</span>
                     <button
                       onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
                       className="text-[#3f3f7a] hover:text-red-400"
@@ -1062,7 +1210,19 @@ function App() {
           {chatLoading && (
             <div className="flex items-center gap-2 text-xs text-[#8888aa]">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
-              Thinking...
+              <span>Thinking...</span>
+              {/* Cancel button appears only after 20s so fast responses don't
+                  flash a button the writer never needed. Lets impatient
+                  writers bail out and rephrase without waiting the full 180s. */}
+              {chatCanCancel && (
+                <button
+                  onClick={cancelEditorChat}
+                  className="ml-1 rounded border border-red-800/60 bg-red-950/30 px-2 py-0.5 text-[11px] text-red-300 transition-colors hover:border-red-600 hover:bg-red-900/40 hover:text-red-200"
+                  title="Cancel this request"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           )}
 
@@ -1116,6 +1276,8 @@ function App() {
           </div>
         </div>
       </aside>
+      </>
+      )}
 
       {/* Settings modal -- rendered as an overlay on top of everything */}
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
@@ -1250,6 +1412,82 @@ function NavItem({
     >
       {label}
     </button>
+  );
+}
+
+
+// ── ChapterNavRow (Phase 6) ───────────────────────────────────────────────────
+// One row in the Manuscript tree. Combines a chapter-opening button with an
+// expand/collapse caret that reveals a single "Chapter Summary" child row.
+//
+// Clicking the caret toggles the subtree. Clicking the chapter name opens
+// the chapter in the editor. These are separate click targets so the writer
+// can navigate to the summary without inadvertently switching chapters.
+
+function ChapterNavRow({
+  chapter,
+  isExpanded,
+  isActiveChapter,
+  isSummaryAncestor,
+  isChapterSummaryActive,
+  onToggleExpand,
+  onOpenChapter,
+  onOpenChapterSummary,
+}: {
+  chapter:                ChapterInfo;
+  isExpanded:             boolean;
+  isActiveChapter:        boolean;  // the chapter .md is open in the editor
+  isSummaryAncestor:      boolean;  // this chapter's summary is the active view
+  isChapterSummaryActive: boolean;  // the Chapter Summary child is currently active
+  onToggleExpand:         () => void;
+  onOpenChapter:          () => void;
+  onOpenChapterSummary:   () => void;
+}) {
+  // Softer highlight for the parent chapter row when the child summary is
+  // active -- helps the eye trace back up the tree without dominating the row.
+  const parentGhostBg = isSummaryAncestor && !isActiveChapter ? "bg-indigo-900/10" : "";
+
+  return (
+    <div className="mb-0.5">
+      {/* Header row: caret + chapter name. Two separate click targets so the
+          writer can open the chapter OR toggle the subtree without ambiguity. */}
+      <div
+        className={`flex items-stretch rounded transition-colors ${
+          isActiveChapter ? "bg-indigo-600/20" : `hover:bg-[#12122e] ${parentGhostBg}`
+        }`}
+      >
+        <button
+          onClick={onToggleExpand}
+          className="flex w-6 shrink-0 items-center justify-center text-xs text-[#6666a0] hover:text-indigo-300"
+          title={isExpanded ? "Collapse" : "Expand"}
+          aria-label={isExpanded ? "Collapse chapter" : "Expand chapter"}
+        >
+          {isExpanded ? "v" : ">"}
+        </button>
+        <button
+          onClick={onOpenChapter}
+          className={`flex-1 px-1 py-1.5 text-left text-sm ${
+            isActiveChapter ? "text-indigo-300" : "text-[#f0f0f5]"
+          }`}
+          title={`Open ${chapter.filename} in the editor`}
+        >
+          {chapter.title}
+        </button>
+      </div>
+
+      {/* Expanded subtree: just the Chapter Summary child row. Indent slightly
+          so the hierarchy reads correctly. */}
+      {isExpanded && (
+        <div className="ml-6 mt-0.5 border-l border-[#1e1e4a] pl-2">
+          <NavItem
+            label="Chapter Summary"
+            hint="AI-generated continuity brief for this chapter"
+            active={isChapterSummaryActive}
+            onClick={onOpenChapterSummary}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

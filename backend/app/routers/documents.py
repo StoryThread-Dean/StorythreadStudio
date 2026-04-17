@@ -141,6 +141,92 @@ async def list_chapters(folder_path: str):
     return chapters
 
 
+# ── Phase 6: Chapter Summary read/write (plain Markdown) ─────────────────────
+# Chapter summaries live as plain Markdown files in summaries/chapters/, named
+# after the chapter stem (e.g., manuscript/01-landing.md pairs with
+# summaries/chapters/01-landing.md). The writer edits them like any other
+# document in the app; the AI generation endpoint writes to the same file.
+
+class ChapterSummaryResponse(BaseModel):
+    """Returned from the GET endpoint. `exists` distinguishes empty-but-present
+    from not-yet-created so the UI can show the right empty-state message."""
+    filename: str
+    content:  str
+    exists:   bool
+
+
+class SaveChapterSummaryRequest(BaseModel):
+    folder_path:      str
+    chapter_filename: str     # e.g. "01-landing.md" (the manuscript filename; stem is used)
+    content:          str
+
+
+class SaveChapterSummaryResponse(BaseModel):
+    filename: str
+    message:  str
+
+
+def _chapter_summary_paths(folder_path: str, chapter_filename: str) -> tuple[str, str]:
+    """
+    Returns (summary_dir, summary_file) for a given chapter. The stem of the
+    chapter filename becomes the summary filename, so 01-landing.md pairs
+    with summaries/chapters/01-landing.md.
+    """
+    stem = os.path.splitext(chapter_filename)[0]
+    summary_dir  = os.path.realpath(os.path.join(folder_path, "summaries", "chapters"))
+    summary_file = os.path.realpath(os.path.join(summary_dir, f"{stem}.md"))
+    # Path-traversal guard: the resolved file must still sit inside the
+    # intended summaries/chapters folder after .. / symlink resolution.
+    if not summary_file.startswith(summary_dir + os.sep) and summary_file != summary_dir:
+        raise HTTPException(status_code=400, detail="Invalid chapter filename.")
+    return summary_dir, summary_file
+
+
+# --- GET /api/documents/chapter-summary ---
+@router.get("/chapter-summary", response_model=ChapterSummaryResponse)
+async def load_chapter_summary(folder_path: str, chapter_filename: str):
+    """
+    Read the plain-Markdown chapter summary for one chapter.
+
+    Returns {exists: false, content: ""} when no summary file has been
+    created yet. Callers use that flag to show the "No summary yet. Click
+    Regenerate." empty state rather than an error.
+    """
+    _summary_dir, summary_file = _chapter_summary_paths(folder_path, chapter_filename)
+
+    stem = os.path.splitext(chapter_filename)[0]
+    filename = f"{stem}.md"
+
+    if not os.path.isfile(summary_file):
+        return ChapterSummaryResponse(filename=filename, content="", exists=False)
+
+    with open(summary_file, "r", encoding="utf-8") as f:
+        return ChapterSummaryResponse(filename=filename, content=f.read(), exists=True)
+
+
+# --- POST /api/documents/chapter-summary ---
+@router.post("/chapter-summary", response_model=SaveChapterSummaryResponse)
+async def save_chapter_summary(request: SaveChapterSummaryRequest):
+    """
+    Save a manually-edited chapter summary to disk. Overwrites the existing
+    file, or creates it if this is the first save. Does NOT call the AI --
+    this endpoint is for direct writer edits (including Ctrl+S in the
+    SummaryView editor).
+    """
+    summary_dir, summary_file = _chapter_summary_paths(request.folder_path, request.chapter_filename)
+    os.makedirs(summary_dir, exist_ok=True)
+
+    # Normalize trailing whitespace so the file always ends with exactly one
+    # newline. Writers don't notice, but some Markdown tools choke on no
+    # final newline.
+    content = request.content.rstrip() + "\n"
+    with open(summary_file, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    stem = os.path.splitext(request.chapter_filename)[0]
+    return SaveChapterSummaryResponse(filename=f"{stem}.md", message="Summary saved.")
+
+
 # --- GET /api/documents/chapter ---
 @router.get("/chapter", response_model=LoadChapterResponse)
 async def load_chapter(folder_path: str, filename: str):

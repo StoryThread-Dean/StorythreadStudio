@@ -88,9 +88,11 @@ SECTION_CONFIGS: dict[str, list[SectionConfig]] = {
         SectionConfig("story_relevance",      "Story Relevance",      False),
         SectionConfig("notes",                "Notes",                False),
     ],
-    # Chapter and scene summaries are simpler -- no trait blocks.
-    # The `full_ai_summary` field on the Profile becomes the actual generated
-    # summary text that will later be used as AI context chips.
+    # Chapter summary is dormant in this profile system. Phase 6 moved chapter
+    # summaries to plain Markdown files under summaries/chapters/ so the writer
+    # can edit them freely without the profile section scaffolding. This config
+    # is preserved only so legacy chapter_summary profile files (from Phase 2)
+    # still open in the Profile Builder without crashing.
     "chapter_summary": [
         SectionConfig("overview",           "Chapter Overview",     False),
         SectionConfig("key_events",         "Key Events",           False),

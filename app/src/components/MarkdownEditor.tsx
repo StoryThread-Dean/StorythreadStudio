@@ -123,9 +123,20 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
   }, [font]);
 
   // Static extensions -- built once, never change.
+  //
+  // contentAttributes sets HTML attributes on CodeMirror's .cm-content div.
+  // CodeMirror 6 defaults spellcheck to "false" for performance, but fiction
+  // writing is exactly the case where we want the browser's built-in spell
+  // checker (red squiggles, right-click for suggestions). autocorrect and
+  // autocapitalize are "off" so the writer stays in control of their prose.
   const extensions = [
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     EditorView.lineWrapping,
+    EditorView.contentAttributes.of({
+      spellcheck: "true",
+      autocorrect: "off",
+      autocapitalize: "off",
+    }),
     fontCompartment.of(buildFontTheme(font)),
   ];
 

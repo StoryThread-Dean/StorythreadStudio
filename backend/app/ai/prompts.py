@@ -764,3 +764,100 @@ def generate_full_summary_prompt() -> str:
         'Return ONLY valid JSON: {"full_summary": "your text here"}. No extra text. '
         'Include the --- Suggestions --- section inside the same string if applicable.'
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CHAPTER SUMMARY PROMPT (Phase 6 -- redesigned)
+# ══════════════════════════════════════════════════════════════════════════════
+# The chapter summary is a single Markdown document stored as a plain file at
+# <project>/summaries/chapters/<chapter-stem>.md. The AI produces the entire
+# Markdown body in one shot -- no JSON wrapping, no multiple sections in the
+# API response. The sectional structure (Overview, Key Events, etc.) lives
+# INSIDE the Markdown the AI writes, not in the storage format.
+#
+# Why this shape:
+#   - The writer edits the summary like any other Markdown document in the app.
+#   - AI output drops straight into a text editor -- what you see is what's
+#     on disk, no JSON-to-Markdown translation layer.
+#   - Fewer moving parts: one prompt, one output, one file.
+#
+# Sanitation: the sanitize_chat() helper (called automatically by run_chat())
+# strips em dashes and ` -- ` fallbacks and replaces them with commas, which
+# is the behavior the writer wants. See sanitizer.py.
+
+CHAPTER_SUMMARY_INSTRUCTIONS = """You are creating a chapter summary for fiction consistency work.
+
+Purpose:
+The summary will be used to maintain continuity, track character state, preserve causality, and support later drafting or revision. Another AI tool will later read this summary as context for other chapters.
+
+Your task:
+Summarize the chapter into a structured, information-dense Markdown document. Output the Markdown directly as prose. Do not wrap it in JSON. Do not include code fences. Do not add any text before or after the summary.
+
+Length requirement:
+- Target length: 200 to 400 words total
+- Aim for approximately 250 words when possible
+- Do not go below 180 words unless the chapter is extremely simple
+- Do not exceed 500 words unless explicitly instructed
+
+Priority:
+- Include only information necessary for continuity and consistency.
+- Favor causality, state changes, motivations, and outcomes over descriptive prose.
+- Omit stylistic detail, line-by-line action, and unnecessary atmosphere unless it affects continuity.
+
+Required output format:
+Return exactly this Markdown shape (keep the section headings, keep the bullet style, keep the blank lines between sections):
+
+Overview:
+Two to three sentences explaining the main movement of the chapter and what changes by the end.
+
+Key Events:
+- Three to six lines, one event per line. Each line describes an event and its consequence. Keep each line concise and specific.
+
+Character State Changes:
+- One line per character whose state changed in a way that matters for continuity. Format: Character name, starting state, ending state.
+
+New Information and Constraints:
+- One line per revelation, rule, limitation, stakes item, or canon fact introduced in the chapter.
+
+Open Threads:
+- One line per unresolved tension, question, promise, or setup that continues beyond the chapter.
+
+Rules:
+- Do not rewrite the chapter in polished prose.
+- Do not add new material.
+- Do not infer emotions, motives, or facts unless clearly supported by the text.
+- Do not include minor details unless they will matter later.
+- Do not summarize every scene beat mechanically.
+- Preserve names, relationships, timeline details, and cause/effect accurately.
+- Keep wording clear, neutral, and compact.
+- If the chapter is too dense to fit the target length, prioritize major continuity-critical information only.
+
+Quality check before finalizing:
+- Ensure the total length stays within 200 to 400 words.
+- Ensure every bullet adds new information.
+- Ensure the summary explains what changed, why it changed, and what must be remembered later.
+"""
+
+
+def generate_chapter_summary_prompt(content_mode: str) -> str:
+    """
+    Build the system prompt for POST /api/ai/generate-chapter-summary.
+
+    Composition:
+        [CONTENT MODE PREAMBLE]? + [CHAPTER_SUMMARY_INSTRUCTIONS] + [PUNCTUATION_RULE]
+
+    The chapter text is sent separately as the user message, NOT embedded in
+    the system prompt. This keeps the system prompt identical across chapters
+    so providers that cache prompts can reuse the cached version.
+
+    No JSON response_format: the endpoint calls run_chat() (plain-text) rather
+    than run_completion() (JSON-wrapped). The AI returns the raw Markdown body
+    that will be written to disk as-is, subject only to em-dash sanitation.
+    """
+    parts: list[str] = []
+    mode = content_mode_instruction(content_mode)
+    if mode:
+        parts.append(mode)
+    parts.append(CHAPTER_SUMMARY_INSTRUCTIONS)
+    parts.append(PUNCTUATION_RULE)
+    return "\n\n".join(parts)

@@ -41,6 +41,7 @@ import { v4 as uuidv4 } from "uuid";
 import { IMPORTANCE_HELP, getSectionHelp } from "../data/profileHelp";
 import type { ImportanceLevelHelp, SectionHelp } from "../data/profileHelp";
 import { formatProfileForAI } from "../utils/profileFormat";
+import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "../components/RightPanelResizer";
 
 const API_BASE = "http://localhost:8000";
 
@@ -240,6 +241,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
 
   // Right panel collapse
   const [chatCollapsed, setChatCollapsed] = useState(false);
+
+  // Right panel width -- toggleable compact/wide, persisted per localStorage.
+  // Separate key from the Writing Companion so the two panels can have
+  // independent preferences.
+  const chatPanel = useRightPanelWidth("storyforge.profileBuilder.chatWidth");
 
   // Section configs for the current profile type
   const sections = useMemo(
@@ -1081,8 +1087,17 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       </main>
 
 
-      {/* ── RIGHT PANEL: Profile Companion Chat ──────────────────────── */}
-      <aside className={`flex shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b] transition-all duration-200 ${chatCollapsed ? "w-10" : "w-[380px]"}`}>
+      {/* ── RIGHT PANEL: Profile Companion Chat ────────────────────────
+          Two size modes. Collapsed -> a 40px strip. Expanded -> either the
+          compact or wide width chosen by the resizer. The resizer button
+          cluster is only rendered when the panel is expanded; its anchor
+          (`relative`) applies in both states but the absolute children are
+          hidden when collapsed. */}
+      <aside className={`relative flex shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b] transition-all duration-200 ${chatCollapsed ? "w-10" : RIGHT_PANEL_CLASS[chatPanel.width]}`}>
+
+        {!chatCollapsed && (
+          <RightPanelResizer width={chatPanel.width} setWidth={chatPanel.setWidth} />
+        )}
 
         {/* Collapsed view */}
         {chatCollapsed ? (

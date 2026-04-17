@@ -37,3 +37,11 @@ Thumbs.db
 # cache files, and logs. These are generated at runtime, not source code.
 **/.storyforge/
 .claude/settings.local.json
+
+# ── Local developer reference material (not source) ──────────────────────────
+# .test-files/ holds local screenshots and scratch files used for planning
+# (UI mockups the writer drags in, etc). chapter_summary_ai_instructions.md
+# is the writer's private prompt draft -- the authoritative copy lives inside
+# backend/app/ai/prompts.py as CHAPTER_SUMMARY_INSTRUCTIONS.
+.test-files/
+chapter_summary_ai_instructions.md

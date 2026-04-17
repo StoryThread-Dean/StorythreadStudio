@@ -30,6 +30,7 @@ from app.ai.prompts import (
     audit_importance_prompt,
     generate_section_summary_prompt,
     generate_full_summary_prompt,
+    generate_chapter_summary_prompt,
     content_mode_instruction,
     TEMPERATURE_DEFAULTS,
 )
@@ -148,6 +149,24 @@ class GenerateFullSummaryRequest(BaseModel):
 
 class GenerateFullSummaryResponse(BaseModel):
     full_summary: str
+
+
+# ── Phase 6: Chapter Summary Generation (plain Markdown) ────────────────────
+# The summary is a single Markdown document saved at
+# <project>/summaries/chapters/<chapter-stem>.md. The AI writes the full body
+# in one shot (not JSON); backend sanitizes and writes it to disk.
+
+class GenerateChapterSummaryRequest(BaseModel):
+    chapter_path: str          # Absolute path to the chapter .md file
+    project_path: str          # Absolute path to the project root
+    model_id:     str | None = None
+    content_mode: str = "general"
+
+
+class GenerateChapterSummaryResponse(BaseModel):
+    content:      str          # The generated Markdown body (as saved on disk)
+    filename:     str          # Summary filename inside summaries/chapters/
+    model_used:   str
 
 
 class ProfileChatMessage(BaseModel):
@@ -798,6 +817,105 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
 
     text = _extract_text_field(result, "full_summary")
     return GenerateFullSummaryResponse(full_summary=sanitize(text.strip()))
+
+
+# ── Phase 6 helpers: chapter summary file I/O ───────────────────────────────
+# Chapter summaries live as plain Markdown files under
+# <project>/summaries/chapters/<chapter-stem>.md. The AI produces the full
+# Markdown body in one shot; the endpoint writes it to disk verbatim.
+
+def _read_chapter_text(project_path: str, chapter_path: str) -> str:
+    """
+    Validate that chapter_path lives under project_path/manuscript/ and return
+    the chapter's raw Markdown text. Path-traversal safe: realpath comparison
+    prevents "../../etc/passwd" style requests.
+    """
+    manuscript_dir = os.path.realpath(os.path.join(project_path, "manuscript"))
+    full = os.path.realpath(chapter_path)
+    if not full.startswith(manuscript_dir + os.sep) and full != manuscript_dir:
+        raise HTTPException(status_code=400, detail="Chapter path must be inside the project's manuscript folder.")
+    if not os.path.isfile(full):
+        raise HTTPException(status_code=404, detail=f"Chapter not found: {chapter_path}")
+    with open(full, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _chapter_title_from_text(chapter_text: str, fallback: str) -> str:
+    """
+    Extract the chapter's display name from its first `# Heading`. Falls back
+    to the filename stem if no heading is found.
+    """
+    for line in chapter_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# ") and not stripped.startswith("## "):
+            return stripped[2:].strip() or fallback
+    return fallback
+
+
+def _chapter_summary_path(project_path: str, chapter_filename: str) -> str:
+    """Resolve the absolute path of the summary file for a given chapter stem."""
+    stem   = os.path.splitext(chapter_filename)[0]
+    folder = os.path.join(project_path, "summaries", "chapters")
+    return os.path.join(folder, f"{stem}.md")
+
+
+@router.post("/generate-chapter-summary", response_model=GenerateChapterSummaryResponse)
+async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
+    """
+    Generate a plain-Markdown chapter summary from a chapter file.
+    Writes the result to <project>/summaries/chapters/<chapter-stem>.md and
+    returns the content so the UI can display it immediately.
+
+    Pipeline:
+      1. Read chapter text from disk (path-traversal safe)
+      2. Build system prompt from CHAPTER_SUMMARY_INSTRUCTIONS + PUNCTUATION_RULE
+      3. Call run_chat() with chapter text as the single user message. run_chat
+         returns plain text and applies sanitize_chat() automatically, which
+         replaces em dashes and ` -- ` with commas per the writer's preference.
+      4. Write the sanitized Markdown to summaries/chapters/<stem>.md
+      5. Return the content + filename + model
+    """
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    chapter_text = _read_chapter_text(request.project_path, request.chapter_path)
+    stem         = os.path.splitext(os.path.basename(request.chapter_path))[0]
+    chapter_name = _chapter_title_from_text(chapter_text, fallback=stem)
+
+    system_prompt = generate_chapter_summary_prompt(request.content_mode)
+    user_message = (
+        f"Chapter title: {chapter_name}\n\n"
+        f"Chapter text:\n\n{chapter_text}"
+    )
+
+    try:
+        # run_chat (not run_completion) because we want plain text output, not
+        # JSON. sanitize_chat() runs inside run_chat to enforce the no-em-dash,
+        # no-double-hyphen rule on anything the model slips past the prompt.
+        body = await run_chat(
+            api_key       = api_key,
+            model_id      = model_id,
+            system_prompt = system_prompt,
+            messages      = [{"role": "user", "content": user_message}],
+            temperature   = TEMPERATURE_DEFAULTS["extraction"],
+        )
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+
+    filename     = f"{stem}.md"
+    summary_dir  = os.path.join(request.project_path, "summaries", "chapters")
+    summary_path = os.path.join(summary_dir, filename)
+    os.makedirs(summary_dir, exist_ok=True)
+
+    # Strip whatever leading/trailing whitespace the model adds, then write.
+    content = body.strip() + "\n"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    return GenerateChapterSummaryResponse(
+        content    = content,
+        filename   = filename,
+        model_used = model_id,
+    )
 
 
 @router.post("/profile-chat", response_model=ProfileChatResponse)
