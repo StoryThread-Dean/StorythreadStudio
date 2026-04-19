@@ -13,7 +13,8 @@
 // is actually used for AI calls (that's the explicitly selected model).
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star, Folder } from "lucide-react";
 import type { AppSettings, ModelInfo } from "../types/ai";
 
 // ── Content Mode Model Filtering (shared logic with ProjectSettings) ─────────
@@ -109,6 +110,11 @@ export function Settings({ onClose }: SettingsProps) {
   const [modelBlocklist, setModelBlocklist]     = useState("");
   const [modelContentModes, setModelContentModes] = useState("");
 
+  // Vault location -- parent folder where new projects/series are auto-placed.
+  // The backend resolves an empty string to ~/Documents/StoryForge, so we
+  // treat "" as a sentinel meaning "use the default".
+  const [vaultRoot, setVaultRoot] = useState("");
+
   // UI state
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
@@ -173,6 +179,10 @@ export function Settings({ onClose }: SettingsProps) {
             .map(([id, modes]) => `${id}: ${(modes as string[]).join(", ")}`)
             .join("\n")
         );
+
+        // Vault location: backend always returns the resolved path (never
+        // empty), so we can pre-fill the input directly.
+        setVaultRoot(data.vault_root ?? "");
 
         if (data.openrouter_api_key_set) {
           fetchModels();
@@ -242,6 +252,8 @@ export function Settings({ onClose }: SettingsProps) {
         model_allowlist:      parsedAllowlist,
         model_blocklist:      parsedBlocklist,
         model_content_modes:  parsedContentModes,
+        // Vault root: empty string tells the backend to reset to the default.
+        vault_root:           vaultRoot.trim(),
       };
 
       if (apiKeyInput.trim()) {
@@ -259,6 +271,10 @@ export function Settings({ onClose }: SettingsProps) {
       const data: AppSettings = await res.json();
       setSettings(data);
       setApiKeyInput("");
+      // Reflect the resolved vault path back -- the backend substitutes the
+      // default when we send "", so this re-fills the input with the real
+      // path instead of leaving it blank.
+      setVaultRoot(data.vault_root ?? "");
       setSaved(true);
       setTestResult(null);
 
@@ -606,7 +622,53 @@ export function Settings({ onClose }: SettingsProps) {
               </section>
 
 
-              {/* ── SECTION 3: Model Routing ─────────────────────────────── */}
+              {/* ── SECTION 3: Vault Location ────────────────────────────── */}
+              <section>
+                <h3 className="mb-4 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                  Vault Location
+                </h3>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                    Project Folder
+                  </label>
+                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                    Parent folder where new projects and series are created. You
+                    won't be asked to pick a folder for new projects. Existing
+                    projects are not moved when you change this.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={vaultRoot}
+                      onChange={e => setVaultRoot(e.target.value)}
+                      placeholder="C:\\Users\\You\\Documents\\StoryForge"
+                      className="flex-1 rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      onClick={async () => {
+                        const picked = await openDialog({
+                          directory: true, multiple: false,
+                          title: "Choose a parent folder for new StoryForge projects",
+                        });
+                        if (typeof picked === "string") setVaultRoot(picked);
+                      }}
+                      className="flex items-center gap-1.5 rounded border border-[#1e1e4a] px-3 py-2 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5]"
+                      title="Browse for a folder"
+                      type="button"
+                    >
+                      <Folder size={12} /> Browse
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-[#3f3f7a]">
+                    Leave blank and save to reset to the default
+                    (<code className="text-indigo-400">~/Documents/StoryForge</code>).
+                  </p>
+                </div>
+              </section>
+
+
+              {/* ── SECTION 4: Model Routing ─────────────────────────────── */}
               <section>
                 <h3 className="mb-4 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
                   Model Routing

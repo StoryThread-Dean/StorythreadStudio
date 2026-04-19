@@ -15,13 +15,19 @@ export interface AppSettings {
   model_allowlist:        string[];  // if non-empty, only these models can be used
   model_blocklist:        string[];  // excluded models (ignored if allowlist set)
   model_content_modes:    Record<string, string[]>;  // model ID -> allowed content modes
+  // Parent folder where new projects and series are auto-placed. The backend
+  // resolves blanks to ~/Documents/StoryForge and always returns a real path
+  // here -- the UI can treat it as non-null for display purposes.
+  vault_root:             string;
 }
 
 export interface UpdateSettingsPayload {
   openrouter_api_key?: string;
-  default_model?: string;
-  content_mode?: string;
-  cost_tier?: string;
+  default_model?:      string;
+  content_mode?:       string;
+  cost_tier?:          string;
+  // Empty string resets to the default (~/Documents/StoryForge).
+  vault_root?:         string;
 }
 
 // ── Models ────────────────────────────────────────────────────────────────────

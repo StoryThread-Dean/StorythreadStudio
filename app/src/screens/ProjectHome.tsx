@@ -83,11 +83,22 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
       .catch(() => setRecentProjects([]));
   }, []);
 
+  // ── Vault root (where new projects are auto-placed) ─────────────────────
+  // Fetched from settings so we can show the writer where the new project
+  // folder will land. The backend is authoritative; we only display it here.
+  const [vaultRoot, setVaultRoot] = useState<string>("");
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/settings`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.vault_root) setVaultRoot(data.vault_root); })
+      .catch(() => { /* non-fatal -- the hint just won't show a path */ });
+  }, []);
+
   // ── Creation form fields ────────────────────────────────────────────────
   // selectedStoryType is the tile clicked. When null we're showing the tile
   // grid; when set we're showing the name + series toggle below the tiles.
   const [selectedStoryType, setSelectedStoryType] = useState<StoryType | null>(null);
-  const [pendingFolderPath, setPendingFolderPath] = useState<string | null>(null);
   const [title, setTitle]                         = useState("");
   const [description, setDescription]             = useState("");
   const [isSeries, setIsSeries]                   = useState(false);
@@ -105,7 +116,6 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
   // ── Handlers: helpers ────────────────────────────────────────────────────
   function resetCreateForm() {
     setSelectedStoryType(null);
-    setPendingFolderPath(null);
     setTitle("");
     setDescription("");
     setIsSeries(false);
@@ -126,18 +136,13 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
 
 
   // ── Handler: pick a story type tile ─────────────────────────────────────
-  // After picking a story type, the writer must choose a folder before the
-  // form can save. We open the folder picker here so the form already has
-  // the folder when it appears.
-  async function handlePickStoryType(value: StoryType) {
+  // Goes straight to the create form. The backend auto-derives the folder
+  // under the configured vault root (default ~/Documents/StoryForge) using
+  // a slugified title, so the writer never has to pick a folder. The hint
+  // in the form tells them where the new project will land.
+  function handlePickStoryType(value: StoryType) {
     setError(null);
-    const selected = await openDialog({
-      directory: true, multiple: false,
-      title: `Choose a folder for your new ${STORY_TYPE_LABELS[value]}`,
-    });
-    if (!selected || typeof selected !== "string") return;
     setSelectedStoryType(value);
-    setPendingFolderPath(selected);
     setMode("create_form");
   }
 
@@ -148,7 +153,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
   //   - on : POST /api/series/create THEN POST /api/projects/create-in-series
   // Two sequential calls in the series case so both files end up consistent.
   async function handleCreate() {
-    if (!selectedStoryType || !pendingFolderPath || !title.trim()) return;
+    if (!selectedStoryType || !title.trim()) return;
     setError(null);
     setLoading(true);
 
@@ -157,9 +162,10 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
         if (!seriesName.trim()) {
           throw new Error("Series name is required when 'Make this a series' is checked.");
         }
-        // Step 1: create the series folder + series.json
+        // Step 1: create the series folder + series.json. Empty folder_path
+        // tells the backend to auto-derive under the vault root.
         const seriesPayload: CreateSeriesPayload = {
-          folder_path:  pendingFolderPath,
+          folder_path:  "",
           name:         seriesName.trim(),
           genre:        seriesGenre.trim(),
           tone:         seriesTone.trim(),
@@ -194,8 +200,9 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
         onProjectOpen(project);
       } else {
         // Standalone path: single POST creates the project and its outline.
+        // Empty folder_path lets the backend auto-derive under the vault root.
         const payload: CreateProjectPayload = {
-          folder_path: pendingFolderPath,
+          folder_path: "",
           title:       title.trim(),
           description: description.trim(),
           story_type:  selectedStoryType,
@@ -471,7 +478,9 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                 New {STORY_TYPE_LABELS[selectedStoryType]}
               </h2>
               <p className="mb-4 text-xs text-[#8888aa]">
-                Folder: <span className="text-[#f0f0f5]">{pendingFolderPath}</span>
+                Will be created under{" "}
+                <span className="text-[#f0f0f5]">{vaultRoot || "your vault folder"}</span>
+                . You can change the vault location in Settings.
               </p>
 
               <label className="mb-1 block text-xs font-medium text-[#8888aa]">
