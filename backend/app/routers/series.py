@@ -50,7 +50,11 @@ SERIES_PROFILE_FOLDERS = [
 
 class CreateSeriesRequest(BaseModel):
     """Data the frontend sends when creating a new series."""
-    folder_path: str      # Parent folder where the series folder will be created
+    # Optional: when omitted/empty the backend places the new series under
+    # the vault root (default ~/Documents/StoryForge) using a slugified
+    # version of the series name. Same UX rationale as project creation:
+    # the writer never gets prompted for a folder.
+    folder_path: str = ""
     name: str             # Series name (e.g. "The Ember Throne Saga")
     genre: str = ""
     subgenre: str = ""
@@ -149,28 +153,42 @@ async def create_series(request: CreateSeriesRequest):
     Create a new book series.
 
     Steps:
-      1. Create the series folder inside the chosen parent directory
-      2. Create canonical profile subfolders
+      1. Resolve where the series folder lives (vault root if no parent
+         given, otherwise the writer-provided parent folder)
+      2. Create the series folder + canonical profile subfolders
       3. Write series.json with series metadata
       4. Return series info
     """
-    parent = request.folder_path
+    # Resolve the parent folder. If the frontend didn't pass one, use the
+    # vault root (default ~/Documents/StoryForge). Imported inline to keep
+    # the top-of-file import graph small and avoid a circular dependency
+    # if settings_store ever ends up importing from this module.
+    from app.routers.projects import _slugify_folder_name, _unique_folder
+    from app.settings_store import get_vault_root
 
-    if not os.path.exists(parent):
-        raise HTTPException(status_code=400, detail=f"Parent folder not found: {parent}")
+    explicit_parent = bool(request.folder_path and request.folder_path.strip())
 
-    if not os.path.isdir(parent):
-        raise HTTPException(status_code=400, detail=f"Path is not a folder: {parent}")
-
-    # Build the series folder path using the series name
-    series_folder = os.path.join(parent, request.name)
-
-    # If the folder already has a series.json, don't overwrite
-    if os.path.exists(os.path.join(series_folder, "series.json")):
-        raise HTTPException(
-            status_code=409,
-            detail="A series already exists in this folder. Use 'Open Series' instead."
-        )
+    if explicit_parent:
+        parent = request.folder_path
+        if not os.path.exists(parent):
+            raise HTTPException(status_code=400, detail=f"Parent folder not found: {parent}")
+        if not os.path.isdir(parent):
+            raise HTTPException(status_code=400, detail=f"Path is not a folder: {parent}")
+        # Legacy path: respect the writer-provided name verbatim. If the
+        # exact folder collides we surface a clear error rather than
+        # silently renaming -- the writer chose this path explicitly.
+        series_folder = os.path.join(parent, request.name)
+        if os.path.exists(os.path.join(series_folder, "series.json")):
+            raise HTTPException(
+                status_code=409,
+                detail="A series already exists in this folder. Use 'Open Series' instead."
+            )
+    else:
+        # Auto-placement under the vault root with slugified naming +
+        # collision suffix. _unique_folder returns a path that doesn't yet
+        # exist on disk; we create it below.
+        parent = get_vault_root()
+        series_folder = _unique_folder(parent, _slugify_folder_name(request.name))
 
     # Create the series folder and canonical profile subfolders
     os.makedirs(series_folder, exist_ok=True)

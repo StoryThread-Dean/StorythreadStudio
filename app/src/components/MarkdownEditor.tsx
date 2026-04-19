@@ -16,8 +16,9 @@ import { useEffect, useRef } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
-import { EditorView } from "@codemirror/view";
-import { Compartment } from "@codemirror/state";
+import { EditorView, Decoration, ViewPlugin } from "@codemirror/view";
+import type { ViewUpdate, DecorationSet } from "@codemirror/view";
+import { Compartment, RangeSetBuilder } from "@codemirror/state";
 import { createTheme } from "@uiw/codemirror-themes";
 import { tags as t } from "@lezer/highlight";
 import type { FontValue } from "./EditorToolbar";
@@ -61,6 +62,85 @@ function buildFontTheme(fontFamily: string) {
     },
   });
 }
+
+
+// --- Horizontal Rule visual decoration ---
+// Markdown's `---` (or `***`) on its own line is the scene-break convention
+// the writer uses + the scene parser recognizes. By default CodeMirror just
+// shows the literal characters, which reads as text noise in long documents.
+// This extension paints a thin horizontal stripe across any line that's only
+// dashes/asterisks, while leaving the source characters intact and editable.
+//
+// Why a line decoration instead of a replacing widget?
+//   - The `---` text stays visible. The writer can still see and edit/delete
+//     the marker without invisible-character mysteries.
+//   - The cursor still lands where it expects to. Replacing widgets disrupt
+//     CodeMirror's coordinate math and click-to-cursor behavior.
+//   - The rule renders across the FULL editor width because `.cm-line` is a
+//     full-width block element, regardless of how short `---` is.
+
+// Detects a line that's nothing but horizontal-rule markers. Three or more
+// dashes or asterisks, with optional surrounding whitespace. Matches what
+// CommonMark treats as a thematic break and what backend/app/utils/scene_parser.py
+// treats as a scene boundary, so the visual cue mirrors the structural one.
+const HR_LINE_REGEX = /^\s*(?:-{3,}|\*{3,})\s*$/;
+
+const hrLineDecoration = Decoration.line({ class: "cm-hr-line" });
+
+// ViewPlugin scans visible lines on every relevant update and emits a line
+// decoration for each HR. Only the visible viewport is scanned, not the whole
+// document, so this stays cheap on long chapters.
+const hrLinePlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildHRDecorations(view);
+    }
+
+    update(update: ViewUpdate) {
+      // Recompute when the doc text changes (HR added/removed) or when the
+      // viewport scrolls to fresh lines we haven't decorated yet.
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = buildHRDecorations(update.view);
+      }
+    }
+  },
+  { decorations: v => v.decorations },
+);
+
+function buildHRDecorations(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  // Walk each visible line, test against the HR pattern, attach the decoration
+  // class. Line decorations attach to a line's start position; CodeMirror does
+  // the rest of the work mapping that onto the line's DOM element.
+  for (const { from, to } of view.visibleRanges) {
+    let pos = from;
+    while (pos <= to) {
+      const line = view.state.doc.lineAt(pos);
+      if (HR_LINE_REGEX.test(line.text)) {
+        builder.add(line.from, line.from, hrLineDecoration);
+      }
+      pos = line.to + 1;
+    }
+  }
+  return builder.finish();
+}
+
+// CSS for the decorated lines. The horizontal stripe is a 1px background
+// gradient centered vertically, drawn behind the muted `---` text. Using a
+// background gradient (rather than a pseudo-element) avoids interfering with
+// CodeMirror's caret and selection rendering.
+const hrLineTheme = EditorView.theme({
+  ".cm-hr-line": {
+    color: "rgba(99, 102, 241, 0.45)",  // muted indigo for the literal `---`
+    backgroundImage:
+      "linear-gradient(rgba(99, 102, 241, 0.45), rgba(99, 102, 241, 0.45))",
+    backgroundSize: "100% 1px",
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "center",
+  },
+});
 
 
 // --- StoryForge Color Theme ---
@@ -138,6 +218,11 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
       autocapitalize: "off",
     }),
     fontCompartment.of(buildFontTheme(font)),
+    // HR scene-break decoration: paints a horizontal stripe across any line
+    // that is just `---` (or `***`). The text remains editable; only the
+    // visual presentation changes.
+    hrLinePlugin,
+    hrLineTheme,
   ];
 
   return (

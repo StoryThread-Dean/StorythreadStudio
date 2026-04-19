@@ -10,10 +10,41 @@
 // so both sides agree on what data looks like.
 
 // --- OutlineTemplateType ---
-// The scaffolds available for notes/outline.md. Extended later as we add
-// Save the Cat, Hero's Journey, etc. Keep in sync with VALID_OUTLINE_TEMPLATES
-// in backend/app/routers/projects.py.
-export type OutlineTemplateType = "novel" | "short_story";
+// The scaffolds available for notes/outline.md. Extended in Phase 6 with
+// novella, novelette, and serial_fiction so each story type has its own
+// dedicated default scaffold. Keep in sync with VALID_OUTLINE_TEMPLATES in
+// backend/app/routers/projects.py.
+export type OutlineTemplateType =
+  | "novel"
+  | "novella"
+  | "novelette"
+  | "short_story"
+  | "serial_fiction";
+
+
+// --- StoryType ---
+// Writer-facing label for what kind of work a project is. Drives the default
+// outline template at creation, and shown on each row of the recent-projects
+// list. The two are independent on disk so the writer can swap templates
+// without changing the story type.
+export type StoryType =
+  | "novel"
+  | "novella"
+  | "novelette"
+  | "short_story"
+  | "serial_fiction";
+
+
+// Display labels for each story type, used in the picker tiles and the
+// recent-projects list. Single source of truth -- both UIs read from here.
+export const STORY_TYPE_LABELS: Record<StoryType, string> = {
+  novel:          "Novel",
+  novella:        "Novella",
+  novelette:      "Novelette",
+  short_story:    "Short Story",
+  serial_fiction: "Serial Fiction",
+};
+
 
 // --- ProjectInfo ---
 // Represents an open StoryForge writing project.
@@ -27,6 +58,9 @@ export interface ProjectInfo {
   default_model:        string | null;
   series_id:            string | null;  // Links to parent series (null = standalone)
   series_path:          string | null;  // Absolute path to the series folder
+  // Story type. Defaults to "novel" for legacy projects via the backend's
+  // read-time fallback -- the frontend never sees null/undefined here.
+  story_type:           StoryType;
   // Which outline scaffold was last applied. May be null on older projects
   // created before this field existed -- treat null as unknown (not an error).
   outline_template:     OutlineTemplateType | null;
@@ -76,7 +110,9 @@ export interface CreateBookInSeriesPayload {
   title:       string;
   description?: string;
   folder_name?: string;
-  template_type?: OutlineTemplateType;  // Defaults to "novel" on the backend
+  // Story type drives the default outline template on the backend.
+  story_type?:    StoryType;
+  template_type?: OutlineTemplateType;  // Optional override; backend defaults from story_type
 }
 
 
@@ -95,7 +131,9 @@ export interface CreateProjectPayload {
   folder_path: string;
   title:       string;
   description: string;
-  template_type?: OutlineTemplateType;  // Defaults to "novel" on the backend
+  // Story type drives the default outline template on the backend.
+  story_type?:    StoryType;
+  template_type?: OutlineTemplateType;  // Optional override; backend defaults from story_type
 }
 
 // --- ApplyOutlineTemplatePayload / Response ---
@@ -128,8 +166,32 @@ export interface RecentProject {
   root_path:    string;
   content_mode: string;
   series_name:  string | null;
+  // Story type for the kind label on each row. Backend backfills "novel" for
+  // legacy entries that lack the field, so the UI never sees null.
+  story_type:   StoryType;
   last_opened:  string;    // ISO datetime
   exists:       boolean;   // false if the folder has been deleted/moved
+}
+
+
+// --- InspectFolderResponse ---
+// Returned by GET /api/projects/inspect-folder?path=... -- powers the unified
+// [Open Project] flow on the main menu. The backend looks at a folder picked
+// by the writer and reports whether it's a project, a series, or neither.
+// For series, books in the immediate children are listed inline so the UI
+// can show a picker without a second round-trip.
+export interface InspectedBook {
+  project_id:  string;
+  title:       string;
+  folder_name: string;
+  root_path:   string;
+}
+
+export interface InspectFolderResponse {
+  kind:  "project" | "series" | "unknown";
+  path:  string;
+  title: string | null;
+  books: InspectedBook[];
 }
 
 // --- UpdateProjectSettingsPayload ---

@@ -13,7 +13,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.settings_store import load_settings, save_settings
+from app.settings_store import load_settings, save_settings, get_vault_root
 from app.ai.openrouter import test_connection
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -33,6 +33,10 @@ class SettingsResponse(BaseModel):
     model_allowlist:        list[str]
     model_blocklist:        list[str]
     model_content_modes:    dict[str, list[str]]
+    # Parent folder where new projects and series are placed. Defaults to
+    # ~/Documents/StoryForge. Returned to the frontend so the Settings screen
+    # can show the current path (and change it).
+    vault_root:             str
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -46,6 +50,11 @@ class UpdateSettingsRequest(BaseModel):
     model_allowlist:     list[str] | None             = None
     model_blocklist:     list[str] | None             = None
     model_content_modes: dict[str, list[str]] | None  = None
+    # Empty string resets to the default location (~/Documents/StoryForge).
+    # Any non-empty value is taken as-is. The directory is created on next
+    # use; we don't validate it exists at save time so writers can set a
+    # not-yet-created folder if they want.
+    vault_root:          str | None                   = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -71,6 +80,9 @@ async def get_settings():
         model_allowlist        = settings.get("model_allowlist", []),
         model_blocklist        = settings.get("model_blocklist", []),
         model_content_modes    = settings.get("model_content_modes", {}),
+        # get_vault_root() resolves blanks to the default and ensures the
+        # directory exists -- frontend always sees a real path.
+        vault_root             = get_vault_root(),
     )
 
 
@@ -101,6 +113,10 @@ async def update_settings(request: UpdateSettingsRequest):
         settings["model_blocklist"] = request.model_blocklist
     if request.model_content_modes is not None:
         settings["model_content_modes"] = request.model_content_modes
+    if request.vault_root is not None:
+        # Empty string is a sentinel for "reset to default" -- store as ""
+        # and let get_vault_root() substitute the default at read time.
+        settings["vault_root"] = request.vault_root.strip()
 
     save_settings(settings)
 
@@ -116,6 +132,7 @@ async def update_settings(request: UpdateSettingsRequest):
         model_allowlist        = settings.get("model_allowlist", []),
         model_blocklist        = settings.get("model_blocklist", []),
         model_content_modes    = settings.get("model_content_modes", {}),
+        vault_root             = get_vault_root(),
     )
 
 

@@ -784,6 +784,20 @@ function App() {
 
         <nav className="flex-1 overflow-y-auto px-2 py-4">
 
+          {/* Main Menu return -- Phase 6. Always-visible button at the top
+              of the left nav so the writer can leave the project without
+              digging into the switcher dropdown. setCurrentProject(null)
+              triggers the conditional render in App() that swaps in the
+              ProjectHome screen. */}
+          <button
+            onClick={() => setCurrentProject(null)}
+            className="mb-4 flex w-full items-center gap-2 rounded border border-[#1e1e4a] bg-[#0d0d2b] px-2 py-1.5 text-left text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:bg-[#12122e] hover:text-indigo-300"
+            title="Return to the main menu (does not affect any open work on disk)"
+          >
+            <span aria-hidden="true">&larr;</span>
+            <span>Main Menu</span>
+          </button>
+
           {/* Manuscript section -- Phase 6 nested tree:
               Each chapter is a collapsible row. Expanding reveals a single
               "Chapter Summary" child. Clicking the chapter name opens the

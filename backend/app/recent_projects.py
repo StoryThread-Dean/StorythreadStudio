@@ -39,12 +39,17 @@ def load_recent() -> list[dict]:
     if not isinstance(entries, list):
         return []
 
-    # Add 'exists' flag by checking if the root_path folder is still there
+    # Add 'exists' flag by checking if the root_path folder is still there.
+    # Backward-compat: legacy entries (pre-Phase-6) have no story_type field;
+    # default them to "novel" so the response model always sees a value and
+    # the recent-projects UI can render the badge without null checks.
     for entry in entries:
         root = entry.get("root_path", "")
         entry["exists"] = os.path.isdir(root) and os.path.isfile(
             os.path.join(root, "project.json")
         )
+        if not entry.get("story_type"):
+            entry["story_type"] = "novel"
 
     # Sort by last_opened descending (most recent first)
     entries.sort(key=lambda e: e.get("last_opened", ""), reverse=True)
@@ -58,6 +63,7 @@ def track_project(
     root_path: str,
     content_mode: str = "general",
     series_name: str | None = None,
+    story_type: str = "novel",
 ) -> None:
     """
     Add or update a project in the recent list.
@@ -81,6 +87,7 @@ def track_project(
         existing["root_path"] = root_path
         existing["content_mode"] = content_mode
         existing["series_name"] = series_name
+        existing["story_type"] = story_type
         existing["last_opened"] = now
     else:
         # Add a new entry
@@ -90,6 +97,7 @@ def track_project(
             "root_path":    root_path,
             "content_mode": content_mode,
             "series_name":  series_name,
+            "story_type":   story_type,
             "last_opened":  now,
         })
 

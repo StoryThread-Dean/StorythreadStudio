@@ -322,6 +322,291 @@ def _short_story_template(metadata: OutlineMetadata) -> str:
     )
 
 
+# ── Novella template ─────────────────────────────────────────────────────────
+
+def _novella_template(metadata: OutlineMetadata) -> str:
+    """
+    Novella scaffold, tuned for roughly 18,000 to 40,000 words.
+
+    Structure: a compressed three-act with a tighter middle than a novel.
+    Novellas typically follow one POV, one central conflict, and skip the
+    subplot-heavy interior of a novel. Chapter count is usually 6 to 15
+    chapters of 2,000 to 4,000 words each.
+
+    The scaffold below mirrors the novel structure but trims the
+    worldbuilding-hooks block and deemphasizes subplots, since these are
+    the two areas that most often bloat a novella into novel territory.
+    """
+    meta = _metadata_block(metadata)
+    title_display = _or_blank(metadata.get("title"))
+    heading = f"# Outline -- {title_display}" if title_display else "# Outline"
+
+    return (
+        f"{meta}\n\n"
+        f"{heading}\n\n"
+        "_Novella Template (compressed three-act, 18k-40k words). Replace every "
+        "`_italic_` example with your own ideas. Delete any section that doesn't "
+        "serve the story you're writing._\n\n"
+        "---\n\n"
+        "## Front Matter\n\n"
+        "- **Working Title:** _e.g. The Night Tide_\n"
+        "- **Series:** _Leave blank for standalone, or fill in the series name._\n"
+        "- **Genre:** _e.g. Literary horror_\n"
+        "- **Tone:** _e.g. Quiet dread, slow burn, intimate scale_\n"
+        "- **POV / Tense:** _Novellas usually stay in a single POV. e.g. First-person past tense._\n"
+        "- **Target Length:** _e.g. 30,000 words / ~10 chapters of ~3,000 words each_\n"
+        "- **Logline:** _One sentence. Who wants what, and what's in their way?_\n"
+        "- **Premise:** _Two or three sentences expanding the logline._\n"
+        "- **Theme:** _What the story is really about beneath the plot._\n\n"
+        "---\n\n"
+        "## Cast (kept small on purpose)\n\n"
+        "_Novellas live or die by tight focus. Three to five named characters is "
+        "usually plenty. Full profiles live in profiles/characters._\n\n"
+        "- **Protagonist:** _Name, want, flaw, the lie they believe._\n"
+        "- **Antagonist or Opposing Force:** _Person, system, or condition that resists "
+        "the protagonist. Doesn't have to be a villain._\n"
+        "- **Key Relationship:** _The one other character who matters most. Often the "
+        "mirror through which the protagonist's change is shown._\n"
+        "- **Supporting Cast:** _One or two minor figures, briefly._\n\n"
+        "---\n\n"
+        "## Setting in One Paragraph\n\n"
+        "_Novellas reward a sharply-drawn small world over a sprawling one. Where "
+        "and when does this story happen, and what one detail makes that place feel "
+        "specific to this story?_\n\n"
+        "- _..._\n\n"
+        "---\n\n"
+        "## Act I -- Setup (roughly 25%, 1 to 3 chapters)\n\n"
+        "_Establish the world, the protagonist, and the disturbance that starts the story._\n\n"
+        "- **Opening Image:** _What does the reader see first?_\n"
+        "- **Status Quo:** _Life before the story starts. The wound or want already there._\n"
+        "- **Inciting Incident:** _The disturbance that makes the story necessary._\n"
+        "- **Threshold:** _The decision to act. The point of no return._\n\n"
+        "---\n\n"
+        "## Act II -- Confrontation (roughly 50%, 4 to 8 chapters)\n\n"
+        "_The interior of a novella stays focused on ONE escalating thread. Resist the "
+        "temptation to add subplots._\n\n"
+        "- **First Push:** _The protagonist tries the obvious solution. It doesn't work._\n"
+        "- **Midpoint Reversal:** _New information or a change of fortune reframes the "
+        "problem. Roughly the halfway mark._\n"
+        "- **Pressure Mounts:** _Complications stack up. The protagonist is forced to "
+        "give up something they were holding onto._\n"
+        "- **Low Point:** _The plan fails. The protagonist's flaw is exposed. They must "
+        "change internally to move forward._\n\n"
+        "---\n\n"
+        "## Act III -- Resolution (roughly 25%, 1 to 3 chapters)\n\n"
+        "_The protagonist applies the internal change to solve the external problem._\n\n"
+        "- **New Plan:** _The protagonist commits with new understanding._\n"
+        "- **Climax:** _External and internal conflict resolve in the same beat._\n"
+        "- **Closing Image:** _Mirror or contrast of the opening. Show what changed._\n\n"
+        "---\n\n"
+        "## Chapter-by-Chapter Plan\n\n"
+        "_One or two lines per chapter. Aim for 2,000 to 4,000 words per chapter._\n\n"
+        "- **Chapter 1:** _..._\n"
+        "- **Chapter 2:** _..._\n"
+        "- **Chapter 3:** _..._\n\n"
+        "---\n\n"
+        "## Notes to Self\n\n"
+        "_Loose ideas, scraps of dialogue, images, questions to resolve later._\n\n"
+        "- _..._\n"
+    )
+
+
+# ── Novelette template ───────────────────────────────────────────────────────
+
+def _novelette_template(metadata: OutlineMetadata) -> str:
+    """
+    Novelette scaffold, tuned for roughly 8,000 to 18,000 words.
+
+    Structure: Freytag's Pyramid (the classical five-stage shape:
+    exposition, rising action, climax, falling action, denouement).
+    Novelettes are too long for the single-arc compression of a short
+    story but too short for the three-act sprawl of a novella, so the
+    five-stage Freytag shape is a natural fit. Single POV, one central
+    conflict, no subplots.
+
+    Typical layout: 4 to 7 chapters or sections of 1,500 to 3,000 words each.
+    """
+    meta = _metadata_block(metadata)
+    title_display = _or_blank(metadata.get("title"))
+    heading = f"# Outline -- {title_display}" if title_display else "# Outline"
+
+    return (
+        f"{meta}\n\n"
+        f"{heading}\n\n"
+        "_Novelette Template (Freytag's Pyramid, 8k-18k words). Replace every "
+        "`_italic_` example with your own ideas. Delete any section that doesn't "
+        "serve the story you're writing._\n\n"
+        "---\n\n"
+        "## Front Matter\n\n"
+        "- **Working Title:** _e.g. The Salt Bell_\n"
+        "- **Genre:** _e.g. Speculative fiction_\n"
+        "- **Tone:** _e.g. Wistful, restrained_\n"
+        "- **POV / Tense:** _Single POV. e.g. Third-person limited, present tense._\n"
+        "- **Target Length:** _e.g. 12,000 words / 5 sections_\n"
+        "- **Logline:** _One sentence. Who wants what, and what's in their way?_\n"
+        "- **Premise:** _Two sentences expanding the logline._\n"
+        "- **Theme:** _What the story is really about beneath the plot._\n\n"
+        "---\n\n"
+        "## Cast (small)\n\n"
+        "_Two or three named characters. Anything more starts to feel crowded at "
+        "this length._\n\n"
+        "- **Protagonist:** _Name, want, flaw._\n"
+        "- **Counterforce:** _Person or condition that opposes the protagonist._\n"
+        "- **Witness or Mirror (optional):** _The third presence who reflects the change._\n\n"
+        "---\n\n"
+        "## Setting in One Sentence\n\n"
+        "_Where, when, and what one specific detail anchors it._\n\n"
+        "- _..._\n\n"
+        "---\n\n"
+        "## Freytag's Pyramid\n\n"
+        "_Five stages. Each is one section/chapter or a tight pair of scenes._\n\n"
+        "### 1. Exposition\n\n"
+        "_Establish the protagonist, the world, and the wound. Keep it brief: a "
+        "novelette doesn't have room for a long setup._\n\n"
+        "- _..._\n\n"
+        "### 2. Rising Action\n\n"
+        "_The disturbance and the escalating attempts to deal with it. Each scene "
+        "raises the stakes or narrows the protagonist's options._\n\n"
+        "- _..._\n\n"
+        "### 3. Climax\n\n"
+        "_The peak. The decision or revelation that everything has been building "
+        "toward. Often a single scene._\n\n"
+        "- _..._\n\n"
+        "### 4. Falling Action\n\n"
+        "_The immediate consequences. The dust settling. Usually shorter than the "
+        "rising action._\n\n"
+        "- _..._\n\n"
+        "### 5. Denouement\n\n"
+        "_The new equilibrium. What the world looks like now. Often quiet, almost an "
+        "epilogue tone._\n\n"
+        "- _..._\n\n"
+        "---\n\n"
+        "## Section-by-Section Plan\n\n"
+        "_One or two lines per section. Aim for 1,500 to 3,000 words per section._\n\n"
+        "- **Section 1 (Exposition):** _..._\n"
+        "- **Section 2 (Rising):** _..._\n"
+        "- **Section 3 (Climax):** _..._\n"
+        "- **Section 4 (Falling):** _..._\n"
+        "- **Section 5 (Denouement):** _..._\n\n"
+        "---\n\n"
+        "## Notes to Self\n\n"
+        "_Loose ideas, scraps of dialogue, images, questions._\n\n"
+        "- _..._\n"
+    )
+
+
+# ── Serial Fiction template ──────────────────────────────────────────────────
+
+def _serial_fiction_template(metadata: OutlineMetadata) -> str:
+    """
+    Serial fiction scaffold, tuned for installment-based storytelling
+    (web serials, episodic releases, long-running ongoing fiction).
+    Per-installment chapter target: 1,500 to 5,000 words.
+
+    Structure: a SEASON arc (5 to 12 episodes typically) sitting inside an
+    overarching SERIES arc, with per-episode beat sheets. Each episode
+    needs its own hook (cold open) and cliffhanger (or strong stinger)
+    so readers come back for the next installment. The scaffold below
+    plans one season; copy this file or duplicate the Season block to
+    plan further seasons.
+    """
+    meta = _metadata_block(metadata)
+    title_display = _or_blank(metadata.get("title"))
+    heading = f"# Outline -- {title_display}" if title_display else "# Outline"
+
+    return (
+        f"{meta}\n\n"
+        f"{heading}\n\n"
+        "_Serial Fiction Template (episodic, 1.5k-5k word installments). Replace "
+        "every `_italic_` example with your own ideas. Delete any section that "
+        "doesn't serve the story you're writing._\n\n"
+        "---\n\n"
+        "## Front Matter\n\n"
+        "- **Working Title:** _e.g. The Seventh Floor_\n"
+        "- **Genre:** _e.g. LitRPG / Slice-of-life fantasy_\n"
+        "- **Tone:** _e.g. Slow-burn, wry, character-first_\n"
+        "- **POV / Tense:** _Serials often use first-person present for immediacy. Pick "
+        "one and stay consistent across installments._\n"
+        "- **Per-Episode Target:** _e.g. 3,000 words. Be honest about what you can "
+        "sustain at your release cadence._\n"
+        "- **Release Cadence:** _e.g. One episode every Monday_\n"
+        "- **Logline:** _One sentence. The premise the reader sees in week one._\n"
+        "- **Series Premise:** _Two or three sentences. The thing the reader is here for "
+        "across many episodes._\n"
+        "- **Theme:** _What the story is really about beneath the episode-to-episode plot._\n\n"
+        "---\n\n"
+        "## Recurring Cast\n\n"
+        "_Serials need a small core cast that reappears every few episodes. Big rotating "
+        "casts confuse readers reading in installments. Full profiles live in "
+        "profiles/characters._\n\n"
+        "- **Protagonist:** _Name, want, flaw. The reader follows them every episode._\n"
+        "- **Recurring Allies:** _Two or three names with a one-line role each._\n"
+        "- **Recurring Antagonist or Opposition:** _The persistent counterforce._\n"
+        "- **Episodic Cast:** _Characters who appear for one or two episodes then exit._\n\n"
+        "---\n\n"
+        "## Series Arc (the long game)\n\n"
+        "_The slow-burning question that takes many seasons to answer. Readers in week "
+        "one shouldn't see the answer. Readers in week 100 should feel like it was "
+        "always there._\n\n"
+        "- **Central Mystery or Goal:** _The thing the protagonist is ultimately moving "
+        "toward across the whole serial._\n"
+        "- **What Changes Over Time:** _The world-state or character-state evolution that "
+        "would be visible if you read episode 1 and episode 50 back to back._\n"
+        "- **Long-Range Foreshadowing Threads:** _Two or three setups planted early that "
+        "pay off much later. Note where the seeds are planted and where they bloom._\n\n"
+        "---\n\n"
+        "## Season 1 Arc\n\n"
+        "_One season is typically 5 to 12 episodes. The season has its own beginning, "
+        "middle, and end while leaving the series-level mystery unresolved._\n\n"
+        "- **Season Premise:** _What this season is about specifically._\n"
+        "- **Season Inciting Incident:** _Episode 1 or 2. The thing that kicks the season off._\n"
+        "- **Season Midpoint:** _Roughly the middle episode. A reveal or reversal that "
+        "changes the protagonist's understanding._\n"
+        "- **Season Climax:** _Penultimate or final episode. The big payoff._\n"
+        "- **Season Cliffhanger:** _Last episode beat. Sets up the next season without "
+        "feeling unfinished._\n\n"
+        "---\n\n"
+        "## Episode-by-Episode Plan\n\n"
+        "_One or two lines per episode plus the hook and the closing beat. Each episode "
+        "should advance the season arc by one notch and stand on its own as a satisfying "
+        "installment._\n\n"
+        "Episode template:\n\n"
+        "- **Cold Open / Hook:** _The first scene. Something that makes the reader keep "
+        "reading past the title._\n"
+        "- **Middle:** _The episode's own beats. One or two scenes that complicate the "
+        "protagonist's situation._\n"
+        "- **Closing Beat:** _A cliffhanger, a revelation, or a strong emotional stinger. "
+        "Something the reader carries between installments._\n\n"
+        "### Episode 1 -- _e.g. Pilot_\n\n"
+        "- **Cold Open / Hook:** _..._\n"
+        "- **Middle:** _..._\n"
+        "- **Closing Beat:** _..._\n\n"
+        "### Episode 2 -- _..._\n\n"
+        "- **Cold Open / Hook:** _..._\n"
+        "- **Middle:** _..._\n"
+        "- **Closing Beat:** _..._\n\n"
+        "### Episode 3 -- _..._\n\n"
+        "- **Cold Open / Hook:** _..._\n"
+        "- **Middle:** _..._\n"
+        "- **Closing Beat:** _..._\n\n"
+        "_(Add more episode blocks as you plan further into the season.)_\n\n"
+        "---\n\n"
+        "## Reader Engagement Notes\n\n"
+        "_Serial fiction lives or dies by reader retention between installments. Track "
+        "what's working._\n\n"
+        "- **Recap Strategy:** _How will you remind returning readers what happened? "
+        "(Brief in-episode reference vs. a separate recap page.)_\n"
+        "- **Open Questions:** _Which plot or character questions are unresolved RIGHT "
+        "NOW? Readers are tracking these. Don't let them quietly lapse._\n"
+        "- **Reader Promises:** _Setups that have been planted but not yet paid off. "
+        "Each one is a debt the writer owes the reader._\n\n"
+        "---\n\n"
+        "## Notes to Self\n\n"
+        "_Loose ideas, scraps of dialogue, future episode seeds._\n\n"
+        "- _..._\n"
+    )
+
+
 # ── Registry + public entry point ────────────────────────────────────────────
 #
 # The frontend sends a template_type string. We look it up here and call the
@@ -331,8 +616,11 @@ def _short_story_template(metadata: OutlineMetadata) -> str:
 # with a gentle warning comment -- better than crashing project creation.
 
 TEMPLATES = {
-    "novel":       _novel_template,
-    "short_story": _short_story_template,
+    "novel":          _novel_template,
+    "novella":        _novella_template,
+    "novelette":      _novelette_template,
+    "short_story":    _short_story_template,
+    "serial_fiction": _serial_fiction_template,
 }
 
 

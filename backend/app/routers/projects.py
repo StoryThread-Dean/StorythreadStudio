@@ -17,9 +17,11 @@ import json
 import uuid
 from datetime import datetime, timezone
 
+import re
 from fastapi import APIRouter, HTTPException
 from app.recent_projects import load_recent, track_project, remove_project
 from app.outline_templates import render_outline, OutlineMetadata
+from app.settings_store import get_vault_root
 from pydantic import BaseModel
 
 
@@ -27,7 +29,28 @@ from pydantic import BaseModel
 # the Pydantic request validation lives next to the endpoints that use it.
 # When we add Save the Cat, Hero's Journey, etc., update both this tuple and
 # the TEMPLATES dict in outline_templates.py.
-VALID_OUTLINE_TEMPLATES = ("novel", "short_story")
+VALID_OUTLINE_TEMPLATES = ("novel", "novella", "novelette", "short_story", "serial_fiction")
+
+
+# Valid story_type values. The story type is the writer-facing label for
+# what kind of work this project is (Novel, Novella, ...). At creation time
+# the frontend uses it to auto-pick a default outline_template, but the two
+# fields are independent on disk so the writer can swap templates later
+# without changing the story type.
+VALID_STORY_TYPES = ("novel", "novella", "novelette", "short_story", "serial_fiction")
+
+
+# Default outline template per story type. Used when the frontend sends a
+# story_type but no explicit template_type. This mapping mirrors the writer's
+# stated preference (Novel/Novella/Novelette/Short Story/Serial Fiction each
+# have their own dedicated scaffold).
+STORY_TYPE_DEFAULT_TEMPLATE: dict[str, str] = {
+    "novel":          "novel",
+    "novella":        "novella",
+    "novelette":      "novelette",
+    "short_story":    "short_story",
+    "serial_fiction": "serial_fiction",
+}
 
 
 # --- Router ---
@@ -74,6 +97,67 @@ STARTER_FILES = {
 }
 
 
+# ── Vault placement helpers ──────────────────────────────────────────────────
+# Phase 6+: when the frontend creates a project or series without a specific
+# folder_path, we generate one for them under the configured vault root
+# (defaults to ~/Documents/StoryForge). The writer never has to pick a folder
+# for new projects -- only when opening one. These helpers do that.
+
+def _slugify_folder_name(title: str) -> str:
+    """
+    Turn a project/series title into a safe folder name.
+
+    "The Ember Throne!" -> "the-ember-throne"
+    "  My Novel  "      -> "my-novel"
+    ""                  -> "untitled"
+
+    We lowercase and hyphenate so the folder names stay portable across
+    filesystems and easy to type in a shell. Falls back to "untitled" when
+    the title is empty after stripping.
+    """
+    s = title.lower().strip()
+    s = re.sub(r"[^\w\s-]", "", s)   # drop punctuation
+    s = re.sub(r"[\s_]+", "-", s)    # spaces/underscores -> hyphen
+    s = re.sub(r"-+", "-", s)        # collapse repeats
+    s = s.strip("-")
+    return s or "untitled"
+
+
+def _unique_folder(parent: str, base_slug: str) -> str:
+    """
+    Return an available folder path under `parent` based on `base_slug`.
+    If `parent/base_slug` is free, returns it; otherwise tries -2, -3, ...
+    until something doesn't exist. Caller still creates the directory.
+
+    Used so two projects called "My Novel" don't collide -- the second one
+    becomes "my-novel-2", the third "my-novel-3", etc., without surfacing
+    the conflict to the writer.
+    """
+    candidate = os.path.join(parent, base_slug)
+    if not os.path.exists(candidate):
+        return candidate
+    n = 2
+    while True:
+        candidate = os.path.join(parent, f"{base_slug}-{n}")
+        if not os.path.exists(candidate):
+            return candidate
+        n += 1
+
+
+def _resolve_create_folder(requested: str | None, title: str) -> str:
+    """
+    Decide where a new project/series folder should live.
+
+    If the frontend passed a folder_path (legacy or testing path), honor it.
+    Otherwise place the new folder under the configured vault root using a
+    slugified version of the title, with a numeric suffix on collisions.
+    """
+    if requested and requested.strip():
+        return requested.strip()
+    vault = get_vault_root()
+    return _unique_folder(vault, _slugify_folder_name(title))
+
+
 def _write_outline_template(
     project_root: str,
     template_type: str,
@@ -99,14 +183,23 @@ def _write_outline_template(
 
 class CreateProjectRequest(BaseModel):
     """Data the frontend sends when creating a new project."""
-    folder_path: str    # Absolute path to the folder the user selected
+    # Optional: when omitted/empty, the backend places the new project under
+    # the configured vault root (default ~/Documents/StoryForge) using a
+    # slugified version of the title. The writer never has to pick a folder
+    # for new projects in the redesigned ProjectHome flow.
+    folder_path: str = ""
     title: str          # Project name (e.g., "My Novel")
     description: str = ""  # Optional short description
-    # Which outline template to seed notes/outline.md with. "novel" suits
-    # long-form fiction; "short_story" ships a 2k-10k word scaffold with
-    # multiple selectable structures. Defaults to "novel" since that's the
-    # overwhelmingly common case.
-    template_type: str = "novel"
+    # Story type. Drives the default outline template at creation and is
+    # surfaced in the recent-projects list so the writer can scan their
+    # library by kind. Optional for backward compatibility; defaults to
+    # "novel" when omitted.
+    story_type: str = "novel"
+    # Which outline template to seed notes/outline.md with. When omitted the
+    # backend picks the matching template for the chosen story_type via
+    # STORY_TYPE_DEFAULT_TEMPLATE. The writer can override this later via
+    # the [+ New Template] button in the editor toolbar.
+    template_type: str | None = None
 
 
 class OpenProjectRequest(BaseModel):
@@ -120,8 +213,12 @@ class CreateBookInSeriesRequest(BaseModel):
     title: str          # Book title (e.g. "The Ashen Crown")
     description: str = ""
     folder_name: str = ""  # Optional custom folder name; defaults to title
-    # Same as CreateProjectRequest -- picks the outline scaffold for the book.
-    template_type: str = "novel"
+    # Same as CreateProjectRequest -- the writer-facing label for what kind
+    # of work this book is.
+    story_type: str = "novel"
+    # Optional. When None the backend picks the default template matching
+    # story_type. The writer can swap later via [+ New Template].
+    template_type: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -134,9 +231,13 @@ class ProjectResponse(BaseModel):
     default_model: str | None
     series_id: str | None = None
     series_path: str | None = None
-    # "novel" | "short_story" -- the scaffold last applied to notes/outline.md.
-    # Optional for backward compatibility: older project.json files created
-    # before this field existed won't have it, in which case we return None.
+    # Story type -- the writer-facing label. "novel", "novella", "novelette",
+    # "short_story", "serial_fiction". Optional for backward compatibility:
+    # older project.json files without this field default to "novel" at
+    # read time so the UI never sees null.
+    story_type: str = "novel"
+    # The scaffold last applied to notes/outline.md. Optional for backward
+    # compatibility: older project.json files won't have it.
     outline_template: str | None = None
     created_at: str
     updated_at: str
@@ -188,31 +289,51 @@ async def create_project(request: CreateProjectRequest):
     The `response_model=ProjectResponse` tells FastAPI to validate our
     return value against the ProjectResponse model before sending it.
     """
-    folder = request.folder_path
+    # Resolve the target folder. If the frontend didn't pass one, place the
+    # project under the configured vault (default ~/Documents/StoryForge)
+    # with a slugified title. _resolve_create_folder returns a path that
+    # does NOT yet exist when the vault path is used, so we don't need the
+    # legacy "no project already exists" check in that case. We still keep
+    # the check below for the case where a folder path WAS supplied (e.g.,
+    # an explicit override for testing or migration scripts).
+    folder = _resolve_create_folder(request.folder_path, request.title)
 
-    # -- Validate the folder --
-    if not os.path.exists(folder):
-        raise HTTPException(status_code=400, detail=f"Folder not found: {folder}")
+    explicit_folder = bool(request.folder_path and request.folder_path.strip())
 
-    if not os.path.isdir(folder):
-        raise HTTPException(status_code=400, detail=f"Path is not a folder: {folder}")
+    if explicit_folder:
+        # Legacy/explicit-path branch: validate the writer-provided folder.
+        if not os.path.exists(folder):
+            raise HTTPException(status_code=400, detail=f"Folder not found: {folder}")
+        if not os.path.isdir(folder):
+            raise HTTPException(status_code=400, detail=f"Path is not a folder: {folder}")
+        if os.path.exists(os.path.join(folder, "project.json")):
+            raise HTTPException(
+                status_code=409,   # 409 = Conflict
+                detail="A StoryForge project already exists in this folder. "
+                       "Use 'Open Project' instead."
+            )
+    else:
+        # Auto-derived path: ensure the new folder gets created. The vault
+        # root itself is created lazily by get_vault_root().
+        os.makedirs(folder, exist_ok=True)
 
-    # -- Check no project already exists there --
-    if os.path.exists(os.path.join(folder, "project.json")):
-        raise HTTPException(
-            status_code=409,   # 409 = Conflict
-            detail="A StoryForge project already exists in this folder. "
-                   "Use 'Open Project' instead."
-        )
-
-    # -- Validate the outline template choice --
-    # Any unknown value still renders (falls back to novel with a warning),
-    # but we reject it here so the frontend gets a clear 400 instead of a
-    # silent fallback that the writer might not notice.
-    if request.template_type not in VALID_OUTLINE_TEMPLATES:
+    # -- Validate story_type and resolve the outline template --
+    if request.story_type not in VALID_STORY_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown outline template '{request.template_type}'. "
+            detail=f"Unknown story type '{request.story_type}'. "
+                   f"Valid options: {', '.join(VALID_STORY_TYPES)}."
+        )
+
+    # If the frontend didn't pin a specific template, pick the default for
+    # the chosen story_type. Writers who want a non-matching scaffold can
+    # explicitly send template_type from the form, or swap later via the
+    # [+ New Template] toolbar button.
+    template_type = request.template_type or STORY_TYPE_DEFAULT_TEMPLATE[request.story_type]
+    if template_type not in VALID_OUTLINE_TEMPLATES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown outline template '{template_type}'. "
                    f"Valid options: {', '.join(VALID_OUTLINE_TEMPLATES)}."
         )
 
@@ -234,7 +355,7 @@ async def create_project(request: CreateProjectRequest):
     # missing fields gracefully (shows "(not set)" in the seed metadata block).
     _write_outline_template(
         project_root=folder,
-        template_type=request.template_type,
+        template_type=template_type,
         metadata={
             "title":       request.title,
             "description": request.description,
@@ -256,11 +377,12 @@ async def create_project(request: CreateProjectRequest):
         "allow_explicit_routing": True,
         "cost_tier":            "balanced",
         "active_style_guide":   "notes/style-guide.md",
+        # Story type chosen at creation. Drives display in the recent-projects
+        # list and lets future features filter or scaffold by kind.
+        "story_type":           request.story_type,
         # Which outline template is currently applied to notes/outline.md.
         # Updated when the writer uses the "+ New Template" button later.
-        # Recorded here so future features (template-aware help, re-render)
-        # can know what scaffold is in play.
-        "outline_template":     request.template_type,
+        "outline_template":     template_type,
         "created_at":           now,
         "updated_at":           now,
     }
@@ -277,6 +399,7 @@ async def create_project(request: CreateProjectRequest):
         title=project_data["title"],
         root_path=folder,
         content_mode=project_data.get("content_mode_default", "general"),
+        story_type=project_data["story_type"],
     )
 
     return ProjectResponse(**project_data)
@@ -302,6 +425,28 @@ async def open_project(request: OpenProjectRequest):
     # Patch root_path in case the project was moved since it was created
     data["root_path"] = folder
 
+    # Backward-compat fallback: pre-Phase-6 project.json files don't have a
+    # story_type. Default to "novel" so the response model validates and the
+    # frontend always sees a defined value.
+    if not data.get("story_type"):
+        data["story_type"] = "novel"
+
+    # If the file is missing the story_type field on disk, take this open as
+    # the chance to rewrite it with the default. Cheap one-time migration so
+    # subsequent opens don't keep re-defaulting.
+    project_file = os.path.join(folder, "project.json")
+    try:
+        with open(project_file, "r", encoding="utf-8") as f:
+            on_disk = json.load(f)
+        if "story_type" not in on_disk:
+            on_disk["story_type"] = data["story_type"]
+            with open(project_file, "w", encoding="utf-8") as f:
+                json.dump(on_disk, f, indent=2)
+    except (OSError, json.JSONDecodeError):
+        # Not worth failing the open if we can't write the migration -- the
+        # in-memory default keeps the session working either way.
+        pass
+
     # Track in recent projects
     track_project(
         project_id=data.get("project_id", ""),
@@ -309,6 +454,7 @@ async def open_project(request: OpenProjectRequest):
         root_path=folder,
         content_mode=data.get("content_mode_default", "general"),
         series_name=data.get("series_name"),
+        story_type=data.get("story_type", "novel"),
     )
 
     return ProjectResponse(**data)
@@ -357,11 +503,19 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
             detail="A book project already exists in this folder."
         )
 
-    # Validate the outline template choice (same rules as standalone projects)
-    if request.template_type not in VALID_OUTLINE_TEMPLATES:
+    # Validate story_type and resolve the outline template (same shape as
+    # the standalone create endpoint).
+    if request.story_type not in VALID_STORY_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown outline template '{request.template_type}'. "
+            detail=f"Unknown story type '{request.story_type}'. "
+                   f"Valid options: {', '.join(VALID_STORY_TYPES)}."
+        )
+    template_type = request.template_type or STORY_TYPE_DEFAULT_TEMPLATE[request.story_type]
+    if template_type not in VALID_OUTLINE_TEMPLATES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown outline template '{template_type}'. "
                    f"Valid options: {', '.join(VALID_OUTLINE_TEMPLATES)}."
         )
 
@@ -384,7 +538,7 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
     # seed the HTML comment block with more context than a standalone project.
     _write_outline_template(
         project_root=book_folder,
-        template_type=request.template_type,
+        template_type=template_type,
         metadata={
             "title":       request.title,
             "description": request.description,
@@ -413,8 +567,9 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
         "allow_explicit_routing": True,
         "cost_tier":            "balanced",
         "active_style_guide":   "notes/style-guide.md",
+        "story_type":           request.story_type,
         # Track which scaffold was last applied -- same field as standalone.
-        "outline_template":     request.template_type,
+        "outline_template":     template_type,
         "created_at":           now,
         "updated_at":           now,
     }
@@ -431,6 +586,7 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
         root_path=book_folder,
         content_mode=content_mode,
         series_name=series_data.get("name"),
+        story_type=project_data["story_type"],
     )
 
     return ProjectResponse(**project_data)
@@ -444,6 +600,10 @@ class RecentProjectItem(BaseModel):
     root_path:    str
     content_mode: str
     series_name:  str | None
+    # Story type drives the kind label on each recent-projects row. Defaults
+    # to "novel" so legacy entries (created before this field existed) still
+    # validate -- load_recent() already backfills the same default at load.
+    story_type:   str = "novel"
     last_opened:  str
     exists:       bool
 
@@ -480,6 +640,108 @@ async def get_project_settings(root_path: str):
     data = _read_project_json(root_path)
     data["root_path"] = root_path
     return data
+
+
+# ── Inspect folder (smart-detect for the unified [Open Project] button) ────
+#
+# Phase 6 collapses the old separate "Open Project" / "Open Series" buttons
+# into one. This endpoint takes a folder path the writer just picked, looks
+# for project.json or series.json inside it, and tells the frontend which
+# kind of thing it is so the UI can route accordingly:
+#   - "project" -> open it directly in the editor
+#   - "series"  -> show the books-in-series picker (with [+ Add Book])
+#   - "unknown" -> show a friendly "this doesn't look like StoryForge" error
+#
+# Listing books for the series case is folded in here so the frontend gets
+# everything in one round-trip. Same scan logic as the existing /list-books
+# endpoint, just inlined.
+
+class InspectedBook(BaseModel):
+    """One book entry inside an inspected series folder."""
+    project_id:  str
+    title:       str
+    folder_name: str
+    root_path:   str
+
+
+class InspectFolderResponse(BaseModel):
+    kind:    str                   # "project" | "series" | "unknown"
+    path:    str                   # Echoed back so the frontend doesn't have to remember
+    title:   str | None = None     # project.title or series.name when known
+    books:   list[InspectedBook] = []   # Populated only when kind == "series"
+
+
+@router.get("/inspect-folder", response_model=InspectFolderResponse)
+async def inspect_folder(path: str):
+    """
+    Look at a folder and report whether it contains a StoryForge project,
+    a series, or neither. Used by the unified [Open Project] flow on the
+    main menu so a single button handles both cases.
+    """
+    if not os.path.isdir(path):
+        raise HTTPException(status_code=400, detail=f"Folder not found: {path}")
+
+    # Project takes precedence: a folder containing both project.json and
+    # series.json (unusual, but possible in nested layouts) opens as the
+    # project, since that's the more specific thing the writer probably wants.
+    project_file = os.path.join(path, "project.json")
+    if os.path.isfile(project_file):
+        try:
+            with open(project_file, "r", encoding="utf-8") as f:
+                pdata = json.load(f)
+            return InspectFolderResponse(
+                kind="project",
+                path=path,
+                title=pdata.get("title"),
+            )
+        except (json.JSONDecodeError, OSError):
+            # Malformed project.json -- treat as unknown rather than failing
+            # the whole inspect call.
+            return InspectFolderResponse(kind="unknown", path=path)
+
+    series_file = os.path.join(path, "series.json")
+    if os.path.isfile(series_file):
+        try:
+            with open(series_file, "r", encoding="utf-8") as f:
+                sdata = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return InspectFolderResponse(kind="unknown", path=path)
+
+        books: list[InspectedBook] = []
+        # Scan immediate children for book project.json files. Same shape as
+        # the existing /api/series/list-books endpoint, inlined here so the
+        # frontend gets project + books in one network call.
+        try:
+            entries = sorted(os.listdir(path))
+        except OSError:
+            entries = []
+        for entry in entries:
+            entry_path = os.path.join(path, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            book_pf = os.path.join(entry_path, "project.json")
+            if not os.path.isfile(book_pf):
+                continue
+            try:
+                with open(book_pf, "r", encoding="utf-8") as f:
+                    bdata = json.load(f)
+                books.append(InspectedBook(
+                    project_id  = bdata.get("project_id", ""),
+                    title       = bdata.get("title", entry),
+                    folder_name = entry,
+                    root_path   = entry_path,
+                ))
+            except (json.JSONDecodeError, OSError):
+                continue
+
+        return InspectFolderResponse(
+            kind="series",
+            path=path,
+            title=sdata.get("name"),
+            books=books,
+        )
+
+    return InspectFolderResponse(kind="unknown", path=path)
 
 
 # ── Apply Outline Template ─────────────────────────────────────────────────

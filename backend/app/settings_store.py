@@ -14,11 +14,23 @@
 # API key doesn't accidentally get committed to a project's git repo.
 
 import json
+import os
 from pathlib import Path
 
 # The directory and file where settings are stored
 SETTINGS_DIR  = Path.home() / ".storyforge"
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+
+
+def _default_vault_root() -> str:
+    """
+    The fallback location for the StoryForge "vault" -- the parent folder
+    where new projects and series are created. Defaults to the user's
+    Documents/StoryForge so the writer doesn't have to pick a folder every
+    time they start a new project.
+    """
+    return str(Path.home() / "Documents" / "StoryForge")
+
 
 # Default values used when settings.json doesn't exist yet or is missing a key
 DEFAULT_SETTINGS: dict = {
@@ -45,6 +57,12 @@ DEFAULT_SETTINGS: dict = {
     # e.g. {"anthropic/claude-3.5-sonnet": ["general", "mature"]}
     # Models not listed default to ["general"] only.
     "model_content_modes": {},
+    # vault_root: parent folder where new projects and series get placed.
+    # The default keeps the writer's library inside their Documents folder
+    # so it lands somewhere familiar, gets backed up by their existing
+    # Documents-folder backups, and never asks where to put a new project.
+    # Writers can change this in the Settings screen.
+    "vault_root":          _default_vault_root(),
 }
 
 
@@ -89,3 +107,21 @@ def get_api_key() -> str:
 def get_default_model() -> str:
     """Convenience function: just return the default model ID."""
     return load_settings().get("default_model", DEFAULT_SETTINGS["default_model"])
+
+
+def get_vault_root() -> str:
+    """
+    Return the resolved vault root path and ensure the directory exists.
+
+    Falls back to the default location (Documents/StoryForge) if the saved
+    value is empty or whitespace. Always creates the directory tree if it's
+    missing, so callers don't have to worry about first-run setup.
+    """
+    raw = (load_settings().get("vault_root") or "").strip()
+    if not raw:
+        raw = _default_vault_root()
+    # Create the folder lazily on first access. exist_ok=True is idempotent
+    # and a missing parent (e.g. a moved Documents folder on Windows) bubbles
+    # up as a real error so the writer knows their vault path is broken.
+    os.makedirs(raw, exist_ok=True)
+    return raw
