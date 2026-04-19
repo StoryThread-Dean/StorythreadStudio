@@ -39,6 +39,17 @@ import type { EditorView } from "@codemirror/view";
 const API_BASE = "http://localhost:8000";
 
 
+// Count whitespace-separated tokens in a string. Trim first so a trailing
+// newline doesn't contribute a phantom word. Markdown syntax (**bold**, `---`)
+// is counted as it appears -- not perfect, but matches what a writer sees
+// and stays consistent with countWords() in ProfileBuilder.
+function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+
 // ── App Component ────────────────────────────────────────────────────────────
 function App() {
 
@@ -147,6 +158,13 @@ function App() {
   // This is passed to MarkdownEditor as its initial content.
   const [chapterContent, setChapterContent] = useState<string>("");
 
+  // Word count for the active document (chapter or note). Recomputed on chapter
+  // load and on every successful save. Zero when nothing is open. Displayed
+  // in the title bar so the writer can watch the number move as they write +
+  // save. Deliberately not live-per-keystroke -- saving is the moment the
+  // writer cares about measuring progress, and live counts tend to be noise.
+  const [wordCount, setWordCount] = useState<number>(0);
+
   // True while a chapter is being fetched from the backend.
   const [isLoadingChapter, setIsLoadingChapter] = useState(false);
 
@@ -220,6 +238,9 @@ function App() {
       setCurrentChapter(chapter);
       setCurrentView("editor");
       setIsDirty(false);
+      // Baseline word count on load so the title bar shows a number before
+      // the first save.
+      setWordCount(countWords(data.content));
 
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not load chapter.");
@@ -257,6 +278,7 @@ function App() {
       setCurrentNote({ filename, title });
       setCurrentView("notes");
       setIsDirty(false);
+      setWordCount(countWords(data.content));
 
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not load note.");
@@ -416,6 +438,8 @@ function App() {
       }
 
       setIsDirty(false);
+      // Refresh word count against the exact bytes that just hit disk.
+      setWordCount(countWords(content));
 
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not save.");
@@ -605,6 +629,31 @@ function App() {
     if (!chatAbortRef.current) return;
     chatManualCancelRef.current = true;
     chatAbortRef.current.abort();
+  }, []);
+
+
+  // --- Fully reset the Writing Companion conversation ---
+  // The backend is stateless -- it only ever sees what the frontend sends in
+  // the next POST. For Clear to actually feel like "fresh conversation," we
+  // have to drop everything the next message would otherwise carry over:
+  //   - chatMessages:         the prior turns themselves
+  //   - establishedChipKeys:  the set that would mark chips as "already sent"
+  //   - chapterEstablished:   the flag that would skip chapter text next time
+  //   - contextChips:         the chips currently attached to the panel
+  //   - chatInput:            any half-typed follow-up
+  //
+  // Before this change Clear left the chips and the chapter-send flag in
+  // place, so the writer's next message still shipped the same profiles and
+  // chapter. The AI then produced answers grounded in that same context,
+  // which read as "the AI still remembers our last conversation" even though
+  // it had no access to the prior turns.
+  const clearWritingCompanionChat = useCallback(() => {
+    setChatMessages([]);
+    setChatError(null);
+    setEstablishedChipKeys(new Set());
+    setChapterEstablished(false);
+    setContextChips([]);
+    setChatInput("");
   }, []);
 
 
@@ -836,11 +885,24 @@ function App() {
 
         {/* Title bar + save indicator -- shows chapter title or note title */}
         <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
-          <span className="text-sm font-medium text-[#f0f0f5]">
-            {currentView === "notes"
-              ? (currentNote ? currentNote.title : "No note open")
-              : (currentChapter ? currentChapter.title : "No chapter open")}
-          </span>
+          <div className="flex items-baseline gap-3">
+            <span className="text-sm font-medium text-[#f0f0f5]">
+              {currentView === "notes"
+                ? (currentNote ? currentNote.title : "No note open")
+                : (currentChapter ? currentChapter.title : "No chapter open")}
+            </span>
+            {/* Word count -- refreshed on document load and on each Save. Not
+                a live counter: the writer sees the number move when they
+                commit, which doubles as feedback that the save succeeded. */}
+            {(currentChapter || currentNote) && (
+              <span
+                className="text-xs text-[#6666a0]"
+                title="Word count at last save (refreshes on Save)"
+              >
+                {wordCount.toLocaleString()} {wordCount === 1 ? "word" : "words"}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleCreateChapter}
@@ -979,9 +1041,9 @@ function App() {
             <h2 className="text-sm font-semibold text-[#f0f0f5]">Writing Companion</h2>
             {chatMessages.length > 0 && (
               <button
-                onClick={() => { setChatMessages([]); setChatError(null); setEstablishedChipKeys(new Set()); setChapterEstablished(false); }}
+                onClick={clearWritingCompanionChat}
                 className="text-xs text-rose-700 transition-colors hover:text-rose-400"
-                title="Clear conversation"
+                title="Clear the conversation and detach all context chips"
               >
                 Clear
               </button>
@@ -1005,12 +1067,10 @@ function App() {
                     // Toggle off: return to general chat (no clearing)
                     setChatCategory(null);
                   } else {
-                    // Switch categories: clear chat + reset materials tracking
+                    // Switch categories: full reset so the new category starts
+                    // with a clean slate (same behavior as the Clear button).
                     if (chatCategory !== null) {
-                      setChatMessages([]);
-                      setChatError(null);
-                      setEstablishedChipKeys(new Set());
-                      setChapterEstablished(false);
+                      clearWritingCompanionChat();
                     }
                     setChatCategory(tab);
                   }

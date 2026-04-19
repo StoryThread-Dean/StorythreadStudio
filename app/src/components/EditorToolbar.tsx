@@ -17,7 +17,7 @@
 import {
   Bold, Italic, Underline, Strikethrough,
   Eraser, Heading1, Heading2, Heading3,
-  List, ListOrdered, ChevronDown, FilePlus2,
+  List, ListOrdered, Minus, ChevronDown, FilePlus2,
 } from "lucide-react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
@@ -244,6 +244,57 @@ function prefixLine(view: EditorView, prefix: string, saved: SavedSelection) {
 }
 
 
+// ── insertHorizontalRule ──────────────────────────────────────────────────────
+// Inserts a Markdown horizontal rule (---) on its own line. This is the scene-
+// break convention the scene parser looks for (see backend/app/utils/scene_parser.py):
+// three dashes, alone on a line, with blank lines above and below.
+//
+// Positioning logic:
+//   - Selection present: replace selection with "\n\n---\n\n"
+//   - Cursor on an empty line: put "---" directly on that line (don't create
+//     extra blank lines the writer will have to clean up)
+//   - Cursor on a line with text: append "\n\n---\n\n" after the current line
+//     so the HR sits between paragraphs with the blank-line padding Markdown
+//     requires for it to render as a rule (not as setext heading underline)
+function insertHorizontalRule(view: EditorView, saved: SavedSelection) {
+  const { from, to } = saved;
+  const state = view.state;
+
+  // With a real selection, replace the selected range with a padded HR.
+  if (from !== to) {
+    const insert = "\n\n---\n\n";
+    view.dispatch({
+      changes:   { from, to, insert },
+      selection: { anchor: from + insert.length },
+    });
+    view.focus();
+    return;
+  }
+
+  const line = state.doc.lineAt(from);
+  const lineIsEmpty = line.text.trim() === "";
+
+  if (lineIsEmpty) {
+    // Drop "---" straight onto the empty line. No extra newlines needed --
+    // the line's surroundings already give it the padding Markdown wants.
+    const insert = "---";
+    view.dispatch({
+      changes:   { from: line.from, to: line.to, insert },
+      selection: { anchor: line.from + insert.length },
+    });
+  } else {
+    // Insert after the end of the current line so prose doesn't get split.
+    const insert = "\n\n---\n\n";
+    view.dispatch({
+      changes:   { from: line.to, to: line.to, insert },
+      selection: { anchor: line.to + insert.length },
+    });
+  }
+
+  view.focus();
+}
+
+
 // ── clearFormatting ───────────────────────────────────────────────────────────
 // Strips Markdown inline formatting from the selection, or removes the line
 // prefix (heading/list marker) if nothing is selected.
@@ -330,6 +381,13 @@ export function EditorToolbar({ editorView, currentFont, onFontChange, onNewTemp
         captureSelection={captureSelection} />
       <ToolbarButton icon={<ListOrdered size={14} />} label="Numbered List"
         onAction={(s) => view && prefixLine(view, "1. ", s)}
+        captureSelection={captureSelection} />
+
+      <Divider />
+
+      {/* Horizontal Rule -- scene break (---) that the scene parser recognizes. */}
+      <ToolbarButton icon={<Minus size={14} />} label="Horizontal Rule (scene break)"
+        onAction={(s) => view && insertHorizontalRule(view, s)}
         captureSelection={captureSelection} />
 
       <div className="flex-1" />
