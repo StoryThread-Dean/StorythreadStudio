@@ -121,6 +121,10 @@ function App() {
   const chatAbortRef        = useRef<AbortController | null>(null);
   const chatManualCancelRef = useRef(false);
   const [chatCanCancel, setChatCanCancel] = useState(false);
+  // Tracks which model is handling the current request so the "Thinking..."
+  // indicator can show something like "google/gemini-2.5-pro..." instead of
+  // a blank spinner. Set from the request payload, confirmed from the response.
+  const [chatModelUsed, setChatModelUsed] = useState<string | null>(null);
 
   // Context chips -- profile summaries the writer explicitly attaches to AI requests.
   const [contextChips, setContextChips] = useState<ContextChip[]>([]);
@@ -534,6 +538,7 @@ function App() {
     setChatInput("");
     setChatLoading(true);
     setChatError(null);
+    setChatModelUsed(currentProjectRef.current?.default_model || null);
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
     // --- Cancellation + timeout setup ---
@@ -580,6 +585,7 @@ function App() {
       }
 
       const data = await res.json();
+      if (data.model_used) setChatModelUsed(data.model_used);
       setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
@@ -1284,7 +1290,11 @@ function App() {
           {chatLoading && (
             <div className="flex items-center gap-2 text-xs text-[#8888aa]">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
-              <span>Thinking...</span>
+              <span>
+                {chatModelUsed
+                  ? <>{chatModelUsed.split("/").pop()} <span className="text-[#555577]">thinking...</span></>
+                  : "Thinking..."}
+              </span>
               {/* Cancel button appears only after 20s so fast responses don't
                   flash a button the writer never needed. Lets impatient
                   writers bail out and rephrase without waiting the full 180s. */}

@@ -208,6 +208,7 @@ class ProfileChatRequest(BaseModel):
 
 class ProfileChatResponse(BaseModel):
     reply: str
+    model_used: str = ""  # The resolved model ID so the UI can display it
 
 
 class AssistantSuggestion(BaseModel):
@@ -978,7 +979,7 @@ async def profile_chat(request: ProfileChatRequest):
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
-    return ProfileChatResponse(reply=reply)
+    return ProfileChatResponse(reply=reply, model_used=model_id)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1004,6 +1005,7 @@ class EditorChatRequest(BaseModel):
 
 class EditorChatResponse(BaseModel):
     reply: str
+    model_used: str = ""  # The resolved model ID so the UI can display it
 
 
 def _build_materials_message(
@@ -1100,4 +1102,4 @@ async def editor_chat(request: EditorChatRequest):
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
-    return EditorChatResponse(reply=reply)
+    return EditorChatResponse(reply=reply, model_used=model_id)

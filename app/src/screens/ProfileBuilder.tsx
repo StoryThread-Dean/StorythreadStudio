@@ -225,6 +225,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [chatModelUsed, setChatModelUsed] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   // Behavior mode (4 modes: chat, extract_traits, check_consistency, refine)
@@ -639,6 +640,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     setChatInput("");
     setChatLoading(true);
     setChatError(null);
+    setChatModelUsed(project.default_model || null);
 
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
@@ -676,6 +678,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       }
 
       const data = await res.json();
+      if (data.model_used) setChatModelUsed(data.model_used);
       setChatMessages([...newMessages, { role: "assistant", content: data.reply }]);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -1223,7 +1226,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           {chatLoading && (
             <div className="flex items-center gap-2 text-xs text-[#8888aa]">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
-              Thinking...
+              <span>
+                {chatModelUsed
+                  ? <>{chatModelUsed.split("/").pop()} <span className="text-[#555577]">thinking...</span></>
+                  : "Thinking..."}
+              </span>
             </div>
           )}
 
