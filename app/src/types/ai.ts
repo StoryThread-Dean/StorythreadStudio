@@ -167,3 +167,82 @@ export interface EditorChatPayload {
   content_mode?:   string;
   project_path?:   string;
 }
+
+
+// ── Scene Summary ─────────────────────────────────────────────────────────────
+// Scene summaries are the per-scene counterpart to chapter summaries. Each
+// chapter is split on `---` horizontal rules; each resulting scene gets its
+// own file: <project>/summaries/scenes/<chapter-stem>/scene-NN.md.
+
+// Metadata returned by the list endpoint -- one entry per filled slot. The
+// sidebar uses this to render Scene N grandchildren under each chapter.
+export interface SceneSummaryInfo {
+  index:    number;   // 1-based positional index
+  title:    string;   // From the `# Heading` line of the scene file
+  filename: string;   // e.g. "scene-01.md"
+}
+
+// Body returned when loading one scene summary. `exists` is false when the
+// file hasn't been created yet -- UI uses that to show an empty state.
+export interface SceneSummaryResponse {
+  index:   number;
+  title:   string;
+  content: string;
+  exists:  boolean;
+}
+
+// Payload for saving a scene summary. The backend prepends "# <title>" to
+// the file, so `content` is just the body.
+export interface SaveSceneSummaryPayload {
+  folder_path:      string;
+  chapter_filename: string;
+  index:            number;
+  title:            string;
+  content:          string;
+}
+
+export interface SaveSceneSummaryResponse {
+  filename: string;
+  index:    number;
+  message:  string;
+}
+
+// Payload for generating one scene summary. Title null means "ask AI to
+// produce a title too" (second small call on the backend).
+export interface GenerateSceneSummaryPayload {
+  chapter_path: string;
+  project_path: string;
+  scene_text:   string;
+  scene_title:  string | null;
+  model_id?:    string;
+  content_mode?: string;
+}
+
+export interface GenerateSceneSummaryResponse {
+  title:      string;
+  content:    string;
+  model_used: string;
+}
+
+// Payload for the scene-split endpoint. Pure parsing -- no AI call.
+export interface SplitChapterScenesPayload {
+  chapter_path: string;
+  project_path: string;
+}
+
+// One entry in the split response. `text` is the full scene body, which the
+// frontend sends back to generate-scene-summary for each scene the writer
+// wants summarized. `text_preview` is a short snippet for UI display.
+export interface SplitChapterScene {
+  index:        number;
+  title:        string | null;
+  text_preview: string;
+  text:         string;
+  start:        number;
+  end:          number;
+}
+
+export interface SplitChapterScenesResponse {
+  scenes:   SplitChapterScene[];
+  hr_count: number;   // 0 triggers the "no scene breaks" fallback UI
+}

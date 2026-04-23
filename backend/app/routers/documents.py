@@ -18,6 +18,7 @@
 
 import os
 import re
+import shutil
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -247,6 +248,282 @@ async def save_chapter_summary(request: SaveChapterSummaryRequest):
     return SaveChapterSummaryResponse(filename=f"{stem}.md", message="Summary saved.")
 
 
+# ── Phase 6: Scene Summary read/write (plain Markdown) ──────────────────────
+# Scene summaries live as plain Markdown files inside a per-chapter folder:
+#   <project>/summaries/scenes/<chapter-stem>/scene-01.md
+#   <project>/summaries/scenes/<chapter-stem>/scene-02.md
+#   ...
+# The file body is "# <Scene Title>" followed by a blank line and the 200-400
+# word summary body. Plain Markdown, no YAML frontmatter (matches chapter
+# summaries). The chapter stem is derived from the chapter filename so a
+# chapter renamed or re-ordered via filename also moves its scene folder.
+
+class SceneSummaryInfo(BaseModel):
+    """One entry in the scene-summaries list. Filled slots only."""
+    index:    int   # 1-based positional index (matches scene-NN.md)
+    title:    str   # Extracted from the `# Heading` line in the scene summary file
+    filename: str   # e.g., "scene-01.md" -- useful for log messages and UI debugging
+
+
+class SceneSummaryResponse(BaseModel):
+    """Returned from GET /scene-summary. `exists` distinguishes not-yet-created
+    from empty-on-purpose so the UI can show the right empty state."""
+    index:   int
+    title:   str
+    content: str
+    exists:  bool
+
+
+class SaveSceneSummaryRequest(BaseModel):
+    folder_path:      str
+    chapter_filename: str     # Manuscript filename; stem drives the scene folder name
+    index:            int     # 1-based positional index
+    title:            str
+    content:          str     # Summary body (no `# title` line -- we prepend it)
+
+
+class SaveSceneSummaryResponse(BaseModel):
+    filename: str
+    index:    int
+    message:  str
+
+
+def _scene_summary_paths(folder_path: str, chapter_filename: str, index: int | None = None) -> tuple[str, str | None]:
+    """
+    Resolve (scene_folder, scene_file) for a given chapter and optional scene index.
+
+    scene_folder is always the per-chapter directory. scene_file is the absolute
+    path to scene-NN.md when `index` is given, else None (used by list/delete-folder).
+
+    Path-traversal guard: both the folder and the file must still resolve inside
+    summaries/scenes/ after realpath resolution.
+    """
+    stem = os.path.splitext(chapter_filename)[0]
+    scenes_root = os.path.realpath(os.path.join(folder_path, "summaries", "scenes"))
+    scene_dir   = os.path.realpath(os.path.join(scenes_root, stem))
+
+    # The per-chapter folder must still sit under summaries/scenes/.
+    if not scene_dir.startswith(scenes_root + os.sep) and scene_dir != scenes_root:
+        raise HTTPException(status_code=400, detail="Invalid chapter filename.")
+
+    if index is None:
+        return scene_dir, None
+
+    # Enforce a sensible index range. Two digits (01-99) is plenty for fiction;
+    # a chapter with more than 99 scenes is a structural problem, not a storage one.
+    if index < 1 or index > 99:
+        raise HTTPException(status_code=400, detail=f"Scene index must be 1-99 (got {index}).")
+
+    scene_file = os.path.realpath(os.path.join(scene_dir, f"scene-{index:02d}.md"))
+    if not scene_file.startswith(scene_dir + os.sep) and scene_file != scene_dir:
+        raise HTTPException(status_code=400, detail="Invalid scene index.")
+    return scene_dir, scene_file
+
+
+def _index_from_scene_filename(name: str) -> int | None:
+    """
+    Pull the numeric index out of "scene-NN.md". Returns None for anything that
+    doesn't match, which lets us skip hidden files or stray notes the writer
+    might have dropped in the folder.
+    """
+    m = re.match(r"^scene-(\d{1,3})\.md$", name)
+    if not m:
+        return None
+    return int(m.group(1))
+
+
+def _scene_title_from_file(filepath: str) -> str:
+    """
+    Read the first `# Heading` line from a scene summary file as its title.
+    Falls back to "Scene" if the file has no heading line.
+
+    Mirrors the pattern in _title_from_file() for chapters, but we accept
+    any first-line heading (not just `# `) because a writer editing the
+    file by hand might use `## ` instead.
+    """
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    # Strip leading #s and whitespace -- works for #, ##, ###, etc.
+                    return stripped.lstrip("#").strip() or "Scene"
+    except OSError:
+        pass
+    return "Scene"
+
+
+# --- GET /api/documents/scene-summaries (list) ---
+@router.get("/scene-summaries", response_model=list[SceneSummaryInfo])
+async def list_scene_summaries(folder_path: str, chapter_filename: str):
+    """
+    List all scene summary files that exist for a given chapter.
+
+    Returns an empty list if the per-chapter folder doesn't exist yet -- the
+    frontend treats that as "no scenes summarized" rather than an error. This
+    keeps the sidebar's "Scene Summaries" group rendering trivial (the
+    grandchildren disappear when the list is empty).
+    """
+    scene_dir, _ = _scene_summary_paths(folder_path, chapter_filename)
+    if not os.path.isdir(scene_dir):
+        return []
+
+    results: list[SceneSummaryInfo] = []
+    with os.scandir(scene_dir) as entries:
+        for entry in entries:
+            if not entry.is_file():
+                continue
+            idx = _index_from_scene_filename(entry.name)
+            if idx is None:
+                continue
+            results.append(SceneSummaryInfo(
+                index    = idx,
+                title    = _scene_title_from_file(entry.path),
+                filename = entry.name,
+            ))
+
+    # Sort by index so the sidebar shows Scene 1, 2, 3 in order even if the
+    # OS returned them in a different order.
+    results.sort(key=lambda r: r.index)
+    return results
+
+
+# --- GET /api/documents/scene-summary (one) ---
+@router.get("/scene-summary", response_model=SceneSummaryResponse)
+async def load_scene_summary(folder_path: str, chapter_filename: str, index: int):
+    """
+    Load a single scene summary file.
+
+    Returns exists=False with empty title/content when the file isn't there yet,
+    so the UI can render an empty-state rather than showing an error.
+    """
+    _scene_dir, scene_file = _scene_summary_paths(folder_path, chapter_filename, index)
+
+    if scene_file is None or not os.path.isfile(scene_file):
+        return SceneSummaryResponse(index=index, title="", content="", exists=False)
+
+    with open(scene_file, "r", encoding="utf-8") as f:
+        raw = f.read()
+
+    # Pull the `# Title` line off the top (first non-blank line). Whatever
+    # follows that line (minus the blank separator) is the summary body.
+    lines = raw.splitlines()
+    title = ""
+    body_start = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            body_start = i + 1
+            continue
+        if stripped.startswith("#"):
+            title = stripped.lstrip("#").strip() or "Scene"
+            body_start = i + 1
+            # If the next line is blank, skip it so `content` doesn't start
+            # with an empty line the writer never typed.
+            if body_start < len(lines) and not lines[body_start].strip():
+                body_start += 1
+            break
+        # First non-blank line wasn't a heading -- treat the whole file as body.
+        break
+
+    body = "\n".join(lines[body_start:]).strip() if title else raw.strip()
+
+    return SceneSummaryResponse(
+        index   = index,
+        title   = title or "Scene",
+        content = body,
+        exists  = True,
+    )
+
+
+# --- POST /api/documents/scene-summary (save/overwrite) ---
+@router.post("/scene-summary", response_model=SaveSceneSummaryResponse)
+async def save_scene_summary(request: SaveSceneSummaryRequest):
+    """
+    Save a scene summary to disk. Creates the per-chapter folder on first save.
+    Overwrites any existing file at the same scene index.
+
+    On-disk layout: "# <title>\\n\\n<content>\\n". Prepending the title as a
+    heading keeps the file self-documenting when opened in any Markdown tool.
+    """
+    scene_dir, scene_file = _scene_summary_paths(
+        request.folder_path, request.chapter_filename, request.index
+    )
+    assert scene_file is not None  # index was provided, so _scene_summary_paths returns a file path
+
+    title = request.title.strip() or "Scene"
+    body  = request.content.strip()
+
+    os.makedirs(scene_dir, exist_ok=True)
+
+    # We always write with exactly one blank line between the heading and the
+    # body, plus a trailing newline. Consistent formatting = fewer surprising
+    # diffs when the writer edits the file by hand later.
+    text = f"# {title}\n\n{body}\n" if body else f"# {title}\n"
+    try:
+        with open(scene_file, "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not write scene summary: {e}")
+
+    return SaveSceneSummaryResponse(
+        filename = f"scene-{request.index:02d}.md",
+        index    = request.index,
+        message  = "Scene summary saved.",
+    )
+
+
+# --- DELETE /api/documents/scene-summary (one) ---
+@router.delete("/scene-summary")
+async def delete_scene_summary(folder_path: str, chapter_filename: str, index: int):
+    """
+    Delete a single scene summary file. The per-chapter folder stays in place
+    even if this was the last file; list_scene_summaries returns an empty
+    list either way, and leaving the folder avoids a race with a concurrent
+    save request.
+    """
+    _scene_dir, scene_file = _scene_summary_paths(folder_path, chapter_filename, index)
+    assert scene_file is not None
+
+    if not os.path.isfile(scene_file):
+        raise HTTPException(status_code=404, detail=f"Scene {index} has no summary file.")
+
+    try:
+        os.remove(scene_file)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not delete scene summary: {e}")
+
+    return {
+        "filename": f"scene-{index:02d}.md",
+        "index":    index,
+        "message":  f"Deleted scene {index}.",
+    }
+
+
+# --- DELETE /api/documents/scene-summaries (whole chapter folder) ---
+@router.delete("/scene-summaries")
+async def delete_all_scene_summaries(folder_path: str, chapter_filename: str):
+    """
+    Remove the entire per-chapter scene summaries folder. Used by the sidebar
+    "delete all scene summaries" action and (best-effort) by the chapter
+    delete endpoint below.
+    """
+    scene_dir, _ = _scene_summary_paths(folder_path, chapter_filename)
+
+    if not os.path.isdir(scene_dir):
+        raise HTTPException(status_code=404, detail="No scene summaries folder exists for this chapter.")
+
+    try:
+        shutil.rmtree(scene_dir)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not delete scene summaries folder: {e}")
+
+    return {
+        "chapter_filename": chapter_filename,
+        "message":          "Deleted all scene summaries for this chapter.",
+    }
+
+
 # --- GET /api/documents/chapter ---
 @router.get("/chapter", response_model=LoadChapterResponse)
 async def load_chapter(folder_path: str, filename: str):
@@ -422,9 +699,24 @@ async def delete_chapter(folder_path: str, filename: str):
     except OSError:
         pass  # Could not remove summary -- leave it, chapter delete already succeeded
 
+    # Best-effort: remove the scene summaries folder too. Same reasoning as
+    # above: orphaned per-scene summaries with no chapter to describe would
+    # be confusing clutter.
+    scenes_removed = False
+    try:
+        scene_dir, _ = _scene_summary_paths(folder_path, filename)
+        if os.path.isdir(scene_dir):
+            shutil.rmtree(scene_dir)
+            scenes_removed = True
+    except HTTPException:
+        pass
+    except OSError:
+        pass
+
     return {
         "filename":        filename,
         "summary_removed": summary_removed,
+        "scenes_removed":  scenes_removed,
         "message":         f"Deleted {filename}.",
     }
 

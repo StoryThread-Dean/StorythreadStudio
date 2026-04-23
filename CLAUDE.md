@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Current phase: Phase 5E (AI Respec -- Writing Companion) -- next.**
+**Current phase: Phase 6 (Export and Polish) -- complete. Post-MVP polish next.**
 
-Phases 0-4 and 5A-5D are complete and merged into `main`. Phase 5 was redesigned into an AI Respec with 5 sub-phases (5A-5E). Full plan in `.claude/plans/polished-moseying-shannon.md`.
+Phases 0-4, 5A-5E, and 6 are complete and merged into `main`. Phase 5 was redesigned into an AI Respec with 5 sub-phases (5A-5E). Phase 6 delivered full-manuscript export (with opt-in chapter summaries / scene summaries / notes / profiles), manual snapshot export, scene summaries (per-scene files with auto-split and selection-based preview), summary quality tuning (cliff-notes reframing + preamble filter), relationship-aware full profile summaries, and a backend-health banner for uniform error handling.
 
 ### Phases 1-3 -- Complete
 Core app: Tauri shell + React scaffold, FastAPI backend, project create/open, CodeMirror Markdown editor, file save, profiles (character/relationship/location/lore/summaries), OpenRouter integration, 9 writing assistants, Settings modal, em dash enforcement.
@@ -61,6 +61,13 @@ Context chips, ai_usage_example generation, section/full summaries, Profile Buil
 - Fixed AI copying instruction template into output (prompt used example-based format instead of numbered template)
 - Fixed numbered list resets in AI responses (--- separators replace numbered lists)
 - Fixed selection highlight only showing on paragraph edges (transparent .cm-line backgrounds, semi-transparent .cm-activeLine)
+
+### Phase 6 -- Export and Polish -- Complete
+- **Scene summaries**: per-scene `summaries/scenes/<stem>/scene-NN.md` files. Auto-split flow (chapter `---` separators drive a sequential per-scene generator with yes/no/cancel overwrite prompts) and selection-based preview modal with slot picker. Expandable sidebar grandchildren under each chapter (Chapter -> Chapter Summary + Scene Summaries -> Scene 1, 2, 3...). `scene_parser.py` drops cosmetic preambles (chapter title + epigraph) under 50 words when an HR follows.
+- **Summary quality tuning**: both chapter and scene summary prompts rewritten as "cliff notes" (primary directive = gist, grounding rules secondary). Temperature switched from `extraction` to `critique` (same 0.3 value, clearer semantics). User messages wrap source text in `--- BEGIN/END ---` markers with explicit "Summarize, do not extend" framing.
+- **Expanded export**: `POST /api/export/full-manuscript` and `POST /api/export/snapshot` accept `include_chapter_summaries` / `include_scene_summaries` / `include_notes` / `include_profiles` flags. Full-manuscript appends each as a `#` appendix; snapshot mirrors the folder layout.
+- **Relationship-aware full profile summaries**: `generate-full-summary` accepts `project_path`; for character profiles it scans `profiles/relationships/*.md` for the character's name and passes Overview / Current Dynamic snippets as "RELATED RELATIONSHIPS" context so the summary weaves in who the character is to others.
+- **Backend-health banner**: `useBackendHealth` hook polls `/health` every 10s; a single fixed-position banner shows when the backend is unreachable, replacing per-feature cryptic fetch errors. Dismiss-until-state-changes behavior.
 
 ---
 

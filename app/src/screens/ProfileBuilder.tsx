@@ -920,6 +920,9 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           profile_name: profile.name,
           profile_type: profile.type,
           profile_content: formatProfileForAI(profile),
+          // Phase 6: gives the backend access to profiles/relationships/ so
+          // character summaries weave in how this character relates to others.
+          project_path: project.root_path,
         }),
       });
       if (!res.ok) {

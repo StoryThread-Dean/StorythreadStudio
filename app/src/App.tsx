@@ -23,15 +23,21 @@ import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/Editor
 import { ProjectHome } from "./screens/ProjectHome";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { SummaryView }    from "./components/SummaryView";
+import { SceneSummaryView } from "./components/SceneSummaryView";
+import { SceneSummaryPreviewModal } from "./components/SceneSummaryPreviewModal";
 import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "./components/RightPanelResizer";
 import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import type { ProfileType } from "./types/profile";
-import type { ContextChip, EditorChatMessage, EditorChatCategory } from "./types/ai";
+import type {
+  ContextChip, EditorChatMessage, EditorChatCategory,
+  SceneSummaryInfo, SplitChapterScenesResponse, GenerateSceneSummaryResponse,
+} from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI } from "./utils/profileFormat";
+import { useBackendHealth } from "./hooks/useBackendHealth";
 import { Bot, Send, ChevronDown, Settings2, Trash2 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
@@ -58,12 +64,21 @@ function App() {
   // Which project is currently open. null = show home screen.
   const [currentProject, setCurrentProject] = useState<ProjectInfo | null>(null);
 
+  // Phase 6: poll the backend /health endpoint in the background so we can
+  // show one clear "backend not responding" banner instead of letting every
+  // feature fail with its own cryptic fetch error.
+  const backendHealth = useBackendHealth();
+  // Dismiss button for the banner. Writer dismissal survives only until the
+  // backend flips state again (goes down after being up, or back up after
+  // being down) -- so a dismissed banner reappears if the situation changes.
+  const [backendBannerDismissedAt, setBackendBannerDismissedAt] = useState<number | null>(null);
+
   // Which top-level view is active: the writing editor, profile builder, notes
   // editor, or chapter-summary editor. ProfileBuilder gets "profiles" because
   // it's a completely separate screen; chapter_summary is rendered in the
   // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
   const [currentView, setCurrentView]   = useState<
-    "editor" | "profiles" | "notes" | "chapter_summary"
+    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
   >("editor");
   const [profileType, setProfileType]   = useState<ProfileType>("character");
 
@@ -75,6 +90,34 @@ function App() {
   //   parent chapter row a subtle highlight while the child summary is active.
   const [expandedChapters, setExpandedChapters]           = useState<Set<string>>(new Set());
   const [currentSummaryChapter, setCurrentSummaryChapter] = useState<string | null>(null);
+
+  // Scene summaries (Phase 6):
+  //   - sceneSummariesByChapter: per-chapter list of filled scene slots, so
+  //     the sidebar grandchildren know which Scene N rows to show. The map
+  //     key is the chapter filename; a missing key means "not fetched yet".
+  //   - expandedSceneGroups: which chapters have their "Scene Summaries"
+  //     subtree expanded in the sidebar. Kept separate from expandedChapters
+  //     so expanding the chapter doesn't force-expand the scenes list too.
+  //   - currentSummaryScene: which {chapter, index} is open in SceneSummaryView.
+  //   - autoSplitProgress: text shown by the EditorToolbar button while the
+  //     auto-split loop is running ("Scene 3 of 7..."). null when idle.
+  //   - sceneOverwritePrompt: the currently-showing confirm dialog for the
+  //     auto-split overwrite flow. null when no prompt is active.
+  //   - showSceneSummaryModal: selection-based preview modal, null when closed.
+  const [sceneSummariesByChapter, setSceneSummariesByChapter] = useState<
+    Map<string, SceneSummaryInfo[]>
+  >(new Map());
+  const [expandedSceneGroups, setExpandedSceneGroups] = useState<Set<string>>(new Set());
+  const [currentSummaryScene, setCurrentSummaryScene] = useState<
+    { chapterFile: string; index: number } | null
+  >(null);
+  const [autoSplitProgress, setAutoSplitProgress] = useState<string | null>(null);
+  const [sceneOverwritePrompt, setSceneOverwritePrompt] = useState<
+    { index: number; title: string; total: number; onAnswer: (answer: "yes" | "no" | "cancel") => void } | null
+  >(null);
+  const [showSceneSummaryModal, setShowSceneSummaryModal] = useState<
+    { chapterFile: string; chapterPath: string; selectedText: string; existingScenes: SceneSummaryInfo[] } | null
+  >(null);
 
   // Writing Companion panel width -- toggle between compact and wide, persisted
   // to localStorage so the writer's preference survives restarts.
@@ -202,7 +245,7 @@ function App() {
   const currentProjectRef = useRef<ProjectInfo | null>(null);
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
   const currentViewRef = useRef<
-    "editor" | "profiles" | "notes" | "chapter_summary"
+    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
   >("editor");
 
   // Keep refs in sync with state on every render.
@@ -316,6 +359,112 @@ function App() {
     setCurrentSummaryChapter(chapterFilename);
     setCurrentView("chapter_summary");
   }, []);
+
+
+  // --- Scene summaries (Phase 6) ---
+  //
+  // Load the list of filled scene slots for one chapter and cache in state.
+  // Called when the writer expands a chapter's Scene Summaries subtree, after
+  // a save/generate/delete, and after the auto-split loop finishes. An empty
+  // list just means the writer hasn't summarized any scenes yet.
+  const loadSceneSummaries = useCallback(async (chapterFilename: string) => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+
+    try {
+      const params = new URLSearchParams({
+        folder_path:      project.root_path,
+        chapter_filename: chapterFilename,
+      });
+      const res = await fetch(`${API_BASE}/api/documents/scene-summaries?${params}`);
+      if (!res.ok) {
+        // 404 is possible on some platforms even though we return [] in the
+        // Python handler. Treat any non-OK response as "no summaries yet" so
+        // the sidebar doesn't crash on a missing folder.
+        setSceneSummariesByChapter(prev => {
+          const next = new Map(prev);
+          next.set(chapterFilename, []);
+          return next;
+        });
+        return;
+      }
+      const list: SceneSummaryInfo[] = await res.json();
+      setSceneSummariesByChapter(prev => {
+        const next = new Map(prev);
+        next.set(chapterFilename, list);
+        return next;
+      });
+    } catch {
+      // Silent: sidebar will show no scenes; writer can re-expand to retry.
+    }
+  }, []);
+
+  // Toggle the Scene Summaries group expanded under a chapter. On first expand
+  // we fetch the list; on subsequent expands we rely on cached state and the
+  // refresh callbacks the individual views trigger after save/delete.
+  const toggleSceneGroupExpanded = useCallback((chapterFilename: string) => {
+    setExpandedSceneGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(chapterFilename)) {
+        next.delete(chapterFilename);
+      } else {
+        next.add(chapterFilename);
+        // Fetch lazily -- only when the writer actually asks to see the list.
+        if (!sceneSummariesByChapter.has(chapterFilename)) {
+          void loadSceneSummaries(chapterFilename);
+        }
+      }
+      return next;
+    });
+  }, [loadSceneSummaries, sceneSummariesByChapter]);
+
+  // Open one scene summary in SceneSummaryView. Same pattern as openChapterSummary.
+  const openSceneSummary = useCallback((chapterFilename: string, index: number) => {
+    setCurrentSummaryScene({ chapterFile: chapterFilename, index });
+    setCurrentView("scene_summary");
+  }, []);
+
+  // Delete a single scene summary from the sidebar trash icon.
+  const handleDeleteSceneSummary = useCallback(async (chapterFilename: string, index: number) => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+
+    const ok = window.confirm(
+      `Delete the summary for scene ${index}? The chapter text is untouched. This cannot be undone.`
+    );
+    if (!ok) return;
+
+    try {
+      const params = new URLSearchParams({
+        folder_path:      project.root_path,
+        chapter_filename: chapterFilename,
+        index:            String(index),
+      });
+      const res = await fetch(`${API_BASE}/api/documents/scene-summary?${params}`, {
+        method: "DELETE",
+      });
+      if (!res.ok && res.status !== 404) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail ?? "Delete failed.");
+      }
+      if (
+        currentSummaryScene &&
+        currentSummaryScene.chapterFile === chapterFilename &&
+        currentSummaryScene.index === index
+      ) {
+        setCurrentSummaryScene(null);
+        setCurrentView("editor");
+      }
+      void loadSceneSummaries(chapterFilename);
+      setEditorError(null);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not delete scene summary.");
+    }
+  }, [currentSummaryScene, loadSceneSummaries]);
+
+  // handleGenerateSceneSummaries and handleSummarizeAsScene are defined AFTER
+  // handleSave below, because they depend on it. Placing them here would trip
+  // the temporal dead zone on the `handleSave` reference.
 
 
   // --- Create a new chapter file and open it in the editor ---
@@ -448,11 +597,27 @@ function App() {
         setCurrentSummaryChapter(null);
         setCurrentView("editor");
       }
+      // Also drop any open scene summary for this chapter and clear the
+      // sidebar cache so stale Scene N rows don't linger.
+      if (currentSummaryScene?.chapterFile === chapter.filename) {
+        setCurrentSummaryScene(null);
+        setCurrentView("editor");
+      }
+      setSceneSummariesByChapter(prev => {
+        const next = new Map(prev);
+        next.delete(chapter.filename);
+        return next;
+      });
+      setExpandedSceneGroups(prev => {
+        const next = new Set(prev);
+        next.delete(chapter.filename);
+        return next;
+      });
       setEditorError(null);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not delete chapter.");
     }
-  }, [currentSummaryChapter]);
+  }, [currentSummaryChapter, currentSummaryScene]);
 
 
   // --- Delete a chapter summary (without touching the chapter itself) ---
@@ -589,6 +754,194 @@ function App() {
       setEditorError(err instanceof Error ? err.message : "Could not save.");
     }
   }, []);
+
+
+  // Orchestrate the scene summary auto-split flow: parse chapter, walk each
+  // scene, prompt before overwriting existing summaries, save each generated
+  // summary. See the sidebar/loop docs above for the full control flow.
+  //
+  // Sequencing: the overwrite prompts block the loop via a Promise wired
+  // through React state (sceneOverwritePrompt). One scene failing doesn't
+  // abort the whole loop -- we record the error and move on so a flaky
+  // connection doesn't lose every scene's work.
+  const handleGenerateSceneSummaries = useCallback(async () => {
+    const project = currentProjectRef.current;
+    const chapter = currentChapterRef.current;
+    if (!project || !chapter) return;
+
+    // If the writer has unsaved edits, save first so the split runs against
+    // the on-disk text. Stale edits would produce wrong scene boundaries.
+    if (isDirty) {
+      const ok = window.confirm(
+        "You have unsaved edits. Save and continue? Cancel to stop and save manually first."
+      );
+      if (!ok) return;
+      await handleSave();
+    }
+
+    setAutoSplitProgress("Parsing chapter...");
+    setEditorError(null);
+
+    try {
+      const chapterAbsPath = `${project.root_path}/manuscript/${chapter.filename}`;
+
+      // Step 1: split the chapter (cheap, no AI call).
+      const splitRes = await fetch(`${API_BASE}/api/ai/split-chapter-scenes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapter_path: chapterAbsPath,
+          project_path: project.root_path,
+        }),
+      });
+      if (!splitRes.ok) {
+        const err = await splitRes.json().catch(() => ({}));
+        throw new Error(err.detail ?? `Parse failed (${splitRes.status})`);
+      }
+      const splitData: SplitChapterScenesResponse = await splitRes.json();
+
+      // Step 2: no-HR fallback. For the MVP this offers a chapter-wide summary;
+      // the AI-suggested scene break feature is deferred per the plan.
+      if (splitData.hr_count === 0) {
+        const choice = window.confirm(
+          "No scene breaks (---) found in this chapter.\n\n" +
+          "OK: Open the Chapter Summary view so you can generate a single chapter-wide summary.\n" +
+          "Cancel: Close this dialog. Add --- separators to your chapter first, then try again."
+        );
+        setAutoSplitProgress(null);
+        if (choice) openChapterSummary(chapter.filename);
+        return;
+      }
+
+      // Step 3: find out which slots are already filled.
+      const listRes = await fetch(
+        `${API_BASE}/api/documents/scene-summaries?` +
+        new URLSearchParams({
+          folder_path:      project.root_path,
+          chapter_filename: chapter.filename,
+        })
+      );
+      const existing: SceneSummaryInfo[] = listRes.ok ? await listRes.json() : [];
+      const existingByIndex = new Map<number, SceneSummaryInfo>(
+        existing.map(s => [s.index, s])
+      );
+
+      // Step 4: sequential loop with overwrite prompts.
+      let cancelled = false;
+      for (const scene of splitData.scenes) {
+        if (cancelled) break;
+
+        const existingSlot = existingByIndex.get(scene.index);
+        if (existingSlot) {
+          const answer = await new Promise<"yes" | "no" | "cancel">((resolve) => {
+            setSceneOverwritePrompt({
+              index: scene.index,
+              title: existingSlot.title,
+              total: splitData.scenes.length,
+              onAnswer: (a) => {
+                setSceneOverwritePrompt(null);
+                resolve(a);
+              },
+            });
+          });
+          if (answer === "cancel") { cancelled = true; break; }
+          if (answer === "no")     { continue; }
+        }
+
+        setAutoSplitProgress(`Generating Scene ${scene.index} of ${splitData.scenes.length}...`);
+
+        try {
+          const genRes = await fetch(`${API_BASE}/api/ai/generate-scene-summary`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chapter_path: chapterAbsPath,
+              project_path: project.root_path,
+              scene_text:   scene.text,
+              scene_title:  scene.title,
+              content_mode: "general",
+            }),
+          });
+          if (!genRes.ok) {
+            const err = await genRes.json().catch(() => ({}));
+            throw new Error(err.detail ?? `Generation failed (${genRes.status})`);
+          }
+          const genData: GenerateSceneSummaryResponse = await genRes.json();
+
+          const saveRes = await fetch(`${API_BASE}/api/documents/scene-summary`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              folder_path:      project.root_path,
+              chapter_filename: chapter.filename,
+              index:            scene.index,
+              title:            genData.title || scene.title || "Scene",
+              content:          genData.content ?? "",
+            }),
+          });
+          if (!saveRes.ok) {
+            const err = await saveRes.json().catch(() => ({}));
+            throw new Error(err.detail ?? `Save failed (${saveRes.status})`);
+          }
+        } catch (err) {
+          setEditorError(
+            `Scene ${scene.index} failed: ${err instanceof Error ? err.message : "unknown error"}`
+          );
+        }
+      }
+
+      setAutoSplitProgress(null);
+      // Refresh sidebar cache and expand the Scene Summaries subtree so the
+      // writer sees what just got created.
+      await loadSceneSummaries(chapter.filename);
+      setExpandedChapters(prev => {
+        const next = new Set(prev);
+        next.add(chapter.filename);
+        return next;
+      });
+      setExpandedSceneGroups(prev => {
+        const next = new Set(prev);
+        next.add(chapter.filename);
+        return next;
+      });
+    } catch (err) {
+      setAutoSplitProgress(null);
+      setEditorError(err instanceof Error ? err.message : "Auto-split failed.");
+    }
+  }, [isDirty, handleSave, loadSceneSummaries, openChapterSummary]);
+
+
+  // Selection-based flow: opens the preview modal. The modal runs the AI
+  // generation itself on mount; we just seed it with the text and the list
+  // of existing scene slots so its slot-picker can render the dropdown.
+  const handleSummarizeAsScene = useCallback(async () => {
+    const project = currentProjectRef.current;
+    const chapter = currentChapterRef.current;
+    if (!project || !chapter) return;
+    const text = selectedText.trim();
+    if (!text) return;
+
+    const chapterAbsPath = `${project.root_path}/manuscript/${chapter.filename}`;
+
+    let existing: SceneSummaryInfo[] = [];
+    try {
+      const params = new URLSearchParams({
+        folder_path:      project.root_path,
+        chapter_filename: chapter.filename,
+      });
+      const res = await fetch(`${API_BASE}/api/documents/scene-summaries?${params}`);
+      if (res.ok) existing = await res.json();
+    } catch {
+      // Silent -- modal opens with an empty "new scene" default.
+    }
+
+    setShowSceneSummaryModal({
+      chapterFile:    chapter.filename,
+      chapterPath:    chapterAbsPath,
+      selectedText:   text,
+      existingScenes: existing,
+    });
+  }, [selectedText]);
 
 
   // --- Apply a new outline template (overwrites notes/outline.md) ---
@@ -820,24 +1173,70 @@ function App() {
   // ── CONDITIONAL RENDERING -- safe to do here because all hooks are above ──
 
   // No project open: show the welcome / project picker screen
+  // Backend-down banner (Phase 6). Rendered as a fixed-position overlay so
+  // it sits above every view without disturbing layout. Shown when the
+  // health-check poll has seen at least one successful ping (so we don't
+  // briefly show the banner during cold start) and the most recent ping
+  // failed, unless the writer explicitly dismissed it after that failure.
+  const showBackendBanner =
+    backendHealth.hasEverConnected &&
+    backendHealth.isDown &&
+    (backendBannerDismissedAt === null || backendBannerDismissedAt < (backendHealth.lastSeen ?? 0));
+  const backendDownBanner = showBackendBanner ? (
+    <div
+      className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-red-800 bg-red-950/95 px-4 py-2 shadow-lg backdrop-blur-sm"
+      role="alert"
+    >
+      <div className="flex items-center gap-2">
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-400" />
+        <p className="text-xs text-red-100">
+          <span className="font-semibold">Backend not responding.</span>{" "}
+          StoryForge can't reach the local API at <span className="font-mono">localhost:8000</span>.
+          Start it with{" "}
+          <span className="rounded border border-red-800 bg-red-900/70 px-1 font-mono text-[10px] text-red-200">
+            uv run uvicorn app.main:app --reload --port 8000
+          </span>
+          {" "}from the <span className="font-mono">backend/</span> folder.
+        </p>
+      </div>
+      <button
+        onClick={() => setBackendBannerDismissedAt(Date.now())}
+        className="rounded border border-red-800 px-2 py-0.5 text-xs text-red-200 transition-colors hover:border-red-500 hover:text-red-100"
+        title="Hide this banner (it reappears if the backend goes down again)"
+      >
+        Dismiss
+      </button>
+    </div>
+  ) : null;
+
   if (!currentProject) {
-    return <ProjectHome onProjectOpen={handleProjectOpen} />;
+    return (
+      <>
+        {backendDownBanner}
+        <ProjectHome onProjectOpen={handleProjectOpen} />
+      </>
+    );
   }
 
   // Profile builder view: replaces the entire editor layout
   if (currentView === "profiles") {
     return (
-      <ProfileBuilder
-        project={currentProject}
-        initialType={profileType}
-        onBack={() => setCurrentView("editor")}
-      />
+      <>
+        {backendDownBanner}
+        <ProfileBuilder
+          project={currentProject}
+          initialType={profileType}
+          onBack={() => setCurrentView("editor")}
+        />
+      </>
     );
   }
 
   // ── Project is open: show the three-panel writing editor ──────────────────
   return (
-    <div className="flex h-screen overflow-hidden bg-[#070724] text-[#f0f0f5]">
+    <>
+      {backendDownBanner}
+      <div className="flex h-screen overflow-hidden bg-[#070724] text-[#f0f0f5]">
 
       {/* ── LEFT PANEL: Navigation Sidebar ─────────────────────────────── */}
       <aside className="flex w-64 shrink-0 flex-col border-r border-[#1e1e4a] bg-[#0d0d2b]">
@@ -957,7 +1356,20 @@ function App() {
             {chapters.map((chapter) => {
               const isExpanded        = expandedChapters.has(chapter.filename);
               const isActiveChapter   = currentView === "editor" && currentChapter?.filename === chapter.filename;
-              const isSummaryAncestor = currentView === "chapter_summary" && currentSummaryChapter === chapter.filename;
+              const isChapterSummaryActive = currentView === "chapter_summary" && currentSummaryChapter === chapter.filename;
+              // "Summary ancestor" -- any descendant of this chapter is the
+              // active view. Used to subtly highlight the chapter row so the
+              // writer can trace back up the tree.
+              const isSceneSummaryActiveInThisChapter =
+                currentView === "scene_summary" &&
+                currentSummaryScene?.chapterFile === chapter.filename;
+              const isSummaryAncestor = isChapterSummaryActive || isSceneSummaryActiveInThisChapter;
+
+              const sceneSummaries  = sceneSummariesByChapter.get(chapter.filename);
+              const isScenesExpanded = expandedSceneGroups.has(chapter.filename);
+              const activeSceneIndex = isSceneSummaryActiveInThisChapter
+                ? (currentSummaryScene?.index ?? null)
+                : null;
 
               return (
                 <ChapterNavRow
@@ -966,7 +1378,10 @@ function App() {
                   isExpanded={isExpanded}
                   isActiveChapter={isActiveChapter}
                   isSummaryAncestor={isSummaryAncestor}
-                  isChapterSummaryActive={isSummaryAncestor}
+                  isChapterSummaryActive={isChapterSummaryActive}
+                  sceneSummaries={sceneSummaries}
+                  isScenesExpanded={isScenesExpanded}
+                  activeSceneIndex={activeSceneIndex}
                   onToggleExpand={() => toggleChapterExpanded(chapter.filename)}
                   onOpenChapter={() => {
                     if (currentView !== "editor" || currentChapter?.filename !== chapter.filename) {
@@ -977,6 +1392,9 @@ function App() {
                   onRenameChapter={(newTitle) => handleRenameChapter(chapter.filename, newTitle)}
                   onDeleteChapter={() => handleDeleteChapter(chapter)}
                   onDeleteChapterSummary={() => handleDeleteChapterSummary(chapter)}
+                  onToggleScenesExpanded={() => toggleSceneGroupExpanded(chapter.filename)}
+                  onOpenScene={(index) => openSceneSummary(chapter.filename, index)}
+                  onDeleteScene={(index) => handleDeleteSceneSummary(chapter.filename, index)}
                 />
               );
             })}
@@ -1039,6 +1457,15 @@ function App() {
           chapterFile={currentSummaryChapter}
           font={currentFont}
           onBack={() => setCurrentView("editor")}
+        />
+      ) : currentView === "scene_summary" && currentSummaryScene ? (
+        <SceneSummaryView
+          project={currentProject}
+          chapterFile={currentSummaryScene.chapterFile}
+          sceneIndex={currentSummaryScene.index}
+          font={currentFont}
+          onBack={() => setCurrentView("editor")}
+          onSidebarRefresh={() => loadSceneSummaries(currentSummaryScene.chapterFile)}
         />
       ) : (
       <>
@@ -1125,6 +1552,15 @@ function App() {
               ? () => setShowTemplateDialog(true)
               : undefined
           }
+          onGenerateSceneSummaries={
+            // Only surface the button when a chapter is open in the editor.
+            // Scene summaries are chapter-scoped, so the button has no
+            // meaning while a note or the project home is showing.
+            currentView === "editor" && currentChapter
+              ? handleGenerateSceneSummaries
+              : undefined
+          }
+          autoSplitRunning={autoSplitProgress !== null}
         />
 
         {/* Editor area -- renders either a chapter or a note depending on currentView */}
@@ -1251,10 +1687,23 @@ function App() {
         {/* Context indicator -- what text the AI will see + chapter toggle */}
         <div className="shrink-0 border-b border-[#1e1e4a] px-4 py-2">
           {selectedText ? (
-            // Writer has text selected -- that always gets sent (bright)
-            <p className={`truncate text-xs ${chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
-              {chapterEstablished ? "Selection (new context)" : "Using selected text"} ({selectedText.length.toLocaleString()} chars)
-            </p>
+            // Writer has text selected -- that always gets sent (bright).
+            // The "Summarize as Scene" button lives here because selection-
+            // based scene summarization is conceptually a Writing Companion
+            // action on the selected passage.
+            <div className="flex items-center justify-between gap-2">
+              <p className={`min-w-0 flex-1 truncate text-xs ${chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
+                {chapterEstablished ? "Selection (new context)" : "Using selected text"} ({selectedText.length.toLocaleString()} chars)
+              </p>
+              <button
+                onClick={handleSummarizeAsScene}
+                disabled={!currentChapter}
+                className="shrink-0 rounded border border-indigo-700/50 bg-indigo-950/40 px-2 py-0.5 text-[10px] text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
+                title="Generate an AI scene summary from this selection (opens a preview modal)"
+              >
+                Summarize as Scene
+              </button>
+            </div>
           ) : currentChapter ? (
             // No selection -- show chapter toggle
             <div className="flex items-center justify-between">
@@ -1529,6 +1978,90 @@ function App() {
         />
       )}
 
+      {/* Scene summary preview modal (selection-based flow). The modal runs
+          its own AI generation on mount; we just hand it the selected text
+          and the list of filled scene slots for its slot picker. */}
+      {showSceneSummaryModal && currentProject && (
+        <SceneSummaryPreviewModal
+          folderPath={currentProject.root_path}
+          chapterFile={showSceneSummaryModal.chapterFile}
+          chapterPath={showSceneSummaryModal.chapterPath}
+          selectedText={showSceneSummaryModal.selectedText}
+          existingScenes={showSceneSummaryModal.existingScenes}
+          onClose={(savedIndex) => {
+            const chapterFile = showSceneSummaryModal.chapterFile;
+            setShowSceneSummaryModal(null);
+            // If the writer saved, refresh the sidebar cache + expand the
+            // Scene Summaries group so the new row is visible.
+            if (savedIndex !== undefined) {
+              void loadSceneSummaries(chapterFile);
+              setExpandedChapters(prev => {
+                const next = new Set(prev);
+                next.add(chapterFile);
+                return next;
+              });
+              setExpandedSceneGroups(prev => {
+                const next = new Set(prev);
+                next.add(chapterFile);
+                return next;
+              });
+            }
+          }}
+        />
+      )}
+
+      {/* Scene summary auto-split: overwrite prompt + progress indicator.
+          The overwrite prompt is a simple modal wired to a Promise inside
+          handleGenerateSceneSummaries -- clicking Yes/No/Cancel resolves the
+          promise and the loop continues. */}
+      {sceneOverwritePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] p-5 shadow-xl">
+            <h2 className="mb-1 text-sm font-semibold text-[#f0f0f5]">
+              Overwrite Scene {sceneOverwritePrompt.index}?
+            </h2>
+            <p className="mb-4 text-xs text-[#8888aa]">
+              A summary already exists for this scene ({sceneOverwritePrompt.total} scenes total):
+              <br />
+              <span className="mt-1 block font-medium text-[#f0f0f5]">
+                "{sceneOverwritePrompt.title}"
+              </span>
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => sceneOverwritePrompt.onAnswer("cancel")}
+                className="rounded border border-[#1e1e4a] px-3 py-1 text-xs text-[#8888aa] transition-colors hover:border-red-500 hover:text-red-300"
+                title="Stop the auto-split loop (keeps what's already been generated)"
+              >
+                Cancel All
+              </button>
+              <button
+                onClick={() => sceneOverwritePrompt.onAnswer("no")}
+                className="rounded border border-[#1e1e4a] px-3 py-1 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5]"
+                title="Skip this scene; keep the existing summary"
+              >
+                No (Skip)
+              </button>
+              <button
+                onClick={() => sceneOverwritePrompt.onAnswer("yes")}
+                className="rounded border border-indigo-700/50 bg-indigo-950/40 px-3 py-1 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200"
+                title="Regenerate and overwrite this scene's summary"
+              >
+                Yes (Overwrite)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {autoSplitProgress && !sceneOverwritePrompt && (
+        <div className="pointer-events-none fixed bottom-4 right-4 z-40 rounded-lg border border-indigo-800 bg-[#0d0d2b] px-4 py-2 shadow-lg">
+          <p className="text-xs text-indigo-300">
+            <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
+            {autoSplitProgress}
+          </p>
+        </div>
+      )}
+
       {/* Outline template switch dialog -- shown when the writer clicks
           [+ New Template] in the toolbar while editing notes/outline.md.
           Lets them pick Novel or Short Story, warns about overwrite, and
@@ -1600,7 +2133,8 @@ function App() {
         </div>
       )}
 
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -1657,24 +2191,42 @@ function ChapterNavRow({
   isActiveChapter,
   isSummaryAncestor,
   isChapterSummaryActive,
+  sceneSummaries,
+  isScenesExpanded,
+  activeSceneIndex,
   onToggleExpand,
   onOpenChapter,
   onOpenChapterSummary,
   onRenameChapter,
   onDeleteChapter,
   onDeleteChapterSummary,
+  onToggleScenesExpanded,
+  onOpenScene,
+  onDeleteScene,
 }: {
   chapter:                ChapterInfo;
   isExpanded:             boolean;
   isActiveChapter:        boolean;  // the chapter .md is open in the editor
   isSummaryAncestor:      boolean;  // this chapter's summary is the active view
   isChapterSummaryActive: boolean;  // the Chapter Summary child is currently active
+  // Scene Summaries subtree (Phase 6):
+  //   sceneSummaries      = filled scene slots fetched from the backend (or
+  //                         undefined if the writer hasn't expanded yet).
+  //   isScenesExpanded    = whether the Scene Summaries group is open.
+  //   activeSceneIndex    = the scene currently shown in SceneSummaryView, or
+  //                         null when a different view is active.
+  sceneSummaries:         SceneSummaryInfo[] | undefined;
+  isScenesExpanded:       boolean;
+  activeSceneIndex:       number | null;
   onToggleExpand:         () => void;
   onOpenChapter:          () => void;
   onOpenChapterSummary:   () => void;
   onRenameChapter:        (newTitle: string) => void;
   onDeleteChapter:        () => void;
   onDeleteChapterSummary: () => void;
+  onToggleScenesExpanded: () => void;
+  onOpenScene:            (index: number) => void;
+  onDeleteScene:          (index: number) => void;
 }) {
   // Softer highlight for the parent chapter row when the child summary is
   // active -- helps the eye trace back up the tree without dominating the row.
@@ -1795,6 +2347,74 @@ function ChapterNavRow({
             >
               <Trash2 size={12} />
             </button>
+          </div>
+
+          {/* Scene Summaries subtree. Separate expandable group so collapsing
+              the scenes doesn't hide the Chapter Summary row too. The group
+              row always shows so the writer knows where to look; the list
+              below only appears when expanded AND there are filled slots. */}
+          <div className="mt-0.5">
+            <button
+              onClick={onToggleScenesExpanded}
+              className="group flex w-full items-stretch rounded text-left text-sm text-[#f0f0f5] transition-colors hover:bg-[#12122e]"
+              title="Per-scene AI summaries (click to expand)"
+            >
+              <span className="flex w-5 shrink-0 items-center justify-center text-xs text-[#6666a0] group-hover:text-indigo-300">
+                {isScenesExpanded ? "v" : ">"}
+              </span>
+              <span className="flex-1 min-w-0 truncate px-1 py-1.5 text-left">
+                Scene Summaries
+                {sceneSummaries && sceneSummaries.length > 0 && (
+                  <span className="ml-1 text-xs text-[#6666a0]">
+                    ({sceneSummaries.length})
+                  </span>
+                )}
+              </span>
+            </button>
+
+            {isScenesExpanded && (
+              <div className="ml-5 mt-0.5 border-l border-[#1e1e4a] pl-2">
+                {sceneSummaries === undefined ? (
+                  <p className="px-2 py-1 text-xs text-[#3f3f7a]">Loading...</p>
+                ) : sceneSummaries.length === 0 ? (
+                  <p className="px-2 py-1 text-xs text-[#3f3f7a]">
+                    No scene summaries yet. Use the toolbar's Generate Scene Summaries button.
+                  </p>
+                ) : (
+                  sceneSummaries.map(scene => {
+                    const isActive = activeSceneIndex === scene.index;
+                    return (
+                      <div
+                        key={scene.index}
+                        className={`group flex items-stretch rounded transition-colors ${
+                          isActive ? "bg-indigo-600/20" : "hover:bg-[#12122e]"
+                        }`}
+                      >
+                        <button
+                          onClick={() => onOpenScene(scene.index)}
+                          className={`flex-1 min-w-0 truncate px-2 py-1 text-left text-xs ${
+                            isActive ? "text-indigo-300" : "text-[#f0f0f5]"
+                          }`}
+                          title={`Scene ${scene.index}: ${scene.title}`}
+                        >
+                          <span className="text-[#6666a0]">Scene {scene.index}</span>
+                          <span className="mx-1 text-[#3f3f7a]">&mdash;</span>
+                          {scene.title}
+                        </button>
+                        <button
+                          onClick={() => onDeleteScene(scene.index)}
+                          className="shrink-0 px-1.5 text-[#3f3f7a] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+                          title={`Delete scene ${scene.index} summary`}
+                          aria-label={`Delete scene ${scene.index} summary`}
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

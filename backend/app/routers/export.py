@@ -31,8 +31,25 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 # --- Pydantic Models ---
 
 class ExportRequest(BaseModel):
-    """What the frontend sends when the writer clicks an export button."""
+    """What the frontend sends when the writer clicks an export button.
+
+    The `include_*` flags default to False so the old behavior (manuscript
+    only) is preserved for any caller that doesn't pass the new fields.
+    Callers that want the richer exports opt in explicitly.
+    """
     folder_path: str   # The project's root directory (e.g. "C:/Users/.../MyNovel")
+
+    # Opt-in extras for the richer Phase 6 export:
+    #   chapter_summaries -> append a "Chapter Summaries" section to the full
+    #                        manuscript, or copy summaries/chapters/ into the
+    #                        snapshot folder.
+    #   scene_summaries   -> same, but for summaries/scenes/<stem>/*.md
+    #   notes             -> copy notes/*.md (outline, style guide, themes)
+    #   profiles          -> copy profiles/ (characters, relationships, etc.)
+    include_chapter_summaries: bool = False
+    include_scene_summaries:   bool = False
+    include_notes:             bool = False
+    include_profiles:          bool = False
 
 
 class ExportResponse(BaseModel):
@@ -130,6 +147,90 @@ def _safe_title(title: str) -> str:
     return slug.strip("-") or "untitled"
 
 
+# ── Phase 6: helpers for the opt-in extras ──────────────────────────────────
+# These read optional project subfolders for the richer exports. Each returns
+# an empty list/string when the folder is missing so the export never fails
+# just because the writer hasn't created any summaries or notes yet.
+
+def _collect_md_files(folder: str) -> list[tuple[str, str]]:
+    """
+    Generic "read all .md files in this folder" helper. Used for chapter
+    summaries and notes. Sorted by filename so order is stable.
+    Returns [] if the folder doesn't exist -- a missing subfolder is normal
+    in projects where the writer hasn't used that feature yet.
+    """
+    if not os.path.isdir(folder):
+        return []
+    items: list[tuple[str, str]] = []
+    with os.scandir(folder) as entries:
+        for entry in entries:
+            if entry.is_file() and entry.name.endswith(".md"):
+                try:
+                    with open(entry.path, "r", encoding="utf-8") as f:
+                        items.append((entry.name, f.read()))
+                except OSError:
+                    pass
+    items.sort(key=lambda c: c[0])
+    return items
+
+
+def _collect_scene_summaries(folder_path: str) -> list[tuple[str, int, str]]:
+    """
+    Walk summaries/scenes/<chapter-stem>/scene-NN.md and return a list of
+    (chapter_stem, scene_index, content) tuples sorted by (chapter, index).
+    Returns [] if no scene summaries exist yet.
+    """
+    scenes_root = os.path.join(folder_path, "summaries", "scenes")
+    if not os.path.isdir(scenes_root):
+        return []
+
+    rows: list[tuple[str, int, str]] = []
+    try:
+        for chapter_stem in sorted(os.listdir(scenes_root)):
+            chapter_dir = os.path.join(scenes_root, chapter_stem)
+            if not os.path.isdir(chapter_dir):
+                continue
+            with os.scandir(chapter_dir) as entries:
+                for entry in entries:
+                    if not entry.is_file() or not entry.name.endswith(".md"):
+                        continue
+                    m = re.match(r"^scene-(\d{1,3})\.md$", entry.name)
+                    if not m:
+                        continue
+                    try:
+                        with open(entry.path, "r", encoding="utf-8") as f:
+                            rows.append((chapter_stem, int(m.group(1)), f.read()))
+                    except OSError:
+                        pass
+    except OSError:
+        return []
+
+    rows.sort(key=lambda r: (r[0], r[1]))
+    return rows
+
+
+def _copy_tree(src: str, dest: str) -> int:
+    """
+    Recursively copy src into dest. Returns the count of files copied.
+    Returns 0 if src doesn't exist. Used by the snapshot export for
+    summaries/, notes/, and profiles/.
+    """
+    if not os.path.isdir(src):
+        return 0
+    count = 0
+    for root, _dirs, files in os.walk(src):
+        rel = os.path.relpath(root, src)
+        target_root = dest if rel == "." else os.path.join(dest, rel)
+        os.makedirs(target_root, exist_ok=True)
+        for name in files:
+            try:
+                shutil.copy2(os.path.join(root, name), os.path.join(target_root, name))
+                count += 1
+            except OSError:
+                pass  # One bad file shouldn't abort the whole copy
+    return count
+
+
 # --- POST /api/export/full-manuscript ---
 
 @router.post("/full-manuscript", response_model=ExportResponse)
@@ -155,14 +256,80 @@ async def export_full_manuscript(request: ExportRequest):
             detail="No chapters found in manuscript/ folder. Write some chapters first!"
         )
 
-    # Build the combined document
-    # Each chapter's content is included as-is, separated by a horizontal rule.
-    # Most chapters already start with a # heading, so we don't need to add one.
+    # Build the combined document. Each chapter's content goes in as-is,
+    # separated by a horizontal rule; most chapters already start with a #
+    # heading, so we don't need to synthesize one.
     parts: list[str] = []
     for _filename, content in chapters:
         parts.append(content.strip())
-
     combined = "\n\n---\n\n".join(parts) + "\n"
+
+    # ── Opt-in appendices. Each one is rendered as a top-level # section so
+    #    the combined file still reads as a single Markdown document. We skip
+    #    sections that are empty on disk -- no point in writing a "Notes"
+    #    heading for a project that has no notes. ─────────────────────────
+    appendices: list[str] = []
+    extras_summary_parts: list[str] = []
+
+    if request.include_chapter_summaries:
+        chapter_summaries = _collect_md_files(os.path.join(folder_path, "summaries", "chapters"))
+        if chapter_summaries:
+            section = ["# Chapter Summaries"]
+            for name, body in chapter_summaries:
+                section.append(f"\n## {name.removesuffix('.md')}\n")
+                section.append(body.strip())
+            appendices.append("\n".join(section))
+            extras_summary_parts.append(f"{len(chapter_summaries)} chapter summaries")
+
+    if request.include_scene_summaries:
+        scene_rows = _collect_scene_summaries(folder_path)
+        if scene_rows:
+            section = ["# Scene Summaries"]
+            current_stem: str | None = None
+            for stem, idx, body in scene_rows:
+                if stem != current_stem:
+                    section.append(f"\n## {stem}\n")
+                    current_stem = stem
+                section.append(f"\n### Scene {idx}\n")
+                # The per-scene file already starts with "# <Scene Title>";
+                # strip that leading heading so the combined export uses the
+                # ### Scene N heading instead of double-stacking.
+                trimmed = re.sub(r"^\s*#[^\n]*\n", "", body.strip(), count=1)
+                section.append(trimmed.strip())
+            appendices.append("\n".join(section))
+            extras_summary_parts.append(f"{len(scene_rows)} scene summaries")
+
+    if request.include_notes:
+        notes = _collect_md_files(os.path.join(folder_path, "notes"))
+        if notes:
+            section = ["# Notes"]
+            for name, body in notes:
+                section.append(f"\n## {name.removesuffix('.md')}\n")
+                section.append(body.strip())
+            appendices.append("\n".join(section))
+            extras_summary_parts.append(f"{len(notes)} notes")
+
+    if request.include_profiles:
+        # Profiles fan out into character/relationship/location/lore folders.
+        # Flatten them into one section with subheadings per type.
+        profile_types = ["character", "relationship", "location", "lore"]
+        profile_chunks: list[str] = []
+        total_profiles = 0
+        for ptype in profile_types:
+            files = _collect_md_files(os.path.join(folder_path, "profiles", ptype))
+            if not files:
+                continue
+            profile_chunks.append(f"\n## {ptype.title()}s\n")
+            for name, body in files:
+                profile_chunks.append(f"\n### {name.removesuffix('.md')}\n")
+                profile_chunks.append(body.strip())
+                total_profiles += 1
+        if profile_chunks:
+            appendices.append("# Profiles" + "".join(profile_chunks))
+            extras_summary_parts.append(f"{total_profiles} profiles")
+
+    if appendices:
+        combined = combined.rstrip() + "\n\n---\n\n" + "\n\n---\n\n".join(appendices) + "\n"
 
     # Generate the output filename from the project title
     title = _project_title(folder_path)
@@ -180,10 +347,14 @@ async def export_full_manuscript(request: ExportRequest):
             detail=f"Could not write export file: {e}"
         )
 
+    extras_msg = ""
+    if extras_summary_parts:
+        extras_msg = " (plus " + ", ".join(extras_summary_parts) + ")"
+
     return ExportResponse(
         export_type="full-manuscript",
         output_path=output_path,
-        message=f"Exported {len(chapters)} chapter(s) to {output_filename}",
+        message=f"Exported {len(chapters)} chapter(s) to {output_filename}{extras_msg}",
     )
 
 
@@ -245,10 +416,47 @@ async def export_snapshot(request: ExportRequest):
         except OSError:
             pass  # Not critical -- the chapters are what matter most
 
+    # ── Opt-in extras (Phase 6). Each bucket is copied into a matching
+    #    subfolder inside the snapshot dir so the shape mirrors the project
+    #    layout -- restoring from a snapshot is then a straight copy-paste.
+    extras_parts: list[str] = []
+
+    if request.include_chapter_summaries:
+        n = _copy_tree(
+            os.path.join(folder_path, "summaries", "chapters"),
+            os.path.join(snapshot_dir, "summaries", "chapters"),
+        )
+        if n:
+            extras_parts.append(f"{n} chapter summaries")
+
+    if request.include_scene_summaries:
+        n = _copy_tree(
+            os.path.join(folder_path, "summaries", "scenes"),
+            os.path.join(snapshot_dir, "summaries", "scenes"),
+        )
+        if n:
+            extras_parts.append(f"{n} scene summary files")
+
+    if request.include_notes:
+        n = _copy_tree(
+            os.path.join(folder_path, "notes"),
+            os.path.join(snapshot_dir, "notes"),
+        )
+        if n:
+            extras_parts.append(f"{n} notes")
+
+    if request.include_profiles:
+        n = _copy_tree(
+            os.path.join(folder_path, "profiles"),
+            os.path.join(snapshot_dir, "profiles"),
+        )
+        if n:
+            extras_parts.append(f"{n} profile files")
+
     if copied_count == 0:
         # Clean up the empty folder since there was nothing to snapshot
         try:
-            os.rmdir(snapshot_dir)
+            shutil.rmtree(snapshot_dir)
         except OSError:
             pass
         raise HTTPException(
@@ -256,8 +464,12 @@ async def export_snapshot(request: ExportRequest):
             detail="No chapters found in manuscript/ folder. Nothing to snapshot."
         )
 
+    extras_msg = ""
+    if extras_parts:
+        extras_msg = " (plus " + ", ".join(extras_parts) + ")"
+
     return ExportResponse(
         export_type="snapshot",
         output_path=snapshot_dir,
-        message=f"Snapshot saved: {copied_count} chapter(s) + project.json to {snapshot_name}/",
+        message=f"Snapshot saved: {copied_count} chapter(s) + project.json to {snapshot_name}/{extras_msg}",
     )

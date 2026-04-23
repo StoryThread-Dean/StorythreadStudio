@@ -755,6 +755,28 @@ def generate_full_summary_prompt() -> str:
         "1-2 paragraphs focused on what an AI writing tool needs to know when "
         "writing scenes involving this element. Same relevance audit applies.\n\n"
 
+        "RELATIONSHIPS (important for character profiles):\n"
+        "A full character summary MUST account for how this character relates to others. "
+        "Relationship material reaches you from two places, and you should use both:\n\n"
+        "  1. The character's own 'Relationships Overview' section (inside the profile "
+        "     content above). This is the writer's primary statement of who matters to "
+        "     this character and why. Read it carefully. Weave its key points into the "
+        "     refined summary so the AI picture of this character includes the people "
+        "     who shape them. If this section is empty or missing, skip to item 2.\n\n"
+        "  2. If the user message contains a 'RELATED RELATIONSHIPS' block, that block "
+        "     lists other standalone relationship profiles that mention this character. "
+        "     Use those snippets to add or deepen relationship notes.\n\n"
+        "How to integrate:\n"
+        "  - Weave in ONE or TWO clear, specific relationship notes -- who they owe, "
+        "    who they fear, who they love, who they oppose. Pick the ones that most "
+        "    shape this character's identity and behavior; do NOT list every relationship.\n"
+        "  - Do NOT copy relationship text verbatim. Translate it into character-shaping "
+        "    statements: 'Her loyalty to X is the line she won't cross' not 'X is her friend'.\n"
+        "  - If the Relationships Overview and a RELATED RELATIONSHIPS snippet cover the "
+        "    same connection, merge them; don't repeat the same relationship twice.\n"
+        "  - If no relationship material exists in either place, it's fine to omit this -- "
+        "    do not invent relationships.\n\n"
+
         "TONE: You are a collaborator helping the writer see their character through "
         "AI's eyes. Be direct and practical, but supportive. The goal is helping the "
         "writer's vision come through clearly, not replacing their voice.\n\n"
@@ -785,13 +807,35 @@ def generate_full_summary_prompt() -> str:
 # strips em dashes and ` -- ` fallbacks and replaces them with commas, which
 # is the behavior the writer wants. See sanitizer.py.
 
-CHAPTER_SUMMARY_INSTRUCTIONS = """You are creating a chapter summary for fiction consistency work.
+CHAPTER_SUMMARY_INSTRUCTIONS = """YOUR PRIMARY JOB: produce a CLIFF NOTES summary of this chapter.
+
+Cliff notes means the gist: the crucial plot beats, the main thrust, the key character movements and revelations, and what has changed by the end. Think of what a reader skimming for the essentials would need. Cut everything that isn't essential.
+
+What a cliff notes summary IS:
+- A compact, high-level capture of the chapter's essence
+- Key events in causal order (what happened, what changed)
+- Character state changes, decisions, and turning points that matter
+- Revelations, rules, or facts that will matter later in the story
+
+What a cliff notes summary is NOT:
+- A retelling of the chapter
+- A line-by-line recap
+- A stylistic rewrite or beautification
+- Atmospheric description or reader immersion
+
+Grounding rules (secondary to the cliff-notes job, but absolute):
+1. The chapter text in the user message is the ONLY source. Every line you write must trace back to something the chapter already contains.
+2. Do not invent motives, emotions, or backstory that are not on the page.
+3. Do not continue the story past the chapter's final line. The only "forward-looking" content allowed is threads the chapter itself leaves explicitly open.
+4. Do not rewrite sentences in a prettier style.
+5. Do not draw on the STORY CONTEXT block (genre, tone, pacing, etc.) for content. That block is project metadata, not source material.
+6. Use names and facts exactly as they appear in the chapter.
 
 Purpose:
-The summary will be used to maintain continuity, track character state, preserve causality, and support later drafting or revision. Another AI tool will later read this summary as context for other chapters.
+Another AI tool will later read this summary as compact context for other chapters. Prioritize continuity, causality, and state changes over descriptive prose.
 
 Your task:
-Summarize the chapter into a structured, information-dense Markdown document. Output the Markdown directly as prose. Do not wrap it in JSON. Do not include code fences. Do not add any text before or after the summary.
+Summarize the chapter into a structured, information-dense Markdown document. Output the Markdown directly. Do not wrap it in JSON. Do not include code fences. Do not add any text before or after the summary.
 
 Length requirement:
 - Target length: 200 to 400 words total
@@ -861,3 +905,124 @@ def generate_chapter_summary_prompt(content_mode: str) -> str:
     parts.append(CHAPTER_SUMMARY_INSTRUCTIONS)
     parts.append(PUNCTUATION_RULE)
     return "\n\n".join(parts)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCENE SUMMARY PROMPTS
+# ══════════════════════════════════════════════════════════════════════════════
+# A scene summary is a shorter-grain version of the chapter summary. A chapter
+# usually contains 1-N scenes separated by `---` horizontal rules; each scene
+# gets its own plain-Markdown file under <project>/summaries/scenes/<stem>/.
+#
+# Why a separate prompt (instead of reusing the chapter one):
+#   - Scenes are smaller, so sectional headings (Overview / Key Events / ...)
+#     would feel heavy. The writer wants one flowing paragraph block.
+#   - A scene summary's job is to remember the beats and reveals of this
+#     one beat, not to track continuity across a whole chapter.
+#   - Smaller scope = shorter target length. Very short scenes should get
+#     very short summaries.
+
+SCENE_SUMMARY_INSTRUCTIONS = """YOUR PRIMARY JOB: produce a CLIFF NOTES summary of this scene.
+
+Cliff notes means the gist: the crucial beats, the main thrust, the key moments of action, decision, or reveal. Think of what a reader skimming for the essentials would need. Cut everything that isn't essential.
+
+What a cliff notes summary IS:
+- A compact, high-level capture of the scene's essence
+- The key beats in causal order (what happened, what changed, what was revealed)
+- The central dialogue points, decisions, and turning moments
+- Only the details that will matter later
+
+What a cliff notes summary is NOT:
+- A retelling of the scene
+- A line-by-line recap
+- A stylistic rewrite or beautification
+- Atmospheric description or reader immersion
+
+Grounding rules (secondary to the cliff-notes job, but absolute):
+1. The SCENE TEXT in the user message is the ONLY source. Every sentence you write must trace back to something that scene text already contains.
+2. If a character's motive, emotion, or backstory is not on the page, do not invent one. Leave it out.
+3. Do not continue the scene past its final line. Do not write what might happen next.
+4. Do not rewrite sentences in a prettier style or add atmosphere.
+5. Do not draw on the STORY CONTEXT block (genre, tone, pacing, etc.) for content. That block is project metadata, not source material.
+6. Names, places, objects, and facts must match the scene text exactly. If the scene calls a character "the boy", do not promote him to a name you weren't given.
+
+Your task:
+Write a single block of compact Markdown prose that captures the scene's essence. Output the Markdown directly. Do not wrap it in JSON. Do not include code fences. Do not add any text before or after the summary. Do not use ## or ### headers.
+
+Length:
+- Typical scene: 200 to 400 words
+- Short scene (under roughly 400 words of source text): 80 to 150 words
+- Very short scene (under roughly 150 words): 40 to 80 words
+- Never exceed 500 words. Never go below 30 words unless the scene is genuinely trivial.
+
+Scale to the scene. A three-line exchange does not need a 300-word summary. When in doubt, go shorter.
+
+Priorities, in order (include only what actually appears in the scene):
+1. Key beats: what actually happens, in causal order
+2. Character actions, reactions, and decisions that reveal something durable
+3. Dialogue points: what is said, decided, promised, refused, or admitted
+4. New information: facts, stakes, rules, or revelations entering canon here
+5. Scene-ending state: where characters are (emotionally and physically) at the close
+
+Omit anything that isn't one of those five priorities:
+- Blow-by-blow action recaps
+- Stylistic prose and atmosphere unless it carries continuity weight
+- Inferences the text doesn't clearly support
+
+Style:
+- Neutral, compact, factual language
+- Flowing prose; use occasional bold or italic only if it truly aids readability
+- Avoid bullet lists unless the scene contains clearly enumerable beats that cannot be expressed naturally in prose
+"""
+
+
+def generate_scene_summary_prompt(content_mode: str) -> str:
+    """
+    Build the system prompt for POST /api/ai/generate-scene-summary.
+
+    Composition:
+        [CONTENT MODE PREAMBLE]? + [SCENE_SUMMARY_INSTRUCTIONS] + [PUNCTUATION_RULE]
+
+    The scene text is sent separately as the user message, not embedded in
+    the system prompt, so the prompt stays cache-friendly across scenes.
+    """
+    parts: list[str] = []
+    mode = content_mode_instruction(content_mode)
+    if mode:
+        parts.append(mode)
+    parts.append(SCENE_SUMMARY_INSTRUCTIONS)
+    parts.append(PUNCTUATION_RULE)
+    return "\n\n".join(parts)
+
+
+SCENE_TITLE_INSTRUCTIONS = """You are naming a scene for a fiction writer.
+
+Given the scene text, produce a short evocative title, 2 to 5 words, that captures the scene's most defining beat, location, character, or turn. The title is a label, not a summary.
+
+Output format:
+- Return ONLY the title text.
+- No quotes, no punctuation at the end, no prefix like "Title:" or "Scene:".
+- Do not wrap the answer in JSON or code fences.
+- Capitalize like a title (major words capitalized, minor words lowercase).
+
+Good examples:
+  Dawn at the Harbor
+  The First Lie
+  Elara Refuses the Oath
+  Rain, Then Silence
+
+Bad examples (do not copy):
+  "A scene where Elara and her mother argue in the kitchen." (too long, descriptive)
+  chapter 3 scene 2 (positional, not evocative)
+  Scene (generic, not useful)
+"""
+
+
+def generate_scene_title_prompt() -> str:
+    """
+    Build the system prompt for the title-extraction fallback used when the
+    scene text has no heading or bold line the parser can lift as a title.
+
+    Short and instruction-only; the scene text arrives in the user message.
+    """
+    return SCENE_TITLE_INSTRUCTIONS + "\n\n" + PUNCTUATION_RULE

@@ -29,6 +29,14 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
   const [result, setResult] = useState<{ type: string; path: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Opt-in extras. Defaults chosen so the common case (just the manuscript)
+  // stays the one-click default -- writers who want the richer export can
+  // toggle these before clicking. Phase 6 addition.
+  const [includeChapterSummaries, setIncludeChapterSummaries] = useState(false);
+  const [includeSceneSummaries,   setIncludeSceneSummaries]   = useState(false);
+  const [includeNotes,            setIncludeNotes]            = useState(false);
+  const [includeProfiles,         setIncludeProfiles]         = useState(false);
+
   // --- Export Handlers ---
 
   const handleExport = async (exportType: "full-manuscript" | "snapshot") => {
@@ -40,7 +48,13 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
       const res = await fetch(`${API_BASE}/api/export/${exportType}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder_path: project.root_path }),
+        body: JSON.stringify({
+          folder_path:               project.root_path,
+          include_chapter_summaries: includeChapterSummaries,
+          include_scene_summaries:   includeSceneSummaries,
+          include_notes:             includeNotes,
+          include_profiles:          includeProfiles,
+        }),
       });
 
       if (!res.ok) {
@@ -87,6 +101,61 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
 
         {/* Body */}
         <div style={{ padding: "1.5rem" }} className="flex flex-col gap-4">
+
+          {/* Optional extras -- toggled before picking Full Manuscript or Snapshot.
+              Full Manuscript embeds the checked sections as appendices in the
+              output .md; Snapshot copies the matching folders alongside the
+              manuscript/ copy. Both default OFF so the one-click export stays
+              lean for writers who just want the prose. */}
+          <div className="rounded-lg border border-[#1e1e4a] bg-[#070724] p-3">
+            <p className="mb-2 text-xs font-medium text-[#a5b4fc]">Include:</p>
+            <div className="flex flex-col gap-1.5">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-[#f0f0f5]">
+                <input
+                  type="checkbox"
+                  checked={includeChapterSummaries}
+                  onChange={(e) => setIncludeChapterSummaries(e.target.checked)}
+                  disabled={isExporting}
+                  className="accent-indigo-500"
+                />
+                <span>Chapter summaries</span>
+                <span className="text-[10px] text-[#6666a0]">summaries/chapters/</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-[#f0f0f5]">
+                <input
+                  type="checkbox"
+                  checked={includeSceneSummaries}
+                  onChange={(e) => setIncludeSceneSummaries(e.target.checked)}
+                  disabled={isExporting}
+                  className="accent-indigo-500"
+                />
+                <span>Scene summaries</span>
+                <span className="text-[10px] text-[#6666a0]">summaries/scenes/</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-[#f0f0f5]">
+                <input
+                  type="checkbox"
+                  checked={includeNotes}
+                  onChange={(e) => setIncludeNotes(e.target.checked)}
+                  disabled={isExporting}
+                  className="accent-indigo-500"
+                />
+                <span>Notes</span>
+                <span className="text-[10px] text-[#6666a0]">notes/ (outline, style guide)</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-[#f0f0f5]">
+                <input
+                  type="checkbox"
+                  checked={includeProfiles}
+                  onChange={(e) => setIncludeProfiles(e.target.checked)}
+                  disabled={isExporting}
+                  className="accent-indigo-500"
+                />
+                <span>Profiles</span>
+                <span className="text-[10px] text-[#6666a0]">profiles/ (characters, locations, etc.)</span>
+              </label>
+            </div>
+          </div>
 
           {/* Export option: Full Manuscript */}
           <button

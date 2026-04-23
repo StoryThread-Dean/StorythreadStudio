@@ -140,16 +140,20 @@ Build:
 
 ## Phase 6: Export and Polish
 Build:
-- full manuscript export
-- manual snapshot export
-- UI polish
-- better error handling
-- summary quality tuning
-- relationship-aware full profile summaries
+- full manuscript export -- COMPLETE (exports/ plain-Markdown output; overwrites in place for a single canonical combined file)
+- manual snapshot export -- COMPLETE (timestamped folder with full project state)
+- scene summaries -- COMPLETE (per-scene `summaries/scenes/<stem>/scene-NN.md`, auto-split on `---`, selection-based preview modal, expandable sidebar grandchildren)
+- summary quality tuning -- COMPLETE (chapter and scene summary prompts rewritten as "cliff notes" with absolute grounding rules; temperature switched to critique; preamble filter drops cosmetic HRs after chapter title)
+- expanded export options -- COMPLETE (opt-in toggles for chapter summaries, scene summaries, notes, and profiles on both export types)
+- relationship-aware full profile summaries -- COMPLETE (generate-full-summary scans profiles/relationships/ for the character and supplies Overview/Current Dynamic snippets to the AI)
+- backend-down error boundary -- COMPLETE (useBackendHealth polls /health; single actionable banner replaces per-feature fetch errors)
+
+Remaining (post-MVP polish -- tracked but not blocking the MVP box):
 - Level 3 Collaborative Draft capabilities
+- AI-suggested scene break insertion (deferred from scene summary phase)
 
 Deliverable:
-- coherent private-use MVP ready for later public GitHub packaging
+- coherent private-use MVP ready for later public GitHub packaging -- DELIVERED
 
 ## Suggested First 10 Build Tasks (historical -- all complete)
 
@@ -176,7 +180,7 @@ Deliverable:
 - [x] Can import and fork a character profile from another project
 - [x] AI output never contains em dashes
 - [x] Can create a book series with shared profiles
-- [ ] Can export full manuscript
+- [x] Can export full manuscript
 - [x] Content mode routing functional
 
 ## Final MVP Boundaries

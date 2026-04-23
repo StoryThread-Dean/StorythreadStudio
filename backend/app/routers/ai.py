@@ -31,12 +31,16 @@ from app.ai.prompts import (
     generate_section_summary_prompt,
     generate_full_summary_prompt,
     generate_chapter_summary_prompt,
+    generate_scene_summary_prompt,
+    generate_scene_title_prompt,
     content_mode_instruction,
     TEMPERATURE_DEFAULTS,
 )
+from app.utils.scene_parser import split_into_scenes_with_meta, count_hr_breaks
 import httpx
 import json
 import os
+import re
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -140,11 +144,21 @@ class GenerateFullSummaryRequest(BaseModel):
     """
     Asks the AI to write a full profile summary synthesizing all sections.
     For character profiles this should be multi-paragraph and reflect trait weights.
+
+    Phase 6 addition: when project_path is provided for a character profile,
+    the backend scans profiles/relationships/ for files that mention this
+    character and appends their Overview / Current Dynamic sections as extra
+    context. The resulting summary can then weave in how this character
+    relates to others instead of describing them in isolation.
     """
     profile_name:    str
     profile_type:    str
     profile_content: str   # All sections formatted into a single readable block
     model_id: str | None = None
+    # Optional in Phase 6 so older callers still work. When provided AND the
+    # profile_type is "character", the endpoint looks up related relationship
+    # profiles and passes them as supporting context.
+    project_path: str | None = None
 
 
 class GenerateFullSummaryResponse(BaseModel):
@@ -167,6 +181,57 @@ class GenerateChapterSummaryResponse(BaseModel):
     content:      str          # The generated Markdown body (as saved on disk)
     filename:     str          # Summary filename inside summaries/chapters/
     model_used:   str
+
+
+# ── Phase 6: Scene Summary Generation (plain Markdown) ──────────────────────
+# Scene summaries are the per-scene version of the chapter summary. Each
+# chapter is split on `---` horizontal rules; each resulting scene gets its
+# own file under <project>/summaries/scenes/<stem>/scene-NN.md.
+#
+# Why return the body instead of writing to disk like chapter summaries do:
+#   - The selection-based flow opens a preview modal so the writer can edit
+#     the summary, pick a slot, or discard it before anything is saved.
+#   - The auto-split flow also wants to confirm each overwrite before writing.
+#   - Keeping generate separate from save makes both flows clean.
+
+class GenerateSceneSummaryRequest(BaseModel):
+    """
+    Ask the AI to summarize a single scene. Does NOT write to disk -- the
+    frontend decides when (and where) to persist via /api/documents/scene-summary.
+    """
+    chapter_path: str               # Absolute path -- used only for story context + validation
+    project_path: str               # Absolute path to the project root
+    scene_text:   str               # The scene body to summarize (sent by the frontend)
+    scene_title:  str | None = None # If None, AI generates a short title as a second call
+    model_id:     str | None = None
+    content_mode: str = "general"
+
+
+class GenerateSceneSummaryResponse(BaseModel):
+    title:      str   # Final title -- either the one the caller passed, or an AI-generated one
+    content:    str   # Summary body (sanitized Markdown)
+    model_used: str
+
+
+class SplitChapterScenesRequest(BaseModel):
+    """Ask the backend to parse a chapter into scene blocks (no AI call)."""
+    chapter_path: str
+    project_path: str
+
+
+class SplitChapterScene(BaseModel):
+    """One entry in the split-chapter response."""
+    index:         int         # 1-based positional index
+    title:         str | None  # Extracted title (heading / bold / italic), or None
+    text_preview:  str         # First ~200 chars of the scene, for UI display
+    text:          str         # Full scene body (frontend sends this back to generate-scene-summary)
+    start:         int         # Character offset in the chapter text
+    end:           int
+
+
+class SplitChapterScenesResponse(BaseModel):
+    scenes:   list[SplitChapterScene]
+    hr_count: int   # Number of valid HR scene breaks found; 0 triggers the no-HR fallback UI
 
 
 class ProfileChatMessage(BaseModel):
@@ -554,6 +619,111 @@ def _build_story_context(project_path: str | None) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ── Phase 6: Relationship-aware summary helper ───────────────────────────────
+# When generating a character's full AI summary, we scan profiles/relationships/
+# for files that mention this character and lift a short snippet from each one.
+# The snippet becomes extra context so the summary synthesis can weave in how
+# the character relates to others, not just describe them in isolation.
+#
+# We deliberately keep this lightweight (plain text scan, no full profile
+# parsing) so a typo or malformed relationship file doesn't block summary
+# generation for an unrelated character.
+
+_RELATIONSHIP_SNIPPET_CAP = 400    # Per-section character cap -- keep prompts tight.
+
+
+def _extract_frontmatter_field(raw: str, field: str) -> str:
+    """
+    Pull a single top-level YAML frontmatter field without a full YAML parse.
+    Cheap and good enough for "name:" lookups -- we only need the value to
+    label the snippet, not to reconstruct the profile.
+    """
+    # Frontmatter lives between the first two "---" separators.
+    parts = raw.split("---", 2)
+    if len(parts) < 3:
+        return ""
+    fm = parts[1]
+    # Match "name: value" at the start of a line; value may be quoted.
+    m = re.search(rf"^{re.escape(field)}\s*:\s*(.+?)$", fm, flags=re.MULTILINE)
+    if not m:
+        return ""
+    return m.group(1).strip().strip('"').strip("'")
+
+
+def _extract_section(raw: str, heading: str) -> str:
+    """
+    Extract the body text under a `# Heading` line in a Markdown profile file.
+    Stops at the next `# heading` line. Returns empty string if the heading
+    isn't present. Used for Overview / Current Dynamic pulls.
+    """
+    # `^# heading$` followed by everything up to the next `^# ` line or EOF.
+    pattern = rf"^#\s+{re.escape(heading)}\s*$\n(.*?)(?=^#\s+|\Z)"
+    m = re.search(pattern, raw, flags=re.MULTILINE | re.DOTALL)
+    if not m:
+        return ""
+    body = m.group(1).strip()
+    # Strip any `## AI Summary:` tail so we don't double-dip on AI content.
+    body = re.split(r"^##\s+AI Summary:", body, maxsplit=1, flags=re.MULTILINE)[0]
+    return body.strip()
+
+
+def _find_related_relationships(project_path: str, character_name: str) -> list[tuple[str, str]]:
+    """
+    Scan profiles/relationships/*.md for files that mention the given character
+    and return [(relationship_name, compact_snippet), ...].
+
+    Match rule: case-insensitive substring match on the character name anywhere
+    in the file. This errs on the side of including near-misses (nicknames,
+    possessives) rather than dropping real matches.
+
+    Snippet composition: Overview (capped) + Current Dynamic (capped), so the
+    AI gets what the character IS to this other party and how things currently
+    stand between them.
+    """
+    rel_dir = os.path.join(project_path, "profiles", "relationships")
+    if not os.path.isdir(rel_dir):
+        return []
+
+    name_lower = character_name.strip().lower()
+    if not name_lower:
+        return []
+
+    results: list[tuple[str, str]] = []
+    try:
+        with os.scandir(rel_dir) as entries:
+            for entry in entries:
+                if not entry.is_file() or not entry.name.endswith(".md"):
+                    continue
+                try:
+                    with open(entry.path, "r", encoding="utf-8") as f:
+                        raw = f.read()
+                except OSError:
+                    continue
+
+                if name_lower not in raw.lower():
+                    continue
+
+                rel_name = _extract_frontmatter_field(raw, "name") or entry.name.removesuffix(".md")
+                overview = _extract_section(raw, "Overview")
+                dynamic  = _extract_section(raw, "Current Dynamic")
+
+                snippet_parts: list[str] = []
+                if overview:
+                    snippet_parts.append(f"Overview: {overview[:_RELATIONSHIP_SNIPPET_CAP]}")
+                if dynamic:
+                    snippet_parts.append(f"Current Dynamic: {dynamic[:_RELATIONSHIP_SNIPPET_CAP]}")
+                if not snippet_parts:
+                    # Nothing structured to pull -- fall back to a short slice
+                    # of the body so the AI still sees *something* linking them.
+                    snippet_parts.append(raw[:_RELATIONSHIP_SNIPPET_CAP].strip())
+
+                results.append((rel_name, "\n".join(snippet_parts)))
+    except OSError:
+        return []
+
+    return results
+
+
 # ── Phase 4: Profile Generation Endpoints ────────────────────────────────────
 # These endpoints are called from the Profile Builder to generate AI content
 # for designated fields (usage previews, section summaries, full profile
@@ -799,9 +969,29 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
 
     system_prompt = generate_full_summary_prompt()
 
+    # Base user message: the profile itself.
     user_message = (
         f"Profile: {request.profile_name} ({request.profile_type})\n\n"
         f"Full content:\n{request.profile_content}\n\n"
+    )
+
+    # Phase 6: fold in related relationship snippets for character profiles.
+    # We keep this purely additive so non-character profiles and older callers
+    # (no project_path) hit the same code path as before.
+    if request.profile_type == "character" and request.project_path:
+        related = _find_related_relationships(request.project_path, request.profile_name)
+        if related:
+            rel_block_lines = [
+                "RELATED RELATIONSHIPS (other profiles in this project that mention this character -- weave these into the summary where they clarify who the character is in relation to others; do NOT copy them verbatim):",
+                "",
+            ]
+            for rel_name, snippet in related:
+                rel_block_lines.append(f"[{rel_name}]")
+                rel_block_lines.append(snippet)
+                rel_block_lines.append("")
+            user_message += "\n".join(rel_block_lines) + "\n"
+
+    user_message += (
         "Refine this Overview into an AI-prompt-friendly version. "
         "Audit each passage for relevance first. Flag anything disconnected. "
         "Then refine the relevant content so AI's interpretation matches the writer's vision. "
@@ -883,21 +1073,32 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
     chapter_name = _chapter_title_from_text(chapter_text, fallback=stem)
 
     system_prompt = generate_chapter_summary_prompt(request.content_mode)
+    # The explicit "SUMMARIZE the following" framing + "do not extend" reminder
+    # cuts down on models that otherwise slip into narrative-continuation mode.
+    # Keep the chapter text as the final block so it's visually clear where
+    # the source material lives.
     user_message = (
+        f"Summarize the following chapter. Do NOT extend, rewrite, or reimagine it. "
+        f"Use ONLY information that appears in the text below.\n\n"
         f"Chapter title: {chapter_name}\n\n"
-        f"Chapter text:\n\n{chapter_text}"
+        f"--- BEGIN CHAPTER TEXT ---\n"
+        f"{chapter_text}\n"
+        f"--- END CHAPTER TEXT ---"
     )
 
     try:
         # run_chat (not run_completion) because we want plain text output, not
         # JSON. sanitize_chat() runs inside run_chat to enforce the no-em-dash,
         # no-double-hyphen rule on anything the model slips past the prompt.
+        # "critique" temperature (0.3) keeps the model grounded -- summaries
+        # need the same low-randomness treatment as structured reviews, not
+        # the creative "generation" temperature.
         body = await run_chat(
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
             messages      = [{"role": "user", "content": user_message}],
-            temperature   = TEMPERATURE_DEFAULTS["extraction"],
+            temperature   = TEMPERATURE_DEFAULTS["critique"],
         )
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
@@ -915,6 +1116,147 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
     return GenerateChapterSummaryResponse(
         content    = content,
         filename   = filename,
+        model_used = model_id,
+    )
+
+
+# ── Scene Summary endpoints ─────────────────────────────────────────────────
+
+@router.post("/split-chapter-scenes", response_model=SplitChapterScenesResponse)
+async def split_chapter_scenes(request: SplitChapterScenesRequest):
+    """
+    Parse a chapter file and return the list of scene blocks with metadata.
+
+    No AI call is made here -- this is pure Markdown parsing. The frontend
+    calls this first so it knows:
+      - how many scenes to iterate through
+      - which titles were extracted (vs need AI title generation later)
+      - whether to show the no-HR fallback modal (hr_count == 0)
+
+    The frontend passes each scene's `text` back to /generate-scene-summary
+    as-is, so we include the full body here (not just a preview).
+    """
+    chapter_text = _read_chapter_text(request.project_path, request.chapter_path)
+    hr_count     = count_hr_breaks(chapter_text)
+    scenes       = split_into_scenes_with_meta(chapter_text)
+
+    # Build preview snippets for UI display. We only send the first ~200 chars
+    # so the Scene Summaries sidebar row can show a hint without bloating the
+    # response. The full `text` field is still sent for the generate call.
+    result = [
+        SplitChapterScene(
+            index        = s.index,
+            title        = s.title,
+            text_preview = (s.text[:200] + "…") if len(s.text) > 200 else s.text,
+            text         = s.text,
+            start        = s.start,
+            end          = s.end,
+        )
+        for s in scenes
+    ]
+
+    return SplitChapterScenesResponse(scenes=result, hr_count=hr_count)
+
+
+@router.post("/generate-scene-summary", response_model=GenerateSceneSummaryResponse)
+async def generate_scene_summary(request: GenerateSceneSummaryRequest):
+    """
+    Generate a summary for a single scene. Does NOT write to disk.
+
+    Pipeline:
+      1. Resolve model + validate routing (allowlist, content mode).
+      2. Build system prompt from SCENE_SUMMARY_INSTRUCTIONS (+ content mode
+         preamble + story context) and call run_chat() with the scene text.
+      3. If the caller didn't pre-extract a title, make a second, smaller
+         run_chat() call to ask the AI for a 2-5 word scene title. This is
+         cheap because the model only returns a handful of tokens.
+      4. Return {title, content, model_used}. The frontend decides whether to
+         save (overwrite prompt, preview modal, etc.) via /api/documents/scene-summary.
+    """
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    settings = load_settings()
+    _validate_model_content_mode(settings, model_id, request.content_mode)
+    _validate_model_allowed(settings, model_id)
+
+    # Validate that the chapter_path really does live inside this project.
+    # We don't need the text itself (the caller passes scene_text directly),
+    # but this catches a mis-wired frontend passing a path from another project.
+    _read_chapter_text(request.project_path, request.chapter_path)
+
+    scene_text = request.scene_text.strip()
+    if not scene_text:
+        raise HTTPException(status_code=400, detail="Scene text is empty.")
+
+    # Body of the summary -- one AI call, plain-text run_chat so the
+    # em-dash sanitizer runs automatically on the output.
+    system_prompt = generate_scene_summary_prompt(request.content_mode)
+    story_context = _build_story_context(request.project_path)
+    if story_context:
+        system_prompt = story_context + system_prompt
+
+    # Explicit "SUMMARIZE the following" framing keeps models from slipping
+    # into narrative-continuation mode. The BEGIN/END markers make it visually
+    # unambiguous which block is source material and which is instruction.
+    user_message = (
+        f"Summarize the following scene. Do NOT extend, rewrite, or reimagine it. "
+        f"Use ONLY information that appears in the text below.\n\n"
+        f"--- BEGIN SCENE TEXT ---\n"
+        f"{scene_text}\n"
+        f"--- END SCENE TEXT ---"
+    )
+
+    try:
+        # "critique" temperature (0.3) -- summaries are low-randomness work,
+        # same as structured reviews. The "generation" temperature is for
+        # creative continuation and would let the model drift.
+        body = await run_chat(
+            api_key       = api_key,
+            model_id      = model_id,
+            system_prompt = system_prompt,
+            messages      = [{"role": "user", "content": user_message}],
+            temperature   = TEMPERATURE_DEFAULTS["critique"],
+        )
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+
+    content = body.strip()
+
+    # Title -- prefer the one the caller extracted (from heading/bold/italic).
+    # Only call the AI a second time if we don't have one yet. A failed title
+    # call falls back to "Scene" rather than bubbling up an error, because the
+    # summary itself already succeeded and blocking on a title would be worse
+    # UX than a generic label the writer can edit.
+    title = (request.scene_title or "").strip()
+    if not title:
+        try:
+            title_reply = await run_chat(
+                api_key       = api_key,
+                model_id      = model_id,
+                system_prompt = generate_scene_title_prompt(),
+                messages      = [{"role": "user", "content": (
+                    f"Give a 2-5 word title for the following scene. "
+                    f"Base the title ONLY on what is in the text.\n\n"
+                    f"--- BEGIN SCENE TEXT ---\n"
+                    f"{scene_text}\n"
+                    f"--- END SCENE TEXT ---"
+                )}],
+                temperature   = TEMPERATURE_DEFAULTS["critique"],
+            )
+            # Models sometimes wrap the title in quotes or add trailing punctuation.
+            # We strip those off so the title lands clean.
+            title = title_reply.strip().strip('"').strip("'").rstrip(".!?,:; ")
+            # Collapse any stray newlines -- a title is a single line by contract.
+            title = title.replace("\n", " ").strip()
+        except (httpx.HTTPStatusError, httpx.RequestError):
+            title = "Scene"
+
+    if not title:
+        title = "Scene"
+
+    return GenerateSceneSummaryResponse(
+        title      = title,
+        content    = content,
         model_used = model_id,
     )
 

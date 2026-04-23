@@ -18,6 +18,7 @@ import {
   Bold, Italic, Underline, Strikethrough,
   Eraser, Heading1, Heading2, Heading3,
   List, ListOrdered, Minus, ChevronDown, FilePlus2,
+  Sparkles,
 } from "lucide-react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
@@ -47,6 +48,13 @@ interface EditorToolbarProps {
   // toolbar. The parent should only pass this when notes/outline.md is the
   // active file -- the toolbar itself doesn't know about filenames.
   onNewTemplate?: () => void;
+  // When present, a [Generate Scene Summaries] button appears on the right
+  // side of the toolbar. Parent should only pass this when a chapter is open
+  // (scene summaries are chapter-scoped).
+  onGenerateSceneSummaries?: () => void;
+  // True while the auto-split loop is running. Disables the button and
+  // changes its label so the writer knows work is in progress.
+  autoSplitRunning?: boolean;
 }
 
 
@@ -326,7 +334,14 @@ function clearFormatting(view: EditorView, saved: SavedSelection) {
 
 
 // ── EditorToolbar Component ───────────────────────────────────────────────────
-export function EditorToolbar({ editorView, currentFont, onFontChange, onNewTemplate }: EditorToolbarProps) {
+export function EditorToolbar({
+  editorView,
+  currentFont,
+  onFontChange,
+  onNewTemplate,
+  onGenerateSceneSummaries,
+  autoSplitRunning,
+}: EditorToolbarProps) {
   const view = editorView;
 
   // Snapshot the current selection from the editor.
@@ -402,6 +417,21 @@ export function EditorToolbar({ editorView, currentFont, onFontChange, onNewTemp
         >
           <FilePlus2 size={12} />
           <span>+ New Template</span>
+        </button>
+      )}
+
+      {/* [Generate Scene Summaries] -- only visible when a chapter is open.
+          Runs the auto-split flow: parse the chapter by ---, walk each scene,
+          prompt for overwrite if existing, save each summary. */}
+      {onGenerateSceneSummaries && (
+        <button
+          onClick={onGenerateSceneSummaries}
+          disabled={autoSplitRunning}
+          title="Split chapter by --- and generate a summary for each scene"
+          className="mr-2 flex items-center gap-1 rounded border border-indigo-700/50 bg-indigo-950/40 px-2 py-0.5 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Sparkles size={12} />
+          <span>{autoSplitRunning ? "Generating..." : "Generate Scene Summaries"}</span>
         </button>
       )}
 
