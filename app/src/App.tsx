@@ -32,7 +32,7 @@ import type { ProfileType } from "./types/profile";
 import type { ContextChip, EditorChatMessage, EditorChatCategory } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI } from "./utils/profileFormat";
-import { Bot, Send, ChevronDown, Settings2 } from "lucide-react";
+import { Bot, Send, ChevronDown, Settings2, Trash2 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -354,6 +354,146 @@ function App() {
       setEditorError(err instanceof Error ? err.message : "Could not create chapter.");
     }
   }, [currentProject, chapters.length, loadChapter]);
+
+
+  // --- Rename a chapter inline from the left nav ---
+  // The backend rewrites the first `# heading` line inside the chapter file
+  // (the filename is kept stable so numeric ordering survives). After a
+  // successful save we patch the chapter list and, if the renamed chapter is
+  // currently open, update the title shown in the editor header too.
+  const handleRenameChapter = useCallback(async (filename: string, newTitle: string) => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+
+    // Skip the network call if nothing actually changed.
+    const current = chapters.find(c => c.filename === filename);
+    if (current && current.title === trimmed) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/documents/rename-chapter`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          folder_path: project.root_path,
+          filename,
+          new_title:   trimmed,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Rename failed.");
+      }
+      const data = await res.json();
+      setChapters(prev => prev.map(c =>
+        c.filename === filename ? { ...c, title: data.title } : c
+      ));
+      // If the renamed chapter is currently open, reflect the new title in
+      // the editor header without forcing a full chapter reload.
+      setCurrentChapter(prev =>
+        prev && prev.filename === filename ? { ...prev, title: data.title } : prev
+      );
+      setEditorError(null);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not rename chapter.");
+    }
+  }, [chapters]);
+
+
+  // --- Delete a chapter (and its paired summary, if any) ---
+  // The backend removes the chapter .md file AND the matching
+  // summaries/chapters/<stem>.md (if present). We confirm with the writer
+  // first because this is destructive and not undoable.
+  const handleDeleteChapter = useCallback(async (chapter: ChapterInfo) => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+
+    const ok = window.confirm(
+      `Delete "${chapter.title}"? This removes the chapter file (and its summary, if any) from disk and cannot be undone.`
+    );
+    if (!ok) return;
+
+    try {
+      const params = new URLSearchParams({
+        folder_path: project.root_path,
+        filename:    chapter.filename,
+      });
+      const res = await fetch(`${API_BASE}/api/documents/chapter?${params}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Delete failed.");
+      }
+
+      setChapters(prev => prev.filter(c => c.filename !== chapter.filename));
+      setExpandedChapters(prev => {
+        const next = new Set(prev);
+        next.delete(chapter.filename);
+        return next;
+      });
+
+      // If the deleted chapter was the one open in the editor or its summary
+      // was the active view, clear back to an empty editor state so the UI
+      // doesn't keep showing content that no longer exists on disk.
+      if (currentChapterRef.current?.filename === chapter.filename) {
+        setCurrentChapter(null);
+        setChapterContent("");
+        setIsDirty(false);
+        setWordCount(0);
+      }
+      if (currentSummaryChapter === chapter.filename) {
+        setCurrentSummaryChapter(null);
+        setCurrentView("editor");
+      }
+      setEditorError(null);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not delete chapter.");
+    }
+  }, [currentSummaryChapter]);
+
+
+  // --- Delete a chapter summary (without touching the chapter itself) ---
+  // Lets the writer wipe a bad AI-generated summary and start over without
+  // losing the manuscript chapter. If the summary is currently open in the
+  // summary editor, bounce back to the main editor view.
+  const handleDeleteChapterSummary = useCallback(async (chapter: ChapterInfo) => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+
+    const ok = window.confirm(
+      `Delete the chapter summary for "${chapter.title}"? The chapter itself is untouched. This cannot be undone.`
+    );
+    if (!ok) return;
+
+    try {
+      const params = new URLSearchParams({
+        folder_path:      project.root_path,
+        chapter_filename: chapter.filename,
+      });
+      const res = await fetch(`${API_BASE}/api/documents/chapter-summary?${params}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        // 404 = no summary file existed; treat that as already-deleted so
+        // the writer isn't shown an error for trying to clean up nothing.
+        if (res.status !== 404) {
+          throw new Error(err.detail ?? "Delete failed.");
+        }
+      }
+
+      if (currentSummaryChapter === chapter.filename) {
+        setCurrentSummaryChapter(null);
+        setCurrentView("editor");
+      }
+      setEditorError(null);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not delete summary.");
+    }
+  }, [currentSummaryChapter]);
 
 
   // --- Called by ProjectHome when a project is opened or created ---
@@ -834,6 +974,9 @@ function App() {
                     }
                   }}
                   onOpenChapterSummary={() => openChapterSummary(chapter.filename)}
+                  onRenameChapter={(newTitle) => handleRenameChapter(chapter.filename, newTitle)}
+                  onDeleteChapter={() => handleDeleteChapter(chapter)}
+                  onDeleteChapterSummary={() => handleDeleteChapterSummary(chapter)}
                 />
               );
             })}
@@ -1517,6 +1660,9 @@ function ChapterNavRow({
   onToggleExpand,
   onOpenChapter,
   onOpenChapterSummary,
+  onRenameChapter,
+  onDeleteChapter,
+  onDeleteChapterSummary,
 }: {
   chapter:                ChapterInfo;
   isExpanded:             boolean;
@@ -1526,17 +1672,43 @@ function ChapterNavRow({
   onToggleExpand:         () => void;
   onOpenChapter:          () => void;
   onOpenChapterSummary:   () => void;
+  onRenameChapter:        (newTitle: string) => void;
+  onDeleteChapter:        () => void;
+  onDeleteChapterSummary: () => void;
 }) {
   // Softer highlight for the parent chapter row when the child summary is
   // active -- helps the eye trace back up the tree without dominating the row.
   const parentGhostBg = isSummaryAncestor && !isActiveChapter ? "bg-indigo-900/10" : "";
 
+  // Inline-rename state: when `editing` is true the title <button> swaps to
+  // an <input>. Start with a local draft so Escape can discard without ever
+  // calling the rename API.
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState(chapter.title);
+
+  // Keep the draft in sync when the chapter title changes from outside
+  // (e.g., another action renames the same chapter) and we're not editing.
+  useEffect(() => {
+    if (!editing) setDraft(chapter.title);
+  }, [chapter.title, editing]);
+
+  const commitRename = () => {
+    setEditing(false);
+    const next = draft.trim();
+    if (!next || next === chapter.title) {
+      setDraft(chapter.title);
+      return;
+    }
+    onRenameChapter(next);
+  };
+
   return (
     <div className="mb-0.5">
-      {/* Header row: caret + chapter name. Two separate click targets so the
-          writer can open the chapter OR toggle the subtree without ambiguity. */}
+      {/* Header row: caret + chapter name + trash. Separate click targets so
+          expanding, opening, renaming, and deleting can't be confused with
+          each other. `group` lets the trash icon stay hidden until hover. */}
       <div
-        className={`flex items-stretch rounded transition-colors ${
+        className={`group flex items-stretch rounded transition-colors ${
           isActiveChapter ? "bg-indigo-600/20" : `hover:bg-[#12122e] ${parentGhostBg}`
         }`}
       >
@@ -1548,27 +1720,82 @@ function ChapterNavRow({
         >
           {isExpanded ? "v" : ">"}
         </button>
-        <button
-          onClick={onOpenChapter}
-          className={`flex-1 px-1 py-1.5 text-left text-sm ${
-            isActiveChapter ? "text-indigo-300" : "text-[#f0f0f5]"
-          }`}
-          title={`Open ${chapter.filename} in the editor`}
-        >
-          {chapter.title}
-        </button>
+        {editing ? (
+          // Inline rename input: shown when the writer double-clicked the
+          // title. Enter saves, Escape cancels, blur saves (so clicking
+          // anywhere else commits the change, matching the example flow the
+          // writer described: "click into it, change it, click out").
+          <input
+            autoFocus
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                (e.currentTarget as HTMLInputElement).blur();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setDraft(chapter.title);
+                setEditing(false);
+              }
+            }}
+            onFocus={e => e.currentTarget.select()}
+            className="flex-1 min-w-0 rounded border border-indigo-500/50 bg-[#12122e] px-1 py-1 text-sm text-[#f0f0f5] outline-none focus:border-indigo-400"
+            title="Rename chapter -- Enter to save, Escape to cancel"
+          />
+        ) : (
+          <button
+            onClick={onOpenChapter}
+            onDoubleClick={() => { setDraft(chapter.title); setEditing(true); }}
+            className={`flex-1 min-w-0 truncate px-1 py-1.5 text-left text-sm ${
+              isActiveChapter ? "text-indigo-300" : "text-[#f0f0f5]"
+            }`}
+            title={`Open ${chapter.filename} -- double-click to rename`}
+          >
+            {chapter.title}
+          </button>
+        )}
+        {!editing && (
+          <button
+            onClick={onDeleteChapter}
+            className="shrink-0 px-1.5 text-[#3f3f7a] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+            title={`Delete ${chapter.title}`}
+            aria-label={`Delete ${chapter.title}`}
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
       </div>
 
-      {/* Expanded subtree: just the Chapter Summary child row. Indent slightly
-          so the hierarchy reads correctly. */}
+      {/* Expanded subtree: the Chapter Summary child row with its own trash
+          button. Wrapped in a `group` container so the trash can reveal on
+          hover independently of the parent chapter row. */}
       {isExpanded && (
         <div className="ml-6 mt-0.5 border-l border-[#1e1e4a] pl-2">
-          <NavItem
-            label="Chapter Summary"
-            hint="AI-generated continuity brief for this chapter"
-            active={isChapterSummaryActive}
-            onClick={onOpenChapterSummary}
-          />
+          <div
+            className={`group flex items-stretch rounded transition-colors ${
+              isChapterSummaryActive ? "bg-indigo-600/20" : "hover:bg-[#12122e]"
+            }`}
+          >
+            <button
+              onClick={onOpenChapterSummary}
+              className={`flex-1 min-w-0 truncate px-2 py-1.5 text-left text-sm ${
+                isChapterSummaryActive ? "text-indigo-300" : "text-[#f0f0f5]"
+              }`}
+              title="AI-generated continuity brief for this chapter"
+            >
+              Chapter Summary
+            </button>
+            <button
+              onClick={onDeleteChapterSummary}
+              className="shrink-0 px-1.5 text-[#3f3f7a] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+              title="Delete chapter summary (keeps the chapter)"
+              aria-label="Delete chapter summary"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
         </div>
       )}
     </div>

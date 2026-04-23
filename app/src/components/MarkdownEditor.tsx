@@ -16,9 +16,10 @@ import { useEffect, useRef } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
-import { EditorView, Decoration, ViewPlugin } from "@codemirror/view";
+import { EditorView, Decoration, ViewPlugin, keymap } from "@codemirror/view";
 import type { ViewUpdate, DecorationSet } from "@codemirror/view";
-import { Compartment, RangeSetBuilder } from "@codemirror/state";
+import { Compartment, Prec, RangeSetBuilder } from "@codemirror/state";
+import { search, openSearchPanel, searchKeymap } from "@codemirror/search";
 import { createTheme } from "@uiw/codemirror-themes";
 import { tags as t } from "@lezer/highlight";
 import type { FontValue } from "./EditorToolbar";
@@ -143,6 +144,113 @@ const hrLineTheme = EditorView.theme({
 });
 
 
+// --- Find & Replace panel ---
+//
+// CodeMirror 6's search panel already renders BOTH a Find input and a
+// Replace input (the Replace row appears below the Find row, separated by a
+// <br> the panel injects). Ctrl+F opens it; we add Ctrl+H as an explicit
+// second entry so the VS Code / Notepad muscle memory works too.
+//
+// Prec.high ensures this beats any default keymap that might swallow Ctrl+H
+// (browsers sometimes map Ctrl+H to "history," so we preventDefault as well
+// to keep the OS webview from intercepting the keystroke).
+const findReplaceKeymap = Prec.high(keymap.of([
+  {
+    key:            "Mod-h",
+    preventDefault: true,
+    run:            openSearchPanel,
+  },
+  // Re-bind Mod-f at high precedence so it definitely lands on the search
+  // command even if another extension tries to claim the same shortcut.
+  {
+    key:            "Mod-f",
+    preventDefault: true,
+    run:            openSearchPanel,
+  },
+  // Also include every default search binding (findNext, findPrev, close,
+  // etc.) so we don't lose them when basicSetup.searchKeymap is disabled.
+  ...searchKeymap,
+]));
+
+
+// Dark-theme polish for the search panel so the Find/Replace controls read
+// clearly against the rest of the editor. CodeMirror ships an unstyled panel
+// by default, which inherits the browser's light-gray form controls and
+// becomes hard to see on the #070724 background.
+//
+// CRITICAL: the panel uses a raw <br> to split the Find row from the Replace
+// row. We deliberately do NOT use `display: flex` on `.cm-search` -- flex
+// treats <br> as a regular flex item (no line break), which would hide the
+// Replace row off the right edge of the panel. Sticking with the default
+// inline/block layout lets the <br> break the line the way the panel expects.
+const searchPanelTheme = EditorView.theme({
+  ".cm-panels": {
+    backgroundColor: "#0d0d2b",
+    color:           "#f0f0f5",
+  },
+  ".cm-panels.cm-panels-bottom": {
+    borderTop: "1px solid #1e1e4a",
+  },
+  ".cm-panels.cm-panels-top": {
+    borderBottom: "1px solid #1e1e4a",
+  },
+  ".cm-search": {
+    padding: "6px 10px",
+    fontSize: "12px",
+  },
+  ".cm-search input.cm-textfield": {
+    backgroundColor: "#12122e",
+    color:           "#f0f0f5",
+    border:          "1px solid #1e1e4a",
+    borderRadius:    "3px",
+    padding:         "3px 6px",
+    margin:          "2px 4px 2px 0",
+    outline:         "none",
+    fontSize:        "12px",
+  },
+  ".cm-search input.cm-textfield:focus": {
+    borderColor: "#6366f1",
+  },
+  ".cm-search button.cm-button": {
+    backgroundColor: "#12122e",
+    backgroundImage: "none",          // override default gradient
+    color:           "#f0f0f5",
+    border:          "1px solid #1e1e4a",
+    borderRadius:    "3px",
+    padding:         "2px 8px",
+    margin:          "0 2px",
+    fontSize:        "12px",
+    cursor:          "pointer",
+  },
+  ".cm-search button.cm-button:hover": {
+    borderColor: "#6366f1",
+  },
+  ".cm-search label": {
+    color:       "#8888aa",
+    margin:      "0 6px 0 0",
+    fontSize:    "12px",
+  },
+  ".cm-search br": {
+    // Give the line-break a little vertical breathing room so the Replace
+    // row is visually separated from the Find row rather than jammed
+    // against it.
+    content:      "''",
+    display:      "block",
+    marginBottom: "4px",
+  },
+  ".cm-search [name='close']": {
+    position: "absolute",
+    top: "4px",
+    right: "4px",
+    background: "transparent",
+    border: "none",
+    color: "#8888aa",
+    fontSize: "14px",
+    cursor: "pointer",
+  },
+});
+
+
 // --- StoryForge Color Theme ---
 // Controls syntax highlighting (headings, bold, italic, links, etc.)
 // and editor chrome colors (background, selection, cursor).
@@ -223,6 +331,18 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
     // visual presentation changes.
     hrLinePlugin,
     hrLineTheme,
+    // Search extension: registers the state field and panel factory. Calling
+    // openSearchPanel without this relies on CodeMirror lazily appending the
+    // config, which works but leaves us without a way to tune options like
+    // panel position. Explicit registration is more predictable.
+    //
+    // top: true puts the Find/Replace bar above the editor (like VS Code)
+    // rather than pinned to the bottom.
+    search({ top: true }),
+    // Ctrl+F and Ctrl+H both open the Find & Replace panel. The panel itself
+    // renders Find + Replace rows whenever the editor isn't read-only.
+    findReplaceKeymap,
+    searchPanelTheme,
   ];
 
   return (
@@ -257,7 +377,11 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
             foldGutter:                false,
             highlightActiveLine:       true,
             highlightSelectionMatches: true,
-            searchKeymap:              true,
+            // We register our own high-precedence searchKeymap in `extensions`
+            // above (which includes the full default searchKeymap plus our
+            // Ctrl+H binding), so disable basicSetup's copy to avoid a
+            // lower-precedence duplicate racing for the same shortcuts.
+            searchKeymap:              false,
             history:                   true,
             // drawSelection: true -- CodeMirror draws its own selection using
             // .cm-selectionBackground divs. Previously false because highlights

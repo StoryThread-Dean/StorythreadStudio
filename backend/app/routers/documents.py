@@ -71,6 +71,26 @@ class CreateChapterResponse(BaseModel):
     path: str
 
 
+class RenameChapterRequest(BaseModel):
+    """What the frontend sends when the writer renames a chapter inline.
+
+    Filename stays the same -- the numeric prefix (01-, 02-, ...) preserves
+    ordering, and changing it would break any external references. We only
+    update the first `# heading` line inside the file, which is what the UI
+    displays as the chapter title.
+    """
+    folder_path: str
+    filename:    str
+    new_title:   str
+
+
+class RenameChapterResponse(BaseModel):
+    """Confirmation returned after a successful rename."""
+    filename: str
+    title:    str
+    path:     str
+
+
 # --- Helpers ---
 
 def _manuscript_dir(folder_path: str) -> str:
@@ -354,6 +374,141 @@ async def create_chapter(request: CreateChapterRequest):
         filename=filename,
         title=request.title,
         path=os.path.realpath(chapter_path),
+    )
+
+
+# --- DELETE /api/documents/chapter ---
+@router.delete("/chapter")
+async def delete_chapter(folder_path: str, filename: str):
+    """
+    Delete a chapter file from the manuscript/ folder, and also remove the
+    paired chapter summary file (if one exists) in summaries/chapters/.
+
+    Why delete the summary too?
+    The summary is derived from the chapter -- its purpose is to describe the
+    chapter's events. With the chapter gone, an orphaned summary would be
+    confusing clutter. Deleting both keeps the project self-consistent.
+
+    The operation is final -- no trash, no undo. The frontend confirms with
+    the writer before calling this endpoint.
+    """
+    manuscript   = _manuscript_dir(folder_path)
+    chapter_path = os.path.realpath(os.path.join(manuscript, filename))
+    safe_root    = os.path.realpath(manuscript)
+
+    # Path-traversal guard: same style as load_chapter / save_chapter above.
+    if not chapter_path.startswith(safe_root + os.sep) and chapter_path != safe_root:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+
+    if not os.path.isfile(chapter_path):
+        raise HTTPException(status_code=404, detail=f"Chapter not found: {filename}")
+
+    try:
+        os.remove(chapter_path)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not delete chapter: {e}")
+
+    # Best-effort: remove the paired summary file too. We don't surface a
+    # partial-success error if the summary file doesn't exist -- that is the
+    # expected state for chapters that never had a summary generated.
+    summary_removed = False
+    try:
+        _summary_dir, summary_file = _chapter_summary_paths(folder_path, filename)
+        if os.path.isfile(summary_file):
+            os.remove(summary_file)
+            summary_removed = True
+    except HTTPException:
+        pass  # Invalid path -- ignore, we already deleted the chapter itself
+    except OSError:
+        pass  # Could not remove summary -- leave it, chapter delete already succeeded
+
+    return {
+        "filename":        filename,
+        "summary_removed": summary_removed,
+        "message":         f"Deleted {filename}.",
+    }
+
+
+# --- DELETE /api/documents/chapter-summary ---
+@router.delete("/chapter-summary")
+async def delete_chapter_summary(folder_path: str, chapter_filename: str):
+    """
+    Delete the chapter summary file for a given chapter.
+
+    The chapter itself is untouched -- this endpoint only removes the summary
+    under summaries/chapters/<stem>.md. Useful when the writer wants to clear
+    out a bad AI-generated summary and start fresh.
+    """
+    _summary_dir, summary_file = _chapter_summary_paths(folder_path, chapter_filename)
+
+    if not os.path.isfile(summary_file):
+        raise HTTPException(status_code=404, detail="No summary file exists for this chapter.")
+
+    try:
+        os.remove(summary_file)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not delete summary: {e}")
+
+    stem = os.path.splitext(chapter_filename)[0]
+    return {"filename": f"{stem}.md", "message": "Summary deleted."}
+
+
+# --- POST /api/documents/rename-chapter ---
+@router.post("/rename-chapter", response_model=RenameChapterResponse)
+async def rename_chapter(request: RenameChapterRequest):
+    """
+    Rename a chapter by updating the first `# heading` line inside the file.
+
+    Why update the heading instead of the filename?
+    The filename carries the numeric prefix (01-landing.md, 02-storm.md) that
+    drives manuscript sort order. Changing it would either break ordering or
+    require re-numbering every chapter after it. The heading is what the UI
+    displays as the title -- updating only the heading keeps the rename cheap
+    and reversible without touching the manuscript's structural ordering.
+
+    If the file has no `# heading`, we insert one at the top.
+    """
+    new_title = request.new_title.strip()
+    if not new_title:
+        raise HTTPException(status_code=400, detail="New title cannot be empty.")
+
+    manuscript   = _manuscript_dir(request.folder_path)
+    chapter_path = os.path.realpath(os.path.join(manuscript, request.filename))
+    safe_root    = os.path.realpath(manuscript)
+
+    if not chapter_path.startswith(safe_root + os.sep) and chapter_path != safe_root:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+
+    if not os.path.isfile(chapter_path):
+        raise HTTPException(status_code=404, detail=f"Chapter not found: {request.filename}")
+
+    try:
+        with open(chapter_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not read chapter: {e}")
+
+    # Replace the first `# ...` heading, or prepend one if none exists.
+    # re.sub with count=1 rewrites only the first match so we don't touch
+    # later sub-headings or in-content '#' lines the writer may have added.
+    new_heading = f"# {new_title}"
+    pattern     = r'^#\s+.*$'
+    updated, replaced = re.subn(pattern, new_heading, content, count=1, flags=re.MULTILINE)
+
+    if replaced == 0:
+        # No heading line found -- prepend one followed by a blank line
+        updated = f"{new_heading}\n\n{content}" if content else f"{new_heading}\n\n"
+
+    try:
+        with open(chapter_path, "w", encoding="utf-8") as f:
+            f.write(updated)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not write chapter: {e}")
+
+    return RenameChapterResponse(
+        filename=request.filename,
+        title=new_title,
+        path=chapter_path,
     )
 
 

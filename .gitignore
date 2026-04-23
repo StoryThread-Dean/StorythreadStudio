@@ -12,7 +12,7 @@ backend/.ruff_cache/
 app/node_modules/
 app/dist/
 app/dist-ssr/
-*.local
+*/local
 
 # ── Tauri / Rust ──────────────────────────────────────────────────────────────
 # Rust build artifacts -- large and fully reproducible via cargo build.

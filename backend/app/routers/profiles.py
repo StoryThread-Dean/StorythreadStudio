@@ -703,6 +703,38 @@ async def save_profile(request: SaveProfileRequest):
     return request.profile
 
 
+# --- DELETE /api/profiles/profile ---
+@router.delete("/profile")
+async def delete_profile(folder_path: str, type: str, filename: str):
+    """
+    Deletes a single profile file from disk (character, relationship, location, or lore).
+
+    The profile's .md file is removed from its profiles/<type>/ subfolder. The
+    operation is final -- there is no trash bin or undo. The frontend confirms
+    with the writer before calling this endpoint.
+
+    Why DELETE (and not POST)?
+    DELETE is the standard HTTP verb for removing a resource. Using it here
+    keeps the API consistent with REST conventions so the intent of the call
+    is obvious from the method alone.
+    """
+    if type not in VALID_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unknown profile type: {type}")
+
+    profile_dir = _profile_dir(folder_path, type)
+    filepath    = _safe_path(profile_dir, filename)
+
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail=f"Profile not found: {filename}")
+
+    try:
+        os.remove(filepath)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not delete profile: {e}")
+
+    return {"filename": filename, "message": f"Deleted {filename}."}
+
+
 @router.post("/import", response_model=Profile)
 async def import_profile(request: ImportProfileRequest):
     """

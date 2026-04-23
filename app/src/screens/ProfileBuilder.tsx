@@ -136,6 +136,155 @@ function countWords(text: string): number {
   return trimmed.split(/\s+/).length;
 }
 
+
+// ── Find & Replace helpers ───────────────────────────────────────────────────
+// The Profile Builder uses plain <textarea>s instead of CodeMirror, so the
+// browser has no built-in find/replace. These helpers walk every text field
+// in the open profile in the same top-to-bottom order the UI displays them,
+// so "Find next" navigates matches the way the writer expects.
+//
+// Every searchable field in the DOM is tagged with data-pb-field="<id>",
+// where <id> matches the fieldId produced by walkProfileMatches. The Find
+// bar uses that attribute to scroll/focus/select the exact match location.
+
+// Escape special regex characters so a literal string can be used as a pattern.
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// One find result. `path` is used to dispatch a single-match Replace back
+// into the profile state; `fieldId` is used to locate the field in the DOM.
+interface ProfileMatch {
+  fieldId: string;         // matches the data-pb-field attribute on the element
+  path:    string[];       // state path: ["name"] | ["section", key, "content"] | ["trait", tbId, "description"] ...
+  start:   number;         // character offset where the match begins (in the field value)
+  end:     number;         // character offset where the match ends
+  value:   string;         // the field value that contained this match (used by replaceAtMatch)
+}
+
+// Walk every searchable string in the profile and return an ordered list of
+// matches. Order mirrors the form layout: name, role, tags, then each
+// section in SECTION_CONFIGS order (trait blocks expanded, then ai_summary),
+// then full_ai_summary at the end.
+function walkProfileMatches(
+  profile:       Profile,
+  query:         string,
+  caseSensitive: boolean,
+  sectionOrder:  readonly { key: string; hasTraitBlocks: boolean }[],
+): ProfileMatch[] {
+  const out: ProfileMatch[] = [];
+  if (!query) return out;
+  const flags = caseSensitive ? "g" : "gi";
+
+  function scan(text: string, fieldId: string, path: string[]) {
+    if (!text) return;
+    // Build a fresh regex per call so `lastIndex` state never leaks between
+    // fields. Zero-width matches can't happen with a plain escaped literal,
+    // but if we ever support regex queries we'd need to bump lastIndex.
+    const re = new RegExp(escapeRegex(query), flags);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      out.push({ fieldId, path, start: m.index, end: m.index + m[0].length, value: text });
+      if (m[0].length === 0) re.lastIndex++;
+    }
+  }
+
+  scan(profile.name, "name", ["name"]);
+  scan(profile.role, "role", ["role"]);
+  // Tags render as a single joined input ("tag1, tag2"), so search the
+  // joined form -- matches what the writer sees in the field.
+  scan(profile.tags.join(", "), "tags", ["tags"]);
+
+  for (const cfg of sectionOrder) {
+    const section = profile.sections[cfg.key];
+    if (!section) continue;
+    if (cfg.hasTraitBlocks) {
+      for (const tb of section.trait_blocks) {
+        scan(tb.trait,       `trait:${tb.id}:trait`,       ["trait", tb.id, "trait"]);
+        scan(tb.description, `trait:${tb.id}:description`, ["trait", tb.id, "description"]);
+      }
+    } else {
+      scan(section.content, `section:${cfg.key}:content`, ["section", cfg.key, "content"]);
+    }
+    scan(section.ai_summary, `section:${cfg.key}:ai_summary`, ["section", cfg.key, "ai_summary"]);
+  }
+
+  scan(profile.full_ai_summary, "full_ai_summary", ["full_ai_summary"]);
+
+  return out;
+}
+
+// Replace just the single match referenced by `match` (not every
+// occurrence). Returns a new Profile immutably. Used by the Replace button;
+// Replace All uses replaceAllInProfile below.
+function replaceAtMatch(profile: Profile, match: ProfileMatch, replacement: string): Profile {
+  const newValue = match.value.slice(0, match.start) + replacement + match.value.slice(match.end);
+  const [kind, ...rest] = match.path;
+
+  if (kind === "name")            return { ...profile, name: newValue };
+  if (kind === "role")            return { ...profile, role: newValue };
+  if (kind === "full_ai_summary") return { ...profile, full_ai_summary: newValue };
+  if (kind === "tags") {
+    // Round-trip through the same split/trim the UI uses so empty/duplicate
+    // tags are normalised identically to manual typing.
+    return { ...profile, tags: newValue.split(",").map(t => t.trim()).filter(Boolean) };
+  }
+  if (kind === "section") {
+    const [sectionKey, fieldKind] = rest;
+    const section = profile.sections[sectionKey];
+    if (!section) return profile;
+    const updated =
+      fieldKind === "content"
+        ? { ...section, content:    newValue }
+        : { ...section, ai_summary: newValue };
+    return { ...profile, sections: { ...profile.sections, [sectionKey]: updated } };
+  }
+  if (kind === "trait") {
+    const [tbId, fieldKind] = rest;
+    const newSections: Record<string, ProfileSection> = {};
+    for (const [sKey, section] of Object.entries(profile.sections)) {
+      newSections[sKey] = {
+        ...section,
+        trait_blocks: section.trait_blocks.map(tb =>
+          tb.id === tbId
+            ? { ...tb, ...(fieldKind === "trait" ? { trait: newValue } : { description: newValue }) }
+            : tb
+        ),
+      };
+    }
+    return { ...profile, sections: newSections };
+  }
+  return profile;
+}
+
+// Replace every occurrence of `query` with `replacement` across the whole
+// profile in one pass. Used by the Replace All button. Implemented as a
+// series of replaceAtMatch calls in reverse order so earlier offsets stay
+// valid while later ones are rewritten.
+function replaceAllInProfile(
+  profile:       Profile,
+  query:         string,
+  replacement:   string,
+  caseSensitive: boolean,
+  sectionOrder:  readonly { key: string; hasTraitBlocks: boolean }[],
+): Profile {
+  const matches = walkProfileMatches(profile, query, caseSensitive, sectionOrder);
+  // Walk backward so replacing later matches doesn't invalidate earlier
+  // offsets within the same field value.
+  let current = profile;
+  for (let i = matches.length - 1; i >= 0; i--) {
+    // Recompute value at replace time by re-scanning -- match.value was
+    // captured from the pre-replace profile and may drift if multiple
+    // matches live in the same field. Cheaper fix: re-walk once at the end
+    // per field; simpler fix: recompute fresh each iteration.
+    const fresh = walkProfileMatches(current, query, caseSensitive, sectionOrder);
+    if (fresh.length === 0) break;
+    // Replace the LAST outstanding match so indices before it stay valid.
+    current = replaceAtMatch(current, fresh[fresh.length - 1], replacement);
+  }
+  return current;
+}
+
 // formatProfileForAI is imported from utils/profileFormat.ts -- single source
 // of truth for how profiles are represented in AI prompts. Used here for
 // generate-full-summary and the profile chat system.
@@ -150,12 +299,17 @@ function AutoTextarea({
   placeholder,
   className,
   minRows = 2,
+  dataField,
 }: {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
   className?: string;
   minRows?: number;
+  // Optional identifier used by the Find & Replace bar to locate this field
+  // in the DOM (data-pb-field="..."). Plain attribute passthrough since
+  // this component wraps a raw <textarea>.
+  dataField?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -177,6 +331,7 @@ function AutoTextarea({
       rows={minRows}
       style={{ resize: "none", overflow: "hidden" }}
       className={className}
+      data-pb-field={dataField}
     />
   );
 }
@@ -248,10 +403,34 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // independent preferences.
   const chatPanel = useRightPanelWidth("storyforge.profileBuilder.chatWidth");
 
+  // Find & Replace bar -- shown at the top of the center panel when the
+  // writer presses Ctrl+F or Ctrl+H. Because the profile editor uses plain
+  // <textarea>s, the browser's native find doesn't cover these fields; this
+  // bar walks every searchable field in the open profile and does the
+  // replacement via state, marking the profile dirty so the writer must
+  // explicitly save (same flow as typing by hand).
+  const [findOpen,       setFindOpen]       = useState(false);
+  const [findQuery,      setFindQuery]      = useState("");
+  const [replaceQuery,   setReplaceQuery]   = useState("");
+  const [findCaseSens,   setFindCaseSens]   = useState(false);
+  const findInputRef = useRef<HTMLInputElement | null>(null);
+
   // Section configs for the current profile type
   const sections = useMemo(
     () => SECTION_CONFIGS[profileType] ?? [],
     [profileType]
+  );
+
+  // Which profile types appear as tabs in the left panel.
+  // Chapter-summary and scene-summary entries are still parseable for legacy
+  // files, but they're reached through the main-menu sidebar (Manuscript tree
+  // for chapter summaries, Summaries > Scene Summaries for scene summaries).
+  // Filtering them out here removes the duplicate access point and avoids
+  // confusing the writer with the same data shown in two places.
+  const TAB_PROFILE_TYPES: ProfileType[] = useMemo(
+    () => (Object.keys(PROFILE_TYPE_LABELS) as ProfileType[])
+            .filter(t => t !== "chapter_summary" && t !== "scene_summary"),
+    []
   );
 
   // Reset chat state when switching profiles
@@ -333,25 +512,206 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         const err = await res.json();
         throw new Error(err.detail ?? "Save failed.");
       }
-      setProfile(await res.json());
+      const saved: Profile = await res.json();
+      setProfile(saved);
       setIsDirty(false);
       setError(null);
+
+      // Keep the left-panel list in sync with the just-saved profile so a
+      // rename (e.g. Serena -> Abby) shows up right away instead of waiting
+      // until the writer switches tabs or reopens the project. Patch the
+      // matching item in place by filename (filename is stable across edits).
+      setProfileList(prev => {
+        const idx = prev.findIndex(item => item.filename === saved.filename);
+        if (idx === -1) return prev;
+        const next = prev.slice();
+        next[idx] = {
+          ...next[idx],
+          name:   saved.name,
+          role:   saved.role,
+          status: saved.status,
+        };
+        // Re-sort so renames move the item to its alphabetical place.
+        next.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save profile.");
     }
   }, [project.root_path]);
 
-  // Ctrl+S keyboard shortcut
+
+  // --- Delete a profile ---
+  // Removes the .md file from disk and drops it from the left-panel list.
+  // The writer confirms with a native dialog first so a mis-click can't
+  // destroy hours of work. If the deleted profile is the one currently open
+  // in the editor, we clear the editor too.
+  const handleDelete = useCallback(async (item: ProfileListItem) => {
+    const ok = window.confirm(
+      `Delete "${item.name}"? This removes the profile file from disk and cannot be undone.`
+    );
+    if (!ok) return;
+
+    try {
+      const params = new URLSearchParams({
+        folder_path: project.root_path,
+        type:        item.type,
+        filename:    item.filename,
+      });
+      const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Failed to delete profile.");
+      }
+      setProfileList(prev => prev.filter(p => p.filename !== item.filename));
+      // If the deleted profile was open in the editor, clear the editor view.
+      if (profileRef.current?.filename === item.filename) {
+        setProfile(null);
+        setIsDirty(false);
+      }
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete profile.");
+    }
+  }, [project.root_path]);
+
+
+  // --- Find & Replace actions ---
+  // Section-order helper passed to the walker so match order matches the UI.
+  // sections is already keyed by profileType and memoised above.
+  const sectionOrder = useMemo(
+    () => sections.map(s => ({ key: s.key, hasTraitBlocks: s.hasTraitBlocks })),
+    [sections]
+  );
+
+  // Ordered list of all matches in the current profile. Recomputes on every
+  // keystroke via useMemo -- cheap enough for profile-sized text.
+  const findMatches: ProfileMatch[] = useMemo(
+    () => (profile && findQuery
+      ? walkProfileMatches(profile, findQuery, findCaseSens, sectionOrder)
+      : []),
+    [profile, findQuery, findCaseSens, sectionOrder]
+  );
+
+  // Which match is currently "active" (shown highlighted/selected). null
+  // means the writer hasn't navigated yet -- the first Find press jumps to
+  // match 0.
+  const [currentMatchIdx, setCurrentMatchIdx] = useState<number | null>(null);
+
+  // Reset the active match pointer whenever the query changes, so a fresh
+  // search starts from the top instead of resuming from a stale index.
+  useEffect(() => {
+    setCurrentMatchIdx(null);
+  }, [findQuery, findCaseSens, profile?.filename]);
+
+  // Jump the writer's cursor to one specific match: scroll its field into
+  // view, focus it, and select the exact character range. This gives the
+  // same "highlight the next match" feel as Ctrl+F in a real text editor.
+  const scrollToMatch = useCallback((match: ProfileMatch) => {
+    // Defer a tick so any pending render (e.g. after a replace) settles
+    // before we query the DOM.
+    requestAnimationFrame(() => {
+      const el = document.querySelector(
+        `[data-pb-field="${CSS.escape(match.fieldId)}"]`
+      ) as HTMLInputElement | HTMLTextAreaElement | null;
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.focus({ preventScroll: true });
+      try {
+        el.setSelectionRange(match.start, match.end);
+      } catch {
+        // Some inputs (type=text in certain states) may reject setSelectionRange
+        // -- ignore and just leave the focus so the field is visibly active.
+      }
+    });
+  }, []);
+
+  // Find / Find Next: wrap around the match list. If there's no active
+  // match yet, start at 0; otherwise step to the next index modulo length.
+  const handleFindNext = useCallback(() => {
+    if (findMatches.length === 0) return;
+    const next = currentMatchIdx == null
+      ? 0
+      : (currentMatchIdx + 1) % findMatches.length;
+    setCurrentMatchIdx(next);
+    scrollToMatch(findMatches[next]);
+  }, [findMatches, currentMatchIdx, scrollToMatch]);
+
+  // Replace the currently-active match (or the first one if none active
+  // yet), then advance to the next match. Matches the behaviour writers
+  // expect from Notepad / VS Code: Replace replaces one, Replace All
+  // replaces all.
+  const handleReplaceSingle = useCallback(() => {
+    const p = profileRef.current;
+    if (!p || !findQuery || findMatches.length === 0) return;
+
+    const idx = currentMatchIdx ?? 0;
+    const match = findMatches[idx];
+    if (!match) return;
+
+    const updated = replaceAtMatch(p, match, replaceQuery);
+    setProfile(updated);
+    setIsDirty(true);
+
+    // After state updates, matches recompute via useMemo. Schedule a jump
+    // to the "same index" position in the new list, which effectively
+    // means the next unreplaced match (since the one we just fixed is gone).
+    // If we've run past the end, wrap to 0.
+    requestAnimationFrame(() => {
+      const fresh = walkProfileMatches(updated, findQuery, findCaseSens, sectionOrder);
+      if (fresh.length === 0) {
+        setCurrentMatchIdx(null);
+        return;
+      }
+      const nextIdx = idx >= fresh.length ? 0 : idx;
+      setCurrentMatchIdx(nextIdx);
+      scrollToMatch(fresh[nextIdx]);
+    });
+  }, [findQuery, replaceQuery, findCaseSens, findMatches, currentMatchIdx, sectionOrder, scrollToMatch]);
+
+  // Replace every match in one shot. Marks dirty so the writer sees the
+  // Unsaved indicator and must explicitly Save (matches the rest of the
+  // profile editor -- nothing writes to disk without Ctrl+S / Save).
+  const handleReplaceAll = useCallback(() => {
+    const p = profileRef.current;
+    if (!p || !findQuery) return;
+    const updated = replaceAllInProfile(p, findQuery, replaceQuery, findCaseSens, sectionOrder);
+    setProfile(updated);
+    setIsDirty(true);
+    setCurrentMatchIdx(null);
+  }, [findQuery, replaceQuery, findCaseSens, sectionOrder]);
+
+  // Ctrl+S / Ctrl+F / Ctrl+H keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "s") {
         e.preventDefault();
         if (isDirtyRef.current) handleSave();
+      } else if (e.ctrlKey && (e.key === "f" || e.key === "h" || e.key === "F" || e.key === "H")) {
+        // Open the Find & Replace bar. preventDefault stops the webview from
+        // handling Ctrl+F itself (some shells show their own find popup).
+        // Focus+select on mount happens in the panel via autoFocus + select().
+        e.preventDefault();
+        setFindOpen(true);
+        // Defer the focus so the input is mounted before we try to grab it.
+        setTimeout(() => {
+          findInputRef.current?.focus();
+          findInputRef.current?.select();
+        }, 0);
+      } else if (e.key === "Escape") {
+        // Esc closes the bar if it's open, but only when the find input is
+        // focused -- otherwise Escape would interrupt unrelated modals or
+        // kill inline editing in the form.
+        if (findOpen && document.activeElement === findInputRef.current) {
+          setFindOpen(false);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleSave]);
+  }, [handleSave, findOpen]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -720,7 +1080,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             Profile Type
           </p>
           <div className="flex flex-col gap-1">
-            {(Object.keys(PROFILE_TYPE_LABELS) as ProfileType[]).map(type => (
+            {TAB_PROFILE_TYPES.map(type => (
               <button
                 key={type}
                 onClick={() => { if (type !== profileType) setProfileType(type); }}
@@ -772,23 +1132,43 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             </p>
           )}
 
-          {profileList.map(item => (
-            <button
-              key={item.filename}
-              onClick={() => loadProfile(item)}
-              className={`mb-0.5 w-full rounded px-2 py-1.5 text-left transition-colors ${
-                profile?.filename === item.filename
-                  ? "bg-indigo-600/20 text-indigo-300"
-                  : "text-[#f0f0f5] hover:bg-[#12122e]"
-              }`}
-              title={item.role ? `${item.role} -- ${item.filename}` : item.filename}
-            >
-              <p className="truncate text-sm">{item.name}</p>
-              {item.role && (
-                <p className="truncate text-xs text-[#8888aa]">{item.role}</p>
-              )}
-            </button>
-          ))}
+          {profileList.map(item => {
+            const isActive = profile?.filename === item.filename;
+            // Row = the open-profile button on the left, a trash button on
+            // the right. They're SEPARATE buttons because nesting a <button>
+            // inside another <button> is invalid HTML. The `group` utility
+            // lets the trash icon reveal on hover without flashing into
+            // view when the writer is just scrolling the list.
+            return (
+              <div
+                key={item.filename}
+                className={`group mb-0.5 flex items-stretch rounded transition-colors ${
+                  isActive ? "bg-indigo-600/20" : "hover:bg-[#12122e]"
+                }`}
+              >
+                <button
+                  onClick={() => loadProfile(item)}
+                  className={`flex-1 min-w-0 px-2 py-1.5 text-left ${
+                    isActive ? "text-indigo-300" : "text-[#f0f0f5]"
+                  }`}
+                  title={item.role ? `${item.role} -- ${item.filename}` : item.filename}
+                >
+                  <p className="truncate text-sm">{item.name}</p>
+                  {item.role && (
+                    <p className="truncate text-xs text-[#8888aa]">{item.role}</p>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleDelete(item)}
+                  className="shrink-0 px-2 text-[#3f3f7a] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+                  title={`Delete ${item.name}`}
+                  aria-label={`Delete ${item.name}`}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       </aside>
 
@@ -832,6 +1212,107 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             </button>
           </div>
         </div>
+
+        {/* Find & Replace bar -- searches every text field in the open
+            profile (name, role, tags, section content, trait blocks, AI
+            summaries). Plain <textarea> fields can't hook into the browser's
+            native find, so this custom bar walks the state and replaces in
+            place. Replaces mark the profile dirty; the writer saves with
+            Ctrl+S as usual. */}
+        {findOpen && profile && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
+            {/* Find input -- Enter jumps to the next match, same as the
+                Find button. Esc closes the bar. */}
+            <input
+              ref={findInputRef}
+              type="text"
+              value={findQuery}
+              onChange={e => setFindQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Escape") { e.preventDefault(); setFindOpen(false); }
+                if (e.key === "Enter")  { e.preventDefault(); handleFindNext();  }
+              }}
+              placeholder="Find..."
+              className="w-48 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+            />
+            {/* Replace-with input -- Enter triggers the single Replace
+                (matches Notepad / VS Code behaviour where Enter in the
+                replace input replaces the current match, not all). */}
+            <input
+              type="text"
+              value={replaceQuery}
+              onChange={e => setReplaceQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Escape") { e.preventDefault(); setFindOpen(false); }
+                if (e.key === "Enter" && findQuery) {
+                  e.preventDefault();
+                  handleReplaceSingle();
+                }
+              }}
+              placeholder="Replace with..."
+              className="w-48 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+            />
+            {/* Find (next) -- jumps to the next match, wraps at end. Writer
+                can press it repeatedly to walk matches one at a time. */}
+            <button
+              onClick={handleFindNext}
+              disabled={!findQuery || findMatches.length === 0}
+              className="rounded border border-[#1e1e4a] px-2 py-1 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
+              title={findMatches.length === 0 ? "No matches" : "Jump to next match (Enter)"}
+            >
+              Find
+            </button>
+            {/* Replace -- replace JUST the current match and advance. */}
+            <button
+              onClick={handleReplaceSingle}
+              disabled={!findQuery || findMatches.length === 0}
+              className="rounded border border-[#1e1e4a] px-2 py-1 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
+              title={findMatches.length === 0 ? "No matches to replace" : "Replace this one match"}
+            >
+              Replace
+            </button>
+            {/* Replace All -- one-shot replace of every match in the profile. */}
+            <button
+              onClick={handleReplaceAll}
+              disabled={!findQuery || findMatches.length === 0}
+              className="rounded border border-[#1e1e4a] px-2 py-1 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
+              title={findMatches.length === 0 ? "No matches to replace" : `Replace all ${findMatches.length} match(es)`}
+            >
+              Replace All
+            </button>
+            <label className="flex items-center gap-1 text-xs text-[#8888aa]">
+              <input
+                type="checkbox"
+                checked={findCaseSens}
+                onChange={e => setFindCaseSens(e.target.checked)}
+                className="accent-indigo-500"
+              />
+              Match case
+            </label>
+            {/* Match indicator: "N of M matches" when one is active,
+                "N matches" otherwise. Gives the writer a sense of progress
+                as they step through matches with Find. */}
+            <span className="text-xs text-[#6666a0]">
+              {!findQuery
+                ? "Type to search"
+                : findMatches.length === 0
+                ? "No matches"
+                : currentMatchIdx == null
+                ? (findMatches.length === 1 ? "1 match" : `${findMatches.length} matches`)
+                : `${currentMatchIdx + 1} of ${findMatches.length}`}
+            </span>
+            <div className="ml-auto">
+              <button
+                onClick={() => setFindOpen(false)}
+                className="rounded px-1 text-[#6666a0] transition-colors hover:text-[#f0f0f5]"
+                title="Close (Esc)"
+                aria-label="Close find and replace"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Error banner */}
         {error && (
@@ -922,6 +1403,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                       type="text"
                       value={profile.name}
                       onChange={e => updateProfileField("name", e.target.value)}
+                      data-pb-field="name"
                       className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -932,6 +1414,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                       value={profile.role}
                       onChange={e => updateProfileField("role", e.target.value)}
                       placeholder="e.g. protagonist"
+                      data-pb-field="role"
                       className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -960,6 +1443,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                         e.target.value.split(",").map(t => t.trim()).filter(Boolean)
                       )}
                       placeholder="e.g. strategist, guarded, grief"
+                      data-pb-field="tags"
                       className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -1081,6 +1565,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                   }
                   className="w-full rounded border border-teal-800/40 bg-[#0a1a1a] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-teal-600"
                   minRows={4}
+                  dataField="full_ai_summary"
                 />
               </div>
 
@@ -1407,6 +1892,7 @@ function ProfileSectionEditor({
           onChange={e => onContentChange(e.target.value)}
           placeholder={`Write ${heading.toLowerCase()} notes here...`}
           rows={4}
+          data-pb-field={`section:${sectionKey}:content`}
           className="mb-3 w-full resize-y rounded border border-[#1e1e4a] bg-[#0d0d2b] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
         />
       )}
@@ -1431,6 +1917,7 @@ function ProfileSectionEditor({
           placeholder="Click Generate to create an AI summary, or write one manually."
           className="w-full rounded border border-[#1e1e4a] bg-[#0d0d2b] px-2 py-1.5 text-xs text-[#8888aa] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
           minRows={2}
+          dataField={`section:${sectionKey}:ai_summary`}
         />
       </div>
     </div>
@@ -1695,6 +2182,7 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
           value={block.trait}
           onChange={e => onUpdate({ trait: e.target.value })}
           placeholder="Trait name (e.g. observant, punctual)"
+          data-pb-field={`trait:${block.id}:trait`}
           className="min-w-0 flex-1 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
         />
 
@@ -1724,6 +2212,7 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
         onChange={e => onUpdate({ description: e.target.value })}
         placeholder="Describe this trait in detail. Be specific to this character."
         rows={3}
+        data-pb-field={`trait:${block.id}:description`}
         className="mb-1 w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
       />
 
