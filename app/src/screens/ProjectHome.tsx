@@ -137,7 +137,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
 
   // ── Handler: pick a story type tile ─────────────────────────────────────
   // Goes straight to the create form. The backend auto-derives the folder
-  // under the configured vault root (default ~/Documents/StoryForge) using
+  // under the configured vault root (default ~/Documents/Storythread Studio) using
   // a slugified title, so the writer never has to pick a folder. The hint
   // in the form tells them where the new project will land.
   function handlePickStoryType(value: StoryType) {
@@ -268,7 +268,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
         setBrowsedSeriesBooks(data.books);
         setMode("series_browser");
       } else {
-        throw new Error("This folder doesn't look like a StoryForge project or series.");
+        throw new Error("This folder doesn't look like a Storythread Studio project or series.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
@@ -399,7 +399,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
 
       {/* Title bar */}
       <div className="shrink-0 border-b border-[#1e1e4a] bg-[#0d0d2b] px-6 py-4">
-        <h1 className="text-2xl font-semibold tracking-wide text-[#f0f0f5]">StoryForge</h1>
+        <h1 className="text-2xl font-semibold tracking-wide text-[#f0f0f5]">Storythread Studio</h1>
         <p className="mt-0.5 text-xs text-[#8888aa]">Your local writing workspace</p>
       </div>
 
@@ -732,7 +732,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                 <span className="font-semibold">Error: </span>{error}
               </p>
               <p className="mt-1 text-xs text-red-400">
-                Make sure the StoryForge backend is running on port 8000.
+                Make sure the Storythread Studio backend is running on port 8000.
               </p>
             </div>
           )}

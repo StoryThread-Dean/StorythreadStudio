@@ -31,7 +31,7 @@ import type { FontValue } from "./EditorToolbar";
 const fontCompartment = new Compartment();
 
 // Builds a CodeMirror theme extension for a given font.
-// Only controls typography -- colors are handled by storyforgeColorTheme.
+// Only controls typography -- colors are handled by storythreadColorTheme.
 function buildFontTheme(fontFamily: string) {
   return EditorView.theme({
     // The root editor element
@@ -251,13 +251,13 @@ const searchPanelTheme = EditorView.theme({
 });
 
 
-// --- StoryForge Color Theme ---
+// --- Storythread Studio Color Theme ---
 // Controls syntax highlighting (headings, bold, italic, links, etc.)
 // and editor chrome colors (background, selection, cursor).
 //
 // The selection color (#3a5bbf) must contrast clearly against the
 // background (#070724). We use a mid-range indigo-blue.
-const storyforgeColorTheme = createTheme({
+const storythreadColorTheme = createTheme({
   theme: "dark",
   settings: {
     background:      "#070724",
@@ -357,7 +357,7 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
         <CodeMirror
           value={defaultValue}
           onChange={onChange}
-          theme={storyforgeColorTheme}
+          theme={storythreadColorTheme}
           extensions={extensions}
           onCreateEditor={(view: EditorView) => {
             editorViewRef.current = view;

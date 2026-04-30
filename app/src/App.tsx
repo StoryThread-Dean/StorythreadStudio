@@ -1,6 +1,6 @@
 // App.tsx -- The Root Layout Component
 // ======================================
-// This is the top-level component of StoryForge's frontend.
+// This is the top-level component of Storythread Studio's frontend.
 //
 // IMPORTANT React rule: "Rules of Hooks"
 //   Every hook (useState, useEffect, useCallback, useRef) must be called
@@ -121,7 +121,7 @@ function App() {
 
   // Writing Companion panel width -- toggle between compact and wide, persisted
   // to localStorage so the writer's preference survives restarts.
-  const writingCompanionPanel = useRightPanelWidth("storyforge.writingCompanion.width");
+  const writingCompanionPanel = useRightPanelWidth("storythread.writingCompanion.width");
 
   // Settings modal visibility
   const [showSettings, setShowSettings] = useState(false);
@@ -1191,7 +1191,7 @@ function App() {
         <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-400" />
         <p className="text-xs text-red-100">
           <span className="font-semibold">Backend not responding.</span>{" "}
-          StoryForge can't reach the local API at <span className="font-mono">localhost:8000</span>.
+          Storythread Studio can't reach the local API at <span className="font-mono">localhost:8000</span>.
           Start it with{" "}
           <span className="rounded border border-red-800 bg-red-900/70 px-1 font-mono text-[10px] text-red-200">
             uv run uvicorn app.main:app --reload --port 8000
@@ -1243,7 +1243,7 @@ function App() {
 
         <div className="border-b border-[#1e1e4a] px-4 py-4">
           <h1 className="text-lg font-semibold tracking-wide text-[#f0f0f5]">
-            StoryForge
+            Storythread Studio
           </h1>
 
           {/* Project title + switcher dropdown + settings gear */}

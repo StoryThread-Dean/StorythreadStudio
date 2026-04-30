@@ -3,7 +3,7 @@
 # Tracks which projects have been opened so the dashboard can show them
 # on next launch without the writer having to find the folder again.
 #
-# Stored in ~/.storyforge/storyforge.json alongside settings.json.
+# Stored in ~/.storythread/storythread.json alongside settings.json.
 # Each entry records the project's ID, title, path, and when it was
 # last opened. The list is sorted by last_opened (most recent first).
 #
@@ -17,8 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Same directory as settings.json -- user's home, not per-project
-STORYFORGE_DIR  = Path.home() / ".storyforge"
-RECENT_FILE     = STORYFORGE_DIR / "storyforge.json"
+STORYTHREAD_DIR = Path.home() / ".storythread"
+RECENT_FILE     = STORYTHREAD_DIR / "storythread.json"
 
 
 def load_recent() -> list[dict]:
@@ -69,7 +69,7 @@ def track_project(
     Add or update a project in the recent list.
     Called every time a project is created or opened.
     """
-    STORYFORGE_DIR.mkdir(parents=True, exist_ok=True)
+    STORYTHREAD_DIR.mkdir(parents=True, exist_ok=True)
 
     entries = load_recent()
     now = datetime.now(timezone.utc).isoformat()
@@ -116,7 +116,7 @@ def remove_project(project_id: str) -> None:
 
 def _save(entries: list[dict]) -> None:
     """Write the entries list to disk. Strips the 'exists' field before saving."""
-    STORYFORGE_DIR.mkdir(parents=True, exist_ok=True)
+    STORYTHREAD_DIR.mkdir(parents=True, exist_ok=True)
 
     # Remove the runtime 'exists' flag before persisting
     clean = []

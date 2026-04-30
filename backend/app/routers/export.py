@@ -51,6 +51,13 @@ class ExportRequest(BaseModel):
     include_notes:             bool = False
     include_profiles:          bool = False
 
+    # Optional chapter filter. When None or empty, ALL chapters in manuscript/
+    # are exported (preserves the original behavior for callers that don't pass
+    # the field). When non-empty, only chapters whose filename appears in this
+    # list are included -- letting the writer export, say, just chapters 3-5
+    # for sharing a draft excerpt without splitting their project.
+    chapter_filenames: list[str] | None = None
+
 
 class ExportResponse(BaseModel):
     """Confirmation returned after a successful export."""
@@ -89,29 +96,47 @@ def _manuscript_dir(folder_path: str) -> str:
     return manuscript
 
 
-def _collect_chapters(folder_path: str) -> list[tuple[str, str]]:
+def _collect_chapters(
+    folder_path: str,
+    only_filenames: list[str] | None = None,
+) -> list[tuple[str, str]]:
     """
     Scans the manuscript/ folder for .md files, reads each one, and returns
     them as a sorted list of (filename, content) tuples.
 
     Sorting by filename ensures chapters come out in the right order when
     they're named like 01-chapter-one.md, 02-chapter-two.md, etc.
+
+    When `only_filenames` is provided (and non-empty), only chapters whose
+    filename appears in the set are returned. This powers the per-chapter
+    selection UI in ExportModal -- the writer picks which chapters to export
+    instead of the all-or-nothing behavior. None / empty list = include all
+    (preserves the original behavior for older callers).
     """
     manuscript = _manuscript_dir(folder_path)
     chapters: list[tuple[str, str]] = []
 
+    # Build a fast lookup set if a filter was supplied. Comparing filenames
+    # is safe here -- the manuscript folder is flat (no subdirectories) so
+    # there's no path-traversal risk from this check alone, and the
+    # _manuscript_dir() guard already locks us inside the project.
+    filter_set: set[str] | None = set(only_filenames) if only_filenames else None
+
     # os.scandir is efficient -- it reads directory entries without extra stat calls
     with os.scandir(manuscript) as entries:
         for entry in entries:
-            if entry.is_file() and entry.name.endswith(".md"):
-                try:
-                    with open(entry.path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    chapters.append((entry.name, content))
-                except OSError:
-                    # Skip files we can't read -- better to export what we can
-                    # than to fail the whole operation
-                    pass
+            if not (entry.is_file() and entry.name.endswith(".md")):
+                continue
+            if filter_set is not None and entry.name not in filter_set:
+                continue
+            try:
+                with open(entry.path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                chapters.append((entry.name, content))
+            except OSError:
+                # Skip files we can't read -- better to export what we can
+                # than to fail the whole operation
+                pass
 
     # Sort by filename so chapters appear in numeric/alphabetical order
     chapters.sort(key=lambda c: c[0])
@@ -248,9 +273,17 @@ async def export_full_manuscript(request: ExportRequest):
     folder_path = request.folder_path
     exports = _exports_dir(folder_path)
 
-    # Collect all chapter files from manuscript/
-    chapters = _collect_chapters(folder_path)
+    # Collect chapter files. When the writer passed a filter list (per-chapter
+    # selection from ExportModal), only those chapters end up in the export.
+    chapters = _collect_chapters(folder_path, request.chapter_filenames)
     if not chapters:
+        # Two distinct empty cases: no chapters at all vs. nothing matched the
+        # selection. The error message helps the writer tell them apart.
+        if request.chapter_filenames:
+            raise HTTPException(
+                status_code=404,
+                detail="None of the selected chapter filenames matched files in manuscript/."
+            )
         raise HTTPException(
             status_code=404,
             detail="No chapters found in manuscript/ folder. Write some chapters first!"
@@ -395,13 +428,23 @@ async def export_snapshot(request: ExportRequest):
 
     copied_count = 0
 
-    # Copy all .md files from manuscript/ into the snapshot
+    # Optional per-chapter filter: when the writer chose specific chapters in
+    # ExportModal, the snapshot only mirrors those (the other manuscript files
+    # are simply not copied). None / empty list = full snapshot, same as before.
+    chapter_filter: set[str] | None = (
+        set(request.chapter_filenames) if request.chapter_filenames else None
+    )
+
+    # Copy selected .md files from manuscript/ into the snapshot
     try:
         with os.scandir(manuscript) as entries:
             for entry in entries:
-                if entry.is_file() and entry.name.endswith(".md"):
-                    shutil.copy2(entry.path, os.path.join(snapshot_dir, entry.name))
-                    copied_count += 1
+                if not (entry.is_file() and entry.name.endswith(".md")):
+                    continue
+                if chapter_filter is not None and entry.name not in chapter_filter:
+                    continue
+                shutil.copy2(entry.path, os.path.join(snapshot_dir, entry.name))
+                copied_count += 1
     except OSError as e:
         raise HTTPException(
             status_code=500,
@@ -459,6 +502,11 @@ async def export_snapshot(request: ExportRequest):
             shutil.rmtree(snapshot_dir)
         except OSError:
             pass
+        if chapter_filter is not None:
+            raise HTTPException(
+                status_code=404,
+                detail="None of the selected chapter filenames matched files in manuscript/."
+            )
         raise HTTPException(
             status_code=404,
             detail="No chapters found in manuscript/ folder. Nothing to snapshot."

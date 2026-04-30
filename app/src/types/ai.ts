@@ -16,7 +16,7 @@ export interface AppSettings {
   model_blocklist:        string[];  // excluded models (ignored if allowlist set)
   model_content_modes:    Record<string, string[]>;  // model ID -> allowed content modes
   // Parent folder where new projects and series are auto-placed. The backend
-  // resolves blanks to ~/Documents/StoryForge and always returns a real path
+  // resolves blanks to ~/Documents/Storythread Studio and always returns a real path
   // here -- the UI can treat it as non-null for display purposes.
   vault_root:             string;
 }
@@ -26,7 +26,7 @@ export interface UpdateSettingsPayload {
   default_model?:      string;
   content_mode?:       string;
   cost_tier?:          string;
-  // Empty string resets to the default (~/Documents/StoryForge).
+  // Empty string resets to the default (~/Documents/Storythread Studio).
   vault_root?:         string;
 }
 

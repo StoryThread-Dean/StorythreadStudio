@@ -1,4 +1,4 @@
-# StoryForge Backend -- Main Entry Point
+# Storythread Studio Backend -- Main Entry Point
 # ========================================
 # This is where the backend server starts. When you run the server,
 # Python loads this file, builds the FastAPI app, and begins listening
@@ -23,8 +23,8 @@ from app.routers import projects, documents, profiles, settings, ai, series, exp
 # We pass it a title, description, and version -- these show up
 # automatically in the interactive API docs at http://localhost:8000/docs
 app = FastAPI(
-    title="StoryForge API",
-    description="Local backend server for the StoryForge writing app.",
+    title="Storythread Studio API",
+    description="Local backend server for the Storythread Studio writing app.",
     version="0.1.0",
 )
 
@@ -64,7 +64,7 @@ app.add_middleware(
 async def root():
     """Friendly welcome message shown at the root URL."""
     return {
-        "message": "StoryForge backend is running.",
+        "message": "Storythread Studio backend is running.",
         "tip": "Visit http://localhost:8000/docs for the interactive API explorer.",
     }
 
@@ -79,7 +79,7 @@ async def health_check():
     """Returns a simple OK status. Use this to confirm the server is running."""
     return {
         "status": "ok",
-        "app": "StoryForge API",
+        "app": "Storythread Studio API",
         "version": "0.1.0",
     }
 

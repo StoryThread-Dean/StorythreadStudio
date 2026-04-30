@@ -2,8 +2,7 @@
 
 ## Product Name
 
-**StoryForge**  
-Working concept name only.
+**Storythread Studio**
 
 ## Product Definition
 

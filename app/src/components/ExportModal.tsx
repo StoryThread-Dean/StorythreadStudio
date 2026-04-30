@@ -8,12 +8,19 @@
 // The modal shows success/error feedback inline so the writer can see
 // exactly where their export was saved without leaving the editor.
 //
-// This follows the same overlay pattern used by Settings and ProjectSettings:
-// fixed full-screen backdrop with a centered card on top.
+// Phase 6 polish: writers can pick which chapters to export instead of always
+// shipping every file. The Chapters section is expandable so the default
+// surface stays compact -- the common case (export everything) is still one
+// click. When the writer expands it, they get checkboxes plus select-all /
+// none controls. The backend treats "no filenames" as "all chapters" so
+// older callers and the collapsed-default flow keep working unchanged.
 
-import { useState } from "react";
-import { X, FileText, Camera, CheckCircle, AlertCircle, Loader } from "lucide-react";
-import type { ProjectInfo } from "../types/project";
+import { useEffect, useMemo, useState } from "react";
+import {
+  X, FileText, Camera, CheckCircle, AlertCircle, Loader,
+  ChevronDown, ChevronRight,
+} from "lucide-react";
+import type { ProjectInfo, ChapterInfo } from "../types/project";
 
 const API_BASE = "http://localhost:8000";
 
@@ -37,6 +44,63 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
   const [includeNotes,            setIncludeNotes]            = useState(false);
   const [includeProfiles,         setIncludeProfiles]         = useState(false);
 
+  // --- Chapter selection state ---
+  // chapters: list of every chapter file in manuscript/ (fetched on mount).
+  // selectedFilenames: which ones the writer has checked. Starts as the full
+  // set so the default behavior matches the old "export everything" flow.
+  // chaptersExpanded: whether the picker is open. Collapsed by default to
+  // keep the modal compact; the writer can open it to narrow the export.
+  const [chapters, setChapters] = useState<ChapterInfo[]>([]);
+  const [selectedFilenames, setSelectedFilenames] = useState<Set<string>>(new Set());
+  const [chaptersExpanded, setChaptersExpanded] = useState(false);
+  const [chaptersLoadError, setChaptersLoadError] = useState<string | null>(null);
+
+  // Fetch the chapter list once when the modal opens. We need this to render
+  // the per-chapter checkboxes; without it the writer has nothing to pick.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ folder_path: project.root_path });
+        const res = await fetch(`${API_BASE}/api/documents/chapters?${params}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "Failed to load chapter list.");
+        }
+        const list = (await res.json()) as ChapterInfo[];
+        if (cancelled) return;
+        setChapters(list);
+        // Default selection = all chapters. Writer can uncheck to narrow it.
+        setSelectedFilenames(new Set(list.map((c) => c.filename)));
+      } catch (err) {
+        if (!cancelled) {
+          setChaptersLoadError(err instanceof Error ? err.message : "Could not load chapter list.");
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [project.root_path]);
+
+  // Derived: are all / none selected? Drives the "Select all" / "Clear"
+  // shortcut buttons and lets us render an indeterminate-looking summary.
+  const allSelected = useMemo(
+    () => chapters.length > 0 && selectedFilenames.size === chapters.length,
+    [chapters.length, selectedFilenames.size],
+  );
+  const noneSelected = selectedFilenames.size === 0;
+
+  function toggleChapter(filename: string) {
+    setSelectedFilenames((prev) => {
+      const next = new Set(prev);
+      if (next.has(filename)) next.delete(filename);
+      else next.add(filename);
+      return next;
+    });
+  }
+
+  function selectAll()  { setSelectedFilenames(new Set(chapters.map((c) => c.filename))); }
+  function selectNone() { setSelectedFilenames(new Set()); }
+
   // --- Export Handlers ---
 
   const handleExport = async (exportType: "full-manuscript" | "snapshot") => {
@@ -45,6 +109,12 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
     setResult(null);
 
     try {
+      // If the writer left every box checked, send `null` for chapter_filenames
+      // so the backend takes the all-chapters fast path. Sending the full list
+      // would work too but the explicit "all" intent is clearer in logs.
+      const sendAll = allSelected || chapters.length === 0;
+      const chapterFilenames = sendAll ? null : Array.from(selectedFilenames);
+
       const res = await fetch(`${API_BASE}/api/export/${exportType}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -54,6 +124,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           include_scene_summaries:   includeSceneSummaries,
           include_notes:             includeNotes,
           include_profiles:          includeProfiles,
+          chapter_filenames:         chapterFilenames,
         }),
       });
 
@@ -82,7 +153,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal card */}
-      <div className="relative flex w-full max-w-md flex-col rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-md flex-col rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] shadow-2xl">
 
         {/* Header */}
         <div
@@ -99,8 +170,96 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           </button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: "1.5rem" }} className="flex flex-col gap-4">
+        {/* Body -- scrollable when the chapter picker is expanded on long projects */}
+        <div style={{ padding: "1.5rem" }} className="flex flex-col gap-4 overflow-y-auto">
+
+          {/* ── Chapter picker ─────────────────────────────────────────────
+              Expandable list of every chapter in manuscript/. Collapsed by
+              default with a one-line summary so the modal stays small for
+              the common "export everything" case. Expanding reveals
+              checkboxes + Select all / Clear shortcuts. */}
+          <div className="rounded-lg border border-[#1e1e4a] bg-[#070724]">
+            <button
+              type="button"
+              onClick={() => setChaptersExpanded((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 p-3 text-left"
+            >
+              <span className="flex items-center gap-2 text-xs font-medium text-[#a5b4fc]">
+                {chaptersExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                Chapters
+              </span>
+              <span className="text-[11px] text-[#8888aa]">
+                {chaptersLoadError
+                  ? "load failed"
+                  : chapters.length === 0
+                  ? "loading..."
+                  : allSelected
+                  ? `All ${chapters.length} chapters`
+                  : noneSelected
+                  ? "None selected"
+                  : `${selectedFilenames.size} of ${chapters.length}`}
+              </span>
+            </button>
+
+            {chaptersExpanded && (
+              <div className="border-t border-[#1e1e4a] p-3">
+                {chaptersLoadError ? (
+                  <p className="text-xs text-red-300">{chaptersLoadError}</p>
+                ) : chapters.length === 0 ? (
+                  <p className="text-xs text-[#8888aa]">No chapters found in manuscript/.</p>
+                ) : (
+                  <>
+                    <div className="mb-2 flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={selectAll}
+                        disabled={allSelected || isExporting}
+                        className="rounded border border-[#1e1e4a] px-2 py-0.5 text-[#a5b4fc] transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={selectNone}
+                        disabled={noneSelected || isExporting}
+                        className="rounded border border-[#1e1e4a] px-2 py-0.5 text-[#a5b4fc] transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Clear
+                      </button>
+                      <span className="ml-auto text-[10px] text-[#6666a0]">
+                        {selectedFilenames.size}/{chapters.length}
+                      </span>
+                    </div>
+
+                    {/* Cap the visible list height so a 50-chapter project
+                        doesn't make the modal taller than the window. */}
+                    <div className="max-h-48 overflow-y-auto rounded border border-[#1e1e4a] bg-[#0d0d2b] p-2">
+                      <div className="flex flex-col gap-1">
+                        {chapters.map((c) => (
+                          <label
+                            key={c.filename}
+                            className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-[#f0f0f5] hover:bg-[#12122e]"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedFilenames.has(c.filename)}
+                              onChange={() => toggleChapter(c.filename)}
+                              disabled={isExporting}
+                              className="accent-indigo-500"
+                            />
+                            <span className="flex-1 truncate" title={c.title}>{c.title}</span>
+                            <span className="shrink-0 font-mono text-[10px] text-[#6666a0]">
+                              {c.filename}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Optional extras -- toggled before picking Full Manuscript or Snapshot.
               Full Manuscript embeds the checked sections as appendices in the
@@ -160,14 +319,14 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           {/* Export option: Full Manuscript */}
           <button
             onClick={() => handleExport("full-manuscript")}
-            disabled={isExporting}
+            disabled={isExporting || noneSelected}
             className="flex items-start gap-3 rounded-lg border border-[#1e1e4a] p-4 text-left transition-colors hover:border-indigo-500 hover:bg-[#12122e] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FileText size={20} className="mt-0.5 shrink-0 text-indigo-400" />
             <div>
               <p className="text-sm font-medium text-[#f0f0f5]">Full Manuscript</p>
               <p className="mt-1 text-xs text-[#8888aa]">
-                Combine all chapters into a single Markdown file. Overwrites the
+                Combine selected chapters into a single Markdown file. Overwrites the
                 previous export so you always have one canonical copy.
               </p>
             </div>
@@ -176,18 +335,24 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           {/* Export option: Snapshot */}
           <button
             onClick={() => handleExport("snapshot")}
-            disabled={isExporting}
+            disabled={isExporting || noneSelected}
             className="flex items-start gap-3 rounded-lg border border-[#1e1e4a] p-4 text-left transition-colors hover:border-indigo-500 hover:bg-[#12122e] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Camera size={20} className="mt-0.5 shrink-0 text-indigo-400" />
             <div>
               <p className="text-sm font-medium text-[#f0f0f5]">Snapshot</p>
               <p className="mt-1 text-xs text-[#8888aa]">
-                Save a dated copy of all chapters and project settings.
+                Save a dated copy of selected chapters and project settings.
                 Each snapshot is a new folder so you can look back at earlier versions.
               </p>
             </div>
           </button>
+
+          {noneSelected && chapters.length > 0 && (
+            <p className="text-xs text-amber-300">
+              Pick at least one chapter to export.
+            </p>
+          )}
 
           {/* Loading indicator */}
           {isExporting && (

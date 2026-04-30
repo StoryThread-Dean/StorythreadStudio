@@ -47,7 +47,7 @@ export const STORY_TYPE_LABELS: Record<StoryType, string> = {
 
 
 // --- ProjectInfo ---
-// Represents an open StoryForge writing project.
+// Represents an open Storythread Studio writing project.
 // This is what the backend returns after create or open.
 export interface ProjectInfo {
   project_id:           string;
@@ -70,7 +70,7 @@ export interface ProjectInfo {
 
 
 // --- SeriesInfo ---
-// Represents a StoryForge book series.
+// Represents a Storythread Studio book series.
 // Series hold canonical profiles and shared settings across multiple books.
 export interface SeriesInfo {
   series_id:       string;

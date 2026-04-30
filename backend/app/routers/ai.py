@@ -163,6 +163,12 @@ class GenerateFullSummaryRequest(BaseModel):
 
 class GenerateFullSummaryResponse(BaseModel):
     full_summary: str
+    # Phase 6: names of standalone relationship profiles whose snippets were
+    # injected into the user message. Empty list when no relationships were
+    # found, when the profile isn't a character, or when project_path is
+    # missing. Lets the UI show the writer "we folded in: [Name1, Name2]"
+    # so the relationship-aware behavior is visible instead of opaque.
+    relationship_sources_used: list[str] = []
 
 
 # ── Phase 6: Chapter Summary Generation (plain Markdown) ────────────────────
@@ -978,6 +984,7 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
     # Phase 6: fold in related relationship snippets for character profiles.
     # We keep this purely additive so non-character profiles and older callers
     # (no project_path) hit the same code path as before.
+    relationship_sources_used: list[str] = []
     if request.profile_type == "character" and request.project_path:
         related = _find_related_relationships(request.project_path, request.profile_name)
         if related:
@@ -989,6 +996,7 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
                 rel_block_lines.append(f"[{rel_name}]")
                 rel_block_lines.append(snippet)
                 rel_block_lines.append("")
+                relationship_sources_used.append(rel_name)
             user_message += "\n".join(rel_block_lines) + "\n"
 
     user_message += (
@@ -1007,7 +1015,10 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
     text = _extract_text_field(result, "full_summary")
-    return GenerateFullSummaryResponse(full_summary=sanitize(text.strip()))
+    return GenerateFullSummaryResponse(
+        full_summary=sanitize(text.strip()),
+        relationship_sources_used=relationship_sources_used,
+    )
 
 
 # ── Phase 6 helpers: chapter summary file I/O ───────────────────────────────

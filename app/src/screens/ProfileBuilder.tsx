@@ -375,6 +375,13 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // Generation state -- tracks which field is being AI-generated
   const [generatingField, setGeneratingField] = useState<string | null>(null);
 
+  // Phase 6: which standalone relationship profiles were folded into the most
+  // recent Full AI Summary generation. Set after a successful character-profile
+  // generate-full-summary call; cleared when the writer switches profiles.
+  // Surfaces the otherwise invisible relationship-aware behavior so the writer
+  // can see "we used: [Alex's Father, The Mentor]" inline with the summary card.
+  const [relationshipSourcesUsed, setRelationshipSourcesUsed] = useState<string[]>([]);
+
   // Chat state -- session-only, no server persistence
   const [chatMessages, setChatMessages] = useState<ProfileChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -401,7 +408,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // Right panel width -- toggleable compact/wide, persisted per localStorage.
   // Separate key from the Writing Companion so the two panels can have
   // independent preferences.
-  const chatPanel = useRightPanelWidth("storyforge.profileBuilder.chatWidth");
+  const chatPanel = useRightPanelWidth("storythread.profileBuilder.chatWidth");
 
   // Find & Replace bar -- shown at the top of the center panel when the
   // writer presses Ctrl+F or Ctrl+H. Because the profile editor uses plain
@@ -488,6 +495,10 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       }
       setProfile(await res.json());
       setIsDirty(false);
+      // Each profile gets its own list of folded-in relationships. Clear the
+      // badge from the previously open profile so it doesn't follow the writer
+      // around when they switch profiles before regenerating.
+      setRelationshipSourcesUsed([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load profile.");
     } finally {
@@ -931,6 +942,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       }
       const data = await res.json();
       updateProfileField("full_ai_summary", data.full_summary);
+      // Reflect what the backend folded in. Empty list when none were found
+      // (or when the profile is not a character) so the badge stays hidden.
+      setRelationshipSourcesUsed(Array.isArray(data.relationship_sources_used)
+        ? data.relationship_sources_used
+        : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not generate full summary.");
     } finally {
@@ -1543,6 +1559,8 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     <p className="mt-0.5 text-xs text-teal-700">
                       {profile.type === "chapter_summary" || profile.type === "scene_summary"
                         ? "Used as AI context when attached as a context chip in the editor."
+                        : profile.type === "character"
+                        ? "Attached as a context chip in the editor. Click Generate to refine -- this character's Relationships Overview and any standalone relationship profiles that mention them are folded in automatically."
                         : "Attached as a context chip in the editor. Generate after filling in the sections above."}
                     </p>
                   </div>
@@ -1570,6 +1588,28 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                   minRows={4}
                   dataField="full_ai_summary"
                 />
+
+                {/* Phase 6 visibility cue: when the character's Full Summary
+                    was just regenerated and the backend folded in standalone
+                    relationship profiles, list them here. The Relationships
+                    Overview section inside the profile is always considered
+                    by the prompt -- this badge specifically calls out the
+                    EXTRA standalone relationship files that were pulled in
+                    so the writer can confirm the relationship-aware behavior
+                    is firing instead of having to guess. */}
+                {profile.type === "character" && relationshipSourcesUsed.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-teal-300">
+                    <span className="text-teal-500">Folded in {relationshipSourcesUsed.length} relationship profile{relationshipSourcesUsed.length === 1 ? "" : "s"}:</span>
+                    {relationshipSourcesUsed.map((name) => (
+                      <span
+                        key={name}
+                        className="rounded-full border border-teal-700/50 bg-teal-950/60 px-2 py-0.5 text-teal-200"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
             </div>

@@ -7,7 +7,7 @@
 #
 # Why OpenRouter?
 # One API key gives access to many models from different providers
-# (OpenAI, Anthropic, Mistral, etc.). This lets StoryForge route requests
+# (OpenAI, Anthropic, Mistral, etc.). This lets Storythread Studio route requests
 # to different models based on task type and content mode without requiring
 # the user to hold multiple API keys.
 #
@@ -40,7 +40,7 @@ async def list_models(api_key: str) -> list[dict]:
     Returns a simplified list with just the fields the UI needs.
 
     The full OpenRouter response has many fields; we extract only what
-    StoryForge needs to display in the model picker and do routing.
+    Storythread Studio needs to display in the model picker and do routing.
     """
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         response = await client.get(
@@ -165,7 +165,7 @@ async def run_completion(
                     "Content-Type":  "application/json",
                     # OpenRouter recommends these headers for tracking
                     "HTTP-Referer":  "http://localhost:1420",
-                    "X-Title":       "StoryForge",
+                    "X-Title":       "Storythread Studio",
                 },
                 json=payload,
             )
@@ -274,7 +274,7 @@ async def run_chat(
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type":  "application/json",
                     "HTTP-Referer":  "http://localhost:1420",
-                    "X-Title":       "StoryForge",
+                    "X-Title":       "Storythread Studio",
                 },
                 json=payload,
             )

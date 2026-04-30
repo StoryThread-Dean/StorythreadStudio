@@ -7,7 +7,7 @@
 # a parent folder that holds several related novels.
 #
 # Directory structure:
-#   ~/Documents/StoryForge/
+#   ~/Documents/Storythread Studio/
 #     The Ember Throne Saga/          <- series folder
 #       series.json                   <- series-level settings
 #       profiles/                     <- canonical series-level profiles
@@ -51,7 +51,7 @@ SERIES_PROFILE_FOLDERS = [
 class CreateSeriesRequest(BaseModel):
     """Data the frontend sends when creating a new series."""
     # Optional: when omitted/empty the backend places the new series under
-    # the vault root (default ~/Documents/StoryForge) using a slugified
+    # the vault root (default ~/Documents/Storythread Studio) using a slugified
     # version of the series name. Same UX rationale as project creation:
     # the writer never gets prompted for a folder.
     folder_path: str = ""
@@ -114,7 +114,7 @@ def _read_series_json(folder_path: str) -> dict:
         raise HTTPException(
             status_code=404,
             detail=f"No series.json found in: {folder_path}\n"
-                   "This folder doesn't appear to be a StoryForge series."
+                   "This folder doesn't appear to be a Storythread Studio series."
         )
 
     try:
@@ -160,7 +160,7 @@ async def create_series(request: CreateSeriesRequest):
       4. Return series info
     """
     # Resolve the parent folder. If the frontend didn't pass one, use the
-    # vault root (default ~/Documents/StoryForge). Imported inline to keep
+    # vault root (default ~/Documents/Storythread Studio). Imported inline to keep
     # the top-of-file import graph small and avoid a circular dependency
     # if settings_store ever ends up importing from this module.
     from app.routers.projects import _slugify_folder_name, _unique_folder

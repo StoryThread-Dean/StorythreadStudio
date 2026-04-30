@@ -1,7 +1,7 @@
 # settings_store.py -- Global App Settings
 # ==========================================
 # Stores and retrieves app-wide settings (API key, default model, etc.)
-# in a JSON file at ~/.storyforge/settings.json.
+# in a JSON file at ~/.storythread/settings.json.
 #
 # Why a file and not SQLite here?
 # Settings are global (not per-project), small, and rarely change.
@@ -9,7 +9,7 @@
 # for this use case. The per-project SQLite DB (app.db) is for caching
 # and indexing -- not global config.
 #
-# Why ~/.storyforge/?
+# Why ~/.storythread/?
 # It lives in the user's home directory, not the project folder, so the
 # API key doesn't accidentally get committed to a project's git repo.
 
@@ -18,18 +18,18 @@ import os
 from pathlib import Path
 
 # The directory and file where settings are stored
-SETTINGS_DIR  = Path.home() / ".storyforge"
+SETTINGS_DIR  = Path.home() / ".storythread"
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 
 
 def _default_vault_root() -> str:
     """
-    The fallback location for the StoryForge "vault" -- the parent folder
+    The fallback location for the Storythread Studio "vault" -- the parent folder
     where new projects and series are created. Defaults to the user's
-    Documents/StoryForge so the writer doesn't have to pick a folder every
-    time they start a new project.
+    Documents/Storythread Studio so the writer doesn't have to pick a folder
+    every time they start a new project.
     """
-    return str(Path.home() / "Documents" / "StoryForge")
+    return str(Path.home() / "Documents" / "Storythread Studio")
 
 
 # Default values used when settings.json doesn't exist yet or is missing a key
@@ -87,7 +87,7 @@ def load_settings() -> dict:
 
 def save_settings(settings: dict) -> None:
     """
-    Write settings to disk. Creates ~/.storyforge/ if it doesn't exist.
+    Write settings to disk. Creates ~/.storythread/ if it doesn't exist.
     Only saves known keys (ignores unknown fields from the request).
     """
     SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -113,7 +113,7 @@ def get_vault_root() -> str:
     """
     Return the resolved vault root path and ensure the directory exists.
 
-    Falls back to the default location (Documents/StoryForge) if the saved
+    Falls back to the default location (Documents/Storythread Studio) if the saved
     value is empty or whitespace. Always creates the directory tree if it's
     missing, so callers don't have to worry about first-run setup.
     """

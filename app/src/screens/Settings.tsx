@@ -1,6 +1,6 @@
 // Settings.tsx -- Expanded Settings Modal
 // =========================================
-// A scrollable modal overlay for configuring StoryForge's AI behaviour,
+// A scrollable modal overlay for configuring Storythread Studio's AI behaviour,
 // model selection, and content preferences.
 //
 // Sections:
@@ -111,7 +111,7 @@ export function Settings({ onClose }: SettingsProps) {
   const [modelContentModes, setModelContentModes] = useState("");
 
   // Vault location -- parent folder where new projects/series are auto-placed.
-  // The backend resolves an empty string to ~/Documents/StoryForge, so we
+  // The backend resolves an empty string to ~/Documents/Storythread Studio, so we
   // treat "" as a sentinel meaning "use the default".
   const [vaultRoot, setVaultRoot] = useState("");
 
@@ -642,14 +642,14 @@ export function Settings({ onClose }: SettingsProps) {
                       type="text"
                       value={vaultRoot}
                       onChange={e => setVaultRoot(e.target.value)}
-                      placeholder="C:\\Users\\You\\Documents\\StoryForge"
+                      placeholder="C:\\Users\\You\\Documents\\Storythread Studio"
                       className="flex-1 rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
                     />
                     <button
                       onClick={async () => {
                         const picked = await openDialog({
                           directory: true, multiple: false,
-                          title: "Choose a parent folder for new StoryForge projects",
+                          title: "Choose a parent folder for new Storythread Studio projects",
                         });
                         if (typeof picked === "string") setVaultRoot(picked);
                       }}
@@ -662,7 +662,7 @@ export function Settings({ onClose }: SettingsProps) {
                   </div>
                   <p className="mt-2 text-xs text-[#3f3f7a]">
                     Leave blank and save to reset to the default
-                    (<code className="text-indigo-400">~/Documents/StoryForge</code>).
+                    (<code className="text-indigo-400">~/Documents/Storythread Studio</code>).
                   </p>
                 </div>
               </section>

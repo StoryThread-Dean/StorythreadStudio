@@ -41,7 +41,7 @@ Deliverable:
 
 ## Phase 3: OpenRouter Integration -- COMPLETE
 Built:
-- API key storage in ~/.storyforge/settings.json
+- API key storage in ~/.storythread/settings.json
 - model listing from OpenRouter (populates Settings model picker)
 - connection test endpoint
 - assistant execution pipeline (run-assistant, sanitize, return structured JSON)

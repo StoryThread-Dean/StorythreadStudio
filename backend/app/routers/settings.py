@@ -3,7 +3,7 @@
 # Exposes endpoints to read and write global app settings
 # (API key, default model, content mode, cost tier).
 #
-# Settings are stored in ~/.storyforge/settings.json via settings_store.py.
+# Settings are stored in ~/.storythread/settings.json via settings_store.py.
 #
 # Routes:
 #   GET  /api/settings        -- return current settings (API key is masked)
@@ -34,7 +34,7 @@ class SettingsResponse(BaseModel):
     model_blocklist:        list[str]
     model_content_modes:    dict[str, list[str]]
     # Parent folder where new projects and series are placed. Defaults to
-    # ~/Documents/StoryForge. Returned to the frontend so the Settings screen
+    # ~/Documents/Storythread Studio. Returned to the frontend so the Settings screen
     # can show the current path (and change it).
     vault_root:             str
 
@@ -50,7 +50,7 @@ class UpdateSettingsRequest(BaseModel):
     model_allowlist:     list[str] | None             = None
     model_blocklist:     list[str] | None             = None
     model_content_modes: dict[str, list[str]] | None  = None
-    # Empty string resets to the default location (~/Documents/StoryForge).
+    # Empty string resets to the default location (~/Documents/Storythread Studio).
     # Any non-empty value is taken as-is. The directory is created on next
     # use; we don't validate it exists at save time so writers can set a
     # not-yet-created folder if they want.

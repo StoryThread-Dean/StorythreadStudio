@@ -71,7 +71,7 @@ Context chips, ai_usage_example generation, section/full summaries, Profile Buil
 
 ---
 
-## What StoryForge Is
+## What Storythread Studio Is
 
 A **Windows desktop, local-first Markdown writing app** for fiction writers. The writer does all the drafting. AI acts as reviewer, editor, and brainstorming partner -- never a ghostwriter. AI assists on demand; it never auto-applies changes or autonomously updates story content.
 
@@ -95,7 +95,7 @@ A **Windows desktop, local-first Markdown writing app** for fiction writers. The
 ## Repository Structure
 
 ```
-StoryForge/               <- repo root (spec docs + config live here)
+StorythreadStudio/        <- repo root (spec docs + config live here)
   app/                    <- Tauri + React frontend (run npm commands from here)
     src/                  <- React/TypeScript source files
     src-tauri/            <- Tauri/Rust shell
@@ -160,7 +160,7 @@ npm run lint
 
 ## Architecture Overview
 
-StoryForge uses a **three-layer local architecture**. No cloud. No sync. Everything runs on the user's machine.
+Storythread Studio uses a **three-layer local architecture**. No cloud. No sync. Everything runs on the user's machine.
 
 ```
 [ Tauri Window ]
@@ -179,7 +179,7 @@ StoryForge uses a **three-layer local architecture**. No cloud. No sync. Everyth
 Two storage systems work together:
 
 - **Markdown files** -- the permanent source of truth. Chapters, profiles, notes, and summaries all live as `.md` files in the project folder. These are human-readable and can be backed up or published to GitHub as-is.
-- **SQLite** (`<project>/.storyforge/app.db`) -- a fast local cache. Stores parsed profile data, settings, model registry, and the assistant registry. Can be rebuilt from Markdown if corrupted or deleted.
+- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. Stores parsed profile data, settings, model registry, and the assistant registry. Can be rebuilt from Markdown if corrupted or deleted.
 
 Think of Markdown as the filing cabinet and SQLite as the index cards on your desk -- the cabinet is what matters; the index cards just make lookup faster.
 
@@ -194,7 +194,7 @@ MyNovel/
   notes/                <- outline, style guide, themes
   profiles/             <- characters, relationships, locations, lore, summaries
   exports/              <- combined manuscripts and dated snapshots
-  .storyforge/          <- app.db, cache, logs (NOT source code)
+  .storythread/          <- app.db, cache, logs (NOT source code)
 ```
 
 Full folder schema is in `02-architecture-and-storage.md`.

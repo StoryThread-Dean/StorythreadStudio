@@ -36,7 +36,7 @@ This architecture fits the project because it:
 ## Project Folder Structure
 
 ```text
-StoryForge/
+StorythreadStudio/
   project.json
   manuscript/
     01-chapter-one.md
@@ -63,7 +63,7 @@ StoryForge/
   exports/
     manuscript-full.md
     snapshot-YYYY-MM-DD.md
-  .storyforge/
+  .storythread/
     app.db
     cache/
     logs/

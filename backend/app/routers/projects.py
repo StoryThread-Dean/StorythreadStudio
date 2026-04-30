@@ -1,6 +1,6 @@
 # routers/projects.py -- Project Create and Open API
 # =====================================================
-# This file handles everything related to StoryForge writing projects:
+# This file handles everything related to Storythread Studio writing projects:
 # creating a new project (folder structure + project.json) and opening
 # an existing one (reading project.json from a chosen folder).
 #
@@ -72,7 +72,7 @@ PROJECT_FOLDERS = [
     "profiles/chapters",
     "profiles/scenes",
     "exports",
-    ".storyforge",       # Hidden folder for app.db, cache, logs
+    ".storythread",      # Hidden folder for app.db, cache, logs
 ]
 
 # Default starter files created in a new project.
@@ -100,7 +100,7 @@ STARTER_FILES = {
 # ── Vault placement helpers ──────────────────────────────────────────────────
 # Phase 6+: when the frontend creates a project or series without a specific
 # folder_path, we generate one for them under the configured vault root
-# (defaults to ~/Documents/StoryForge). The writer never has to pick a folder
+# (defaults to ~/Documents/Storythread Studio). The writer never has to pick a folder
 # for new projects -- only when opening one. These helpers do that.
 
 def _slugify_folder_name(title: str) -> str:
@@ -184,7 +184,7 @@ def _write_outline_template(
 class CreateProjectRequest(BaseModel):
     """Data the frontend sends when creating a new project."""
     # Optional: when omitted/empty, the backend places the new project under
-    # the configured vault root (default ~/Documents/StoryForge) using a
+    # the configured vault root (default ~/Documents/Storythread Studio) using a
     # slugified version of the title. The writer never has to pick a folder
     # for new projects in the redesigned ProjectHome flow.
     folder_path: str = ""
@@ -259,7 +259,7 @@ def _read_project_json(folder_path: str) -> dict:
         raise HTTPException(
             status_code=404,
             detail=f"No project.json found in: {folder_path}\n"
-                   "This folder doesn't appear to be a StoryForge project."
+                   "This folder doesn't appear to be a Storythread Studio project."
         )
 
     try:
@@ -276,7 +276,7 @@ def _read_project_json(folder_path: str) -> dict:
 @router.post("/create", response_model=ProjectResponse)
 async def create_project(request: CreateProjectRequest):
     """
-    Creates a new StoryForge writing project.
+    Creates a new Storythread Studio writing project.
 
     Steps:
       1. Validate the folder path exists and is accessible
@@ -290,7 +290,7 @@ async def create_project(request: CreateProjectRequest):
     return value against the ProjectResponse model before sending it.
     """
     # Resolve the target folder. If the frontend didn't pass one, place the
-    # project under the configured vault (default ~/Documents/StoryForge)
+    # project under the configured vault (default ~/Documents/Storythread Studio)
     # with a slugified title. _resolve_create_folder returns a path that
     # does NOT yet exist when the vault path is used, so we don't need the
     # legacy "no project already exists" check in that case. We still keep
@@ -309,7 +309,7 @@ async def create_project(request: CreateProjectRequest):
         if os.path.exists(os.path.join(folder, "project.json")):
             raise HTTPException(
                 status_code=409,   # 409 = Conflict
-                detail="A StoryForge project already exists in this folder. "
+                detail="A Storythread Studio project already exists in this folder. "
                        "Use 'Open Project' instead."
             )
     else:
@@ -409,10 +409,10 @@ async def create_project(request: CreateProjectRequest):
 @router.post("/open", response_model=ProjectResponse)
 async def open_project(request: OpenProjectRequest):
     """
-    Opens an existing StoryForge project by reading its project.json.
+    Opens an existing Storythread Studio project by reading its project.json.
 
     The frontend sends the folder path the user selected.
-    We validate it's a real StoryForge project folder and return its info.
+    We validate it's a real Storythread Studio project folder and return its info.
     """
     folder = request.folder_path
 
@@ -650,7 +650,7 @@ async def get_project_settings(root_path: str):
 # kind of thing it is so the UI can route accordingly:
 #   - "project" -> open it directly in the editor
 #   - "series"  -> show the books-in-series picker (with [+ Add Book])
-#   - "unknown" -> show a friendly "this doesn't look like StoryForge" error
+#   - "unknown" -> show a friendly "this doesn't look like Storythread Studio" error
 #
 # Listing books for the series case is folded in here so the frontend gets
 # everything in one round-trip. Same scan logic as the existing /list-books
@@ -674,7 +674,7 @@ class InspectFolderResponse(BaseModel):
 @router.get("/inspect-folder", response_model=InspectFolderResponse)
 async def inspect_folder(path: str):
     """
-    Look at a folder and report whether it contains a StoryForge project,
+    Look at a folder and report whether it contains a Storythread Studio project,
     a series, or neither. Used by the unified [Open Project] flow on the
     main menu so a single button handles both cases.
     """
@@ -794,7 +794,7 @@ async def apply_outline_template(request: ApplyOutlineTemplateRequest):
         raise HTTPException(
             status_code=404,
             detail="project.json not found -- can't apply a template to a "
-                   "folder that isn't a StoryForge project."
+                   "folder that isn't a Storythread Studio project."
         )
 
     # Read the project's own metadata

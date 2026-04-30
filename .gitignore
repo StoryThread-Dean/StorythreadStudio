@@ -32,10 +32,10 @@ Thumbs.db
 .env.local
 *.env
 
-# ── StoryForge Writing Projects ───────────────────────────────────────────────
-# The .storyforge folder inside each writing project holds the SQLite database,
+# ── Storythread Studio Writing Projects ──────────────────────────────────────
+# The .storythread folder inside each writing project holds the SQLite database,
 # cache files, and logs. These are generated at runtime, not source code.
-**/.storyforge/
+**/.storythread/
 .claude/settings.local.json
 
 # ── Local developer reference material (not source) ──────────────────────────
