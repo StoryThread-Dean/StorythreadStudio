@@ -23,6 +23,7 @@ import { search, openSearchPanel, searchKeymap } from "@codemirror/search";
 import { createTheme } from "@uiw/codemirror-themes";
 import { tags as t } from "@lezer/highlight";
 import type { FontValue } from "./EditorToolbar";
+import { useTheme } from "../hooks/useTheme";
 
 
 // --- Font Compartment ---
@@ -31,7 +32,11 @@ import type { FontValue } from "./EditorToolbar";
 const fontCompartment = new Compartment();
 
 // Builds a CodeMirror theme extension for a given font.
-// Only controls typography -- colors are handled by storythreadColorTheme.
+// Only controls typography -- syntax highlighting colors are handled by
+// the dark/light color themes below. Where this DOES set colors (caret,
+// active-line highlight) it uses CSS variables so the colors flip with
+// the app theme automatically. CodeMirror lets us write plain CSS values
+// here, and var(--color-...) is a plain CSS value.
 function buildFontTheme(fontFamily: string) {
   return EditorView.theme({
     // The root editor element
@@ -43,7 +48,7 @@ function buildFontTheme(fontFamily: string) {
     // system stays accurate. Centering is handled by the wrapper div in JSX.
     ".cm-content": {
       fontFamily,
-      caretColor: "#6366f1",
+      caretColor: "var(--color-accent)",
       padding: "2rem 1rem",  // Small padding only -- wrapper handles centering
     },
     ".cm-line": {
@@ -53,10 +58,10 @@ function buildFontTheme(fontFamily: string) {
     ".cm-gutters": {
       display: "none",
     },
-    // Subtle highlight on the line the cursor is on
-    ".cm-activeLine": {
-      backgroundColor: "#0d0d2b",
-    },
+    // The active-line override is intentionally OMITTED here. App.css
+    // already paints .cm-activeLine using --color-active-line at the
+    // global level, and that variable swaps with the theme. Setting a
+    // hardcoded color here would shadow the global rule in light mode.
     // Remove the default browser blue focus ring -- our border handles it
     "&.cm-focused": {
       outline: "none",
@@ -173,10 +178,13 @@ const findReplaceKeymap = Prec.high(keymap.of([
 ]));
 
 
-// Dark-theme polish for the search panel so the Find/Replace controls read
+// Theme-aware polish for the search panel so the Find/Replace controls read
 // clearly against the rest of the editor. CodeMirror ships an unstyled panel
 // by default, which inherits the browser's light-gray form controls and
-// becomes hard to see on the #070724 background.
+// becomes hard to see on either the dark navy or paper background.
+//
+// All colors are CSS variables (defined in App.css) so the panel flips between
+// dark/light along with the rest of the app -- no separate panel theme needed.
 //
 // CRITICAL: the panel uses a raw <br> to split the Find row from the Replace
 // row. We deliberately do NOT use `display: flex` on `.cm-search` -- flex
@@ -185,23 +193,23 @@ const findReplaceKeymap = Prec.high(keymap.of([
 // inline/block layout lets the <br> break the line the way the panel expects.
 const searchPanelTheme = EditorView.theme({
   ".cm-panels": {
-    backgroundColor: "#0d0d2b",
-    color:           "#f0f0f5",
+    backgroundColor: "var(--color-bg-panel)",
+    color:           "var(--color-text-primary)",
   },
   ".cm-panels.cm-panels-bottom": {
-    borderTop: "1px solid #1e1e4a",
+    borderTop: "1px solid var(--color-border)",
   },
   ".cm-panels.cm-panels-top": {
-    borderBottom: "1px solid #1e1e4a",
+    borderBottom: "1px solid var(--color-border)",
   },
   ".cm-search": {
     padding: "6px 10px",
     fontSize: "12px",
   },
   ".cm-search input.cm-textfield": {
-    backgroundColor: "#12122e",
-    color:           "#f0f0f5",
-    border:          "1px solid #1e1e4a",
+    backgroundColor: "var(--color-bg-surface)",
+    color:           "var(--color-text-primary)",
+    border:          "1px solid var(--color-border)",
     borderRadius:    "3px",
     padding:         "3px 6px",
     margin:          "2px 4px 2px 0",
@@ -209,13 +217,13 @@ const searchPanelTheme = EditorView.theme({
     fontSize:        "12px",
   },
   ".cm-search input.cm-textfield:focus": {
-    borderColor: "#6366f1",
+    borderColor: "var(--color-accent)",
   },
   ".cm-search button.cm-button": {
-    backgroundColor: "#12122e",
+    backgroundColor: "var(--color-bg-surface)",
     backgroundImage: "none",          // override default gradient
-    color:           "#f0f0f5",
-    border:          "1px solid #1e1e4a",
+    color:           "var(--color-text-primary)",
+    border:          "1px solid var(--color-border)",
     borderRadius:    "3px",
     padding:         "2px 8px",
     margin:          "0 2px",
@@ -223,10 +231,10 @@ const searchPanelTheme = EditorView.theme({
     cursor:          "pointer",
   },
   ".cm-search button.cm-button:hover": {
-    borderColor: "#6366f1",
+    borderColor: "var(--color-accent)",
   },
   ".cm-search label": {
-    color:       "#8888aa",
+    color:       "var(--color-text-muted)",
     margin:      "0 6px 0 0",
     fontSize:    "12px",
   },
@@ -244,28 +252,37 @@ const searchPanelTheme = EditorView.theme({
     right: "4px",
     background: "transparent",
     border: "none",
-    color: "#8888aa",
+    color: "var(--color-text-muted)",
     fontSize: "14px",
     cursor: "pointer",
   },
 });
 
 
-// --- Storythread Studio Color Theme ---
-// Controls syntax highlighting (headings, bold, italic, links, etc.)
-// and editor chrome colors (background, selection, cursor).
+// --- Storythread Studio Color Themes (dark + light) ---
+// Controls syntax highlighting (headings, bold, italic, links, etc.) and
+// editor chrome colors (background, selection, cursor).
 //
-// The selection color (#3a5bbf) must contrast clearly against the
-// background (#070724). We use a mid-range indigo-blue.
-const storythreadColorTheme = createTheme({
+// Why two themes instead of CSS variables?
+//   createTheme() from @uiw/codemirror-themes bakes its colors into a
+//   pre-generated stylesheet and inline class definitions. CSS variables
+//   would render as the literal string "var(--...)" in those baked styles,
+//   which CodeMirror's syntax highlighter can't resolve. So we build a
+//   complete dark theme and a complete light theme, then the component
+//   picks the matching one based on the current app theme.
+//
+// The dark theme uses the navy palette; the light theme uses the paper palette.
+// Both keep the same indigo accent so syntax cues feel consistent across modes.
+
+const storythreadDarkTheme = createTheme({
   theme: "dark",
   settings: {
-    background:      "#070724",
-    foreground:      "#f0f0f5",
-    caret:           "#6366f1",
+    background:      "#070724",   // bg-primary
+    foreground:      "#f0f0f5",   // text-primary
+    caret:           "#6366f1",   // accent
     selection:       "#3a5bbf",   // Visible indigo-blue selection
     selectionMatch:  "#1e3464",   // Dimmer for secondary matches
-    lineHighlight:   "#0d0d2b",
+    lineHighlight:   "#0d0d2b",   // bg-panel
     gutterBackground: "#070724",
     gutterForeground: "#8888aa",
   },
@@ -285,6 +302,37 @@ const storythreadColorTheme = createTheme({
   ],
 });
 
+const storythreadLightTheme = createTheme({
+  theme: "light",
+  settings: {
+    background:      "#F4F1EA",   // bg-primary (warm paper)
+    foreground:      "#1A1A1A",   // text-primary (near-black)
+    caret:           "#6366f1",   // accent (kept indigo)
+    selection:       "#c7d2fe",   // soft indigo for selection on paper
+    selectionMatch:  "#e0e7ff",   // even softer for secondary matches
+    lineHighlight:   "#EAE6DC",   // bg-panel (slightly darker paper)
+    gutterBackground: "#F4F1EA",
+    gutterForeground: "#6B6B6B",
+  },
+  styles: [
+    // Headings stay near-black on paper -- bold weight already gives the
+    // hierarchy, no need to lighten the color.
+    { tag: t.heading1,              color: "#1A1A1A", fontWeight: "bold", fontSize: "1.5em" },
+    { tag: t.heading2,              color: "#1A1A1A", fontWeight: "bold", fontSize: "1.3em" },
+    { tag: t.heading3,              color: "#2A2A2A", fontWeight: "bold", fontSize: "1.1em" },
+    { tag: t.emphasis,              fontStyle: "italic"  },
+    { tag: t.strong,                fontWeight: "bold"   },
+    // Links use a slightly darker indigo so they pass AA contrast on paper.
+    { tag: t.link,                  color: "#4F46E5"     },
+    { tag: t.url,                   color: "#4F46E5"     },
+    { tag: t.quote,                 color: "#6B6B6B", fontStyle: "italic" },
+    { tag: t.monospace,             color: "#4F46E5"     },
+    { tag: t.meta,                  color: "#9A9485"     }, // **, ##, etc. -- soft tan
+    { tag: t.processingInstruction, color: "#9A9485"     },
+    { tag: t.strikethrough,         textDecoration: "line-through", color: "#6B6B6B" },
+  ],
+});
+
 
 // --- MarkdownEditor Props ---
 interface MarkdownEditorProps {
@@ -299,6 +347,14 @@ interface MarkdownEditorProps {
 // ── MarkdownEditor Component ──────────────────────────────────────────────────
 export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, onSelectionChange }: MarkdownEditorProps) {
   const editorViewRef = useRef<EditorView | null>(null);
+
+  // Subscribe to the global theme so we can switch CodeMirror's syntax
+  // highlighting + chrome colors when the user toggles dark/light. The
+  // CodeMirror prop `theme` accepts either an extension or a baked theme,
+  // and changing it triggers @uiw/react-codemirror to rebuild the view --
+  // exactly what we want when the palette changes.
+  const [appTheme]    = useTheme();
+  const editorTheme   = appTheme === "light" ? storythreadLightTheme : storythreadDarkTheme;
 
   // When the font prop changes, hot-swap only the font compartment.
   // This avoids rebuilding the entire editor (which would reset the cursor).
@@ -347,7 +403,7 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
 
   return (
     // Outer wrapper: fills the panel and scrolls vertically.
-    <div className="h-full overflow-y-auto bg-[#070724]">
+    <div className="h-full overflow-y-auto bg-bg-primary">
 
       {/* Centering wrapper: constrains the editor to a comfortable reading width.
           We center HERE with a div, not inside CodeMirror's internal styles.
@@ -357,7 +413,7 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
         <CodeMirror
           value={defaultValue}
           onChange={onChange}
-          theme={storythreadColorTheme}
+          theme={editorTheme}
           extensions={extensions}
           onCreateEditor={(view: EditorView) => {
             editorViewRef.current = view;

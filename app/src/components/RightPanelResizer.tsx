@@ -112,7 +112,7 @@ export function RightPanelResizer({ width, setWidth }: RightPanelResizerProps) {
         disabled={!canExpand}
         title="Larger (expand this panel)"
         aria-label="Expand right panel"
-        className="flex h-6 w-6 items-center justify-center rounded-full border border-[#1e1e4a] bg-[#0d0d2b] text-[11px] text-[#a5b4fc] shadow transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[#1e1e4a] disabled:hover:text-[#a5b4fc]"
+        className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-bg-panel text-[11px] text-indigo-300 shadow transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:text-indigo-300"
       >
         {"\u00AB"}
       </button>
@@ -124,7 +124,7 @@ export function RightPanelResizer({ width, setWidth }: RightPanelResizerProps) {
         disabled={!canShrink}
         title="Smaller (shrink this panel)"
         aria-label="Shrink right panel"
-        className="flex h-6 w-6 items-center justify-center rounded-full border border-[#1e1e4a] bg-[#0d0d2b] text-[11px] text-[#a5b4fc] shadow transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[#1e1e4a] disabled:hover:text-[#a5b4fc]"
+        className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-bg-panel text-[11px] text-indigo-300 shadow transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:text-indigo-300"
       >
         {"\u00BB"}
       </button>

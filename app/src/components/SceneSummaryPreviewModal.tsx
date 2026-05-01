@@ -203,24 +203,24 @@ export function SceneSummaryPreviewModal({
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-bg-panel shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
 
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-[#f0f0f5]">
+            <span className="text-sm font-semibold text-text-primary">
               New Scene Summary
             </span>
-            <span className="text-xs text-[#8888aa]">
+            <span className="text-xs text-text-muted">
               Generated from selected text ({selectedText.length.toLocaleString()} chars)
             </span>
           </div>
           <button
             onClick={() => onClose()}
             disabled={isGenerating || isSaving}
-            className="rounded px-2 text-lg text-[#8888aa] hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded px-2 text-lg text-text-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
             title="Close (Esc)"
           >
             &times;
@@ -232,7 +232,7 @@ export function SceneSummaryPreviewModal({
 
           {/* Title */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#8888aa]" htmlFor="preview-title">
+            <label className="text-xs text-text-muted" htmlFor="preview-title">
               Title
             </label>
             <input
@@ -242,13 +242,13 @@ export function SceneSummaryPreviewModal({
               onChange={(e) => setTitle(e.target.value)}
               disabled={isGenerating || isSaving}
               placeholder={isGenerating ? "Generating title..." : "Scene title"}
-              className="rounded border border-[#1e1e4a] bg-[#0a0a20] px-2 py-1 text-sm text-[#f0f0f5] placeholder:text-[#4a4a7a] focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+              className="rounded border border-border bg-bg-primary px-2 py-1 text-sm text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Body */}
           <div className="flex flex-1 flex-col gap-1">
-            <label className="text-xs text-[#8888aa]" htmlFor="preview-body">
+            <label className="text-xs text-text-muted" htmlFor="preview-body">
               Summary
             </label>
             <textarea
@@ -258,15 +258,15 @@ export function SceneSummaryPreviewModal({
               disabled={isGenerating || isSaving}
               placeholder={isGenerating ? "Generating summary..." : "Summary body"}
               rows={10}
-              className="flex-1 resize-y rounded border border-[#1e1e4a] bg-[#0a0a20] px-2 py-1.5 text-sm text-[#f0f0f5] placeholder:text-[#4a4a7a] focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+              className="flex-1 resize-y rounded border border-border bg-bg-primary px-2 py-1.5 text-sm text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Slot picker */}
-          <div className="flex flex-col gap-2 rounded border border-[#1e1e4a] bg-[#0a0a20]/50 p-3">
-            <span className="text-xs font-semibold text-[#a5b4fc]">Save as</span>
+          <div className="flex flex-col gap-2 rounded border border-border bg-bg-primary/50 p-3">
+            <span className="text-xs font-semibold text-indigo-300">Save as</span>
 
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-[#f0f0f5]">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
               <input
                 type="radio"
                 name="slot-mode"
@@ -276,14 +276,14 @@ export function SceneSummaryPreviewModal({
               />
               <span>
                 New scene &nbsp;
-                <span className="text-xs text-[#8888aa]">
+                <span className="text-xs text-text-muted">
                   (will be Scene {nextNewIndex})
                 </span>
               </span>
             </label>
 
             {existingScenes.length > 0 && (
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-[#f0f0f5]">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
                 <input
                   type="radio"
                   name="slot-mode"
@@ -297,7 +297,7 @@ export function SceneSummaryPreviewModal({
                     value={replaceIndex ?? ""}
                     onChange={(e) => setReplaceIndex(Number(e.target.value))}
                     onClick={() => setSlotMode("replace")}
-                    className="rounded border border-[#1e1e4a] bg-[#0d0d2b] px-1.5 py-0.5 text-xs text-[#f0f0f5]"
+                    className="rounded border border-border bg-bg-panel px-1.5 py-0.5 text-xs text-text-primary"
                   >
                     {existingScenes.map(s => (
                       <option key={s.index} value={s.index}>
@@ -319,7 +319,7 @@ export function SceneSummaryPreviewModal({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-[#1e1e4a] px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between border-t border-border px-4 py-3">
           <button
             onClick={() => runGenerate(true)}
             disabled={isGenerating || isSaving}
@@ -333,7 +333,7 @@ export function SceneSummaryPreviewModal({
             <button
               onClick={() => onClose()}
               disabled={isGenerating || isSaving}
-              className="rounded border border-[#1e1e4a] px-3 py-1 text-xs text-[#8888aa] transition-colors hover:border-red-500 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-red-500 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Discard
             </button>

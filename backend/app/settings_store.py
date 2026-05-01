@@ -63,6 +63,10 @@ DEFAULT_SETTINGS: dict = {
     # Documents-folder backups, and never asks where to put a new project.
     # Writers can change this in the Settings screen.
     "vault_root":          _default_vault_root(),
+    # theme: UI color theme. "dark" (default charcoal/navy) or "light"
+    # (warm off-white "paper" feel). Persisted globally so the writer's
+    # preference applies across all projects.
+    "theme":               "dark",
 }
 
 

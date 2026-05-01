@@ -37,6 +37,8 @@ class SettingsResponse(BaseModel):
     # ~/Documents/Storythread Studio. Returned to the frontend so the Settings screen
     # can show the current path (and change it).
     vault_root:             str
+    # UI theme: "dark" or "light". Drives the runtime color palette.
+    theme:                  str
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -55,6 +57,8 @@ class UpdateSettingsRequest(BaseModel):
     # use; we don't validate it exists at save time so writers can set a
     # not-yet-created folder if they want.
     vault_root:          str | None                   = None
+    # "dark" or "light". Anything else is ignored.
+    theme:               str | None                   = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -83,6 +87,7 @@ async def get_settings():
         # get_vault_root() resolves blanks to the default and ensures the
         # directory exists -- frontend always sees a real path.
         vault_root             = get_vault_root(),
+        theme                  = settings.get("theme", "dark"),
     )
 
 
@@ -117,6 +122,10 @@ async def update_settings(request: UpdateSettingsRequest):
         # Empty string is a sentinel for "reset to default" -- store as ""
         # and let get_vault_root() substitute the default at read time.
         settings["vault_root"] = request.vault_root.strip()
+    if request.theme is not None and request.theme in ("dark", "light"):
+        # Silently ignore unknown values rather than 400 -- forward-compatible
+        # in case future themes are added in newer clients.
+        settings["theme"] = request.theme
 
     save_settings(settings)
 
@@ -133,6 +142,7 @@ async def update_settings(request: UpdateSettingsRequest):
         model_blocklist        = settings.get("model_blocklist", []),
         model_content_modes    = settings.get("model_content_modes", {}),
         vault_root             = get_vault_root(),
+        theme                  = settings.get("theme", "dark"),
     )
 
 

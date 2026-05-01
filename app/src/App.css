@@ -15,48 +15,126 @@
 
 
 /*
- * @theme -- Storythread Studio Design Tokens
- * ====================================
+ * Theme Tokens -- Storythread Studio Design System
+ * ==================================================
  * Design tokens are named values for colors, spacing, etc. that you
  * define once and reuse everywhere. Changing a token here updates it
  * across the whole app instantly.
  *
- * In Tailwind v4, tokens defined in @theme become utility classes
- * automatically. For example, --color-accent: #6366f1 lets you write
- * "bg-accent" or "text-accent" in any component.
+ * Two layers work together:
+ *
+ *   1. CSS variables on :root and [data-theme="light"]
+ *      - These are runtime-swappable. The frontend sets
+ *        document.documentElement.setAttribute('data-theme', 'light')
+ *        to flip every color in the app at once.
+ *
+ *   2. @theme block (Tailwind v4)
+ *      - References the CSS variables via var(--color-*).
+ *      - Tailwind v4 auto-generates utility classes like bg-bg-primary,
+ *        text-text-primary, border-border, bg-accent from these tokens.
+ *      - Components use those classes (NOT hardcoded hex values), so the
+ *        runtime variable swap actually takes effect.
+ *
+ * Adding a new color: declare it in BOTH :root and [data-theme="light"],
+ * then expose it through @theme so Tailwind generates a utility class.
  */
-@theme {
 
-  /* ── Background Layers ──────────────────────────────────────────────
-   * Three levels of dark navy create visual depth without bright contrast.
-   * Inspired by Quarkle.ai's dark mode design.
-   *   primary  = the outermost window background (darkest)
-   *   panel    = sidebars and panel surfaces (slightly lighter)
-   *   surface  = cards, input fields, inner boxes (lightest of the three)
-   */
-  --color-bg-primary:  #070724;
-  --color-bg-panel:    #0d0d2b;
-  --color-bg-surface:  #12122e;
-
-  /* ── Borders ────────────────────────────────────────────────────────
-   * Subtle dividing lines that separate panels without being harsh.
-   * Same navy family -- dark enough to be invisible until needed.
-   */
-  --color-border: #1e1e4a;
-
-  /* ── Text ───────────────────────────────────────────────────────────
-   *   primary = main readable content (near-white)
-   *   muted   = labels, placeholders, secondary info (grey-blue)
-   */
+/* ── Dark theme (default) ─────────────────────────────────────────────
+ * Three levels of dark navy create visual depth without bright contrast.
+ * Inspired by Quarkle.ai's dark mode design.
+ *   primary  = outermost window background (darkest)
+ *   panel    = sidebars and panel surfaces
+ *   surface  = cards, input fields, inner boxes (lightest of the three)
+ */
+:root {
+  --color-bg-primary:   #070724;
+  --color-bg-panel:     #0d0d2b;
+  --color-bg-surface:   #12122e;
+  --color-border:       #1e1e4a;
   --color-text-primary: #f0f0f5;
   --color-text-muted:   #8888aa;
+  /* Faint = even dimmer than muted; used for placeholders, hint text, and
+     low-emphasis labels. ~114 places use this shade in dark mode. */
+  --color-faint:        #3f3f7a;
+  --color-accent:       #6366f1;
 
-  /* ── Accent ─────────────────────────────────────────────────────────
-   * Indigo is the primary action color -- used for selected states,
-   * active buttons, and interactive highlights.
-   * It stands out against the dark navy without being jarring.
-   */
-  --color-accent: #6366f1;
+  /* Selection layer colors (used by CodeMirror + native ::selection) */
+  --color-selection:        #3a5bbf;
+  --color-active-line:      rgba(13, 13, 43, 0.5);
+}
+
+/* ── Light theme (paper feel) ─────────────────────────────────────────
+ * Warm off-white palette evoking a real paper page. Indigo accent kept
+ * identical so brand identity carries over. Activated by setting
+ * data-theme="light" on the <html> element.
+ */
+[data-theme="light"] {
+  --color-bg-primary:   #F4F1EA;  /* warm paper */
+  --color-bg-panel:     #EAE6DC;  /* slightly darker paper for sidebars */
+  --color-bg-surface:   #FBF8F1;  /* near-white for cards/inputs */
+  --color-border:       #D6D0C2;  /* soft tan */
+  --color-text-primary: #1A1A1A;  /* near-black for body text */
+  --color-text-muted:   #6B6B6B;  /* warm grey for labels */
+  --color-faint:        #9A9485;  /* very light tan for placeholders/hints */
+  --color-accent:       #6366f1;  /* indigo, unchanged */
+
+  /* Selection: lighter, more subtle on paper */
+  --color-selection:        #c7d2fe;
+  --color-active-line:      rgba(99, 102, 241, 0.08);
+
+  /* Override Tailwind's lighter indigo shades in light mode.
+     ============================================================
+     The codebase uses text-indigo-200 / -300 / -400 to mark "selected" or
+     "highlighted" UI items (active chapter, active tab, primary buttons).
+     Those shades were picked to read against a DARK navy background --
+     on the cream paper background they fade out and become hard to read.
+     Overriding the same Tailwind tokens here means every existing
+     text-indigo-300 etc. instantly becomes readable in light mode,
+     without refactoring ~80 occurrences across the app.
+     Dark-mode shades aren't affected because these overrides only apply
+     under [data-theme="light"]. */
+  --color-indigo-200:   #4338ca;  /* was #c7d2fe -- dark enough to read on cream */
+  --color-indigo-300:   #3730a3;  /* was #a5b4fc -- the main "highlight" shade */
+  --color-indigo-400:   #4338ca;  /* was #818cf8 -- icons / accent text */
+
+  /* Override Tailwind's teal palette for light mode.
+     ============================================================
+     Teal is the accent color used in the Profile Builder AI panel
+     ("Mode:" bar, mode list) and on Location chips. The default
+     light teal shades fade out on cream; we darken the text shades
+     and lighten the dark-bg shades so:
+       - Default text (was teal-300/400): now medium-dark teal -- readable
+       - Hover text (was teal-100/200): now even darker teal -- "couple
+         of tones darker on hover" as the user requested
+       - The "Mode:" bar (bg-teal-950/40) stops being a dark grey patch:
+         teal-950 is overridden to a pale teal so 40% over cream reads
+         as a faint tint instead of a heavy dark band.
+     Border shades (teal-700/800) are left as Tailwind defaults --
+     dark teal borders work fine on cream. */
+  --color-teal-100:     #042f2e;  /* was #ccfbf1 -- for active-mode label */
+  --color-teal-200:     #115e59;  /* was #99f6e4 -- hover emphasis */
+  --color-teal-300:     #0f766e;  /* was #5eead4 -- main highlight */
+  --color-teal-400:     #0d9488;  /* was #2dd4bf -- default action text */
+  --color-teal-500:     #0f766e;  /* was #14b8a6 -- "Mode:" label */
+  --color-teal-600:     #115e59;  /* was #0d9488 -- chevrons / labels */
+  --color-teal-900:     #ccfbf1;  /* was #134e4a -- semi-transparent bg patches */
+  --color-teal-950:     #ccfbf1;  /* was #042f2e -- the AI panel bar */
+}
+
+/*
+ * Bridge CSS variables into Tailwind v4's design system.
+ * Each entry here makes the variable available as a utility class,
+ * e.g. --color-bg-primary becomes bg-bg-primary / text-bg-primary / etc.
+ */
+@theme {
+  --color-bg-primary:   var(--color-bg-primary);
+  --color-bg-panel:     var(--color-bg-panel);
+  --color-bg-surface:   var(--color-bg-surface);
+  --color-border:       var(--color-border);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-muted:   var(--color-text-muted);
+  --color-faint:        var(--color-faint);
+  --color-accent:       var(--color-accent);
 }
 
 
@@ -75,15 +153,16 @@
  * Also keep ::selection as a fallback for any text outside CodeMirror.
  */
 
-/* CodeMirror drawn selection: force visible above line backgrounds */
+/* CodeMirror drawn selection: force visible above line backgrounds.
+   Uses the --color-selection variable so it adapts to dark/light themes. */
 .cm-selectionLayer .cm-selectionBackground {
-  background-color: #3a5bbf !important;
+  background-color: var(--color-selection) !important;
 }
 
 /* The active line highlight must not be fully opaque or it covers the selection.
    Use a semi-transparent version so selection shows through. */
 .cm-activeLine {
-  background-color: rgba(13, 13, 43, 0.5) !important;
+  background-color: var(--color-active-line) !important;
 }
 
 /* Ensure .cm-line backgrounds don't cover the selection layer */
@@ -93,12 +172,12 @@
 
 /* Browser native selection: fallback for text outside CodeMirror */
 ::selection {
-  background-color: #3a5bbf;
+  background-color: var(--color-selection);
   color: inherit;
 }
 
 ::-webkit-selection {
-  background-color: #3a5bbf;
+  background-color: var(--color-selection);
   color: inherit;
 }
 

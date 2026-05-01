@@ -289,17 +289,17 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
 
         {/* Header */}
         <div
-          className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a]"
+          className="flex shrink-0 items-center justify-between border-b border-border"
           style={{ padding: "1rem 1.5rem" }}
         >
-          <h2 className="text-base font-semibold text-[#f0f0f5]">Project Settings</h2>
+          <h2 className="text-base font-semibold text-text-primary">Project Settings</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-[#f0f0f5]"
+            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
           >
             <X size={16} />
           </button>
@@ -311,33 +311,33 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
             {/* ── Project Info ──────────────────────────────────────────── */}
             <section>
-              <h3 className="mb-3 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+              <h3 className="mb-3 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                 Project Info
               </h3>
 
               <div className="mb-4">
-                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Title</label>
+                <label className="mb-1 block text-xs font-medium text-text-primary">Title</label>
                 <input
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div className="mb-4">
-                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Description</label>
+                <label className="mb-1 block text-xs font-medium text-text-primary">Description</label>
                 <textarea
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   rows={3}
-                  className="w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
+                  className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div className="mb-4">
-                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Genre</label>
-                <p className="mb-1 text-xs text-[#3f3f7a]">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Genre</label>
+                <p className="mb-1 text-xs text-faint">
                   Auto-injected into AI prompts as story context.
                 </p>
                 <input
@@ -345,13 +345,13 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={genre}
                   onChange={e => setGenre(e.target.value)}
                   placeholder="e.g. epic fantasy, sci-fi thriller, contemporary romance"
-                  className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div className="mb-4">
-                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Tone</label>
-                <p className="mb-1 text-xs text-[#3f3f7a]">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Tone</label>
+                <p className="mb-1 text-xs text-faint">
                   Auto-injected into AI prompts as story context.
                 </p>
                 <input
@@ -359,7 +359,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={tone}
                   onChange={e => setTone(e.target.value)}
                   placeholder="e.g. dark, atmospheric, slow burn, humorous"
-                  className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -369,7 +369,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   <p className="text-xs text-teal-400">
                     Part of a series
                   </p>
-                  <p className="text-xs text-[#8888aa]">
+                  <p className="text-xs text-text-muted">
                     Series path: {project.series_path}
                   </p>
                 </div>
@@ -379,10 +379,10 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
             {/* ── Outline Template ─────────────────────────────────────── */}
             <section>
-              <h3 className="mb-3 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+              <h3 className="mb-3 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                 Outline Template
               </h3>
-              <p className="mb-3 text-xs text-[#3f3f7a]">
+              <p className="mb-3 text-xs text-faint">
                 Choose which scaffold to use for notes/outline.md. Applying a
                 new template will <span className="text-amber-500">overwrite</span> the
                 current outline file.
@@ -396,7 +396,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 ]).map(opt => (
                   <label
                     key={opt.value}
-                    className="flex cursor-pointer items-start gap-2 rounded border border-[#1e1e4a] bg-[#12122e] p-2 transition-colors hover:border-[#3f3f7a]"
+                    className="flex cursor-pointer items-start gap-2 rounded border border-border bg-bg-surface p-2 transition-colors hover:border-faint"
                   >
                     <input
                       type="radio"
@@ -407,8 +407,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                       className="mt-0.5 accent-indigo-500"
                     />
                     <div>
-                      <p className="text-xs font-medium text-[#f0f0f5]">{opt.label}</p>
-                      <p className="text-xs text-[#8888aa]">{opt.hint}</p>
+                      <p className="text-xs font-medium text-text-primary">{opt.label}</p>
+                      <p className="text-xs text-text-muted">{opt.hint}</p>
                     </div>
                   </label>
                 ))}
@@ -440,14 +440,14 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
             {/* ── Content & Models ──────────────────────────────────────── */}
             <section>
-              <h3 className="mb-3 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+              <h3 className="mb-3 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                 Content & Models
               </h3>
 
               {/* Content Mode */}
               <div className="mb-5">
-                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Content Mode</label>
-                <p className="mb-2 text-xs text-[#3f3f7a]">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Content Mode</label>
+                <p className="mb-2 text-xs text-faint">
                   Controls how AI assistants handle mature or explicit story content for this project.
                 </p>
                 <div className="flex flex-col gap-2">
@@ -466,8 +466,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                         className="mt-0.5 accent-indigo-500"
                       />
                       <div>
-                        <span className="text-xs font-medium text-[#f0f0f5]">{opt.label}</span>
-                        <span className="ml-2 text-xs text-[#3f3f7a]">{opt.desc}</span>
+                        <span className="text-xs font-medium text-text-primary">{opt.label}</span>
+                        <span className="ml-2 text-xs text-faint">{opt.desc}</span>
                       </div>
                     </label>
                   ))}
@@ -476,14 +476,14 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
               {/* Model Tier Floor */}
               <div className="mb-5">
-                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Model Quality Floor</label>
-                <p className="mb-2 text-xs text-[#3f3f7a]">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Model Quality Floor</label>
+                <p className="mb-2 text-xs text-faint">
                   Sets the minimum AI model quality for this project. If blank, the global setting is used.
                 </p>
                 <select
                   value={costTier}
                   onChange={e => setCostTier(e.target.value)}
-                  className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
                 >
                   <option value="free">Free Only</option>
                   <option value="budget">Budget ($0-1/M input)</option>
@@ -499,8 +499,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   - Explicit: only unmoderated models shown (moderated ones refuse explicit)
               */}
               <div className="mb-5">
-                <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">Project Model</label>
-                <p className="mb-2 text-xs text-[#3f3f7a]">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Project Model</label>
+                <p className="mb-2 text-xs text-faint">
                   Choose a specific model for this project. Leave blank to use the global default.
                   {contentMode === "explicit" && (
                     <span className="ml-1 text-amber-500">
@@ -517,7 +517,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   <select
                     value={projectModel}
                     onChange={e => setProjectModel(e.target.value)}
-                    className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
                   >
                     <option value="">Use global default</option>
                     {models
@@ -535,7 +535,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     value={projectModel}
                     onChange={e => setProjectModel(e.target.value)}
                     placeholder="e.g. anthropic/claude-3.5-sonnet (leave blank for global)"
-                    className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                   />
                 )}
                 {projectModel && (
@@ -551,29 +551,29 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
             <section>
               <button
                 onClick={() => setShowGuide(g => !g)}
-                className="flex w-full items-center justify-between rounded border border-[#1e1e4a] bg-[#070724] px-4 py-3 text-left transition-colors hover:border-indigo-800"
+                className="flex w-full items-center justify-between rounded border border-border bg-bg-primary px-4 py-3 text-left transition-colors hover:border-indigo-800"
               >
                 <div className="flex items-center gap-2">
                   <HelpCircle size={14} className="text-indigo-400" />
-                  <span className="text-xs font-semibold text-[#f0f0f5]">
+                  <span className="text-xs font-semibold text-text-primary">
                     Model Choosing Guide
                   </span>
                 </div>
                 <ChevronDown
                   size={12}
-                  className={`text-[#8888aa] transition-transform ${showGuide ? "rotate-180" : ""}`}
+                  className={`text-text-muted transition-transform ${showGuide ? "rotate-180" : ""}`}
                 />
               </button>
 
               {showGuide && (
-                <div className="mt-2 space-y-4 rounded border border-[#1e1e4a] bg-[#070724] p-4">
+                <div className="mt-2 space-y-4 rounded border border-border bg-bg-primary p-4">
 
                   {/* Section A: What does the tier floor do? */}
                   <div>
                     <p className="mb-1 text-xs font-semibold text-indigo-300">
                       What does the model quality floor do?
                     </p>
-                    <p className="text-xs leading-relaxed text-[#8888aa]">
+                    <p className="text-xs leading-relaxed text-text-muted">
                       The quality floor sets the minimum capability level for AI assistance
                       in this project. Free models are available to everyone at no cost.
                       Budget and Standard models produce more nuanced, character-aware
@@ -586,20 +586,20 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     <p className="mb-1 text-xs font-semibold text-indigo-300">
                       What will this cost me?
                     </p>
-                    <p className="mb-1 text-xs text-[#8888aa]">
-                      At the <span className="font-medium text-[#f0f0f5]">{tierLabel}</span> tier:
+                    <p className="mb-1 text-xs text-text-muted">
+                      At the <span className="font-medium text-text-primary">{tierLabel}</span> tier:
                     </p>
-                    <div className="rounded border border-[#1e1e4a] bg-[#0d0d2b] p-3">
-                      <p className="text-xs text-[#f0f0f5]">
+                    <div className="rounded border border-border bg-bg-panel p-3">
+                      <p className="text-xs text-text-primary">
                         Getting started (5-8 profiles, world-building, 3-5 chapters with AI feedback):
                         <span className="ml-1 font-semibold text-emerald-400">{costs.startup}</span>
                       </p>
-                      <p className="mt-1 text-xs text-[#f0f0f5]">
+                      <p className="mt-1 text-xs text-text-primary">
                         Typical writing session after that (profile tweaks, feedback on 1-2 chapters):
                         <span className="ml-1 font-semibold text-emerald-400">{costs.session}</span>
                       </p>
                     </div>
-                    <p className="mt-1 text-xs text-[#3f3f7a]">
+                    <p className="mt-1 text-xs text-faint">
                       These are rough estimates. Actual costs depend on the specific model,
                       how much text you send, and how often you use AI features.
                     </p>
@@ -610,7 +610,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     <p className="mb-1 text-xs font-semibold text-indigo-300">
                       How does content mode affect model choice?
                     </p>
-                    <p className="text-xs leading-relaxed text-[#8888aa]">
+                    <p className="text-xs leading-relaxed text-text-muted">
                       {getContentModeGuide()}
                     </p>
                   </div>
@@ -620,7 +620,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     <p className="mb-1 text-xs font-semibold text-indigo-300">
                       Recommendation for your project
                     </p>
-                    <p className="text-xs leading-relaxed text-[#f0f0f5]">
+                    <p className="text-xs leading-relaxed text-text-primary">
                       {getRecommendation()}
                     </p>
                   </div>
@@ -634,7 +634,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
         {/* Footer */}
         <div
-          className="shrink-0 border-t border-[#1e1e4a]"
+          className="shrink-0 border-t border-border"
           style={{ padding: "1rem 1.5rem" }}
         >
           {error && <p className="mb-2 text-xs text-red-400">{error}</p>}

@@ -219,17 +219,17 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
       {/* Title bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
+      <div className="flex shrink-0 items-center justify-between border-b border-border bg-bg-panel px-4 py-2">
         <div className="flex items-baseline gap-2">
           <button
             onClick={onBack}
-            className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
             title="Back to the chapter editor"
           >
             &larr; Back
           </button>
-          <span className="text-sm font-medium text-[#f0f0f5]">{chapterTitle}</span>
-          <span className="text-xs text-[#6666a0]">Chapter Summary</span>
+          <span className="text-sm font-medium text-text-primary">{chapterTitle}</span>
+          <span className="text-xs text-text-muted">Chapter Summary</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -262,7 +262,7 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
           <button
             onClick={handleSave}
             disabled={!isDirty || isSaving}
-            className="rounded border border-[#1e1e4a] px-3 py-1 text-xs text-[#f0f0f5] transition-colors hover:border-emerald-500 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-border px-3 py-1 text-xs text-text-primary transition-colors hover:border-emerald-500 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
             title="Save edits (Ctrl+S)"
           >
             {isSaving ? "Saving..." : "Save"}
@@ -271,9 +271,9 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
       </div>
 
       {/* Info banner -- tiny, so it doesn't dominate the editor */}
-      <div className="shrink-0 border-b border-[#1e1e4a] bg-[#0d0d2b]/50 px-4 py-1.5">
-        <p className="text-xs text-[#8888aa]">
-          <span className="font-semibold text-[#a5b4fc]">Purpose:</span>{" "}
+      <div className="shrink-0 border-b border-border bg-bg-panel/50 px-4 py-1.5">
+        <p className="text-xs text-text-muted">
+          <span className="font-semibold text-indigo-300">Purpose:</span>{" "}
           AI context for drafting and continuity checks. Focus on causality and state changes, not prose.
         </p>
       </div>
@@ -290,15 +290,15 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
       {/* Editor body */}
       <div className="relative flex-1 overflow-hidden">
         {initialContent === null ? (
-          <div className="flex h-full items-center justify-center text-sm text-[#6666a0]">
+          <div className="flex h-full items-center justify-center text-sm text-text-muted">
             Loading summary...
           </div>
         ) : !exists && initialContent === "" ? (
           // Empty state overlay: sits above an empty editor so the writer can
           // either click Generate or start typing their own summary by hand.
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-sm text-[#a5b4fc]">No summary yet.</p>
-            <p className="max-w-md text-xs text-[#8888aa]">
+            <p className="text-sm text-indigo-300">No summary yet.</p>
+            <p className="max-w-md text-xs text-text-muted">
               Click Generate with AI to produce a continuity brief from the chapter,
               or start typing your own below.
             </p>

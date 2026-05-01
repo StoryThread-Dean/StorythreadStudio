@@ -306,17 +306,17 @@ export function SceneSummaryView({
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
       {/* Title bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
+      <div className="flex shrink-0 items-center justify-between border-b border-border bg-bg-panel px-4 py-2">
         <div className="flex items-baseline gap-2">
           <button
             onClick={onBack}
-            className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
             title="Back to the chapter editor"
           >
             &larr; Back
           </button>
-          <span className="text-sm font-medium text-[#f0f0f5]">{chapterTitle}</span>
-          <span className="text-xs text-[#6666a0]">Scene {sceneIndex}</span>
+          <span className="text-sm font-medium text-text-primary">{chapterTitle}</span>
+          <span className="text-xs text-text-muted">Scene {sceneIndex}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -349,7 +349,7 @@ export function SceneSummaryView({
           <button
             onClick={handleSave}
             disabled={!isDirty || isSaving}
-            className="rounded border border-[#1e1e4a] px-3 py-1 text-xs text-[#f0f0f5] transition-colors hover:border-emerald-500 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-border px-3 py-1 text-xs text-text-primary transition-colors hover:border-emerald-500 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
             title="Save edits (Ctrl+S)"
           >
             {isSaving ? "Saving..." : "Save"}
@@ -369,8 +369,8 @@ export function SceneSummaryView({
 
       {/* Title input strip -- separate from the editor so renaming a scene
           feels like metadata, not editing prose. */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-[#1e1e4a] bg-[#0d0d2b]/50 px-4 py-1.5">
-        <label className="text-xs text-[#8888aa]" htmlFor="scene-title-input">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-bg-panel/50 px-4 py-1.5">
+        <label className="text-xs text-text-muted" htmlFor="scene-title-input">
           Title:
         </label>
         <input
@@ -382,7 +382,7 @@ export function SceneSummaryView({
             setIsDirty(true);
           }}
           placeholder="Untitled scene"
-          className="flex-1 rounded border border-[#1e1e4a] bg-[#0d0d2b] px-2 py-0.5 text-xs text-[#f0f0f5] placeholder:text-[#4a4a7a] focus:border-indigo-500 focus:outline-none"
+          className="flex-1 rounded border border-border bg-bg-panel px-2 py-0.5 text-xs text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none"
         />
       </div>
 
@@ -398,13 +398,13 @@ export function SceneSummaryView({
       {/* Editor body */}
       <div className="relative flex-1 overflow-hidden">
         {initialContent === null ? (
-          <div className="flex h-full items-center justify-center text-sm text-[#6666a0]">
+          <div className="flex h-full items-center justify-center text-sm text-text-muted">
             Loading scene summary...
           </div>
         ) : !exists && initialContent === "" ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-sm text-[#a5b4fc]">No summary for scene {sceneIndex} yet.</p>
-            <p className="max-w-md text-xs text-[#8888aa]">
+            <p className="text-sm text-indigo-300">No summary for scene {sceneIndex} yet.</p>
+            <p className="max-w-md text-xs text-text-muted">
               Click Generate with AI to summarize this scene from the chapter text,
               or type your own below.
             </p>

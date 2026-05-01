@@ -356,7 +356,7 @@ export function EditorToolbar({
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-0.5 border-b border-[#1e1e4a] bg-[#0d0d2b] px-3 py-1.5">
+    <div className="flex shrink-0 items-center gap-0.5 border-b border-border bg-bg-panel px-3 py-1.5">
 
       {/* Inline Formatting */}
       <ToolbarButton icon={<Bold size={14} />}          label="Bold"
@@ -413,7 +413,7 @@ export function EditorToolbar({
         <button
           onClick={onNewTemplate}
           title="Apply a different outline template (overwrites current outline)"
-          className="mr-2 flex items-center gap-1 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5]"
+          className="mr-2 flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
         >
           <FilePlus2 size={12} />
           <span>+ New Template</span>
@@ -440,7 +440,7 @@ export function EditorToolbar({
         <select
           value={currentFont}
           onChange={(e) => onFontChange(e.target.value as FontValue)}
-          className="appearance-none rounded border border-[#1e1e4a] bg-[#12122e] py-0.5 pl-2 pr-6 text-xs text-[#f0f0f5] transition-colors hover:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="appearance-none rounded border border-border bg-bg-surface py-0.5 pl-2 pr-6 text-xs text-text-primary transition-colors hover:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           title="Change the editor font (display only -- not saved in the document)"
           style={{ fontFamily: currentFont }}
         >
@@ -450,7 +450,7 @@ export function EditorToolbar({
             </option>
           ))}
         </select>
-        <ChevronDown size={12} className="pointer-events-none absolute right-1.5 text-[#8888aa]" />
+        <ChevronDown size={12} className="pointer-events-none absolute right-1.5 text-text-muted" />
       </div>
 
     </div>
@@ -493,7 +493,7 @@ function ToolbarButton({
         onAction(saved);                 // 4. Format with saved selection
       }}
       title={label}
-      className="flex h-6 w-6 items-center justify-center rounded text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-[#f0f0f5]"
+      className="flex h-6 w-6 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
     >
       {icon}
     </button>
@@ -502,5 +502,5 @@ function ToolbarButton({
 
 // A thin vertical line separating button groups in the toolbar.
 function Divider() {
-  return <div className="mx-1.5 h-4 w-px bg-[#1e1e4a]" />;
+  return <div className="mx-1.5 h-4 w-px bg-border" />;
 }

@@ -71,7 +71,7 @@ type GaugeLevel = "sparse" | "basic" | "good" | "detailed" | "wordy" | "bloated"
 
 function getGaugeLevel(wordCount: number, importance: ImportanceLevel): { level: GaugeLevel; label: string; color: string } {
   if (importance === "hidden") {
-    return { level: "good", label: `${wordCount} words`, color: "text-[#8888aa]" };
+    return { level: "good", label: `${wordCount} words`, color: "text-text-muted" };
   }
 
   const t = GAUGE_THRESHOLDS[importance];
@@ -88,7 +88,7 @@ function getGaugeLevel(wordCount: number, importance: ImportanceLevel): { level:
 function WordGauge({ wordCount, importance }: { wordCount: number; importance: ImportanceLevel }) {
   if (importance === "hidden") {
     return (
-      <div className="mt-1 flex items-center gap-2 text-xs text-[#3f3f7a]">
+      <div className="mt-1 flex items-center gap-2 text-xs text-faint">
         <span>{wordCount} words (writer-only)</span>
       </div>
     );
@@ -113,7 +113,7 @@ function WordGauge({ wordCount, importance }: { wordCount: number; importance: I
   return (
     <div className="mt-1.5 flex items-center gap-2">
       {/* The gauge bar */}
-      <div className="h-1 flex-1 rounded-full bg-[#1e1e4a]">
+      <div className="h-1 flex-1 rounded-full bg-border">
         <div
           className={`h-1 rounded-full transition-all duration-300 ${barColor}`}
           style={{ width: `${pct}%` }}
@@ -1076,16 +1076,16 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#070724] text-[#f0f0f5]">
+    <div className="flex h-screen overflow-hidden bg-bg-primary text-text-primary">
 
       {/* ── LEFT PANEL: Type Tabs + Profile List ───────────────────────── */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-[#1e1e4a] bg-[#0d0d2b]">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-bg-panel">
 
         {/* Back button */}
-        <div className="border-b border-[#1e1e4a] px-3 py-3">
+        <div className="border-b border-border px-3 py-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-[#f0f0f5]"
+            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
             title="Return to the writing editor"
           >
             <ChevronLeft size={13} />
@@ -1094,8 +1094,8 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         </div>
 
         {/* Profile type tabs */}
-        <div className="border-b border-[#1e1e4a] px-3 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+        <div className="border-b border-border px-3 py-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
             Profile Type
           </p>
           <div className="flex flex-col gap-1">
@@ -1106,7 +1106,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 className={`rounded px-2 py-1.5 text-left text-sm transition-colors ${
                   profileType === type
                     ? "bg-indigo-600/20 text-indigo-300"
-                    : "text-[#f0f0f5] hover:bg-[#12122e]"
+                    : "text-text-primary hover:bg-bg-surface"
                 }`}
               >
                 {PROFILE_TYPE_LABELS[type]}
@@ -1118,14 +1118,14 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         {/* Profile list */}
         <div className="flex-1 overflow-y-auto px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+            <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
               {PROFILE_TYPE_LABELS[profileType]}
             </p>
             <div className="flex items-center gap-1">
               {profileType === "character" && (
                 <button
                   onClick={handleImport}
-                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-indigo-300"
+                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
                   title="Import a character profile from another project"
                 >
                   <Download size={12} /> Import
@@ -1133,7 +1133,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               )}
               <button
                 onClick={() => { setShowCreateForm(true); setNewName(""); setNewRole(""); }}
-                className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-indigo-300"
+                className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
                 title={`Create a new ${profileType} profile`}
               >
                 <Plus size={12} /> New
@@ -1142,11 +1142,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           </div>
 
           {listLoading && (
-            <p className="text-xs text-[#3f3f7a]">Loading...</p>
+            <p className="text-xs text-faint">Loading...</p>
           )}
 
           {!listLoading && profileList.length === 0 && (
-            <p className="text-xs text-[#3f3f7a]">
+            <p className="text-xs text-faint">
               No {PROFILE_TYPE_LABELS[profileType].toLowerCase()} yet. Click New to create one.
             </p>
           )}
@@ -1162,24 +1162,24 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               <div
                 key={item.filename}
                 className={`group mb-0.5 flex items-stretch rounded transition-colors ${
-                  isActive ? "bg-indigo-600/20" : "hover:bg-[#12122e]"
+                  isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
                 }`}
               >
                 <button
                   onClick={() => loadProfile(item)}
                   className={`flex-1 min-w-0 px-2 py-1.5 text-left ${
-                    isActive ? "text-indigo-300" : "text-[#f0f0f5]"
+                    isActive ? "text-indigo-300" : "text-text-primary"
                   }`}
                   title={item.role ? `${item.role} -- ${item.filename}` : item.filename}
                 >
                   <p className="truncate text-sm">{item.name}</p>
                   {item.role && (
-                    <p className="truncate text-xs text-[#8888aa]">{item.role}</p>
+                    <p className="truncate text-xs text-text-muted">{item.role}</p>
                   )}
                 </button>
                 <button
                   onClick={() => handleDelete(item)}
-                  className="shrink-0 px-2 text-[#3f3f7a] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+                  className="shrink-0 px-2 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
                   title={`Delete ${item.name}`}
                   aria-label={`Delete ${item.name}`}
                 >
@@ -1196,13 +1196,13 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* Title bar */}
-        <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
+        <div className="flex shrink-0 items-center justify-between border-b border-border bg-bg-panel px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium text-[#f0f0f5]">
+            <span className="truncate text-sm font-medium text-text-primary">
               {profile ? profile.name : "Profile Builder"}
             </span>
             {profile && (
-              <span className="shrink-0 rounded-full border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa]">
+              <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">
                 {PROFILE_TYPE_LABELS[profile.type as ProfileType] ?? profile.type}
               </span>
             )}
@@ -1224,7 +1224,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             <button
               onClick={handleSave}
               disabled={!isDirty || !profile}
-              className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title="Save profile to disk (Ctrl+S)"
             >
               Save
@@ -1239,7 +1239,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             place. Replaces mark the profile dirty; the writer saves with
             Ctrl+S as usual. */}
         {findOpen && profile && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-bg-panel px-4 py-2">
             {/* Find input -- Enter jumps to the next match, same as the
                 Find button. Esc closes the bar. */}
             <input
@@ -1252,7 +1252,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 if (e.key === "Enter")  { e.preventDefault(); handleFindNext();  }
               }}
               placeholder="Find..."
-              className="w-48 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+              className="w-48 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
             />
             {/* Replace-with input -- Enter triggers the single Replace
                 (matches Notepad / VS Code behaviour where Enter in the
@@ -1269,14 +1269,14 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 }
               }}
               placeholder="Replace with..."
-              className="w-48 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+              className="w-48 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
             />
             {/* Find (next) -- jumps to the next match, wraps at end. Writer
                 can press it repeatedly to walk matches one at a time. */}
             <button
               onClick={handleFindNext}
               disabled={!findQuery || findMatches.length === 0}
-              className="rounded border border-[#1e1e4a] px-2 py-1 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title={findMatches.length === 0 ? "No matches" : "Jump to next match (Enter)"}
             >
               Find
@@ -1285,7 +1285,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             <button
               onClick={handleReplaceSingle}
               disabled={!findQuery || findMatches.length === 0}
-              className="rounded border border-[#1e1e4a] px-2 py-1 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title={findMatches.length === 0 ? "No matches to replace" : "Replace this one match"}
             >
               Replace
@@ -1294,12 +1294,12 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             <button
               onClick={handleReplaceAll}
               disabled={!findQuery || findMatches.length === 0}
-              className="rounded border border-[#1e1e4a] px-2 py-1 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title={findMatches.length === 0 ? "No matches to replace" : `Replace all ${findMatches.length} match(es)`}
             >
               Replace All
             </button>
-            <label className="flex items-center gap-1 text-xs text-[#8888aa]">
+            <label className="flex items-center gap-1 text-xs text-text-muted">
               <input
                 type="checkbox"
                 checked={findCaseSens}
@@ -1311,7 +1311,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             {/* Match indicator: "N of M matches" when one is active,
                 "N matches" otherwise. Gives the writer a sense of progress
                 as they step through matches with Find. */}
-            <span className="text-xs text-[#6666a0]">
+            <span className="text-xs text-text-muted">
               {!findQuery
                 ? "Type to search"
                 : findMatches.length === 0
@@ -1323,7 +1323,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             <div className="ml-auto">
               <button
                 onClick={() => setFindOpen(false)}
-                className="rounded px-1 text-[#6666a0] transition-colors hover:text-[#f0f0f5]"
+                className="rounded px-1 text-text-muted transition-colors hover:text-text-primary"
                 title="Close (Esc)"
                 aria-label="Close find and replace"
               >
@@ -1344,11 +1344,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
 
         {/* Create profile form */}
         {showCreateForm && (
-          <div className="shrink-0 border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-4">
-            <p className="mb-3 text-sm font-semibold text-[#f0f0f5]">
+          <div className="shrink-0 border-b border-border bg-bg-panel px-4 py-4">
+            <p className="mb-3 text-sm font-semibold text-text-primary">
               New {PROFILE_TYPE_LABELS[profileType].slice(0, -1)}
             </p>
-            <label className="mb-1 block text-xs text-[#8888aa]">
+            <label className="mb-1 block text-xs text-text-muted">
               Name <span className="text-indigo-400">*</span>
             </label>
             <input
@@ -1358,18 +1358,18 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               onKeyDown={e => e.key === "Enter" && handleCreate()}
               autoFocus
               placeholder={profileType === "character" ? "e.g. Elara Voss" : "e.g. Northwatch Harbor"}
-              className="mb-3 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+              className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
             />
             {profileType === "character" && (
               <>
-                <label className="mb-1 block text-xs text-[#8888aa]">Role (optional)</label>
+                <label className="mb-1 block text-xs text-text-muted">Role (optional)</label>
                 <input
                   type="text"
                   value={newRole}
                   onChange={e => setNewRole(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCreate()}
                   placeholder="e.g. protagonist, mentor, antagonist"
-                  className="mb-3 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                  className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
               </>
             )}
@@ -1383,7 +1383,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               </button>
               <button
                 onClick={() => setShowCreateForm(false)}
-                className="rounded border border-[#1e1e4a] px-3 py-1.5 text-xs text-[#8888aa] transition-colors hover:text-[#f0f0f5]"
+                className="rounded border border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:text-text-primary"
               >
                 Cancel
               </button>
@@ -1395,16 +1395,16 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {editorLoading && (
             <div className="flex h-32 items-center justify-center">
-              <p className="text-sm text-[#8888aa]">Loading profile...</p>
+              <p className="text-sm text-text-muted">Loading profile...</p>
             </div>
           )}
 
           {!editorLoading && !profile && (
             <div className="flex h-full flex-col items-center justify-center text-center">
-              <p className="mb-2 text-sm text-[#8888aa]">
+              <p className="mb-2 text-sm text-text-muted">
                 Select a profile from the left panel, or create a new one.
               </p>
-              <p className="text-xs text-[#3f3f7a]">
+              <p className="text-xs text-faint">
                 Profiles store character details, traits, and context that AI can reference.
               </p>
             </div>
@@ -1414,45 +1414,45 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             <div className="mx-auto max-w-2xl">
 
               {/* Profile header -- name, role, status, tags */}
-              <div className="mb-6 rounded border border-[#1e1e4a] bg-[#0d0d2b] p-4">
+              <div className="mb-6 rounded border border-border bg-bg-panel p-4">
                 <div className="mb-3 grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1 block text-xs text-[#8888aa]">Name</label>
+                    <label className="mb-1 block text-xs text-text-muted">Name</label>
                     <input
                       type="text"
                       value={profile.name}
                       onChange={e => updateProfileField("name", e.target.value)}
                       data-pb-field="name"
-                      className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
+                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-[#8888aa]">Role</label>
+                    <label className="mb-1 block text-xs text-text-muted">Role</label>
                     <input
                       type="text"
                       value={profile.role}
                       onChange={e => updateProfileField("role", e.target.value)}
                       placeholder="e.g. protagonist"
                       data-pb-field="role"
-                      className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
                 <div className="mb-3 grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1 block text-xs text-[#8888aa]">Status</label>
+                    <label className="mb-1 block text-xs text-text-muted">Status</label>
                     <select
                       value={profile.status}
                       onChange={e => updateProfileField("status", e.target.value)}
-                      className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] outline-none focus:border-indigo-500"
+                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
                     >
                       <option value="active">Active</option>
                       <option value="archived">Archived</option>
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-[#8888aa]">
-                      Tags <span className="text-[#3f3f7a]">(comma-separated)</span>
+                    <label className="mb-1 block text-xs text-text-muted">
+                      Tags <span className="text-faint">(comma-separated)</span>
                     </label>
                     <input
                       type="text"
@@ -1463,7 +1463,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                       )}
                       placeholder="e.g. strategist, guarded, grief"
                       data-pb-field="tags"
-                      className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
@@ -1500,7 +1500,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                       ) : (
                         <div className="space-y-2">
                           {auditFlags.map((flag, i) => (
-                            <div key={i} className="rounded border border-teal-800/30 bg-[#0d0d2b] p-2">
+                            <div key={i} className="rounded border border-teal-800/30 bg-bg-panel p-2">
                               <div className="mb-1 flex items-center gap-2 text-xs">
                                 <span className="font-medium text-teal-200">{flag.trait}</span>
                                 {flag.current_importance && flag.suggested_importance && (
@@ -1584,7 +1584,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                       ? "Write a concise summary of this scene for use as AI context..."
                       : "Click Generate to create a full AI profile summary, or write one manually."
                   }
-                  className="w-full rounded border border-teal-800/40 bg-[#0a1a1a] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-teal-600"
+                  className="w-full rounded border border-teal-800/40 bg-bg-primary px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-teal-600"
                   minRows={4}
                   dataField="full_ai_summary"
                 />
@@ -1624,7 +1624,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           cluster is only rendered when the panel is expanded; its anchor
           (`relative`) applies in both states but the absolute children are
           hidden when collapsed. */}
-      <aside className={`relative flex shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b] transition-all duration-200 ${chatCollapsed ? "w-10" : RIGHT_PANEL_CLASS[chatPanel.width]}`}>
+      <aside className={`relative flex shrink-0 flex-col border-l border-border bg-bg-panel transition-all duration-200 ${chatCollapsed ? "w-10" : RIGHT_PANEL_CLASS[chatPanel.width]}`}>
 
         {!chatCollapsed && (
           <RightPanelResizer width={chatPanel.width} setWidth={chatPanel.setWidth} />
@@ -1634,7 +1634,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         {chatCollapsed ? (
           <button
             onClick={() => setChatCollapsed(false)}
-            className="flex h-full w-full flex-col items-center justify-center gap-2 text-[#3f3f7a] transition-colors hover:bg-[#12122e] hover:text-[#8888aa]"
+            className="flex h-full w-full flex-col items-center justify-center gap-2 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
             title="Expand the Profile Chat panel"
           >
             <span className="text-xs font-medium" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
@@ -1645,10 +1645,10 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         <>
 
         {/* Chat header */}
-        <div className="border-b border-[#1e1e4a] px-3 py-3">
+        <div className="border-b border-border px-3 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="shrink-0 text-sm font-semibold text-[#f0f0f5]">Profile Chat</h2>
+              <h2 className="shrink-0 text-sm font-semibold text-text-primary">Profile Chat</h2>
               {focusedSection && (
                 <span
                   className="truncate rounded-full border border-indigo-800/50 bg-indigo-900/20 px-2 py-0.5 text-xs text-indigo-400"
@@ -1670,14 +1670,14 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               )}
               <button
                 onClick={() => setChatCollapsed(true)}
-                className="rounded p-0.5 text-[#3f3f7a] transition-colors hover:bg-[#12122e] hover:text-[#8888aa]"
+                className="rounded p-0.5 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
                 title="Collapse the chat panel"
               >
                 <ChevronRight size={14} />
               </button>
             </div>
           </div>
-          <p className="mt-1 text-xs text-[#8888aa]">
+          <p className="mt-1 text-xs text-text-muted">
             Session-only. Pick a mode below, then ask your question.
           </p>
         </div>
@@ -1685,7 +1685,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         {/* Chat history */}
         <div className="flex-1 overflow-y-auto px-3 py-3">
           {!profile && (
-            <p className="text-center text-xs text-[#3f3f7a]">Open a profile to start chatting.</p>
+            <p className="text-center text-xs text-faint">Open a profile to start chatting.</p>
           )}
 
           {profile && chatMessages.length === 0 && (
@@ -1694,13 +1694,13 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 <Bot size={20} />
               </div>
               <div>
-                <p className="text-sm font-medium text-[#8888aa]">Profile Companion</p>
-                <p className="mt-1 text-xs text-[#3f3f7a]">
+                <p className="text-sm font-medium text-text-muted">Profile Companion</p>
+                <p className="mt-1 text-xs text-faint">
                   Pick a behavior mode below and type your question.
                 </p>
               </div>
-              <div className="w-full rounded border border-[#1e1e4a] bg-[#070724] p-2.5 text-left">
-                <p className="mb-1 text-xs font-medium text-[#8888aa]">Try asking:</p>
+              <div className="w-full rounded border border-border bg-bg-primary p-2.5 text-left">
+                <p className="mb-1 text-xs font-medium text-text-muted">Try asking:</p>
                 {[
                   "How would AI use the core traits?",
                   "What's missing from this profile?",
@@ -1709,7 +1709,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                   <button
                     key={q}
                     onClick={() => setChatInput(q)}
-                    className="mt-1 block w-full rounded px-2 py-1 text-left text-xs text-[#3f3f7a] transition-colors hover:bg-[#1e1e4a] hover:text-[#8888aa]"
+                    className="mt-1 block w-full rounded px-2 py-1 text-left text-xs text-faint transition-colors hover:bg-border hover:text-text-muted"
                   >
                     "{q}"
                   </button>
@@ -1733,7 +1733,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                   msg.role === "user"
                     ? "rounded-tr-sm bg-indigo-600 text-white"
-                    : "rounded-tl-sm border border-[#1e1e4a] bg-[#12122e] text-[#f0f0f5]"
+                    : "rounded-tl-sm border border-border bg-bg-surface text-text-primary"
                 }`}
               >
                 {msg.role === "user" ? (
@@ -1752,11 +1752,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           ))}
 
           {chatLoading && (
-            <div className="flex items-center gap-2 text-xs text-[#8888aa]">
+            <div className="flex items-center gap-2 text-xs text-text-muted">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
               <span>
                 {chatModelUsed
-                  ? <>{chatModelUsed.split("/").pop()} <span className="text-[#555577]">thinking...</span></>
+                  ? <>{chatModelUsed.split("/").pop()} <span className="text-faint">thinking...</span></>
                   : "Thinking..."}
               </span>
             </div>
@@ -1785,7 +1785,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         />
 
         {/* Chat input */}
-        <div className="border-t border-[#1e1e4a] p-3">
+        <div className="border-t border-border p-3">
           <div className="relative flex items-end gap-2">
             <textarea
               value={chatInput}
@@ -1811,12 +1811,12 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               disabled={!profile || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
-              className={`flex-1 rounded border px-2 py-2 text-xs text-[#f0f0f5] placeholder-[#6666a0] outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50 bg-[#1e1e48] ${
+              className={`flex-1 rounded border px-2 py-2 text-xs text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50 bg-border ${
                 chatInput.length > 6000
                   ? "border-red-600"
                   : chatInput.length > 3000
                   ? "border-amber-600"
-                  : "border-[#1e1e4a]"
+                  : "border-border"
               }`}
             />
             {chatInput.length > 500 && (
@@ -1825,7 +1825,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                   ? "text-red-400"
                   : chatInput.length > 3000
                   ? "text-amber-500"
-                  : "text-[#3f3f7a]"
+                  : "text-faint"
               }`}>
                 {chatInput.length.toLocaleString()} chars
                 {chatInput.length > 6000 && " -- may be too large"}
@@ -1834,7 +1834,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             <button
               onClick={sendChatMessage}
               disabled={!profile || !chatInput.trim() || chatLoading}
-              className="flex items-center justify-center rounded border border-[#1e1e4a] p-1.5 text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
               title="Send message (Enter)"
             >
               <Send size={13} />
@@ -1892,9 +1892,9 @@ function ProfileSectionEditor({
   return (
     <div className="mb-6" onFocus={onFocus}>
       {/* Section heading with indigo accent + help icon for text sections */}
-      <div className="mb-3 flex items-center gap-2.5 border-b border-[#1e1e4a] pb-2">
+      <div className="mb-3 flex items-center gap-2.5 border-b border-border pb-2">
         <span className="h-4 w-0.5 shrink-0 rounded-full bg-indigo-600/70" />
-        <h2 className="text-sm font-semibold text-[#f0f0f5]">{heading}</h2>
+        <h2 className="text-sm font-semibold text-text-primary">{heading}</h2>
         {/* (?) icon -- shows writing tips with Poor/Good/Great examples.
             Only renders if help content exists for this section. */}
         {!hasTraitBlocks && (
@@ -1905,7 +1905,7 @@ function ProfileSectionEditor({
       {hasTraitBlocks ? (
         <div>
           {section.trait_blocks.length === 0 && (
-            <p className="mb-2 text-xs text-[#3f3f7a]">
+            <p className="mb-2 text-xs text-faint">
               No traits yet. Click "Add Trait" to add one.
             </p>
           )}
@@ -1923,7 +1923,7 @@ function ProfileSectionEditor({
           ))}
           <button
             onClick={onAddTraitBlock}
-            className="mb-3 flex items-center gap-1 rounded border border-dashed border-[#1e1e4a] px-3 py-1.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            className="mb-3 flex items-center gap-1 rounded border border-dashed border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
             title="Add a trait or group of related traits"
           >
             <Plus size={12} /> Add Trait
@@ -1936,18 +1936,18 @@ function ProfileSectionEditor({
           placeholder={`Write ${heading.toLowerCase()} notes here...`}
           rows={4}
           data-pb-field={`section:${sectionKey}:content`}
-          className="mb-3 w-full resize-y rounded border border-[#1e1e4a] bg-[#0d0d2b] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+          className="mb-3 w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
         />
       )}
 
       {/* AI Summary sub-section */}
-      <div className="rounded border border-[#1e1e4a] bg-[#070724] p-3">
+      <div className="rounded border border-border bg-bg-primary p-3">
         <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-xs font-medium text-[#8888aa]">AI Summary: {heading}</p>
+          <p className="text-xs font-medium text-text-muted">AI Summary: {heading}</p>
           <button
             onClick={onGenerateSectionSummary}
             disabled={isGeneratingSummary}
-            className="flex items-center gap-1 rounded border border-[#1e1e4a] px-1.5 py-0.5 text-xs text-[#3f3f7a] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
             title="Generate this section summary using AI"
           >
             <Sparkles size={10} />
@@ -1958,7 +1958,7 @@ function ProfileSectionEditor({
           value={section.ai_summary}
           onChange={e => onAiSummaryChange(e.target.value)}
           placeholder="Click Generate to create an AI summary, or write one manually."
-          className="w-full rounded border border-[#1e1e4a] bg-[#0d0d2b] px-2 py-1.5 text-xs text-[#8888aa] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+          className="w-full rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-muted placeholder-faint outline-none focus:border-indigo-500"
           minRows={2}
           dataField={`section:${sectionKey}:ai_summary`}
         />
@@ -1999,14 +1999,14 @@ function ImportanceHelpPopover({
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="shrink-0 rounded p-0.5 text-[#3f3f7a] transition-colors hover:text-indigo-400"
+        className="shrink-0 rounded p-0.5 text-faint transition-colors hover:text-indigo-400"
         title={`Help: ${importance} importance level`}
       >
         <HelpCircle size={12} />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-6 z-30 w-72 rounded-lg border border-[#1e1e4a] bg-[#0a0a20] p-3 shadow-xl">
+        <div className="absolute left-0 top-6 z-30 w-72 rounded-lg border border-border bg-bg-primary p-3 shadow-xl">
           {/* Header */}
           <div className="mb-2 flex items-start justify-between">
             <p className="text-xs font-semibold text-indigo-300">
@@ -2014,23 +2014,23 @@ function ImportanceHelpPopover({
             </p>
             <button
               onClick={() => setOpen(false)}
-              className="rounded p-0.5 text-[#3f3f7a] hover:text-[#f0f0f5]"
+              className="rounded p-0.5 text-faint hover:text-text-primary"
             >
               <X size={10} />
             </button>
           </div>
 
           {/* Summary */}
-          <p className="mb-2 text-xs font-medium text-[#f0f0f5]">{help.summary}</p>
+          <p className="mb-2 text-xs font-medium text-text-primary">{help.summary}</p>
 
           {/* Detail */}
-          <p className="mb-3 text-xs leading-relaxed text-[#8888aa]">{help.detail}</p>
+          <p className="mb-3 text-xs leading-relaxed text-text-muted">{help.detail}</p>
 
           {/* Section-specific example */}
           {example && (
-            <div className="rounded border border-[#1e1e4a] bg-[#12122e] p-2">
-              <p className="mb-1 text-xs font-medium text-[#8888aa]">Example for this section:</p>
-              <p className="whitespace-pre-line text-xs leading-relaxed text-[#c0c0d0]">{example}</p>
+            <div className="rounded border border-border bg-bg-surface p-2">
+              <p className="mb-1 text-xs font-medium text-text-muted">Example for this section:</p>
+              <p className="whitespace-pre-line text-xs leading-relaxed text-text-primary">{example}</p>
             </div>
           )}
         </div>
@@ -2064,27 +2064,27 @@ function SectionHelpPopover({
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="shrink-0 rounded p-0.5 text-[#3f3f7a] transition-colors hover:text-indigo-400"
+        className="shrink-0 rounded p-0.5 text-faint transition-colors hover:text-indigo-400"
         title="Writing tips for this section"
       >
         <HelpCircle size={12} />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-6 z-30 max-h-[28rem] w-80 overflow-y-auto rounded-lg border border-[#1e1e4a] bg-[#0a0a20] p-3 shadow-xl">
+        <div className="absolute left-0 top-6 z-30 max-h-[28rem] w-80 overflow-y-auto rounded-lg border border-border bg-bg-primary p-3 shadow-xl">
           {/* Header */}
           <div className="mb-2 flex items-start justify-between">
             <p className="text-xs font-semibold text-indigo-300">Writing Tips</p>
             <button
               onClick={() => setOpen(false)}
-              className="rounded p-0.5 text-[#3f3f7a] hover:text-[#f0f0f5]"
+              className="rounded p-0.5 text-faint hover:text-text-primary"
             >
               <X size={10} />
             </button>
           </div>
 
           {/* What to put */}
-          <p className="mb-3 text-xs leading-relaxed text-[#f0f0f5]">{help.whatToPut}</p>
+          <p className="mb-3 text-xs leading-relaxed text-text-primary">{help.whatToPut}</p>
 
           {/* Poor example */}
           <div className="mb-2 rounded border border-red-900/40 bg-red-950/20 p-2">
@@ -2199,14 +2199,14 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
   };
 
   return (
-    <div className="mb-3 rounded border border-[#1e1e4a] bg-[#0d0d2b] p-3">
+    <div className="mb-3 rounded border border-border bg-bg-panel p-3">
       {/* Top row: importance selector + trait name + delete button */}
       <div className="mb-2 flex items-start gap-2">
         {/* Importance dropdown */}
         <select
           value={block.importance}
           onChange={e => onUpdate({ importance: e.target.value as ImportanceLevel })}
-          className="shrink-0 rounded border border-[#1e1e4a] bg-[#12122e] px-1.5 py-1 text-xs text-[#f0f0f5] outline-none focus:border-indigo-500"
+          className="shrink-0 rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
           title="How prominently AI uses this trait"
         >
           {(Object.keys(IMPORTANCE_LABELS) as ImportanceLevel[]).map(level => (
@@ -2226,14 +2226,14 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
           onChange={e => onUpdate({ trait: e.target.value })}
           placeholder="Trait name (e.g. observant, punctual)"
           data-pb-field={`trait:${block.id}:trait`}
-          className="min-w-0 flex-1 rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
         />
 
         {/* "How AI uses this" button -- generates on-demand prose explanation */}
         <button
           onClick={generatePreview}
           disabled={previewLoading || !block.trait.trim() || !block.description.trim()}
-          className="shrink-0 rounded p-1 text-[#3f3f7a] transition-colors hover:text-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 rounded p-1 text-faint transition-colors hover:text-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
           title="How AI uses this trait (generates a preview explanation)"
         >
           <Sparkles size={12} />
@@ -2242,7 +2242,7 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
         {/* Delete button */}
         <button
           onClick={onRemove}
-          className="shrink-0 rounded p-1 text-[#3f3f7a] transition-colors hover:bg-red-950/40 hover:text-red-400"
+          className="shrink-0 rounded p-1 text-faint transition-colors hover:bg-red-950/40 hover:text-red-400"
           title="Remove this trait"
         >
           <Trash2 size={12} />
@@ -2256,7 +2256,7 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
         placeholder="Describe this trait in detail. Be specific to this character."
         rows={3}
         data-pb-field={`trait:${block.id}:description`}
-        className="mb-1 w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-2 py-1.5 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+        className="mb-1 w-full resize-y rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
       />
 
       {/* Word count gauge + trim button when wordy/bloated */}

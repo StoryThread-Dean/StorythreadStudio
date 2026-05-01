@@ -14,8 +14,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star, Folder } from "lucide-react";
+import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star, Folder, Sun, Moon } from "lucide-react";
 import type { AppSettings, ModelInfo } from "../types/ai";
+import { useTheme } from "../hooks/useTheme";
 
 // ── Content Mode Model Filtering (shared logic with ProjectSettings) ─────────
 const MODERATED_PROVIDERS = [
@@ -114,6 +115,11 @@ export function Settings({ onClose }: SettingsProps) {
   // The backend resolves an empty string to ~/Documents/Storythread Studio, so we
   // treat "" as a sentinel meaning "use the default".
   const [vaultRoot, setVaultRoot] = useState("");
+
+  // Theme: lives in the global theme store (useTheme), not in local state.
+  // The setter applies the change immediately to the DOM and persists to the
+  // backend, so there's no separate "save" step for theme like other fields.
+  const [theme, setTheme] = useTheme();
 
   // UI state
   const [loading, setLoading]             = useState(true);
@@ -326,17 +332,17 @@ export function Settings({ onClose }: SettingsProps) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal -- wider and scrollable for expanded content */}
-      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
 
         {/* Sticky header -- inline padding to bypass Tailwind purge */}
         <div
-          className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a]"
+          className="flex shrink-0 items-center justify-between border-b border-border"
           style={{ padding: "1rem 1.5rem" }}
         >
-          <h2 className="text-base font-semibold text-[#f0f0f5]">Settings</h2>
+          <h2 className="text-base font-semibold text-text-primary">Settings</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-[#f0f0f5]"
+            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
             title="Close settings"
           >
             <X size={16} />
@@ -346,22 +352,22 @@ export function Settings({ onClose }: SettingsProps) {
         {/* Scrollable body -- inline padding to bypass Tailwind purge */}
         <div className="flex-1 overflow-y-auto" style={{ padding: "1.25rem 1.5rem" }}>
           {loading ? (
-            <p className="text-sm text-[#8888aa]">Loading settings...</p>
+            <p className="text-sm text-text-muted">Loading settings...</p>
           ) : (
             <div className="space-y-8">
 
               {/* ── SECTION 1: API & Model Selection ──────────────────────── */}
               <section>
-                <h3 className="mb-4 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                   API & Model Selection
                 </h3>
 
                 {/* OpenRouter API Key */}
                 <div className="mb-5">
-                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
                     OpenRouter API Key
                   </label>
-                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                  <p className="mb-2 text-xs text-faint">
                     {settings?.openrouter_api_key_set
                       ? `Current key: ${settings.openrouter_api_key} -- enter a new key to replace it`
                       : "No key saved. Get one free at openrouter.ai"
@@ -374,11 +380,11 @@ export function Settings({ onClose }: SettingsProps) {
                         value={apiKeyInput}
                         onChange={e => setApiKeyInput(e.target.value)}
                         placeholder="sk-or-v1-..."
-                        className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 pr-8 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-3 py-2 pr-8 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                       />
                       <button
                         onClick={() => setShowKey(v => !v)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#3f3f7a] hover:text-[#8888aa]"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-faint hover:text-text-muted"
                         title={showKey ? "Hide key" : "Show key"}
                         type="button"
                       >
@@ -388,7 +394,7 @@ export function Settings({ onClose }: SettingsProps) {
                     <button
                       onClick={handleTest}
                       disabled={testing || saving}
-                      className="flex items-center gap-1.5 rounded border border-[#1e1e4a] px-3 py-2 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:opacity-50"
                       title="Test if the API key works"
                     >
                       {testing ? <Loader size={12} className="animate-spin" /> : null}
@@ -405,10 +411,10 @@ export function Settings({ onClose }: SettingsProps) {
 
                 {/* Cost Tier Slider */}
                 <div className="mb-5">
-                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
                     Model Cost Tier
                   </label>
-                  <p className="mb-3 text-xs text-[#3f3f7a]">
+                  <p className="mb-3 text-xs text-faint">
                     Filters which models appear in the picker below.
                     Your selected model is always used regardless of this setting.
                   </p>
@@ -429,7 +435,7 @@ export function Settings({ onClose }: SettingsProps) {
                         className={`text-xs ${
                           i === tierIndex(costTier)
                             ? "font-semibold text-indigo-300"
-                            : "text-[#3f3f7a]"
+                            : "text-faint"
                         }`}
                       >
                         {t.label}
@@ -441,15 +447,15 @@ export function Settings({ onClose }: SettingsProps) {
                 {/* Text-Only Filter Toggle */}
                 <div className="mb-5 flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-[#f0f0f5]">Text-Only Models</p>
-                    <p className="text-xs text-[#3f3f7a]">
+                    <p className="text-xs font-medium text-text-primary">Text-Only Models</p>
+                    <p className="text-xs text-faint">
                       Hide models that output images, audio, or video
                     </p>
                   </div>
                   <button
                     onClick={() => setTextOnlyFilter(v => !v)}
                     className={`relative h-5 w-9 rounded-full transition-colors ${
-                      textOnlyFilter ? "bg-indigo-600" : "bg-[#1e1e4a]"
+                      textOnlyFilter ? "bg-indigo-600" : "bg-border"
                     }`}
                     title={textOnlyFilter ? "Text-only filter on" : "Text-only filter off"}
                   >
@@ -473,10 +479,10 @@ export function Settings({ onClose }: SettingsProps) {
 
                 {/* Model Picker */}
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
                     Default Model
                   </label>
-                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                  <p className="mb-2 text-xs text-faint">
                     Used for all AI requests unless overridden. Click a model to select it.
                     Star to add to My Favorites.
                   </p>
@@ -489,20 +495,20 @@ export function Settings({ onClose }: SettingsProps) {
                         value={selectedModel}
                         onChange={e => setSelectedModel(e.target.value)}
                         placeholder="e.g. openai/gpt-4o-mini"
-                        className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                       />
-                      <p className="mt-1 text-xs text-[#3f3f7a]">
+                      <p className="mt-1 text-xs text-faint">
                         Test your connection above to load the model list.
                       </p>
                     </>
                   ) : (
                     // Full three-section picker
-                    <div className="max-h-72 overflow-y-auto rounded border border-[#1e1e4a] bg-[#070724]">
+                    <div className="max-h-72 overflow-y-auto rounded border border-border bg-bg-primary">
 
                       {/* Staff Picks */}
                       {availableStaffPicks.length > 0 && (
                         <>
-                          <div className="sticky top-0 bg-[#070724] px-3 py-1.5">
+                          <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
                             <p className="text-xs font-semibold text-indigo-400">
                               ★ Staff Picks
                             </p>
@@ -521,14 +527,14 @@ export function Settings({ onClose }: SettingsProps) {
                               />
                             );
                           })}
-                          <div className="border-b border-[#1e1e4a]" />
+                          <div className="border-b border-border" />
                         </>
                       )}
 
                       {/* My Favorites */}
                       {availableFavorites.length > 0 && (
                         <>
-                          <div className="sticky top-0 bg-[#070724] px-3 py-1.5">
+                          <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
                             <p className="text-xs font-semibold text-teal-400">
                               ★ My Favorites
                             </p>
@@ -547,21 +553,21 @@ export function Settings({ onClose }: SettingsProps) {
                               />
                             );
                           })}
-                          <div className="border-b border-[#1e1e4a]" />
+                          <div className="border-b border-border" />
                         </>
                       )}
 
                       {/* All Models (filtered) */}
                       <div className="px-3 py-1.5">
-                        <p className="text-xs font-semibold text-[#8888aa]">
+                        <p className="text-xs font-semibold text-text-muted">
                           All Models
-                          <span className="ml-1 font-normal text-[#3f3f7a]">
+                          <span className="ml-1 font-normal text-faint">
                             ({visibleModels.length} shown)
                           </span>
                         </p>
                       </div>
                       {visibleModels.length === 0 ? (
-                        <p className="px-3 pb-3 text-xs text-[#3f3f7a]">
+                        <p className="px-3 pb-3 text-xs text-faint">
                           No models match the current tier and filter. Try loosening the settings above.
                         </p>
                       ) : (
@@ -584,15 +590,15 @@ export function Settings({ onClose }: SettingsProps) {
 
               {/* ── SECTION 2: Content Settings ───────────────────────────── */}
               <section>
-                <h3 className="mb-4 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                   Content Settings
                 </h3>
 
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
                     Content Mode
                   </label>
-                  <p className="mb-3 text-xs text-[#3f3f7a]">
+                  <p className="mb-3 text-xs text-faint">
                     Controls how AI assistants handle mature or explicit story content.
                     Applies globally to all AI calls in this app.
                   </p>
@@ -612,8 +618,8 @@ export function Settings({ onClose }: SettingsProps) {
                           className="mt-0.5 accent-indigo-500"
                         />
                         <div>
-                          <p className="text-xs font-medium text-[#f0f0f5]">{option.label}</p>
-                          <p className="text-xs text-[#3f3f7a]">{option.desc}</p>
+                          <p className="text-xs font-medium text-text-primary">{option.label}</p>
+                          <p className="text-xs text-faint">{option.desc}</p>
                         </div>
                       </label>
                     ))}
@@ -622,17 +628,70 @@ export function Settings({ onClose }: SettingsProps) {
               </section>
 
 
+              {/* ── Appearance ──────────────────────────────────────────────
+                  Theme switcher. Unlike the other sections, the theme applies
+                  and persists immediately on click -- no separate Save step --
+                  because that's the standard pattern users expect for visual
+                  preferences (Cmd+Click instant feedback). */}
+              <section>
+                <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  Appearance
+                </h3>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-text-primary">
+                    Theme
+                  </label>
+                  <div className="flex gap-2">
+                    {/* Each card is its own button, styled so the active one
+                        gets an indigo border + accent text. Reads like a
+                        segmented control without the visual heaviness of one. */}
+                    <button
+                      onClick={() => setTheme("dark")}
+                      type="button"
+                      className={`flex flex-1 items-center gap-2 rounded border px-3 py-2 text-xs transition-colors ${
+                        theme === "dark"
+                          ? "border-indigo-500 bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                      }`}
+                    >
+                      <Moon size={14} />
+                      <span className="font-medium">Dark</span>
+                      <span className="text-text-muted">— charcoal navy (default)</span>
+                    </button>
+                    <button
+                      onClick={() => setTheme("light")}
+                      type="button"
+                      className={`flex flex-1 items-center gap-2 rounded border px-3 py-2 text-xs transition-colors ${
+                        theme === "light"
+                          ? "border-indigo-500 bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                      }`}
+                    >
+                      <Sun size={14} />
+                      <span className="font-medium">Light</span>
+                      <span className="text-text-muted">— warm paper</span>
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-faint">
+                    Switches the entire app between dark and light modes.
+                    Saved globally, so the choice carries across all projects.
+                  </p>
+                </div>
+              </section>
+
+
               {/* ── SECTION 3: Vault Location ────────────────────────────── */}
               <section>
-                <h3 className="mb-4 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                   Vault Location
                 </h3>
 
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
                     Project Folder
                   </label>
-                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                  <p className="mb-2 text-xs text-faint">
                     Parent folder where new projects and series are created. You
                     won't be asked to pick a folder for new projects. Existing
                     projects are not moved when you change this.
@@ -643,7 +702,7 @@ export function Settings({ onClose }: SettingsProps) {
                       value={vaultRoot}
                       onChange={e => setVaultRoot(e.target.value)}
                       placeholder="C:\\Users\\You\\Documents\\Storythread Studio"
-                      className="flex-1 rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                      className="flex-1 rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                     />
                     <button
                       onClick={async () => {
@@ -653,14 +712,14 @@ export function Settings({ onClose }: SettingsProps) {
                         });
                         if (typeof picked === "string") setVaultRoot(picked);
                       }}
-                      className="flex items-center gap-1.5 rounded border border-[#1e1e4a] px-3 py-2 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5]"
+                      className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
                       title="Browse for a folder"
                       type="button"
                     >
                       <Folder size={12} /> Browse
                     </button>
                   </div>
-                  <p className="mt-2 text-xs text-[#3f3f7a]">
+                  <p className="mt-2 text-xs text-faint">
                     Leave blank and save to reset to the default
                     (<code className="text-indigo-400">~/Documents/Storythread Studio</code>).
                   </p>
@@ -670,16 +729,16 @@ export function Settings({ onClose }: SettingsProps) {
 
               {/* ── SECTION 4: Model Routing ─────────────────────────────── */}
               <section>
-                <h3 className="mb-4 border-b border-[#1e1e4a] pb-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+                <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                   Model Routing
                 </h3>
 
                 {/* Allowlist */}
                 <div className="mb-5">
-                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
                     Model Allowlist
                   </label>
-                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                  <p className="mb-2 text-xs text-faint">
                     If set, only these models can be used. One model ID per line. Leave empty to allow all models.
                   </p>
                   <textarea
@@ -687,16 +746,16 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelAllowlist(e.target.value)}
                     rows={3}
                     placeholder={"e.g.\nanthropic/claude-3.5-sonnet\nopenai/gpt-4o-mini"}
-                    className="w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 {/* Blocklist */}
                 <div className="mb-5">
-                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
                     Model Blocklist
                   </label>
-                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                  <p className="mb-2 text-xs text-faint">
                     These models are excluded from selection. Ignored if allowlist is set. One model ID per line.
                   </p>
                   <textarea
@@ -704,16 +763,16 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelBlocklist(e.target.value)}
                     rows={3}
                     placeholder="e.g.\ngoogle/gemma-2-9b-it:free"
-                    className="w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 {/* Per-model content modes */}
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-[#f0f0f5]">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
                     Model Content Modes
                   </label>
-                  <p className="mb-2 text-xs text-[#3f3f7a]">
+                  <p className="mb-2 text-xs text-faint">
                     Configure which content modes each model supports. Format: one entry per line as
                     <code className="mx-1 text-indigo-400">model-id: general, mature, explicit</code>
                     Models not listed default to "general" only.
@@ -723,7 +782,7 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelContentModes(e.target.value)}
                     rows={4}
                     placeholder={"e.g.\nanthropic/claude-3.5-sonnet: general, mature\ndeepseek/deepseek-chat: general, mature, explicit"}
-                    className="w-full resize-y rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-xs text-[#f0f0f5] placeholder-[#3f3f7a] outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                   />
                 </div>
               </section>
@@ -733,7 +792,7 @@ export function Settings({ onClose }: SettingsProps) {
         </div>
 
         {/* Sticky footer -- inline padding to bypass Tailwind purge */}
-        <div className="shrink-0 border-t border-[#1e1e4a]" style={{ padding: "1rem 1.5rem" }}>
+        <div className="shrink-0 border-t border-border" style={{ padding: "1rem 1.5rem" }}>
           {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
           {saved && !error && (
             <p className="mb-2 flex items-center gap-1.5 text-xs text-emerald-400">
@@ -777,7 +836,7 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
 
   return (
     <div
-      className={`flex items-center gap-2 px-3 py-2 transition-colors hover:bg-[#0d0d2b] ${
+      className={`flex items-center gap-2 px-3 py-2 transition-colors hover:bg-bg-panel ${
         isSelected ? "bg-indigo-900/20" : ""
       }`}
     >
@@ -794,14 +853,14 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
           }`}
         />
         <div className="min-w-0">
-          <p className={`truncate text-xs ${isSelected ? "text-indigo-300 font-medium" : "text-[#f0f0f5]"}`}>
+          <p className={`truncate text-xs ${isSelected ? "text-indigo-300 font-medium" : "text-text-primary"}`}>
             {model.name}
           </p>
           {note && (
-            <p className="text-xs text-[#8888aa]">{note}</p>
+            <p className="text-xs text-text-muted">{note}</p>
           )}
         </div>
-        <span className={`ml-auto shrink-0 text-xs ${model.is_free ? "text-emerald-500" : "text-[#3f3f7a]"}`}>
+        <span className={`ml-auto shrink-0 text-xs ${model.is_free ? "text-emerald-500" : "text-faint"}`}>
           {costLabel}
         </span>
       </button>
@@ -810,7 +869,7 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
       <button
         onClick={(e) => { e.stopPropagation(); onToggleStar(); }}
         className={`shrink-0 transition-colors ${
-          isStarred ? "text-amber-400" : "text-[#2a2a4a] hover:text-[#8888aa]"
+          isStarred ? "text-amber-400" : "text-faint hover:text-text-muted"
         }`}
         title={isStarred ? "Remove from favorites" : "Add to favorites"}
       >

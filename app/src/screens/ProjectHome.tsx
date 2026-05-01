@@ -33,6 +33,7 @@ import type {
 } from "../types/project";
 import { STORY_TYPE_LABELS } from "../types/project";
 import { formatDateTime12h } from "../utils/dateFormat";
+import { Wordmark } from "../components/Wordmark";
 
 const API_BASE = "http://localhost:8000";
 
@@ -395,12 +396,18 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen flex-col bg-[#070724] text-[#f0f0f5]">
+    <div className="flex h-screen flex-col bg-bg-primary text-text-primary">
 
-      {/* Title bar */}
-      <div className="shrink-0 border-b border-[#1e1e4a] bg-[#0d0d2b] px-6 py-4">
-        <h1 className="text-2xl font-semibold tracking-wide text-[#f0f0f5]">Storythread Studio</h1>
-        <p className="mt-0.5 text-xs text-[#8888aa]">Your local writing workspace</p>
+      {/* Title bar -- a full-width logo banner with the tagline beneath.
+          Wordmark renders the dashed-thin ivory strip carrying the official
+          logo art. The tagline sits below it on the regular bg-bg-panel
+          background so the banner reads as the focal point and the tagline
+          as supporting copy. */}
+      <div className="shrink-0 border-b border-border bg-bg-panel">
+        <Wordmark />
+        <p className="py-2 text-center text-xs text-text-muted">
+          Your local writing workspace
+        </p>
       </div>
 
       {/* Two-column body. min-h-0 + overflow on inner scrolls keeps the two
@@ -408,15 +415,15 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
       <div className="flex min-h-0 flex-1">
 
         {/* ── Left column: New Project / Open / Series browser ───────── */}
-        <section className="flex w-3/5 min-w-0 flex-col overflow-y-auto border-r border-[#1e1e4a] p-8">
+        <section className="flex w-3/5 min-w-0 flex-col overflow-y-auto border-r border-border p-8">
 
           {/* Main mode: tile picker + open button */}
           {mode === "main" && (
             <>
-              <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-[#a5b4fc]">
+              <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-indigo-300">
                 New Project
               </h2>
-              <p className="mb-5 text-xs text-[#8888aa]">
+              <p className="mb-5 text-xs text-text-muted">
                 Pick the kind of story you're starting. The outline scaffold is
                 chosen automatically; you can swap it later from the editor.
               </p>
@@ -431,13 +438,13 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                       onClick={() => handlePickStoryType(opt.value)}
                       disabled={loading}
                       title={opt.hint}
-                      className="flex flex-col items-start gap-1 rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] p-4 text-left transition-colors hover:border-indigo-500 hover:bg-[#12122e] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Icon size={22} className="text-indigo-400" />
-                      <p className="mt-1 text-sm font-semibold text-[#f0f0f5]">
+                      <p className="mt-1 text-sm font-semibold text-text-primary">
                         {STORY_TYPE_LABELS[opt.value]}
                       </p>
-                      <p className="text-xs text-[#8888aa]">{opt.range}</p>
+                      <p className="text-xs text-text-muted">{opt.range}</p>
                     </button>
                   );
                 })}
@@ -445,19 +452,19 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
 
               {/* Divider + Open Project */}
               <div className="my-6 flex items-center gap-3">
-                <div className="h-px flex-1 bg-[#1e1e4a]" />
-                <span className="text-xs text-[#3f3f7a]">or</span>
-                <div className="h-px flex-1 bg-[#1e1e4a]" />
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-faint">or</span>
+                <div className="h-px flex-1 bg-border" />
               </div>
 
               <button
                 onClick={handleOpen}
                 disabled={loading}
-                className="self-start rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] px-5 py-3 text-left transition-colors hover:border-indigo-500 hover:bg-[#12122e] disabled:cursor-not-allowed disabled:opacity-50"
+                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                 title="Open an existing project or series folder"
               >
-                <p className="text-sm font-semibold text-[#f0f0f5]">Open Project</p>
-                <p className="mt-0.5 text-xs text-[#8888aa]">
+                <p className="text-sm font-semibold text-text-primary">Open Project</p>
+                <p className="mt-0.5 text-xs text-text-muted">
                   Opens a folder. Detects whether it's a project or a series.
                 </p>
               </button>
@@ -469,42 +476,42 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
             <>
               <button
                 onClick={backToMain}
-                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-[#8888aa] hover:text-indigo-300"
+                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-indigo-300"
               >
                 <ArrowLeft size={12} /> Back
               </button>
 
-              <h2 className="mb-1 text-sm font-semibold text-[#f0f0f5]">
+              <h2 className="mb-1 text-sm font-semibold text-text-primary">
                 New {STORY_TYPE_LABELS[selectedStoryType]}
               </h2>
-              <p className="mb-4 text-xs text-[#8888aa]">
+              <p className="mb-4 text-xs text-text-muted">
                 Will be created under{" "}
-                <span className="text-[#f0f0f5]">{vaultRoot || "your vault folder"}</span>
+                <span className="text-text-primary">{vaultRoot || "your vault folder"}</span>
                 . You can change the vault location in Settings.
               </p>
 
-              <label className="mb-1 block text-xs font-medium text-[#8888aa]">
+              <label className="mb-1 block text-xs font-medium text-text-muted">
                 Title <span className="text-indigo-400">*</span>
               </label>
               <input
                 type="text" value={title} onChange={e => setTitle(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !isSeries) handleCreate(); }}
                 placeholder="e.g. The Ember Chronicles" autoFocus
-                className="mb-3 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
 
-              <label className="mb-1 block text-xs font-medium text-[#8888aa]">
-                Description <span className="text-[#3f3f7a]">(optional)</span>
+              <label className="mb-1 block text-xs font-medium text-text-muted">
+                Description <span className="text-faint">(optional)</span>
               </label>
               <input
                 type="text" value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="A short description of your story"
-                className="mb-4 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="mb-4 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
 
               {/* Series toggle + inline expansion. When checked the series
                   fields slide in below the checkbox. */}
-              <label className="mb-2 flex cursor-pointer items-center gap-2 text-sm text-[#f0f0f5]">
+              <label className="mb-2 flex cursor-pointer items-center gap-2 text-sm text-text-primary">
                 <input
                   type="checkbox" checked={isSeries}
                   onChange={e => setIsSeries(e.target.checked)}
@@ -512,53 +519,53 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                 />
                 Make this a series
               </label>
-              <p className="mb-3 ml-6 text-xs text-[#8888aa]">
+              <p className="mb-3 ml-6 text-xs text-text-muted">
                 Creates a series folder around this book. You can add more
                 books to it later from the Open Project flow.
               </p>
 
               {isSeries && (
-                <div className="ml-6 mb-4 rounded border border-teal-800/40 bg-[#0d0d2b] p-4">
-                  <label className="mb-1 block text-xs font-medium text-[#8888aa]">
+                <div className="ml-6 mb-4 rounded border border-teal-800/40 bg-bg-panel p-4">
+                  <label className="mb-1 block text-xs font-medium text-text-muted">
                     Series Name <span className="text-teal-400">*</span>
                   </label>
                   <input
                     type="text" value={seriesName} onChange={e => setSeriesName(e.target.value)}
                     placeholder="e.g. The Ember Throne Saga"
-                    className="mb-3 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
 
-                  <label className="mb-1 block text-xs font-medium text-[#8888aa]">
-                    Genre <span className="text-[#3f3f7a]">(optional)</span>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">
+                    Genre <span className="text-faint">(optional)</span>
                   </label>
                   <input
                     type="text" value={seriesGenre} onChange={e => setSeriesGenre(e.target.value)}
                     placeholder="e.g. epic fantasy"
-                    className="mb-3 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
 
-                  <label className="mb-1 block text-xs font-medium text-[#8888aa]">
-                    Tone <span className="text-[#3f3f7a]">(optional)</span>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">
+                    Tone <span className="text-faint">(optional)</span>
                   </label>
                   <input
                     type="text" value={seriesTone} onChange={e => setSeriesTone(e.target.value)}
                     placeholder="e.g. dark, atmospheric"
-                    className="mb-3 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
 
-                  <label className="mb-1 block text-xs font-medium text-[#8888aa]">
+                  <label className="mb-1 block text-xs font-medium text-text-muted">
                     Content Mode
                   </label>
                   <select
                     value={seriesContentMode}
                     onChange={e => setSeriesContentMode(e.target.value as "general" | "mature" | "explicit")}
-                    className="w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   >
                     <option value="general">General</option>
                     <option value="mature">Mature</option>
                     <option value="explicit">Explicit</option>
                   </select>
-                  <p className="mt-1 text-xs text-[#3f3f7a]">
+                  <p className="mt-1 text-xs text-faint">
                     Books in this series will inherit this content mode by default.
                   </p>
                 </div>
@@ -575,7 +582,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                 <button
                   onClick={backToMain}
                   disabled={loading}
-                  className="rounded border border-[#1e1e4a] px-4 py-2 text-sm text-[#8888aa] transition-colors hover:border-[#3f3f7a] hover:text-[#f0f0f5]"
+                  className="rounded border border-border px-4 py-2 text-sm text-text-muted transition-colors hover:border-faint hover:text-text-primary"
                 >
                   Cancel
                 </button>
@@ -588,22 +595,22 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
             <>
               <button
                 onClick={backToMain}
-                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-[#8888aa] hover:text-indigo-300"
+                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-indigo-300"
               >
                 <ArrowLeft size={12} /> Back
               </button>
 
               <h2 className="mb-1 text-sm font-semibold text-teal-200">{browsedSeriesName}</h2>
-              <p className="mb-5 text-xs text-[#8888aa]">
+              <p className="mb-5 text-xs text-text-muted">
                 {browsedSeriesPath}
               </p>
 
-              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[#3f3f7a]">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-faint">
                 Books in this series
               </p>
 
               {browsedSeriesBooks.length === 0 ? (
-                <p className="mb-4 text-xs text-[#3f3f7a]">
+                <p className="mb-4 text-xs text-faint">
                   No books yet. Create the first book below.
                 </p>
               ) : (
@@ -613,10 +620,10 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                       key={book.project_id || book.folder_name}
                       onClick={() => handleOpenBookFromBrowser(book)}
                       disabled={loading}
-                      className="rounded border border-[#1e1e4a] bg-[#0d0d2b] px-4 py-3 text-left transition-colors hover:border-teal-600 hover:bg-[#12122e] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded border border-border bg-bg-panel px-4 py-3 text-left transition-colors hover:border-teal-600 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <p className="text-sm font-medium text-[#f0f0f5]">{book.title}</p>
-                      <p className="mt-0.5 text-xs text-[#3f3f7a]">{book.folder_name}</p>
+                      <p className="text-sm font-medium text-text-primary">{book.title}</p>
+                      <p className="mt-0.5 text-xs text-faint">{book.folder_name}</p>
                     </button>
                   ))}
                 </div>
@@ -639,7 +646,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
             <>
               <button
                 onClick={() => setMode("series_browser")}
-                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-[#8888aa] hover:text-indigo-300"
+                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-indigo-300"
               >
                 <ArrowLeft size={12} /> Back to series
               </button>
@@ -650,7 +657,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
 
               {!selectedStoryType ? (
                 <>
-                  <p className="mb-4 text-xs text-[#8888aa]">Pick the kind of book you're starting.</p>
+                  <p className="mb-4 text-xs text-text-muted">Pick the kind of book you're starting.</p>
                   <div className="grid grid-cols-3 gap-3">
                     {STORY_TYPE_OPTIONS.map(opt => {
                       const Icon = opt.icon;
@@ -660,13 +667,13 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                           onClick={() => setSelectedStoryType(opt.value)}
                           disabled={loading}
                           title={opt.hint}
-                          className="flex flex-col items-start gap-1 rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] p-4 text-left transition-colors hover:border-teal-500 hover:bg-[#12122e] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-teal-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Icon size={22} className="text-teal-300" />
-                          <p className="mt-1 text-sm font-semibold text-[#f0f0f5]">
+                          <p className="mt-1 text-sm font-semibold text-text-primary">
                             {STORY_TYPE_LABELS[opt.value]}
                           </p>
-                          <p className="text-xs text-[#8888aa]">{opt.range}</p>
+                          <p className="text-xs text-text-muted">{opt.range}</p>
                         </button>
                       );
                     })}
@@ -674,33 +681,33 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                 </>
               ) : (
                 <>
-                  <p className="mb-4 text-xs text-[#8888aa]">
+                  <p className="mb-4 text-xs text-text-muted">
                     Type: <span className="text-teal-200">{STORY_TYPE_LABELS[selectedStoryType]}</span>
                     <button
                       onClick={() => setSelectedStoryType(null)}
-                      className="ml-2 text-[#3f3f7a] underline hover:text-[#8888aa]"
+                      className="ml-2 text-faint underline hover:text-text-muted"
                     >
                       change
                     </button>
                   </p>
 
-                  <label className="mb-1 block text-xs font-medium text-[#8888aa]">
+                  <label className="mb-1 block text-xs font-medium text-text-muted">
                     Title <span className="text-teal-400">*</span>
                   </label>
                   <input
                     type="text" value={title} onChange={e => setTitle(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleCreateBookInBrowsedSeries()}
                     placeholder="e.g. The Ashen Crown" autoFocus
-                    className="mb-3 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
 
-                  <label className="mb-1 block text-xs font-medium text-[#8888aa]">
-                    Description <span className="text-[#3f3f7a]">(optional)</span>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">
+                    Description <span className="text-faint">(optional)</span>
                   </label>
                   <input
                     type="text" value={description} onChange={e => setDescription(e.target.value)}
                     placeholder="A short description of this book"
-                    className="mb-4 w-full rounded border border-[#1e1e4a] bg-[#12122e] px-3 py-2 text-sm text-[#f0f0f5] placeholder-[#8888aa] outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-4 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
 
                   <div className="flex gap-3">
@@ -714,7 +721,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                     <button
                       onClick={() => setMode("series_browser")}
                       disabled={loading}
-                      className="rounded border border-[#1e1e4a] px-4 py-2 text-sm text-[#8888aa] transition-colors hover:border-[#3f3f7a] hover:text-[#f0f0f5]"
+                      className="rounded border border-border px-4 py-2 text-sm text-text-muted transition-colors hover:border-faint hover:text-text-primary"
                     >
                       Cancel
                     </button>
@@ -740,16 +747,16 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
 
 
         {/* ── Right column: Recent Projects ──────────────────────────── */}
-        <aside className="flex w-2/5 min-w-0 flex-col overflow-y-auto bg-[#0a0a20] p-8">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-[#a5b4fc]">
+        <aside className="flex w-2/5 min-w-0 flex-col overflow-y-auto bg-bg-primary p-8">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-indigo-300">
             Recent Projects
           </h2>
-          <p className="mb-5 text-xs text-[#8888aa]">
+          <p className="mb-5 text-xs text-text-muted">
             Newest first. Click to open. Use [X] to remove from this list (does not delete files).
           </p>
 
           {recentProjects.length === 0 ? (
-            <p className="text-xs text-[#3f3f7a]">No recent projects yet.</p>
+            <p className="text-xs text-faint">No recent projects yet.</p>
           ) : (
             <div className="flex flex-col gap-2">
               {recentProjects.map(rp => (
@@ -767,7 +774,7 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
       </div>
 
       {/* Footer tip */}
-      <p className="shrink-0 border-t border-[#1e1e4a] bg-[#0d0d2b] px-6 py-2 text-xs text-[#3f3f7a]">
+      <p className="shrink-0 border-t border-border bg-bg-panel px-6 py-2 text-xs text-faint">
         Projects and series are stored as plain Markdown files. You can read and back them up anywhere.
       </p>
     </div>
@@ -799,8 +806,8 @@ function RecentProjectRow({
     <div
       className={`group relative rounded border px-3 py-2 transition-colors ${
         isMissing
-          ? "border-[#1e1e4a] bg-[#0a0a1a] opacity-60"
-          : "border-[#1e1e4a] bg-[#0d0d2b] hover:border-indigo-500 hover:bg-[#12122e]"
+          ? "border-border bg-bg-primary opacity-60"
+          : "border-border bg-bg-panel hover:border-indigo-500 hover:bg-bg-surface"
       }`}
     >
       {/* Open button covers the whole row except the X. We use a wrapping
@@ -812,21 +819,21 @@ function RecentProjectRow({
         className="block w-full pr-7 text-left disabled:cursor-not-allowed"
         title={isMissing ? "Folder not found on disk" : `Open ${rp.title}`}
       >
-        <p className={`truncate text-sm font-medium ${isMissing ? "text-[#3f3f7a]" : "text-[#f0f0f5]"}`}>
+        <p className={`truncate text-sm font-medium ${isMissing ? "text-faint" : "text-text-primary"}`}>
           {rp.title}
         </p>
-        <p className="mt-0.5 truncate text-xs text-[#8888aa]">
+        <p className="mt-0.5 truncate text-xs text-text-muted">
           <span>{storyLabel}</span>
           {rp.series_name && (
             <>
-              <span className="mx-1 text-[#3f3f7a]">.</span>
+              <span className="mx-1 text-faint">.</span>
               <span className="text-teal-400">Series: {rp.series_name}</span>
             </>
           )}
           {lastOpened && (
             <>
-              <span className="mx-1 text-[#3f3f7a]">.</span>
-              <span className="text-[#6666a0]">{lastOpened}</span>
+              <span className="mx-1 text-faint">.</span>
+              <span className="text-text-muted">{lastOpened}</span>
             </>
           )}
         </p>
@@ -842,7 +849,7 @@ function RecentProjectRow({
         disabled={loading}
         title="Remove from recent list (does not delete files)"
         aria-label="Remove from recent list"
-        className="absolute right-1.5 top-1.5 rounded p-1 text-[#3f3f7a] transition-colors hover:bg-red-950/40 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+        className="absolute right-1.5 top-1.5 rounded p-1 text-faint transition-colors hover:bg-red-950/40 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <X size={12} />
       </button>

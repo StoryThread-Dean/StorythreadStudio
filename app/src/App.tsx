@@ -38,6 +38,8 @@ import type {
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI } from "./utils/profileFormat";
 import { useBackendHealth } from "./hooks/useBackendHealth";
+import { initTheme } from "./hooks/useTheme";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { Bot, Send, ChevronDown, Settings2, Trash2 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
@@ -1156,6 +1158,15 @@ function App() {
   }, []);
 
 
+  // --- Theme init ---
+  // Load the saved theme from the backend on first mount and apply it to the
+  // <html> element. This runs once at app boot; from then on any theme
+  // change goes through useTheme()/setTheme() which updates the DOM directly.
+  useEffect(() => {
+    void initTheme();
+  }, []);
+
+
   // --- Keyboard shortcut: Ctrl+S to save ---
   // useEffect runs this setup once after the first render, and cleans up on unmount.
   useEffect(() => {
@@ -1236,15 +1247,18 @@ function App() {
   return (
     <>
       {backendDownBanner}
-      <div className="flex h-screen overflow-hidden bg-[#070724] text-[#f0f0f5]">
+      <div className="flex h-screen overflow-hidden bg-bg-primary text-text-primary">
 
       {/* ── LEFT PANEL: Navigation Sidebar ─────────────────────────────── */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-[#1e1e4a] bg-[#0d0d2b]">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-bg-panel">
 
-        <div className="border-b border-[#1e1e4a] px-4 py-4">
-          <h1 className="text-lg font-semibold tracking-wide text-[#f0f0f5]">
-            Storythread Studio
-          </h1>
+        <div className="border-b border-border px-4 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold tracking-wide text-text-primary">
+              Storythread Studio
+            </h1>
+            <ThemeToggle />
+          </div>
 
           {/* Project title + switcher dropdown + settings gear */}
           <div className="relative mt-1">
@@ -1260,15 +1274,15 @@ function App() {
                   }
                   setShowSwitcher(s => !s);
                 }}
-                className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-[#12122e]"
+                className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-bg-surface"
                 title="Switch to a different project"
               >
-                <span className="truncate text-xs text-[#8888aa]">{currentProject.title}</span>
-                <ChevronDown size={10} className="shrink-0 text-[#3f3f7a]" />
+                <span className="truncate text-xs text-text-muted">{currentProject.title}</span>
+                <ChevronDown size={10} className="shrink-0 text-faint" />
               </button>
               <button
                 onClick={() => setShowProjectSettings(true)}
-                className="shrink-0 rounded p-1 text-[#3f3f7a] transition-colors hover:bg-[#12122e] hover:text-[#8888aa]"
+                className="shrink-0 rounded p-1 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
                 title="Project settings"
               >
                 <Settings2 size={12} />
@@ -1277,9 +1291,9 @@ function App() {
 
             {/* Project switcher dropdown */}
             {showSwitcher && (
-              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded border border-[#1e1e4a] bg-[#0d0d2b] shadow-xl">
+              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded border border-border bg-bg-panel shadow-xl">
                 {switcherProjects.length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-[#3f3f7a]">No recent projects</p>
+                  <p className="px-3 py-2 text-xs text-faint">No recent projects</p>
                 ) : (
                   switcherProjects.filter(p => p.exists).map(rp => (
                     <button
@@ -1301,23 +1315,23 @@ function App() {
                           setCurrentProject(null);
                         }
                       }}
-                      className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-[#12122e] ${
+                      className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-bg-surface ${
                         rp.root_path === currentProject.root_path
                           ? "text-indigo-300"
-                          : "text-[#f0f0f5]"
+                          : "text-text-primary"
                       }`}
                     >
                       <p className="truncate font-medium">{rp.title}</p>
                       {rp.series_name && (
-                        <p className="truncate text-[#3f3f7a]">{rp.series_name}</p>
+                        <p className="truncate text-faint">{rp.series_name}</p>
                       )}
                     </button>
                   ))
                 )}
-                <div className="border-t border-[#1e1e4a]">
+                <div className="border-t border-border">
                   <button
                     onClick={() => { setShowSwitcher(false); setCurrentProject(null); }}
-                    className="w-full px-3 py-2 text-left text-xs text-[#3f3f7a] transition-colors hover:bg-[#12122e] hover:text-[#8888aa]"
+                    className="w-full px-3 py-2 text-left text-xs text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
                   >
                     Back to Dashboard
                   </button>
@@ -1336,7 +1350,7 @@ function App() {
               ProjectHome screen. */}
           <button
             onClick={() => setCurrentProject(null)}
-            className="mb-4 flex w-full items-center gap-2 rounded border border-[#1e1e4a] bg-[#0d0d2b] px-2 py-1.5 text-left text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:bg-[#12122e] hover:text-indigo-300"
+            className="mb-4 flex w-full items-center gap-2 rounded border border-border bg-bg-panel px-2 py-1.5 text-left text-xs text-text-muted transition-colors hover:border-indigo-500 hover:bg-bg-surface hover:text-indigo-300"
             title="Return to the main menu (does not affect any open work on disk)"
           >
             <span aria-hidden="true">&larr;</span>
@@ -1351,7 +1365,7 @@ function App() {
               persists as the writer navigates between views. */}
           <NavSection label="Manuscript">
             {chapters.length === 0 && (
-              <p className="px-2 text-xs text-[#3f3f7a]">No chapters found.</p>
+              <p className="px-2 text-xs text-faint">No chapters found.</p>
             )}
             {chapters.map((chapter) => {
               const isExpanded        = expandedChapters.has(chapter.filename);
@@ -1430,10 +1444,10 @@ function App() {
           </NavSection>
         </nav>
 
-        <div className="border-t border-[#1e1e4a] px-4 py-3">
+        <div className="border-t border-border px-4 py-3">
           <button
             onClick={() => setShowSettings(true)}
-            className="w-full rounded px-2 py-1.5 text-left text-sm text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-[#f0f0f5]"
+            className="w-full rounded px-2 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
             title="Open settings (API key, model selection)"
           >
             ⚙ Settings
@@ -1474,9 +1488,9 @@ function App() {
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* Title bar + save indicator -- shows chapter title or note title */}
-        <div className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a] bg-[#0d0d2b] px-4 py-2">
+        <div className="flex shrink-0 items-center justify-between border-b border-border bg-bg-panel px-4 py-2">
           <div className="flex items-baseline gap-3">
-            <span className="text-sm font-medium text-[#f0f0f5]">
+            <span className="text-sm font-medium text-text-primary">
               {currentView === "notes"
                 ? (currentNote ? currentNote.title : "No note open")
                 : (currentChapter ? currentChapter.title : "No chapter open")}
@@ -1486,7 +1500,7 @@ function App() {
                 commit, which doubles as feedback that the save succeeded. */}
             {(currentChapter || currentNote) && (
               <span
-                className="text-xs text-[#6666a0]"
+                className="text-xs text-text-muted"
                 title="Word count at last save (refreshes on Save)"
               >
                 {wordCount.toLocaleString()} {wordCount === 1 ? "word" : "words"}
@@ -1496,7 +1510,7 @@ function App() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleCreateChapter}
-              className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-emerald-500 hover:text-emerald-400"
+              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-emerald-500 hover:text-emerald-400"
               title="Create a new chapter in manuscript/"
             >
               + New Chapter
@@ -1517,14 +1531,14 @@ function App() {
             <button
               onClick={handleSave}
               disabled={!isDirty || (currentView === "notes" ? !currentNote : !currentChapter)}
-              className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title="Save to disk (Ctrl+S)"
             >
               Save
             </button>
             <button
               onClick={() => setShowExportModal(true)}
-              className="rounded border border-[#1e1e4a] px-2 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5]"
+              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
               title="Export manuscript to the exports/ folder"
             >
               Export
@@ -1569,7 +1583,7 @@ function App() {
             // ── Notes editor ──
             isLoadingNote ? (
               <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-[#8888aa]">Loading note...</p>
+                <p className="text-sm text-text-muted">Loading note...</p>
               </div>
             ) : currentNote ? (
               // key includes "note-" prefix so switching between a chapter and note
@@ -1587,7 +1601,7 @@ function App() {
               />
             ) : (
               <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-[#8888aa]">
+                <p className="text-sm text-text-muted">
                   Select a note from the left panel.
                 </p>
               </div>
@@ -1596,7 +1610,7 @@ function App() {
             // ── Chapter editor ──
             isLoadingChapter ? (
               <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-[#8888aa]">Loading chapter...</p>
+                <p className="text-sm text-text-muted">Loading chapter...</p>
               </div>
             ) : currentChapter ? (
               // key={currentChapter.filename} forces a full remount when the chapter
@@ -1616,7 +1630,7 @@ function App() {
               />
             ) : (
               <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-[#8888aa]">
+                <p className="text-sm text-text-muted">
                   Select a chapter from the left panel to start writing.
                 </p>
               </div>
@@ -1630,14 +1644,14 @@ function App() {
           Width is toggleable (compact / wide) via the resizer pinned to the
           left edge; preference persists via localStorage. `relative` so the
           absolutely-positioned resizer anchors inside this aside. */}
-      <aside className={`relative flex ${RIGHT_PANEL_CLASS[writingCompanionPanel.width]} shrink-0 flex-col border-l border-[#1e1e4a] bg-[#0d0d2b] transition-[width] duration-200`}>
+      <aside className={`relative flex ${RIGHT_PANEL_CLASS[writingCompanionPanel.width]} shrink-0 flex-col border-l border-border bg-bg-panel transition-[width] duration-200`}>
 
         <RightPanelResizer width={writingCompanionPanel.width} setWidth={writingCompanionPanel.setWidth} />
 
         {/* Header + clear */}
-        <div className="border-b border-[#1e1e4a] px-4 py-3">
+        <div className="border-b border-border px-4 py-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f0f0f5]">Writing Companion</h2>
+            <h2 className="text-sm font-semibold text-text-primary">Writing Companion</h2>
             {chatMessages.length > 0 && (
               <button
                 onClick={clearWritingCompanionChat}
@@ -1648,7 +1662,7 @@ function App() {
               </button>
             )}
           </div>
-          <p className="mt-1 text-xs text-[#8888aa]">
+          <p className="mt-1 text-xs text-text-muted">
             {chatCategory
               ? `Focus: ${chatCategory}. Click tab again to return to general chat.`
               : "General chat. Click a tab for structured feedback."}
@@ -1656,7 +1670,7 @@ function App() {
         </div>
 
         {/* Category tabs -- toggleable: click active tab to deselect (return to general chat) */}
-        <div className="border-b border-[#1e1e4a] px-4 py-2">
+        <div className="border-b border-border px-4 py-2">
           <div className="flex gap-1">
             {(["readability", "structure", "context"] as const).map(tab => (
               <button
@@ -1675,7 +1689,7 @@ function App() {
                   }
                 }}
                 className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
-                  chatCategory === tab ? "bg-indigo-600 text-white" : "text-[#8888aa] hover:text-[#f0f0f5]"
+                  chatCategory === tab ? "bg-indigo-600 text-white" : "text-text-muted hover:text-text-primary"
                 }`}
               >
                 {tab}
@@ -1685,7 +1699,7 @@ function App() {
         </div>
 
         {/* Context indicator -- what text the AI will see + chapter toggle */}
-        <div className="shrink-0 border-b border-[#1e1e4a] px-4 py-2">
+        <div className="shrink-0 border-b border-border px-4 py-2">
           {selectedText ? (
             // Writer has text selected -- that always gets sent (bright).
             // The "Summarize as Scene" button lives here because selection-
@@ -1709,10 +1723,10 @@ function App() {
             <div className="flex items-center justify-between">
               <p className={`text-xs ${
                 !includeChapter
-                  ? "text-[#3f3f7a]"
+                  ? "text-faint"
                   : chapterEstablished
                     ? "text-amber-700"
-                    : "text-amber-400"
+                    : "text-indigo-300"
               }`}>
                 {!includeChapter
                   ? "Chapter text not included"
@@ -1724,9 +1738,9 @@ function App() {
                 className="flex cursor-pointer items-center gap-1.5"
                 title="When off, AI responds based on your message and attached context only"
               >
-                <span className="text-xs text-[#3f3f7a]">Include chapter</span>
+                <span className="text-xs text-faint">Include chapter</span>
                 <div
-                  className={`relative h-4 w-7 rounded-full transition-colors ${includeChapter ? "bg-indigo-600" : "bg-[#1e1e4a]"}`}
+                  className={`relative h-4 w-7 rounded-full transition-colors ${includeChapter ? "bg-indigo-600" : "bg-border"}`}
                   onClick={() => setIncludeChapter(v => !v)}
                 >
                   <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${includeChapter ? "translate-x-3.5" : "translate-x-0.5"}`} />
@@ -1734,21 +1748,21 @@ function App() {
               </label>
             </div>
           ) : (
-            <p className="text-xs text-[#3f3f7a]">
+            <p className="text-xs text-faint">
               Open a chapter to start
             </p>
           )}
         </div>
 
         {/* Context chips -- always visible on all tabs */}
-        <div className="shrink-0 border-b border-[#1e1e4a] px-3 py-2">
+        <div className="shrink-0 border-b border-border px-3 py-2">
           <div className="mb-1 flex items-center justify-between">
-            <p className="text-xs text-[#8888aa]">
+            <p className="text-xs text-text-muted">
               Context: {contextChips.length === 0 ? "none attached" : `${contextChips.length} profile${contextChips.length > 1 ? "s" : ""}`}
             </p>
             <button
               onClick={() => setShowChipPicker(prev => !prev)}
-              className="rounded border border-[#1e1e4a] px-1.5 py-0.5 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300"
+              className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
               title="Attach a profile as context"
             >
               + Add
@@ -1801,7 +1815,7 @@ function App() {
                     <span className="text-[10px] opacity-60">({sizeLabel})</span>
                     <button
                       onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
-                      className="text-[#3f3f7a] hover:text-red-400"
+                      className="text-faint hover:text-red-400"
                     >
                       ×
                     </button>
@@ -1820,9 +1834,9 @@ function App() {
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-900/40 text-indigo-400">
                 <Bot size={20} />
               </div>
-              <p className="text-sm font-medium text-[#8888aa]">Writing Companion</p>
-              <div className="w-full rounded border border-[#1e1e4a] bg-[#070724] p-2.5 text-left">
-                <p className="mb-1 text-xs font-medium text-[#8888aa]">Try asking:</p>
+              <p className="text-sm font-medium text-text-muted">Writing Companion</p>
+              <div className="w-full rounded border border-border bg-bg-primary p-2.5 text-left">
+                <p className="mb-1 text-xs font-medium text-text-muted">Try asking:</p>
                 {(chatCategory === null ? [
                   "What do you think of this passage?",
                   "Help me brainstorm what happens next",
@@ -1843,7 +1857,7 @@ function App() {
                   <button
                     key={q}
                     onClick={() => setChatInput(q)}
-                    className="mt-1 block w-full rounded px-2 py-1 text-left text-xs text-[#3f3f7a] transition-colors hover:bg-[#1e1e4a] hover:text-[#8888aa]"
+                    className="mt-1 block w-full rounded px-2 py-1 text-left text-xs text-faint transition-colors hover:bg-border hover:text-text-muted"
                   >
                     "{q}"
                   </button>
@@ -1863,7 +1877,7 @@ function App() {
               <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                 msg.role === "user"
                   ? "rounded-tr-sm bg-indigo-600 text-white"
-                  : "rounded-tl-sm border border-[#1e1e4a] bg-[#12122e] text-[#f0f0f5]"
+                  : "rounded-tl-sm border border-border bg-bg-surface text-text-primary"
               }`}>
                 {msg.role === "user" ? (
                   <span className="whitespace-pre-wrap">{msg.content}</span>
@@ -1880,11 +1894,11 @@ function App() {
           ))}
 
           {chatLoading && (
-            <div className="flex items-center gap-2 text-xs text-[#8888aa]">
+            <div className="flex items-center gap-2 text-xs text-text-muted">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
               <span>
                 {chatModelUsed
-                  ? <>{chatModelUsed.split("/").pop()} <span className="text-[#555577]">thinking...</span></>
+                  ? <>{chatModelUsed.split("/").pop()} <span className="text-faint">thinking...</span></>
                   : "Thinking..."}
               </span>
               {/* Cancel button appears only after 20s so fast responses don't
@@ -1917,7 +1931,7 @@ function App() {
         </div>
 
         {/* Chat input */}
-        <div className="border-t border-[#1e1e4a] p-3">
+        <div className="border-t border-border p-3">
           <div className="relative flex items-end gap-2">
             <textarea
               value={chatInput}
@@ -1939,12 +1953,12 @@ function App() {
               disabled={!currentChapter || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
-              className="flex-1 rounded border border-[#1e1e4a] bg-[#1e1e48] px-2 py-2 text-xs text-[#f0f0f5] placeholder-[#6666a0] outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded border border-border bg-border px-2 py-2 text-xs text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <button
               onClick={sendEditorChat}
               disabled={!currentChapter || !chatInput.trim() || chatLoading}
-              className="flex items-center justify-center rounded border border-[#1e1e4a] p-1.5 text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
               title="Send (Enter)"
             >
               <Send size={13} />
@@ -2016,28 +2030,28 @@ function App() {
           promise and the loop continues. */}
       {sceneOverwritePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] p-5 shadow-xl">
-            <h2 className="mb-1 text-sm font-semibold text-[#f0f0f5]">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-bg-panel p-5 shadow-xl">
+            <h2 className="mb-1 text-sm font-semibold text-text-primary">
               Overwrite Scene {sceneOverwritePrompt.index}?
             </h2>
-            <p className="mb-4 text-xs text-[#8888aa]">
+            <p className="mb-4 text-xs text-text-muted">
               A summary already exists for this scene ({sceneOverwritePrompt.total} scenes total):
               <br />
-              <span className="mt-1 block font-medium text-[#f0f0f5]">
+              <span className="mt-1 block font-medium text-text-primary">
                 "{sceneOverwritePrompt.title}"
               </span>
             </p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => sceneOverwritePrompt.onAnswer("cancel")}
-                className="rounded border border-[#1e1e4a] px-3 py-1 text-xs text-[#8888aa] transition-colors hover:border-red-500 hover:text-red-300"
+                className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-red-500 hover:text-red-300"
                 title="Stop the auto-split loop (keeps what's already been generated)"
               >
                 Cancel All
               </button>
               <button
                 onClick={() => sceneOverwritePrompt.onAnswer("no")}
-                className="rounded border border-[#1e1e4a] px-3 py-1 text-xs text-[#8888aa] transition-colors hover:border-indigo-500 hover:text-[#f0f0f5]"
+                className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
                 title="Skip this scene; keep the existing summary"
               >
                 No (Skip)
@@ -2054,7 +2068,7 @@ function App() {
         </div>
       )}
       {autoSplitProgress && !sceneOverwritePrompt && (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-40 rounded-lg border border-indigo-800 bg-[#0d0d2b] px-4 py-2 shadow-lg">
+        <div className="pointer-events-none fixed bottom-4 right-4 z-40 rounded-lg border border-indigo-800 bg-bg-panel px-4 py-2 shadow-lg">
           <p className="text-xs text-indigo-300">
             <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
             {autoSplitProgress}
@@ -2068,12 +2082,12 @@ function App() {
           calls the backend to regenerate the outline file. */}
       {showTemplateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] p-6 shadow-xl">
-            <h2 className="mb-1 text-sm font-semibold text-[#f0f0f5]">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-bg-panel p-6 shadow-xl">
+            <h2 className="mb-1 text-sm font-semibold text-text-primary">
               Apply Outline Template
             </h2>
-            <p className="mb-4 text-xs text-[#8888aa]">
-              Choose a template to regenerate <span className="text-[#f0f0f5]">notes/outline.md</span>.
+            <p className="mb-4 text-xs text-text-muted">
+              Choose a template to regenerate <span className="text-text-primary">notes/outline.md</span>.
             </p>
 
             {/* Warning banner */}
@@ -2094,7 +2108,7 @@ function App() {
               ]).map(opt => (
                 <label
                   key={opt.value}
-                  className="flex cursor-pointer items-start gap-2 rounded border border-[#1e1e4a] bg-[#12122e] p-2 transition-colors hover:border-[#3f3f7a]"
+                  className="flex cursor-pointer items-start gap-2 rounded border border-border bg-bg-surface p-2 transition-colors hover:border-faint"
                 >
                   <input
                     type="radio"
@@ -2105,8 +2119,8 @@ function App() {
                     className="mt-0.5 accent-indigo-500"
                   />
                   <div>
-                    <p className="text-xs font-medium text-[#f0f0f5]">{opt.label}</p>
-                    <p className="text-xs text-[#8888aa]">{opt.hint}</p>
+                    <p className="text-xs font-medium text-text-primary">{opt.label}</p>
+                    <p className="text-xs text-text-muted">{opt.hint}</p>
                   </div>
                 </label>
               ))}
@@ -2124,7 +2138,7 @@ function App() {
               <button
                 onClick={() => setShowTemplateDialog(false)}
                 disabled={templateDialogLoading}
-                className="rounded border border-[#1e1e4a] px-4 py-2 text-sm text-[#8888aa] transition-colors hover:border-[#3f3f7a] hover:text-[#f0f0f5]"
+                className="rounded border border-border px-4 py-2 text-sm text-text-muted transition-colors hover:border-faint hover:text-text-primary"
               >
                 Cancel
               </button>
@@ -2144,7 +2158,7 @@ function App() {
 function NavSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-5">
-      <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-[#8888aa]">
+      <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
         {label}
       </p>
       {children}
@@ -2167,7 +2181,7 @@ function NavItem({
     <button
       onClick={onClick}
       className={`mb-0.5 w-full rounded px-2 py-1.5 text-left text-sm transition-colors ${
-        active ? "bg-indigo-600/20 text-indigo-300" : "text-[#f0f0f5] hover:bg-[#12122e]"
+        active ? "bg-indigo-600/20 text-indigo-300" : "text-text-primary hover:bg-bg-surface"
       }`}
       title={hint}
     >
@@ -2261,12 +2275,12 @@ function ChapterNavRow({
           each other. `group` lets the trash icon stay hidden until hover. */}
       <div
         className={`group flex items-stretch rounded transition-colors ${
-          isActiveChapter ? "bg-indigo-600/20" : `hover:bg-[#12122e] ${parentGhostBg}`
+          isActiveChapter ? "bg-indigo-600/20" : `hover:bg-bg-surface ${parentGhostBg}`
         }`}
       >
         <button
           onClick={onToggleExpand}
-          className="flex w-6 shrink-0 items-center justify-center text-xs text-[#6666a0] hover:text-indigo-300"
+          className="flex w-6 shrink-0 items-center justify-center text-xs text-text-muted hover:text-indigo-300"
           title={isExpanded ? "Collapse" : "Expand"}
           aria-label={isExpanded ? "Collapse chapter" : "Expand chapter"}
         >
@@ -2293,7 +2307,7 @@ function ChapterNavRow({
               }
             }}
             onFocus={e => e.currentTarget.select()}
-            className="flex-1 min-w-0 rounded border border-indigo-500/50 bg-[#12122e] px-1 py-1 text-sm text-[#f0f0f5] outline-none focus:border-indigo-400"
+            className="flex-1 min-w-0 rounded border border-indigo-500/50 bg-bg-surface px-1 py-1 text-sm text-text-primary outline-none focus:border-indigo-400"
             title="Rename chapter -- Enter to save, Escape to cancel"
           />
         ) : (
@@ -2301,7 +2315,7 @@ function ChapterNavRow({
             onClick={onOpenChapter}
             onDoubleClick={() => { setDraft(chapter.title); setEditing(true); }}
             className={`flex-1 min-w-0 truncate px-1 py-1.5 text-left text-sm ${
-              isActiveChapter ? "text-indigo-300" : "text-[#f0f0f5]"
+              isActiveChapter ? "text-indigo-300" : "text-text-primary"
             }`}
             title={`Open ${chapter.filename} -- double-click to rename`}
           >
@@ -2311,7 +2325,7 @@ function ChapterNavRow({
         {!editing && (
           <button
             onClick={onDeleteChapter}
-            className="shrink-0 px-1.5 text-[#3f3f7a] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+            className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
             title={`Delete ${chapter.title}`}
             aria-label={`Delete ${chapter.title}`}
           >
@@ -2324,16 +2338,16 @@ function ChapterNavRow({
           button. Wrapped in a `group` container so the trash can reveal on
           hover independently of the parent chapter row. */}
       {isExpanded && (
-        <div className="ml-6 mt-0.5 border-l border-[#1e1e4a] pl-2">
+        <div className="ml-6 mt-0.5 border-l border-border pl-2">
           <div
             className={`group flex items-stretch rounded transition-colors ${
-              isChapterSummaryActive ? "bg-indigo-600/20" : "hover:bg-[#12122e]"
+              isChapterSummaryActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
             }`}
           >
             <button
               onClick={onOpenChapterSummary}
               className={`flex-1 min-w-0 truncate px-2 py-1.5 text-left text-sm ${
-                isChapterSummaryActive ? "text-indigo-300" : "text-[#f0f0f5]"
+                isChapterSummaryActive ? "text-indigo-300" : "text-text-primary"
               }`}
               title="AI-generated continuity brief for this chapter"
             >
@@ -2341,7 +2355,7 @@ function ChapterNavRow({
             </button>
             <button
               onClick={onDeleteChapterSummary}
-              className="shrink-0 px-1.5 text-[#3f3f7a] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+              className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
               title="Delete chapter summary (keeps the chapter)"
               aria-label="Delete chapter summary"
             >
@@ -2356,16 +2370,16 @@ function ChapterNavRow({
           <div className="mt-0.5">
             <button
               onClick={onToggleScenesExpanded}
-              className="group flex w-full items-stretch rounded text-left text-sm text-[#f0f0f5] transition-colors hover:bg-[#12122e]"
+              className="group flex w-full items-stretch rounded text-left text-sm text-text-primary transition-colors hover:bg-bg-surface"
               title="Per-scene AI summaries (click to expand)"
             >
-              <span className="flex w-5 shrink-0 items-center justify-center text-xs text-[#6666a0] group-hover:text-indigo-300">
+              <span className="flex w-5 shrink-0 items-center justify-center text-xs text-text-muted group-hover:text-indigo-300">
                 {isScenesExpanded ? "v" : ">"}
               </span>
               <span className="flex-1 min-w-0 truncate px-1 py-1.5 text-left">
                 Scene Summaries
                 {sceneSummaries && sceneSummaries.length > 0 && (
-                  <span className="ml-1 text-xs text-[#6666a0]">
+                  <span className="ml-1 text-xs text-text-muted">
                     ({sceneSummaries.length})
                   </span>
                 )}
@@ -2373,11 +2387,11 @@ function ChapterNavRow({
             </button>
 
             {isScenesExpanded && (
-              <div className="ml-5 mt-0.5 border-l border-[#1e1e4a] pl-2">
+              <div className="ml-5 mt-0.5 border-l border-border pl-2">
                 {sceneSummaries === undefined ? (
-                  <p className="px-2 py-1 text-xs text-[#3f3f7a]">Loading...</p>
+                  <p className="px-2 py-1 text-xs text-faint">Loading...</p>
                 ) : sceneSummaries.length === 0 ? (
-                  <p className="px-2 py-1 text-xs text-[#3f3f7a]">
+                  <p className="px-2 py-1 text-xs text-faint">
                     No scene summaries yet. Use the toolbar's Generate Scene Summaries button.
                   </p>
                 ) : (
@@ -2387,23 +2401,23 @@ function ChapterNavRow({
                       <div
                         key={scene.index}
                         className={`group flex items-stretch rounded transition-colors ${
-                          isActive ? "bg-indigo-600/20" : "hover:bg-[#12122e]"
+                          isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
                         }`}
                       >
                         <button
                           onClick={() => onOpenScene(scene.index)}
                           className={`flex-1 min-w-0 truncate px-2 py-1 text-left text-xs ${
-                            isActive ? "text-indigo-300" : "text-[#f0f0f5]"
+                            isActive ? "text-indigo-300" : "text-text-primary"
                           }`}
                           title={`Scene ${scene.index}: ${scene.title}`}
                         >
-                          <span className="text-[#6666a0]">Scene {scene.index}</span>
-                          <span className="mx-1 text-[#3f3f7a]">&mdash;</span>
+                          <span className="text-text-muted">Scene {scene.index}</span>
+                          <span className="mx-1 text-faint">&mdash;</span>
                           {scene.title}
                         </button>
                         <button
                           onClick={() => onDeleteScene(scene.index)}
-                          className="shrink-0 px-1.5 text-[#3f3f7a] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+                          className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
                           title={`Delete scene ${scene.index} summary`}
                           aria-label={`Delete scene ${scene.index} summary`}
                         >
@@ -2452,7 +2466,7 @@ const NOTE_FILES = [
 
 function chipTypeColor(type: string): string {
   return CHIP_TYPES.find(t => t.id === type)?.color
-    ?? "text-[#8888aa] border-[#1e1e4a] bg-[#12122e]";
+    ?? "text-text-muted border-border bg-bg-surface";
 }
 
 function chipTypeLabel(type: string): string {
@@ -2576,16 +2590,16 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
   const typeColor = chipTypeColor(profileType);
 
   return (
-    <div className="mb-3 rounded border border-indigo-800/50 bg-[#0a0a28] p-3">
+    <div className="mb-3 rounded border border-indigo-800/50 bg-bg-primary p-3">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-semibold text-indigo-300">Attach Context</p>
-        <button onClick={onClose} className="text-xs text-[#3f3f7a] hover:text-[#8888aa]">✕</button>
+        <button onClick={onClose} className="text-xs text-faint hover:text-text-muted">✕</button>
       </div>
 
       {/* Suggested chips -- ghost chips shown at top for quick attachment */}
       {unattachedSuggested.length > 0 && (
         <div className="mb-2">
-          <p className="mb-1 text-xs text-[#3f3f7a]">Suggested</p>
+          <p className="mb-1 text-xs text-faint">Suggested</p>
           <div className="flex flex-wrap gap-1">
             {unattachedSuggested.map(s => (
               <button
@@ -2610,7 +2624,7 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
             className={`rounded border px-2 py-0.5 text-xs transition-colors ${
               source === "project"
                 ? "border-indigo-600 bg-indigo-900/30 text-indigo-300"
-                : "border-[#1e1e4a] text-[#3f3f7a] hover:text-[#8888aa]"
+                : "border-border text-faint hover:text-text-muted"
             }`}
           >
             This Book
@@ -2620,7 +2634,7 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
             className={`rounded border px-2 py-0.5 text-xs transition-colors ${
               source === "series"
                 ? "border-teal-600 bg-teal-900/30 text-teal-300"
-                : "border-[#1e1e4a] text-[#3f3f7a] hover:text-[#8888aa]"
+                : "border-border text-faint hover:text-text-muted"
             }`}
           >
             Series Profiles
@@ -2638,7 +2652,7 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
             className={`rounded border px-2 py-0.5 text-xs transition-colors ${
               profileType === t.id
                 ? t.color
-                : "border-[#1e1e4a] text-[#3f3f7a] hover:text-[#8888aa]"
+                : "border-border text-faint hover:text-text-muted"
             }`}
           >
             {t.label}
@@ -2650,7 +2664,7 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
           className={`rounded border px-2 py-0.5 text-xs transition-colors ${
             profileType === "notes"
               ? "text-rose-300 border-rose-700/50 bg-rose-900/20"
-              : "border-[#1e1e4a] text-[#3f3f7a] hover:text-[#8888aa]"
+              : "border-border text-faint hover:text-text-muted"
           }`}
         >
           Notes
@@ -2670,8 +2684,8 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
                 disabled={alreadyAdded || adding === n.filename}
                 className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
                   alreadyAdded
-                    ? "text-[#3f3f7a]"
-                    : "text-[#f0f0f5] hover:bg-indigo-600/20"
+                    ? "text-faint"
+                    : "text-text-primary hover:bg-indigo-600/20"
                 }`}
               >
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-rose-300 border-rose-700/50 bg-rose-900/20" />
@@ -2685,9 +2699,9 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
           })}
         </div>
       ) : loading ? (
-        <p className="py-1 text-xs text-[#3f3f7a]">Loading...</p>
+        <p className="py-1 text-xs text-faint">Loading...</p>
       ) : profiles.length === 0 ? (
-        <p className="py-1 text-xs text-[#3f3f7a]">
+        <p className="py-1 text-xs text-faint">
           No {chipTypeLabel(profileType).toLowerCase()} profiles found
           {source === "series" ? " in this series" : " in this project"}.
         </p>
@@ -2703,8 +2717,8 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
                 disabled={alreadyAdded || adding === p.filename}
                 className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
                   alreadyAdded
-                    ? "text-[#3f3f7a]"
-                    : "text-[#f0f0f5] hover:bg-indigo-600/20"
+                    ? "text-faint"
+                    : "text-text-primary hover:bg-indigo-600/20"
                 }`}
               >
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full border ${typeColor}`} />

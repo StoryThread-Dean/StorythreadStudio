@@ -153,17 +153,17 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal card */}
-      <div className="relative flex max-h-[90vh] w-full max-w-md flex-col rounded-lg border border-[#1e1e4a] bg-[#0d0d2b] shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-md flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
 
         {/* Header */}
         <div
-          className="flex shrink-0 items-center justify-between border-b border-[#1e1e4a]"
+          className="flex shrink-0 items-center justify-between border-b border-border"
           style={{ padding: "1rem 1.5rem" }}
         >
-          <h2 className="text-base font-semibold text-[#f0f0f5]">Export Manuscript</h2>
+          <h2 className="text-base font-semibold text-text-primary">Export Manuscript</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-[#8888aa] transition-colors hover:bg-[#12122e] hover:text-[#f0f0f5]"
+            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
             title="Close"
           >
             <X size={16} />
@@ -178,17 +178,17 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
               default with a one-line summary so the modal stays small for
               the common "export everything" case. Expanding reveals
               checkboxes + Select all / Clear shortcuts. */}
-          <div className="rounded-lg border border-[#1e1e4a] bg-[#070724]">
+          <div className="rounded-lg border border-border bg-bg-primary">
             <button
               type="button"
               onClick={() => setChaptersExpanded((v) => !v)}
               className="flex w-full items-center justify-between gap-2 p-3 text-left"
             >
-              <span className="flex items-center gap-2 text-xs font-medium text-[#a5b4fc]">
+              <span className="flex items-center gap-2 text-xs font-medium text-indigo-300">
                 {chaptersExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 Chapters
               </span>
-              <span className="text-[11px] text-[#8888aa]">
+              <span className="text-[11px] text-text-muted">
                 {chaptersLoadError
                   ? "load failed"
                   : chapters.length === 0
@@ -202,11 +202,11 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
             </button>
 
             {chaptersExpanded && (
-              <div className="border-t border-[#1e1e4a] p-3">
+              <div className="border-t border-border p-3">
                 {chaptersLoadError ? (
                   <p className="text-xs text-red-300">{chaptersLoadError}</p>
                 ) : chapters.length === 0 ? (
-                  <p className="text-xs text-[#8888aa]">No chapters found in manuscript/.</p>
+                  <p className="text-xs text-text-muted">No chapters found in manuscript/.</p>
                 ) : (
                   <>
                     <div className="mb-2 flex items-center gap-2 text-[11px]">
@@ -214,7 +214,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                         type="button"
                         onClick={selectAll}
                         disabled={allSelected || isExporting}
-                        className="rounded border border-[#1e1e4a] px-2 py-0.5 text-[#a5b4fc] transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded border border-border px-2 py-0.5 text-indigo-300 transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Select all
                       </button>
@@ -222,23 +222,23 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                         type="button"
                         onClick={selectNone}
                         disabled={noneSelected || isExporting}
-                        className="rounded border border-[#1e1e4a] px-2 py-0.5 text-[#a5b4fc] transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded border border-border px-2 py-0.5 text-indigo-300 transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Clear
                       </button>
-                      <span className="ml-auto text-[10px] text-[#6666a0]">
+                      <span className="ml-auto text-[10px] text-text-muted">
                         {selectedFilenames.size}/{chapters.length}
                       </span>
                     </div>
 
                     {/* Cap the visible list height so a 50-chapter project
                         doesn't make the modal taller than the window. */}
-                    <div className="max-h-48 overflow-y-auto rounded border border-[#1e1e4a] bg-[#0d0d2b] p-2">
+                    <div className="max-h-48 overflow-y-auto rounded border border-border bg-bg-panel p-2">
                       <div className="flex flex-col gap-1">
                         {chapters.map((c) => (
                           <label
                             key={c.filename}
-                            className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-[#f0f0f5] hover:bg-[#12122e]"
+                            className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-text-primary hover:bg-bg-surface"
                           >
                             <input
                               type="checkbox"
@@ -248,7 +248,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                               className="accent-indigo-500"
                             />
                             <span className="flex-1 truncate" title={c.title}>{c.title}</span>
-                            <span className="shrink-0 font-mono text-[10px] text-[#6666a0]">
+                            <span className="shrink-0 font-mono text-[10px] text-text-muted">
                               {c.filename}
                             </span>
                           </label>
@@ -266,10 +266,10 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
               output .md; Snapshot copies the matching folders alongside the
               manuscript/ copy. Both default OFF so the one-click export stays
               lean for writers who just want the prose. */}
-          <div className="rounded-lg border border-[#1e1e4a] bg-[#070724] p-3">
-            <p className="mb-2 text-xs font-medium text-[#a5b4fc]">Include:</p>
+          <div className="rounded-lg border border-border bg-bg-primary p-3">
+            <p className="mb-2 text-xs font-medium text-indigo-300">Include:</p>
             <div className="flex flex-col gap-1.5">
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-[#f0f0f5]">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
                   type="checkbox"
                   checked={includeChapterSummaries}
@@ -278,9 +278,9 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Chapter summaries</span>
-                <span className="text-[10px] text-[#6666a0]">summaries/chapters/</span>
+                <span className="text-[10px] text-text-muted">summaries/chapters/</span>
               </label>
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-[#f0f0f5]">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
                   type="checkbox"
                   checked={includeSceneSummaries}
@@ -289,9 +289,9 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Scene summaries</span>
-                <span className="text-[10px] text-[#6666a0]">summaries/scenes/</span>
+                <span className="text-[10px] text-text-muted">summaries/scenes/</span>
               </label>
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-[#f0f0f5]">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
                   type="checkbox"
                   checked={includeNotes}
@@ -300,9 +300,9 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Notes</span>
-                <span className="text-[10px] text-[#6666a0]">notes/ (outline, style guide)</span>
+                <span className="text-[10px] text-text-muted">notes/ (outline, style guide)</span>
               </label>
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-[#f0f0f5]">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
                   type="checkbox"
                   checked={includeProfiles}
@@ -311,7 +311,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Profiles</span>
-                <span className="text-[10px] text-[#6666a0]">profiles/ (characters, locations, etc.)</span>
+                <span className="text-[10px] text-text-muted">profiles/ (characters, locations, etc.)</span>
               </label>
             </div>
           </div>
@@ -320,12 +320,12 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           <button
             onClick={() => handleExport("full-manuscript")}
             disabled={isExporting || noneSelected}
-            className="flex items-start gap-3 rounded-lg border border-[#1e1e4a] p-4 text-left transition-colors hover:border-indigo-500 hover:bg-[#12122e] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FileText size={20} className="mt-0.5 shrink-0 text-indigo-400" />
             <div>
-              <p className="text-sm font-medium text-[#f0f0f5]">Full Manuscript</p>
-              <p className="mt-1 text-xs text-[#8888aa]">
+              <p className="text-sm font-medium text-text-primary">Full Manuscript</p>
+              <p className="mt-1 text-xs text-text-muted">
                 Combine selected chapters into a single Markdown file. Overwrites the
                 previous export so you always have one canonical copy.
               </p>
@@ -336,12 +336,12 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           <button
             onClick={() => handleExport("snapshot")}
             disabled={isExporting || noneSelected}
-            className="flex items-start gap-3 rounded-lg border border-[#1e1e4a] p-4 text-left transition-colors hover:border-indigo-500 hover:bg-[#12122e] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Camera size={20} className="mt-0.5 shrink-0 text-indigo-400" />
             <div>
-              <p className="text-sm font-medium text-[#f0f0f5]">Snapshot</p>
-              <p className="mt-1 text-xs text-[#8888aa]">
+              <p className="text-sm font-medium text-text-primary">Snapshot</p>
+              <p className="mt-1 text-xs text-text-muted">
                 Save a dated copy of selected chapters and project settings.
                 Each snapshot is a new folder so you can look back at earlier versions.
               </p>
@@ -356,7 +356,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
 
           {/* Loading indicator */}
           {isExporting && (
-            <div className="flex items-center gap-2 text-xs text-[#8888aa]">
+            <div className="flex items-center gap-2 text-xs text-text-muted">
               <Loader size={14} className="animate-spin" />
               Exporting...
             </div>

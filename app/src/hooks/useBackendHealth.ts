@@ -19,7 +19,7 @@
 // backend doesn't pile up pending requests. The fetch is kept lightweight
 // so this hook is safe to mount for the entire lifetime of the app.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 
 const API_BASE = "http://localhost:8000";
@@ -44,6 +44,14 @@ export function useBackendHealth(intervalMs: number = 10_000): BackendHealth {
   const [isDown,           setIsDown]           = useState(true);
   const [lastSeen,         setLastSeen]         = useState<number | null>(null);
 
+  // Track the *previous* up/down state in a ref so we can detect transitions
+  // without triggering a re-render every poll. Without this, calling
+  // setLastSeen(Date.now()) on every successful ping fires a state update
+  // every 10s, which cascades a full App re-render and tears down DOM nodes
+  // in the AI chat panel -- killing any text the writer had selected to copy.
+  // We only need to bump state when the up/down status actually changes.
+  const wasDownRef = useRef(true);
+
   useEffect(() => {
     let cancelled = false;
     let timer:    ReturnType<typeof setTimeout> | null = null;
@@ -53,23 +61,35 @@ export function useBackendHealth(intervalMs: number = 10_000): BackendHealth {
       // when the backend is genuinely gone.
       const ac = new AbortController();
       const cutoff = setTimeout(() => ac.abort(), 3000);
+      let ok = false;
       try {
         const res = await fetch(`${API_BASE}/health`, { signal: ac.signal });
-        if (!cancelled && res.ok) {
-          setIsDown(false);
-          setLastSeen(Date.now());
-          setHasEverConnected(true);
-        } else if (!cancelled) {
-          setIsDown(true);
-        }
+        ok = res.ok;
       } catch {
-        if (!cancelled) setIsDown(true);
+        ok = false;
       } finally {
         clearTimeout(cutoff);
       }
 
-      // Schedule the next ping only if we're still mounted.
       if (!cancelled) {
+        if (ok) {
+          // Successful ping. Only flip state on a real down -> up transition.
+          // If the backend has been up the whole time, do nothing -- this is
+          // the steady-state path and must not re-render.
+          if (wasDownRef.current) {
+            wasDownRef.current = false;
+            setIsDown(false);
+            setLastSeen(Date.now());
+            setHasEverConnected(true);
+          }
+        } else {
+          // Failed ping. Only flip on the up -> down transition.
+          if (!wasDownRef.current) {
+            wasDownRef.current = true;
+            setIsDown(true);
+          }
+        }
+
         timer = setTimeout(ping, intervalMs);
       }
     };
