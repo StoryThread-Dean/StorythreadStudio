@@ -1375,9 +1375,18 @@ def _build_materials_message(
     if context_chips:
         lines.append("ATTACHED CONTEXT (treat as canon for this story):")
         lines.append("")
+        # Each chip is wrapped in BEGIN/END delimiters so the model treats it
+        # as an isolated block. Without these markers, when several characters
+        # are attached, traits can bleed across profiles in long responses --
+        # the AI may assign one character's [core] trait to another. The
+        # explicit closing tag forces a hard boundary.
         for chip in context_chips:
-            lines.append(f"[{chip.type.replace('_', ' ').title()}: {chip.name}]")
+            type_label = chip.type.replace("_", " ").upper()
+            header = f"=== BEGIN {type_label}: {chip.name} ==="
+            footer = f"=== END {type_label}: {chip.name} ==="
+            lines.append(header)
             lines.append(chip.content.strip())
+            lines.append(footer)
             lines.append("")
         lines.append("---")
         lines.append("")

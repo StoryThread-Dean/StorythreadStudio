@@ -30,13 +30,15 @@ import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
-import type { ProfileType } from "./types/profile";
+import type { ProfileType, Profile } from "./types/profile";
 import type {
-  ContextChip, EditorChatMessage, EditorChatCategory,
+  ContextChip, ChipIncludeFlags, EditorChatMessage, EditorChatCategory,
   SceneSummaryInfo, SplitChapterScenesResponse, GenerateSceneSummaryResponse,
 } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
-import { formatProfileForAI } from "./utils/profileFormat";
+import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
+import type { ChipIncludeOptions } from "./utils/profileFormat";
+import { SECTION_CONFIGS } from "./types/profile";
 import { useBackendHealth } from "./hooks/useBackendHealth";
 import { initTheme } from "./hooks/useTheme";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -2489,6 +2491,17 @@ interface ChipPickerProps {
   onClose: () => void;
 }
 
+// State that holds the profile the writer clicked on but hasn't confirmed
+// yet. While this is non-null, the picker shows the "configure attachment"
+// panel instead of the profile list. Lets the writer choose which slices
+// of the profile to include before the chip is built.
+interface PendingProfile {
+  filename: string;
+  name:     string;
+  chipType: string;            // e.g. "character" or "series_character"
+  profile:  Profile;           // The fully fetched profile object
+}
+
 function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: ChipPickerProps) {
   const [loading, setLoading] = useState(false);
   const [profileType, setProfileType] = useState("character");
@@ -2502,6 +2515,13 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
   // Whether we're browsing series canonical profiles vs local project profiles
   const [source, setSource] = useState<"project" | "series">("project");
   const hasSeries = Boolean(seriesPath);
+
+  // The profile the writer has selected but not yet confirmed. While non-null
+  // we show the "what to include" panel instead of the list. Once the writer
+  // hits Attach, we serialize with the chosen flags and call onAdd.
+  const [pending, setPending] = useState<PendingProfile | null>(null);
+  const [pendingInclude, setPendingInclude] = useState<ChipIncludeOptions>(DEFAULT_CHIP_INCLUDE);
+  const [showHelp, setShowHelp] = useState(false);
 
   // On mount, auto-suggest character profiles from the project
   useEffect(() => {
@@ -2532,9 +2552,13 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
       .finally(() => setLoading(false));
   }, [profileType, rootPath, seriesPath, source]);
 
+  // Step 1 of attaching a profile: fetch it and switch into "configure" mode
+  // so the writer can pick which slices to include before the chip is built.
+  // (Used to be a one-shot fetch+attach -- now split so the writer can choose
+  // Summary / Traits / Overview / Details before committing.)
   async function pickProfile(filename: string, name: string, fromSource?: "project" | "series") {
     setAdding(filename);
-    const chipType = source === "series" ? `series_${profileType}` : profileType;
+    const chipType = (fromSource ?? source) === "series" ? `series_${profileType}` : profileType;
     try {
       if (existingChips.some(c => c.name === name && c.type === chipType)) {
         onClose();
@@ -2543,17 +2567,31 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
       const folderPath = (fromSource ?? source) === "series" && seriesPath ? seriesPath : rootPath;
       const params = new URLSearchParams({ folder_path: folderPath, type: profileType, filename });
       const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`);
-      const profile = await res.json();
-      // Format the full profile (traits + overview + notes) for AI context.
-      // Uses the same formatter as Profile Builder chat so both paths send
-      // consistent, importance-labeled content -- not the AI summary.
-      const content = formatProfileForAI(profile);
-      onAdd({ type: chipType, name, content });
+      const profile: Profile = await res.json();
+      setPending({ filename, name, chipType, profile });
+      // Reset to the smart default each time a new profile is selected so
+      // there's no surprise carry-over from a previous attach.
+      setPendingInclude(DEFAULT_CHIP_INCLUDE);
     } catch {
       onClose();
     } finally {
       setAdding(null);
     }
+  }
+
+  // Step 2 of attaching: serialize the pending profile with the chosen
+  // include flags and hand the chip up to the parent. Falls back to the
+  // legacy default if for some reason no slice is selected -- prevents
+  // sending an effectively-empty chip.
+  function confirmAttach() {
+    if (!pending) return;
+    const safeInclude: ChipIncludeOptions =
+      pendingInclude.summary || pendingInclude.traits || pendingInclude.overview || pendingInclude.details
+        ? pendingInclude
+        : DEFAULT_CHIP_INCLUDE;
+    const content = formatProfileForAI(pending.profile, safeInclude);
+    const includeFlags: ChipIncludeFlags = { ...safeInclude };
+    onAdd({ type: pending.chipType, name: pending.name, content, include: includeFlags });
   }
 
   // Fetch a note file's content and attach it as a "note" context chip.
@@ -2589,13 +2627,63 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
 
   const typeColor = chipTypeColor(profileType);
 
+  // Compute the live preview for the configure panel. We re-serialize the
+  // pending profile every time the include checkboxes change so the token
+  // estimate updates in real time.
+  // (Kept cheap: formatProfileForAI is a single pass over already-loaded
+  // section data.)
+  const pendingPreview = pending ? formatProfileForAI(pending.profile, pendingInclude) : "";
+  const pendingTokens  = estimateTokens(pendingPreview);
+
+  // Whether the pending profile actually has trait sections. Most non-character
+  // profile types (relationship, location, lore) have no trait blocks, so we
+  // disable the "Traits" checkbox for those rather than offering a checkbox
+  // that does nothing.
+  const pendingHasTraits = pending
+    ? (SECTION_CONFIGS[pending.profile.type as ProfileType] ?? []).some(c => c.hasTraitBlocks)
+    : false;
+
+  // Whether the pending profile has an AI Summary worth offering. Brand-new
+  // profiles often haven't had a summary generated yet -- in that case we
+  // disable the checkbox and label it as missing rather than letting the
+  // writer toggle on something that produces nothing.
+  const pendingHasSummary = Boolean(pending && pending.profile.full_ai_summary && pending.profile.full_ai_summary.trim().length > 0);
+
   return (
     <div className="mb-3 rounded border border-indigo-800/50 bg-bg-primary p-3">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold text-indigo-300">Attach Context</p>
+        <p className="text-xs font-semibold text-indigo-300">
+          {pending ? `Attach: ${pending.name}` : "Attach Context"}
+        </p>
         <button onClick={onClose} className="text-xs text-faint hover:text-text-muted">✕</button>
       </div>
 
+      {/* Configure-attachment panel -- replaces the browse list while a
+          profile is pending. Shows the four include checkboxes, a token
+          estimate, and a help button. The checkboxes write to pendingInclude
+          which feeds back into the live preview computed above. */}
+      {pending && (
+        <ConfigureAttachPanel
+          include={pendingInclude}
+          onChange={setPendingInclude}
+          tokens={pendingTokens}
+          hasTraits={pendingHasTraits}
+          hasSummary={pendingHasSummary}
+          onShowHelp={() => setShowHelp(true)}
+          onCancel={() => setPending(null)}
+          onAttach={confirmAttach}
+        />
+      )}
+
+      {/* Help popup -- detailed explanation of each include option and the
+          effect of combining them. Triggered by the [?] button in the
+          configure panel. Renders as an overlay so it doesn't disrupt the
+          configure panel state behind it. */}
+      {showHelp && <ChipIncludeHelp onClose={() => setShowHelp(false)} />}
+
+      {/* Browse UI -- only shown when no profile is pending. */}
+      {!pending && (
+      <>
       {/* Suggested chips -- ghost chips shown at top for quick attachment */}
       {unattachedSuggested.length > 0 && (
         <div className="mb-2">
@@ -2732,6 +2820,257 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
           })}
         </div>
       )}
+      </>
+      )}
+    </div>
+  );
+}
+
+
+// ── ConfigureAttachPanel ──────────────────────────────────────────────────────
+// Inline panel shown after the writer clicks a profile in the chip picker.
+// Lets them choose which slices of the profile to include before the chip
+// is built. Driven by the four ChipIncludeOptions flags; the parent owns the
+// state and re-serializes on each change so the token estimate stays live.
+
+interface ConfigureAttachPanelProps {
+  include:     ChipIncludeOptions;
+  onChange:    (next: ChipIncludeOptions) => void;
+  tokens:      number;
+  hasTraits:   boolean;
+  hasSummary:  boolean;
+  onShowHelp:  () => void;
+  onCancel:    () => void;
+  onAttach:    () => void;
+}
+
+function ConfigureAttachPanel({
+  include, onChange, tokens, hasTraits, hasSummary, onShowHelp, onCancel, onAttach,
+}: ConfigureAttachPanelProps) {
+  // A single helper to flip one flag without losing the others. Keeps the JSX
+  // below readable -- otherwise every checkbox needs a four-field spread.
+  const toggle = (key: keyof ChipIncludeOptions) =>
+    onChange({ ...include, [key]: !include[key] });
+
+  // Disable Attach when no slice is selected. Sending a chip that's just the
+  // profile header line wastes tokens and confuses the AI ("why did the
+  // writer attach this?"). Force the writer to pick at least one bucket.
+  const anySelected = include.summary || include.traits || include.overview || include.details;
+
+  // Visual warning when the writer's selection is unusually heavy. Same
+  // thresholds as the inline chip badges: ~1.5k tokens (~6k chars) is large,
+  // ~3k tokens (~12k chars) is huge.
+  const isLarge = tokens > 1500;
+  const isHuge  = tokens > 3000;
+
+  return (
+    <div className="mb-2 rounded border border-indigo-700/50 bg-indigo-950/30 p-2">
+      <div className="mb-1.5 flex items-center justify-between">
+        <p className="text-xs font-semibold text-indigo-300">What to include</p>
+        <button
+          onClick={onShowHelp}
+          className="rounded-full border border-indigo-600 px-1.5 py-0 text-[10px] text-indigo-300 hover:bg-indigo-800/40"
+          title="Detailed explanation of each option and combinations"
+        >
+          ?
+        </button>
+      </div>
+
+      {/* Four checkboxes -- each one toggles a single bucket. Disabled
+          checkboxes show a hint about why they're unavailable. */}
+      <div className="mb-2 grid grid-cols-2 gap-1 text-xs">
+        <CheckboxRow
+          label="AI Summary"
+          checked={include.summary && hasSummary}
+          disabled={!hasSummary}
+          disabledHint="(no summary yet)"
+          onToggle={() => toggle("summary")}
+        />
+        <CheckboxRow
+          label="Traits"
+          checked={include.traits && hasTraits}
+          disabled={!hasTraits}
+          disabledHint="(no trait sections)"
+          onToggle={() => toggle("traits")}
+        />
+        <CheckboxRow
+          label="Overview"
+          checked={include.overview}
+          onToggle={() => toggle("overview")}
+        />
+        <CheckboxRow
+          label="Details"
+          checked={include.details}
+          onToggle={() => toggle("details")}
+        />
+      </div>
+
+      {/* Token estimate -- updates live as the writer flips checkboxes.
+          Color escalates from neutral to amber to red as the chip grows. */}
+      <p className={`mb-2 text-[11px] ${isHuge ? "text-red-400" : isLarge ? "text-amber-400" : "text-faint"}`}>
+        Estimated cost: ~{tokens.toLocaleString()} tokens
+        {isHuge ? " (very heavy -- consider trimming)" : isLarge ? " (heavy)" : ""}
+      </p>
+
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onCancel}
+          className="rounded border border-border px-2 py-0.5 text-xs text-faint hover:text-text-muted"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onAttach}
+          disabled={!anySelected}
+          className="rounded border border-indigo-600 bg-indigo-700/40 px-2 py-0.5 text-xs text-indigo-100 hover:bg-indigo-700/60 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Attach
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+// Checkbox row used inside the configure panel. Pulled out to keep the
+// markup readable -- four near-identical rows would otherwise dominate the
+// component. Disabled state shows a muted hint instead of the live label.
+interface CheckboxRowProps {
+  label:         string;
+  checked:       boolean;
+  disabled?:     boolean;
+  disabledHint?: string;
+  onToggle:      () => void;
+}
+
+function CheckboxRow({ label, checked, disabled = false, disabledHint, onToggle }: CheckboxRowProps) {
+  return (
+    <label className={`flex items-center gap-1.5 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-indigo-200"}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onToggle}
+        className="h-3 w-3 accent-indigo-500"
+      />
+      <span>{label}</span>
+      {disabled && disabledHint && (
+        <span className="text-[10px] text-faint">{disabledHint}</span>
+      )}
+    </label>
+  );
+}
+
+
+// ── ChipIncludeHelp ───────────────────────────────────────────────────────────
+// Detailed explanation popup triggered by the [?] button on the configure
+// panel. Reads more like documentation than UI -- the writer is non-technical
+// and needs to understand what each option actually does to their AI
+// responses, not just what it costs in tokens.
+
+interface ChipIncludeHelpProps {
+  onClose: () => void;
+}
+
+function ChipIncludeHelp({ onClose }: ChipIncludeHelpProps) {
+  return (
+    // Fixed-position overlay so it sits above the picker without disrupting
+    // its state. Click outside or the [Close] button to dismiss.
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] max-w-2xl overflow-y-auto rounded border border-indigo-700/50 bg-bg-panel p-5 text-sm text-text-primary shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-indigo-300">What each option does</h2>
+          <button onClick={onClose} className="text-faint hover:text-text-muted">✕</button>
+        </div>
+
+        <p className="mb-4 text-xs text-faint">
+          When you attach a profile to the AI chat, you decide which slices of it the AI sees.
+          Each option below sends a different portion of the profile, and they combine. The
+          token estimate in the configure panel updates as you toggle these on and off, so you
+          can balance richness against cost.
+        </p>
+
+        <Section title="AI Summary">
+          <p>The synthesized one-paragraph summary of the character (the “# Full AI Summary” block at the bottom of the profile file). Acts as the gist. The AI uses it to orient itself about who this character is at a glance.</p>
+          <p className="mt-1"><strong>Use it when:</strong> you want the AI to know <em>who this character is</em> without sending every trait. Good for casual chat, brainstorming, “does this scene fit her at all?” questions, or when you’re attaching multiple characters and need to keep token use down.</p>
+          <p className="mt-1"><strong>Skip it when:</strong> the profile doesn’t have a generated summary yet, or you want the AI working strictly from the raw traits without the synthesized phrasing influencing it.</p>
+          <p className="mt-1 text-xs text-faint">Typical cost: ~80 to 200 tokens.</p>
+        </Section>
+
+        <Section title="Traits">
+          <p>All trait-block sections of the profile (Physical Traits, Personality Traits, Motivations, Voice Notes, Hidden Traits, Contextual). Every trait carries an importance label in brackets ([core], [present], [background], [contextual], [hidden]) which the AI is instructed to weight when deciding whether to surface it.</p>
+          <p className="mt-1"><strong>Use it when:</strong> you’re working on dialogue, voice, in-character behavior, consistency checks, or scene generation. This is the operational layer the AI needs to actually <em>act</em> as the character.</p>
+          <p className="mt-1"><strong>Skip it when:</strong> you only need the gist (use AI Summary alone), or the profile is non-character (relationships, locations, lore have no trait sections).</p>
+          <p className="mt-1 text-xs text-faint">Typical cost: 200 to 1500 tokens, depending on how many traits exist.</p>
+        </Section>
+
+        <Section title="Overview">
+          <p>The free-text Overview section at the top of the profile (the writer’s prose introduction to the character or place). Different from AI Summary: this is what <em>you</em> wrote, not the synthesized recap.</p>
+          <p className="mt-1"><strong>Use it when:</strong> the Overview contains backstory, context, or framing that doesn’t fit cleanly into trait blocks. Common for relationship profiles (history, current dynamic) and location profiles (atmosphere, role in the story).</p>
+          <p className="mt-1"><strong>Skip it when:</strong> the Overview is empty, or it duplicates information already in the AI Summary or Traits.</p>
+          <p className="mt-1 text-xs text-faint">Typical cost: 100 to 600 tokens.</p>
+        </Section>
+
+        <Section title="Details">
+          <p>All other prose sections of the profile that aren’t the Overview and aren’t trait blocks. For a character profile, that’s mainly the Notes section and the Relationships Overview. For a relationship, it’s History, Current Dynamic, Hidden Tensions, Emotional Direction. For a location, it’s Physical Description, Tone and Atmosphere, Historical/Cultural Significance, Scene Use Notes. For lore, it’s Rule or Concept, What It Affects, What Characters Know, Story Relevance.</p>
+          <p className="mt-1"><strong>Use it when:</strong> the question you’re asking the AI depends on the deeper material — “what would this lore rule do here?”, “how would they react given their history?”, “does this scene match the location’s mood?”.</p>
+          <p className="mt-1"><strong>Skip it when:</strong> you’re doing light work and the gist is enough, or the profile is sparse and the detail sections are mostly empty.</p>
+          <p className="mt-1 text-xs text-faint">Typical cost: highly variable — can be the largest section if the profile is detailed.</p>
+        </Section>
+
+        <h3 className="mb-2 mt-4 text-sm font-semibold text-indigo-300">Combinations to recognize</h3>
+
+        <Section title="Summary + Traits (the default)">
+          <p>The everyday choice for character work. The AI sees who the character is at a glance and the operational trait layer it needs to write or analyze them in scene. Light enough to attach 3 or 4 characters at once for a multi-character scene check.</p>
+        </Section>
+
+        <Section title="Summary only">
+          <p>The minimum viable chip. Useful when you’re attaching many profiles at once and don’t want to bloat the chat (e.g. a scene with 6 characters and you just want the AI to know who they all roughly are). The AI will know <em>who</em>, not <em>how</em>.</p>
+        </Section>
+
+        <Section title="Traits only">
+          <p>Useful when the AI Summary feels off (you haven’t regenerated it after recent edits) or you specifically want the AI working from raw, importance-labeled traits without the synthesized prose nudging its interpretation.</p>
+        </Section>
+
+        <Section title="Summary + Traits + Overview + Details (everything)">
+          <p>Heavy but thorough. Right for a focused deep-dive on a single character, relationship, or location — “does this whole subplot work with what I’ve established?”. Avoid stacking this across multiple profiles in one chat; you’ll burn through context quickly.</p>
+        </Section>
+
+        <Section title="Overview + Details only">
+          <p>For non-character profiles (relationships, locations, lore) where there are no trait sections. This combination is what those profiles always look like effectively — the picker disables Traits when no trait sections exist, so you’ll naturally end up here.</p>
+        </Section>
+
+        <h3 className="mb-2 mt-4 text-sm font-semibold text-indigo-300">A note about Hidden traits</h3>
+        <p className="mb-3 text-xs">
+          When you include Traits, traits marked [hidden] go to the AI <em>as influence material</em> — the AI is instructed never to name, describe, or quote them directly. They shape body language, dialogue choices, and what the character avoids; they don’t become content on the page. If you want the AI to ignore hidden traits entirely, mark them with a different importance level instead.
+        </p>
+
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="rounded border border-indigo-600 bg-indigo-700/40 px-3 py-1 text-xs text-indigo-100 hover:bg-indigo-700/60"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// Small section heading used inside the help popup. Keeps the markup tidy.
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-3 text-xs">
+      <h3 className="mb-1 text-sm font-semibold text-indigo-200">{title}</h3>
+      <div className="text-text-primary">{children}</div>
     </div>
   );
 }

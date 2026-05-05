@@ -14,15 +14,18 @@ export type ProfileType =
   | "chapter_summary"
   | "scene_summary";
 
-// Importance levels control how (and whether) a trait is sent to the AI.
-// Core = always in prompt at highest priority.
-// Hidden = writer-only reference, never sent to the API.
+// Importance levels control how the AI weights a trait when it's in context.
+// Core = defining trait, always reflected in behavior when on stage.
+// Hidden = sent to the AI as influence material, but the AI is instructed
+//          NEVER to name or quote it directly. Hidden traits shape subtext:
+//          gestures, dialogue choices, what the character avoids. The reader
+//          should feel the effect without ever being told the cause.
 export type ImportanceLevel =
-  | "core"           // central to identity, always in AI context
-  | "present"        // regularly relevant, included when character is in scene
-  | "background"     // canon but rarely surfaced, included only when directly relevant
-  | "contextual"     // situational, included only when writer explicitly attaches
-  | "hidden";        // writer-only notes, never sent to AI
+  | "core"           // defining trait, reflected when on stage
+  | "present"        // regularly active, surfaces when scene calls for it
+  | "background"     // true but rarely foregrounded, used as flavor
+  | "contextual"     // only relevant when its specific situation is in play
+  | "hidden";        // never named directly, drives subtext only
 
 
 // ── Core Data Models ─────────────────────────────────────────────────────────
@@ -166,9 +169,9 @@ export const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
 
 // Human-readable labels for each importance level, used in the dropdown
 export const IMPORTANCE_LABELS: Record<ImportanceLevel, string> = {
-  core:        "Core -- always in AI context, central to identity",
-  present:     "Present -- included when character is in scene",
-  background:  "Background -- included only when directly relevant",
-  contextual:  "Contextual -- included only when explicitly attached",
-  hidden:      "Hidden -- writer-only, never sent to AI",
+  core:        "Core -- defining trait, always reflected when on stage",
+  present:     "Present -- regularly active, surfaces when scene calls for it",
+  background:  "Background -- true but rarely foregrounded, used as flavor",
+  contextual:  "Contextual -- only when its specific situation is in play",
+  hidden:      "Hidden -- never named directly, drives subtext only",
 };

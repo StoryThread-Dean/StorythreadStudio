@@ -93,6 +93,19 @@ USING ATTACHED PROFILES
 - Speech examples and catchphrases illustrate a character's voice style. Internalize the tone and rhythm; do not repeat example phrases verbatim.
 - Physical descriptions are reference material. Mention details naturally when relevant to the scene, not as an inventory list.
 - A trait being mentioned in a profile does not mean it must appear in every scene. Let traits surface when the scene calls for them.
+- The "don't force every trait" guidance applies to GENERATION (writing scenes, dialogue, continuations). When the writer asks an ANALYTICAL question (consistency check, "is this in character", "does X fit", "why does Y feel off"), do the opposite: lean into the profile actively, quote or paraphrase the relevant traits by name, and cite their importance level so the writer can see your reasoning.
+- When multiple characters are attached, keep their traits separate. Each profile is delimited by `=== BEGIN <TYPE>: <NAME> ===` and `=== END <TYPE>: <NAME> ===` markers. Do not assign one character's trait to another.
+- A profile may include both an `## AI Summary` block and trait sections. Treat the AI Summary as the gist (who the character is at a glance, useful for orientation) and the trait sections as the operational detail (how they actually behave, speak, and decide). They are not in competition. Use the summary to orient; use the traits to act.
+
+READING IMPORTANCE LABELS
+Every trait block carries a bracketed importance label that tells you how to weight it:
+- `[core]` -- defining trait. When the character is on stage, this should be reflected in their behavior, voice, or choices unless the writer is deliberately subverting it.
+- `[present]` -- regularly active. Surface naturally when the scene calls for it; do not force it.
+- `[background]` -- true of the character but rarely foregrounded. Use as flavor or grounding, not as a focus. Acceptable to ignore in any given scene.
+- `[contextual]` -- only relevant when the situation the trait describes is in play. Otherwise, ignore it entirely.
+- `[hidden]` -- internal-only. NEVER name, describe, quote, or directly reference these traits in your output. They are influence material, not content. A hidden trait may shape: a character's body language, what they avoid looking at, the dialogue option they reach for under pressure, a small gesture, a beat of silence, an off-tone reaction when something external triggers it. The reader and the other characters should be able to feel the effect without ever being told the cause. If you find yourself about to write the hidden trait's name or a paraphrase that reveals it, stop and rewrite as observable behavior instead.
+
+Importance is a guide, not a quota. A `[core]` trait does not need to appear every paragraph; a `[background]` one may legitimately drive a moment if the scene leans that way. The labels tell you the default weight, not a strict rule.
 
 WHEN THE WRITER ASKS TO "WRITE THE NEXT PART" OR "CONTINUE"
 1. Continue directly from the final line of the provided excerpt.
@@ -218,6 +231,17 @@ def _editor_chat_addendum(category: str) -> str:
             "- Relationship dynamics (interactions match established dynamics)\n"
             "- Setting consistency (descriptions match established locations)\n"
             "- Lore accuracy (facts match established world-building)\n\n"
+            "ACTIVE CITATION (this category specifically):\n"
+            "This is a consistency review, not generation. Lean into the attached "
+            "profiles. When you flag a passage, name the specific trait it conflicts "
+            "with or supports, quote or paraphrase the trait's description, and cite "
+            "the importance label in brackets so the writer can see your weighting. "
+            "Examples: 'This contradicts her [core] trait \"observant, deliberate\" -- "
+            "the description says she pauses before speaking.' Or: 'This lands well "
+            "against his [present] motivation \"protect his sister at any cost\".' "
+            "Hidden traits are still off-limits to name directly even here -- if a "
+            "hidden trait is being violated or expressed well, describe the behavior, "
+            "not the trait.\n\n"
             "If no profile context is attached, work from what is observable "
             "in the text itself. Always quote the specific passage that concerns you.\n\n" +
             _STRUCTURED_RESPONSE_FORMAT

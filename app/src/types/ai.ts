@@ -69,13 +69,27 @@ export interface AssistantResponse {
 }
 
 // ── Importance Levels ─────────────────────────────────────────────────────────
-// Controls how (and whether) a trait is sent to the AI.
-// Core = always in prompt at highest priority.
-// Hidden = writer-only, never sent to the API.
+// Controls how the AI weights a trait when the profile is in context.
+// Core = defining trait, reflected in behavior when the character is on stage.
+// Hidden = sent to AI as influence material, but the prompt instructs the AI
+//          to NEVER name or quote it directly -- it drives subtext only.
+// (Authoritative copy lives in app/src/types/profile.ts.)
 
 export type ImportanceLevel = "core" | "present" | "background" | "contextual" | "hidden";
 
 // ── Context Chips ─────────────────────────────────────────────────────────────
+
+// Per-chip options that record which slices of the profile the writer chose
+// to include when attaching it. The chip's `content` was already serialized
+// with these flags applied -- this field exists so the chip UI can display
+// what was selected (badges) and so the writer can re-build the chip later
+// if we add an "edit attachment" affordance. The backend never reads this.
+export interface ChipIncludeFlags {
+  summary:  boolean;
+  traits:   boolean;
+  overview: boolean;
+  details:  boolean;
+}
 
 // A context chip is a piece of profile content the writer explicitly attaches
 // to an AI assistant request. The AI only sees what the writer chooses to share.
@@ -83,6 +97,9 @@ export interface ContextChip {
   type: string;    // "character" | "relationship" | "location" | "lore" | etc.
   name: string;    // Display name, e.g. "Elara Voss"
   content: string; // The profile summary or relevant text to include
+  // Optional metadata describing what slices were included when the chip was
+  // built. Older chips may not have this; treat its absence as "unknown".
+  include?: ChipIncludeFlags;
 }
 
 export interface RunAssistantPayload {
