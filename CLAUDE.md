@@ -262,33 +262,14 @@ Favor **longer, clearly annotated code** over compact, clever code. A function w
 
 ---
 
-## Development Phases (Reference)
-
-| Phase | Goal |
-|---|---|
-| 0 | Design freeze: schemas, wireframes, routing rules |
-| 1 | Tauri shell + React scaffold + FastAPI + Markdown editor (no AI) |
-| 2 | Profile system: character, relationship, location, lore, summaries |
-| 3 | OpenRouter integration + first AI assistants |
-| 4 | Profile-aware AI: context attachment, summaries, Profile Builder chat |
-| 5A | AI Respec: Profile Builder rebuild (importance levels, word gauge, simplified modes) |
-| 5B | AI tools: trim, audit, usage preview, series context injection |
-| 5C | Series/Book structure: series.json, canonical profiles, arc files |
-| 5D | Toolkit & routing: auto-suggest, content mode routing, allowlist/blocklist |
-| 5E | Writing Companion: unified editor right panel, chat in main editor |
-| 6 | Export, polish, summary quality tuning |
-
-Full phase details and the MVP acceptance checklist are in `06-roadmap-and-mvp-plan.md`.
-
----
-
 ## Key Reference Files
 
 | File | Contains |
 |---|---|
-| `01-product-scope.md` | Core goals, writing philosophy, locked rules, non-goals |
-| `02-architecture-and-storage.md` | Folder structure, editor behavior, storage responsibilities |
-| `03-profile-builder-spec.md` | Profile types, sections, trait block format, importance levels |
-| `04-ai-assistants-and-routing.md` | Assistant categories, output schemas, routing architecture, em dash enforcement |
-| `05-api-ui-and-data-models.md` | FastAPI endpoints, SQLite schema, screen layout plan |
-| `06-roadmap-and-mvp-plan.md` | Build phases, first 10 tasks, MVP acceptance checklist |
+| `docs/product-scope.md` | Core goals, writing philosophy, locked product rules, in/out-of-scope |
+| `docs/architecture.md` | Three-layer architecture, dual storage model, folder layout, current API surface |
+| `docs/features.md` | What the product does today: editor, Profile Builder, Smart Advisor, Writing Companion, series, exports, settings |
+| `docs/roadmap.md` | Scheduled / Proposed / Nice-to-Have features, plus dropped items |
+| `docs/RELEASING.md` | Release runbook (signing key setup, per-release checklist) |
+| `CHANGELOG.md` | Shipped changes per version |
+| `README.md` | Public-facing project description, install instructions, donation links |

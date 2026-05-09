@@ -10,7 +10,7 @@ A local-first Markdown writing app for fiction writers. The writer does the draf
 
 - **Markdown editor** with focused, distraction-free writing in a serif typeface (Tauri + CodeMirror 6)
 - **Profile system** for characters, relationships, locations, and lore — with structured trait blocks and importance levels
-- **Smart Advisor** runs Readability, Structure, and Context passes over your chapter and shows AI feedback as clickable inline highlights with accept/revise/ignore controls
+- **Smart Advisor** runs Readability, Structure, and Context passes directly over your chapter. Findings appear as colored inline highlights anchored to the exact passages the AI quoted; click any highlight for an explanation, a word-level diff against the suggested rewrite, and accept / ignore / re-cast controls (Rewrite, Expand, Shorten, Describe, Rephrase, Add Sensory Detail, Change Tone). Subcategory toggles per category let you scope a pass (e.g. Readability → Grammar + Clarity only)
 - **Writing Companion** chat panel for open conversational help — brainstorming, voice work, ad-hoc questions
 - **Series support** — multi-book projects with shared canonical profiles and per-book character arcs
 - **Export** — full manuscript, dated snapshots, optional inclusion of summaries, notes, and profiles
@@ -69,14 +69,14 @@ You can use, modify, and redistribute Storythread Studio. If you redistribute a 
 
 ## Project documentation
 
-The design specs and roadmap live in this repo for transparency:
+The design docs and roadmap live in this repo for transparency:
 
-- [`01-product-scope.md`](01-product-scope.md) — core goals, philosophy, locked rules
-- [`02-architecture-and-storage.md`](02-architecture-and-storage.md) — folder structure, storage model
-- [`03-profile-builder-spec.md`](03-profile-builder-spec.md) — profile types, importance levels
-- [`04-ai-assistants-and-routing.md`](04-ai-assistants-and-routing.md) — assistant categories, em dash rule
-- [`05-api-ui-and-data-models.md`](05-api-ui-and-data-models.md) — backend endpoints, screen layout
-- [`06-roadmap-and-mvp-plan.md`](06-roadmap-and-mvp-plan.md) — build phases
+- [`docs/product-scope.md`](docs/product-scope.md) — core goals, writing philosophy, locked product rules, in/out-of-scope
+- [`docs/architecture.md`](docs/architecture.md) — three-layer architecture, dual storage model, folder layout, API surface
+- [`docs/features.md`](docs/features.md) — what the product does today, in detail
+- [`docs/roadmap.md`](docs/roadmap.md) — Scheduled, Proposed, and Nice-to-Have features
+- [`docs/RELEASING.md`](docs/RELEASING.md) — release runbook for maintainers
+- [`CHANGELOG.md`](CHANGELOG.md) — shipped changes per version
 - [`CLAUDE.md`](CLAUDE.md) — guidance for AI coding assistants working on this codebase
 
 ## Contributing
