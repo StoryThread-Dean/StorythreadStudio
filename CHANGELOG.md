@@ -19,12 +19,9 @@ entry while working on a feature, append it under Unreleased.
 
 ### Fixed
 
-- Backend sidecar hung at startup in installed builds, causing "Failed to fetch" errors on first project open. The Tauri shell plugin pipes the child process's stdout and stderr through a Receiver that the setup hook was dropping; uvicorn's startup log lines filled the OS pipe buffer and blocked the backend from binding to port 8000. The setup hook now drains the receiver in a detached task so the backend can start cleanly.
-- API requests from the installed app were blocked by CORS even after the backend started, because the allowlist only included Tauri v1's `tauri://localhost` origin. Tauri v2 on Windows uses `http://tauri.localhost`; both Tauri v2 origins are now on the allowlist.
-
 ---
 
-## [1.0.0] - TBD
+## [1.0.0] - 2026-05-08
 
 First public release.
 
@@ -41,6 +38,11 @@ First public release.
 - Em dash sanitizer enforced at the prompt, post-process, and style guide layers
 - Backend health monitor with a single actionable banner replacing per-feature fetch errors
 - Auto-update infrastructure with launch-time check, summary of changes, and explicit download/install confirmation
+
+### Fixed
+
+- Backend sidecar hung at startup in installed builds, causing "Failed to fetch" errors on first project open. The Tauri shell plugin pipes the child process's stdout and stderr through a Receiver that the setup hook was dropping; uvicorn's startup log lines filled the OS pipe buffer and blocked the backend from binding to port 8000. The setup hook now drains the receiver in a detached task so the backend can start cleanly.
+- API requests from the installed app were blocked by CORS even after the backend started, because the allowlist only included Tauri v1's `tauri://localhost` origin. Tauri v2 on Windows uses `http://tauri.localhost`; both Tauri v2 origins are now on the allowlist.
 
 [Unreleased]: https://github.com/dataguydpeterson-cmyk/StorythreadStudio/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/dataguydpeterson-cmyk/StorythreadStudio/releases/tag/v1.0.0
