@@ -62,13 +62,29 @@ pub fn run() {
             {
                 match _app.shell().sidecar("storythread-backend") {
                     Ok(cmd) => {
-                        // Spawn fires the process and returns immediately.
-                        // We discard the (CommandChild, Receiver) pair --
-                        // we don't currently consume the backend's stdout
-                        // events. If we ever want to surface backend logs
-                        // in the app, this is where we'd plumb them.
-                        if let Err(e) = cmd.spawn() {
-                            eprintln!("Failed to spawn backend sidecar: {e}");
+                        // Spawn returns (Receiver<CommandEvent>, CommandChild).
+                        // We MUST drain the receiver: Tauri pipes the child's
+                        // stdout/stderr through it, and if nothing reads, the
+                        // OS pipe buffer (~4KB on Windows) fills up and the
+                        // child blocks on its next write. uvicorn's startup
+                        // logs are enough to fill it, so without draining the
+                        // backend hangs forever before binding to port 8000.
+                        match cmd.spawn() {
+                            Ok((mut rx, _child)) => {
+                                // Detached drain task: discards every event
+                                // until the child exits and the channel
+                                // closes. Tauri kills the child on app exit,
+                                // which closes the channel, which ends this
+                                // loop. No explicit cleanup required.
+                                tauri::async_runtime::spawn(async move {
+                                    while rx.recv().await.is_some() {
+                                        // discard
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to spawn backend sidecar: {e}");
+                            }
                         }
                     }
                     Err(e) => {

@@ -43,9 +43,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:1420",    # Vite dev server (React during development)
-        "http://127.0.0.1:1420",   # Same address, different notation
-        "tauri://localhost",        # Tauri's production window origin
+        "http://localhost:1420",     # Vite dev server (React during development)
+        "http://127.0.0.1:1420",    # Same address, different notation
+        "tauri://localhost",         # Tauri v1 production origin (macOS/Linux)
+        "http://tauri.localhost",    # Tauri v2 production origin (Windows WebView2)
+        "https://tauri.localhost",   # Tauri v2 alternate (some platforms/configs)
     ],
     allow_credentials=True,    # Allows cookies and auth headers if needed later
     allow_methods=["*"],       # Accepts GET, POST, PUT, DELETE, etc.
