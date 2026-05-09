@@ -23,6 +23,8 @@ from app.ai.openrouter import run_completion, run_chat, list_models
 from app.ai.sanitizer import sanitize
 from app.ai.prompts import (
     build_editor_chat_system_prompt,
+    build_editor_pass_system_prompt,
+    build_revise_suggestion_system_prompt,
     build_profile_chat_system_prompt,
     wrap_assistant_prompt,
     generate_usage_preview_prompt,
@@ -34,8 +36,10 @@ from app.ai.prompts import (
     generate_scene_summary_prompt,
     generate_scene_title_prompt,
     content_mode_instruction,
+    EDITOR_PASS_SUBCATEGORIES,
     TEMPERATURE_DEFAULTS,
 )
+import uuid
 from app.utils.scene_parser import split_into_scenes_with_meta, count_hr_breaks
 import httpx
 import json
@@ -1465,3 +1469,286 @@ async def editor_chat(request: EditorChatRequest):
         raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
 
     return EditorChatResponse(reply=reply, model_used=model_id)
+
+
+# ── Editor Pass (Inline Overlay Feedback) ─────────────────────────────────────
+# The editor-pass endpoint powers the inline highlight system in the manuscript
+# editor. The frontend calls it with a category (readability/structure/context)
+# plus subcategory toggles, the chapter text, and any attached profile chips.
+# The AI returns a JSON list of issues, each anchored to a verbatim quote from
+# the chapter. The frontend locates each quote in the editor and decorates it
+# as a clickable highlight.
+#
+# Why structured JSON instead of the existing editor-chat prose flow?
+#   editor-chat returns markdown the writer reads in the side panel; the
+#   redesign moves feedback ONTO the manuscript itself, which means the
+#   frontend has to know exactly what to highlight, what label to show, and
+#   what the suggested rewrite is. JSON lets us hand all three pieces over
+#   in one round trip without screen-scraping prose.
+
+class EditorPassRequest(BaseModel):
+    category:      str                          # "readability" | "structure" | "context"
+    subcategories: list[str] = []               # subcategory keys; empty = all of them
+    chapter_text:  str                          # the full chapter the AI should review
+    context_chips: list[ContextChip] = []
+    model_id:      str | None = None
+    content_mode:  str = "general"
+    project_path:  str | None = None
+
+
+class EditorIssueModel(BaseModel):
+    """One AI-flagged issue. The frontend matches `quote` against the chapter
+    text to determine where to render the highlight; if no exact match is
+    found, the frontend silently drops the issue (rather than mis-highlighting
+    a similar-looking passage)."""
+    id:           str
+    category:     str           # one of EDITOR_PASS_SUBCATEGORIES[<top>] keys
+    severity:     str           # "praise" | "issue" | "suggestion"
+    quote:        str           # verbatim chapter text -- frontend uses for locate
+    explanation:  str
+    suggestions:  list[str] = []
+
+
+class EditorPassResponse(BaseModel):
+    issues:     list[EditorIssueModel]
+    model_used: str = ""
+
+
+def _coerce_issues(payload: object) -> list[dict]:
+    """
+    Accept either a list of issues or a wrapper object {"issues": [...]}.
+    Some models return one shape, some the other; we accept both rather than
+    failing. Returns an empty list if the shape is unrecognized.
+    """
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        items = payload.get("issues")
+        if isinstance(items, list):
+            return [item for item in items if isinstance(item, dict)]
+    return []
+
+
+def _extract_json_block(raw: str) -> str | None:
+    """
+    Find a JSON object inside a model response. Some models obey the
+    'no preamble, no fence' instruction; others wrap output in ```json or
+    chat around it. We look for the first '{' and the last matching '}'.
+    Returns None if nothing JSON-like is present.
+    """
+    if not raw:
+        return None
+    start = raw.find("{")
+    if start < 0:
+        return None
+    end = raw.rfind("}")
+    if end <= start:
+        return None
+    return raw[start:end + 1]
+
+
+def _parse_pass_response(raw: str, allowed_subcategory_keys: set[str]) -> list[dict]:
+    """
+    Parse the model's response into a list of issue dicts. Tolerates: bare
+    JSON, JSON with leading/trailing text, JSON wrapped in a markdown fence,
+    and lists vs. {"issues": [...]} wrappers. Returns issues filtered to
+    only those whose 'category' is in the allowed set -- this prevents the
+    AI from inventing categories the frontend doesn't know how to render.
+    """
+    block = _extract_json_block(raw)
+    if not block:
+        return []
+    try:
+        parsed = json.loads(block)
+    except json.JSONDecodeError:
+        return []
+    items = _coerce_issues(parsed)
+    cleaned: list[dict] = []
+    for item in items:
+        cat = str(item.get("category", "")).strip().lower()
+        if cat not in allowed_subcategory_keys:
+            # Silently drop unrecognized categories rather than fail the whole
+            # pass. A typo from the model shouldn't lose the writer's other
+            # 8 valid issues.
+            continue
+        sev = str(item.get("severity", "issue")).strip().lower()
+        if sev not in ("praise", "issue", "suggestion"):
+            sev = "issue"
+        quote = str(item.get("quote", "")).strip()
+        if not quote:
+            # No quote = nothing to highlight. Drop.
+            continue
+        explanation = str(item.get("explanation", "")).strip()
+        # Suggestions can be a list or, occasionally, a single string from
+        # confused models. Normalize to a list of trimmed non-empty strings.
+        raw_sugs = item.get("suggestions", [])
+        if isinstance(raw_sugs, str):
+            raw_sugs = [raw_sugs]
+        if not isinstance(raw_sugs, list):
+            raw_sugs = []
+        sugs = [str(s).strip() for s in raw_sugs if str(s).strip()]
+        cleaned.append({
+            "id":          str(uuid.uuid4()),
+            "category":    cat,
+            "severity":    sev,
+            "quote":       sanitize(quote),
+            "explanation": sanitize(explanation),
+            "suggestions": [sanitize(s) for s in sugs],
+        })
+    return cleaned
+
+
+@router.post("/editor-pass", response_model=EditorPassResponse)
+async def editor_pass(request: EditorPassRequest):
+    """
+    Run an editor pass over a chapter. Returns a list of inline issues the
+    frontend renders as clickable highlights. See module-level docstring
+    above for the architectural rationale.
+    """
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    settings = load_settings()
+    _validate_model_content_mode(settings, model_id, request.content_mode)
+    _validate_model_allowed(settings, model_id)
+
+    cat_defs = EDITOR_PASS_SUBCATEGORIES.get(request.category)
+    if not cat_defs:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown editor pass category: {request.category!r}. "
+                   f"Expected one of: {list(EDITOR_PASS_SUBCATEGORIES.keys())}.",
+        )
+
+    # Cap the chapter length the same way editor-chat does for full-chapter
+    # mode. Beyond this size the request is likely to time out or blow the
+    # model's context window; force the writer to trim before retrying.
+    if len(request.chapter_text) > 100_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The chapter is too long ({len(request.chapter_text):,} chars, "
+                   f"max 100,000). Try a shorter passage or split the chapter.",
+        )
+
+    # Build the system prompt + materials user message. This re-uses the
+    # exact same chip-wrapping logic as editor-chat (BEGIN/END delimiters,
+    # ATTACHED CONTEXT block) so attached profiles behave identically across
+    # the two endpoints.
+    system_prompt = build_editor_pass_system_prompt(
+        category      = request.category,
+        subcategories = request.subcategories,
+        content_mode  = request.content_mode,
+    )
+    story_context = _build_story_context(request.project_path)
+    if story_context:
+        system_prompt = story_context + system_prompt
+
+    materials = _build_materials_message(
+        text_content    = request.chapter_text,
+        is_full_chapter = True,
+        context_chips   = request.context_chips,
+    )
+    messages = [materials]
+
+    try:
+        raw = await run_chat(
+            api_key       = api_key,
+            model_id      = model_id,
+            system_prompt = system_prompt,
+            messages      = messages,
+            # critique temperature: low randomness, focused output. Same as
+            # the structured-feedback path through editor-chat.
+            temperature   = TEMPERATURE_DEFAULTS["critique"],
+        )
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+
+    allowed_keys = set(cat_defs.keys())
+    issues_raw = _parse_pass_response(raw, allowed_keys)
+
+    issues = [EditorIssueModel(**item) for item in issues_raw]
+    return EditorPassResponse(issues=issues, model_used=model_id)
+
+
+# ── Revise Suggestion (per-issue refinement) ──────────────────────────────────
+# Called when the writer clicks a quick-modifier button on an issue popover
+# (Rewrite / Expand / Shorten / Describe / Rephrase / Add Sensory Detail /
+# Change Tone / Default). Scoped to ONE issue's quote+suggestion+modifier --
+# does not see the whole chapter, which keeps the call fast and cheap.
+
+class ReviseSuggestionRequest(BaseModel):
+    quote:              str   # the original passage being suggested over
+    current_suggestion: str   # the suggestion the writer wants revised
+    modifier:           str   # one of the modifier names; "default" = open rewrite
+    context_chips:      list[ContextChip] = []
+    model_id:           str | None = None
+    content_mode:       str = "general"
+    project_path:       str | None = None
+
+
+class ReviseSuggestionResponse(BaseModel):
+    suggestion: str
+    model_used: str = ""
+
+
+@router.post("/revise-suggestion", response_model=ReviseSuggestionResponse)
+async def revise_suggestion(request: ReviseSuggestionRequest):
+    """
+    Refine a single issue's suggestion based on a creative-transformation
+    modifier. Returns one new suggestion that replaces the old one in the
+    issue popover; does not affect any other issue or the manuscript.
+    """
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    settings = load_settings()
+    _validate_model_content_mode(settings, model_id, request.content_mode)
+    _validate_model_allowed(settings, model_id)
+
+    if not request.quote.strip():
+        raise HTTPException(status_code=400, detail="Quote is required.")
+
+    system_prompt = build_revise_suggestion_system_prompt(
+        modifier     = request.modifier,
+        content_mode = request.content_mode,
+    )
+    story_context = _build_story_context(request.project_path)
+    if story_context:
+        system_prompt = story_context + system_prompt
+
+    # Materials message: the original passage + current suggestion. Wrapped
+    # with attached chips so character voice context still applies. The
+    # 'is_full_chapter' flag is False because we're not sending the whole
+    # chapter -- just the quote + suggestion.
+    materials_text = (
+        f"ORIGINAL PASSAGE:\n{request.quote}\n\n"
+        f"CURRENT SUGGESTION (revise this):\n{request.current_suggestion}"
+    )
+    materials = _build_materials_message(
+        text_content    = materials_text,
+        is_full_chapter = False,
+        context_chips   = request.context_chips,
+    )
+
+    try:
+        raw = await run_chat(
+            api_key       = api_key,
+            model_id      = model_id,
+            system_prompt = system_prompt,
+            messages      = [materials],
+            temperature   = TEMPERATURE_DEFAULTS["generation"],
+        )
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+
+    # Strip surrounding whitespace and any accidental markdown fence the
+    # model wrapped around the prose. The prompt forbids these but weak
+    # models slip up; cheap to clean up here rather than show fence text
+    # to the writer.
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        # Drop the opening fence (with optional language tag) and the
+        # closing fence on the last line.
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```\s*$", "", cleaned)
+    cleaned = sanitize(cleaned.strip())
+
+    return ReviseSuggestionResponse(suggestion=cleaned, model_used=model_id)

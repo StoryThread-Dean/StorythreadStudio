@@ -24,6 +24,7 @@ import { createTheme } from "@uiw/codemirror-themes";
 import { tags as t } from "@lezer/highlight";
 import type { FontValue } from "./EditorToolbar";
 import { useTheme } from "../hooks/useTheme";
+import { issueOverlayExtension } from "./editor/issueOverlay";
 
 
 // --- Font Compartment ---
@@ -387,6 +388,11 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
     // visual presentation changes.
     hrLinePlugin,
     hrLineTheme,
+    // Smart Advisor inline-issue overlay. Registers the StateField that holds
+    // active issue decorations, the click handler that emits issue-click
+    // events for the popover, and the theme for highlight colors. Issues are
+    // dispatched into this field by EditorAdvisorBar after each pass.
+    issueOverlayExtension(),
     // Search extension: registers the state field and panel factory. Calling
     // openSearchPanel without this relies on CodeMirror lazily appending the
     // config, which works but leaves us without a way to tune options like

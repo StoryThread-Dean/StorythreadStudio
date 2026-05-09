@@ -7,6 +7,19 @@
     "core:default",
     "opener:default",
     "dialog:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "binaries/storythread-backend",
+          "sidecar": true,
+          "args": []
+        }
+      ]
+    },
+    "updater:default",
+    "process:default",
+    "process:allow-restart"
   ]
 }

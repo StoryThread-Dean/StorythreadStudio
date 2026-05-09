@@ -32,13 +32,25 @@ import { ExportModal } from "./components/ExportModal";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import type { ProfileType, Profile } from "./types/profile";
 import type {
-  ContextChip, ChipIncludeFlags, EditorChatMessage, EditorChatCategory,
+  ContextChip, ChipIncludeFlags, EditorChatMessage,
   SceneSummaryInfo, SplitChapterScenesResponse, GenerateSceneSummaryResponse,
 } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
 import type { ChipIncludeOptions } from "./utils/profileFormat";
 import { SECTION_CONFIGS } from "./types/profile";
+import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
+import { IssuePopover } from "./components/editor/IssuePopover";
+import { ISSUE_CLICK_EVENT, clearIssuesEffect } from "./components/editor/issueOverlay";
+import type { LocatedIssue, IssueClickDetail } from "./components/editor/issueOverlay";
+import { useAppUpdate } from "./hooks/useAppUpdate";
+import { useDonationState } from "./hooks/useDonationState";
+import { useFreshVersion } from "./hooks/useFreshVersion";
+import { UpdateBanner } from "./components/update/UpdateBanner";
+import { UpdateModal } from "./components/update/UpdateModal";
+import { PostUpdateBanner } from "./components/update/PostUpdateBanner";
+import { AboutPanel } from "./components/about/AboutPanel";
+import { DonationPrompt } from "./components/about/DonationPrompt";
 import { useBackendHealth } from "./hooks/useBackendHealth";
 import { initTheme } from "./hooks/useTheme";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -130,6 +142,27 @@ function App() {
   // Settings modal visibility
   const [showSettings, setShowSettings] = useState(false);
 
+  // Auto-update + donation + about-panel UI state. Bundled here so the
+  // entire end-of-render-tree set of banners and modals can be wired up
+  // from one place. The actual logic lives in useAppUpdate / useDonationState
+  // / useFreshVersion -- this state just controls modal visibility.
+  const [showAboutPanel, setShowAboutPanel]   = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+
+  // Auto-update orchestration. Runs a launch-time check (production only),
+  // exposes the available update + download/install actions.
+  const appUpdate = useAppUpdate();
+
+  // Donation prompts + donor flag. shouldShowPrompt fires every 30-50
+  // launches when the user isn't a donor; the prompt suppresses itself
+  // once the writer marks themselves as a donor or dismisses.
+  const donation = useDonationState();
+
+  // First-run-after-update detection. isFreshVersion is true exactly on
+  // the first launch following an upgrade. Acknowledged by clicking the
+  // banner's "Got it" button, which writes the new version to localStorage.
+  const freshVersion = useFreshVersion();
+
   // Project settings modal visibility (separate from global Settings)
   const [showProjectSettings, setShowProjectSettings] = useState(false);
 
@@ -150,13 +183,23 @@ function App() {
   const [selectedText, setSelectedText] = useState("");
 
   // Writing Companion (editor chat) state
-  // null = no category selected (general chat mode); string = structured review mode
-  const [chatCategory, setChatCategory] = useState<EditorChatCategory>(null);
+  // The category-tab system was removed in the Smart Advisor redesign;
+  // structured Readability/Structure/Context feedback now renders as inline
+  // editor highlights via EditorAdvisorBar, not as chat replies. The chat
+  // panel is always in general-chat mode.
   const [chatMessages, setChatMessages] = useState<EditorChatMessage[]>([]);
   const [chatInput, setChatInput]       = useState("");
   const [chatLoading, setChatLoading]   = useState(false);
   const [chatError, setChatError]       = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Smart Advisor state. Currently-active issues are owned by the editor's
+  // StateField (see components/editor/issueOverlay.ts); we mirror just the
+  // count here for the toolbar's pill and Done button. The popover state
+  // captures which issues to render and where to anchor the popover after a
+  // click on a highlight; null = popover closed.
+  const [issueCount, setIssueCount] = useState(0);
+  const [issuePopover, setIssuePopover] = useState<IssueClickDetail | null>(null);
 
   // --- Cancel-in-flight chat request ---
   // chatAbortRef holds the AbortController for the currently running fetch so
@@ -258,6 +301,33 @@ function App() {
   currentProjectRef.current  = currentProject;
   currentNoteRef.current     = currentNote;
   currentViewRef.current     = currentView;
+
+
+  // Smart Advisor: subscribe to issue-click events from the editor's DOM.
+  // The issueOverlay extension dispatches a CustomEvent whenever a writer
+  // clicks a highlighted issue; we capture the click coordinates + issue ids
+  // and open the IssuePopover at that position. Re-attaches when the editor
+  // view changes (chapter switch).
+  useEffect(() => {
+    if (!editorView) return;
+    const target = editorView.dom;
+    function onIssueClick(e: Event) {
+      const ce = e as CustomEvent<IssueClickDetail>;
+      if (ce.detail) setIssuePopover(ce.detail);
+    }
+    target.addEventListener(ISSUE_CLICK_EVENT, onIssueClick);
+    return () => target.removeEventListener(ISSUE_CLICK_EVENT, onIssueClick);
+  }, [editorView]);
+
+  // When the writer switches chapters, drop any stale issues + close any
+  // open popover. The new chapter's text doesn't share offsets with the
+  // previous one, so leftover decorations would highlight nonsense.
+  useEffect(() => {
+    if (!editorView) return;
+    editorView.dispatch({ effects: clearIssuesEffect.of() });
+    setIssueCount(0);
+    setIssuePopover(null);
+  }, [editorView, currentChapter?.filename]);
 
 
   // --- Load a chapter from the backend ---
@@ -1057,7 +1127,10 @@ function App() {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          category:        chatCategory ?? "chat",
+          // Smart Advisor redesign: chat is always general-chat now.
+          // Structured Readability/Structure/Context feedback runs through
+          // /api/ai/editor-pass and renders as inline highlights instead.
+          category:        "chat",
           text_content:    textContent,
           is_full_chapter: isFullChapter,
           messages:        newMessages,
@@ -1121,7 +1194,7 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, chatCategory, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys]);
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys]);
 
 
   // --- Cancel an in-flight chat request ---
@@ -1132,6 +1205,24 @@ function App() {
     if (!chatAbortRef.current) return;
     chatManualCancelRef.current = true;
     chatAbortRef.current.abort();
+  }, []);
+
+
+  // --- Open a URL in the system browser ---
+  // Tauri's opener plugin routes URLs to the OS default browser instead of
+  // Tauri's own webview, so external links don't navigate the app away.
+  // Used by AboutPanel, UpdateModal, PostUpdateBanner, DonationPrompt for
+  // GitHub / Sponsors / Ko-fi / changelog links. In dev (non-Tauri), falls
+  // back to window.open which works fine for testing in the browser.
+  const openLink = useCallback(async (url: string) => {
+    try {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(url);
+    } catch {
+      // Non-Tauri context (e.g. running Vite directly): fall back to a
+      // normal browser open. Catches dev-mode tests as well.
+      window.open(url, "_blank");
+    }
   }, []);
 
 
@@ -1222,10 +1313,84 @@ function App() {
     </div>
   ) : null;
 
+  // ── Update + donation overlays ─────────────────────────────────────────────
+  // Bundled into one JSX block so each return path adds it with one variable.
+  // The pieces (UpdateBanner, PostUpdateBanner, modals, donation prompt) are
+  // independent -- order is purely visual.
+  const updateOverlays = (
+    <>
+      {/* Slim "update available" banner. Rendered when the launch-time check
+          found a newer release. Clicking "View details" opens UpdateModal. */}
+      {appUpdate.status === "available" && appUpdate.update && (
+        <UpdateBanner
+          update={appUpdate.update}
+          onViewDetails={() => setShowUpdateModal(true)}
+        />
+      )}
+
+      {/* Post-update banner. Fires on the first launch after the writer
+          installed a new version (detected via useFreshVersion). */}
+      {freshVersion.isFreshVersion && freshVersion.currentVersion && (
+        <PostUpdateBanner
+          currentVersion={freshVersion.currentVersion}
+          previousVersion={freshVersion.previousVersion}
+          hasDonated={donation.hasDonated}
+          openLink={openLink}
+          onAcknowledge={freshVersion.acknowledge}
+        />
+      )}
+
+      {/* Update details modal. Surfaced by clicking the banner OR via the
+          About panel's "Check for updates" button, which re-runs the check
+          and (if positive) flips status to 'available' so the banner +
+          modal both become reachable again. */}
+      {showUpdateModal && appUpdate.update && (
+        <UpdateModal
+          update={appUpdate.update}
+          status={appUpdate.status}
+          progress={appUpdate.progress}
+          error={appUpdate.error}
+          hasDonated={donation.hasDonated}
+          openLink={openLink}
+          onDownloadInstall={() => void appUpdate.downloadAndInstall()}
+          onRelaunch={() => void appUpdate.relaunch()}
+          onClose={() => setShowUpdateModal(false)}
+        />
+      )}
+
+      {/* About + donation panel. Opened from the sidebar's "About" button. */}
+      {showAboutPanel && freshVersion.currentVersion && (
+        <AboutPanel
+          version={freshVersion.currentVersion}
+          hasDonated={donation.hasDonated}
+          updateStatus={appUpdate.status}
+          openLink={openLink}
+          onMarkDonated={donation.markDonated}
+          onUnmarkDonated={donation.unmarkDonated}
+          onCheckUpdates={() => void appUpdate.checkAgain()}
+          onClose={() => setShowAboutPanel(false)}
+        />
+      )}
+
+      {/* Periodic donation nudge. Fires every 30-50 launches when the writer
+          isn't already a donor (see useDonationState). Non-modal: floats in
+          the bottom-right and the writer can keep typing through it. */}
+      {donation.shouldShowPrompt && (
+        <DonationPrompt
+          appOpenCount={donation.appOpenCount}
+          openLink={openLink}
+          onDismiss={donation.dismissPeriodicPrompt}
+          onMarkDonated={donation.markDonated}
+        />
+      )}
+    </>
+  );
+
   if (!currentProject) {
     return (
       <>
         {backendDownBanner}
+        {updateOverlays}
         <ProjectHome onProjectOpen={handleProjectOpen} />
       </>
     );
@@ -1236,6 +1401,7 @@ function App() {
     return (
       <>
         {backendDownBanner}
+        {updateOverlays}
         <ProfileBuilder
           project={currentProject}
           initialType={profileType}
@@ -1249,6 +1415,7 @@ function App() {
   return (
     <>
       {backendDownBanner}
+      {updateOverlays}
       <div className="flex h-screen overflow-hidden bg-bg-primary text-text-primary">
 
       {/* ── LEFT PANEL: Navigation Sidebar ─────────────────────────────── */}
@@ -1454,6 +1621,18 @@ function App() {
           >
             ⚙ Settings
           </button>
+          <button
+            onClick={() => setShowAboutPanel(true)}
+            className="mt-1 flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            title="About Storythread Studio: version, license, donations"
+          >
+            <span>ℹ About</span>
+            {/* Surface the donor flag here as a small heart so the writer
+                sees the acknowledgement every time they open the sidebar. */}
+            {donation.hasDonated && (
+              <span className="text-pink-400" title="Thank you for donating!">♥</span>
+            )}
+          </button>
         </div>
       </aside>
 
@@ -1579,6 +1758,26 @@ function App() {
           autoSplitRunning={autoSplitProgress !== null}
         />
 
+        {/* Smart Advisor toolbar -- only relevant for chapter editing.
+            Notes and project-home views skip this row. The bar runs the
+            three category passes (Readability/Structure/Context), which
+            return inline issues that decorate the manuscript directly. */}
+        {currentView === "editor" && currentChapter && (
+          <EditorAdvisorBar
+            view={editorView}
+            chapterText={chapterContent}
+            contextChips={contextChips}
+            modelId={currentProject?.default_model || null}
+            contentMode={currentProject?.content_mode_default ?? "general"}
+            projectPath={currentProject?.root_path ?? null}
+            issueCount={issueCount}
+            onClearIssues={() => setIssueCount(0)}
+            onAddIssues={(located: LocatedIssue[]) =>
+              setIssueCount(prev => prev + located.length)
+            }
+          />
+        )}
+
         {/* Editor area -- renders either a chapter or a note depending on currentView */}
         <div className="flex-1 overflow-hidden">
           {currentView === "notes" ? (
@@ -1665,39 +1864,9 @@ function App() {
             )}
           </div>
           <p className="mt-1 text-xs text-text-muted">
-            {chatCategory
-              ? `Focus: ${chatCategory}. Click tab again to return to general chat.`
-              : "General chat. Click a tab for structured feedback."}
+            General chat. For structured Readability, Structure, or Context
+            review, use the Smart Advisor toolbar above the manuscript.
           </p>
-        </div>
-
-        {/* Category tabs -- toggleable: click active tab to deselect (return to general chat) */}
-        <div className="border-b border-border px-4 py-2">
-          <div className="flex gap-1">
-            {(["readability", "structure", "context"] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => {
-                  if (chatCategory === tab) {
-                    // Toggle off: return to general chat (no clearing)
-                    setChatCategory(null);
-                  } else {
-                    // Switch categories: full reset so the new category starts
-                    // with a clean slate (same behavior as the Clear button).
-                    if (chatCategory !== null) {
-                      clearWritingCompanionChat();
-                    }
-                    setChatCategory(tab);
-                  }
-                }}
-                className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
-                  chatCategory === tab ? "bg-indigo-600 text-white" : "text-text-muted hover:text-text-primary"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Context indicator -- what text the AI will see + chapter toggle */}
@@ -1839,23 +2008,11 @@ function App() {
               <p className="text-sm font-medium text-text-muted">Writing Companion</p>
               <div className="w-full rounded border border-border bg-bg-primary p-2.5 text-left">
                 <p className="mb-1 text-xs font-medium text-text-muted">Try asking:</p>
-                {(chatCategory === null ? [
+                {[
                   "What do you think of this passage?",
                   "Help me brainstorm what happens next",
                   "How could I make this scene stronger?",
-                ] : chatCategory === "readability" ? [
-                  "Check this paragraph for grammar issues",
-                  "Is this passage too wordy?",
-                  "How can I make this clearer?",
-                ] : chatCategory === "structure" ? [
-                  "Does the dialogue sound natural?",
-                  "Is the POV consistent here?",
-                  "How's the pacing in this section?",
-                ] : [
-                  "Is this character behaving consistently?",
-                  "Does this match the setting we established?",
-                  "Check for lore contradictions",
-                ]).map(q => (
+                ].map(q => (
                   <button
                     key={q}
                     onClick={() => setChatInput(q)}
@@ -1991,6 +2148,24 @@ function App() {
         <ExportModal
           project={currentProject}
           onClose={() => setShowExportModal(false)}
+        />
+      )}
+
+      {/* Smart Advisor issue popover. Appears when the writer clicks an
+          inline issue highlight in the manuscript. Portals to body so it
+          floats above the editor and can position freely. The popover
+          updates the editor's StateField directly via dispatched effects
+          when the writer accepts or ignores an issue. */}
+      {issuePopover && editorView && (
+        <IssuePopover
+          view={editorView}
+          issueIds={issuePopover.issueIds}
+          contextChips={contextChips}
+          modelId={currentProject?.default_model || null}
+          contentMode={currentProject?.content_mode_default ?? "general"}
+          projectPath={currentProject?.root_path ?? null}
+          onIssueResolved={() => setIssueCount(prev => Math.max(0, prev - 1))}
+          onClose={() => setIssuePopover(null)}
         />
       )}
 

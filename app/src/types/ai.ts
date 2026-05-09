@@ -186,6 +186,86 @@ export interface EditorChatPayload {
 }
 
 
+// ── Editor Pass (Inline Overlay Feedback) ────────────────────────────────────
+// Mirrors EditorPassRequest / EditorPassResponse / EditorIssueModel in
+// backend/app/routers/ai.py. The pass endpoint is the JSON-output cousin of
+// editor-chat: it returns a list of issues anchored to verbatim quotes from
+// the chapter, which the frontend turns into clickable highlights in the
+// CodeMirror editor.
+
+// Top-level pass categories. Maps 1:1 to the three buttons in EditorAdvisorBar.
+export type IssueCategory = "readability" | "structure" | "context";
+
+// Severity drives the popover badge color. "praise" highlights what's working;
+// "issue" flags problems; "suggestion" proposes an improvement that isn't
+// strictly broken. Backend normalizes anything outside this set to "issue".
+export type IssueSeverity = "praise" | "issue" | "suggestion";
+
+// Subcategory keys per category. Must stay in sync with EDITOR_PASS_SUBCATEGORIES
+// in backend/app/ai/prompts.py -- adding a key on one side without the other
+// means either the toolbar shows a checkbox the AI never receives, or the AI
+// returns a category the frontend doesn't know how to color.
+export type ReadabilitySubcategory = "grammar" | "clarity" | "redundancy" | "descriptive";
+export type StructureSubcategory   = "dialogue" | "pov" | "tone" | "character" | "pacing";
+export type ContextSubcategory     = "character_consistency" | "relationships" | "setting" | "lore";
+export type IssueSubcategory       = ReadabilitySubcategory | StructureSubcategory | ContextSubcategory;
+
+// One AI-flagged issue. The frontend matches `quote` against the editor's
+// current document to determine where to render the highlight. If no exact
+// match is found at locate-time, the issue is silently dropped.
+export interface EditorIssue {
+  id:          string;             // server-generated UUID
+  category:    IssueSubcategory;   // e.g. "grammar", "character_consistency"
+  severity:    IssueSeverity;
+  quote:       string;             // verbatim chapter passage
+  explanation: string;
+  suggestions: string[];           // typically 1; "praise" entries may be []
+}
+
+export interface EditorPassRequest {
+  category:       IssueCategory;
+  subcategories:  IssueSubcategory[];   // empty = all subcategories
+  chapter_text:   string;
+  context_chips?: ContextChip[];
+  model_id?:      string;
+  content_mode?:  string;
+  project_path?:  string | null;
+}
+
+export interface EditorPassResponse {
+  issues:     EditorIssue[];
+  model_used: string;
+}
+
+// Quick-modifier names for the per-issue revise endpoint. Each name maps to
+// a short instruction the backend appends to the system prompt. "default" is
+// the open rewrite -- same intent, different phrasing, no other constraint.
+export type ReviseModifier =
+  | "default"
+  | "rewrite"
+  | "expand"
+  | "shorten"
+  | "describe"
+  | "rephrase"
+  | "add sensory detail"
+  | "change tone";
+
+export interface ReviseSuggestionRequest {
+  quote:              string;
+  current_suggestion: string;
+  modifier:           ReviseModifier;
+  context_chips?:     ContextChip[];
+  model_id?:          string;
+  content_mode?:      string;
+  project_path?:      string | null;
+}
+
+export interface ReviseSuggestionResponse {
+  suggestion: string;
+  model_used: string;
+}
+
+
 // ── Scene Summary ─────────────────────────────────────────────────────────────
 // Scene summaries are the per-scene counterpart to chapter summaries. Each
 // chapter is split on `---` horizontal rules; each resulting scene gets its

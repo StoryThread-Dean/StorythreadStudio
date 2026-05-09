@@ -9,8 +9,15 @@
 //   - The picture (React/Vite) is the UI rendered inside it
 //   - Plugins add extra capabilities to the frame (file dialogs, etc.)
 //
-// We don't need custom Rust commands yet -- our Python FastAPI backend
-// handles all business logic. This file mainly registers plugins.
+// Plugins registered here:
+//   - opener:  open URLs / files in the OS default app
+//   - dialog:  native folder/file picker dialogs
+//   - shell:   spawn the bundled Python backend as a sidecar (release only)
+//   - updater: check GitHub Releases for new versions on launch
+//   - process: let the JS side trigger app restart after an update installs
+
+#[cfg(not(debug_assertions))]
+use tauri_plugin_shell::ShellExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,6 +28,56 @@ pub fn run() {
         // Used on the Project Home screen when the user clicks "New Project"
         // or "Open Project" -- shows a real Windows folder browser dialog
         .plugin(tauri_plugin_dialog::init())
+        // shell plugin: required for sidecar spawning in release builds.
+        // In dev (npm run tauri dev) the backend is started manually via
+        // 'uv run uvicorn'; the sidecar binary doesn't even exist yet --
+        // it's produced by scripts/build-backend.ps1 at release time.
+        .plugin(tauri_plugin_shell::init())
+        // updater plugin: registers the JS bridge so the frontend can call
+        // .check() on launch and downloadAndInstall() when the writer
+        // approves an update. The signing public key + endpoint URL come
+        // from tauri.conf.json's "plugins.updater" block.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // process plugin: exposes 'relaunch' to JS so the update flow can
+        // restart the app cleanly after the installer replaces the binary.
+        .plugin(tauri_plugin_process::init())
+        .setup(|_app| {
+            // ── Sidecar spawn (release builds only) ─────────────────────
+            // Production builds embed a frozen Python+FastAPI exe (built by
+            // scripts/build-backend.ps1). We spawn it on app start so the
+            // React frontend can talk to localhost:8000 without the user
+            // having to install Python.
+            //
+            // Why guarded by #[cfg(not(debug_assertions))]?
+            //   In dev mode the sidecar binary doesn't exist (Tauri only
+            //   bundles it during `tauri build`). Trying to spawn it would
+            //   fail and noisily crash the dev startup. The dev workflow
+            //   has the developer running 'uv run uvicorn' in a separate
+            //   terminal; that's fine.
+            //
+            // Lifecycle: Tauri tracks spawned child processes and kills
+            // them when the app exits, so we don't have to stash the
+            // CommandChild handle for explicit cleanup.
+            #[cfg(not(debug_assertions))]
+            {
+                match _app.shell().sidecar("storythread-backend") {
+                    Ok(cmd) => {
+                        // Spawn fires the process and returns immediately.
+                        // We discard the (CommandChild, Receiver) pair --
+                        // we don't currently consume the backend's stdout
+                        // events. If we ever want to surface backend logs
+                        // in the app, this is where we'd plumb them.
+                        if let Err(e) = cmd.spawn() {
+                            eprintln!("Failed to spawn backend sidecar: {e}");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Sidecar 'storythread-backend' not found: {e}");
+                    }
+                }
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

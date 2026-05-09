@@ -18,6 +18,25 @@ app/dist-ssr/
 # Rust build artifacts -- large and fully reproducible via cargo build.
 app/src-tauri/target/
 
+# ── Backend bundling ──────────────────────────────────────────────────────────
+# PyInstaller intermediates: build/ and dist/ are throwaway, regenerated
+# every release. scripts/build-backend.ps1 copies the real .exe into
+# app/src-tauri/binaries/ where Tauri picks it up.
+backend/build/
+backend/dist/
+
+# Real PyInstaller-built sidecar binaries are 40-80 MB and reproducible.
+# We DO commit the zero-byte placeholder named below (so dev mode compiles
+# without requiring everyone to run build-backend first), but any larger
+# .exe in that folder is a build artifact and should NOT be committed.
+# Use `git add -f` if you ever need to override this.
+app/src-tauri/binaries/*-*.exe.bak
+
+# ── Release artifacts ────────────────────────────────────────────────────────
+# scripts/release.ps1 stages .msi, .sig, latest.json here before manual
+# upload to GitHub Releases. Nothing here belongs in git.
+release-artifacts/
+
 # ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*

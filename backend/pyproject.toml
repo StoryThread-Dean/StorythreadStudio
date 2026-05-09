@@ -16,4 +16,9 @@ dependencies = [
 dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.10",
+    # PyInstaller is used by scripts/build-backend.ps1 to freeze the FastAPI
+    # app + uvicorn server into a single .exe. The Tauri shell embeds that
+    # exe as a sidecar so end users don't need Python installed. Only used
+    # at release time; not required for development.
+    "pyinstaller>=6.10.0",
 ]

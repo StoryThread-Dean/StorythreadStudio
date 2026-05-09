@@ -276,6 +276,219 @@ def build_editor_chat_system_prompt(category: str, content_mode: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# EDITOR PASS SYSTEM PROMPTS
+# ══════════════════════════════════════════════════════════════════════════════
+# The editor-pass endpoint is the JSON-output cousin of editor-chat. It powers
+# the inline overlay system: the AI reads the chapter, returns a structured
+# list of issues (quote, category, explanation, suggestions), and the frontend
+# turns each issue into a clickable highlight in the manuscript.
+#
+# Why a separate prompt builder? editor-chat returns prose, editor-pass needs
+# strict JSON. Mixing those instructions in one prompt produces models that
+# either drift back to prose mid-response or wrap JSON in apologetic preamble
+# that breaks parsers. The two prompts share BASE_WRITING_ASSISTANT_CONTRACT
+# (importance labels, hidden traits, em dash rule) but their output rules and
+# category addenda diverge.
+
+# Subcategory definitions per top-level category. These map 1:1 to the
+# checkbox toggles in EditorAdvisorBar so the writer can scope a pass to
+# just the slices they want. The bullet text becomes part of the prompt
+# whenever that subcategory is active. Adding/removing a key here automatically
+# flows through to the toolbar (see app/src/components/editor/EditorAdvisorBar.tsx).
+EDITOR_PASS_SUBCATEGORIES: dict[str, dict[str, str]] = {
+    "readability": {
+        "grammar":     "Grammar and punctuation errors.",
+        "clarity":     "Unclear phrasing and ambiguous references.",
+        "redundancy":  "Redundant words, repeated ideas, filler.",
+        "descriptive": "Opportunities for richer or more specific descriptive language.",
+    },
+    "structure": {
+        "dialogue":  "Dialogue authenticity and distinct character voices.",
+        "pov":       "POV consistency and head-hopping.",
+        "tone":      "Tone and voice consistency across the passage.",
+        "character": "Character development through action and choice.",
+        "pacing":    "Pacing -- rushed transitions, dragging scenes, balance.",
+    },
+    "context": {
+        "character_consistency": "Character actions and speech vs. their established traits in attached profiles.",
+        "relationships":         "Interactions vs. established relationship dynamics in attached profiles.",
+        "setting":               "Setting descriptions vs. established locations in attached profiles.",
+        "lore":                  "Facts vs. established world-building in attached profiles.",
+    },
+}
+
+
+# JSON schema description embedded in the prompt. Sent verbatim so the model
+# sees the exact shape we expect. Keeping this as a string (rather than asking
+# the model to "return JSON") cut malformed responses dramatically in testing.
+_EDITOR_PASS_OUTPUT_FORMAT = """OUTPUT FORMAT (CRITICAL):
+Return a single JSON object, nothing else. No preamble, no apology, no markdown
+fence, no trailing commentary. The JSON must validate against this shape:
+
+{
+  "issues": [
+    {
+      "category": "<one of the active subcategory keys, e.g. grammar | clarity | redundancy | descriptive | dialogue | pov | tone | character | pacing | character_consistency | relationships | setting | lore>",
+      "severity": "praise" | "issue" | "suggestion",
+      "quote": "<the EXACT verbatim passage from the chapter that you are commenting on -- copy character-for-character so the frontend can locate it>",
+      "explanation": "<one to three sentences. WHY this is a problem (or worth praising), referencing the quoted text. No generic encouragement.>",
+      "suggestions": ["<a single rewritten version of the quote, preserving the writer's voice>"]
+    }
+  ]
+}
+
+RULES:
+- "quote" MUST be copied verbatim from the chapter. Do not paraphrase, do not
+  add or remove punctuation, do not normalize whitespace inside the quote.
+  The frontend uses this string to locate the passage in the editor; if it
+  doesn't match the chapter exactly, the highlight is dropped.
+- Aim for 3 to 12 issues per pass. Quality over quantity. Choose the issues
+  that would matter most to a careful reader.
+- For "praise" entries, the suggestions array can be an empty list [] -- there
+  is nothing to fix. For "issue" or "suggestion" entries, include exactly one
+  rewritten suggestion that preserves the writer's voice.
+- Do not invent story facts. Do not introduce new named characters, locations,
+  or events that are not already in the chapter or in attached profiles.
+- Em dashes are forbidden in EVERY string field. Use commas, periods, colons,
+  semicolons, or parentheses instead.
+- If the chapter is genuinely clean and you cannot find anything worth flagging
+  in the active subcategories, return {"issues": []}. Do not invent problems."""
+
+
+def _editor_pass_addendum(category: str, subcategories: list[str]) -> str:
+    """
+    Build the category-specific portion of the editor-pass system prompt.
+
+    Mirrors _editor_chat_addendum's structure but with two differences:
+    (1) the output format demands JSON, not prose, and (2) the subcategory
+    list scopes which slices the AI should look for. An empty subcategory
+    list is treated as "all of them" so the writer never accidentally gets
+    a no-op pass from forgetting to check a box.
+    """
+    cat_defs = EDITOR_PASS_SUBCATEGORIES.get(category, {})
+
+    # If the writer didn't pick subcategories, default to all of them. The
+    # AdvisorBar UI prevents this in normal use, but defending against it
+    # here means a malformed request still produces useful output.
+    active = subcategories if subcategories else list(cat_defs.keys())
+
+    # Filter the subcategory list to only ones we recognize for this category.
+    # An unknown key (e.g. typo or stale frontend) gets silently dropped
+    # rather than crashing the prompt builder.
+    active = [k for k in active if k in cat_defs]
+    if not active:
+        active = list(cat_defs.keys())
+
+    # Render the active subcategories as a bullet list the model can scan.
+    bullets = "\n".join(f"- {key}: {cat_defs[key]}" for key in active)
+
+    if category == "readability":
+        focus = "READABILITY -- comprehensive prose editing."
+    elif category == "structure":
+        focus = "STRUCTURE AND CRAFT -- structural and storytelling editing."
+    elif category == "context":
+        focus = (
+            "CONTEXT AND CONSISTENCY -- continuity review against attached profiles. "
+            "Lean into the profiles actively. When you flag a passage, name the "
+            "specific trait it conflicts with or supports and cite its importance "
+            "label in brackets. Hidden traits remain off-limits to name directly: "
+            "describe the behavior, not the trait."
+        )
+    else:
+        # Unknown category -- shouldn't happen via the UI, but degrade
+        # gracefully rather than 500 the request.
+        focus = "GENERAL PROSE REVIEW."
+
+    return (
+        f"YOUR FOCUS: {focus}\n\n"
+        f"ACTIVE SUBCATEGORIES (only flag issues that fall into one of these):\n"
+        f"{bullets}\n\n"
+        f"For each issue you flag, set the 'category' field to the exact "
+        f"subcategory key from the list above (e.g. 'grammar', not 'Grammar' or "
+        f"'grammar issue'). The frontend uses the key to color and group the "
+        f"highlight.\n\n"
+        + _EDITOR_PASS_OUTPUT_FORMAT
+    )
+
+
+def build_editor_pass_system_prompt(
+    category:      str,
+    subcategories: list[str],
+    content_mode:  str,
+) -> str:
+    """
+    Build the full system prompt for the editor pass (inline overlay feature).
+
+    Same structure as build_editor_chat_system_prompt -- base contract +
+    content mode instruction + category addendum -- but the addendum demands
+    structured JSON output and is scoped to the writer's chosen subcategories.
+
+    Story text, context chips, and chapter content are NOT included here;
+    they go into a user message built by _build_materials_message() in ai.py.
+    """
+    parts = [BASE_WRITING_ASSISTANT_CONTRACT]
+
+    mode_block = content_mode_instruction(content_mode)
+    if mode_block:
+        parts.append(mode_block)
+
+    parts.append(_editor_pass_addendum(category, subcategories))
+
+    return "\n".join(parts)
+
+
+def build_revise_suggestion_system_prompt(modifier: str, content_mode: str) -> str:
+    """
+    System prompt for the per-issue 'revise this suggestion' endpoint.
+
+    The user provides: the original quote, the current suggestion, the
+    modifier name (Rewrite / Expand / Shorten / Describe / Rephrase /
+    Add Sensory Detail / Change Tone / Default). This prompt tells the AI
+    to produce ONE new alternative suggestion driven by that modifier,
+    treating the modifier as a creative transformation rather than a fix.
+
+    Output is plain prose -- a single revised passage -- no JSON, no
+    explanation, no preamble. The endpoint wraps it back into the issue's
+    suggestions array on the frontend.
+    """
+    parts = [BASE_WRITING_ASSISTANT_CONTRACT]
+
+    mode_block = content_mode_instruction(content_mode)
+    if mode_block:
+        parts.append(mode_block)
+
+    # Per-modifier guidance. Keeps each transformation distinct so 'Shorten'
+    # doesn't accidentally also rewrite voice and 'Change Tone' doesn't
+    # collapse the passage's length.
+    modifier_guidance = {
+        "default":            "Produce one alternative version of the suggestion. Same intent, different phrasing.",
+        "rewrite":            "Rewrite from scratch in the writer's voice. Same meaning, fresh sentence structure.",
+        "expand":             "Expand the suggestion. Add 1 to 3 sentences of detail, sensory grounding, or interiority that fit naturally.",
+        "shorten":            "Shorten the suggestion. Cut filler, combine clauses, preserve every load-bearing detail.",
+        "describe":           "Add concrete description. Replace vague language with specific, observable detail.",
+        "rephrase":           "Rephrase only. Same length, same meaning, different sentence rhythm or word choice.",
+        "add sensory detail": "Add a specific sensory beat (sight, sound, smell, touch, taste) without inflating the passage.",
+        "change tone":        "Shift the emotional tone of the passage. Keep the events, change the atmosphere or mood.",
+    }
+    key = (modifier or "default").strip().lower()
+    instruction = modifier_guidance.get(key, modifier_guidance["default"])
+
+    parts.append(
+        "YOUR ROLE: revise a single suggestion the writer is reviewing.\n\n"
+        f"MODIFIER: {key.upper()}\n"
+        f"{instruction}\n\n"
+        "OUTPUT RULES:\n"
+        "- Return ONLY the revised passage as plain prose. No JSON, no preamble, "
+        "no markdown fence, no explanation.\n"
+        "- Preserve the writer's voice. Do not introduce new named entities or "
+        "story facts that were not present in the original passage.\n"
+        "- Do not include em dashes in the output."
+    )
+
+    return "\n".join(parts)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PROFILE CHAT SYSTEM PROMPTS
 # ══════════════════════════════════════════════════════════════════════════════
 # These build the system prompt for the Profile Builder chat panel.

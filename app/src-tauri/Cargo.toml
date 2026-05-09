@@ -1,9 +1,11 @@
 [package]
-name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+name = "storythread-studio"
+version = "1.0.0"
+description = "Local-first Markdown writing app for fiction writers, with AI review tools."
+authors = ["Dean Peterson"]
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/dataguydpeterson-cmyk/StorythreadStudio"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -23,6 +25,15 @@ tauri-plugin-opener = "2"
 # dialog plugin: gives us native OS folder/file picker dialogs
 # without this, the app would have no way to let the user browse for a folder
 tauri-plugin-dialog = "2"
+# shell plugin: required to spawn the bundled FastAPI backend as a sidecar
+# in release builds. Dev builds skip this and use a manually-launched uvicorn.
+tauri-plugin-shell = "2"
+# updater plugin: checks GitHub Releases on launch for new versions and
+# (with explicit user approval) downloads + installs them in-place.
+tauri-plugin-updater = "2"
+# process plugin: lets the JS layer trigger app restart after an update
+# is installed. Without it the writer would have to manually restart.
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

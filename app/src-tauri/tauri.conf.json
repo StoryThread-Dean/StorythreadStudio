@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Storythread Studio",
-  "version": "0.1.0",
-  "identifier": "com.storythread.app",
+  "version": "1.0.0",
+  "identifier": "studio.storythread.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -34,6 +34,20 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "externalBin": [
+      "binaries/storythread-backend"
+    ],
+    "resources": []
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/dataguydpeterson-cmyk/StorythreadStudio/releases/latest/download/latest.json"
+      ],
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEwN0JENzY0RkM4OTBFMjkKUldRcERvbjhaTmQ3b0lneVJ4b1FUU3pWN1FSZ2IwV1FyaUhjbVIzY0tsUFIybldzcVpFNDFrL3kK"
+    }
   }
 }
