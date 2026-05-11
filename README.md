@@ -19,7 +19,7 @@ A local-first Markdown writing app for fiction writers. The writer does the draf
 ## Requirements
 
 - Windows 10 or 11
-- An [OpenRouter](https://openrouter.ai/) API key for AI features ([It's fairly easy to set up](https://www.youtube.com/watch?v=VvJvJ0uXiVQ))
+- An [OpenRouter](https://openrouter.ai/) API key for AI features ([It's fairly easy to set up](https://www.youtube.com/watch?v=nhwWwVN22nk))
 - ~60 MB free disk space for the installer
 
 ## Install
