@@ -1489,7 +1489,8 @@ async def editor_chat(request: EditorChatRequest):
 class EditorPassRequest(BaseModel):
     category:      str                          # "readability" | "structure" | "context"
     subcategories: list[str] = []               # subcategory keys; empty = all of them
-    chapter_text:  str                          # the full chapter the AI should review
+    chapter_text:  str                          # the passage the AI should review (may be whole chapter or just a selection)
+    is_selection:  bool = False                 # True when chapter_text is a writer-selected range, not the whole chapter
     context_chips: list[ContextChip] = []
     model_id:      str | None = None
     content_mode:  str = "general"
@@ -1619,14 +1620,18 @@ async def editor_pass(request: EditorPassRequest):
                    f"Expected one of: {list(EDITOR_PASS_SUBCATEGORIES.keys())}.",
         )
 
-    # Cap the chapter length the same way editor-chat does for full-chapter
-    # mode. Beyond this size the request is likely to time out or blow the
-    # model's context window; force the writer to trim before retrying.
-    if len(request.chapter_text) > 100_000:
+    # Cap the input length. Selection mode gets a tighter cap (30K) because
+    # the writer is explicitly scoping the pass; if a selection runs that
+    # long it's almost certainly an accident. Full-chapter mode keeps the
+    # 100K cap that matches editor-chat. Beyond either cap the request is
+    # likely to time out or blow the model's context window.
+    max_chars = 30_000 if request.is_selection else 100_000
+    if len(request.chapter_text) > max_chars:
+        mode_label = "selection" if request.is_selection else "chapter"
         raise HTTPException(
             status_code=400,
-            detail=f"The chapter is too long ({len(request.chapter_text):,} chars, "
-                   f"max 100,000). Try a shorter passage or split the chapter.",
+            detail=f"The {mode_label} is too long ({len(request.chapter_text):,} chars, "
+                   f"max {max_chars:,}). Try a shorter passage or split the chapter.",
         )
 
     # Build the system prompt + materials user message. This re-uses the
@@ -1644,7 +1649,7 @@ async def editor_pass(request: EditorPassRequest):
 
     materials = _build_materials_message(
         text_content    = request.chapter_text,
-        is_full_chapter = True,
+        is_full_chapter = not request.is_selection,
         context_chips   = request.context_chips,
     )
     messages = [materials]

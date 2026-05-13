@@ -225,7 +225,8 @@ export interface EditorIssue {
 export interface EditorPassRequest {
   category:       IssueCategory;
   subcategories:  IssueSubcategory[];   // empty = all subcategories
-  chapter_text:   string;
+  chapter_text:   string;               // selected passage or full chapter depending on is_selection
+  is_selection?:  boolean;              // true when chapter_text is a writer selection rather than whole chapter
   context_chips?: ContextChip[];
   model_id?:      string;
   content_mode?:  string;

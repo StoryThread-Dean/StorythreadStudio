@@ -342,8 +342,18 @@ RULES:
   add or remove punctuation, do not normalize whitespace inside the quote.
   The frontend uses this string to locate the passage in the editor; if it
   doesn't match the chapter exactly, the highlight is dropped.
-- Aim for 3 to 12 issues per pass. Quality over quantity. Choose the issues
-  that would matter most to a careful reader.
+- Be thorough. Surface EVERY meaningful issue you find in the active
+  subcategories. Do not artificially cap the list.
+  * A polished, near-final passage may legitimately yield 0 to 5 issues.
+  * A typical revision-stage chapter usually yields 10 to 25 issues.
+  * A raw first draft can easily yield 30 to 50 issues across the active
+    subcategories. That is normal and expected.
+  Quality is a tiebreaker on minor cosmetic flags, NOT a numeric cap.
+  Do not stop at 10 or 12 if you are still finding real problems.
+- That said, do not pad the list. Skip an issue if it is genuinely trivial
+  (a single missing comma in dialogue tags, a minor stylistic preference
+  with no concrete improvement). Every entry should give the writer
+  something actionable.
 - For "praise" entries, the suggestions array can be an empty list [] -- there
   is nothing to fix. For "issue" or "suggestion" entries, include exactly one
   rewritten suggestion that preserves the writer's voice.

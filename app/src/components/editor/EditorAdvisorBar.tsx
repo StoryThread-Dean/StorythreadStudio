@@ -133,6 +133,20 @@ export function EditorAdvisorBar({
   // overlapping requests.
   const [running, setRunning] = useState<IssueCategory | null>(null);
 
+  // Whether the running pass is scoped to a selection (vs the whole chapter).
+  // Captured at click time so the progress text stays accurate even if the
+  // writer changes their selection while the request is in flight.
+  const [runningIsSelection, setRunningIsSelection] = useState(false);
+
+  // Live snapshot of the editor's current selection. Polled from the view
+  // (CodeMirror doesn't expose a React-friendly subscription out of the box
+  // without modifying the editor's extension array, which lives elsewhere).
+  // null = no qualifying selection; the pass runs on the whole chapter.
+  // We require at least 5 words to count as a real scoped selection so a
+  // stray double-click or single-word highlight doesn't accidentally narrow
+  // the pass.
+  const [selectionInfo, setSelectionInfo] = useState<{ text: string; words: number } | null>(null);
+
   // Seconds elapsed since the current pass started. Drives the rotating
   // status text on the right side. Held in state (not a ref) because the
   // status string is derived from this value and needs to re-render.
@@ -185,6 +199,43 @@ export function EditorAdvisorBar({
   useEffect(() => { saveSubs("context",     contextSubs);     }, [contextSubs]);
 
 
+  // Poll the editor's selection so the scope pill updates live. We sample
+  // every 200ms (cheap; reads two numbers and possibly slices the doc) and
+  // only update React state when the selection range actually changed. This
+  // avoids the heavier CodeMirror-extension wiring needed to subscribe via
+  // an updateListener, which would require modifying MarkdownEditor.tsx.
+  useEffect(() => {
+    if (!view) {
+      setSelectionInfo(null);
+      return;
+    }
+    let lastFrom = -1;
+    let lastTo = -1;
+    function poll() {
+      if (!view) return;
+      const sel = view.state.selection.main;
+      if (sel.from === lastFrom && sel.to === lastTo) return;
+      lastFrom = sel.from;
+      lastTo   = sel.to;
+      if (sel.empty || sel.from === sel.to) {
+        setSelectionInfo(null);
+        return;
+      }
+      const text = view.state.sliceDoc(sel.from, sel.to);
+      const words = countWords(text);
+      if (words < 5) {
+        // Too small to be intentional scoping. Treat as no selection.
+        setSelectionInfo(null);
+        return;
+      }
+      setSelectionInfo({ text, words });
+    }
+    poll();
+    const id = window.setInterval(poll, 200);
+    return () => window.clearInterval(id);
+  }, [view]);
+
+
   // Toggle one subcategory key inside a list. Generic so the same helper
   // works for all three categories.
   function toggleSub<T extends IssueSubcategory>(key: T, list: T[], setList: (v: T[]) => void) {
@@ -219,14 +270,30 @@ export function EditorAdvisorBar({
       return;
     }
 
+    // Decide scope at click time (not from polled state) so we use the
+    // selection exactly as it stands the moment the writer hit the button.
+    // Re-applies the 5-word floor in case the polled value is stale.
+    const sel = view.state.selection.main;
+    let passText  = chapterText;
+    let isSelection = false;
+    if (!sel.empty && sel.from !== sel.to) {
+      const sliced = view.state.sliceDoc(sel.from, sel.to);
+      if (countWords(sliced) >= 5) {
+        passText    = sliced;
+        isSelection = true;
+      }
+    }
+
     setRunning(category);
+    setRunningIsSelection(isSelection);
     setError(null);
     setOpenMenu(null);
 
     const payload: EditorPassRequest = {
       category,
       subcategories: subs,
-      chapter_text:  chapterText,
+      chapter_text:  passText,
+      is_selection:  isSelection,
       context_chips: contextChips,
       model_id:      modelId ?? undefined,
       content_mode:  contentMode,
@@ -398,10 +465,30 @@ export function EditorAdvisorBar({
         {running ? (
           <span className="flex items-center gap-1.5 text-[11px] italic text-indigo-300">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
-            {progressText(running, elapsed)}
+            {progressText(running, elapsed, runningIsSelection)}
           </span>
         ) : (
           <>
+            {/* Scope pill: tells the writer what the next pass will cover.
+                Shows "selection (N words)" when there's a qualifying
+                selection, otherwise "full chapter". Hidden while a pass
+                is running -- the progress text covers that case. */}
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                selectionInfo
+                  ? "border-amber-700 bg-amber-900/20 text-amber-200"
+                  : "border-border bg-bg-elev text-faint"
+              }`}
+              title={
+                selectionInfo
+                  ? "Smart Advisor will run on your current selection."
+                  : "No selection. Smart Advisor will run on the whole chapter."
+              }
+            >
+              {selectionInfo
+                ? `selection (${selectionInfo.words} ${selectionInfo.words === 1 ? "word" : "words"})`
+                : "full chapter"}
+            </span>
             {issueCount > 0 && (
               <span className="rounded-full border border-indigo-700 bg-indigo-900/30 px-2 py-0.5 text-[10px] text-indigo-200">
                 {issueCount} {issueCount === 1 ? "issue" : "issues"}
@@ -436,7 +523,11 @@ export function EditorAdvisorBar({
 // alive. The phases are honest in the sense that the model genuinely DOES
 // read the chapter, then identify candidate issues, then format them --
 // our wording just gives that hidden process a face.
-function progressText(category: IssueCategory, elapsedSeconds: number): string {
+function progressText(
+  category: IssueCategory,
+  elapsedSeconds: number,
+  isSelection: boolean,
+): string {
   // Display label for the category. Short so the right-side area doesn't
   // wrap the toolbar onto a second row.
   const label =
@@ -444,8 +535,22 @@ function progressText(category: IssueCategory, elapsedSeconds: number): string {
     category === "structure"   ? "structure" :
                                  "context";
 
-  if (elapsedSeconds < 3) return "Reading the chapter...";
+  // Scope-aware first phase. After the read step the wording is identical
+  // whether we're on a selection or a whole chapter -- the AI's work past
+  // that point looks the same to the writer.
+  if (elapsedSeconds < 3) return isSelection ? "Reading the selection..." : "Reading the chapter...";
   if (elapsedSeconds < 8) return "Looking for issues...";
   if (elapsedSeconds < 18) return `Reviewing for ${label}...`;
   return "Finishing up...";
+}
+
+
+// Lightweight word counter for the scope pill. Splits on whitespace and
+// drops empty tokens. Doesn't try to be Unicode-clever about apostrophes
+// or hyphenation -- a couple of words off in either direction does not
+// affect the 5-word floor used to qualify a selection.
+function countWords(text: string): number {
+  if (!text) return 0;
+  const tokens = text.trim().split(/\s+/);
+  return tokens.filter(Boolean).length;
 }
