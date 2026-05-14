@@ -77,12 +77,21 @@ OK "Tag v$Version is available"
 
 Step "Bumping versions to $Version"
 
+# UTF-8 encoder WITHOUT a BOM. Windows PowerShell 5.1's `Set-Content -Encoding
+# UTF8` writes a UTF-8 BOM, which Vite's enhanced-resolve cannot parse on
+# package.json -- the production build fails with "Unexpected token '', '{...'"
+# as soon as the manifest has the BOM bytes (EF BB BF) at the start. Using
+# [System.IO.File]::WriteAllText with this encoding produces a BOM-less file
+# that every downstream tool (npm, cargo, vite, tauri) parses cleanly.
+$noBomUtf8 = New-Object System.Text.UTF8Encoding($false)
+
 # package.json: read+modify+write the JSON in place. Avoids needing jq on
 # Windows; keeps the existing key order intact.
 $packageJsonPath = Join-Path $repoRoot "app\package.json"
 $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
 $packageJson.version = $Version
-$packageJson | ConvertTo-Json -Depth 32 | Set-Content $packageJsonPath -Encoding UTF8
+$packageJsonText = $packageJson | ConvertTo-Json -Depth 32
+[System.IO.File]::WriteAllText($packageJsonPath, $packageJsonText, $noBomUtf8)
 OK "app/package.json"
 
 # tauri.conf.json: same pattern as above. Tauri's config also has a top-level
@@ -90,7 +99,8 @@ OK "app/package.json"
 $tauriConfPath = Join-Path $repoRoot "app\src-tauri\tauri.conf.json"
 $tauriConf = Get-Content $tauriConfPath -Raw | ConvertFrom-Json
 $tauriConf.version = $Version
-$tauriConf | ConvertTo-Json -Depth 32 | Set-Content $tauriConfPath -Encoding UTF8
+$tauriConfText = $tauriConf | ConvertTo-Json -Depth 32
+[System.IO.File]::WriteAllText($tauriConfPath, $tauriConfText, $noBomUtf8)
 OK "app/src-tauri/tauri.conf.json"
 
 # Cargo.toml: TOML doesn't have a built-in PowerShell parser, so we use a
@@ -99,7 +109,7 @@ OK "app/src-tauri/tauri.conf.json"
 $cargoTomlPath = Join-Path $repoRoot "app\src-tauri\Cargo.toml"
 $cargoToml = Get-Content $cargoTomlPath -Raw
 $cargoToml = $cargoToml -replace '(?m)^version\s*=\s*".*"$', "version = `"$Version`""
-Set-Content $cargoTomlPath $cargoToml -Encoding UTF8
+[System.IO.File]::WriteAllText($cargoTomlPath, $cargoToml, $noBomUtf8)
 OK "app/src-tauri/Cargo.toml"
 
 
@@ -139,12 +149,17 @@ $nsisDir   = Join-Path $bundleDir "nsis"
 
 # Tauri produces .msi (Windows Installer) and/or .exe (NSIS) depending on
 # config. Prefer the .msi when both exist; fall back to .exe.
+#
+# Filter by $Version so we never pick up a leftover bundle from a previous
+# release. Tauri does NOT clean the bundle/ directory between builds, so
+# without this filter `Select-Object -First 1` would pick the alphabetically
+# earliest file (e.g. v1.0.0 wins over v1.0.1).
 $installer = $null
 if (Test-Path $msiDir) {
-    $installer = Get-ChildItem $msiDir -Filter "*.msi" | Select-Object -First 1
+    $installer = Get-ChildItem $msiDir -Filter "*${Version}*.msi" | Select-Object -First 1
 }
 if (-not $installer -and (Test-Path $nsisDir)) {
-    $installer = Get-ChildItem $nsisDir -Filter "*-setup.exe" | Select-Object -First 1
+    $installer = Get-ChildItem $nsisDir -Filter "*${Version}*-setup.exe" | Select-Object -First 1
 }
 if (-not $installer) {
     Write-Error "Could not find a built installer in $bundleDir. Check the Tauri build output."
