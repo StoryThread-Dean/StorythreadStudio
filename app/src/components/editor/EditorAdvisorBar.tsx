@@ -114,12 +114,20 @@ export interface EditorAdvisorBarProps {
   onClearIssues: () => void;
   // Notifies App.tsx of new issues so it can update its own count + caches.
   onAddIssues:   (issues: LocatedIssue[]) => void;
+  // Number of profile-type chips (character / relationship / location / lore)
+  // currently attached. Drives the Context attach-profiles button and the
+  // (i) info hint that vanishes once at least one profile is present.
+  profileChipCount:      number;
+  // Opens the AI panel's chip picker so the writer can attach profiles
+  // without leaving the Smart Advisor bar.
+  onOpenProfilePicker:   () => void;
 }
 
 
 export function EditorAdvisorBar({
   view, chapterText, contextChips, modelId, contentMode, projectPath,
   issueCount, onClearIssues, onAddIssues,
+  profileChipCount, onOpenProfilePicker,
 }: EditorAdvisorBarProps) {
 
   // The category whose subcategory menu is currently open. null = no menu.
@@ -127,6 +135,10 @@ export function EditorAdvisorBar({
   // and a writer running a pass doesn't typically need to compare across
   // categories.
   const [openMenu, setOpenMenu] = useState<IssueCategory | null>(null);
+
+  // Whether the Context (i) info popover is showing. Cleared by clicking
+  // outside the bar, same as openMenu.
+  const [showContextInfo, setShowContextInfo] = useState(false);
 
   // The category whose pass is currently running. null = idle. Drives the
   // disabled state on every button so the writer can't spam-trigger
@@ -178,19 +190,21 @@ export function EditorAdvisorBar({
     () => loadSubs<ContextSubcategory>("context", CONTEXT_SUBS.map(s => s.key)),
   );
 
-  // Click-outside dismissal for the open menu.
+  // Click-outside dismissal for the open menu and the context info popover.
+  // Both share the same handler so only one listener is ever active.
   const barRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (openMenu == null) return;
+    if (openMenu == null && !showContextInfo) return;
     function onClick(e: MouseEvent) {
       if (!barRef.current) return;
       if (!barRef.current.contains(e.target as Node)) {
         setOpenMenu(null);
+        setShowContextInfo(false);
       }
     }
     window.addEventListener("mousedown", onClick);
     return () => window.removeEventListener("mousedown", onClick);
-  }, [openMenu]);
+  }, [openMenu, showContextInfo]);
 
 
   // Persist subcategory changes to localStorage.
@@ -446,14 +460,71 @@ export function EditorAdvisorBar({
         color="border-violet-600 text-violet-300"
       />
 
-      <CategoryButton
-        category="context"
-        subs={contextSubs}
-        allSubs={CONTEXT_SUBS as { key: IssueSubcategory; label: string; help: string }[]}
-        setSubs={(v) => setContextSubs(v as ContextSubcategory[])}
-        label="Context"
-        color="border-teal-600 text-teal-300"
-      />
+      {/* Context group: category button + profile attach + (i) info hint.
+          Context is the only pass that depends on external data (profiles)
+          so it gets extra affordances to remind the writer to attach them. */}
+      <div className="flex items-center gap-1">
+        <CategoryButton
+          category="context"
+          subs={contextSubs}
+          allSubs={CONTEXT_SUBS as { key: IssueSubcategory; label: string; help: string }[]}
+          setSubs={(v) => setContextSubs(v as ContextSubcategory[])}
+          label="Context"
+          color="border-teal-600 text-teal-300"
+        />
+
+        {/* Attach / profile-count button. Shows "Attach Profiles" when none
+            are attached, switching to a count pill once at least one is
+            present. Always clickable so the writer can add more or refresh. */}
+        {profileChipCount === 0 ? (
+          <button
+            onClick={onOpenProfilePicker}
+            disabled={running != null}
+            className="rounded border border-teal-700 bg-teal-900/20 px-2 py-0.5 text-[10px] text-teal-300 hover:bg-teal-800/40 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Attach character, relationship, location, or lore profiles for Context to use"
+          >
+            Attach Profiles
+          </button>
+        ) : (
+          <button
+            onClick={onOpenProfilePicker}
+            disabled={running != null}
+            className="rounded border border-teal-800 bg-teal-900/10 px-2 py-0.5 text-[10px] text-teal-400 hover:bg-teal-700/20 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Add or refresh attached profiles"
+          >
+            {profileChipCount} {profileChipCount === 1 ? "profile" : "profiles"}
+          </button>
+        )}
+
+        {/* (i) info popover -- only shown when no profiles are attached.
+            Disappears once the writer has attached at least one profile,
+            since Context will then have something to work with. */}
+        {profileChipCount === 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setShowContextInfo(prev => !prev)}
+              className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-teal-800 text-[9px] font-bold text-teal-600 hover:border-teal-600 hover:text-teal-300"
+              title="Why does Context need profiles?"
+              aria-label="Context help"
+            >
+              i
+            </button>
+            {showContextInfo && (
+              <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded border border-teal-800 bg-bg-panel p-2.5 shadow-lg">
+                <p className="mb-1 text-[11px] font-semibold text-teal-300">Context needs profiles</p>
+                <p className="text-[11px] text-text-muted">
+                  Context checks the chapter against your attached character,
+                  relationship, location, and lore profiles. Without profiles
+                  there is nothing to compare and very few issues will surface.
+                </p>
+                <p className="mt-1.5 text-[11px] text-teal-400">
+                  Click <span className="font-semibold">Attach Profiles</span> to get started.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Right-side area. While a pass is in flight, shows rotating status
           text (Reading chapter / Looking for issues / etc.) so the writer

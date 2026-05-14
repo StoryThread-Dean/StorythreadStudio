@@ -1778,6 +1778,12 @@ function App() {
             onAddIssues={(located: LocatedIssue[]) =>
               setIssueCount(prev => prev + located.length)
             }
+            profileChipCount={contextChips.filter(c =>
+              ["character","relationship","location","lore",
+               "series_character","series_relationship","series_location","series_lore"]
+              .includes(c.type)
+            ).length}
+            onOpenProfilePicker={() => setShowChipPicker(true)}
           />
         )}
 

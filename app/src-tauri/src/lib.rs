@@ -17,7 +17,24 @@
 //   - process: let the JS side trigger app restart after an update installs
 
 #[cfg(not(debug_assertions))]
+use std::sync::Mutex;
+
+#[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
+
+#[cfg(not(debug_assertions))]
+use tauri_plugin_shell::process::CommandChild;
+
+// Holds the running backend sidecar handle so it stays alive for the entire
+// app lifetime. Stored in Tauri's managed state (think: app-wide global) so
+// it isn't dropped when the setup closure returns.
+//
+// Why Mutex<Option<...>>?
+//   Tauri's managed state must be Send + Sync so it can be accessed from any
+//   thread. Mutex gives us safe interior mutability. Option lets us "take"
+//   the child out when we need to kill it on exit.
+#[cfg(not(debug_assertions))]
+struct BackendSidecar(Mutex<Option<CommandChild>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -54,31 +71,34 @@ pub fn run() {
             //   fail and noisily crash the dev startup. The dev workflow
             //   has the developer running 'uv run uvicorn' in a separate
             //   terminal; that's fine.
-            //
-            // Lifecycle: Tauri tracks spawned child processes and kills
-            // them when the app exits, so we don't have to stash the
-            // CommandChild handle for explicit cleanup.
             #[cfg(not(debug_assertions))]
             {
+                // Register the state container first so we can store the
+                // child handle into it right after spawning.
+                _app.manage(BackendSidecar(Mutex::new(None)));
+
                 match _app.shell().sidecar("storythread-backend") {
                     Ok(cmd) => {
-                        // Spawn returns (Receiver<CommandEvent>, CommandChild).
-                        // We MUST drain the receiver: Tauri pipes the child's
-                        // stdout/stderr through it, and if nothing reads, the
-                        // OS pipe buffer (~4KB on Windows) fills up and the
-                        // child blocks on its next write. uvicorn's startup
-                        // logs are enough to fill it, so without draining the
-                        // backend hangs forever before binding to port 8000.
                         match cmd.spawn() {
-                            Ok((mut rx, _child)) => {
-                                // Detached drain task: discards every event
-                                // until the child exits and the channel
-                                // closes. Tauri kills the child on app exit,
-                                // which closes the channel, which ends this
-                                // loop. No explicit cleanup required.
+                            Ok((mut rx, child)) => {
+                                // Store the CommandChild handle in managed state.
+                                // This is the critical fix: without storing it the
+                                // handle is dropped when setup() returns, the process
+                                // becomes an orphan, and port 8000 stays open after
+                                // the app window closes.
+                                let state = _app.state::<BackendSidecar>();
+                                *state.0.lock().unwrap() = Some(child);
+
+                                // Detached drain task: discards every event until
+                                // the child exits and the channel closes. We MUST
+                                // drain the receiver -- the OS pipe buffer (~4 KB on
+                                // Windows) fills up quickly (uvicorn's startup logs
+                                // alone are enough), and a full buffer causes the
+                                // child to block on its next write before it ever
+                                // binds to port 8000.
                                 tauri::async_runtime::spawn(async move {
                                     while rx.recv().await.is_some() {
-                                        // discard
+                                        // discard stdout/stderr events
                                     }
                                 });
                             }
@@ -93,6 +113,29 @@ pub fn run() {
                 }
             }
             Ok(())
+        })
+        // ── Sidecar cleanup on window close ─────────────────────────────
+        // When the main (and only) window is destroyed, explicitly kill the
+        // backend sidecar. This is the companion to the fix above: storing
+        // the handle keeps the process alive; calling kill() here ensures it
+        // stops when the writer closes the app.
+        //
+        // Why WindowEvent::Destroyed rather than CloseRequested?
+        //   CloseRequested fires before the window is gone and can be
+        //   cancelled (e.g. by an unsaved-changes dialog). Destroyed fires
+        //   exactly once, after the window is fully gone -- the right moment
+        //   to release OS resources like the port.
+        .on_window_event(|_window, _event| {
+            #[cfg(not(debug_assertions))]
+            if let tauri::WindowEvent::Destroyed = _event {
+                if let Some(state) = _window.app_handle().try_state::<BackendSidecar>() {
+                    if let Ok(mut guard) = state.0.lock() {
+                        if let Some(child) = guard.take() {
+                            let _ = child.kill();
+                        }
+                    }
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
