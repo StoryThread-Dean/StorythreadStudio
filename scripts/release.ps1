@@ -182,33 +182,52 @@ OK "Signature: $sigPath"
 
 Step "Generating latest.json"
 
-# Pull the [Unreleased] section out of CHANGELOG.md and use it as release
-# notes. Falls back to a generic message if the section is empty or missing.
+# Pull the [<Version>] section out of CHANGELOG.md and use it as release
+# notes. Prefers the tagged section (e.g. [1.0.1]) since that's what's
+# moved into place before cutting the release. Falls back to [Unreleased]
+# for forward-compatibility, then to a generic message.
+#
+# Regex notes:
+# - (?m)^## anchors the heading to the start of a line so we don't match
+#   inline references to "## [Unreleased]" inside the file's preamble
+#   paragraph. (We hit this bug in v1.0.1: the preamble text mentions
+#   "## [Unreleased]" inside backticks, and the un-anchored regex
+#   captured everything from that mention through the next real heading.)
 $changelogPath = Join-Path $repoRoot "CHANGELOG.md"
 $notesBody = "Bug fixes and improvements."
 if (Test-Path $changelogPath) {
     $changelogText = Get-Content $changelogPath -Raw
-    $unreleasedMatch = [regex]::Match(
-        $changelogText,
-        '##\s*\[Unreleased\]\s*(.*?)(?=\n##\s|\z)',
-        [Text.RegularExpressions.RegexOptions]::Singleline
-    )
-    if ($unreleasedMatch.Success) {
-        $extracted = $unreleasedMatch.Groups[1].Value.Trim()
-        # Drop empty subsection headers (### Added / Changed / Fixed with no body)
+    $versionPattern = '(?ms)^## \[' + [regex]::Escape($Version) + '\][^\n]*\n(.*?)(?=\n## \[|\z)'
+    $versionMatch = [regex]::Match($changelogText, $versionPattern)
+    if ($versionMatch.Success) {
+        $extracted = $versionMatch.Groups[1].Value.Trim()
         $extracted = $extracted -replace '(?m)^###\s+\w+\s*\r?\n\s*(?=\r?\n)', ''
-        if ($extracted) {
-            $notesBody = $extracted.Trim()
+        if ($extracted) { $notesBody = $extracted.Trim() }
+    } else {
+        # Fall back to [Unreleased] only if no version section exists yet.
+        $unreleasedMatch = [regex]::Match(
+            $changelogText,
+            '(?ms)^## \[Unreleased\][^\n]*\n(.*?)(?=\n## \[|\z)'
+        )
+        if ($unreleasedMatch.Success) {
+            $extracted = $unreleasedMatch.Groups[1].Value.Trim()
+            $extracted = $extracted -replace '(?m)^###\s+\w+\s*\r?\n\s*(?=\r?\n)', ''
+            if ($extracted) { $notesBody = $extracted.Trim() }
         }
     }
 }
 
 $signature = Get-Content $sigPath -Raw
 
-# GitHub Releases URL pattern: when you upload assets to a release tagged
-# 'v1.2.3', they're available at github.com/USER/REPO/releases/download/v1.2.3/FILENAME
+# GitHub Releases URL pattern: when you upload an asset, GitHub REPLACES
+# spaces in the filename with dots in the download URL. The asset on disk
+# may be "Storythread Studio_1.0.1_x64_en-US.msi" but the live URL serves
+# it as "Storythread.Studio_1.0.1_x64_en-US.msi". URL-encoding the space
+# as %20 also fails -- GitHub doesn't decode it back, and a 404 results.
+# So we rewrite spaces to dots here for the manifest URL.
 $repo = "dataguydpeterson-cmyk/StorythreadStudio"
-$installerUrl = "https://github.com/$repo/releases/download/v$Version/$($installer.Name)"
+$urlFilename = $installer.Name -replace ' ', '.'
+$installerUrl = "https://github.com/$repo/releases/download/v$Version/$urlFilename"
 
 $manifest = [ordered]@{
     version  = $Version
@@ -227,7 +246,13 @@ $artifactsDir = Split-Path $manifestPath
 if (-not (Test-Path $artifactsDir)) {
     New-Item -ItemType Directory -Path $artifactsDir | Out-Null
 }
-$manifest | ConvertTo-Json -Depth 32 | Set-Content $manifestPath -Encoding UTF8
+# BOM-less UTF-8 write -- Set-Content -Encoding UTF8 in Windows PowerShell 5.1
+# emits a BOM, which Tauri's JSON parser rejects on latest.json (the auto-
+# updater silently fails to find an update because the manifest can't be
+# parsed). [System.IO.File]::WriteAllText with UTF8Encoding($false) produces
+# a clean BOM-less file.
+$manifestText = $manifest | ConvertTo-Json -Depth 32
+[System.IO.File]::WriteAllText($manifestPath, $manifestText, $noBomUtf8)
 
 # Copy the installer + signature next to the manifest so all upload
 # artifacts live in one folder.
