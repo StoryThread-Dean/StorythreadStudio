@@ -258,7 +258,7 @@ export function SceneSummaryPreviewModal({
               disabled={isGenerating || isSaving}
               placeholder={isGenerating ? "Generating summary..." : "Summary body"}
               rows={10}
-              className="flex-1 resize-y rounded border border-border bg-bg-primary px-2 py-1.5 text-sm text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+              className="text-entry flex-1 resize-y rounded border border-border bg-bg-primary px-2 py-1.5 text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 

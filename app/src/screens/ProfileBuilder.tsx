@@ -322,6 +322,12 @@ function AutoTextarea({
     el.style.height = Math.max(el.scrollHeight, minH) + "px";
   }, [value, minRows]);
 
+  // Always tag with .text-entry so profile description and notes fields
+  // pick up the writer-facing font-size set by useUiScale, regardless of
+  // what the caller passed in className. Caller classes still win for
+  // colors / padding / borders -- only the font-size is dictated here.
+  const mergedClassName = ["text-entry", className].filter(Boolean).join(" ");
+
   return (
     <textarea
       ref={ref}
@@ -330,7 +336,7 @@ function AutoTextarea({
       placeholder={placeholder}
       rows={minRows}
       style={{ resize: "none", overflow: "hidden" }}
-      className={className}
+      className={mergedClassName}
       data-pb-field={dataField}
     />
   );
@@ -1793,7 +1799,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 setChatInput(e.target.value);
                 const el = e.target;
                 el.style.height = "auto";
-                const maxH = 7 * 20 + 12;
+                // maxH = 7 lines × ~24px line-height + padding. Sized for
+                // text-sm at the default UI scale; bigger UI scales still
+                // fit ~5-6 visible lines before scrolling because
+                // el.scrollHeight tracks the live rendered font size.
+                const maxH = 7 * 24 + 14;
                 el.style.height = Math.min(el.scrollHeight, maxH) + "px";
                 el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
               }}
@@ -1811,7 +1821,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               disabled={!profile || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
-              className={`flex-1 rounded border px-2 py-2 text-xs text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50 bg-border ${
+              className={`text-entry flex-1 rounded border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50 bg-border ${
                 chatInput.length > 6000
                   ? "border-red-600"
                   : chatInput.length > 3000

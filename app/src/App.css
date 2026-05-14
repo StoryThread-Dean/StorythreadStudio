@@ -139,6 +139,24 @@
 
 
 /*
+ * Text-entry sizing
+ * =================
+ * Writer-facing text input surfaces (chat boxes, profile description
+ * textareas, scene-summary editing) need a larger, more legible font
+ * than the surrounding chrome. The --text-entry-size custom property
+ * is set by useUiScale based on the active UI scale; the .text-entry
+ * class reads it.
+ *
+ * Falls back to 1rem so the class is safe to apply before the hook
+ * has run (e.g. during the brief boot window before initUiScale
+ * resolves).
+ */
+.text-entry {
+  font-size: var(--text-entry-size, 1rem);
+}
+
+
+/*
  * CodeMirror Selection Styling
  * ============================
  * With drawSelection: true, CodeMirror draws its own selection using

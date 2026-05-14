@@ -248,6 +248,56 @@ async def save_chapter_summary(request: SaveChapterSummaryRequest):
     return SaveChapterSummaryResponse(filename=f"{stem}.md", message="Summary saved.")
 
 
+# --- GET /api/documents/chapter-summaries (list) ---
+# Convenience endpoint for the ChipPicker. Returns every chapter summary file
+# present under summaries/chapters/, paired with the chapter's title (read
+# from the matching manuscript/<stem>.md file's first heading). The picker
+# uses this to render a list of attachable chapter-summary chips without
+# making N+1 round trips.
+
+class ChapterSummaryListItem(BaseModel):
+    chapter_filename: str   # the manuscript file's name, e.g. "07-the-awakening.md"
+    chapter_title:    str   # human-readable title; same logic as the chapter list
+    summary_filename: str   # the summary file under summaries/chapters/
+
+
+@router.get("/chapter-summaries", response_model=list[ChapterSummaryListItem])
+async def list_chapter_summaries(folder_path: str):
+    """
+    List every chapter summary present in summaries/chapters/.
+
+    Each entry pairs the summary file with the chapter title taken from the
+    matching manuscript/<stem>.md (falling back to a humanized filename when
+    the chapter file is missing or has no heading). Returns an empty list when
+    the summaries/chapters/ directory doesn't exist yet, mirroring how
+    list_scene_summaries handles the empty case.
+    """
+    summary_dir  = os.path.realpath(os.path.join(folder_path, "summaries", "chapters"))
+    manuscript   = _manuscript_dir(folder_path)
+    if not os.path.isdir(summary_dir):
+        return []
+
+    results: list[ChapterSummaryListItem] = []
+    with os.scandir(summary_dir) as entries:
+        for entry in entries:
+            if not entry.is_file() or not entry.name.endswith(".md"):
+                continue
+            stem = entry.name.removesuffix(".md")
+            chapter_filename = f"{stem}.md"
+            chapter_path     = os.path.join(manuscript, chapter_filename)
+            chapter_title    = _title_from_file(chapter_path, chapter_filename)
+            results.append(ChapterSummaryListItem(
+                chapter_filename = chapter_filename,
+                chapter_title    = chapter_title,
+                summary_filename = entry.name,
+            ))
+
+    # Sort by filename so the picker shows chapters in numeric order
+    # (01-, 02-, ...). Matches the chapter list ordering.
+    results.sort(key=lambda r: r.summary_filename)
+    return results
+
+
 # ── Phase 6: Scene Summary read/write (plain Markdown) ──────────────────────
 # Scene summaries live as plain Markdown files inside a per-chapter folder:
 #   <project>/summaries/scenes/<chapter-stem>/scene-01.md
@@ -386,6 +436,72 @@ async def list_scene_summaries(folder_path: str, chapter_filename: str):
     # OS returned them in a different order.
     results.sort(key=lambda r: r.index)
     return results
+
+
+# --- GET /api/documents/all-scene-summaries (list across chapters) ---
+# Convenience endpoint that returns every scene summary in the project,
+# grouped by chapter. The ChipPicker uses this to render a tree of attachable
+# scene-summary chips without making one request per chapter. Skips chapters
+# that have no scene summaries so the picker only shows usable entries.
+
+class SceneSummaryGroup(BaseModel):
+    chapter_filename: str
+    chapter_title:    str
+    scenes:           list[SceneSummaryInfo]
+
+
+@router.get("/all-scene-summaries", response_model=list[SceneSummaryGroup])
+async def list_all_scene_summaries(folder_path: str):
+    """
+    For every chapter in manuscript/, return its scene summary list. Chapters
+    with no scene summaries are omitted; the response only contains groups
+    that have at least one scene to attach.
+    """
+    manuscript = _manuscript_dir(folder_path)
+    if not os.path.isdir(manuscript):
+        return []
+
+    groups: list[SceneSummaryGroup] = []
+
+    # Iterate chapters in filename order so the picker shows them numerically
+    # (Chapter 1, 2, 3, ...). Same ordering rule as list_chapters.
+    chapter_filenames = sorted(
+        e.name for e in os.scandir(manuscript)
+        if e.is_file() and e.name.endswith(".md")
+    )
+
+    for chapter_filename in chapter_filenames:
+        scene_dir, _ = _scene_summary_paths(folder_path, chapter_filename)
+        if not os.path.isdir(scene_dir):
+            continue
+
+        scenes: list[SceneSummaryInfo] = []
+        with os.scandir(scene_dir) as entries:
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                idx = _index_from_scene_filename(entry.name)
+                if idx is None:
+                    continue
+                scenes.append(SceneSummaryInfo(
+                    index    = idx,
+                    title    = _scene_title_from_file(entry.path),
+                    filename = entry.name,
+                ))
+
+        if not scenes:
+            continue
+
+        scenes.sort(key=lambda s: s.index)
+        chapter_path  = os.path.join(manuscript, chapter_filename)
+        chapter_title = _title_from_file(chapter_path, chapter_filename)
+        groups.append(SceneSummaryGroup(
+            chapter_filename = chapter_filename,
+            chapter_title    = chapter_title,
+            scenes           = scenes,
+        ))
+
+    return groups
 
 
 # --- GET /api/documents/scene-summary (one) ---

@@ -17,6 +17,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star, Folder, Sun, Moon } from "lucide-react";
 import type { AppSettings, ModelInfo } from "../types/ai";
 import { useTheme } from "../hooks/useTheme";
+import { useUiScale, UI_SCALE_PX, type UiScale } from "../hooks/useUiScale";
 
 // ── Content Mode Model Filtering (shared logic with ProjectSettings) ─────────
 const MODERATED_PROVIDERS = [
@@ -120,6 +121,11 @@ export function Settings({ onClose }: SettingsProps) {
   // The setter applies the change immediately to the DOM and persists to the
   // backend, so there's no separate "save" step for theme like other fields.
   const [theme, setTheme] = useTheme();
+
+  // UI font scale: same global-store pattern as theme. Applies to chrome
+  // (menus, chat box, Settings, About, profile labels). The manuscript
+  // editor has its own font picker and is unaffected by this control.
+  const [uiScale, setUiScaleLocal] = useUiScale();
 
   // UI state
   const [loading, setLoading]             = useState(true);
@@ -676,6 +682,44 @@ export function Settings({ onClose }: SettingsProps) {
                   <p className="mt-2 text-xs text-faint">
                     Switches the entire app between dark and light modes.
                     Saved globally, so the choice carries across all projects.
+                  </p>
+                </div>
+
+                {/* ── Interface size ──────────────────────────────────────
+                    Subtle scale of all chrome text -- menus, chat box,
+                    Settings, About, profile labels, etc. The manuscript
+                    editor uses its own font picker (in the editor toolbar)
+                    and is intentionally NOT affected by this control. */}
+                <div className="mt-6">
+                  <label className="mb-2 block text-xs font-medium text-text-primary">
+                    Interface size
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {([
+                      { id: "default",     label: "Default" },
+                      { id: "larger",      label: "Larger" },
+                      { id: "larger_plus", label: "Larger+" },
+                      { id: "largest",     label: "Largest" },
+                    ] satisfies { id: UiScale; label: string }[]).map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setUiScaleLocal(opt.id)}
+                        type="button"
+                        className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
+                          uiScale === opt.id
+                            ? "border-indigo-500 bg-bg-surface text-text-primary"
+                            : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                        }`}
+                      >
+                        <span className="font-medium">{opt.label}</span>
+                        <span className="text-text-muted">{UI_SCALE_PX[opt.id]}px</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-faint">
+                    Scales menus, chat, Settings, and other interface text. The
+                    manuscript editor's font is controlled separately by the
+                    font picker in the editor toolbar. Saved globally.
                   </p>
                 </div>
               </section>

@@ -39,6 +39,13 @@ class SettingsResponse(BaseModel):
     vault_root:             str
     # UI theme: "dark" or "light". Drives the runtime color palette.
     theme:                  str
+    # UI font scale for chrome (menus, chat, settings, About, profile labels).
+    # One of "default" | "larger" | "larger_plus" | "largest". Drives the
+    # root <html> font-size at runtime so every Tailwind text-* rem-based
+    # utility scales proportionally. The editor uses its own pixel-sized
+    # font so it is unaffected by this setting (writers control editor
+    # font via the existing font picker in the editor toolbar).
+    ui_scale:               str
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -59,6 +66,9 @@ class UpdateSettingsRequest(BaseModel):
     vault_root:          str | None                   = None
     # "dark" or "light". Anything else is ignored.
     theme:               str | None                   = None
+    # One of "default" | "larger" | "larger_plus" | "largest". Anything else
+    # is ignored. Forward-compatible if more steps are added later.
+    ui_scale:            str | None                   = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -88,6 +98,7 @@ async def get_settings():
         # directory exists -- frontend always sees a real path.
         vault_root             = get_vault_root(),
         theme                  = settings.get("theme", "dark"),
+        ui_scale               = settings.get("ui_scale", "default"),
     )
 
 
@@ -126,6 +137,10 @@ async def update_settings(request: UpdateSettingsRequest):
         # Silently ignore unknown values rather than 400 -- forward-compatible
         # in case future themes are added in newer clients.
         settings["theme"] = request.theme
+    if request.ui_scale is not None and request.ui_scale in ("default", "larger", "larger_plus", "largest"):
+        # Same silent-ignore pattern as theme. Lets us add more steps later
+        # without older clients breaking on the new values.
+        settings["ui_scale"] = request.ui_scale
 
     save_settings(settings)
 
@@ -143,6 +158,7 @@ async def update_settings(request: UpdateSettingsRequest):
         model_content_modes    = settings.get("model_content_modes", {}),
         vault_root             = get_vault_root(),
         theme                  = settings.get("theme", "dark"),
+        ui_scale               = settings.get("ui_scale", "default"),
     )
 
 

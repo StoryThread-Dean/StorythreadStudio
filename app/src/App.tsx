@@ -53,6 +53,7 @@ import { AboutPanel } from "./components/about/AboutPanel";
 import { DonationPrompt } from "./components/about/DonationPrompt";
 import { useBackendHealth } from "./hooks/useBackendHealth";
 import { initTheme } from "./hooks/useTheme";
+import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { Bot, Send, ChevronDown, Settings2, Trash2 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
@@ -1251,12 +1252,14 @@ function App() {
   }, []);
 
 
-  // --- Theme init ---
-  // Load the saved theme from the backend on first mount and apply it to the
-  // <html> element. This runs once at app boot; from then on any theme
-  // change goes through useTheme()/setTheme() which updates the DOM directly.
+  // --- Theme + UI scale init ---
+  // Load the saved theme and font-size scale from the backend on first
+  // mount and apply each to the <html> element. Runs once at app boot;
+  // from then on changes go through useTheme()/setTheme() and
+  // useUiScale()/setUiScale() which update the DOM directly.
   useEffect(() => {
     void initTheme();
+    void initUiScale();
   }, []);
 
 
@@ -1944,6 +1947,7 @@ function App() {
             <ChipPicker
               rootPath={currentProject.root_path}
               seriesPath={currentProject.series_path}
+              currentChapterFilename={currentChapter?.filename ?? null}
               existingChips={contextChips}
               onAdd={(chip) => { setContextChips(prev => [...prev, chip]); setShowChipPicker(false); }}
               onClose={() => setShowChipPicker(false)}
@@ -2098,7 +2102,11 @@ function App() {
                 setChatInput(e.target.value);
                 const el = e.target;
                 el.style.height = "auto";
-                const maxH = 7 * 20 + 12;
+                // maxH = 7 lines × ~24px line-height + padding. Larger than
+                // before to accommodate the bumped text-sm size and to leave
+                // room when the UI scale is raised. el.scrollHeight is in
+                // rendered pixels so it tracks the live font size correctly.
+                const maxH = 7 * 24 + 14;
                 el.style.height = Math.min(el.scrollHeight, maxH) + "px";
                 el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
               }}
@@ -2112,7 +2120,7 @@ function App() {
               disabled={!currentChapter || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
-              className="flex-1 rounded border border-border bg-border px-2 py-2 text-xs text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="text-entry flex-1 rounded border border-border bg-border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <button
               onClick={sendEditorChat}
@@ -2661,9 +2669,37 @@ function chipTypeLabel(type: string): string {
 interface ChipPickerProps {
   rootPath: string;
   seriesPath?: string | null;
+  // Filename of the chapter the writer currently has open in the editor (if any).
+  // Drives the "Suggested" row at the top of the picker so the current chapter's
+  // summary and scene summaries are one click away without browsing the tabs.
+  currentChapterFilename?: string | null;
   existingChips: ContextChip[];
   onAdd: (chip: ContextChip) => void;
   onClose: () => void;
+}
+
+// Shape of an item in the chapter-summaries list endpoint. Mirrors
+// ChapterSummaryListItem in backend/app/routers/documents.py.
+interface ChapterSummaryListEntry {
+  chapter_filename: string;
+  chapter_title:    string;
+  summary_filename: string;
+}
+
+// Shape of one scene inside a SceneSummaryGroup. Mirrors SceneSummaryInfo
+// in backend/app/routers/documents.py.
+interface SceneSummaryEntry {
+  index:    number;
+  title:    string;
+  filename: string;
+}
+
+// Shape of a per-chapter scene-summary group returned by
+// /api/documents/all-scene-summaries.
+interface SceneSummaryGroupEntry {
+  chapter_filename: string;
+  chapter_title:    string;
+  scenes:           SceneSummaryEntry[];
 }
 
 // State that holds the profile the writer clicked on but hasn't confirmed
@@ -2677,7 +2713,7 @@ interface PendingProfile {
   profile:  Profile;           // The fully fetched profile object
 }
 
-function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: ChipPickerProps) {
+function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChips, onAdd, onClose }: ChipPickerProps) {
   const [loading, setLoading] = useState(false);
   const [profileType, setProfileType] = useState("character");
   const [profiles, setProfiles] = useState<{ filename: string; name: string }[]>([]);
@@ -2686,6 +2722,18 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
   // "suggested" chips: auto-fetched character profiles shown at the top as ghost chips
   const [suggested, setSuggested] = useState<{ filename: string; name: string; type: string }[]>([]);
   const [suggestedLoaded, setSuggestedLoaded] = useState(false);
+
+  // Chapter-summary tab: full list of summaries present in the project. Loaded
+  // lazily the first time the writer opens the Chapter Summary tab.
+  const [chapterSummaries, setChapterSummaries] = useState<ChapterSummaryListEntry[]>([]);
+  const [chapterSummariesLoaded, setChapterSummariesLoaded] = useState(false);
+
+  // Scene-summary tab: groups of (chapter, scenes[]) across the whole project.
+  // Loaded lazily the first time the writer opens the Scene Summary tab. Each
+  // chapter group can be expanded/collapsed to keep the picker compact.
+  const [sceneGroups, setSceneGroups] = useState<SceneSummaryGroupEntry[]>([]);
+  const [sceneGroupsLoaded, setSceneGroupsLoaded] = useState(false);
+  const [expandedScenes, setExpandedScenes] = useState<Set<string>>(new Set());
 
   // Whether we're browsing series canonical profiles vs local project profiles
   const [source, setSource] = useState<"project" | "series">("project");
@@ -2715,8 +2763,60 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
       .finally(() => setSuggestedLoaded(true));
   }, [rootPath, suggestedLoaded]);
 
-  // Fetch the profile list when the selected type or source changes
+
+  // Load the full chapter-summaries list the first time the writer switches
+  // to the Chapter Summary tab. Cached after that for the lifetime of the
+  // picker (the picker remounts on each open via showChipPicker, so a fresh
+  // open re-fetches; cheap because the endpoint is local).
   useEffect(() => {
+    if (profileType !== "chapter_summary") return;
+    if (chapterSummariesLoaded) return;
+    const params = new URLSearchParams({ folder_path: rootPath });
+    fetch(`${API_BASE}/api/documents/chapter-summaries?${params}`)
+      .then(r => r.json())
+      .then((data: ChapterSummaryListEntry[]) => {
+        setChapterSummaries(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setChapterSummaries([]))
+      .finally(() => setChapterSummariesLoaded(true));
+  }, [profileType, chapterSummariesLoaded, rootPath]);
+
+
+  // Load the all-scene-summaries tree the first time the writer switches to
+  // the Scene Summary tab. Same lazy-once pattern as chapter summaries above.
+  useEffect(() => {
+    if (profileType !== "scene_summary") return;
+    if (sceneGroupsLoaded) return;
+    const params = new URLSearchParams({ folder_path: rootPath });
+    fetch(`${API_BASE}/api/documents/all-scene-summaries?${params}`)
+      .then(r => r.json())
+      .then((data: SceneSummaryGroupEntry[]) => {
+        const groups = Array.isArray(data) ? data : [];
+        setSceneGroups(groups);
+        // Auto-expand the current chapter's group so the writer doesn't
+        // have to hunt for it. Other chapters stay collapsed to keep the
+        // list compact.
+        if (currentChapterFilename) {
+          setExpandedScenes(prev => {
+            const next = new Set(prev);
+            if (groups.some(g => g.chapter_filename === currentChapterFilename)) {
+              next.add(currentChapterFilename);
+            }
+            return next;
+          });
+        }
+      })
+      .catch(() => setSceneGroups([]))
+      .finally(() => setSceneGroupsLoaded(true));
+  }, [profileType, sceneGroupsLoaded, rootPath, currentChapterFilename]);
+
+  // Fetch the profile list when the selected type or source changes.
+  // Skipped for non-profile chip tabs (notes, chapter_summary, scene_summary)
+  // which load via their own dedicated endpoints elsewhere in this component.
+  useEffect(() => {
+    if (profileType === "notes" || profileType === "chapter_summary" || profileType === "scene_summary") {
+      return;
+    }
     setLoading(true);
     const folderPath = source === "series" && seriesPath ? seriesPath : rootPath;
     const params = new URLSearchParams({ folder_path: folderPath, type: profileType });
@@ -2795,6 +2895,122 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
     }
   }
 
+  // Fetch a chapter summary and attach it as a "chapter_summary" chip. Uses
+  // the chapter filename (not the summary filename) as the dedup key so the
+  // writer can't accidentally attach two chips for the same chapter from
+  // different code paths (Suggested vs Chapter Summary tab).
+  async function pickChapterSummary(chapterFilename: string, chapterTitle: string) {
+    const chipName = `${chapterTitle || displayNameFromFilename(chapterFilename)} (Summary)`;
+    setAdding(`chapter:${chapterFilename}`);
+    try {
+      if (existingChips.some(c => c.name === chipName && c.type === "chapter_summary")) {
+        onClose();
+        return;
+      }
+      const params = new URLSearchParams({
+        folder_path:      rootPath,
+        chapter_filename: chapterFilename,
+      });
+      const res = await fetch(`${API_BASE}/api/documents/chapter-summary?${params}`);
+      if (!res.ok) {
+        onClose();
+        return;
+      }
+      const data = await res.json();
+      const body = (data.content || "").trim();
+      if (!body) {
+        // The summary file exists but is empty. Attach a placeholder so the
+        // writer notices something is off rather than sending blank context.
+        onAdd({
+          type: "chapter_summary",
+          name: chipName,
+          content: `[${chipName} is empty. Generate or write the summary first.]`,
+        });
+      } else {
+        onAdd({ type: "chapter_summary", name: chipName, content: body });
+      }
+    } catch {
+      onClose();
+    } finally {
+      setAdding(null);
+    }
+  }
+
+  // Fetch one scene summary and attach it as a "scene_summary" chip. Chip
+  // name is "<Chapter Title> - <Scene Title>" so multiple scenes from different
+  // chapters don't collide (the chat side dedupes by name + type).
+  async function pickSceneSummary(
+    chapterFilename: string,
+    chapterTitle: string,
+    sceneIndex: number,
+    sceneTitle: string,
+  ) {
+    const chapter = chapterTitle || displayNameFromFilename(chapterFilename);
+    const scene   = sceneTitle || `Scene ${sceneIndex}`;
+    const chipName = `${chapter} - ${scene}`;
+    setAdding(`scene:${chapterFilename}:${sceneIndex}`);
+    try {
+      if (existingChips.some(c => c.name === chipName && c.type === "scene_summary")) {
+        onClose();
+        return;
+      }
+      const params = new URLSearchParams({
+        folder_path:      rootPath,
+        chapter_filename: chapterFilename,
+        index:            String(sceneIndex),
+      });
+      const res = await fetch(`${API_BASE}/api/documents/scene-summary?${params}`);
+      if (!res.ok) {
+        onClose();
+        return;
+      }
+      const data = await res.json();
+      const body = (data.content || "").trim();
+      if (!body) {
+        onAdd({
+          type: "scene_summary",
+          name: chipName,
+          content: `[${chipName} is empty. Generate or write the scene summary first.]`,
+        });
+      } else {
+        // Prepend the scene title so the AI knows what scene it's reading.
+        // The file body itself stores just the summary body (the # heading
+        // is stripped at read time per load_scene_summary's parser).
+        const content = data.title
+          ? `# ${data.title}\n\n${body}`
+          : body;
+        onAdd({ type: "scene_summary", name: chipName, content });
+      }
+    } catch {
+      onClose();
+    } finally {
+      setAdding(null);
+    }
+  }
+
+
+  // Helper: turn a chapter filename into a humanized label when the title
+  // from the list endpoint isn't available yet. Mirrors the fallback in
+  // backend/_title_from_file -- drops the leading numeric prefix, replaces
+  // separators, title-cases.
+  function displayNameFromFilename(filename: string): string {
+    let name = filename.replace(/\.md$/i, "");
+    name = name.replace(/^\d+-/, "");
+    name = name.replace(/[-_]/g, " ");
+    return name.replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+
+  // Toggle a chapter group's expanded state in the Scene Summary tab.
+  function toggleSceneGroup(chapterFilename: string) {
+    setExpandedScenes(prev => {
+      const next = new Set(prev);
+      if (next.has(chapterFilename)) next.delete(chapterFilename);
+      else                            next.add(chapterFilename);
+      return next;
+    });
+  }
+
   // Filter suggested chips: only show ones not already attached
   const unattachedSuggested = suggested.filter(
     s => !existingChips.some(c => c.name === s.name && (c.type === s.type || c.type === `series_${s.type}`))
@@ -2859,7 +3075,9 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
       {/* Browse UI -- only shown when no profile is pending. */}
       {!pending && (
       <>
-      {/* Suggested chips -- ghost chips shown at top for quick attachment */}
+      {/* Suggested chips -- ghost chips shown at top for quick attachment.
+          Character profiles only; summaries are attached via the Chapter
+          Summary and Scene Summary tabs. */}
       {unattachedSuggested.length > 0 && (
         <div className="mb-2">
           <p className="mb-1 text-xs text-faint">Suggested</p>
@@ -2905,9 +3123,15 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
         </div>
       )}
 
-      {/* Profile type tabs + Notes tab */}
+      {/* Profile type tabs + Notes tab. Chapter Summary and Scene Summary
+          show alongside the profile types but pull from /api/documents
+          endpoints rather than /api/profiles. The source toggle (Project /
+          Series) applies to profile tabs only -- summaries and notes are
+          always project-scoped. */}
       <div className="mb-2 flex flex-wrap gap-1">
-        {/* Profile type tabs -- only show directly pickable types (not series_* or note) */}
+        {/* Profile type tabs. Series_* variants get filtered (they're chosen
+            via the source toggle above, not as tabs). Notes get filtered
+            because they have a dedicated tab below this row. */}
         {CHIP_TYPES.filter(t => !t.id.startsWith("series_") && t.id !== "note").map(t => (
           <button
             key={t.id}
@@ -2934,7 +3158,9 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
         </button>
       </div>
 
-      {/* Content list -- either profiles or notes depending on active tab */}
+      {/* Content list -- branches on active tab. Notes and the two summary
+          tabs each have their own data source and item shape; everything
+          else falls through to the generic profile list. */}
       {profileType === "notes" ? (
         // Notes list: hardcoded note files from the project's notes/ folder
         <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
@@ -2961,6 +3187,98 @@ function ChipPicker({ rootPath, seriesPath, existingChips, onAdd, onClose }: Chi
             );
           })}
         </div>
+      ) : profileType === "chapter_summary" ? (
+        // Chapter Summary list: one row per chapter that has a summary in
+        // summaries/chapters/. The row label shows the chapter title; the
+        // resulting chip will be named "<Title> (Summary)".
+        !chapterSummariesLoaded ? (
+          <p className="py-1 text-xs text-faint">Loading...</p>
+        ) : chapterSummaries.length === 0 ? (
+          <p className="py-1 text-xs text-faint">
+            No chapter summaries yet. Generate one from the chapter view first.
+          </p>
+        ) : (
+          <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
+            {chapterSummaries.map(cs => {
+              const chipName = `${cs.chapter_title} (Summary)`;
+              const alreadyAdded = existingChips.some(c => c.name === chipName && c.type === "chapter_summary");
+              const addingKey    = `chapter:${cs.chapter_filename}`;
+              return (
+                <button
+                  key={cs.summary_filename}
+                  onClick={() => !alreadyAdded && pickChapterSummary(cs.chapter_filename, cs.chapter_title)}
+                  disabled={alreadyAdded || adding === addingKey}
+                  className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
+                    alreadyAdded ? "text-faint" : "text-text-primary hover:bg-indigo-600/20"
+                  }`}
+                >
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-sky-300 border-sky-700/50 bg-sky-900/20" />
+                  {adding === addingKey
+                    ? "Adding..."
+                    : alreadyAdded
+                    ? <><span className="opacity-50">{cs.chapter_title}</span><span className="ml-auto text-emerald-600">✓</span></>
+                    : cs.chapter_title}
+                </button>
+              );
+            })}
+          </div>
+        )
+      ) : profileType === "scene_summary" ? (
+        // Scene Summary list: chapters expand to show their scenes. Chapters
+        // with no scene summaries are filtered server-side, so every group
+        // shown has at least one attachable scene.
+        !sceneGroupsLoaded ? (
+          <p className="py-1 text-xs text-faint">Loading...</p>
+        ) : sceneGroups.length === 0 ? (
+          <p className="py-1 text-xs text-faint">
+            No scene summaries yet. Generate them from a chapter view first.
+          </p>
+        ) : (
+          <div className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+            {sceneGroups.map(group => {
+              const expanded = expandedScenes.has(group.chapter_filename);
+              return (
+                <div key={group.chapter_filename}>
+                  <button
+                    onClick={() => toggleSceneGroup(group.chapter_filename)}
+                    className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-text-muted hover:bg-emerald-600/10"
+                  >
+                    <span className="font-mono text-[10px] text-faint">{expanded ? "▾" : "▸"}</span>
+                    <span className="truncate">{group.chapter_title}</span>
+                    <span className="ml-auto text-[10px] text-faint">{group.scenes.length}</span>
+                  </button>
+                  {expanded && (
+                    <div className="ml-3 flex flex-col gap-0.5 border-l border-emerald-800/30 pl-2">
+                      {group.scenes.map(scene => {
+                        const sceneLabel = scene.title || `Scene ${scene.index}`;
+                        const chipName   = `${group.chapter_title} - ${sceneLabel}`;
+                        const alreadyAdded = existingChips.some(c => c.name === chipName && c.type === "scene_summary");
+                        const addingKey    = `scene:${group.chapter_filename}:${scene.index}`;
+                        return (
+                          <button
+                            key={`${group.chapter_filename}:${scene.index}`}
+                            onClick={() => !alreadyAdded && pickSceneSummary(group.chapter_filename, group.chapter_title, scene.index, sceneLabel)}
+                            disabled={alreadyAdded || adding === addingKey}
+                            className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-left text-xs transition-colors disabled:cursor-not-allowed ${
+                              alreadyAdded ? "text-faint" : "text-text-primary hover:bg-emerald-600/20"
+                            }`}
+                          >
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-emerald-300 border-emerald-700/50 bg-emerald-900/20" />
+                            {adding === addingKey
+                              ? "Adding..."
+                              : alreadyAdded
+                              ? <><span className="opacity-50">{sceneLabel}</span><span className="ml-auto text-emerald-600">✓</span></>
+                              : sceneLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
       ) : loading ? (
         <p className="py-1 text-xs text-faint">Loading...</p>
       ) : profiles.length === 0 ? (
