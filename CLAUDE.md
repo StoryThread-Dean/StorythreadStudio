@@ -158,6 +158,44 @@ npm run lint
 
 ---
 
+## Testing
+
+Two automated test suites plus a manual checklist. All three are wired into `/pre-release` (see `.claude/commands/pre-release.md`).
+
+### Test layout
+
+- `backend/tests/` -- pytest, using FastAPI's `TestClient` for HTTP-level tests. Test files named `test_*.py`.
+- `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom.
+- `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
+
+### Test commands
+
+- Backend: `uv run pytest` from `backend/`
+- Frontend: `npm run test` from `app/` (vitest)
+- Full pre-release gate: the `/pre-release` slash command in Claude Code
+
+### Why no automated end-to-end suite
+
+Storythread Studio is a Tauri desktop app. File dialogs, native menus, the auto-updater, and the FastAPI sidecar live in the Rust shell, not the WebView. Playwright drives browsers, not Tauri binaries; pointing it at `localhost:1420` would give false coverage on every flow that needs the shell. Real desktop E2E (via `tauri-driver`) is a separate roadmap item. Until then, automated tests cover the React + Python layers and `tests/manual-smoke.md` covers shell-dependent paths.
+
+There is **no staging URL.** This app is distributed as a `.msi` installer via GitHub Releases. The only "URL" is the local Vite dev server at `http://localhost:1420` during `npm run tauri dev`.
+
+### When you find a regression
+
+1. **Reproduce twice.** If it does not repro consistently, note that explicitly in the issue.
+2. **Capture context.** Failing command output, snapshot if applicable, reproduction steps a human can follow without you.
+3. **File a GitHub issue via the `github` MCP.** Title = short imperative ("Smart Advisor pass fails on chapters > 50k chars"). Body = repro / expected / actual / version / log excerpts. Labels = `qa-automation` plus an area label if obvious.
+4. **Report to the user in chat** with the issue link.
+5. **Do not silently fix.** Bug-fix work needs an explicit user request -- never as a side effect of test-running.
+
+### Testing guardrails
+
+- **Never run tests against any non-local environment.** No remote production exists. If "staging" is ever added, `/pre-release` must be updated to gate against it.
+- **Never skip a failing test to make a suite pass.** No `pytest.skip`, no `xfail`, no commented-out assertions, no `it.skip(...)`. Fix the test or fix the code; do not hide the failure.
+- **Never auto-merge.** All commits and PRs go through explicit human review. No `gh pr merge --auto`, no automated merge bots.
+
+---
+
 ## Architecture Overview
 
 Storythread Studio uses a **three-layer local architecture**. No cloud. No sync. Everything runs on the user's machine.
@@ -259,6 +297,38 @@ Favor **longer, clearly annotated code** over compact, clever code. A function w
 - **Three-panel layout** on the main writing screen: left navigation panel, center Markdown editor, right AI assistant panel
 - **Embedded UX hints** are a first-class design feature: tooltips, contextual help text, and onboarding cues built into the UI from the start -- both to help the fiction writer use the app and to help the developer understand what each UI piece does
 - The **writer's text** is always the visual focus. UI chrome should be minimal and non-intrusive.
+
+---
+
+## Available MCP servers
+
+Two MCP servers are configured for this project (see `.mcp.json`). Use them where they help; skip them where they would mislead.
+
+### playwright (research / ad-hoc only)
+
+**Use when:**
+- Fetching content from external web pages when WebFetch is not enough (heavy JS, login-walled docs, complex SPAs).
+- Capturing accessibility snapshots of external sites for debugging or comparison.
+- Ad-hoc browser exploration on `http://localhost:1420` when WebFetch cannot reach the interaction you need.
+
+**Do NOT use when:**
+- Running `/pre-release`. Playwright cannot drive the Tauri shell; coverage would be misleading. The pre-release gate uses pytest + vitest + the manual smoke checklist.
+- Testing any flow that depends on `@tauri-apps/api` (file dialogs, the updater, native menus, the embedded sidecar). Those simply do not exist when Playwright drives a plain browser.
+- Replacing pytest or vitest for any automated-test purpose.
+
+### github (issues + repo metadata only)
+
+**Use when:**
+- Filing a `qa-automation` issue for a regression (see "When you find a regression" under Testing).
+- Listing open `pre-release-blocker` issues during `/pre-release`.
+- Reading existing issues for context when debugging or understanding a feature's history.
+- Adding labels or comments to existing issues with explicit user approval.
+
+**Do NOT use when:**
+- Creating or modifying releases. Use the workflow in `docs/RELEASING.md` and `scripts/release.ps1`.
+- Force-pushing or rewriting git history.
+- Merging pull requests. Never auto-merge -- see the testing guardrails above.
+- Closing issues without explicit user direction.
 
 ---
 
