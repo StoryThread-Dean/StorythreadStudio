@@ -1,4 +1,4 @@
-// components/about/DonationPrompt.tsx -- Periodic "consider donating" nudge
+﻿// components/about/DonationPrompt.tsx -- Periodic "consider donating" nudge
 // =============================================================================
 // Triggered by useDonationState's shouldShowPrompt flag, which fires every
 // 30-50 launches (random per-installation cadence) when the writer hasn't
@@ -52,7 +52,7 @@ export function DonationPrompt({
           className="text-faint hover:text-text-muted"
           title="Dismiss (won't show again for a while)"
         >
-          ✕
+          âœ•
         </button>
       </div>
 
@@ -69,7 +69,7 @@ export function DonationPrompt({
 
         <div className="flex flex-col gap-1.5">
           <button
-            onClick={() => openLink("https://github.com/sponsors/dataguydpeterson-cmyk")}
+            onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
             className="rounded border border-pink-700 bg-pink-900/30 px-2 py-1 text-[11px] font-medium text-pink-200 hover:bg-pink-900/50"
           >
             Support on GitHub Sponsors

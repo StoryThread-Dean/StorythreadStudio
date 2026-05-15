@@ -1,4 +1,4 @@
-# scripts/release.ps1 -- Cut a Storythread Studio release
+﻿# scripts/release.ps1 -- Cut a Storythread Studio release
 # ============================================================================
 # Run from the repo root:
 #   .\scripts\release.ps1 -Version 1.1.0
@@ -46,7 +46,7 @@ function OK($msg)   { Write-Host "    ok: $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "    !!  $msg" -ForegroundColor Yellow }
 
 
-# ── Pre-flight checks ────────────────────────────────────────────────────────
+# â”€â”€ Pre-flight checks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Step "Pre-flight checks"
 
@@ -73,7 +73,7 @@ if ($gitTagExists) {
 OK "Tag v$Version is available"
 
 
-# ── Bump versions ────────────────────────────────────────────────────────────
+# â”€â”€ Bump versions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Step "Bumping versions to $Version"
 
@@ -113,7 +113,7 @@ $cargoToml = $cargoToml -replace '(?m)^version\s*=\s*".*"$', "version = `"$Versi
 OK "app/src-tauri/Cargo.toml"
 
 
-# ── Build the backend sidecar ────────────────────────────────────────────────
+# â”€â”€ Build the backend sidecar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Step "Building backend (PyInstaller)"
 & (Join-Path $PSScriptRoot "build-backend.ps1")
@@ -123,7 +123,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 
-# ── Build the Tauri bundle ────────────────────────────────────────────────────
+# â”€â”€ Build the Tauri bundle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Step "Building Tauri bundle (npm run tauri build)"
 Push-Location (Join-Path $repoRoot "app")
@@ -139,7 +139,7 @@ finally {
 }
 
 
-# ── Locate build outputs ─────────────────────────────────────────────────────
+# â”€â”€ Locate build outputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Step "Locating build outputs"
 
@@ -178,7 +178,7 @@ if (-not (Test-Path $sigPath)) {
 OK "Signature: $sigPath"
 
 
-# ── Generate latest.json manifest ────────────────────────────────────────────
+# â”€â”€ Generate latest.json manifest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Step "Generating latest.json"
 
@@ -225,7 +225,7 @@ $signature = Get-Content $sigPath -Raw
 # it as "Storythread.Studio_1.0.1_x64_en-US.msi". URL-encoding the space
 # as %20 also fails -- GitHub doesn't decode it back, and a 404 results.
 # So we rewrite spaces to dots here for the manifest URL.
-$repo = "dataguydpeterson-cmyk/StorythreadStudio"
+$repo = "StoryThread-Dean/StorythreadStudio"
 $urlFilename = $installer.Name -replace ' ', '.'
 $installerUrl = "https://github.com/$repo/releases/download/v$Version/$urlFilename"
 
@@ -264,7 +264,7 @@ OK "release-artifacts/$($installer.Name)"
 OK "release-artifacts/$($installer.Name).sig"
 
 
-# ── Done -- print the manual checklist ───────────────────────────────────────
+# â”€â”€ Done -- print the manual checklist â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Step "Manual upload checklist"
 Write-Host ""

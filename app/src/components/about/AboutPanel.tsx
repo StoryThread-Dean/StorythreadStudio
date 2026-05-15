@@ -1,4 +1,4 @@
-// components/about/AboutPanel.tsx -- About + donation modal
+﻿// components/about/AboutPanel.tsx -- About + donation modal
 // ============================================================
 // Single modal accessed from the Settings screen (or an About menu entry)
 // that surfaces:
@@ -48,7 +48,7 @@ export function AboutPanel({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-base font-semibold text-indigo-300">About</h2>
-          <button onClick={onClose} className="text-faint hover:text-text-muted">✕</button>
+          <button onClick={onClose} className="text-faint hover:text-text-muted">âœ•</button>
         </div>
 
         {/* Identity block: app name, version, donor badge */}
@@ -76,7 +76,7 @@ export function AboutPanel({
           </p>
           <div className="flex flex-col gap-2">
             <button
-              onClick={() => openLink("https://github.com/sponsors/dataguydpeterson-cmyk")}
+              onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
               className="flex items-center justify-center gap-2 rounded border border-pink-700 bg-pink-900/30 px-3 py-1.5 text-xs font-medium text-pink-200 hover:bg-pink-900/50"
             >
               <Heart size={12} fill="currentColor" />
@@ -87,7 +87,7 @@ export function AboutPanel({
               onClick={() => openLink("https://ko-fi.com/storythreadstudio")}
               className="flex items-center justify-center gap-2 rounded border border-cyan-700 bg-cyan-900/30 px-3 py-1.5 text-xs font-medium text-cyan-200 hover:bg-cyan-900/50"
             >
-              ☕ Ko-fi
+              â˜• Ko-fi
               <ExternalLink size={10} />
             </button>
           </div>
@@ -145,25 +145,25 @@ export function AboutPanel({
           </p>
           <div className="space-y-1">
             <button
-              onClick={() => openLink("https://github.com/dataguydpeterson-cmyk/StorythreadStudio")}
+              onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio")}
               className="flex items-center gap-1 text-indigo-300 underline hover:text-indigo-200"
             >
               GitHub repository <ExternalLink size={10} />
             </button>
             <button
-              onClick={() => openLink("https://github.com/dataguydpeterson-cmyk/StorythreadStudio/blob/main/CHANGELOG.md")}
+              onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/blob/main/CHANGELOG.md")}
               className="flex items-center gap-1 text-indigo-300 underline hover:text-indigo-200"
             >
               Changelog <ExternalLink size={10} />
             </button>
             <button
-              onClick={() => openLink("https://github.com/dataguydpeterson-cmyk/StorythreadStudio/issues")}
+              onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/issues")}
               className="flex items-center gap-1 text-indigo-300 underline hover:text-indigo-200"
             >
               Report a bug or request a feature <ExternalLink size={10} />
             </button>
             <button
-              onClick={() => openLink("https://github.com/dataguydpeterson-cmyk/StorythreadStudio/blob/main/LICENSE")}
+              onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/blob/main/LICENSE")}
               className="flex items-center gap-1 text-indigo-300 underline hover:text-indigo-200"
             >
               Apache License 2.0 <ExternalLink size={10} />

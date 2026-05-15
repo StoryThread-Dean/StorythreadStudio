@@ -1,4 +1,4 @@
-# Releasing Storythread Studio
+﻿# Releasing Storythread Studio
 
 This is the runbook for cutting a new release. Most steps are automated by
 `scripts\release.ps1`; the manual ones are flagged inline.
@@ -66,7 +66,7 @@ to the key.
     `app/src/components/about/DonationPrompt.tsx`,
     `app/src/components/update/UpdateModal.tsx`,
     `app/src/components/update/PostUpdateBanner.tsx`,
-    and `README.md`. Search for `dataguydpeterson-cmyk` and `storythreadstudio`.
+    and `README.md`. Search for `StoryThread-Dean` and `storythreadstudio`.
 
 ### 5. Push v1.0.0 to GitHub
 
@@ -188,7 +188,7 @@ The README warns users about this on the install page.
 
 Run through the checks in order:
 1. Is the running version actually older than `latest.json` reports?
-   (`https://github.com/dataguydpeterson-cmyk/StorythreadStudio/releases/latest/download/latest.json`)
+   (`https://github.com/StoryThread-Dean/StorythreadStudio/releases/latest/download/latest.json`)
 2. Is the running version a release build (`tauri build`), not a dev
    build? The hook short-circuits in dev to avoid signature errors.
 3. Did the GitHub Release tag match the version in `latest.json`?

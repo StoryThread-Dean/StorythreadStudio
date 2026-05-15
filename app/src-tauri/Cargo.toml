@@ -1,11 +1,11 @@
-[package]
+﻿[package]
 name = "storythread-studio"
 version = "1.0.1"
 description = "Local-first Markdown writing app for fiction writers, with AI review tools."
 authors = ["Dean Peterson"]
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/dataguydpeterson-cmyk/StorythreadStudio"
+repository = "https://github.com/StoryThread-Dean/StorythreadStudio"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -1,4 +1,4 @@
-// components/update/UpdateModal.tsx -- Update details + install flow
+﻿// components/update/UpdateModal.tsx -- Update details + install flow
 // ====================================================================
 // Opens when the writer clicks "View details" on the UpdateBanner. Shows:
 //   - Version number (current -> new)
@@ -81,7 +81,7 @@ export function UpdateModal({
             disabled={isWorking}
             className="text-faint hover:text-text-muted disabled:cursor-not-allowed disabled:opacity-40"
           >
-            ✕
+            âœ•
           </button>
         </div>
 
@@ -100,7 +100,7 @@ export function UpdateModal({
             <p className="text-sm text-text-muted">
               No release notes provided. The full changelog is available at{" "}
               <button
-                onClick={() => openLink("https://github.com/dataguydpeterson-cmyk/StorythreadStudio/blob/main/CHANGELOG.md")}
+                onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/blob/main/CHANGELOG.md")}
                 className="text-indigo-300 underline hover:text-indigo-200"
               >
                 CHANGELOG.md
@@ -120,7 +120,7 @@ export function UpdateModal({
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => openLink("https://github.com/sponsors/dataguydpeterson-cmyk")}
+                  onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
                   className="rounded border border-pink-700 bg-pink-900/30 px-2 py-0.5 text-[11px] text-pink-200 hover:bg-pink-900/50"
                 >
                   GitHub Sponsors
@@ -178,7 +178,7 @@ export function UpdateModal({
         {/* Footer actions */}
         <div className="flex shrink-0 items-center justify-between border-t border-border bg-bg-primary px-5 py-3">
           <button
-            onClick={() => openLink(`https://github.com/dataguydpeterson-cmyk/StorythreadStudio/releases/tag/v${update.version}`)}
+            onClick={() => openLink(`https://github.com/StoryThread-Dean/StorythreadStudio/releases/tag/v${update.version}`)}
             className="text-[11px] text-indigo-300 underline hover:text-indigo-200"
           >
             View on GitHub

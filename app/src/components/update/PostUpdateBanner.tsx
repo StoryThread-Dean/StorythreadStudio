@@ -1,4 +1,4 @@
-// components/update/PostUpdateBanner.tsx -- "What's new" after an update
+﻿// components/update/PostUpdateBanner.tsx -- "What's new" after an update
 // =========================================================================
 // Fires the FIRST time the writer launches a new version. Detected by
 // useFreshVersion(): if localStorage's last-seen version is older than the
@@ -47,7 +47,7 @@ export function PostUpdateBanner({
             </span>
           )}
           <button
-            onClick={() => openLink("https://github.com/dataguydpeterson-cmyk/StorythreadStudio/blob/main/CHANGELOG.md")}
+            onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/blob/main/CHANGELOG.md")}
             className="ml-2 text-emerald-300 underline hover:text-emerald-200"
           >
             View changelog
@@ -58,7 +58,7 @@ export function PostUpdateBanner({
           <p className="mt-0.5 text-[11px] text-emerald-300/80">
             Enjoying the updates? Consider{" "}
             <button
-              onClick={() => openLink("https://github.com/sponsors/dataguydpeterson-cmyk")}
+              onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
               className="underline hover:text-emerald-200"
             >
               sponsoring on GitHub
@@ -86,7 +86,7 @@ export function PostUpdateBanner({
         className="rounded px-1.5 py-0.5 text-[11px] text-emerald-300/70 hover:text-emerald-200"
         title="Hide for now (will return on next launch)"
       >
-        ✕
+        âœ•
       </button>
     </div>
   );
