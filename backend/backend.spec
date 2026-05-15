@@ -66,6 +66,22 @@ a = Analysis(
         # certifi bundles the TLS root certs httpx needs for OpenRouter
         # calls. Without it, the frozen exe sometimes fails SSL verification.
         'certifi',
+        # Export format libraries (DOCX and EPUB generation, Markdown->HTML)
+        'docx',
+        'docx.opc',
+        'docx.opc.part',
+        'docx.opc.pkgreader',
+        'docx.oxml',
+        'docx.oxml.ns',
+        'docx.shared',
+        'docx.enum.text',
+        'ebooklib',
+        'ebooklib.epub',
+        'markdown',
+        'markdown.extensions',
+        'markdown.extensions.extra',
+        'lxml',
+        'lxml.etree',
     ],
     hookspath=[],
     hooksconfig={},

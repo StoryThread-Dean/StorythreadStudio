@@ -36,13 +36,19 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
   const [result, setResult] = useState<{ type: string; path: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Opt-in extras. Defaults chosen so the common case (just the manuscript)
-  // stays the one-click default -- writers who want the richer export can
-  // toggle these before clicking. Phase 6 addition.
+  // Output format for the Full Manuscript export.
+  // Snapshot is always a folder of .md files regardless of this setting.
+  type ExportFormat = "markdown" | "txt" | "docx" | "epub";
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("markdown");
+
+  // Opt-in extras. Only available for markdown/txt exports; DOCX and EPUB
+  // are prose-only clean publish formats where notes/profiles don't belong.
   const [includeChapterSummaries, setIncludeChapterSummaries] = useState(false);
   const [includeSceneSummaries,   setIncludeSceneSummaries]   = useState(false);
   const [includeNotes,            setIncludeNotes]            = useState(false);
   const [includeProfiles,         setIncludeProfiles]         = useState(false);
+
+  const extrasAvailable = exportFormat === "markdown" || exportFormat === "txt";
 
   // --- Chapter selection state ---
   // chapters: list of every chapter file in manuscript/ (fetched on mount).
@@ -120,6 +126,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           folder_path:               project.root_path,
+          format:                    exportType === "full-manuscript" ? exportFormat : "markdown",
           include_chapter_summaries: includeChapterSummaries,
           include_scene_summaries:   includeSceneSummaries,
           include_notes:             includeNotes,
@@ -261,20 +268,50 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
             )}
           </div>
 
-          {/* Optional extras -- toggled before picking Full Manuscript or Snapshot.
-              Full Manuscript embeds the checked sections as appendices in the
-              output .md; Snapshot copies the matching folders alongside the
-              manuscript/ copy. Both default OFF so the one-click export stays
-              lean for writers who just want the prose. */}
+          {/* ── Format picker ─────────────────────────────────────────────
+              Applies to Full Manuscript only. Snapshot is always a folder
+              of .md files regardless of this setting. */}
           <div className="rounded-lg border border-border bg-bg-primary p-3">
-            <p className="mb-2 text-xs font-medium text-indigo-300">Include:</p>
+            <p className="mb-2 text-xs font-medium text-indigo-300">Export format</p>
+            <div className="flex gap-2">
+              {(["markdown", "txt", "docx", "epub"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => setExportFormat(fmt)}
+                  disabled={isExporting}
+                  className={`rounded border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                    exportFormat === fmt
+                      ? "border-indigo-500 bg-indigo-950 text-indigo-300"
+                      : "border-border text-text-muted hover:border-indigo-400 hover:text-text-primary"
+                  }`}
+                >
+                  {fmt === "markdown" ? ".MD" : fmt === "txt" ? ".TXT" : fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            {!extrasAvailable && (
+              <p className="mt-2 text-[10px] text-text-muted">
+                {exportFormat.toUpperCase()} export is prose-only -- extras are not included.
+              </p>
+            )}
+          </div>
+
+          {/* Optional extras -- only shown for Markdown / TXT formats.
+              DOCX and EPUB are clean publish files; notes/profiles don't belong. */}
+          <div className={`rounded-lg border border-border bg-bg-primary p-3 transition-opacity ${
+            extrasAvailable ? "opacity-100" : "opacity-30 pointer-events-none"
+          }`}>
+            <p className="mb-2 text-xs font-medium text-indigo-300">
+              Include {!extrasAvailable && <span className="text-text-muted">(Markdown / TXT only)</span>}
+            </p>
             <div className="flex flex-col gap-1.5">
               <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
                   type="checkbox"
                   checked={includeChapterSummaries}
                   onChange={(e) => setIncludeChapterSummaries(e.target.checked)}
-                  disabled={isExporting}
+                  disabled={isExporting || !extrasAvailable}
                   className="accent-indigo-500"
                 />
                 <span>Chapter summaries</span>
@@ -285,7 +322,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   type="checkbox"
                   checked={includeSceneSummaries}
                   onChange={(e) => setIncludeSceneSummaries(e.target.checked)}
-                  disabled={isExporting}
+                  disabled={isExporting || !extrasAvailable}
                   className="accent-indigo-500"
                 />
                 <span>Scene summaries</span>
@@ -296,7 +333,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   type="checkbox"
                   checked={includeNotes}
                   onChange={(e) => setIncludeNotes(e.target.checked)}
-                  disabled={isExporting}
+                  disabled={isExporting || !extrasAvailable}
                   className="accent-indigo-500"
                 />
                 <span>Notes</span>
@@ -307,7 +344,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   type="checkbox"
                   checked={includeProfiles}
                   onChange={(e) => setIncludeProfiles(e.target.checked)}
-                  disabled={isExporting}
+                  disabled={isExporting || !extrasAvailable}
                   className="accent-indigo-500"
                 />
                 <span>Profiles</span>
@@ -326,8 +363,12 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
             <div>
               <p className="text-sm font-medium text-text-primary">Full Manuscript</p>
               <p className="mt-1 text-xs text-text-muted">
-                Combine selected chapters into a single Markdown file. Overwrites the
-                previous export so you always have one canonical copy.
+                Combine selected chapters into a single{" "}
+                {exportFormat === "markdown" ? "Markdown (.md)" :
+                 exportFormat === "txt"      ? "plain text (.txt)" :
+                 exportFormat === "docx"     ? "Word document (.docx)" :
+                                              "EPUB e-book (.epub)"}{" "}
+                file. Overwrites the previous export so you always have one canonical copy.
               </p>
             </div>
           </button>

@@ -6,8 +6,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
+    "ebooklib>=0.18",
     "fastapi>=0.135.3",
     "httpx>=0.28.1",
+    "markdown>=3.7",
+    "python-docx>=1.1.2",
     "pyyaml>=6.0.2",
     "uvicorn[standard]>=0.44.0",
 ]
