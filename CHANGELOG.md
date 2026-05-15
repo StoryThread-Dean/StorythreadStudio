@@ -15,9 +15,27 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **Thesaurus.** Right-click (or select + right-click) a word in the editor to open a thesaurus popover. Synonyms come from the Datamuse API (free, no key required). Click a synonym to replace the word in place. Built as a CodeMirror context-menu extension paired with a React popover.
+
+- **Export: TXT, DOCX, and EPUB.** The full-manuscript and snapshot exports now write to four formats. TXT strips Markdown formatting and writes plain text. DOCX uses `python-docx` and preserves headings and paragraphs. EPUB uses `ebooklib` with proper chapter structure. All three appear in the existing Export modal alongside the original Markdown option.
+
+- **Reader Mode.** A clean two-page spread view of the full manuscript rendered as formatted prose. No editor chrome, no toolbars -- just typography tuned for proofreading and enjoyment (line height, margins, readable font size). Keyboard shortcut to enter and exit; pure frontend, no backend changes.
+
+- **Writing Progress tracking.** A project-completion gauge in the left panel (below the project title, above the navigation) shows overall progress as a `[==== ] N%` bar against a target derived from the project's `story_type` or, when present, from the Outline's new YAML frontmatter block. Clicking the gauge expands a slide-over panel (constrained to the left panel) with the per-segment breakdown: Manuscript 50% / Outline 10% / Profiles bucket 30% / Notes 10%, with manuscript-heavy fallback when no Outline frontmatter exists. Loose name matching against `expected_characters`, `expected_locations`, `expected_lore`, and `expected_relationships` lists in the outline drives the profiles bucket and surfaces unresolved Outline names so the writer can spot typos. Serial fiction projects show a placeholder card instead of the gauge -- the percentage model doesn't apply to chapter-self-contained serial work yet. Detailed spec: `docs/roadmap.md` "Writing Progress Tracking".
+
+- **Daily goal tracker.** Inside the gauge's slide-over, a "Today" section shows words written and task credits earned against a target chosen in Settings (Newbie 500 / Beginner 750 / Novice 1,250 / Amateur 2,500 / Experienced 4,000 / Full-time 7,500 / Professional 10,000 words per day, with matching task quotas). A 7-day sparkline shows hit/miss per day with tooltips for word and task totals. A "task" is one tracked file edited per day; running a Smart Advisor Default pass on a chapter also earns it a task credit, as does running all three category passes (Readability + Structure + Context) separately on the same chapter the same day. Per-file events are stored in a new per-project SQLite database at `<project>/.storythread/app.db`.
+
+- **Outline YAML frontmatter.** New outlines now start with a YAML frontmatter block at the top recording `target_word_count`, `expected_characters`, `expected_locations`, `expected_lore`, `expected_relationships`, and a `chapters` list for optional per-chapter word targets. Older outlines without frontmatter keep working -- the gauge falls back to per-story-type defaults (novel 90k, novella 30k, novelette 13k, short story 6k).
+
+- **Settings: Writing Progress section.** New "Writing Skill Level" dropdown drives the daily word and task targets. New "Day Rollover" toggle: Midnight (default) or Night Owl (4 AM) for writers who work past midnight.
+
 ### Changed
 
 ### Fixed
+
+- **Backend sidecar killed on normal app close.** Earlier the sidecar process only died on window destroyed; some shutdown paths left it orphaned, holding port 8000 until the next reboot or manual kill.
+
+- **Stale sidecar port conflict on app start.** On startup, the app now detects an orphan sidecar holding port 8000 from a previous unclean exit and waits for the port to clear before starting its own sidecar, instead of erroring out.
 
 ---
 

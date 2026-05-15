@@ -46,6 +46,12 @@ class SettingsResponse(BaseModel):
     # font so it is unaffected by this setting (writers control editor
     # font via the existing font picker in the editor toolbar).
     ui_scale:               str
+    # Writing Progress: writer's chosen skill level. Drives the daily
+    # word + task targets in the Writing Progress tracker.
+    writing_skill_level:    str
+    # Writing Progress: hour at which "today" rolls over. 0 = midnight
+    # (default), 4 = Night Owl. See progress_store.local_date_for().
+    day_rollover_hour:      int
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -69,6 +75,11 @@ class UpdateSettingsRequest(BaseModel):
     # One of "default" | "larger" | "larger_plus" | "largest". Anything else
     # is ignored. Forward-compatible if more steps are added later.
     ui_scale:            str | None                   = None
+    # One of the seven skill levels. Anything else is silently coerced to
+    # "novice" (the default) when written.
+    writing_skill_level: str | None                   = None
+    # Only 0 or 4 are accepted. Anything else is clamped to 0 at write time.
+    day_rollover_hour:   int | None                   = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -99,6 +110,8 @@ async def get_settings():
         vault_root             = get_vault_root(),
         theme                  = settings.get("theme", "dark"),
         ui_scale               = settings.get("ui_scale", "default"),
+        writing_skill_level    = settings.get("writing_skill_level", "novice"),
+        day_rollover_hour      = int(settings.get("day_rollover_hour", 0) or 0),
     )
 
 
@@ -141,6 +154,24 @@ async def update_settings(request: UpdateSettingsRequest):
         # Same silent-ignore pattern as theme. Lets us add more steps later
         # without older clients breaking on the new values.
         settings["ui_scale"] = request.ui_scale
+    if request.writing_skill_level is not None:
+        # Coerce unknown levels to "novice" (the documented default) rather
+        # than 400'ing -- forward-compatible if more steps are added later.
+        valid_levels = ("newbie", "beginner", "novice", "amateur",
+                        "experienced", "fulltime", "professional")
+        settings["writing_skill_level"] = (
+            request.writing_skill_level
+            if request.writing_skill_level in valid_levels
+            else "novice"
+        )
+    if request.day_rollover_hour is not None:
+        # Only midnight (0) and Night Owl (4) are valid. Anything else clamps
+        # to 0 so a stray value doesn't shift the gauge unexpectedly.
+        settings["day_rollover_hour"] = (
+            request.day_rollover_hour
+            if request.day_rollover_hour in (0, 4)
+            else 0
+        )
 
     save_settings(settings)
 
@@ -159,6 +190,8 @@ async def update_settings(request: UpdateSettingsRequest):
         vault_root             = get_vault_root(),
         theme                  = settings.get("theme", "dark"),
         ui_scale               = settings.get("ui_scale", "default"),
+        writing_skill_level    = settings.get("writing_skill_level", "novice"),
+        day_rollover_hour      = int(settings.get("day_rollover_hour", 0) or 0),
     )
 
 

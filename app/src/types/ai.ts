@@ -19,6 +19,12 @@ export interface AppSettings {
   // resolves blanks to ~/Documents/Storythread Studio and always returns a real path
   // here -- the UI can treat it as non-null for display purposes.
   vault_root:             string;
+  // Writing Progress: skill level drives daily word/task targets. Values:
+  // "newbie" | "beginner" | "novice" | "amateur" | "experienced" | "fulltime" | "professional".
+  writing_skill_level:    string;
+  // Writing Progress: clock hour at which "today" rolls over. 0 = midnight
+  // (default), 4 = Night Owl. Anything in [00:00, rollover_hour) counts toward yesterday.
+  day_rollover_hour:      number;
 }
 
 export interface UpdateSettingsPayload {

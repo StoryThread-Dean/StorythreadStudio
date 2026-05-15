@@ -41,6 +41,7 @@ import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./util
 import type { ChipIncludeOptions } from "./utils/profileFormat";
 import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
+import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
 import { IssuePopover } from "./components/editor/IssuePopover";
 import { ISSUE_CLICK_EVENT, clearIssuesEffect } from "./components/editor/issueOverlay";
 import type { LocatedIssue, IssueClickDetail } from "./components/editor/issueOverlay";
@@ -205,6 +206,11 @@ function App() {
   // click on a highlight; null = popover closed.
   const [issueCount, setIssueCount] = useState(0);
   const [issuePopover, setIssuePopover] = useState<IssueClickDetail | null>(null);
+
+  // Writing Progress: whether the gauge's slide-over breakdown is expanded.
+  // Lifted here so future left-panel coordination (close on project switch,
+  // etc.) is easy if we ever need it.
+  const [progressOpen, setProgressOpen] = useState(false);
 
   // --- Cancel-in-flight chat request ---
   // chatAbortRef holds the AbortController for the currently running fetch so
@@ -1426,7 +1432,7 @@ function App() {
       <div className="flex h-screen overflow-hidden bg-bg-primary text-text-primary">
 
       {/* ── LEFT PANEL: Navigation Sidebar ─────────────────────────────── */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-bg-panel">
+      <aside className="relative flex w-64 shrink-0 flex-col border-r border-border bg-bg-panel">
 
         <div className="border-b border-border px-4 py-4">
           <div className="flex items-center justify-between">
@@ -1515,6 +1521,18 @@ function App() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Writing Progress gauge (v1.0.2). Sits below the project title and
+            above the navigation. The slide-over breakdown is constrained to
+            the aside's bounds (the wrapping div has relative positioning
+            inside the gauge component) so it never crosses into the editor. */}
+        <div className="border-b border-border px-3 py-3">
+          <ProjectCompletionGauge
+            projectPath={currentProject.root_path}
+            isOpen={progressOpen}
+            onToggle={() => setProgressOpen(o => !o)}
+          />
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-4">

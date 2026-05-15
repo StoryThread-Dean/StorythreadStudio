@@ -117,6 +117,12 @@ export function Settings({ onClose }: SettingsProps) {
   // treat "" as a sentinel meaning "use the default".
   const [vaultRoot, setVaultRoot] = useState("");
 
+  // Writing Progress -- skill level drives daily word + task targets shown
+  // in the gauge's daily tracker. The Night Owl toggle shifts the day
+  // boundary from midnight to 4am for writers who work past midnight.
+  const [writingSkillLevel, setWritingSkillLevel] = useState("novice");
+  const [nightOwl, setNightOwl] = useState(false);
+
   // Theme: lives in the global theme store (useTheme), not in local state.
   // The setter applies the change immediately to the DOM and persists to the
   // backend, so there's no separate "save" step for theme like other fields.
@@ -196,6 +202,10 @@ export function Settings({ onClose }: SettingsProps) {
         // empty), so we can pre-fill the input directly.
         setVaultRoot(data.vault_root ?? "");
 
+        // Writing Progress: skill level + Night Owl rollover.
+        setWritingSkillLevel(data.writing_skill_level ?? "novice");
+        setNightOwl((data.day_rollover_hour ?? 0) === 4);
+
         if (data.openrouter_api_key_set) {
           fetchModels();
         }
@@ -266,6 +276,10 @@ export function Settings({ onClose }: SettingsProps) {
         model_content_modes:  parsedContentModes,
         // Vault root: empty string tells the backend to reset to the default.
         vault_root:           vaultRoot.trim(),
+        // Writing Progress: skill level (driver of daily word + task targets)
+        // and day rollover (0 = midnight default, 4 = Night Owl mode).
+        writing_skill_level:  writingSkillLevel,
+        day_rollover_hour:    nightOwl ? 4 : 0,
       };
 
       if (apiKeyInput.trim()) {
@@ -287,6 +301,10 @@ export function Settings({ onClose }: SettingsProps) {
       // default when we send "", so this re-fills the input with the real
       // path instead of leaving it blank.
       setVaultRoot(data.vault_root ?? "");
+      // Mirror Writing Progress fields back from server in case the backend
+      // normalized them (e.g. clamped a bad rollover hour to 0).
+      setWritingSkillLevel(data.writing_skill_level ?? "novice");
+      setNightOwl((data.day_rollover_hour ?? 0) === 4);
       setSaved(true);
       setTestResult(null);
 
@@ -776,6 +794,88 @@ export function Settings({ onClose }: SettingsProps) {
                     Leave blank and save to reset to the default
                     (<code className="text-indigo-400">~/Documents/Storythread Studio</code>).
                   </p>
+                </div>
+              </section>
+
+
+              {/* ── SECTION 3b: Writing Progress ───────────────────────────
+                  Two controls feed the v1.0.2 Writing Progress gauge:
+                    - Skill level: daily word + task targets
+                    - Night Owl: shifts the day-rollover boundary
+                  Detailed spec: docs/roadmap.md "Writing Progress Tracking". */}
+              <section>
+                <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  Writing Progress
+                </h3>
+
+                {/* Skill level dropdown */}
+                <div className="mb-5">
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
+                    Writing Skill Level
+                  </label>
+                  <p className="mb-2 text-xs text-faint">
+                    Drives the daily word and task targets shown in the
+                    project's progress tracker. Pick the level that matches
+                    your typical pace -- the gauge celebrates hitting the
+                    daily goal, not the difference between levels.
+                  </p>
+                  <select
+                    value={writingSkillLevel}
+                    onChange={e => setWritingSkillLevel(e.target.value)}
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  >
+                    <option value="newbie">Newbie -- 500 words / 1 task per day</option>
+                    <option value="beginner">Beginner -- 750 words / 1 task per day</option>
+                    <option value="novice">Novice -- 1,250 words / 2 tasks per day</option>
+                    <option value="amateur">Amateur -- 2,500 words / 2 tasks per day</option>
+                    <option value="experienced">Experienced -- 4,000 words / 3 tasks per day</option>
+                    <option value="fulltime">Full-time -- 7,500 words / 3 tasks per day</option>
+                    <option value="professional">Professional -- 10,000 words / 4 tasks per day</option>
+                  </select>
+                  <p className="mt-2 text-xs text-faint">
+                    A "task" is one tracked file edited per day (manuscript,
+                    notes, outline, profile). Running a Smart Advisor Default
+                    pass on a chapter also earns it a task credit.
+                  </p>
+                </div>
+
+                {/* Night Owl rollover toggle */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-primary">
+                    Day Rollover
+                  </label>
+                  <p className="mb-2 text-xs text-faint">
+                    When does "today" become "tomorrow" for daily-goal
+                    accounting? Midnight is standard. Night Owl mode shifts
+                    the boundary to 4 AM so a 1 AM writing session still
+                    counts toward the previous day's goal.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setNightOwl(false)}
+                      type="button"
+                      className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
+                        !nightOwl
+                          ? "border-indigo-500 bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                      }`}
+                    >
+                      <span className="font-medium">Midnight (default)</span>
+                      <span className="text-text-muted">Day rolls over at 12:00 AM</span>
+                    </button>
+                    <button
+                      onClick={() => setNightOwl(true)}
+                      type="button"
+                      className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
+                        nightOwl
+                          ? "border-indigo-500 bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                      }`}
+                    >
+                      <span className="font-medium">Night Owl</span>
+                      <span className="text-text-muted">Day rolls over at 4:00 AM</span>
+                    </button>
+                  </div>
                 </div>
               </section>
 
