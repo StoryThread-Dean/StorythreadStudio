@@ -41,6 +41,8 @@ from app.ai.prompts import (
 )
 import uuid
 from app.utils.scene_parser import split_into_scenes_with_meta, count_hr_breaks
+from app.progress_store import record_advisor_run
+from app.settings_store import get_rollover_hour
 import httpx
 import json
 import os
@@ -1487,14 +1489,15 @@ async def editor_chat(request: EditorChatRequest):
 #   in one round trip without screen-scraping prose.
 
 class EditorPassRequest(BaseModel):
-    category:      str                          # "readability" | "structure" | "context"
-    subcategories: list[str] = []               # subcategory keys; empty = all of them
-    chapter_text:  str                          # the passage the AI should review (may be whole chapter or just a selection)
-    is_selection:  bool = False                 # True when chapter_text is a writer-selected range, not the whole chapter
-    context_chips: list[ContextChip] = []
-    model_id:      str | None = None
-    content_mode:  str = "general"
-    project_path:  str | None = None
+    category:         str                          # "readability" | "structure" | "context"
+    subcategories:    list[str] = []               # subcategory keys; empty = all of them
+    chapter_text:     str                          # the passage the AI should review (may be whole chapter or just a selection)
+    is_selection:     bool = False                 # True when chapter_text is a writer-selected range, not the whole chapter
+    context_chips:    list[ContextChip] = []
+    model_id:         str | None = None
+    content_mode:     str = "general"
+    project_path:     str | None = None
+    chapter_filename: str | None = None            # for Writing Progress logging; the chapter file the writer is reviewing
 
 
 class EditorIssueModel(BaseModel):
@@ -1671,6 +1674,20 @@ async def editor_pass(request: EditorPassRequest):
     issues_raw = _parse_pass_response(raw, allowed_keys)
 
     issues = [EditorIssueModel(**item) for item in issues_raw]
+
+    # Writing Progress: log this advisor invocation. Records project, chapter
+    # file, and which category ran (readability / structure / context). The
+    # aggregator in routers/progress.py grants the chapter a daily task credit
+    # once all three categories have run on it the same day. Best-effort --
+    # record_advisor_run() never raises.
+    if request.project_path and request.chapter_filename:
+        await record_advisor_run(
+            request.project_path,
+            f"manuscript/{request.chapter_filename}",
+            request.category,
+            rollover_hour=get_rollover_hour(),
+        )
+
     return EditorPassResponse(issues=issues, model_used=model_id)
 
 

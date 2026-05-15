@@ -1774,6 +1774,7 @@ function App() {
           <EditorAdvisorBar
             view={editorView}
             chapterText={chapterContent}
+            chapterFilename={currentChapter?.filename ?? null}
             contextChips={contextChips}
             modelId={currentProject?.default_model || null}
             contentMode={currentProject?.content_mode_default ?? "general"}

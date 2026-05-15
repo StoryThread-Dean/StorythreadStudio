@@ -101,6 +101,11 @@ export interface EditorAdvisorBarProps {
   // Must reflect the editor's current state (passed from App.tsx, which
   // mirrors the doc string into chapter content state).
   chapterText:   string;
+  // Filename of the chapter currently open in the editor. Forwarded to the
+  // backend so the Writing Progress gauge can record which file the advisor
+  // pass ran against. Null when no chapter is open (the buttons disable in
+  // that state anyway).
+  chapterFilename: string | null;
   contextChips:  ContextChip[];
   modelId:       string | null;
   contentMode:   string;
@@ -125,7 +130,7 @@ export interface EditorAdvisorBarProps {
 
 
 export function EditorAdvisorBar({
-  view, chapterText, contextChips, modelId, contentMode, projectPath,
+  view, chapterText, chapterFilename, contextChips, modelId, contentMode, projectPath,
   issueCount, onClearIssues, onAddIssues,
   profileChipCount, onOpenProfilePicker,
 }: EditorAdvisorBarProps) {
@@ -305,13 +310,14 @@ export function EditorAdvisorBar({
 
     const payload: EditorPassRequest = {
       category,
-      subcategories: subs,
-      chapter_text:  passText,
-      is_selection:  isSelection,
-      context_chips: contextChips,
-      model_id:      modelId ?? undefined,
-      content_mode:  contentMode,
-      project_path:  projectPath,
+      subcategories:    subs,
+      chapter_text:     passText,
+      is_selection:     isSelection,
+      context_chips:    contextChips,
+      model_id:         modelId ?? undefined,
+      content_mode:     contentMode,
+      project_path:     projectPath,
+      chapter_filename: chapterFilename,
     };
 
     try {
