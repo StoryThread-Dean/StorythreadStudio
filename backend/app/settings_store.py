@@ -67,6 +67,10 @@ DEFAULT_SETTINGS: dict = {
     # (warm off-white "paper" feel). Persisted globally so the writer's
     # preference applies across all projects.
     "theme":               "dark",
+    # ui_scale: interface font size step. One of:
+    # "default" | "larger" | "larger_plus" | "largest"
+    # Drives the root <html> font-size so Tailwind rem utilities scale.
+    "ui_scale":            "default",
 }
 
 

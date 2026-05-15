@@ -315,6 +315,15 @@ export function Settings({ onClose }: SettingsProps) {
       const res = await fetch(`${API_BASE}/api/settings/test-connection`, {
         method: "POST",
       });
+      if (!res.ok) {
+        // Server returned a non-2xx (e.g. 500). Try to read a detail message;
+        // fall back gracefully so res.json() throwing doesn't mask the real
+        // problem with "Could not reach the backend."
+        let detail = `Server error (${res.status}).`;
+        try { const err = await res.json(); detail = err.detail ?? err.error ?? detail; } catch { /* ignore */ }
+        setTestResult({ ok: false, message: detail });
+        return;
+      }
       const data = await res.json();
 
       if (data.ok) {

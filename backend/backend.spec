@@ -13,6 +13,7 @@
 # to be listed explicitly or the bundled exe crashes on first request.
 
 # -*- mode: python ; coding: utf-8 -*-
+import certifi
 
 block_cipher = None
 
@@ -21,7 +22,14 @@ a = Analysis(
     ['run_backend.py'],
     pathex=['.'],
     binaries=[],
-    datas=[],
+    # Include certifi's cacert.pem so HTTPS calls (OpenRouter) work in the
+    # frozen exe. Without this data file, certifi.where() returns a path
+    # that doesn't exist inside the bundle and httpx raises an SSLError on
+    # every external request. The hidden import above pulls in the Python
+    # module; this datas entry pulls in the actual certificate file.
+    datas=[
+        (certifi.where(), 'certifi'),
+    ],
     hiddenimports=[
         # ── uvicorn internals ──────────────────────────────────────────────
         # Loaded by string name from uvicorn.config based on autodetected

@@ -104,6 +104,12 @@ async def test_connection(api_key: str) -> dict:
         return {"ok": False, "error": f"OpenRouter returned HTTP {e.response.status_code}."}
     except httpx.RequestError as e:
         return {"ok": False, "error": f"Could not reach OpenRouter: {e}"}
+    except Exception as e:
+        # Catches SSL errors (missing cert bundle in frozen binary), JSON
+        # decode errors from malformed OpenRouter responses, and any other
+        # unexpected failure. Returns a user-facing message instead of
+        # letting FastAPI turn the exception into a 500 with no detail.
+        return {"ok": False, "error": f"Connection check failed: {type(e).__name__}: {e}"}
 
 
 async def run_completion(

@@ -17,8 +17,20 @@ the file top-to-bottom; module-level imports get caught reliably. Putting
 'from app.main import app' inside __main__ has historically caused
 'No module named app' errors in some PyInstaller setups.
 """
+import os
+import sys
 import uvicorn
 from app.main import app
+
+# When running as a PyInstaller frozen exe, certifi.where() resolves
+# correctly because PyInstaller copies cacert.pem into the bundle and
+# patches the path. Setting these env vars explicitly ensures httpx and
+# any other HTTP library in the process also find the bundled certs,
+# even if they do their own SSL path resolution before importing certifi.
+if getattr(sys, 'frozen', False):
+    import certifi
+    os.environ.setdefault('SSL_CERT_FILE', certifi.where())
+    os.environ.setdefault('REQUESTS_CA_BUNDLE', certifi.where())
 
 
 if __name__ == "__main__":
