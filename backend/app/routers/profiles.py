@@ -33,6 +33,9 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.progress_store import record_save_event
+from app.settings_store import get_rollover_hour
+
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 
 
@@ -694,11 +697,34 @@ async def save_profile(request: SaveProfileRequest):
 
     markdown = _generate_profile_markdown(request.profile, profile_type)
 
+    # Read previous content (if any) for the word-delta calculation.
+    previous_content: str | None = None
+    if os.path.isfile(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                previous_content = f.read()
+        except OSError:
+            previous_content = None
+
     try:
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(markdown)
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Could not save profile: {e}")
+
+    # Record the save as a progress event. Character / relationship / location
+    # / lore saves earn the file a daily task credit; chapter_summary and
+    # scene_summary are AI-generated content and only log word deltas, not
+    # task credits (the writer doesn't earn "tasks" for AI-authored material).
+    is_summary = profile_type in ("chapter_summary", "scene_summary")
+    await record_save_event(
+        request.folder_path,
+        f"{PROFILE_FOLDERS[profile_type]}/{request.filename}",
+        markdown,
+        previous_content,
+        rollover_hour=get_rollover_hour(),
+        count_for_task_credit=not is_summary,
+    )
 
     return request.profile
 
@@ -952,8 +978,28 @@ async def save_arc(request: SaveProfileRequest):
     request.profile.updated_at = datetime.now(timezone.utc).isoformat()
 
     markdown = _generate_profile_markdown(request.profile, ptype)
+
+    # Read previous content for the word-delta calculation.
+    previous_content: str | None = None
+    if os.path.isfile(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                previous_content = f.read()
+        except OSError:
+            previous_content = None
+
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(markdown)
+
+    # Arc files are book-level character work; they count for task credit
+    # just like canonical profile saves.
+    await record_save_event(
+        request.folder_path,
+        f"{ARC_FOLDERS[ptype]}/{request.filename}",
+        markdown,
+        previous_content,
+        rollover_hour=get_rollover_hour(),
+    )
 
     return request.profile
 

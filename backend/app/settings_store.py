@@ -71,6 +71,17 @@ DEFAULT_SETTINGS: dict = {
     # "default" | "larger" | "larger_plus" | "largest"
     # Drives the root <html> font-size so Tailwind rem utilities scale.
     "ui_scale":            "default",
+    # writing_skill_level: drives the daily word + task targets shown in the
+    # Writing Progress tracker. Values: "newbie" | "beginner" | "novice"
+    # | "amateur" | "experienced" | "fulltime" | "professional".
+    # Default "novice" (1,250 words/day, 2 tasks/day) is a reasonable middle
+    # bar -- ambitious enough to feel meaningful, not so high it discourages.
+    "writing_skill_level": "novice",
+    # day_rollover_hour: clock hour at which "today" rolls into "tomorrow"
+    # for daily-goal accounting. 0 = midnight (default). 4 = Night Owl mode
+    # for writers who work past midnight -- anything from 00:00 through 03:59
+    # still counts toward yesterday's progress.
+    "day_rollover_hour":   0,
 }
 
 
@@ -115,6 +126,21 @@ def get_api_key() -> str:
 def get_default_model() -> str:
     """Convenience function: just return the default model ID."""
     return load_settings().get("default_model", DEFAULT_SETTINGS["default_model"])
+
+
+def get_rollover_hour() -> int:
+    """
+    Return the configured day-rollover hour for daily-progress accounting.
+
+    Valid values: 0 (midnight, default) or 4 (Night Owl). Anything else is
+    clamped to 0 so a stray bad value doesn't shift the gauge unexpectedly.
+    """
+    raw = load_settings().get("day_rollover_hour", 0)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 0
+    return value if value in (0, 4) else 0
 
 
 def get_vault_root() -> str:

@@ -23,6 +23,9 @@ import shutil
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.progress_store import record_save_event
+from app.settings_store import get_rollover_hour
+
 
 # --- Router ---
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -703,11 +706,32 @@ async def save_chapter(request: SaveChapterRequest):
             detail=f"manuscript/ folder not found in: {request.folder_path}"
         )
 
+    # Read previous content (if any) before we overwrite. The Writing Progress
+    # gauge needs old vs. new word counts to compute the delta for the day.
+    previous_content: str | None = None
+    if os.path.isfile(chapter_path):
+        try:
+            with open(chapter_path, "r", encoding="utf-8") as f:
+                previous_content = f.read()
+        except OSError:
+            # Best-effort -- if we can't read the old content, treat it as new.
+            previous_content = None
+
     try:
         with open(chapter_path, "w", encoding="utf-8") as f:
             f.write(request.content)
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Could not write file: {e}")
+
+    # Record the save as a progress event. record_save_event() never raises,
+    # so a failure here cannot break the save.
+    await record_save_event(
+        request.folder_path,
+        f"manuscript/{request.filename}",
+        request.content,
+        previous_content,
+        rollover_hour=get_rollover_hour(),
+    )
 
     return SaveChapterResponse(
         filename=request.filename,
@@ -1036,11 +1060,30 @@ async def save_note(request: SaveChapterRequest):
             detail=f"notes/ folder not found in: {request.folder_path}"
         )
 
+    # Read previous content (if any) for the word-delta calculation.
+    previous_content: str | None = None
+    if os.path.isfile(note_path):
+        try:
+            with open(note_path, "r", encoding="utf-8") as f:
+                previous_content = f.read()
+        except OSError:
+            previous_content = None
+
     try:
         with open(note_path, "w", encoding="utf-8") as f:
             f.write(request.content)
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Could not write file: {e}")
+
+    # Record the save as a progress event. Notes include outline.md, which
+    # the gauge treats as a tracked file for both word-delta and task-credit.
+    await record_save_event(
+        request.folder_path,
+        f"notes/{request.filename}",
+        request.content,
+        previous_content,
+        rollover_hour=get_rollover_hour(),
+    )
 
     return SaveChapterResponse(
         filename=request.filename,

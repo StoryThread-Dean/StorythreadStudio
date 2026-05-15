@@ -83,6 +83,88 @@ def _metadata_block(metadata: OutlineMetadata) -> str:
     )
 
 
+# ── Writing-Progress frontmatter ─────────────────────────────────────────────
+#
+# Per-template default target word counts. The Writing Progress gauge reads
+# these to compute the project-completion percentage when the writer hasn't
+# overridden them in the outline's YAML frontmatter. Values are midpoints of
+# common publishing-industry ranges for each form -- defensible defaults that
+# the writer can easily replace.
+#
+# Serial fiction has no fixed total target because serials are chapter-self-
+# contained and ongoing. The gauge renders a placeholder card for serials
+# instead of the percentage bar (see roadmap.md "Serial fiction progress
+# model" for the deferred design).
+
+TEMPLATE_DEFAULTS: dict[str, dict] = {
+    "novel":          {"target_word_count": 90000},
+    "novella":        {"target_word_count": 30000},
+    "novelette":      {"target_word_count": 13000},
+    "short_story":    {"target_word_count": 6000},
+    "serial_fiction": {"target_word_count": None},
+}
+
+
+def _frontmatter_block(template_type: str) -> str:
+    """
+    Build the YAML frontmatter block at the very top of a new outline.
+
+    Why YAML frontmatter and not part of the HTML metadata comment below?
+      - YAML between `---` delimiters is the industry-standard "structured
+        metadata at the top of a Markdown file" convention. Writers familiar
+        with Obsidian, Jekyll, or Hugo will recognize the pattern. PyYAML
+        parses it cleanly with no regex.
+      - The Writing Progress gauge polls this block to know what the writer
+        is planning toward (target word count, expected character / location /
+        lore / relationship lists, optional per-chapter word targets).
+      - Empty lists are fine -- the gauge falls back to story-type defaults
+        when fields are blank. The block exists with empty slots so the
+        writer can fill them in without inventing the schema.
+
+    Inline `#` comments teach the writer what each field means without
+    needing a separate documentation lookup.
+    """
+    defaults = TEMPLATE_DEFAULTS.get(template_type, TEMPLATE_DEFAULTS["novel"])
+    target = defaults.get("target_word_count")
+
+    # Render `target_word_count` either as the integer default or as YAML null
+    # for serial fiction. A trailing comment on the null line explains why.
+    if target is None:
+        target_line = (
+            "target_word_count: null  "
+            "# Serial fiction is chapter-self-contained; no fixed total target yet."
+        )
+    else:
+        target_line = f"target_word_count: {target}"
+
+    return (
+        "---\n"
+        "# OUTLINE TRACKING DATA -- read by the Writing Progress gauge.\n"
+        "# Fill these in as you plan. Empty lists are fine; the gauge falls\n"
+        "# back to story-type defaults when fields are blank.\n"
+        f"{target_line}\n"
+        "expected_characters: []      # e.g. [Kael, Vire, Empress Asha]\n"
+        "expected_locations: []       # e.g. [Ironhold, The Hollow Crown]\n"
+        "expected_lore: []            # e.g. [The Ashen Pact]\n"
+        "expected_relationships: []   # e.g. [Kael & Vire]\n"
+        "chapters: []                 # Optional per-chapter word targets,\n"
+        "                             # e.g. [{title: \"Opening\", word_target: 3000}]\n"
+        "---"
+    )
+
+
+def _template_preamble(metadata: OutlineMetadata, template_type: str) -> str:
+    """
+    Build the full top-of-file preamble: YAML frontmatter + HTML metadata.
+
+    Order matters. YAML frontmatter must be the very first thing in the file
+    (the convention is anchored to the start of the document) so the parser
+    can find it. The HTML metadata comment goes underneath and stays hidden
+    from Markdown preview.
+    """
+    return f"{_frontmatter_block(template_type)}\n\n{_metadata_block(metadata)}"
+
+
 # ── Novel template ────────────────────────────────────────────────────────────
 
 def _novel_template(metadata: OutlineMetadata) -> str:
@@ -101,7 +183,7 @@ def _novel_template(metadata: OutlineMetadata) -> str:
     react to instead of a blank page. The writer is expected to overwrite
     these examples.
     """
-    meta = _metadata_block(metadata)
+    meta = _template_preamble(metadata, "novel")
     # Seed the visible header from title if available -- but keep it generic
     # enough that a blank title just produces "# Outline".
     title_display = _or_blank(metadata.get("title"))
@@ -210,7 +292,7 @@ def _short_story_template(metadata: OutlineMetadata) -> str:
       - Three-Act Short (compressed novel structure)
       - In Medias Res (start mid-action, fill in via flashback)
     """
-    meta = _metadata_block(metadata)
+    meta = _template_preamble(metadata, "short_story")
     title_display = _or_blank(metadata.get("title"))
     heading = f"# Outline -- {title_display}" if title_display else "# Outline"
 
@@ -337,7 +419,7 @@ def _novella_template(metadata: OutlineMetadata) -> str:
     worldbuilding-hooks block and deemphasizes subplots, since these are
     the two areas that most often bloat a novella into novel territory.
     """
-    meta = _metadata_block(metadata)
+    meta = _template_preamble(metadata, "novella")
     title_display = _or_blank(metadata.get("title"))
     heading = f"# Outline -- {title_display}" if title_display else "# Outline"
 
@@ -426,7 +508,7 @@ def _novelette_template(metadata: OutlineMetadata) -> str:
 
     Typical layout: 4 to 7 chapters or sections of 1,500 to 3,000 words each.
     """
-    meta = _metadata_block(metadata)
+    meta = _template_preamble(metadata, "novelette")
     title_display = _or_blank(metadata.get("title"))
     heading = f"# Outline -- {title_display}" if title_display else "# Outline"
 
@@ -510,7 +592,7 @@ def _serial_fiction_template(metadata: OutlineMetadata) -> str:
     plans one season; copy this file or duplicate the Season block to
     plan further seasons.
     """
-    meta = _metadata_block(metadata)
+    meta = _template_preamble(metadata, "serial_fiction")
     title_display = _or_blank(metadata.get("title"))
     heading = f"# Outline -- {title_display}" if title_display else "# Outline"
 
