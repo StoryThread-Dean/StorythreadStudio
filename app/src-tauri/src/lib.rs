@@ -38,6 +38,20 @@ use tauri_plugin_shell::process::CommandChild;
 #[cfg(not(debug_assertions))]
 struct BackendSidecar(Mutex<Option<CommandChild>>);
 
+// Drop ensures the sidecar is killed when the managed state is released
+// during app shutdown -- more reliable than the on_window_event handler alone,
+// because Rust's drop order runs before the OS cleans up the process.
+#[cfg(not(debug_assertions))]
+impl Drop for BackendSidecar {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = self.0.lock() {
+            if let Some(child) = guard.take() {
+                let _ = child.kill();
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
