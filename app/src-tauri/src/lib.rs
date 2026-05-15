@@ -75,6 +75,21 @@ pub fn run() {
             //   terminal; that's fine.
             #[cfg(not(debug_assertions))]
             {
+                // Kill any stale sidecar left over from a previous session.
+                // This handles the upgrade case: the user installs a new version
+                // while the old sidecar (from the pre-fix release) is still
+                // running and holding port 8000. Without this, the new sidecar
+                // fails to bind and the app can't talk to its own backend.
+                // taskkill /F /IM kills by exe name; ignore the exit code
+                // (non-zero when no matching process exists, which is fine).
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/IM", "storythread-backend.exe"])
+                    .output();
+
+                // Give the OS a moment to release the port after the kill.
+                // The TCP socket stays in TIME_WAIT briefly; 400ms is enough.
+                std::thread::sleep(std::time::Duration::from_millis(400));
+
                 // Register the state container first so we can store the
                 // child handle into it right after spawning.
                 _app.manage(BackendSidecar(Mutex::new(None)));

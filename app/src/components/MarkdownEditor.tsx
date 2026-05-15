@@ -12,7 +12,7 @@
 //     mouse-position-to-document-position calculations, causing selection to
 //     appear in the wrong place or not at all.
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
@@ -25,6 +25,7 @@ import { tags as t } from "@lezer/highlight";
 import type { FontValue } from "./EditorToolbar";
 import { useTheme } from "../hooks/useTheme";
 import { issueOverlayExtension } from "./editor/issueOverlay";
+import { ThesaurusPopover } from "./editor/ThesaurusPopover";
 
 
 // --- Font Compartment ---
@@ -345,9 +346,77 @@ interface MarkdownEditorProps {
 }
 
 
+// ── Thesaurus state shape ─────────────────────────────────────────────────────
+interface ThesaurusState {
+  word: string;
+  from: number;   // document position of word start
+  to:   number;   // document position of word end
+  x:    number;   // viewport px for popover
+  y:    number;
+}
+
+
 // ── MarkdownEditor Component ──────────────────────────────────────────────────
 export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, onSelectionChange }: MarkdownEditorProps) {
   const editorViewRef = useRef<EditorView | null>(null);
+
+  // Thesaurus popover state -- null when closed
+  const [thesaurus, setThesaurus] = useState<ThesaurusState | null>(null);
+
+  // ── Context-menu handler: open Thesaurus for any word ─────────────────────
+  // Priority order:
+  //   1. If a single word is selected, use the selection.
+  //   2. Otherwise, look up the word at the click position.
+  // Multi-word selections and clicks on punctuation/whitespace fall through
+  // to the browser's native context menu (which keeps spell-check working).
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    const view = editorViewRef.current;
+    if (!view) return;
+
+    let word = "";
+    let from = 0;
+    let to   = 0;
+
+    // Check for an existing single-word selection first
+    const sel  = view.state.selection.main;
+    if (!sel.empty) {
+      const text = view.state.sliceDoc(sel.from, sel.to).trim();
+      if (text && !/\s/.test(text) && text.length <= 60) {
+        word = text;
+        from = sel.from;
+        to   = sel.to;
+      }
+    }
+
+    // No usable selection -- find the word at the click position
+    if (!word) {
+      const clickPos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+      if (clickPos !== null) {
+        const range = view.state.wordAt(clickPos);
+        if (range) {
+          const text = view.state.sliceDoc(range.from, range.to);
+          // Only show for real words (letters, hyphens, apostrophes)
+          if (/^[A-Za-z][A-Za-z'-]*$/.test(text)) {
+            word = text;
+            from = range.from;
+            to   = range.to;
+          }
+        }
+      }
+    }
+
+    if (!word) return;   // nothing word-like found -- let native menu show
+
+    e.preventDefault();
+    setThesaurus({ word, from, to, x: e.clientX, y: e.clientY });
+  }, []);
+
+  // Replace the original word with the chosen synonym, then close the popover
+  const handleThesaurusReplace = useCallback((replacement: string, from: number, to: number) => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    view.dispatch({ changes: { from, to, insert: replacement } });
+  }, []);
 
   // Subscribe to the global theme so we can switch CodeMirror's syntax
   // highlighting + chrome colors when the user toggles dark/light. The
@@ -409,7 +478,23 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
 
   return (
     // Outer wrapper: fills the panel and scrolls vertically.
-    <div className="h-full overflow-y-auto bg-bg-primary">
+    // onContextMenu intercepts right-clicks so we can show the Thesaurus popover
+    // for any word. When no word is found the handler returns early, allowing the
+    // browser's native context menu (with spellcheck suggestions) to appear.
+    <div className="h-full overflow-y-auto bg-bg-primary" onContextMenu={handleContextMenu}>
+
+      {/* Thesaurus popover -- fixed-position, appears at the right-click coordinates */}
+      {thesaurus && (
+        <ThesaurusPopover
+          word={thesaurus.word}
+          from={thesaurus.from}
+          to={thesaurus.to}
+          x={thesaurus.x}
+          y={thesaurus.y}
+          onReplace={handleThesaurusReplace}
+          onClose={() => setThesaurus(null)}
+        />
+      )}
 
       {/* Centering wrapper: constrains the editor to a comfortable reading width.
           We center HERE with a div, not inside CodeMirror's internal styles.

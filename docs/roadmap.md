@@ -10,6 +10,22 @@ For shipped releases see [`../CHANGELOG.md`](../CHANGELOG.md).
 
 Committed work for the near-term roadmap.
 
+### v1.0.2 Release
+
+Planned features for the next release, in implementation order:
+
+**Thesaurus** — Right-click (or select + right-click) a word in the editor to open a thesaurus popover. Fetches synonyms from the Datamuse API (free, no key). Click a synonym to replace the word in place. CodeMirror context-menu extension + React popover.
+
+**Export: TXT, DOCX, EPUB** — Expand the existing export system beyond Markdown. TXT strips Markdown formatting. DOCX uses `python-docx` and preserves headings/paragraphs. EPUB uses `ebooklib` with chapter structure. All three surface in the existing Export modal alongside the current Markdown option.
+
+**Reader Mode** — A clean full-screen (or panel) view of the current chapter rendered as formatted prose. No editor chrome, no toolbars. Tuned typography (line height, margins, readable font size) for proofreading and enjoyment. Keyboard shortcut to enter/exit. Pure frontend — no backend changes.
+
+**Writing Progress Tracking** — Word count per chapter aggregated to a project total, measured against a target derived from the project's `story_type` (short story / novelette / novella / novel / series). Progress bar on the project home or a persistent footer indicator. Optional chapter-level word-count targets from the Outline. Includes daily word count tracking.
+
+**Global Search + Replace** — Search across all Markdown files in `manuscript/`, `notes/`, and `profiles/`. Results grouped by file with line context. Replace is per-match or replace-all within a file. Backend scans files; frontend shows results with confirm step before writing.
+
+---
+
 ### Level 3: Collaborative Draft
 
 A new AI mode where the writer and AI co-draft a passage turn-by-turn from an outline beat. Distinct from today's copy-and-paste assistance pattern. Surface to be designed — likely a dedicated panel mode, not an inline overlay. Keeps the locked rule that AI never writes story prose unless the writer explicitly asked.
