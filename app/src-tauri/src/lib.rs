@@ -19,6 +19,8 @@
 #[cfg(not(debug_assertions))]
 use std::sync::Mutex;
 
+use tauri::Manager;
+
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
 
