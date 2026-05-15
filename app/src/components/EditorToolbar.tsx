@@ -18,7 +18,7 @@ import {
   Bold, Italic, Underline, Strikethrough,
   Eraser, Heading1, Heading2, Heading3,
   List, ListOrdered, Minus, ChevronDown, FilePlus2,
-  Sparkles,
+  Sparkles, BookOpen,
 } from "lucide-react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
@@ -55,6 +55,9 @@ interface EditorToolbarProps {
   // True while the auto-split loop is running. Disables the button and
   // changes its label so the writer knows work is in progress.
   autoSplitRunning?: boolean;
+  // When present, a [Reader Mode] button appears on the right side. Only
+  // meaningful when a project is open with at least one chapter.
+  onReaderMode?: () => void;
 }
 
 
@@ -341,6 +344,7 @@ export function EditorToolbar({
   onNewTemplate,
   onGenerateSceneSummaries,
   autoSplitRunning,
+  onReaderMode,
 }: EditorToolbarProps) {
   const view = editorView;
 
@@ -432,6 +436,18 @@ export function EditorToolbar({
         >
           <Sparkles size={12} />
           <span>{autoSplitRunning ? "Generating..." : "Generate Scene Summaries"}</span>
+        </button>
+      )}
+
+      {/* [Reader Mode] -- open the full-screen manuscript reader */}
+      {onReaderMode && (
+        <button
+          onClick={onReaderMode}
+          title="Read the full manuscript in Reader Mode"
+          className="mr-2 flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-emerald-600 hover:text-emerald-400"
+        >
+          <BookOpen size={12} />
+          <span>Reader Mode</span>
         </button>
       )}
 

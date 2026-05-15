@@ -21,6 +21,7 @@ import "./App.css";
 import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
 import { ProjectHome } from "./screens/ProjectHome";
+import { ReaderMode } from "./screens/ReaderMode";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
@@ -169,6 +170,9 @@ function App() {
 
   // Export modal visibility
   const [showExportModal, setShowExportModal] = useState(false);
+
+  // Reader Mode overlay visibility
+  const [showReaderMode, setShowReaderMode] = useState(false);
 
   // Outline template switcher dialog -- triggered by [+ New Template] in the
   // toolbar when notes/outline.md is the active file.
@@ -1759,6 +1763,7 @@ function App() {
               : undefined
           }
           autoSplitRunning={autoSplitProgress !== null}
+          onReaderMode={currentProject && chapters.length > 0 ? () => setShowReaderMode(true) : undefined}
         />
 
         {/* Smart Advisor toolbar -- only relevant for chapter editing.
@@ -2162,6 +2167,14 @@ function App() {
         <ExportModal
           project={currentProject}
           onClose={() => setShowExportModal(false)}
+        />
+      )}
+
+      {/* Reader Mode full-screen overlay */}
+      {showReaderMode && currentProject && (
+        <ReaderMode
+          projectPath={currentProject.root_path}
+          onClose={() => setShowReaderMode(false)}
         />
       )}
 

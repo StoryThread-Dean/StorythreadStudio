@@ -920,6 +920,52 @@ async def rename_chapter(request: RenameChapterRequest):
     )
 
 
+# --- GET /api/documents/manuscript-content ---
+# Returns every chapter in manuscript/ with its full Markdown text in one
+# request. Used by the Reader Mode overlay so it can stitch all chapters
+# together without making one round-trip per chapter.
+
+class ManuscriptChapter(BaseModel):
+    """One chapter with its full content, for bulk-manuscript reads."""
+    filename: str
+    title:    str
+    content:  str
+
+
+@router.get("/manuscript-content", response_model=list[ManuscriptChapter])
+async def load_manuscript_content(folder_path: str):
+    """
+    Read every chapter file in manuscript/ and return them all with their
+    content, sorted by filename (chapter order).
+
+    Why bulk? Reader Mode renders the whole manuscript. Making 30 individual
+    /chapter requests would be slow and would hammer the backend during the
+    open animation. One call is faster and simpler.
+    """
+    manuscript = _manuscript_dir(folder_path)
+    if not os.path.isdir(manuscript):
+        raise HTTPException(status_code=404, detail=f"manuscript/ folder not found: {folder_path}")
+
+    chapters: list[ManuscriptChapter] = []
+    with os.scandir(manuscript) as entries:
+        for entry in entries:
+            if not entry.is_file() or not entry.name.endswith(".md"):
+                continue
+            try:
+                with open(entry.path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except OSError:
+                content = ""
+            chapters.append(ManuscriptChapter(
+                filename = entry.name,
+                title    = _title_from_file(entry.path, entry.name),
+                content  = content,
+            ))
+
+    chapters.sort(key=lambda c: c.filename)
+    return chapters
+
+
 # --- Notes ---
 # Notes are Markdown files in the project's notes/ folder.
 # Unlike chapters, notes are freeform reference documents: outline, style guide,
