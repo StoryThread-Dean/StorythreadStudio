@@ -1,6 +1,6 @@
-﻿# Storythread Studio
+# Storythread Studio
 
-A local-first Markdown writing app for fiction writers. The writer does the drafting; the AI works as a reviewer, editor, and brainstorming partner â€” never a ghostwriter.
+A local-first Markdown writing app for fiction writers. The writer does the drafting; the AI works as a reviewer, editor, and brainstorming partner — never a ghostwriter.
 
 > Storythread Studio runs entirely on your machine. Your manuscript, profiles, and notes are plain Markdown files in a folder you control. Nothing is uploaded anywhere except the AI requests you explicitly trigger, and those go directly from your computer to your chosen AI provider.
 
@@ -9,11 +9,11 @@ A local-first Markdown writing app for fiction writers. The writer does the draf
 ## What it does
 
 - **Markdown editor** with focused, distraction-free writing in a serif typeface (Tauri + CodeMirror 6)
-- **Profile system** for characters, relationships, locations, and lore â€” with structured trait blocks and importance levels
-- **Smart Advisor** runs Readability, Structure, and Context passes directly over your chapter. Findings appear as colored inline highlights anchored to the exact passages the AI quoted; click any highlight for an explanation, a word-level diff against the suggested rewrite, and accept / ignore / re-cast controls (Rewrite, Expand, Shorten, Describe, Rephrase, Add Sensory Detail, Change Tone). Subcategory toggles per category let you scope a pass (e.g. Readability â†’ Grammar + Clarity only)
-- **Writing Companion** chat panel for open conversational help â€” brainstorming, voice work, ad-hoc questions
-- **Series support** â€” multi-book projects with shared canonical profiles and per-book character arcs
-- **Export** â€” full manuscript, dated snapshots, optional inclusion of summaries, notes, and profiles
+- **Profile system** for characters, relationships, locations, and lore — with structured trait blocks and importance levels
+- **Smart Advisor** runs Readability, Structure, and Context passes directly over your chapter. Findings appear as colored inline highlights anchored to the exact passages the AI quoted; click any highlight for an explanation, a word-level diff against the suggested rewrite, and accept / ignore / re-cast controls (Rewrite, Expand, Shorten, Describe, Rephrase, Add Sensory Detail, Change Tone). Subcategory toggles per category let you scope a pass (e.g. Readability → Grammar + Clarity only)
+- **Writing Companion** chat panel for open conversational help — brainstorming, voice work, ad-hoc questions
+- **Series support** — multi-book projects with shared canonical profiles and per-book character arcs
+- **Export** — full manuscript, dated snapshots, optional inclusion of summaries, notes, and profiles
 - **Light + dark themes**
 
 ## Requirements
@@ -43,23 +43,23 @@ You can verify the installer's integrity by checking the SHA-256 hash listed on 
 
 1. Launch Storythread Studio
 2. Open Settings (gear icon) and paste your OpenRouter API key
-3. Pick a default model â€” start with something cheap like `deepseek/deepseek-chat` and upgrade if you want richer prose
+3. Pick a default model — start with something cheap like `deepseek/deepseek-chat` and upgrade if you want richer prose
 4. Click **New Project** on the home screen and choose a folder
 
-Your project is just a folder. You can back it up, sync it to a private cloud drive, or commit it to a personal git repo â€” Storythread won't touch any of that.
+Your project is just a folder. You can back it up, sync it to a private cloud drive, or commit it to a personal git repo — Storythread won't touch any of that.
 
 ## Updates
 
-The app checks for updates on launch. If a new version is available, you'll see a banner with a summary of what changed and an explicit **Download & Install** button. Updates never download or install automatically â€” your call, every time.
+The app checks for updates on launch. If a new version is available, you'll see a banner with a summary of what changed and an explicit **Download & Install** button. Updates never download or install automatically — your call, every time.
 
 ## Donations
 
 Storythread Studio is free and will stay free. Donations cover the Claude API costs of ongoing development and let me keep adding features without putting them behind a paywall.
 
-- ðŸ’– [GitHub Sponsors](https://github.com/sponsors/StoryThread-Dean) â€” recurring or one-time
-- â˜• [Ko-fi](https://ko-fi.com/storythreadstudio) â€” one-time tips, no platform cut
+- [GitHub Sponsors](https://github.com/sponsors/StoryThread-Dean) — recurring or one-time
+- [Ko-fi](https://ko-fi.com/storythreadstudio) — one-time tips, no platform cut
 
-If you've donated, you can let the app know in the About panel and the donation reminders will stop. There's no verification â€” it's an honor-system flag for your own UX.
+If you've donated, you can let the app know in the About panel and the donation reminders will stop. There's no verification — it's an honor-system flag for your own UX.
 
 ## License
 
@@ -71,13 +71,13 @@ You can use, modify, and redistribute Storythread Studio. If you redistribute a 
 
 The design docs and roadmap live in this repo for transparency:
 
-- [`docs/product-scope.md`](docs/product-scope.md) â€” core goals, writing philosophy, locked product rules, in/out-of-scope
-- [`docs/architecture.md`](docs/architecture.md) â€” three-layer architecture, dual storage model, folder layout, API surface
-- [`docs/features.md`](docs/features.md) â€” what the product does today, in detail
-- [`docs/roadmap.md`](docs/roadmap.md) â€” Scheduled, Proposed, and Nice-to-Have features
-- [`docs/RELEASING.md`](docs/RELEASING.md) â€” release runbook for maintainers
-- [`CHANGELOG.md`](CHANGELOG.md) â€” shipped changes per version
-- [`CLAUDE.md`](CLAUDE.md) â€” guidance for AI coding assistants working on this codebase
+- [`docs/product-scope.md`](docs/product-scope.md) — core goals, writing philosophy, locked product rules, in/out-of-scope
+- [`docs/architecture.md`](docs/architecture.md) — three-layer architecture, dual storage model, folder layout, API surface
+- [`docs/features.md`](docs/features.md) — what the product does today, in detail
+- [`docs/roadmap.md`](docs/roadmap.md) — Scheduled, Proposed, and Nice-to-Have features
+- [`docs/RELEASING.md`](docs/RELEASING.md) — release runbook for maintainers
+- [`CHANGELOG.md`](CHANGELOG.md) — shipped changes per version
+- [`CLAUDE.md`](CLAUDE.md) — guidance for AI coding assistants working on this codebase
 
 ## Contributing
 
