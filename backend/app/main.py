@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers -- each router handles one area of the API.
 # As we build more features, we'll add more routers here.
-from app.routers import projects, documents, profiles, settings, ai, series, export, progress
+from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search
 
 
 # --- Create the FastAPI App ---
@@ -98,6 +98,7 @@ app.include_router(ai.router)
 app.include_router(series.router)
 app.include_router(export.router)
 app.include_router(progress.router)
+app.include_router(search.router)
 
 
 # --- What Comes Next ---

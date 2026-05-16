@@ -42,6 +42,7 @@ import type { ChipIncludeOptions } from "./utils/profileFormat";
 import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
+import { GlobalSearchModal } from "./components/GlobalSearchModal";
 import { IssuePopover } from "./components/editor/IssuePopover";
 import { ISSUE_CLICK_EVENT, clearIssuesEffect } from "./components/editor/issueOverlay";
 import type { LocatedIssue, IssueClickDetail } from "./components/editor/issueOverlay";
@@ -174,6 +175,12 @@ function App() {
 
   // Reader Mode overlay visibility
   const [showReaderMode, setShowReaderMode] = useState(false);
+
+  // Global Search + Replace modal visibility (Ctrl+Shift+F)
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+
+  // Banner shown briefly when Global Replace modifies the open chapter.
+  const [globalReplaceBanner, setGlobalReplaceBanner] = useState<string | null>(null);
 
   // Outline template switcher dialog -- triggered by [+ New Template] in the
   // toolbar when notes/outline.md is the active file.
@@ -1273,18 +1280,22 @@ function App() {
   }, []);
 
 
-  // --- Keyboard shortcut: Ctrl+S to save ---
-  // useEffect runs this setup once after the first render, and cleans up on unmount.
+  // --- Keyboard shortcuts ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "s") {
         e.preventDefault();
         handleSave();
       }
+      // Ctrl+Shift+F: open Global Search + Replace (only when a project is open)
+      if (e.ctrlKey && e.shiftKey && e.key === "F") {
+        e.preventDefault();
+        if (currentProject) setShowGlobalSearch(true);
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave]);
+  }, [handleSave, currentProject]);
 
 
   // ── CONDITIONAL RENDERING -- safe to do here because all hooks are above ──
@@ -2195,6 +2206,44 @@ function App() {
           projectPath={currentProject.root_path}
           onClose={() => setShowReaderMode(false)}
         />
+      )}
+
+      {/* Global Search + Replace modal (Ctrl+Shift+F) */}
+      {showGlobalSearch && currentProject && (
+        <GlobalSearchModal
+          projectPath={currentProject.root_path}
+          openFileRelpath={
+            currentView === "editor" && currentChapter
+              ? `manuscript/${currentChapter.filename}`
+              : currentView === "notes" && currentNote
+              ? `notes/${currentNote.filename}`
+              : null
+          }
+          isDirty={isDirty}
+          onSaveRequest={handleSave}
+          onFileModifiedByReplace={(relpaths) => {
+            // If the currently open chapter was one of the modified files,
+            // reload it so the editor shows the post-replace text.
+            const openRelpath =
+              currentView === "editor" && currentChapter
+                ? `manuscript/${currentChapter.filename}`
+                : null;
+            if (openRelpath && relpaths.includes(openRelpath) && currentProject) {
+              void loadChapter(currentChapter!, currentProject);
+              setGlobalReplaceBanner("File updated by Global Replace");
+              setTimeout(() => setGlobalReplaceBanner(null), 4000);
+            }
+          }}
+          onClose={() => setShowGlobalSearch(false)}
+        />
+      )}
+
+      {/* Global Replace banner -- briefly shown after the open chapter is
+          modified by a replace, so the writer knows why their text changed. */}
+      {globalReplaceBanner && (
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded border border-indigo-700 bg-indigo-950/90 px-4 py-2 text-xs text-indigo-200 shadow-lg backdrop-blur-sm">
+          {globalReplaceBanner}
+        </div>
       )}
 
       {/* Smart Advisor issue popover. Appears when the writer clicks an
