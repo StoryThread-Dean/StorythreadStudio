@@ -13,7 +13,7 @@
 // All external links open via Tauri's opener plugin (passed in as openLink)
 // rather than window.open so they go to the system browser cleanly.
 
-import { Heart, ExternalLink } from "lucide-react";
+import { Heart, ExternalLink, Coffee } from "lucide-react";
 import type { UpdateStatus } from "../../hooks/useAppUpdate";
 
 
@@ -48,7 +48,7 @@ export function AboutPanel({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-base font-semibold text-indigo-300">About</h2>
-          <button onClick={onClose} className="text-faint hover:text-text-muted">âœ•</button>
+          <button onClick={onClose} className="text-faint hover:text-text-muted">✕</button>
         </div>
 
         {/* Identity block: app name, version, donor badge */}
@@ -87,7 +87,8 @@ export function AboutPanel({
               onClick={() => openLink("https://ko-fi.com/storythreadstudio")}
               className="flex items-center justify-center gap-2 rounded border border-cyan-700 bg-cyan-900/30 px-3 py-1.5 text-xs font-medium text-cyan-200 hover:bg-cyan-900/50"
             >
-              â˜• Ko-fi
+              <Coffee size={12} />
+              Ko-fi
               <ExternalLink size={10} />
             </button>
           </div>
