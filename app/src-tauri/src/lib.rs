@@ -38,17 +38,33 @@ use tauri_plugin_shell::process::CommandChild;
 #[cfg(not(debug_assertions))]
 struct BackendSidecar(Mutex<Option<CommandChild>>);
 
-// Drop ensures the sidecar is killed when the managed state is released
-// during app shutdown -- more reliable than the on_window_event handler alone,
-// because Rust's drop order runs before the OS cleans up the process.
+// Kill the sidecar synchronously using taskkill rather than CommandChild::kill().
+//
+// Why not child.kill()?
+//   In tauri-plugin-shell v2, CommandChild::kill() sends a kill command through
+//   Tauri's async runtime (tokio). The call returns immediately -- the actual
+//   TerminateProcess happens later in an async task. When on_window_event fires
+//   and the handler returns, Tauri begins tearing down the runtime, and that
+//   async task may never execute. The result: the backend stays alive on port
+//   8000 after the window is gone.
+//
+//   std::process::Command::output() is fully synchronous -- it blocks until
+//   taskkill.exe returns, which only happens after TerminateProcess succeeds.
+//   The sidecar is guaranteed dead before we return from the event handler.
+#[cfg(not(debug_assertions))]
+fn kill_sidecar_sync() {
+    let _ = std::process::Command::new("taskkill")
+        .args(["/F", "/IM", "storythread-backend.exe"])
+        .output();
+}
+
+// Drop is a belt-and-suspenders fallback in case on_window_event never fires
+// (e.g. the app panics or is force-killed from Task Manager before the window
+// is cleanly destroyed).
 #[cfg(not(debug_assertions))]
 impl Drop for BackendSidecar {
     fn drop(&mut self) {
-        if let Ok(mut guard) = self.0.lock() {
-            if let Some(child) = guard.take() {
-                let _ = child.kill();
-            }
-        }
+        kill_sidecar_sync();
     }
 }
 
@@ -159,13 +175,10 @@ pub fn run() {
         .on_window_event(|_window, _event| {
             #[cfg(not(debug_assertions))]
             if let tauri::WindowEvent::Destroyed = _event {
-                if let Some(state) = _window.app_handle().try_state::<BackendSidecar>() {
-                    if let Ok(mut guard) = state.0.lock() {
-                        if let Some(child) = guard.take() {
-                            let _ = child.kill();
-                        }
-                    }
-                }
+                // kill_sidecar_sync() blocks until taskkill returns, so the
+                // sidecar is dead before this handler returns and Tauri begins
+                // tearing down the async runtime.
+                kill_sidecar_sync();
             }
         })
         .run(tauri::generate_context!())
