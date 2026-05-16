@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -15,6 +16,17 @@ export default defineConfig(async () => ({
     react(),         // Handles JSX and React-specific transforms
     tailwindcss(),   // Processes all Tailwind utility classes in your components
   ],
+
+  // Vitest configuration. Only active when running `npm run test`; has no
+  // effect on the normal `npm run tauri dev` or `npm run build` paths.
+  // Using jsdom as the environment gives tests a browser-like DOM so React
+  // components can render and be queried without a real browser.
+  test: {
+    globals: false,       // import {describe,it,expect,vi} from "vitest" explicitly
+    environment: "jsdom",
+    setupFiles: ["./src/test-setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

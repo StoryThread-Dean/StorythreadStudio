@@ -18,6 +18,10 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    # pytest-asyncio lets us write `async def test_*` functions that run under
+    # asyncio. With asyncio_mode = "auto" (see [tool.pytest.ini_options] below),
+    # every async test function is promoted automatically -- no per-test decorator needed.
+    "pytest-asyncio>=0.24",
     "ruff>=0.15.10",
     # PyInstaller is used by scripts/build-backend.ps1 to freeze the FastAPI
     # app + uvicorn server into a single .exe. The Tauri shell embeds that
@@ -25,3 +29,12 @@ dev = [
     # at release time; not required for development.
     "pyinstaller>=6.10.0",
 ]
+
+[tool.pytest.ini_options]
+# asyncio_mode = "auto": every async test function runs under asyncio without
+# needing the @pytest.mark.asyncio decorator. Required for progress_store tests
+# which call `async with open_db(...)` directly.
+asyncio_mode = "auto"
+# Explicit testpaths prevents pytest from wandering into PyInstaller output
+# dirs (dist/, build/) or the uv virtualenv (.venv/) looking for tests.
+testpaths = ["tests"]

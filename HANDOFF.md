@@ -71,13 +71,16 @@ The `/pre-release` command references two labels that may not exist yet on the r
 
 Create both via the github MCP once it's connected, with a brief description each. Colors are user preference.
 
-### 4. Stand up the actual test infrastructure
+### 4. Stand up the actual test infrastructure ✅ DONE (2026-05-15)
 
-`/pre-release` will fail today even if everything else works, because:
-- `backend/tests/` does not exist. Need to create it, add `conftest.py`, write a handful of pytest cases against the new Writing Progress modules (`outline_frontmatter`, `progress_store`, `routers/progress`). Pattern: `uv run pytest` from `backend/`.
-- `npm run test` is not registered in `app/package.json`. Need to install vitest + `@testing-library/react` + `jsdom`, add the script, write a few component-level tests starting with `ProjectCompletionGauge.tsx`.
-
-This is "stage the test infrastructure" work — separate ask. The user has not authorized it yet. Wait for explicit go-ahead before starting.
+- `backend/tests/` created with `conftest.py`, `test_outline_frontmatter.py` (11 tests),
+  `test_progress_store.py` (14 tests), `test_progress_routes.py` (11 tests). 40 tests, all green.
+  `pytest-asyncio>=0.24` added to dev deps; `asyncio_mode = "auto"` configured in `pyproject.toml`.
+- `npm run test` registered in `app/package.json`. vitest + @testing-library/react + jsdom installed.
+  `ProjectCompletionGauge.test.tsx` written (7 tests, all green).
+  `/// <reference types="vitest" />` + test config block added to `vite.config.ts`.
+- Both `/pre-release` stage commands now pass: `uv run pytest --no-header -q` (40/40) and
+  `npm run test -- --run` (7/7).
 
 ### 5. First real `/pre-release` dry run
 
