@@ -20,9 +20,11 @@ import os
 import re
 import shutil
 
+import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.outline_frontmatter import parse_outline_frontmatter, strip_outline_frontmatter
 from app.progress_store import record_save_event
 from app.settings_store import get_rollover_hour
 
@@ -1089,4 +1091,250 @@ async def save_note(request: SaveChapterRequest):
         filename=request.filename,
         path=note_path,
         message=f"Saved {request.filename} successfully.",
+    )
+
+
+# ── Outline Planner: structured read/write of notes/outline.md ───────────────
+#
+# These endpoints power the OutlinePlanner screen. They parse outline.md into
+# its constituent parts (YAML frontmatter + preamble + ## sections) so the
+# writer can edit via a form UI without writing raw YAML.
+#
+# GET  /api/documents/outline?folder_path=...  -> OutlineResponse
+# POST /api/documents/outline                  -> SaveChapterResponse
+
+# Matches "## heading" lines. The split pattern captures the heading so
+# re.split returns [preamble, "## Heading1", content1, "## Heading2", ...].
+_SECTION_SPLIT_RE = re.compile(r"\n(## [^\n]+)")
+
+
+class OutlineSectionItem(BaseModel):
+    """One ## section from outline.md stripped of its surrounding --- separators."""
+    heading: str   # e.g. "Front Matter", "Act I -- Setup"
+    content: str   # The section body text
+
+
+class OutlineFrontmatterData(BaseModel):
+    """Planning metadata fields from the YAML frontmatter block."""
+    target_word_count:      int | None  = None
+    expected_characters:    list[str]   = []
+    expected_locations:     list[str]   = []
+    expected_lore:          list[str]   = []
+    expected_relationships: list[str]   = []
+    # Chapters is a complex nested list edited via the body section, not the form.
+    # We round-trip it unchanged so no data is lost.
+    chapters: list = []
+
+
+class OutlineResponse(BaseModel):
+    frontmatter: OutlineFrontmatterData
+    preamble:    str                        # HTML comment + title + desc, verbatim
+    sections:    list[OutlineSectionItem]
+
+
+class OutlineSaveRequest(BaseModel):
+    folder_path: str
+    frontmatter: OutlineFrontmatterData
+    preamble:    str
+    sections:    list[OutlineSectionItem]
+
+
+def _parse_outline_sections(body: str) -> tuple[str, list[dict]]:
+    """
+    Split the outline body (after YAML frontmatter stripped) into preamble and
+    a list of {heading, content} dicts.
+
+    The preamble is everything before the first ## heading (HTML comment,
+    title, description, and the first --- separator). Each section's content
+    has its surrounding --- separators stripped so the round-trip is clean.
+    """
+    parts = _SECTION_SPLIT_RE.split(body)
+    preamble = parts[0] if parts else ""
+
+    sections: list[dict] = []
+    i = 1
+    while i < len(parts):
+        heading_raw = parts[i]                     # e.g. "## Front Matter"
+        content_raw = parts[i + 1] if i + 1 < len(parts) else ""
+        i += 2
+
+        heading = heading_raw[3:].strip()           # strip "## " prefix
+        # Strip the trailing --- separator that the template writes between
+        # sections, plus any leading/trailing blank lines.
+        content = content_raw.strip()
+        content = re.sub(r"\s*\n---\s*$", "", content).strip()
+
+        sections.append({"heading": heading, "content": content})
+
+    return preamble, sections
+
+
+def _serialize_frontmatter_block(fm: dict) -> str:
+    """
+    Serialize the frontmatter dict to a YAML block with the standard teaching
+    comments. We reconstruct the comments manually because PyYAML does not
+    preserve them when round-tripping through a dict.
+    """
+    target = fm.get("target_word_count")
+    chars  = fm.get("expected_characters")     or []
+    locs   = fm.get("expected_locations")      or []
+    lore   = fm.get("expected_lore")           or []
+    rels   = fm.get("expected_relationships")  or []
+    chapters = fm.get("chapters") or []
+
+    def _inline(items: list) -> str:
+        if not items:
+            return "[]"
+        return "[" + ", ".join(str(item) for item in items) + "]"
+
+    if target is None:
+        target_line = (
+            "target_word_count: null  "
+            "# Serial fiction is chapter-self-contained; no fixed total target yet."
+        )
+    else:
+        target_line = f"target_word_count: {int(target)}"
+
+    chapters_str = yaml.dump(chapters, allow_unicode=True, default_flow_style=False).rstrip() if chapters else "[]"
+
+    return (
+        "---\n"
+        "# OUTLINE TRACKING DATA -- read by the Writing Progress gauge.\n"
+        "# Fill these in as you plan. Empty lists are fine; the gauge falls\n"
+        "# back to story-type defaults when fields are blank.\n"
+        f"{target_line}\n"
+        f"expected_characters: {_inline(chars)}\n"
+        f"expected_locations: {_inline(locs)}\n"
+        f"expected_lore: {_inline(lore)}\n"
+        f"expected_relationships: {_inline(rels)}\n"
+        f"chapters: {chapters_str}\n"
+        "---"
+    )
+
+
+def _reconstruct_outline(fm_block: str, preamble: str, sections: list[dict]) -> str:
+    """
+    Reassemble the outline.md file from its structured parts.
+
+    Layout produced:
+        ---
+        YAML block
+        ---
+        [preamble: HTML comment + title + description + first ---]
+        ## Section 1
+
+        content
+
+        ---
+        ## Section 2
+
+        content
+        ...
+    """
+    result = fm_block
+    # Preamble contains the text after the YAML --- and before the first ## heading.
+    # It already ends with "---\n" (the separator before sections) so we just
+    # normalise to one trailing newline before appending the sections.
+    result += preamble.rstrip("\n") + "\n"
+
+    for i, section in enumerate(sections):
+        result += f"\n## {section['heading']}\n\n{section['content'].strip()}\n"
+        if i < len(sections) - 1:
+            result += "\n---"
+
+    return result
+
+
+# --- GET /api/documents/outline ---
+@router.get("/outline", response_model=OutlineResponse)
+async def get_outline(folder_path: str):
+    """
+    Parse notes/outline.md into structured parts for the OutlinePlanner screen.
+
+    Returns the YAML frontmatter as typed fields and the body split by ## section
+    headings. The preamble (HTML comment metadata, title heading, template
+    description) is preserved verbatim so save_outline can reconstruct faithfully.
+    """
+    notes_dir    = os.path.join(folder_path, "notes")
+    outline_path = os.path.join(notes_dir, "outline.md")
+
+    if not os.path.isfile(outline_path):
+        raise HTTPException(status_code=404, detail="outline.md not found in notes/.")
+
+    try:
+        with open(outline_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read outline.md: {exc}") from exc
+
+    fm_data = parse_outline_frontmatter(raw)
+    body    = strip_outline_frontmatter(raw)
+    preamble, sections = _parse_outline_sections(body)
+
+    fm = OutlineFrontmatterData(
+        target_word_count       = fm_data.get("target_word_count"),
+        expected_characters     = fm_data.get("expected_characters")     or [],
+        expected_locations      = fm_data.get("expected_locations")      or [],
+        expected_lore           = fm_data.get("expected_lore")           or [],
+        expected_relationships  = fm_data.get("expected_relationships")  or [],
+        chapters                = fm_data.get("chapters")                or [],
+    )
+
+    return OutlineResponse(
+        frontmatter = fm,
+        preamble    = preamble,
+        sections    = [OutlineSectionItem(heading=s["heading"], content=s["content"]) for s in sections],
+    )
+
+
+# --- POST /api/documents/outline ---
+@router.post("/outline", response_model=SaveChapterResponse)
+async def save_outline(request: OutlineSaveRequest):
+    """
+    Reconstruct notes/outline.md from the structured data sent by the planner and
+    write it to disk.
+
+    Uses the same progress-tracking hook as POST /note so the Writing Progress
+    gauge picks up word-delta and task-credit events from outline saves.
+    """
+    notes_dir    = os.path.join(request.folder_path, "notes")
+    outline_path = os.path.realpath(os.path.join(notes_dir, "outline.md"))
+    safe_root    = os.path.realpath(notes_dir)
+
+    if not outline_path.startswith(safe_root + os.sep) and outline_path != safe_root:
+        raise HTTPException(status_code=400, detail="Invalid outline path.")
+
+    if not os.path.isdir(notes_dir):
+        raise HTTPException(status_code=404, detail=f"notes/ folder not found in: {request.folder_path}")
+
+    fm_block        = _serialize_frontmatter_block(request.frontmatter.model_dump())
+    sections_dicts  = [{"heading": s.heading, "content": s.content} for s in request.sections]
+    content         = _reconstruct_outline(fm_block, request.preamble, sections_dicts)
+
+    previous_content: str | None = None
+    if os.path.isfile(outline_path):
+        try:
+            with open(outline_path, "r", encoding="utf-8") as f:
+                previous_content = f.read()
+        except OSError:
+            previous_content = None
+
+    try:
+        with open(outline_path, "w", encoding="utf-8") as f:
+            f.write(content)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not write outline.md: {exc}") from exc
+
+    await record_save_event(
+        request.folder_path,
+        "notes/outline.md",
+        content,
+        previous_content,
+        rollover_hour=get_rollover_hour(),
+    )
+
+    return SaveChapterResponse(
+        filename = "outline.md",
+        path     = outline_path,
+        message  = "Outline saved.",
     )

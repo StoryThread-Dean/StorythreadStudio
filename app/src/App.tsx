@@ -23,6 +23,7 @@ import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/Editor
 import { ProjectHome } from "./screens/ProjectHome";
 import { ReaderMode } from "./screens/ReaderMode";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
+import { OutlinePlanner } from "./screens/OutlinePlanner";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
 import { SceneSummaryPreviewModal } from "./components/SceneSummaryPreviewModal";
@@ -98,7 +99,7 @@ function App() {
   // it's a completely separate screen; chapter_summary is rendered in the
   // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
   const [currentView, setCurrentView]   = useState<
-    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
+    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary" | "outline_planner"
   >("editor");
   const [profileType, setProfileType]   = useState<ProfileType>("character");
 
@@ -310,7 +311,7 @@ function App() {
   const currentProjectRef = useRef<ProjectInfo | null>(null);
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
   const currentViewRef = useRef<
-    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
+    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary" | "outline_planner"
   >("editor");
 
   // Keep refs in sync with state on every render.
@@ -1620,9 +1621,9 @@ function App() {
           </NavSection>
 
           <NavSection label="Notes">
-            <NavItem label="Outline"     hint="Story structure and plot notes"
-              active={currentView === "notes" && currentNote?.filename === "outline.md"}
-              onClick={() => loadNote("outline.md", "Outline", currentProject)} />
+            <NavItem label="Outline"     hint="Story structure, targets, and plot beats"
+              active={currentView === "outline_planner"}
+              onClick={() => setCurrentView("outline_planner")} />
             <NavItem label="Style Guide" hint="Rules for tone, voice, and punctuation"
               active={currentView === "notes" && currentNote?.filename === "style-guide.md"}
               onClick={() => loadNote("style-guide.md", "Style Guide", currentProject)} />
@@ -1682,7 +1683,14 @@ function App() {
         continuity editing, not prose drafting, so the chat panel would only
         distract.
       */}
-      {currentView === "chapter_summary" && currentSummaryChapter ? (
+      {currentView === "outline_planner" ? (
+        <OutlinePlanner
+          project={currentProject}
+          onBack={() => setCurrentView("editor")}
+          onDirtyChange={setIsDirty}
+          onSwitchToRaw={() => loadNote("outline.md", "Outline", currentProject)}
+        />
+      ) : currentView === "chapter_summary" && currentSummaryChapter ? (
         <SummaryView
           project={currentProject}
           chapterFile={currentSummaryChapter}
@@ -2217,6 +2225,8 @@ function App() {
               ? `manuscript/${currentChapter.filename}`
               : currentView === "notes" && currentNote
               ? `notes/${currentNote.filename}`
+              : currentView === "outline_planner"
+              ? "notes/outline.md"
               : null
           }
           isDirty={isDirty}
