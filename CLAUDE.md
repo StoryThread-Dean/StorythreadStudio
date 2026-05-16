@@ -164,15 +164,49 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
 
 ### Test layout
 
-- `backend/tests/` -- pytest, using FastAPI's `TestClient` for HTTP-level tests. Test files named `test_*.py`.
-- `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom.
+- `backend/tests/` -- pytest + pytest-asyncio. Uses FastAPI's `TestClient` for HTTP-level tests and `async with open_db(tmp_path)` for store-level tests. Test files named `test_*.py`. Current files:
+  - `test_outline_frontmatter.py` -- YAML frontmatter parser (11 tests)
+  - `test_progress_store.py` -- word counting, night-owl rollover, event recording (14 tests)
+  - `test_progress_routes.py` -- `/api/progress/summary` and `/api/progress/daily` HTTP endpoints (11 tests)
+- `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
+  - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode, onToggle callback (7 tests)
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands
 
-- Backend: `uv run pytest` from `backend/`
-- Frontend: `npm run test` from `app/` (vitest)
-- Full pre-release gate: the `/pre-release` slash command in Claude Code
+Run these from the repo root (or the subdirectory noted):
+
+```powershell
+# ── Backend (run from backend/) ───────────────────────────────────────────────
+cd backend
+
+# Run all tests (verbose, shows each test name)
+uv run pytest -v
+
+# Run all tests (quiet summary, same as /pre-release Stage 1)
+uv run pytest --no-header -q
+
+# Run a single test file
+uv run pytest tests/test_progress_store.py -v
+
+# ── Frontend (run from app/) ──────────────────────────────────────────────────
+cd app
+
+# Single-run mode -- exits when done (same as /pre-release Stage 2)
+npm run test -- --run
+
+# Watch mode -- reruns on file changes (for active development)
+npm run test
+
+# ── Full pre-release gate ─────────────────────────────────────────────────────
+# Run the /pre-release slash command in Claude Code.
+# It runs pytest + vitest + GitHub blocker check + manual smoke acknowledgment
+# and prints a RELEASE READY / DO NOT RELEASE verdict.
+# See .claude/commands/pre-release.md for the full spec.
+```
+
+**Before every release, run `/pre-release` and get a `✅ RELEASE READY` verdict before cutting the build.**
+The gate cannot pass with zero tests, open `pre-release-blocker` issues, or an unacknowledged manual smoke.
 
 ### Why no automated end-to-end suite
 
