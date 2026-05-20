@@ -363,10 +363,7 @@ async def get_models():
         models = await list_models(api_key)
         return [ModelInfo(**m) for m in models]
     except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"OpenRouter returned an error: HTTP {e.response.status_code}"
-        )
+        raise _openrouter_exc(e)
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=503,
@@ -463,12 +460,7 @@ async def run_assistant(request: RunAssistantRequest):
             temperature=TEMPERATURE_DEFAULTS["critique"],
         )
     except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            raise HTTPException(status_code=401, detail="OpenRouter API key is invalid.")
-        raise HTTPException(
-            status_code=502,
-            detail=f"OpenRouter returned an error: HTTP {e.response.status_code}"
-        )
+        raise _openrouter_exc(e)
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=503,
@@ -488,6 +480,58 @@ async def run_assistant(request: RunAssistantRequest):
         notes=result.get("notes", []),
         model_used=result.get("model_used", model_id),
         had_em_dashes=result.get("had_em_dashes", False),
+    )
+
+
+# ── OpenRouter Error Translation ─────────────────────────────────────────────
+# OpenRouter returns standard HTTP status codes when something goes wrong on its
+# end. Rather than showing the raw HTTP code (confusing) or a generic "AI request
+# failed" message (useless), we translate the most common codes into sentences
+# the writer can actually act on.
+
+def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
+    """
+    Convert an OpenRouter HTTPStatusError into a user-facing FastAPI exception.
+
+    Why a helper instead of inline if/elif chains?
+    There are ~12 endpoint catch blocks. A single helper means the messages are
+    consistent and only need updating in one place when OpenRouter changes behaviour.
+    """
+    status = e.response.status_code
+    if status == 401:
+        return HTTPException(
+            status_code=401,
+            detail="OpenRouter API key is invalid. Double-check your key in Settings.",
+        )
+    if status == 402:
+        return HTTPException(
+            status_code=402,
+            detail=(
+                "OpenRouter account has insufficient credits. "
+                "Add credits at openrouter.ai or switch to Free and choose a new tiered model in Settings."
+            ),
+        )
+    if status == 429:
+        return HTTPException(
+            status_code=429,
+            detail=(
+                "OpenRouter rate limit reached -- too many requests in a short window. "
+                "Wait a moment and try again. "
+                "If this keeps happening, check your OpenRouter plan limits at openrouter.ai or switch to a different model."
+                "Suggestion: Deposit $5-10. Go-to app Settings>Model Cost Tier> Budget or Free. It sips tokens, promise"
+            ),
+        )
+    if status >= 500:
+        return HTTPException(
+            status_code=502,
+            detail=(
+                f"OpenRouter service error (HTTP {status}). "
+                "This is on their end -- try again in a few seconds."
+            ),
+        )
+    return HTTPException(
+        status_code=502,
+        detail=f"OpenRouter returned an unexpected error: HTTP {status}.",
     )
 
 
@@ -832,8 +876,10 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
         result = await run_completion(api_key=api_key, model_id=model_id,
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["extraction"])
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     text = _extract_text_field(result, "usage_preview")
     return GenerateUsagePreviewResponse(usage_preview=sanitize(text.strip()))
@@ -879,8 +925,10 @@ async def trim_trait(request: TrimTraitRequest):
         result = await run_completion(api_key=api_key, model_id=model_id,
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["critique"])
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     text = _extract_text_field(result, "trimmed")
     return TrimTraitResponse(trimmed=sanitize(text.strip()))
@@ -918,8 +966,10 @@ async def audit_importance(request: AuditImportanceRequest):
         result = await run_completion(api_key=api_key, model_id=model_id,
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["extraction"])
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     # Parse the flags array from the AI response
     raw_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -961,8 +1011,10 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
         result = await run_completion(api_key=api_key, model_id=model_id,
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["profile"])
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     text = _extract_text_field(result, "section_summary")
     return GenerateSectionSummaryResponse(section_summary=sanitize(text.strip()))
@@ -1017,8 +1069,10 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
         result = await run_completion(api_key=api_key, model_id=model_id,
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["profile"])
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     text = _extract_text_field(result, "full_summary")
     return GenerateFullSummaryResponse(
@@ -1117,8 +1171,10 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
             messages      = [{"role": "user", "content": user_message}],
             temperature   = TEMPERATURE_DEFAULTS["critique"],
         )
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     filename     = f"{stem}.md"
     summary_dir  = os.path.join(request.project_path, "summaries", "chapters")
@@ -1234,8 +1290,10 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
             messages      = [{"role": "user", "content": user_message}],
             temperature   = TEMPERATURE_DEFAULTS["critique"],
         )
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     content = body.strip()
 
@@ -1335,8 +1393,10 @@ async def profile_chat(request: ProfileChatRequest):
         reply = await run_chat(api_key=api_key, model_id=model_id,
                                system_prompt=system_prompt, messages=messages,
                                temperature=temp)
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     return ProfileChatResponse(reply=reply, model_used=model_id)
 
@@ -1467,8 +1527,10 @@ async def editor_chat(request: EditorChatRequest):
         reply = await run_chat(api_key=api_key, model_id=model_id,
                                system_prompt=system_prompt, messages=messages,
                                temperature=temp)
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     return EditorChatResponse(reply=reply, model_used=model_id)
 
@@ -1667,8 +1729,10 @@ async def editor_pass(request: EditorPassRequest):
             # the structured-feedback path through editor-chat.
             temperature   = TEMPERATURE_DEFAULTS["critique"],
         )
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     allowed_keys = set(cat_defs.keys())
     issues_raw = _parse_pass_response(raw, allowed_keys)
@@ -1758,8 +1822,10 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
             messages      = [materials],
             temperature   = TEMPERATURE_DEFAULTS["generation"],
         )
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
     # Strip surrounding whitespace and any accidental markdown fence the
     # model wrapped around the prose. The prompt forbids these but weak
