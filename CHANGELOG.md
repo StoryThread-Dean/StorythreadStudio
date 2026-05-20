@@ -21,6 +21,14 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
+## [1.0.4] - 2026-05-20
+
+### Quick Fix
+
+- **Per User feedback: OpenRouter error messages are now actionable.** Rate-limit (429), insufficient-credits (402), invalid-key (401), and service errors (5xx) from OpenRouter now show a plain-English message explaining what happened and what to do, instead of a raw HTTP status code or generic "AI request failed" text. Affects all AI features (Smart Advisor, Writing Companion, Profile Builder, scene/chapter summaries, and all editor-pass tools).
+
+---
+
 ## [1.0.3] - 2026-05-15
 
 ### Added
