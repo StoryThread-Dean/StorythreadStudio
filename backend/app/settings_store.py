@@ -14,12 +14,25 @@
 # API key doesn't accidentally get committed to a project's git repo.
 
 import json
+import logging
 import os
+import shutil
 from pathlib import Path
 
 # The directory and file where settings are stored
 SETTINGS_DIR  = Path.home() / ".storythread"
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+# Rolling one-generation backup of the last known-good settings.json.
+# Written before each successful save and used by load_settings() to recover
+# if settings.json is missing or corrupt (e.g. truncated by a process kill
+# during a patch install -- see the patch-safe write logic below).
+SETTINGS_BACKUP = SETTINGS_DIR / "settings.json.bak"
+# Temp file used for atomic writes. os.replace(tmp, real) is atomic on Windows
+# (and POSIX), so a kill mid-write can leave the .tmp in a half state but
+# settings.json itself is never seen empty or partial by a future reader.
+SETTINGS_TMP    = SETTINGS_DIR / "settings.json.tmp"
+
+log = logging.getLogger(__name__)
 
 
 def _default_vault_root() -> str:
@@ -85,37 +98,122 @@ DEFAULT_SETTINGS: dict = {
 }
 
 
+def _read_settings_file(path: Path) -> dict | None:
+    """
+    Try to read and parse a settings file. Returns the parsed dict on success,
+    or None if the file is missing, unreadable, empty, or not valid JSON.
+
+    "None" is the sentinel for "this file can't be trusted" so the caller can
+    decide whether to fall back to the backup or to defaults.
+    """
+    if not path.exists():
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+        if not text.strip():
+            # Truncated-to-zero-bytes case: a process kill between truncate
+            # and write leaves the file empty. Treat as unreadable.
+            return None
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict):
+            return None
+        return parsed
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 def load_settings() -> dict:
     """
-    Read settings from disk. Returns defaults if the file doesn't exist.
+    Read settings from disk. Returns defaults if no readable file exists.
+
+    Recovery order:
+      1. settings.json (the live file)
+      2. settings.json.bak (last known-good snapshot)
+      3. DEFAULT_SETTINGS (fresh-install behavior)
+
+    Step 2 protects against the patch-install scenario: if the backend was
+    killed mid-write (taskkill /F during an update), settings.json may be
+    empty or partial JSON. The .bak file -- written before each successful
+    save -- still holds the previous good content, including the API key.
+
     Always merges with defaults so new keys added in future versions
     are available even on old settings files.
     """
-    if not SETTINGS_FILE.exists():
-        return dict(DEFAULT_SETTINGS)
+    primary = _read_settings_file(SETTINGS_FILE)
+    if primary is not None:
+        return {**DEFAULT_SETTINGS, **primary}
 
-    try:
-        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-            stored = json.load(f)
-        # Merge: start with defaults, overlay what's stored
-        # This means new keys added to DEFAULT_SETTINGS are always present
-        return {**DEFAULT_SETTINGS, **stored}
-    except (json.JSONDecodeError, OSError):
-        return dict(DEFAULT_SETTINGS)
+    backup = _read_settings_file(SETTINGS_BACKUP)
+    if backup is not None:
+        # Log to stderr so the recovery shows up in the sidecar drain --
+        # useful for diagnosing future patch-related bug reports.
+        log.warning(
+            "settings.json unreadable; recovered from %s", SETTINGS_BACKUP
+        )
+        # Restore the backup as the live file so subsequent saves have a
+        # valid baseline to update from. Best-effort: if the restore fails
+        # we still return the parsed backup so the current request works.
+        try:
+            shutil.copy2(SETTINGS_BACKUP, SETTINGS_FILE)
+        except OSError as exc:
+            log.warning("Could not restore settings.json from backup: %s", exc)
+        return {**DEFAULT_SETTINGS, **backup}
+
+    return dict(DEFAULT_SETTINGS)
 
 
 def save_settings(settings: dict) -> None:
     """
-    Write settings to disk. Creates ~/.storythread/ if it doesn't exist.
-    Only saves known keys (ignores unknown fields from the request).
+    Write settings to disk atomically, with a rolling one-generation backup.
+
+    Sequence:
+      1. Write the new content to settings.json.tmp.
+      2. If the current settings.json exists and parses as JSON, copy it to
+         settings.json.bak first -- so the .bak always holds the previous
+         known-good state, never garbage from a partial write.
+      3. os.replace(tmp, settings.json) -- atomic on Windows and POSIX.
+
+    Why atomic? open("w") truncates the file before writing. If the process
+    is killed (e.g. taskkill /F during a Tauri updater install) between the
+    truncate and the json.dump, settings.json is left empty. os.replace
+    swaps the file in one filesystem operation: a future reader either sees
+    the old file or the new one, never an empty/partial file.
     """
     SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Only persist keys we know about -- avoids storing garbage from bad requests
     safe = {k: settings.get(k, v) for k, v in DEFAULT_SETTINGS.items()}
 
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+    # 1. Write the new content to a sibling temp file. Same directory so the
+    #    replace below is a rename within one filesystem (required for atomic
+    #    replace on Windows).
+    with open(SETTINGS_TMP, "w", encoding="utf-8") as f:
         json.dump(safe, f, indent=2)
+        # Flush + fsync so the bytes are on disk before we swap. Without
+        # this, a power-loss event after replace() could still leave an
+        # empty file if the OS hadn't flushed the temp's contents yet.
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            # fsync isn't available on every Windows filesystem (e.g. some
+            # network drives). The atomic replace alone is still a big
+            # improvement over the previous truncate-and-write approach.
+            pass
+
+    # 2. Snapshot the current live file as backup, but ONLY if it parses --
+    #    we don't want to overwrite a good backup with a corrupted live file.
+    if _read_settings_file(SETTINGS_FILE) is not None:
+        try:
+            shutil.copy2(SETTINGS_FILE, SETTINGS_BACKUP)
+        except OSError as exc:
+            # Non-fatal: if the backup copy fails we still proceed with the
+            # main write. Worst case we lose one generation of history.
+            log.warning("Could not refresh settings.json.bak: %s", exc)
+
+    # 3. Atomic swap: tmp becomes the new settings.json.
+    os.replace(SETTINGS_TMP, SETTINGS_FILE)
 
 
 def get_api_key() -> str:
