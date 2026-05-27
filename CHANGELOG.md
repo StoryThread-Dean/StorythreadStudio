@@ -15,9 +15,17 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
-- **Spelling corrections in the right-click menu.** Right-clicking a word in the editor now leads with a **Spellcheck** section when the word is misspelled, listing dictionary-backed corrections above the Thesaurus synonyms. Previously the thesaurus popover suppressed the browser's native right-click menu, so a misspelled word showed "No synonyms found" with no way to fix the spelling. Corrections come from a bundled offline dictionary (Hunspell `en` via `nspell`), click a suggestion to replace the word with its capitalization preserved. The red squiggle still comes from the system spell checker; the Spellcheck section only appears when the dictionary has suggestions, so it stays out of the way for invented character and place names.
-
 ### Changed
+
+### Fixed
+
+---
+
+## [1.0.5] - 2026-05-27
+
+### Added
+
+- **Spelling corrections in the right-click menu.** Right-clicking a word in the editor now leads with a **Spellcheck** section when the word is misspelled, listing dictionary-backed corrections above the Thesaurus synonyms. Previously the thesaurus popover suppressed the browser's native right-click menu, so a misspelled word showed "No synonyms found" with no way to fix the spelling. Corrections come from a bundled offline dictionary (Hunspell `en` via `nspell`), click a suggestion to replace the word with its capitalization preserved. The red squiggle still comes from the system spell checker; the Spellcheck section only appears when the dictionary has suggestions, so it stays out of the way for invented character and place names.
 
 ### Fixed
 
