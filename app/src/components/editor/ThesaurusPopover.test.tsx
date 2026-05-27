@@ -22,7 +22,9 @@ import { isMisspelled, suggestCorrections } from "../../utils/spellcheck";
 // (rel_syn, then ml); we resolve both with the provided payloads.
 function mockDatamuse(synonyms: string[], related: string[]) {
   const toData = (words: string[]) => words.map((word, i) => ({ word, score: 100 - i }));
-  global.fetch = vi
+  // globalThis (not Node's `global`) so this also type-checks under the
+  // production build's tsc, which compiles test files too.
+  globalThis.fetch = vi
     .fn()
     .mockResolvedValueOnce({ json: async () => toData(synonyms) })
     .mockResolvedValueOnce({ json: async () => toData(related) }) as unknown as typeof fetch;
