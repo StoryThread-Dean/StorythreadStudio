@@ -1,16 +1,28 @@
 // ThesaurusPopover.tsx -- Right-click word lookup
 // =================================================
-// Shows synonym and related-word suggestions for the right-clicked word.
-// Fetches from the Datamuse API (free, no key required).
+// Shows spelling corrections AND thesaurus suggestions for the right-clicked
+// word in a single popover, in priority order:
 //
-// Displays two sections when results exist:
-//   Synonyms  -- direct thesaurus synonyms (rel_syn)
-//   Related   -- "means like" alternatives (ml), deduped against synonyms
+//   Spellcheck  -- dictionary corrections (only when the word is misspelled)
+//   Synonyms    -- direct thesaurus synonyms (Datamuse rel_syn)
+//   Related     -- "means like" alternatives (Datamuse ml), deduped
+//
+// Why both here? The editor's red squiggle comes from the WebView's native
+// spell checker, but the browser won't hand its correction suggestions to
+// JavaScript, and opening this popover suppresses the native right-click menu.
+// So a misspelled word would otherwise lose its corrections entirely. We
+// generate corrections ourselves via the bundled dictionary (utils/spellcheck)
+// and show them ABOVE the thesaurus, so the common case -- "I right-clicked a
+// word with a red squiggle to fix it" -- works the way the writer expects.
+//
+// Spelling corrections come from the local dictionary (instant, offline).
+// Synonyms/related come from the Datamuse API (free, no key required).
 //
 // Clicking any suggestion replaces the original word in the editor,
 // preserving the original word's capitalization style.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { isMisspelled, suggestCorrections } from "../../utils/spellcheck";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -136,9 +148,21 @@ export function ThesaurusPopover({
     onClose();
   };
 
+  // ── Spelling corrections (local dictionary, synchronous) ───────────────────
+  // Computed from the bundled dictionary, not Datamuse. Only populated when the
+  // word is actually misspelled AND the dictionary has suggestions -- so the
+  // Spellcheck section stays hidden for correctly-spelled words and for
+  // invented names the dictionary can't help with. Memoized on `word` so the
+  // dictionary lookup runs once per opened word, not on every render.
+  const corrections = useMemo(
+    () => (isMisspelled(word) ? suggestCorrections(word) : []),
+    [word],
+  );
+  const hasCorrections = corrections.length > 0;
+
   const hasSynonyms = synonyms.length > 0;
   const hasRelated  = related.length  > 0;
-  const empty       = !loading && !hasSynonyms && !hasRelated;
+  const noThesaurus = !loading && !hasSynonyms && !hasRelated;
 
   return (
     <div
@@ -151,59 +175,94 @@ export function ThesaurusPopover({
         flex flex-col
       "
     >
-      {/* Header */}
-      <div className="flex items-baseline gap-1.5 px-3 py-2 border-b border-border shrink-0">
-        <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
-          Thesaurus
-        </span>
-        <span className="font-medium text-accent truncate">{word}</span>
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <div className="px-3 py-3 text-text-muted text-xs">Looking up synonyms&hellip;</div>
-      ) : empty ? (
-        <div className="px-3 py-3 text-text-muted text-xs">
-          No synonyms found for &ldquo;{word}&rdquo;.
-        </div>
-      ) : (
-        <div className="flex flex-col">
-          {hasSynonyms && (
-            <Section label="Synonyms" words={synonyms} onSelect={handleSelect} />
-          )}
-          {hasRelated && (
-            <Section label="Related" words={related} onSelect={handleSelect} />
-          )}
-        </div>
+      {/* ── Spellcheck section (top priority) ────────────────────────────────
+          Shown only when the word is misspelled and we have corrections, so a
+          right-click on a red-squiggled word leads with the fix, exactly as a
+          native spell-check menu would. */}
+      {hasCorrections && (
+        <Section
+          label="Spellcheck"
+          word={word}
+          words={corrections}
+          onSelect={handleSelect}
+          accentSelection
+        />
       )}
+
+      {/* ── Thesaurus section ────────────────────────────────────────────────
+          Always present so the writer can reach synonyms even for a misspelled
+          word. The header repeats the word for the same reason the spellcheck
+          header does -- the two sections can stack and each should be labeled. */}
+      <div className="flex flex-col">
+        <div className="flex items-baseline gap-1.5 px-3 py-2 border-b border-border shrink-0">
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+            Thesaurus
+          </span>
+          <span className="font-medium text-accent truncate">{word}</span>
+        </div>
+
+        {loading ? (
+          <div className="px-3 py-3 text-text-muted text-xs">Looking up synonyms&hellip;</div>
+        ) : noThesaurus ? (
+          <div className="px-3 py-3 text-text-muted text-xs">
+            No synonyms found for &ldquo;{word}&rdquo;.
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {hasSynonyms && (
+              <Section label="Synonyms" words={synonyms} onSelect={handleSelect} />
+            )}
+            {hasRelated && (
+              <Section label="Related" words={related} onSelect={handleSelect} />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 
 // ── Section ───────────────────────────────────────────────────────────────────
+// Two header styles:
+//   - With `word`: a top-level labeled header matching the Thesaurus header
+//     (used by the Spellcheck section, which stacks as its own block).
+//   - Without `word`: a small sub-label (used by Synonyms / Related inside the
+//     Thesaurus block).
 
 interface SectionProps {
-  label:    string;
-  words:    string[];
-  onSelect: (word: string) => void;
+  label:            string;
+  words:            string[];
+  onSelect:         (word: string) => void;
+  word?:            string;   // when set, render the prominent labeled header
+  accentSelection?: boolean;  // visually nudge the writer toward these (corrections)
 }
 
-function Section({ label, words, onSelect }: SectionProps) {
+function Section({ label, words, onSelect, word, accentSelection }: SectionProps) {
   return (
     <div>
-      <div className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
-        {label}
-      </div>
+      {word !== undefined ? (
+        <div className="flex items-baseline gap-1.5 px-3 py-2 border-b border-border shrink-0">
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+            {label}
+          </span>
+          <span className="font-medium text-accent truncate">{word}</span>
+        </div>
+      ) : (
+        <div className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+          {label}
+        </div>
+      )}
       {words.map(w => (
         <button
           key={w}
           onClick={() => onSelect(w)}
-          className="
+          className={`
             w-full text-left px-4 py-1.5 text-sm
             text-text-primary hover:bg-bg-surface hover:text-accent
             transition-colors duration-75
-          "
+            ${accentSelection ? "font-medium" : ""}
+          `}
         >
           {w}
         </button>
