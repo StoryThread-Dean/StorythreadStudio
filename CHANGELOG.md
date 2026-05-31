@@ -19,6 +19,8 @@ entry while working on a feature, append it under Unreleased.
 
 ### Fixed
 
+- **Outline Planner: sections missing or silently deleted after Raw view edits.** A corruption bug caused the YAML frontmatter closing `---` to fuse with the first `## ` section heading onto one line (e.g. `---## Setting in One Paragraph`). This caused three cascading failures: the frontmatter parser mis-fired and absorbed section content into the YAML body (silently losing YAML field values like word targets and expected characters); the section parser never saw the fused heading; and if the user then saved anything from the Planner (even just editing Project Targets), the Planner wrote back its incomplete section list and permanently deleted the un-parsed sections from disk. Fixed at three layers: (1) `GET /api/documents/outline` now heals `---## ` fusions in the raw file *before* any parsing and writes the repaired content back to disk immediately, so YAML values are always read correctly and the file is safe before any subsequent Planner save; (2) `_reconstruct_outline` always inserts a newline between the YAML block and preamble so the fusion cannot be created again; (3) `_parse_outline_sections` normalizes bodies that start with `## ` so sections at position zero are never silently absorbed into the invisible preamble. Eleven regression tests added.
+
 ---
 
 ## [1.0.5] - 2026-05-27

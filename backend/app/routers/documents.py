@@ -1107,6 +1107,12 @@ async def save_note(request: SaveChapterRequest):
 # re.split returns [preamble, "## Heading1", content1, "## Heading2", ...].
 _SECTION_SPLIT_RE = re.compile(r"\n(## [^\n]+)")
 
+# Matches a YAML-closing --- fused directly with a ## heading on the same line,
+# e.g. "---## Front Matter". This corruption is produced when _reconstruct_outline
+# is called with a preamble that doesn't start with \n, causing fm_block (which
+# ends with "---") to run directly into the preamble's first character.
+_FUSED_SEPARATOR_RE = re.compile(r"(?m)^---## ")
+
 
 class OutlineSectionItem(BaseModel):
     """One ## section from outline.md stripped of its surrounding --- separators."""
@@ -1148,6 +1154,18 @@ def _parse_outline_sections(body: str) -> tuple[str, list[dict]]:
     title, description, and the first --- separator). Each section's content
     has its surrounding --- separators stripped so the round-trip is clean.
     """
+    # Auto-heal: if a previous save fused the YAML closing --- with a ## heading
+    # (producing e.g. "---## Setting"), split them back onto separate lines.
+    # This repairs corrupted files silently on load without any data loss.
+    if _FUSED_SEPARATOR_RE.search(body):
+        body = _FUSED_SEPARATOR_RE.sub("---\n\n## ", body)
+
+    # Normalize: the regex requires \n BEFORE ## to match. If the body starts
+    # with "## " directly (no preceding newline) the first section would be
+    # absorbed into the invisible preamble. Prepend \n so the regex finds it.
+    if body and not body.startswith("\n"):
+        body = "\n" + body
+
     parts = _SECTION_SPLIT_RE.split(body)
     preamble = parts[0] if parts else ""
 
@@ -1233,8 +1251,12 @@ def _reconstruct_outline(fm_block: str, preamble: str, sections: list[dict]) -> 
     """
     result = fm_block
     # Preamble contains the text after the YAML --- and before the first ## heading.
-    # It already ends with "---\n" (the separator before sections) so we just
-    # normalise to one trailing newline before appending the sections.
+    # Always ensure a newline between the fm_block (which ends with "---") and the
+    # preamble. Without this, a preamble that starts with a non-newline character
+    # (e.g. "## Heading") would fuse with the YAML closing --- on the same line,
+    # making that section permanently invisible to the parser on next load.
+    if not result.endswith("\n"):
+        result += "\n"
     result += preamble.rstrip("\n") + "\n"
 
     for i, section in enumerate(sections):
@@ -1266,6 +1288,23 @@ async def get_outline(folder_path: str):
             raw = f.read()
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Could not read outline.md: {exc}") from exc
+
+    # Auto-heal before any parsing. The _FUSED_SEPARATOR_RE check in
+    # _parse_outline_sections catches fusions in the body, but only AFTER
+    # strip_outline_frontmatter runs. If the fusion is at the YAML closing
+    # position (e.g. "---## Setting in One Paragraph"), the frontmatter regex
+    # mis-fires and absorbs section content into the YAML body, losing both
+    # section visibility AND YAML field values. Healing the raw bytes here
+    # ensures the frontmatter and body parse correctly, and writing the healed
+    # content back means subsequent Planner saves don't overwrite lost sections.
+    healed_raw = _FUSED_SEPARATOR_RE.sub("---\n\n## ", raw)
+    if healed_raw != raw:
+        try:
+            with open(outline_path, "w", encoding="utf-8") as wf:
+                wf.write(healed_raw)
+        except OSError:
+            pass  # Non-fatal: serve healed version in memory even if write fails
+        raw = healed_raw
 
     fm_data = parse_outline_frontmatter(raw)
     body    = strip_outline_frontmatter(raw)
