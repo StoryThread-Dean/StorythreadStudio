@@ -170,10 +170,21 @@ export interface ProfileChatPayload {
 
 // ── Writing Companion (Editor Chat) ───────────────────────────────────────────
 
-// The three focus categories for the main editor's Writing Companion panel.
+// The focus categories for the main editor's Writing Companion panel.
 // Each category sets the AI's area of expertise for the conversation.
-// null = no category selected (general chat mode)
-export type EditorChatCategory = "readability" | "structure" | "context" | null;
+//   "chat"  = general discussion / brainstorming companion (default)
+//   "draft" = the AI writes story prose (a scene or chapter segment)
+//   readability/structure/context = legacy structured-review modes
+//   null = no category selected
+// The wire format currently sends "chat" by default and "draft" when the
+// writer has Draft mode on or clicks Continue.
+export type EditorChatCategory =
+  | "readability"
+  | "structure"
+  | "context"
+  | "chat"
+  | "draft"
+  | null;
 
 export interface EditorChatMessage {
   role: "user" | "assistant";

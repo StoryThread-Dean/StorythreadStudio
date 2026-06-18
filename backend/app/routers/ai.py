@@ -1517,16 +1517,23 @@ async def editor_chat(request: EditorChatRequest):
     else:
         messages = conversation
 
-    # Pick temperature: structured categories get lower randomness
+    # Pick temperature: creative modes (open chat + scene drafting) get higher
+    # randomness; the structured review categories get lower randomness.
     temp = (
-        TEMPERATURE_DEFAULTS["generation"] if request.category == "chat"
+        TEMPERATURE_DEFAULTS["generation"] if request.category in ("chat", "draft")
         else TEMPERATURE_DEFAULTS["critique"]
     )
+
+    # Pick the sanitizer mode. Draft mode produces story prose, where an
+    # approved ' -- ' is legitimate punctuation, so we use the prose sanitizer
+    # (strips em/en dashes only). Every other mode is conversational and uses
+    # the chat sanitizer, which also folds ' -- ' down to commas.
+    sanitize_mode = "prose" if request.category == "draft" else "chat"
 
     try:
         reply = await run_chat(api_key=api_key, model_id=model_id,
                                system_prompt=system_prompt, messages=messages,
-                               temperature=temp)
+                               temperature=temp, sanitize_mode=sanitize_mode)
     except httpx.HTTPStatusError as e:
         raise _openrouter_exc(e)
     except httpx.RequestError as e:

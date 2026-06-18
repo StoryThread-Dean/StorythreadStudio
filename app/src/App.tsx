@@ -40,6 +40,7 @@ import type {
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
 import type { ChipIncludeOptions } from "./utils/profileFormat";
+import { buildEditorChatPayload, isWeakDraftingModel } from "./utils/buildEditorChatPayload";
 import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
@@ -59,7 +60,7 @@ import { useBackendHealth } from "./hooks/useBackendHealth";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { Bot, Send, ChevronDown, Settings2, Trash2 } from "lucide-react";
+import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -206,6 +207,15 @@ function App() {
   const [chatLoading, setChatLoading]   = useState(false);
   const [chatError, setChatError]       = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Draft mode: when ON, a typed message asks the AI to write story prose (a
+  // scene or chapter segment) instead of discussing the text. The Continue
+  // button always drafts regardless of this toggle. Off = normal discussion.
+  const [draftMode, setDraftMode] = useState(false);
+  // One-time, dismissible nudge shown when the writer drafts on a weak model
+  // (cheap tiers produce generic prose). Never blocks; resets per session.
+  const [showDraftModelNudge, setShowDraftModelNudge] = useState(false);
+  const [draftNudgeDismissed, setDraftNudgeDismissed] = useState(false);
 
   // Smart Advisor state. Currently-active issues are owned by the editor's
   // StateField (see components/editor/issueOverlay.ts); we mirror just the
@@ -1087,41 +1097,50 @@ function App() {
   //
   // "Established" = sent in a prior turn (muted in UI, still in AI memory).
   // "New"         = first time being sent (bright in UI, included in payload).
-  const sendEditorChat = useCallback(async () => {
-    if (!chatInput.trim() || chatLoading) return;
+  const sendEditorChat = useCallback(async (opts?: {
+    // When set, send this text as the user turn instead of the input box.
+    // Used by the Continue button (a canned "keep going" message).
+    overrideText?: string;
+    // Force a category. Defaults to draft-mode-aware "chat"/"draft".
+    category?: "chat" | "draft";
+    // Skip sending any chapter/selection text (Continue relies on history).
+    suppressText?: boolean;
+  }) => {
+    const messageText = (opts?.overrideText ?? chatInput).trim();
+    if (!messageText || chatLoading) return;
 
-    // ── Determine what text to send (if any) ──────────────────────────────
-    // Selected text is always "new" (it's a fresh passage the writer highlighted).
-    // Full chapter text is sent only if: toggle is ON and it hasn't been established yet.
-    const selected = selectedText.trim();
-    let textContent = "";
-    let isFullChapter = false;
+    // Resolve the category: explicit override wins, else follow the toggle.
+    const category: "chat" | "draft" = opts?.category ?? (draftMode ? "draft" : "chat");
+    const modelId = currentProjectRef.current?.default_model || undefined;
 
-    if (selected) {
-      // Writer highlighted specific text -- always send it (it's new context)
-      textContent = selected;
-      isFullChapter = false;
-    } else if (includeChapter && !chapterEstablished) {
-      // No selection, chapter toggle ON, chapter not yet sent in this convo
-      const view = editorViewRef.current;
-      if (view) {
-        textContent = view.state.doc.toString();
-        isFullChapter = true;
-      }
+    // Non-blocking nudge: if we're about to draft on a weak model, surface a
+    // one-time suggestion to switch to a stronger one. Never stops the request.
+    if (category === "draft" && !draftNudgeDismissed && isWeakDraftingModel(modelId)) {
+      setShowDraftModelNudge(true);
     }
-    // Otherwise: no text sent. Either toggle is OFF, or chapter was already
-    // established in a prior turn. The AI still has it from history.
 
-    // ── Determine which chips are new ─────────────────────────────────────
-    // Only send chips that haven't been established yet in this conversation.
-    const newChips = contextChips.filter(
-      chip => !establishedChipKeys.has(`${chip.type}:${chip.name}`)
-    );
+    // ── Decide what materials this turn carries (text + new chips) ─────────
+    // Delegated to a pure helper so the branching is unit-tested. Continue
+    // turns suppress text entirely (the prose so far is in the history).
+    const view = editorViewRef.current;
+    const payloadCore = buildEditorChatPayload({
+      category,
+      selectedText,
+      fullChapterText: view ? view.state.doc.toString() : null,
+      includeChapter,
+      chapterEstablished,
+      contextChips,
+      establishedChipKeys,
+      suppressText: opts?.suppressText ?? false,
+    });
+    const textContent = payloadCore.text_content;
+    const newChips    = payloadCore.context_chips;
 
-    const userMsg: EditorChatMessage = { role: "user", content: chatInput.trim() };
+    const userMsg: EditorChatMessage = { role: "user", content: messageText };
     const newMessages = [...chatMessages, userMsg];
     setChatMessages(newMessages);
-    setChatInput("");
+    // Only clear the input box when we actually sent what was typed there.
+    if (opts?.overrideText === undefined) setChatInput("");
     setChatLoading(true);
     setChatError(null);
     setChatModelUsed(currentProjectRef.current?.default_model || null);
@@ -1146,15 +1165,15 @@ function App() {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          // Smart Advisor redesign: chat is always general-chat now.
+          // "chat" = discussion companion; "draft" = the AI writes prose.
           // Structured Readability/Structure/Context feedback runs through
           // /api/ai/editor-pass and renders as inline highlights instead.
-          category:        "chat",
-          text_content:    textContent,
-          is_full_chapter: isFullChapter,
+          category:        category,
+          text_content:    payloadCore.text_content,
+          is_full_chapter: payloadCore.is_full_chapter,
           messages:        newMessages,
           context_chips:   newChips,
-          model_id:        currentProjectRef.current?.default_model || undefined,
+          model_id:        modelId,
           content_mode:    currentProjectRef.current?.content_mode_default ?? "general",
           project_path:    currentProjectRef.current?.root_path ?? null,
         }),
@@ -1213,7 +1232,7 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys]);
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed]);
 
 
   // --- Cancel an in-flight chat request ---
@@ -1916,8 +1935,9 @@ function App() {
             )}
           </div>
           <p className="mt-1 text-xs text-text-muted">
-            General chat. For structured Readability, Structure, or Context
-            review, use the Smart Advisor toolbar above the manuscript.
+            Discuss your writing, or turn on Draft mode to have the AI write a
+            scene. For structured Readability, Structure, or Context review, use
+            the Smart Advisor toolbar above the manuscript.
           </p>
         </div>
 
@@ -2060,12 +2080,19 @@ function App() {
               </div>
               <p className="text-sm font-medium text-text-muted">Writing Companion</p>
               <div className="w-full rounded border border-border bg-bg-primary p-2.5 text-left">
-                <p className="mb-1 text-xs font-medium text-text-muted">Try asking:</p>
-                {[
-                  "What do you think of this passage?",
-                  "Help me brainstorm what happens next",
-                  "How could I make this scene stronger?",
-                ].map(q => (
+                <p className="mb-1 text-xs font-medium text-text-muted">{draftMode ? "Try drafting:" : "Try asking:"}</p>
+                {(draftMode
+                  ? [
+                      "Write the opening scene where they first meet",
+                      "Draft a tense confrontation in the throne room",
+                      "Write the next scene from the premise in my outline",
+                    ]
+                  : [
+                      "What do you think of this passage?",
+                      "Help me brainstorm what happens next",
+                      "How could I make this scene stronger?",
+                    ]
+                ).map(q => (
                   <button
                     key={q}
                     onClick={() => setChatInput(q)}
@@ -2104,6 +2131,31 @@ function App() {
               )}
             </div>
           ))}
+
+          {/* Continue: appends the next prose segment. Shown only after the
+              AI has replied (last message is the assistant's) and we're idle.
+              It sends a canned "keep going" turn in draft mode, relying on the
+              conversation history for everything else, so the scene can be
+              extended indefinitely one segment at a time. */}
+          {!chatLoading && !chatError &&
+            chatMessages.length > 0 &&
+            chatMessages[chatMessages.length - 1].role === "assistant" && (
+            <div className="mb-2 ml-7 flex">
+              <button
+                onClick={() => sendEditorChat({
+                  overrideText: "Continue from where you left off. Pick up at the next word of the prose, no recap and no preamble.",
+                  category: "draft",
+                  suppressText: true,
+                })}
+                disabled={!currentChapter}
+                className="inline-flex items-center gap-1 rounded-full border border-indigo-700/50 bg-indigo-950/40 px-2.5 py-1 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
+                title="Write the next segment of the scene, continuing from here"
+              >
+                <CornerDownRight size={12} />
+                Continue
+              </button>
+            </div>
+          )}
 
           {chatLoading && (
             <div className="flex items-center gap-2 text-xs text-text-muted">
@@ -2144,6 +2196,53 @@ function App() {
 
         {/* Chat input */}
         <div className="border-t border-border p-3">
+
+          {/* Weak-model nudge: shown once when drafting on a budget model that
+              tends to produce generic prose. Dismissible, never blocks. */}
+          {showDraftModelNudge && !draftNudgeDismissed && (
+            <div className="mb-2 rounded border border-amber-800/60 bg-amber-950/30 p-2">
+              <p className="text-xs text-amber-200">
+                Drafting works best on a stronger model.
+                {chatModelUsed ? <> Current: <span className="font-medium">{chatModelUsed.split("/").pop()}</span>.</> : null}
+              </p>
+              <div className="mt-1 flex items-center gap-3">
+                <button
+                  onClick={() => { setShowSettings(true); }}
+                  className="text-xs text-indigo-300 underline transition-colors hover:text-indigo-200"
+                >
+                  Change in Settings
+                </button>
+                <button
+                  onClick={() => { setDraftNudgeDismissed(true); setShowDraftModelNudge(false); }}
+                  className="text-xs text-faint transition-colors hover:text-text-muted"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Draft mode toggle. Off = discussion chat. On = the AI writes a
+              scene/chapter segment from your message + attached context. */}
+          <div className="mb-2 flex items-center justify-between">
+            <label
+              className="flex cursor-pointer items-center gap-1.5"
+              title="When on, the AI writes story prose from your message and attached context. When off, it discusses your writing."
+            >
+              <PenLine size={12} className={draftMode ? "text-emerald-400" : "text-faint"} />
+              <span className={`text-xs ${draftMode ? "text-emerald-400" : "text-faint"}`}>Draft mode</span>
+              <div
+                className={`relative h-4 w-7 rounded-full transition-colors ${draftMode ? "bg-emerald-600" : "bg-border"}`}
+                onClick={() => setDraftMode(v => !v)}
+              >
+                <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${draftMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
+              </div>
+            </label>
+            {draftMode && (
+              <span className="text-[10px] text-faint">AI writes prose &middot; use Continue to extend</span>
+            )}
+          </div>
+
           <div className="relative flex items-end gap-2">
             <textarea
               value={chatInput}
@@ -2165,14 +2264,20 @@ function App() {
                   sendEditorChat();
                 }
               }}
-              placeholder={currentChapter ? "Ask about your writing... (Enter to send)" : "Open a chapter first"}
+              placeholder={
+                !currentChapter
+                  ? "Open a chapter first"
+                  : draftMode
+                    ? "Describe the scene to write... (Enter to send)"
+                    : "Ask about your writing... (Enter to send)"
+              }
               disabled={!currentChapter || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
               className="text-entry flex-1 rounded border border-border bg-border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <button
-              onClick={sendEditorChat}
+              onClick={() => sendEditorChat()}
               disabled={!currentChapter || !chatInput.trim() || chatLoading}
               className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
               title="Send (Enter)"

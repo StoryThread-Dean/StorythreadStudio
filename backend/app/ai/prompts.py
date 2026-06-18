@@ -204,6 +204,43 @@ _GENERAL_RESPONSE_RULES = (
     "- Address what was asked, then stop.\n"
 )
 
+# ── Draft response rules (used by draft mode) ───────────────────────────────
+# This is the ONLY mode where the AI writes finished story prose for the
+# writer. The rules below override the conversational chat tone: the output
+# IS the scene, not a description of it. Segment length is set here (~800-1200
+# words); the writer extends arbitrarily long scenes by clicking Continue,
+# which reuses the base contract's "WHEN THE WRITER ASKS TO CONTINUE" block.
+_DRAFT_RESPONSE_RULES = (
+    "YOUR ROLE: Drafting story prose.\n"
+    "The writer has asked you to write a scene or chapter segment. Treat their "
+    "message as the premise or brief, and the attached profiles, outline, and "
+    "location notes as canon for what you write.\n\n"
+    "WHAT TO OUTPUT:\n"
+    "- Write the actual story prose. Not a summary, not an outline, not a "
+    "description of what the scene would contain, not notes about your choices.\n"
+    "- Use the attached profiles for voice, physical detail, and motivation, "
+    "weighted by their importance labels. Do not list traits; let them surface "
+    "naturally as the scene calls for them.\n"
+    "- Match the POV, tense, and tone implied by the premise and any attached "
+    "text. If the writer attached existing prose, match its voice.\n\n"
+    "WHAT NOT TO DO:\n"
+    "- No preamble. Do not open with 'Here is a scene', a restated premise, or "
+    "an italicized setup. The first line is the first line of the story.\n"
+    "- No editorial sign-off. Do not close with 'Let me know', 'I tried to "
+    "capture', 'Hope this helps', or questions about the draft.\n"
+    "- No markdown headers, bullet lists, or blockquotes wrapped around the "
+    "prose. Write plain paragraphs the way a manuscript reads. A scene break "
+    "(a centered --- ) is fine only if the premise genuinely spans one.\n\n"
+    "LENGTH AND STOPPING:\n"
+    "- Write roughly 800 to 1200 words per segment unless the writer specifies "
+    "a different length.\n"
+    "- Stop at a natural beat, not at the end of the whole scene. Leave room to "
+    "continue. Do NOT write a closing or thematic capstone line unless the "
+    "writer explicitly asks you to bring the scene to a close.\n"
+    "- The writer will click Continue to extend the scene, so an unfinished, "
+    "mid-momentum stopping point is correct and expected.\n"
+)
+
 
 def _editor_chat_addendum(category: str) -> str:
     """
@@ -219,6 +256,19 @@ def _editor_chat_addendum(category: str) -> str:
             "or help brainstorm. No specific structured format required.\n\n" +
             _GENERAL_RESPONSE_RULES
         )
+
+    if category == "draft":
+        # Drafting mode: the writer has explicitly asked the AI to write story
+        # prose (a new scene or chapter segment) from a premise plus attached
+        # materials. This is the one mode where the AI ghostwrites prose.
+        #
+        # We deliberately do NOT append _GENERAL_RESPONSE_RULES here. Those rules
+        # ("Conversational tone. This is a chat, not a report... Address what was
+        # asked, then stop.") are written for discussion and actively work against
+        # clean prose output. The base contract already supplies the heavy lifting
+        # (continuation behavior, profile usage, importance labels, punctuation),
+        # so this addendum only sets the drafting role and the stop/length rules.
+        return _DRAFT_RESPONSE_RULES
 
     if category == "readability":
         return (

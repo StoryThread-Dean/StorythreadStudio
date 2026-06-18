@@ -237,6 +237,7 @@ async def run_chat(
     system_prompt: str,
     messages: list[dict],
     temperature: float | None = None,
+    sanitize_mode: str = "chat",
 ) -> str:
     """
     Send a multi-turn chat completion request to OpenRouter and return
@@ -250,8 +251,15 @@ async def run_chat(
 
     Unlike run_completion(), we return the raw text (not parsed JSON)
     because profile chat replies are conversational, not structured data.
+
+    `sanitize_mode` controls how the reply is cleaned before returning:
+      - "chat" (default): sanitize_chat() -- strips em/en dashes AND folds
+        an approved ' -- ' down to a comma. Right for conversational replies.
+      - "prose": sanitize() -- strips em/en dashes only and KEEPS ' -- '.
+        Right for drafted story prose, where ' -- ' is legitimate punctuation
+        and turning it into commas would damage the writing.
     """
-    from app.ai.sanitizer import sanitize_chat
+    from app.ai.sanitizer import sanitize, sanitize_chat
 
     payload = {
         "model": model_id,
@@ -301,7 +309,10 @@ async def run_chat(
 
     raw_reply = data["choices"][0]["message"]["content"]
 
-    # Apply the chat sanitizer: removes em/en dashes AND double-hyphen dashes
+    # Apply the sanitizer chosen by the caller. Prose drafting keeps ' -- ';
+    # everything else folds it to a comma (see sanitize_mode docstring above).
+    if sanitize_mode == "prose":
+        return sanitize(raw_reply)
     return sanitize_chat(raw_reply)
 
 

@@ -15,6 +15,8 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **Draft mode in the Writing Companion.** A new Draft mode toggle next to the chat input turns the AI from a discussion partner into a drafting partner: with it on, your message is treated as a premise and the AI writes actual scene prose from it, using your attached context chips (outline, character, location profiles) as canon. Output is plain manuscript-style paragraphs with no preamble or editorial sign-off, runs about 800 to 1200 words per segment, and stops at a natural beat rather than forcing a scene ending. A **Continue** button appears under the AI's reply: click it and the next segment is written from where the prose left off, so a scene or chapter can be built up indefinitely one segment at a time. Draft mode is off by default, so normal discussion chat is unchanged. Drafted prose keeps the approved `--` punctuation (only the conversational chat path folds it to commas), and a one-time, dismissible nudge suggests switching to a stronger model when drafting on a budget tier that tends to produce generic prose.
+
 ### Changed
 
 ### Fixed
