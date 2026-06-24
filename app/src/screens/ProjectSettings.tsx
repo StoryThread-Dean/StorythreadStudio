@@ -193,12 +193,18 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
       const data = await res.json();
       setSaved(true);
 
-      // Notify parent so the sidebar title updates
+      // Notify parent so the in-memory project matches what we just saved.
+      // IMPORTANT: default_model MUST be included here. App.tsx sends
+      // currentProject.default_model on every AI request (App.tsx:~1114). If we
+      // leave it out, the spread of the OLD `project` keeps the stale model in
+      // memory, so a model change silently has no effect until the writer fully
+      // reopens the project -- which looks exactly like "saving didn't work".
       onProjectUpdated({
         ...project,
         title: data.title ?? project.title,
         description: data.description ?? project.description,
         content_mode_default: data.content_mode_default ?? project.content_mode_default,
+        default_model: data.default_model ?? null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save.");
@@ -282,6 +288,20 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
     return "This is a balanced setup. Good quality AI feedback at a reasonable cost.";
   }
 
+
+  // ── Derived: model-picker options ──────────────────────────────────────────
+  // The models list comes live from OpenRouter, so a model the project saved
+  // earlier can vanish from it -- the provider deprecated/renamed it, or the
+  // content-mode filter now hides it. When that happens a plain <select> can't
+  // display the stored value (no matching <option>), so it silently shows the
+  // FIRST option instead. That tricked a writer into thinking their model was
+  // fine and re-saving the stale, dead model on a blind Save. To prevent that
+  // we detect the orphaned value and render an explicit option for it, clearly
+  // flagged as unavailable, plus a warning nudging them to pick a current one.
+  const visibleModels = models.filter(m => filterModelByContentMode(m, contentMode));
+  const projectModelInList =
+    projectModel !== "" && visibleModels.some(m => m.id === projectModel);
+  const projectModelMissing = projectModel !== "" && !projectModelInList;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -520,9 +540,15 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
                   >
                     <option value="">Use global default</option>
-                    {models
-                      .filter(m => filterModelByContentMode(m, contentMode))
-                      .map(m => (
+                    {/* Orphaned stored model: render it so the select shows the
+                        TRUE saved value instead of snapping to the first option.
+                        Flagged so the writer knows it must be replaced. */}
+                    {projectModelMissing && (
+                      <option value={projectModel}>
+                        {projectModel} (unavailable -- select a current model)
+                      </option>
+                    )}
+                    {visibleModels.map(m => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                         {m.is_free ? " (free)" : ` ($${m.cost_input_per_million.toFixed(2)}/M)`}
@@ -538,7 +564,17 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                   />
                 )}
-                {projectModel && (
+                {/* Loud warning when the saved model is no longer selectable.
+                    This is the case that produced the silent "HTTP 404" -- the
+                    model is dead but the project still points at it. */}
+                {projectModelMissing && models.length > 0 && (
+                  <p className="mt-1 text-xs text-amber-500">
+                    This project is set to <span className="font-mono">{projectModel}</span>, which
+                    is not in the current model list (likely deprecated, renamed, or hidden by this
+                    project's content mode). AI requests will fail until you pick a model above.
+                  </p>
+                )}
+                {projectModel && !projectModelMissing && (
                   <p className="mt-1 text-xs text-emerald-600">
                     This project will use {projectModel.split("/").pop()} for all AI requests.
                   </p>

@@ -19,6 +19,10 @@ entry while working on a feature, append it under Unreleased.
 
 ### Fixed
 
+- **AI requests no longer fail with a cryptic "HTTP 404" when a project's model is deprecated.** When a project's `default_model` pointed at a model the provider had since deprecated or renamed on OpenRouter (e.g. `x-ai/grok-3-mini`), every AI feature failed with the unhelpful `OpenRouter returned an unexpected error: HTTP 404.` This read like an OpenRouter outage even though the account, key, and service were all fine. The 404 handler now extracts OpenRouter's own error message and leads with actionable guidance, so the writer sees, for example, *"The AI model this project uses is unavailable on OpenRouter... OpenRouter says: Grok 3 Mini is deprecated. xAI recommends switching to Grok 4.3."* OpenRouter's message is also appended to all other unexpected status codes. Six regression tests added.
+- **Changing a project's model now takes effect immediately.** Saving a new model in Project Settings wrote it to `project.json` correctly, but the in-memory project kept the old value, so AI requests kept using the previous model until the project was fully reopened. This looked exactly like "the change didn't save." The save callback now propagates `default_model`, so a model change applies on the spot.
+- **Project Settings model picker no longer hides a deprecated saved model.** When a project's saved model was absent from OpenRouter's current list (deprecated, renamed, or hidden by the project's content mode), the dropdown silently snapped to the first available model, which could trick a blind Save into re-persisting the dead model. The picker now renders the stored model as an explicit option flagged `(unavailable -- select a current model)` and shows an amber warning that AI requests will fail until a current model is chosen.
+
 ---
 
 ## [1.0.6] - 2026-06-18

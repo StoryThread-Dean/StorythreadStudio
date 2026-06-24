@@ -489,6 +489,36 @@ async def run_assistant(request: RunAssistantRequest):
 # failed" message (useless), we translate the most common codes into sentences
 # the writer can actually act on.
 
+def _openrouter_msg(e: httpx.HTTPStatusError) -> str:
+    """
+    Pull OpenRouter's own human-readable error message out of the response body.
+
+    OpenRouter returns errors as JSON shaped like
+    {"error": {"message": "Grok 3 Mini is deprecated...", "code": 404}}.
+    That message is frequently the single most useful thing for the writer (it
+    often names the exact replacement model), so we surface it instead of
+    discarding the body and showing only a bare status code.
+
+    Returns "" when the body is missing, not JSON, or not in a shape we know.
+    The response is already fully buffered by httpx at this point (we make
+    non-streaming calls), so reading .json() here is safe and synchronous.
+    """
+    try:
+        body = e.response.json()
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    # Preferred shape: {"error": {"message": "..."}}
+    err = body.get("error")
+    if isinstance(err, dict) and isinstance(err.get("message"), str):
+        return err["message"].strip()
+    # Some shapes put the message at the top level instead.
+    if isinstance(body.get("message"), str):
+        return body["message"].strip()
+    return ""
+
+
 def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
     """
     Convert an OpenRouter HTTPStatusError into a user-facing FastAPI exception.
@@ -498,6 +528,9 @@ def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
     consistent and only need updating in one place when OpenRouter changes behaviour.
     """
     status = e.response.status_code
+    # OpenRouter's own message, if it sent one. Appended to our friendlier text
+    # so the writer sees both "what to do" and "what the provider actually said".
+    provider_msg = _openrouter_msg(e)
     if status == 401:
         return HTTPException(
             status_code=401,
@@ -521,6 +554,23 @@ def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
                 "Suggestion: Deposit $5-10. Go-to app Settings>Model Cost Tier> Budget or Free. It sips tokens, promise"
             ),
         )
+    if status == 404:
+        # A 404 from a chat completion almost always means the chosen model is
+        # gone -- deprecated or renamed by its provider -- or simply not a valid
+        # model ID. This is the failure that looks like "OpenRouter is down"
+        # even though the account and key are fine. OpenRouter's body usually
+        # names the exact replacement (e.g. "switch to Grok 4.3"), so we lead
+        # with actionable guidance and append their message verbatim.
+        base = (
+            "The AI model this project uses is unavailable on OpenRouter, "
+            "usually because the provider deprecated or renamed it. "
+            "Pick a current model in Project Settings (this project may override "
+            "the global model in Settings)."
+        )
+        return HTTPException(
+            status_code=502,
+            detail=f"{base} OpenRouter says: {provider_msg}" if provider_msg else base,
+        )
     if status >= 500:
         return HTTPException(
             status_code=502,
@@ -529,9 +579,10 @@ def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
                 "This is on their end -- try again in a few seconds."
             ),
         )
+    base = f"OpenRouter returned an unexpected error: HTTP {status}."
     return HTTPException(
         status_code=502,
-        detail=f"OpenRouter returned an unexpected error: HTTP {status}.",
+        detail=f"{base} OpenRouter says: {provider_msg}" if provider_msg else base,
     )
 
 
