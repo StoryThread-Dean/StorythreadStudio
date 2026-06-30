@@ -477,17 +477,11 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
   ];
 
   return (
-    // Outer wrapper: a plain bounded box that fills the panel. It must NOT scroll.
-    // CodeMirror (height="100%" below) owns its own vertical scrolling via its
-    // internal .cm-scroller, and its caret "scroll-into-view" math operates on
-    // that scroller. If this wrapper ALSO scrolled (overflow-y-auto), the two
-    // would fight: typing near the bottom would snap the view to the document end
-    // and undo any manual scroll on the next keystroke. Keeping scrolling in a
-    // single element (CodeMirror's) fixes that jump.
+    // Outer wrapper: fills the panel and scrolls vertically.
     // onContextMenu intercepts right-clicks so we can show the Thesaurus popover
     // for any word. When no word is found the handler returns early, allowing the
     // browser's native context menu (with spellcheck suggestions) to appear.
-    <div className="h-full bg-bg-primary" onContextMenu={handleContextMenu}>
+    <div className="h-full overflow-y-auto bg-bg-primary" onContextMenu={handleContextMenu}>
 
       {/* Thesaurus popover -- fixed-position, appears at the right-click coordinates */}
       {thesaurus && (
@@ -505,11 +499,8 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
       {/* Centering wrapper: constrains the editor to a comfortable reading width.
           We center HERE with a div, not inside CodeMirror's internal styles.
           This keeps CodeMirror's coordinate system accurate so selection,
-          click-to-cursor, and drag-select all work correctly.
-          h-full is required so CodeMirror's height="100%" resolves to a bounded
-          height -- that is what makes CodeMirror's own .cm-scroller the single
-          scrolling element (see the outer wrapper comment above). */}
-      <div className="mx-auto h-full w-full max-w-3xl">
+          click-to-cursor, and drag-select all work correctly. */}
+      <div className="mx-auto w-full max-w-3xl">
         <CodeMirror
           value={defaultValue}
           onChange={onChange}
