@@ -241,6 +241,48 @@ _DRAFT_RESPONSE_RULES = (
     "mid-momentum stopping point is correct and expected.\n"
 )
 
+# ── Enhance response rules (used by enhance mode) ───────────────────────────
+# Enhance mode rewrites a HIGHLIGHTED passage as richer, more vividly staged
+# prose, WITHOUT inventing new plot. Unlike draft mode (which writes new scenes
+# from a premise), enhance is bounded to the selection: same beats, same
+# outcomes, just more texture. Like draft, it outputs bare prose and skips the
+# conversational _GENERAL_RESPONSE_RULES (they fight clean prose). The em-dash
+# ban + "don't contradict canon" come from BASE_WRITING_ASSISTANT_CONTRACT.
+_ENHANCE_RESPONSE_RULES = (
+    "YOUR ROLE: Enhancing an existing passage.\n"
+    "The writer has highlighted a specific passage (delimited by BEGIN/END "
+    "PASSAGE TO ENHANCE markers) and wants a richer, more vividly staged version "
+    "of it. Rewrite ONLY that passage.\n\n"
+    "THE ENRICHMENT CONTRACT (do not break this):\n"
+    "- KEEP every event, fact, action, and outcome from the original passage. "
+    "Same beats, same order, same result. If they arrive, meet a contact, and "
+    "get a mission, your version still has exactly those beats and that outcome.\n"
+    "- ADD sensory and atmospheric detail (sight, sound, smell, texture, light, "
+    "weather, mood) and small, plausible staging props (a bouncer at the door, a "
+    "guttering candle, a stain on the table). These are set dressing, not plot.\n"
+    "- DO NOT add new plot, new decisions, new conflicts, or new outcomes.\n"
+    "- DO NOT introduce new named characters. Unnamed background figures used "
+    "purely as staging (a bartender, a courier) are fine; do not name them or "
+    "give them a story role.\n"
+    "- DO NOT change who does what, who is present, or how things end.\n"
+    "- Match the POV, tense, and voice of the passage and the surrounding context.\n\n"
+    "USING THE SURROUNDING CONTEXT:\n"
+    "- The SURROUNDING CONTEXT block (when present) is grounding only. Use it for "
+    "names, facts, continuity, established mood, and what just happened or is "
+    "about to happen. Never rewrite, continue, or quote it back. Your output is "
+    "the enhanced passage alone.\n\n"
+    "ENHANCEMENT LEVELS (the active level is stated in the materials):\n"
+    "- Default: enhance according to the writer's typed instructions, no fixed "
+    "length target.\n"
+    "- Minimum: add only 1 to 4 sentences of enrichment beyond the original.\n"
+    "- Expanded: produce roughly 3x to 5x the length of the original passage.\n\n"
+    "WHAT TO OUTPUT:\n"
+    "- The enhanced passage as plain manuscript prose. No preamble ('Here is...'), "
+    "no sign-off, no notes about your choices, no markdown headers or bullet lists.\n"
+    "- The writer copies this into their manuscript themselves, so output prose "
+    "ready to paste, nothing else.\n"
+)
+
 
 def _editor_chat_addendum(category: str) -> str:
     """
@@ -269,6 +311,12 @@ def _editor_chat_addendum(category: str) -> str:
         # (continuation behavior, profile usage, importance labels, punctuation),
         # so this addendum only sets the drafting role and the stop/length rules.
         return _DRAFT_RESPONSE_RULES
+
+    if category == "enhance":
+        # Enhance mode: expand the highlighted passage into richer prose without
+        # inventing plot. Like draft, it outputs bare manuscript prose, so we
+        # skip _GENERAL_RESPONSE_RULES for the same reason documented above.
+        return _ENHANCE_RESPONSE_RULES
 
     if category == "readability":
         return (

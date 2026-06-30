@@ -184,7 +184,13 @@ export type EditorChatCategory =
   | "context"
   | "chat"
   | "draft"
+  | "enhance"
   | null;
+
+// Enhance mode expansion level: "prompt" follows the writer's typed
+// instructions (no fixed length); "minimum" adds 1-4 sentences; "expanded"
+// produces 3x-5x the highlighted passage.
+export type EnhanceLevel = "prompt" | "minimum" | "expanded";
 
 export interface EditorChatMessage {
   role: "user" | "assistant";
@@ -193,13 +199,17 @@ export interface EditorChatMessage {
 
 export interface EditorChatPayload {
   category:        EditorChatCategory;
-  text_content:    string;          // Selected text OR full chapter
+  text_content:    string;          // Selected text OR full chapter (enhance: the passage to expand)
   is_full_chapter: boolean;
   messages:        EditorChatMessage[];
   context_chips?:  ContextChip[];
   model_id?:       string;
   content_mode?:   string;
   project_path?:   string;
+  // Enhance mode only: paragraphs around the selection (grounding, not rewritten).
+  surrounding_context?: string;
+  // Enhance mode only: how much to expand.
+  enhance_level?:  EnhanceLevel;
 }
 
 

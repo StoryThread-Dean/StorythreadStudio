@@ -34,13 +34,13 @@ import { ExportModal } from "./components/ExportModal";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import type { ProfileType, Profile } from "./types/profile";
 import type {
-  ContextChip, ChipIncludeFlags, EditorChatMessage,
+  ContextChip, ChipIncludeFlags, EditorChatMessage, EnhanceLevel,
   SceneSummaryInfo, SplitChapterScenesResponse, GenerateSceneSummaryResponse,
 } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
 import type { ChipIncludeOptions } from "./utils/profileFormat";
-import { buildEditorChatPayload, isWeakDraftingModel } from "./utils/buildEditorChatPayload";
+import { buildEditorChatPayload, isWeakDraftingModel, computeSurroundingWindow } from "./utils/buildEditorChatPayload";
 import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
@@ -60,7 +60,7 @@ import { useBackendHealth } from "./hooks/useBackendHealth";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine } from "lucide-react";
+import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine, Sparkles } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -216,6 +216,15 @@ function App() {
   // (cheap tiers produce generic prose). Never blocks; resets per session.
   const [showDraftModelNudge, setShowDraftModelNudge] = useState(false);
   const [draftNudgeDismissed, setDraftNudgeDismissed] = useState(false);
+
+  // Enhance mode: when ON, the writer highlights a passage and the AI returns a
+  // richer, expanded rewrite of ONLY that selection (grounded by surrounding
+  // paragraphs). Mutually exclusive with Draft mode. enhanceLevel controls how
+  // much it expands. A one-time dismissible nudge suggests attaching the
+  // chapter/outline/profiles as context for better grounding.
+  const [enhanceMode, setEnhanceMode] = useState(false);
+  const [enhanceLevel, setEnhanceLevel] = useState<EnhanceLevel>("prompt");
+  const [enhanceNudgeDismissed, setEnhanceNudgeDismissed] = useState(false);
 
   // Smart Advisor state. Currently-active issues are owned by the editor's
   // StateField (see components/editor/issueOverlay.ts); we mirror just the
@@ -1101,17 +1110,27 @@ function App() {
     // When set, send this text as the user turn instead of the input box.
     // Used by the Continue button (a canned "keep going" message).
     overrideText?: string;
-    // Force a category. Defaults to draft-mode-aware "chat"/"draft".
-    category?: "chat" | "draft";
+    // Force a category. Defaults to mode-aware "chat"/"draft"/"enhance".
+    category?: "chat" | "draft" | "enhance";
     // Skip sending any chapter/selection text (Continue relies on history).
     suppressText?: boolean;
   }) => {
     const messageText = (opts?.overrideText ?? chatInput).trim();
     if (!messageText || chatLoading) return;
 
-    // Resolve the category: explicit override wins, else follow the toggle.
-    const category: "chat" | "draft" = opts?.category ?? (draftMode ? "draft" : "chat");
+    // Resolve the category: explicit override wins, else follow the toggles.
+    // Draft and Enhance are mutually exclusive (enforced by the toggle handlers),
+    // so at most one is on here.
+    const category: "chat" | "draft" | "enhance" =
+      opts?.category ?? (draftMode ? "draft" : enhanceMode ? "enhance" : "chat");
     const modelId = currentProjectRef.current?.default_model || undefined;
+
+    // Enhance needs a highlighted passage to expand. Guard early with a clear
+    // hint rather than sending an empty target.
+    if (category === "enhance" && !selectedText.trim()) {
+      setChatError("Highlight the passage you want to enhance first.");
+      return;
+    }
 
     // Non-blocking nudge: if we're about to draft on a weak model, surface a
     // one-time suggestion to switch to a stronger one. Never stops the request.
@@ -1123,15 +1142,27 @@ function App() {
     // Delegated to a pure helper so the branching is unit-tested. Continue
     // turns suppress text entirely (the prose so far is in the history).
     const view = editorViewRef.current;
+    const fullChapterText = view ? view.state.doc.toString() : null;
+
+    // For enhance, compute the surrounding-paragraph grounding window from the
+    // live selection offsets into the full chapter. (Other modes send "".)
+    let surroundingContext = "";
+    if (category === "enhance" && view && fullChapterText) {
+      const sel = view.state.selection.main;
+      surroundingContext = computeSurroundingWindow(fullChapterText, sel.from, sel.to);
+    }
+
     const payloadCore = buildEditorChatPayload({
       category,
       selectedText,
-      fullChapterText: view ? view.state.doc.toString() : null,
+      fullChapterText,
       includeChapter,
       chapterEstablished,
       contextChips,
       establishedChipKeys,
       suppressText: opts?.suppressText ?? false,
+      enhanceLevel,
+      surroundingContext,
     });
     const textContent = payloadCore.text_content;
     const newChips    = payloadCore.context_chips;
@@ -1176,6 +1207,9 @@ function App() {
           model_id:        modelId,
           content_mode:    currentProjectRef.current?.content_mode_default ?? "general",
           project_path:    currentProjectRef.current?.root_path ?? null,
+          // Enhance mode only; harmless empties for other modes (backend ignores).
+          surrounding_context: payloadCore.surrounding_context,
+          enhance_level:       payloadCore.enhance_level,
         }),
       });
 
@@ -1232,7 +1266,7 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed]);
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel]);
 
 
   // --- Cancel an in-flight chat request ---
@@ -1949,8 +1983,10 @@ function App() {
             // based scene summarization is conceptually a Writing Companion
             // action on the selected passage.
             <div className="flex items-center justify-between gap-2">
-              <p className={`min-w-0 flex-1 truncate text-xs ${chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
-                {chapterEstablished ? "Selection (new context)" : "Using selected text"} ({selectedText.length.toLocaleString()} chars)
+              <p className={`min-w-0 flex-1 truncate text-xs ${enhanceMode ? "text-violet-400" : chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
+                {enhanceMode
+                  ? "Passage to enhance"
+                  : chapterEstablished ? "Selection (new context)" : "Using selected text"} ({selectedText.length.toLocaleString()} chars)
               </p>
               <button
                 onClick={handleSummarizeAsScene}
@@ -1961,6 +1997,12 @@ function App() {
                 Summarize as Scene
               </button>
             </div>
+          ) : currentChapter && enhanceMode ? (
+            // Enhance is on but nothing is highlighted -- the feature needs a
+            // target passage, so prompt the writer to select one.
+            <p className="text-xs text-violet-400">
+              Highlight a passage in the editor to enhance
+            </p>
           ) : currentChapter ? (
             // No selection -- show chapter toggle
             <div className="flex items-center justify-between">
@@ -2080,12 +2122,20 @@ function App() {
               </div>
               <p className="text-sm font-medium text-text-muted">Writing Companion</p>
               <div className="w-full rounded border border-border bg-bg-primary p-2.5 text-left">
-                <p className="mb-1 text-xs font-medium text-text-muted">{draftMode ? "Try drafting:" : "Try asking:"}</p>
+                <p className="mb-1 text-xs font-medium text-text-muted">
+                  {draftMode ? "Try drafting:" : enhanceMode ? "Try enhancing (highlight a passage first):" : "Try asking:"}
+                </p>
                 {(draftMode
                   ? [
                       "Write the opening scene where they first meet",
                       "Draft a tense confrontation in the throne room",
                       "Write the next scene from the premise in my outline",
+                    ]
+                  : enhanceMode
+                  ? [
+                      "Make this more vivid",
+                      "Add atmosphere and staging",
+                      "Enrich the sensory detail here",
                     ]
                   : [
                       "What do you think of this passage?",
@@ -2222,9 +2272,31 @@ function App() {
             </div>
           )}
 
-          {/* Draft mode toggle. Off = discussion chat. On = the AI writes a
-              scene/chapter segment from your message + attached context. */}
-          <div className="mb-2 flex items-center justify-between">
+          {/* Enhance-mode context nudge: shown once when Enhance is on, suggesting
+              the writer attach grounding (chapter/outline/profiles) for better
+              results. Dismissible, never blocks. */}
+          {enhanceMode && !enhanceNudgeDismissed && (
+            <div className="mb-2 rounded border border-violet-800/60 bg-violet-950/30 p-2">
+              <p className="text-xs text-violet-200">
+                For the richest results, attach the full chapter, your outline, and
+                relevant character profiles as context (use + Add above). Enhance
+                already sends the paragraphs around your selection automatically.
+              </p>
+              <div className="mt-1 flex items-center gap-3">
+                <button
+                  onClick={() => setEnhanceNudgeDismissed(true)}
+                  className="text-xs text-faint transition-colors hover:text-text-muted"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mode toggles. Draft and Enhance are mutually exclusive; turning one
+              on turns the other off. Off (both) = discussion chat. */}
+          <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {/* Draft mode: the AI writes a new scene/segment from your message. */}
             <label
               className="flex cursor-pointer items-center gap-1.5"
               title="When on, the AI writes story prose from your message and attached context. When off, it discusses your writing."
@@ -2233,15 +2305,56 @@ function App() {
               <span className={`text-xs ${draftMode ? "text-emerald-400" : "text-faint"}`}>Draft mode</span>
               <div
                 className={`relative h-4 w-7 rounded-full transition-colors ${draftMode ? "bg-emerald-600" : "bg-border"}`}
-                onClick={() => setDraftMode(v => !v)}
+                onClick={() => setDraftMode(v => { const next = !v; if (next) setEnhanceMode(false); return next; })}
               >
                 <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${draftMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
               </div>
             </label>
+
+            {/* Enhance mode: the AI expands your HIGHLIGHTED passage into richer prose. */}
+            <label
+              className="flex cursor-pointer items-center gap-1.5"
+              title="When on, highlight a passage and the AI rewrites it as richer, more vivid prose (keeping the same events). Output appears in chat for you to copy."
+            >
+              <Sparkles size={12} className={enhanceMode ? "text-violet-400" : "text-faint"} />
+              <span className={`text-xs ${enhanceMode ? "text-violet-400" : "text-faint"}`}>Enhance</span>
+              <div
+                className={`relative h-4 w-7 rounded-full transition-colors ${enhanceMode ? "bg-violet-600" : "bg-border"}`}
+                onClick={() => setEnhanceMode(v => { const next = !v; if (next) setDraftMode(false); return next; })}
+              >
+                <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enhanceMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
+              </div>
+            </label>
+
             {draftMode && (
               <span className="text-[10px] text-faint">AI writes prose &middot; use Continue to extend</span>
             )}
           </div>
+
+          {/* Enhance level: how much to expand the highlighted passage. */}
+          {enhanceMode && (
+            <div className="mb-2 flex items-center gap-1.5">
+              <span className="text-[10px] text-faint">Amount:</span>
+              {([
+                { value: "prompt",   label: "Default",  hint: "Follow your instructions" },
+                { value: "minimum",  label: "Minimum",  hint: "Add 1-4 sentences" },
+                { value: "expanded", label: "Expanded", hint: "3x-5x the selection" },
+              ] as { value: EnhanceLevel; label: string; hint: string }[]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setEnhanceLevel(opt.value)}
+                  title={opt.hint}
+                  className={`rounded border px-2 py-0.5 text-[10px] transition-colors ${
+                    enhanceLevel === opt.value
+                      ? "border-violet-500 bg-violet-950/50 text-violet-200"
+                      : "border-border text-faint hover:border-violet-700 hover:text-violet-300"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="relative flex items-end gap-2">
             <textarea
@@ -2269,16 +2382,20 @@ function App() {
                   ? "Open a chapter first"
                   : draftMode
                     ? "Describe the scene to write... (Enter to send)"
-                    : "Ask about your writing... (Enter to send)"
+                    : enhanceMode
+                      ? (selectedText.trim()
+                          ? "Describe how to enrich the highlighted passage... (Enter to send)"
+                          : "Highlight a passage in the editor to enhance")
+                      : "Ask about your writing... (Enter to send)"
               }
-              disabled={!currentChapter || chatLoading}
+              disabled={!currentChapter || chatLoading || (enhanceMode && !selectedText.trim())}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
               className="text-entry flex-1 rounded border border-border bg-border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <button
               onClick={() => sendEditorChat()}
-              disabled={!currentChapter || !chatInput.trim() || chatLoading}
+              disabled={!currentChapter || !chatInput.trim() || chatLoading || (enhanceMode && !selectedText.trim())}
               className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
               title="Send (Enter)"
             >

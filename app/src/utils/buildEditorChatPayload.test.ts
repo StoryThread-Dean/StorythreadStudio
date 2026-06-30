@@ -8,7 +8,7 @@
 //   - Continue turn                  -> category "draft", no text, only new chips
 
 import { describe, it, expect } from "vitest";
-import { buildEditorChatPayload, isWeakDraftingModel } from "./buildEditorChatPayload";
+import { buildEditorChatPayload, isWeakDraftingModel, computeSurroundingWindow } from "./buildEditorChatPayload";
 import type { ContextChip } from "../types/ai";
 
 const chip = (type: string, name: string, content = "x"): ContextChip => ({ type, name, content });
@@ -81,6 +81,81 @@ describe("buildEditorChatPayload", () => {
       establishedChipKeys: new Set(["character:Elara"]),
     });
     expect(out.context_chips.map((c) => c.name)).toEqual(["Keep"]);
+  });
+});
+
+describe("buildEditorChatPayload (enhance mode)", () => {
+  it("sends the selection as the target and carries the grounding window + level", () => {
+    const out = buildEditorChatPayload({
+      ...base,
+      category: "enhance",
+      selectedText: "  They walked to the bar.  ",
+      enhanceLevel: "expanded",
+      surroundingContext: "Earlier they left the safehouse.",
+    });
+    expect(out.category).toBe("enhance");
+    expect(out.text_content).toBe("They walked to the bar.");
+    expect(out.is_full_chapter).toBe(false);
+    expect(out.surrounding_context).toBe("Earlier they left the safehouse.");
+    expect(out.enhance_level).toBe("expanded");
+  });
+
+  it("resends the selection even when the chapter is already established", () => {
+    // Follow-up turns ("now make it darker") must keep the exact target in front
+    // of the model, unlike chat/draft which stop resending established context.
+    const out = buildEditorChatPayload({
+      ...base,
+      category: "enhance",
+      selectedText: "the passage",
+      chapterEstablished: true,
+      surroundingContext: "ctx",
+    });
+    expect(out.text_content).toBe("the passage");
+    expect(out.surrounding_context).toBe("ctx");
+  });
+
+  it("defaults enhance_level to 'prompt' and surrounding_context to '' when omitted", () => {
+    const out = buildEditorChatPayload({ ...base, category: "chat" });
+    expect(out.enhance_level).toBe("prompt");
+    expect(out.surrounding_context).toBe("");
+  });
+});
+
+describe("computeSurroundingWindow", () => {
+  const paras = (n: number) =>
+    Array.from({ length: n }, (_, i) => `Paragraph ${i + 1}.`).join("\n\n");
+
+  it("takes N paragraphs each side and inserts the selection marker", () => {
+    const full = paras(10);
+    // Select the middle paragraph (Paragraph 5).
+    const target = "Paragraph 5.";
+    const from = full.indexOf(target);
+    const to = from + target.length;
+    const win = computeSurroundingWindow(full, from, to, 2);
+    expect(win).toContain("[... selected passage ...]");
+    // 2 paragraphs before (3,4) and after (6,7); not the far ones.
+    expect(win).toContain("Paragraph 3.");
+    expect(win).toContain("Paragraph 4.");
+    expect(win).toContain("Paragraph 6.");
+    expect(win).toContain("Paragraph 7.");
+    expect(win).not.toContain("Paragraph 1.");
+    expect(win).not.toContain("Paragraph 9.");
+  });
+
+  it("respects the maxChars cap", () => {
+    const full = paras(40);
+    const target = "Paragraph 20.";
+    const from = full.indexOf(target);
+    const win = computeSurroundingWindow(full, from, from + target.length, 10, 80);
+    expect(win.length).toBeLessThanOrEqual(80);
+  });
+
+  it("returns empty string when there is no surrounding text", () => {
+    expect(computeSurroundingWindow("only the selection", 0, 18)).toBe("");
+  });
+
+  it("returns empty string for invalid offsets", () => {
+    expect(computeSurroundingWindow("abc", 5, 2)).toBe("");
   });
 });
 

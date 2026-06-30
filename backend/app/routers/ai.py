@@ -1463,14 +1463,21 @@ class EditorChatMessage(BaseModel):
 
 class EditorChatRequest(BaseModel):
     """One turn of the Writing Companion chat in the main editor."""
-    category:        str                     # "readability" | "structure" | "context"
-    text_content:    str                     # Selected text OR full chapter
+    category:        str                     # "readability" | "structure" | "context" | "chat" | "draft" | "enhance"
+    text_content:    str                     # Selected text OR full chapter (for enhance: the passage to expand)
     is_full_chapter: bool = False
     messages:        list[EditorChatMessage]
     context_chips:   list[ContextChip] = []
     model_id:        str | None = None
     content_mode:    str = "general"
     project_path:    str | None = None
+    # Enhance mode only: a window of paragraphs around the selection, sent as
+    # grounding (facts/continuity/outcomes) that the model must NOT rewrite.
+    # Empty for every other mode.
+    surrounding_context: str = ""
+    # Enhance mode only: how much to expand. "prompt" = follow the writer's typed
+    # instructions (no fixed length); "minimum" = +1-4 sentences; "expanded" = 3x-5x.
+    enhance_level:   str = "prompt"
 
 
 class EditorChatResponse(BaseModel):
@@ -1478,14 +1485,32 @@ class EditorChatResponse(BaseModel):
     model_used: str = ""  # The resolved model ID so the UI can display it
 
 
+# Per-turn length directives for enhance mode, keyed by enhance_level. These go
+# in the user materials message (not the system prompt) so the system prompt stays
+# stable/instruction-only while the active level can vary turn to turn.
+_ENHANCE_LEVEL_DIRECTIVES = {
+    "prompt":   "ENHANCEMENT LEVEL: Default. Enhance according to my instructions above; no fixed length target.",
+    "minimum":  "ENHANCEMENT LEVEL: Minimum. Add only 1 to 4 sentences of enrichment beyond the original.",
+    "expanded": "ENHANCEMENT LEVEL: Expanded. Produce roughly 3x to 5x the length of the passage to enhance.",
+}
+
+
 def _build_materials_message(
     text_content: str,
     is_full_chapter: bool,
     context_chips: list[ContextChip],
+    surrounding_context: str = "",
+    enhance_level: str = "prompt",
+    is_enhance: bool = False,
 ) -> dict:
     """
     Build a user message containing all variable content (selected text,
     context chips). This keeps the system prompt stable and instruction-only.
+
+    For enhance mode (is_enhance=True) the message has a specific shape so the
+    model can tell grounding from target:
+      chips -> SURROUNDING CONTEXT (grounding, do-not-rewrite) -> PASSAGE TO
+      ENHANCE (the only thing to rewrite) -> the level directive.
     """
     lines = []
 
@@ -1508,14 +1533,36 @@ def _build_materials_message(
         lines.append("---")
         lines.append("")
 
+    # Enhance mode: the surrounding paragraphs are grounding only. Same BEGIN/END
+    # framing as chips so the boundary with the target passage is unambiguous.
+    if is_enhance and surrounding_context.strip():
+        lines.append(
+            "SURROUNDING CONTEXT (grounding only -- do NOT rewrite or expand this; "
+            "use it for facts, names, continuity, and outcomes):"
+        )
+        lines.append("=== BEGIN SURROUNDING CONTEXT ===")
+        lines.append(surrounding_context.strip())
+        lines.append("=== END SURROUNDING CONTEXT ===")
+        lines.append("")
+
     # Only include the text section if there's actual text. When the writer
     # has Include Chapter toggled OFF and nothing selected, text_content is
     # empty -- adding an empty "SELECTED PASSAGE:" header confuses the AI
     # into thinking the context failed to load.
     if text_content.strip():
-        label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
-        lines.append(f"{label}:")
-        lines.append(text_content)
+        if is_enhance:
+            # The target passage. Wrapped in explicit markers so the model never
+            # confuses it with the surrounding grounding block above.
+            lines.append("PASSAGE TO ENHANCE (rewrite ONLY this):")
+            lines.append("=== BEGIN PASSAGE TO ENHANCE ===")
+            lines.append(text_content)
+            lines.append("=== END PASSAGE TO ENHANCE ===")
+            lines.append("")
+            lines.append(_ENHANCE_LEVEL_DIRECTIVES.get(enhance_level, _ENHANCE_LEVEL_DIRECTIVES["prompt"]))
+        else:
+            label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
+            lines.append(f"{label}:")
+            lines.append(text_content)
 
     return {"role": "user", "content": "\n".join(lines)}
 
@@ -1538,6 +1585,17 @@ async def editor_chat(request: EditorChatRequest):
                    f"max {max_len:,}). Try a shorter passage."
         )
 
+    # Enhance mode also ships a surrounding-paragraph window; bound it too so a
+    # huge window can't blow past context limits.
+    if len(request.surrounding_context) > 30_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The surrounding context is too long ({len(request.surrounding_context):,} chars, "
+                   f"max 30,000). Try enhancing a passage with less text around it."
+        )
+
+    is_enhance = request.category == "enhance"
+
     # 1. System prompt = instructions only (no story text, no chips)
     system_prompt = build_editor_chat_system_prompt(
         category     = request.category,
@@ -1554,32 +1612,40 @@ async def editor_chat(request: EditorChatRequest):
     #    omits text_content and chips that were already sent in a prior turn (they're
     #    already in the conversation history). Skipping the materials message here
     #    avoids resending the same chapter + profiles on every single turn.
-    has_new_materials = bool(request.text_content.strip()) or bool(request.context_chips)
+    has_new_materials = (
+        bool(request.text_content.strip())
+        or bool(request.context_chips)
+        or bool(request.surrounding_context.strip())
+    )
 
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
     if has_new_materials:
         materials = _build_materials_message(
-            text_content    = request.text_content,
-            is_full_chapter = request.is_full_chapter,
-            context_chips   = request.context_chips,
+            text_content        = request.text_content,
+            is_full_chapter     = request.is_full_chapter,
+            context_chips       = request.context_chips,
+            surrounding_context = request.surrounding_context,
+            enhance_level       = request.enhance_level,
+            is_enhance          = is_enhance,
         )
         messages = [materials] + conversation
     else:
         messages = conversation
 
-    # Pick temperature: creative modes (open chat + scene drafting) get higher
-    # randomness; the structured review categories get lower randomness.
+    # Pick temperature: creative modes (open chat, scene drafting, and prose
+    # enhancement) get higher randomness; the structured review categories get
+    # lower randomness.
     temp = (
-        TEMPERATURE_DEFAULTS["generation"] if request.category in ("chat", "draft")
+        TEMPERATURE_DEFAULTS["generation"] if request.category in ("chat", "draft", "enhance")
         else TEMPERATURE_DEFAULTS["critique"]
     )
 
-    # Pick the sanitizer mode. Draft mode produces story prose, where an
-    # approved ' -- ' is legitimate punctuation, so we use the prose sanitizer
-    # (strips em/en dashes only). Every other mode is conversational and uses
-    # the chat sanitizer, which also folds ' -- ' down to commas.
-    sanitize_mode = "prose" if request.category == "draft" else "chat"
+    # Pick the sanitizer mode. Draft and Enhance both produce story prose, where
+    # an approved ' -- ' is legitimate punctuation, so they use the prose
+    # sanitizer (strips em/en dashes only). Every other mode is conversational
+    # and uses the chat sanitizer, which also folds ' -- ' down to commas.
+    sanitize_mode = "prose" if request.category in ("draft", "enhance") else "chat"
 
     try:
         reply = await run_chat(api_key=api_key, model_id=model_id,
