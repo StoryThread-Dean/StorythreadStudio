@@ -1386,6 +1386,57 @@ def generate_scene_summary_prompt(content_mode: str) -> str:
     return "\n\n".join(parts)
 
 
+SCENE_BREAK_SUGGESTIONS_INSTRUCTIONS = """You are a developmental editor analyzing chapter structure for a fiction writer.
+
+Your job: find where SCENE BREAKS would strengthen this chapter's pacing and structure. In this app a scene break is a horizontal rule (--- on its own line, with blank lines above and below). It marks a structural shift: a point-of-view change, a time jump, a location change, a significant character entrance or exit, the end of an emotional beat, or a tonal shift.
+
+WHAT TO DO:
+- Scan the chapter and identify 3 to 7 of the STRONGEST candidate locations for a scene break.
+- For each candidate, quote a short VERBATIM run of text (at least 5 words) taken from the END of the passage that should come right BEFORE the break. The writer will use this quote to find the spot, so it must appear word-for-word in the chapter.
+- Explain in one sentence why a break there strengthens the structure (name the shift: "POV moves from X to Y", "time jumps to the next morning", "they leave the tavern for the road").
+- Rate your confidence as "strong" (clear, obvious), "moderate" (a good idea), or "subtle" (defensible but optional).
+
+HARD RULES:
+- Quote text that actually exists in the chapter, verbatim, at least 5 words.
+- Do NOT suggest a break before the very first paragraph or after the very last paragraph.
+- Do NOT suggest a break in the middle of a line of dialogue.
+- Suggest at most 7 breaks. Fewer strong suggestions beat many weak ones.
+- You are SUGGESTING only. Do not rewrite the prose or insert the breaks yourself.
+
+RESPONSE FORMAT:
+Return ONLY valid JSON, with no preamble, no markdown fence, and no trailing text:
+{
+  "analysis": "1 to 2 sentences on the chapter's overall pacing and rhythm",
+  "suggestions": [
+    {
+      "quote": "the verbatim words just before where the break should go",
+      "explanation": "why a break here strengthens the structure",
+      "severity": "strong"
+    }
+  ]
+}
+If the chapter is too short or already well-segmented, return an empty "suggestions" list and say so in "analysis"."""
+
+
+def generate_scene_break_suggestions_prompt(content_mode: str) -> str:
+    """
+    Build the system prompt for POST /api/ai/suggest-scene-breaks.
+
+    Composition mirrors the scene-summary prompt:
+        [CONTENT MODE PREAMBLE]? + [SCENE_BREAK_SUGGESTIONS_INSTRUCTIONS] + [PUNCTUATION_RULE]
+
+    The chapter text is sent separately as the user message so this prompt stays
+    cache-friendly across chapters.
+    """
+    parts: list[str] = []
+    mode = content_mode_instruction(content_mode)
+    if mode:
+        parts.append(mode)
+    parts.append(SCENE_BREAK_SUGGESTIONS_INSTRUCTIONS)
+    parts.append(PUNCTUATION_RULE)
+    return "\n\n".join(parts)
+
+
 SCENE_TITLE_INSTRUCTIONS = """You are naming a scene for a fiction writer.
 
 Given the scene text, produce a short evocative title, 2 to 5 words, that captures the scene's most defining beat, location, character, or turn. The title is a label, not a summary.

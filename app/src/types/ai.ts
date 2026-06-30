@@ -213,6 +213,34 @@ export interface EditorChatPayload {
 }
 
 
+// ── Scene Break Suggestions ──────────────────────────────────────────────────
+// Mirrors SuggestSceneBreaksRequest/Response in backend/app/routers/ai.py. The
+// AI reads a chapter and proposes where to place `---` scene breaks; each
+// suggestion is anchored to a verbatim quote the writer can find. Review-only:
+// the writer inserts the breaks by hand.
+export type SceneBreakSeverity = "strong" | "moderate" | "subtle";
+
+export interface SceneBreakSuggestion {
+  quote:       string;            // verbatim text just before the suggested break
+  explanation: string;            // why a break here helps
+  severity:    SceneBreakSeverity;
+}
+
+export interface SuggestSceneBreaksPayload {
+  chapter_path?: string;
+  project_path?: string;
+  chapter_text:  string;
+  model_id?:     string;
+  content_mode?: string;
+}
+
+export interface SuggestSceneBreaksResponse {
+  suggestions: SceneBreakSuggestion[];
+  analysis:    string;
+  model_used:  string;
+}
+
+
 // ── Editor Pass (Inline Overlay Feedback) ────────────────────────────────────
 // Mirrors EditorPassRequest / EditorPassResponse / EditorIssueModel in
 // backend/app/routers/ai.py. The pass endpoint is the JSON-output cousin of

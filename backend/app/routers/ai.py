@@ -35,6 +35,7 @@ from app.ai.prompts import (
     generate_chapter_summary_prompt,
     generate_scene_summary_prompt,
     generate_scene_title_prompt,
+    generate_scene_break_suggestions_prompt,
     content_mode_instruction,
     EDITOR_PASS_SUBCATEGORIES,
     TEMPERATURE_DEFAULTS,
@@ -1384,6 +1385,119 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
         title      = title,
         content    = content,
         model_used = model_id,
+    )
+
+
+# ── Scene Break Suggestions ───────────────────────────────────────────────────
+# Reads a whole chapter and proposes where to insert `---` scene breaks. Like
+# every AI feature here, it only SUGGESTS: the writer places the breaks by hand
+# (the locked no-auto-apply rule). Suggestions are quote-anchored (verbatim text
+# just before each break) because line numbers aren't stable but exact text is.
+
+class SuggestSceneBreaksRequest(BaseModel):
+    chapter_path: str | None = None          # for context/logging; not required
+    project_path: str | None = None          # for story-context injection
+    chapter_text: str                        # the full chapter markdown
+    model_id:     str | None = None
+    content_mode: str = "general"
+
+
+class SceneBreakSuggestion(BaseModel):
+    quote:       str                         # verbatim text just before the break
+    explanation: str                         # why a break here helps
+    severity:    str                         # "strong" | "moderate" | "subtle"
+
+
+class SuggestSceneBreaksResponse(BaseModel):
+    suggestions: list[SceneBreakSuggestion]
+    analysis:    str                         # overall pacing commentary
+    model_used:  str
+
+
+_VALID_BREAK_SEVERITIES = {"strong", "moderate", "subtle"}
+
+
+@router.post("/suggest-scene-breaks", response_model=SuggestSceneBreaksResponse)
+async def suggest_scene_breaks(request: SuggestSceneBreaksRequest):
+    """Suggest where to place `---` scene breaks in a chapter (review-only)."""
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    settings = load_settings()
+    _validate_model_content_mode(settings, model_id, request.content_mode)
+    _validate_model_allowed(settings, model_id)
+
+    chapter_text = request.chapter_text.strip()
+    if not chapter_text:
+        raise HTTPException(status_code=400, detail="Chapter text is empty.")
+    # Same full-chapter cap as the editor-pass / editor-chat full-chapter path.
+    if len(chapter_text) > 100_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Chapter is too long ({len(chapter_text):,} chars, max 100,000). "
+                   f"Try splitting it first."
+        )
+
+    system_prompt = generate_scene_break_suggestions_prompt(request.content_mode)
+    story_context = _build_story_context(request.project_path)
+    if story_context:
+        system_prompt = story_context + system_prompt
+
+    user_message = (
+        "Analyze the following chapter and suggest where scene breaks would help.\n\n"
+        "--- BEGIN CHAPTER TEXT ---\n"
+        f"{chapter_text}\n"
+        "--- END CHAPTER TEXT ---"
+    )
+
+    try:
+        # critique temperature (0.3): identifying structural beats is analytic
+        # work, not creative generation -- we want consistency, not drift.
+        raw = await run_chat(
+            api_key       = api_key,
+            model_id      = model_id,
+            system_prompt = system_prompt,
+            messages      = [{"role": "user", "content": user_message}],
+            temperature   = TEMPERATURE_DEFAULTS["critique"],
+        )
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+
+    # Parse the model's JSON. Tolerate fences/preamble via the shared extractor.
+    # A malformed response yields no suggestions rather than a 500 -- the writer
+    # just sees "no suggestions" instead of a crash.
+    parsed: dict = {}
+    block = _extract_json_block(raw)
+    if block:
+        try:
+            loaded = json.loads(block)
+            if isinstance(loaded, dict):
+                parsed = loaded
+        except json.JSONDecodeError:
+            parsed = {}
+
+    suggestions: list[SceneBreakSuggestion] = []
+    for s in parsed.get("suggestions", []):
+        if not isinstance(s, dict):
+            continue
+        quote = sanitize(str(s.get("quote", "")).strip())
+        explanation = sanitize(str(s.get("explanation", "")).strip())
+        if not quote or not explanation:
+            continue
+        severity = str(s.get("severity", "moderate")).strip().lower()
+        if severity not in _VALID_BREAK_SEVERITIES:
+            severity = "moderate"
+        suggestions.append(SceneBreakSuggestion(
+            quote=quote, explanation=explanation, severity=severity,
+        ))
+
+    analysis = sanitize(str(parsed.get("analysis", "")).strip())
+
+    return SuggestSceneBreaksResponse(
+        suggestions = suggestions,
+        analysis    = analysis,
+        model_used  = model_id,
     )
 
 

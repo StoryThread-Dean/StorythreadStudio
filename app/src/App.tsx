@@ -36,6 +36,7 @@ import type { ProfileType, Profile } from "./types/profile";
 import type {
   ContextChip, ChipIncludeFlags, EditorChatMessage, EnhanceLevel,
   SceneSummaryInfo, SplitChapterScenesResponse, GenerateSceneSummaryResponse,
+  SuggestSceneBreaksResponse,
 } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
@@ -225,6 +226,10 @@ function App() {
   const [enhanceMode, setEnhanceMode] = useState(false);
   const [enhanceLevel, setEnhanceLevel] = useState<EnhanceLevel>("prompt");
   const [enhanceNudgeDismissed, setEnhanceNudgeDismissed] = useState(false);
+
+  // Scene-break suggestions: true while the "Suggest Breaks" toolbar request is
+  // in flight. Results are rendered into the Writing Companion chat below.
+  const [suggestBreaksRunning, setSuggestBreaksRunning] = useState(false);
 
   // Smart Advisor state. Currently-active issues are owned by the editor's
   // StateField (see components/editor/issueOverlay.ts); we mirror just the
@@ -1021,6 +1026,79 @@ function App() {
       setEditorError(err instanceof Error ? err.message : "Auto-split failed.");
     }
   }, [isDirty, handleSave, loadSceneSummaries, openChapterSummary]);
+
+
+  // --- Suggest scene breaks ---
+  // Sends the open chapter to the AI and asks where `---` scene breaks would
+  // help. Results are formatted into the Writing Companion chat (reusing
+  // ChatMarkdown), where the writer reads them and inserts breaks by hand.
+  // No auto-apply: this only suggests.
+  const handleSuggestSceneBreaks = useCallback(async () => {
+    const project = currentProjectRef.current;
+    const chapter = currentChapterRef.current;
+    if (!project || !chapter || suggestBreaksRunning) return;
+
+    // Use the live editor text (includes unsaved edits) so suggestions match
+    // what the writer is currently looking at.
+    const view = editorViewRef.current;
+    const chapterText = view ? view.state.doc.toString() : chapterContent;
+    if (!chapterText.trim()) return;
+
+    setSuggestBreaksRunning(true);
+    setChatError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/suggest-scene-breaks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapter_path: `${project.root_path}/manuscript/${chapter.filename}`,
+          project_path: project.root_path,
+          chapter_text: chapterText,
+          model_id:     project.default_model || undefined,
+          content_mode: project.content_mode_default ?? "general",
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail ?? `Request failed (${res.status})`);
+      }
+
+      const data: SuggestSceneBreaksResponse = await res.json();
+      if (data.model_used) setChatModelUsed(data.model_used);
+
+      // Format the structured result as markdown for the chat panel. The writer
+      // reads each quote-anchored suggestion and places the break themselves.
+      const severityLabel: Record<string, string> = {
+        strong: "Strong", moderate: "Moderate", subtle: "Subtle",
+      };
+      let reply: string;
+      if (data.suggestions.length === 0) {
+        reply = `**Scene break suggestions**\n\n${data.analysis || "No strong scene-break candidates found in this chapter."}`;
+      } else {
+        const items = data.suggestions.map(s =>
+          `**${severityLabel[s.severity] ?? "Suggested"}** — place a break after:\n\n> ${s.quote}\n\n${s.explanation}`
+        ).join("\n\n---\n\n");
+        reply = `**Scene break suggestions**\n\n${data.analysis}\n\n---\n\n${items}\n\n---\n\n_Insert a \`---\` line (blank line above and below) at each spot you agree with. Nothing was changed in your manuscript._`;
+      }
+
+      setChatMessages(prev => [
+        ...prev,
+        { role: "user", content: "Suggest scene breaks for this chapter." },
+        { role: "assistant", content: reply },
+      ]);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    } catch (err) {
+      if (err instanceof TypeError && err.message.toLowerCase().includes("failed to fetch")) {
+        setChatError("Could not reach the backend. Check that it is running on port 8000.");
+      } else {
+        setChatError(err instanceof Error ? err.message : "Scene-break request failed.");
+      }
+    } finally {
+      setSuggestBreaksRunning(false);
+    }
+  }, [suggestBreaksRunning, chapterContent]);
 
 
   // Selection-based flow: opens the preview modal. The modal runs the AI
@@ -1853,6 +1931,13 @@ function App() {
               : undefined
           }
           autoSplitRunning={autoSplitProgress !== null}
+          onSuggestSceneBreaks={
+            // Chapter-scoped, like scene summaries: only when a chapter is open.
+            currentView === "editor" && currentChapter
+              ? handleSuggestSceneBreaks
+              : undefined
+          }
+          suggestBreaksRunning={suggestBreaksRunning}
           onReaderMode={currentProject && chapters.length > 0 ? () => setShowReaderMode(true) : undefined}
         />
 
