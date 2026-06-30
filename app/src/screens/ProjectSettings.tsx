@@ -12,66 +12,11 @@ import { useState, useEffect } from "react";
 import { X, ChevronDown, HelpCircle } from "lucide-react";
 import type { ProjectInfo, OutlineTemplateType } from "../types/project";
 import type { ModelInfo } from "../types/ai";
+// Content-mode filter + curated recommended list are shared with the global
+// Settings screen so the two pickers behave identically (see utils/modelFiltering.ts).
+import { filterModelByContentMode, RECOMMENDED_MODELS } from "../utils/modelFiltering";
 
 const API_BASE = "http://localhost:8000";
-
-// ── Content Mode Model Filtering ──────────────────────────────────────────────
-// OpenRouter's is_moderated flag is unreliable. Instead, we use two approaches:
-//
-// MATURE mode: blacklist known strict providers (hides ~50 models)
-// EXPLICIT mode: whitelist known unmoderated providers (shows only ~50-80 models)
-//
-// The whitelist approach for explicit is more aggressive but more accurate.
-// Writers can still type any model ID manually if they know a specific model works.
-// These lists should be reviewed periodically as providers change.
-//
-// Sources: NovelCrafter NSFW docs, OpenRouter roleplay collection, community reports.
-
-const MODERATED_PROVIDERS = [
-  "openai/",
-  "anthropic/",
-  "google/",
-  "cohere/",
-];
-
-// Providers known to allow explicit/NSFW content without content filtering.
-// Used for explicit mode whitelist -- only these providers are shown.
-const EXPLICIT_ALLOWED_PROVIDERS = [
-  "mistralai/",          // Mistral models (most are unmoderated)
-  "deepseek/",           // DeepSeek models
-  "x-ai/",              // Grok (known for explicit prose)
-  "meta-llama/",         // Llama models (open source, unmoderated)
-  "qwen/",              // Qwen models
-  "nothingiisreal/",    // NiR creative writing models
-  "nousresearch/",      // Nous Research models
-  "cognitivecomputations/", // Cognitive Computations (Dolphin etc.)
-  "thedrummer/",        // TheDrummer creative models
-  "sao10k/",            // Sao10K models
-  "anthracite-org/",    // Anthracite models
-  "venice/",            // Venice AI (explicitly uncensored)
-  "eva-unit-01/",       // Eva models
-  "microsoft/",         // Phi models (generally unmoderated)
-  "01-ai/",             // Yi models
-  "liquid/",            // Liquid AI
-  "ai21/",              // AI21 (generally permissive)
-];
-
-function filterModelByContentMode(m: ModelInfo, contentMode: string): boolean {
-  if (contentMode === "general") return true;
-
-  if (contentMode === "mature") {
-    // Mature: hide known strict providers
-    if (m.is_moderated) return false;
-    return !MODERATED_PROVIDERS.some(prefix => m.id.startsWith(prefix));
-  }
-
-  if (contentMode === "explicit") {
-    // Explicit: whitelist only -- show ONLY known unmoderated providers
-    return EXPLICIT_ALLOWED_PROVIDERS.some(prefix => m.id.startsWith(prefix));
-  }
-
-  return true;
-}
 
 // ── Cost estimate ranges per tier ─────────────────────────────────────────────
 // These are high-level educational estimates, not exact prices.
@@ -302,6 +247,14 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   const projectModelInList =
     projectModel !== "" && visibleModels.some(m => m.id === projectModel);
   const projectModelMissing = projectModel !== "" && !projectModelInList;
+
+  // Recommended models that exist in the live list AND pass the content-mode
+  // filter -- pinned in their own <optgroup> at the top of the picker. Same
+  // curated list and live-list cross-check the global Settings screen uses, so
+  // a deprecated recommendation never appears here either.
+  const recommendedOptions = RECOMMENDED_MODELS.filter(rec =>
+    visibleModels.some(m => m.id === rec.id)
+  );
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -548,12 +501,31 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                         {projectModel} (unavailable -- select a current model)
                       </option>
                     )}
-                    {visibleModels.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                        {m.is_free ? " (free)" : ` ($${m.cost_input_per_million.toFixed(2)}/M)`}
-                      </option>
-                    ))}
+                    {/* Recommended group, pinned at the top. Curated + cross-checked
+                        against the live list, so no deprecated slugs appear. */}
+                    {recommendedOptions.length > 0 && (
+                      <optgroup label="★ Recommended">
+                        {recommendedOptions.map(rec => {
+                          const m = visibleModels.find(vm => vm.id === rec.id)!;
+                          return (
+                            <option key={`rec-${rec.id}`} value={rec.id}>
+                              {m.name} -- {rec.note}
+                              {m.is_free ? " (free)" : ` ($${m.cost_input_per_million.toFixed(2)}/M)`}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    )}
+                    {/* All models (recommended ones are repeated here too, under
+                        their natural list, which is fine for a dropdown). */}
+                    <optgroup label="All models">
+                      {visibleModels.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                          {m.is_free ? " (free)" : ` ($${m.cost_input_per_million.toFixed(2)}/M)`}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 ) : (
                   <input

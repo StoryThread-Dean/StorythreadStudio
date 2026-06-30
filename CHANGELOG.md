@@ -17,6 +17,8 @@ entry while working on a feature, append it under Unreleased.
 
 ### Changed
 
+- **Refreshed and broadened the recommended models in Settings.** The model picker's curated shortcut (formerly "Staff Picks", now "★ Recommended") had drifted out of date: three of its five entries (`claude-3.5-sonnet`, `claude-3.5-haiku`, `gemma-2-9b-it:free`) no longer exist on OpenRouter and were silently dropping out. It now offers a current, balanced set spanning premium prose models, fast/budget options, a free pick, and several unmoderated models for mature/explicit fiction. The list is content-mode aware, so explicit-mode writers only see unmoderated recommendations, and (as before) every entry is cross-checked against OpenRouter's live list so a deprecated slug can never be offered. The Recommended group now also appears in the per-project model picker. Internally, the duplicated content-mode filtering logic in Settings and Project Settings was extracted into a shared `modelFiltering` utility with unit tests.
+
 ### Fixed
 
 - **Editor no longer jumps to the bottom of the page while typing.** When writing near the bottom of a chapter, the editor would snap the whole view to the very end of the document on each keystroke, and scrolling back up was undone the moment you typed again, making it nearly impossible to edit the end of long chapters. The cause was two competing scroll containers: the editor was wrapped in a scrolling `div` while CodeMirror was also configured to own its own scrolling, so its cursor "scroll-into-view" logic fought the outer scroller. The editor now uses a single scroll container (CodeMirror's own), so the caret stays put as you type.
