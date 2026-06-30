@@ -72,7 +72,7 @@ export function buildEditorChatPayload(
     contextChips,
     establishedChipKeys,
     suppressText = false,
-    enhanceLevel = "prompt",
+    enhanceLevel = "default",
     surroundingContext = "",
   } = input;
 

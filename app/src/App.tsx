@@ -225,7 +225,7 @@ function App() {
   // much it expands. A one-time dismissible nudge suggests attaching the
   // chapter/outline/profiles as context for better grounding.
   const [enhanceMode, setEnhanceMode] = useState(false);
-  const [enhanceLevel, setEnhanceLevel] = useState<EnhanceLevel>("prompt");
+  const [enhanceLevel, setEnhanceLevel] = useState<EnhanceLevel>("default");
   const [enhanceNudgeDismissed, setEnhanceNudgeDismissed] = useState(false);
 
   // Scene-break suggestions: true while the "Suggest Breaks" toolbar request is
@@ -2219,9 +2219,9 @@ function App() {
                     ]
                   : enhanceMode
                   ? [
-                      "Make this more vivid",
-                      "Add atmosphere and staging",
-                      "Enrich the sensory detail here",
+                      "Work in a description of the setting",
+                      "Make this character's reply more reluctant",
+                      "Sharpen the tension and tighten the pacing",
                     ]
                   : [
                       "What do you think of this passage?",
@@ -2422,9 +2422,9 @@ function App() {
             <div className="mb-2 flex items-center gap-1.5">
               <span className="text-[10px] text-faint">Amount:</span>
               {([
-                { value: "prompt",   label: "Default",  hint: "Follow your instructions" },
-                { value: "minimum",  label: "Minimum",  hint: "Add 1-4 sentences" },
-                { value: "expanded", label: "Expanded", hint: "3x-5x the selection" },
+                { value: "restate",  label: "Restate",  hint: "Rework the wording, about the same length" },
+                { value: "default",  label: "Default",  hint: "Richer pass, about 1.5x to 2.2x" },
+                { value: "expanded", label: "Expanded", hint: "Most immersive, about 2.2x to 4x" },
               ] as { value: EnhanceLevel; label: string; hint: string }[]).map(opt => (
                 <button
                   key={opt.value}

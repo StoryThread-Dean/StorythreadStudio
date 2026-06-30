@@ -1589,9 +1589,9 @@ class EditorChatRequest(BaseModel):
     # grounding (facts/continuity/outcomes) that the model must NOT rewrite.
     # Empty for every other mode.
     surrounding_context: str = ""
-    # Enhance mode only: how much to expand. "prompt" = follow the writer's typed
-    # instructions (no fixed length); "minimum" = +1-4 sentences; "expanded" = 3x-5x.
-    enhance_level:   str = "prompt"
+    # Enhance mode only: the length budget. "restate" = ~same length rewrite;
+    # "default" = 1.5-2.2x; "expanded" = 2.2-4x. The writer's message is the direction.
+    enhance_level:   str = "default"
 
 
 class EditorChatResponse(BaseModel):
@@ -1601,11 +1601,20 @@ class EditorChatResponse(BaseModel):
 
 # Per-turn length directives for enhance mode, keyed by enhance_level. These go
 # in the user materials message (not the system prompt) so the system prompt stays
-# stable/instruction-only while the active level can vary turn to turn.
+# stable/instruction-only while the active level can vary turn to turn. The level
+# is a HARD length budget; the writer's chat message supplies the direction.
 _ENHANCE_LEVEL_DIRECTIVES = {
-    "prompt":   "ENHANCEMENT LEVEL: Default. Enhance according to my instructions above; no fixed length target.",
-    "minimum":  "ENHANCEMENT LEVEL: Minimum. Add only 1 to 4 sentences of enrichment beyond the original.",
-    "expanded": "ENHANCEMENT LEVEL: Expanded. Produce roughly 3x to 5x the length of the passage to enhance.",
+    "restate":  ("ENHANCEMENT LEVEL: Restate. Keep your rewrite about the SAME length as the "
+                 "passage to enhance (do not pad it out). Rework the wording to satisfy my "
+                 "direction above; flex slightly longer only if the direction genuinely "
+                 "requires it, such as splitting one sentence into two."),
+    "default":  ("ENHANCEMENT LEVEL: Default. Your rewrite should be roughly 1.5 to 2.2 times "
+                 "the length of the passage to enhance. Add the depth my direction calls for, "
+                 "including a line of dialogue if it fits, and break the result into natural "
+                 "paragraphs."),
+    "expanded": ("ENHANCEMENT LEVEL: Expanded. Your rewrite should be roughly 2.2 to 4 times the "
+                 "length of the passage to enhance, landing higher in that range the more my "
+                 "direction asks for. Break the result into natural paragraphs."),
 }
 
 
@@ -1672,7 +1681,7 @@ def _build_materials_message(
             lines.append(text_content)
             lines.append("=== END PASSAGE TO ENHANCE ===")
             lines.append("")
-            lines.append(_ENHANCE_LEVEL_DIRECTIVES.get(enhance_level, _ENHANCE_LEVEL_DIRECTIVES["prompt"]))
+            lines.append(_ENHANCE_LEVEL_DIRECTIVES.get(enhance_level, _ENHANCE_LEVEL_DIRECTIVES["default"]))
         else:
             label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
             lines.append(f"{label}:")

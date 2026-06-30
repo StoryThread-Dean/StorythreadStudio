@@ -114,9 +114,9 @@ describe("buildEditorChatPayload (enhance mode)", () => {
     expect(out.surrounding_context).toBe("ctx");
   });
 
-  it("defaults enhance_level to 'prompt' and surrounding_context to '' when omitted", () => {
+  it("defaults enhance_level to 'default' and surrounding_context to '' when omitted", () => {
     const out = buildEditorChatPayload({ ...base, category: "chat" });
-    expect(out.enhance_level).toBe("prompt");
+    expect(out.enhance_level).toBe("default");
     expect(out.surrounding_context).toBe("");
   });
 });

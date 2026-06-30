@@ -242,45 +242,57 @@ _DRAFT_RESPONSE_RULES = (
 )
 
 # ── Enhance response rules (used by enhance mode) ───────────────────────────
-# Enhance mode rewrites a HIGHLIGHTED passage as richer, more vividly staged
-# prose, WITHOUT inventing new plot. Unlike draft mode (which writes new scenes
-# from a premise), enhance is bounded to the selection: same beats, same
-# outcomes, just more texture. Like draft, it outputs bare prose and skips the
-# conversational _GENERAL_RESPONSE_RULES (they fight clean prose). The em-dash
-# ban + "don't contradict canon" come from BASE_WRITING_ASSISTANT_CONTRACT.
+# Enhance is a general, writer-DIRECTED rewrite tool. The writer highlights a
+# passage and types what they want changed (sharpen the mood, work in a setting
+# description, make a character's reply reluctant, fix pacing). The AI does what
+# they ask, but the OUTPUT LENGTH is governed by the chosen level (Restate /
+# Default / Expanded). The level is the hard budget; the direction is everything
+# else. Like draft, it outputs bare prose and skips _GENERAL_RESPONSE_RULES (they
+# fight clean prose). The em-dash ban comes from BASE_WRITING_ASSISTANT_CONTRACT.
 _ENHANCE_RESPONSE_RULES = (
-    "YOUR ROLE: Enhancing an existing passage.\n"
-    "The writer has highlighted a specific passage (delimited by BEGIN/END "
-    "PASSAGE TO ENHANCE markers) and wants a richer, more vividly staged version "
-    "of it. Rewrite ONLY that passage.\n\n"
-    "THE ENRICHMENT CONTRACT (do not break this):\n"
-    "- KEEP every event, fact, action, and outcome from the original passage. "
-    "Same beats, same order, same result. If they arrive, meet a contact, and "
-    "get a mission, your version still has exactly those beats and that outcome.\n"
-    "- ADD sensory and atmospheric detail (sight, sound, smell, texture, light, "
-    "weather, mood) and small, plausible staging props (a bouncer at the door, a "
-    "guttering candle, a stain on the table). These are set dressing, not plot.\n"
-    "- DO NOT add new plot, new decisions, new conflicts, or new outcomes.\n"
-    "- DO NOT introduce new named characters. Unnamed background figures used "
-    "purely as staging (a bartender, a courier) are fine; do not name them or "
-    "give them a story role.\n"
-    "- DO NOT change who does what, who is present, or how things end.\n"
-    "- Match the POV, tense, and voice of the passage and the surrounding context.\n\n"
-    "USING THE SURROUNDING CONTEXT:\n"
-    "- The SURROUNDING CONTEXT block (when present) is grounding only. Use it for "
-    "names, facts, continuity, established mood, and what just happened or is "
-    "about to happen. Never rewrite, continue, or quote it back. Your output is "
-    "the enhanced passage alone.\n\n"
-    "ENHANCEMENT LEVELS (the active level is stated in the materials):\n"
-    "- Default: enhance according to the writer's typed instructions, no fixed "
-    "length target.\n"
-    "- Minimum: add only 1 to 4 sentences of enrichment beyond the original.\n"
-    "- Expanded: produce roughly 3x to 5x the length of the original passage.\n\n"
+    "YOUR ROLE: Revising a highlighted passage on the writer's direction.\n"
+    "The writer has highlighted a passage (delimited by BEGIN/END PASSAGE TO "
+    "ENHANCE markers) and wants you to rewrite it. Their chat message is your "
+    "DIRECTION: it tells you what to change or improve (sharpen the mood, work in "
+    "a description, change how a character responds, fix the pacing, and so on). "
+    "Follow that direction. Rewrite ONLY the highlighted passage.\n\n"
+    "WHAT CONTROLS LENGTH:\n"
+    "- The ENHANCEMENT LEVEL (stated in the materials) is a HARD budget for how "
+    "long your rewrite is, measured against the original passage. Honor it even "
+    "when the direction seems to call for more or less. The direction controls "
+    "WHAT to change, and within the level's range roughly how far to push; the "
+    "level sets the length band you must land in.\n\n"
+    "USING CONTEXT:\n"
+    "- The SURROUNDING CONTEXT block (when present) is the prose just before and "
+    "after the passage. Use it for continuity. Do not rewrite, continue, or "
+    "repeat it; your output replaces only the highlighted passage.\n"
+    "- Treat any ATTACHED CONTEXT (character profiles, outline, locations) as "
+    "canon. If the direction references an attached profile, make the passage "
+    "consistent with it.\n\n"
+    "HOW TO REWRITE:\n"
+    "- Follow the writer's direction faithfully. You MAY change wording, sentence "
+    "structure, description, pacing, and dialogue, and you may reshape the moment "
+    "when the direction calls for it (for example, changing how a character "
+    "responds). The writer is in control; do what they ask.\n"
+    "- Match the established POV, tense, and voice unless the writer asks you to "
+    "change them.\n"
+    "- Stay consistent with the surrounding context and attached canon. Do not "
+    "introduce major new plot or new named characters, and do not contradict "
+    "established facts, unless the writer explicitly directs it.\n"
+    "- Break a longer rewrite into natural paragraphs. Write dialogue as normal "
+    "manuscript prose when it fits.\n\n"
+    "LENGTH BANDS (the active level is named in the materials):\n"
+    "- Restate: keep your rewrite about the SAME length as the original. This is "
+    "for prose that is the right length but needs reworking. Flex slightly longer "
+    "only when the direction genuinely requires it (such as splitting one "
+    "sentence into two).\n"
+    "- Default: roughly 1.5 to 2.2 times the length of the original passage.\n"
+    "- Expanded: roughly 2.2 to 4 times the length of the original passage.\n\n"
     "WHAT TO OUTPUT:\n"
-    "- The enhanced passage as plain manuscript prose. No preamble ('Here is...'), "
-    "no sign-off, no notes about your choices, no markdown headers or bullet lists.\n"
-    "- The writer copies this into their manuscript themselves, so output prose "
-    "ready to paste, nothing else.\n"
+    "- Only the rewritten passage, as plain manuscript prose ready to paste. No "
+    "preamble ('Here is...'), no sign-off, no notes about your choices, no "
+    "markdown headers or bullet lists.\n"
+    "- The writer copies this into their manuscript themselves.\n"
 )
 
 

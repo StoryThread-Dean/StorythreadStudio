@@ -22,12 +22,14 @@ from app.routers.ai import _build_materials_message, _ENHANCE_LEVEL_DIRECTIVES, 
 
 # ── The enhance addendum + system prompt (pure functions) ────────────────────
 
-def test_enhance_addendum_sets_enrichment_contract():
+def test_enhance_addendum_is_direction_led_with_level_budget():
     text = _editor_chat_addendum("enhance")
-    assert "Enhancing an existing passage" in text
-    assert "KEEP every event, fact, action, and outcome" in text
-    assert "DO NOT add new plot" in text
-    assert "DO NOT introduce new named characters" in text
+    # Writer's message is the direction; the level governs length.
+    assert "DIRECTION" in text
+    assert "ENHANCEMENT LEVEL" in text
+    assert "HARD budget" in text
+    # The three length bands are described.
+    assert "Restate" in text and "Default" in text and "Expanded" in text
 
 
 def test_enhance_addendum_drops_conversational_chat_rules():
@@ -41,7 +43,7 @@ def test_enhance_system_prompt_includes_contract_and_punctuation_rule():
     prompt = build_editor_chat_system_prompt("enhance", "general")
     assert BASE_WRITING_ASSISTANT_CONTRACT in prompt
     assert PUNCTUATION_RULE in prompt          # em-dash ban survives
-    assert "Enhancing an existing passage" in prompt
+    assert "Revising a highlighted passage" in prompt
 
 
 # ── The materials message shape ──────────────────────────────────────────────
@@ -69,12 +71,20 @@ def test_materials_message_marks_target_and_grounding_for_enhance():
 
 
 def test_materials_message_level_directive_varies():
-    for level in ("prompt", "minimum", "expanded"):
+    for level in ("restate", "default", "expanded"):
         msg = _build_materials_message(
             text_content="A line.", is_full_chapter=False, context_chips=[],
             surrounding_context="", enhance_level=level, is_enhance=True,
         )
         assert _ENHANCE_LEVEL_DIRECTIVES[level] in msg["content"]
+
+
+def test_materials_message_unknown_level_falls_back_to_default():
+    msg = _build_materials_message(
+        text_content="A line.", is_full_chapter=False, context_chips=[],
+        surrounding_context="", enhance_level="bogus", is_enhance=True,
+    )
+    assert _ENHANCE_LEVEL_DIRECTIVES["default"] in msg["content"]
 
 
 def test_materials_message_non_enhance_unchanged():
@@ -118,7 +128,7 @@ def test_enhance_endpoint_keeps_double_hyphen(client, monkeypatch):
         "text_content": "She paused, then ran.",
         "messages": [{"role": "user", "content": "make it vivid"}],
         "surrounding_context": "The corridor was dark.",
-        "enhance_level": "minimum",
+        "enhance_level": "restate",
         "content_mode": "general",
     })
     assert resp.status_code == 200, resp.text

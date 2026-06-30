@@ -187,10 +187,12 @@ export type EditorChatCategory =
   | "enhance"
   | null;
 
-// Enhance mode expansion level: "prompt" follows the writer's typed
-// instructions (no fixed length); "minimum" adds 1-4 sentences; "expanded"
-// produces 3x-5x the highlighted passage.
-export type EnhanceLevel = "prompt" | "minimum" | "expanded";
+// Enhance length budget. The writer's chat message supplies the direction;
+// the level governs how long the rewrite is relative to the original passage:
+//   "restate"  -- about the same length (rework wording in place)
+//   "default"  -- ~1.5x to 2.2x
+//   "expanded" -- ~2.2x to 4x
+export type EnhanceLevel = "restate" | "default" | "expanded";
 
 export interface EditorChatMessage {
   role: "user" | "assistant";
