@@ -42,6 +42,7 @@ import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
 import type { ChipIncludeOptions } from "./utils/profileFormat";
 import { buildEditorChatPayload, isWeakDraftingModel, computeSurroundingWindow } from "./utils/buildEditorChatPayload";
+import { autoSizeTextarea } from "./utils/autoSizeTextarea";
 import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
@@ -2446,15 +2447,9 @@ function App() {
               value={chatInput}
               onChange={e => {
                 setChatInput(e.target.value);
-                const el = e.target;
-                el.style.height = "auto";
-                // maxH = 7 lines × ~24px line-height + padding. Larger than
-                // before to accommodate the bumped text-sm size and to leave
-                // room when the UI scale is raised. el.scrollHeight is in
-                // rendered pixels so it tracks the live font size correctly.
-                const maxH = 7 * 24 + 14;
-                el.style.height = Math.min(el.scrollHeight, maxH) + "px";
-                el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+                // maxH = 7 lines × ~24px line-height + padding. el.scrollHeight
+                // tracks the live rendered font size, so this adapts to UI scale.
+                autoSizeTextarea(e.currentTarget, { maxH: 7 * 24 + 14 });
               }}
               onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey) {
