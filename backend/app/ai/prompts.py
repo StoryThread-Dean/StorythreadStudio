@@ -72,6 +72,28 @@ def content_mode_instruction(content_mode: str) -> str:
     return ""  # General mode needs no special instruction
 
 
+# ── Attachment Stance ───────────────────────────────────────────────────────
+# How the AI should treat attached profiles/outline/locations for an editor-chat
+# turn, driven by the writer's Canon/Reference toggle. Canon = enforce as truth;
+# Reference = the writer's typed direction takes precedence over the attachments.
+# Appended to the editor-chat system prompt only when chips are attached.
+
+def context_stance_instruction(treat_as_canon: bool) -> str:
+    if treat_as_canon:
+        return (
+            "ATTACHMENT STANCE: CANON. Treat the attached profiles, outline, and locations as "
+            "established truth. Keep your writing consistent with them and do not contradict "
+            "established traits, relationships, or facts."
+        )
+    return (
+        "ATTACHMENT STANCE: REFERENCE. Treat the attached profiles, outline, and locations as "
+        "reference, not law. Draw on the details relevant to this moment, but MY TYPED DIRECTION "
+        "TAKES PRECEDENCE: when my direction conflicts with an attached trait or detail, follow "
+        "my direction. Weight relevance to this scene over a trait's importance label, and do not "
+        "force in traits that do not fit the moment."
+    )
+
+
 # ── Base Writing Assistant Contract ─────────────────────────────────────────
 # The core identity shared by ALL chat-based AI interactions in the app.
 # Mode-specific addenda are appended after this. This ensures consistent
@@ -241,6 +263,59 @@ _DRAFT_RESPONSE_RULES = (
     "mid-momentum stopping point is correct and expected.\n"
 )
 
+# ── Enhance response rules (used by enhance mode) ───────────────────────────
+# Enhance is a general, writer-DIRECTED rewrite tool. The writer highlights a
+# passage and types what they want changed (sharpen the mood, work in a setting
+# description, make a character's reply reluctant, fix pacing). The AI does what
+# they ask, but the OUTPUT LENGTH is governed by the chosen level (Restate /
+# Default / Expanded). The level is the hard budget; the direction is everything
+# else. Like draft, it outputs bare prose and skips _GENERAL_RESPONSE_RULES (they
+# fight clean prose). The em-dash ban comes from BASE_WRITING_ASSISTANT_CONTRACT.
+_ENHANCE_RESPONSE_RULES = (
+    "YOUR ROLE: Revising a highlighted passage on the writer's direction.\n"
+    "The writer has highlighted a passage (delimited by BEGIN/END PASSAGE TO "
+    "ENHANCE markers) and wants you to rewrite it. Their chat message is your "
+    "DIRECTION: it tells you what to change or improve (sharpen the mood, work in "
+    "a description, change how a character responds, fix the pacing, and so on). "
+    "Follow that direction. Rewrite ONLY the highlighted passage.\n\n"
+    "WHAT CONTROLS LENGTH:\n"
+    "- The ENHANCEMENT LEVEL (stated in the materials) is a HARD budget for how "
+    "long your rewrite is, measured against the original passage. Honor it even "
+    "when the direction seems to call for more or less. The direction controls "
+    "WHAT to change, and within the level's range roughly how far to push; the "
+    "level sets the length band you must land in.\n\n"
+    "USING CONTEXT:\n"
+    "- The SURROUNDING CONTEXT block (when present) is the prose just before and "
+    "after the passage. Use it for continuity. Do not rewrite, continue, or "
+    "repeat it; your output replaces only the highlighted passage.\n"
+    "- Attached profiles, outline, and locations follow the ATTACHMENT STANCE "
+    "stated separately in these instructions; use them accordingly.\n\n"
+    "HOW TO REWRITE:\n"
+    "- Follow the writer's direction faithfully. You MAY change wording, sentence "
+    "structure, description, pacing, and dialogue, and you may reshape the moment "
+    "when the direction calls for it (for example, changing how a character "
+    "responds). The writer is in control; do what they ask.\n"
+    "- Match the established POV, tense, and voice unless the writer asks you to "
+    "change them.\n"
+    "- Stay consistent with the surrounding context and attached canon. Do not "
+    "introduce major new plot or new named characters, and do not contradict "
+    "established facts, unless the writer explicitly directs it.\n"
+    "- Break a longer rewrite into natural paragraphs. Write dialogue as normal "
+    "manuscript prose when it fits.\n\n"
+    "LENGTH BANDS (the active level is named in the materials):\n"
+    "- Restate: keep your rewrite about the SAME length as the original. This is "
+    "for prose that is the right length but needs reworking. Flex slightly longer "
+    "only when the direction genuinely requires it (such as splitting one "
+    "sentence into two).\n"
+    "- Default: roughly 1.5 to 2.2 times the length of the original passage.\n"
+    "- Expanded: roughly 2.2 to 4 times the length of the original passage.\n\n"
+    "WHAT TO OUTPUT:\n"
+    "- Only the rewritten passage, as plain manuscript prose ready to paste. No "
+    "preamble ('Here is...'), no sign-off, no notes about your choices, no "
+    "markdown headers or bullet lists.\n"
+    "- The writer copies this into their manuscript themselves.\n"
+)
+
 
 def _editor_chat_addendum(category: str) -> str:
     """
@@ -269,6 +344,12 @@ def _editor_chat_addendum(category: str) -> str:
         # (continuation behavior, profile usage, importance labels, punctuation),
         # so this addendum only sets the drafting role and the stop/length rules.
         return _DRAFT_RESPONSE_RULES
+
+    if category == "enhance":
+        # Enhance mode: expand the highlighted passage into richer prose without
+        # inventing plot. Like draft, it outputs bare manuscript prose, so we
+        # skip _GENERAL_RESPONSE_RULES for the same reason documented above.
+        return _ENHANCE_RESPONSE_RULES
 
     if category == "readability":
         return (
@@ -1334,6 +1415,57 @@ def generate_scene_summary_prompt(content_mode: str) -> str:
     if mode:
         parts.append(mode)
     parts.append(SCENE_SUMMARY_INSTRUCTIONS)
+    parts.append(PUNCTUATION_RULE)
+    return "\n\n".join(parts)
+
+
+SCENE_BREAK_SUGGESTIONS_INSTRUCTIONS = """You are a developmental editor analyzing chapter structure for a fiction writer.
+
+Your job: find where SCENE BREAKS would strengthen this chapter's pacing and structure. In this app a scene break is a horizontal rule (--- on its own line, with blank lines above and below). It marks a structural shift: a point-of-view change, a time jump, a location change, a significant character entrance or exit, the end of an emotional beat, or a tonal shift.
+
+WHAT TO DO:
+- Scan the chapter and identify 3 to 7 of the STRONGEST candidate locations for a scene break.
+- For each candidate, quote a short VERBATIM run of text (at least 5 words) taken from the END of the passage that should come right BEFORE the break. The writer will use this quote to find the spot, so it must appear word-for-word in the chapter.
+- Explain in one sentence why a break there strengthens the structure (name the shift: "POV moves from X to Y", "time jumps to the next morning", "they leave the tavern for the road").
+- Rate your confidence as "strong" (clear, obvious), "moderate" (a good idea), or "subtle" (defensible but optional).
+
+HARD RULES:
+- Quote text that actually exists in the chapter, verbatim, at least 5 words.
+- Do NOT suggest a break before the very first paragraph or after the very last paragraph.
+- Do NOT suggest a break in the middle of a line of dialogue.
+- Suggest at most 7 breaks. Fewer strong suggestions beat many weak ones.
+- You are SUGGESTING only. Do not rewrite the prose or insert the breaks yourself.
+
+RESPONSE FORMAT:
+Return ONLY valid JSON, with no preamble, no markdown fence, and no trailing text:
+{
+  "analysis": "1 to 2 sentences on the chapter's overall pacing and rhythm",
+  "suggestions": [
+    {
+      "quote": "the verbatim words just before where the break should go",
+      "explanation": "why a break here strengthens the structure",
+      "severity": "strong"
+    }
+  ]
+}
+If the chapter is too short or already well-segmented, return an empty "suggestions" list and say so in "analysis"."""
+
+
+def generate_scene_break_suggestions_prompt(content_mode: str) -> str:
+    """
+    Build the system prompt for POST /api/ai/suggest-scene-breaks.
+
+    Composition mirrors the scene-summary prompt:
+        [CONTENT MODE PREAMBLE]? + [SCENE_BREAK_SUGGESTIONS_INSTRUCTIONS] + [PUNCTUATION_RULE]
+
+    The chapter text is sent separately as the user message so this prompt stays
+    cache-friendly across chapters.
+    """
+    parts: list[str] = []
+    mode = content_mode_instruction(content_mode)
+    if mode:
+        parts.append(mode)
+    parts.append(SCENE_BREAK_SUGGESTIONS_INSTRUCTIONS)
     parts.append(PUNCTUATION_RULE)
     return "\n\n".join(parts)
 

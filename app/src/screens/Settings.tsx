@@ -18,44 +18,11 @@ import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star, Folder, Sun, Moon }
 import type { AppSettings, ModelInfo } from "../types/ai";
 import { useTheme } from "../hooks/useTheme";
 import { useUiScale, UI_SCALE_PX, type UiScale } from "../hooks/useUiScale";
-
-// ── Content Mode Model Filtering (shared logic with ProjectSettings) ─────────
-const MODERATED_PROVIDERS = [
-  "openai/", "anthropic/", "google/", "cohere/",
-];
-
-const EXPLICIT_ALLOWED_PROVIDERS = [
-  "mistralai/", "deepseek/", "x-ai/", "meta-llama/", "qwen/",
-  "nothingiisreal/", "nousresearch/", "cognitivecomputations/",
-  "thedrummer/", "sao10k/", "anthracite-org/", "venice/",
-  "eva-unit-01/", "microsoft/", "01-ai/", "liquid/", "ai21/",
-];
-
-function filterModelByContentMode(m: ModelInfo, mode: string): boolean {
-  if (mode === "general") return true;
-  if (mode === "mature") {
-    if (m.is_moderated) return false;
-    return !MODERATED_PROVIDERS.some(p => m.id.startsWith(p));
-  }
-  if (mode === "explicit") {
-    return EXPLICIT_ALLOWED_PROVIDERS.some(p => m.id.startsWith(p));
-  }
-  return true;
-}
+// Content-mode filter + curated recommended list now live in a shared util so
+// Settings and ProjectSettings can't drift apart (see utils/modelFiltering.ts).
+import { filterModelByContentMode, RECOMMENDED_MODELS } from "../utils/modelFiltering";
 
 const API_BASE = "http://localhost:8000";
-
-// ── Staff Picks ───────────────────────────────────────────────────────────────
-// Curated list of models that work well for fiction writing.
-// Only shown if the model ID is present in the live fetched model list.
-// Update this list when the app is updated -- IDs are OpenRouter model IDs.
-const STAFF_PICKS: { id: string; note: string }[] = [
-  { id: "anthropic/claude-3.5-sonnet",  note: "Best for prose quality"      },
-  { id: "anthropic/claude-3.5-haiku",   note: "Fast, quality, affordable"   },
-  { id: "deepseek/deepseek-chat",       note: "Best budget option"           },
-  { id: "openai/gpt-4o-mini",           note: "Fast, capable, low cost"     },
-  { id: "google/gemma-2-9b-it:free",    note: "Best free option"             },
-];
 
 // ── Tier Slider ───────────────────────────────────────────────────────────────
 // Maps a 0-3 integer position to a label and a filter function.
@@ -161,10 +128,14 @@ export function Settings({ onClose }: SettingsProps) {
     !visibleModels.some(m => m.id === selectedModel)
   );
 
-  // Staff picks that actually exist in the fetched model list
-  const availableStaffPicks = STAFF_PICKS.filter(sp =>
-    models.some(m => m.id === sp.id)
-  );
+  // Recommended models that (a) still exist in the live fetched list -- so a
+  // deprecated slug silently drops out instead of 404-ing later -- AND (b) are
+  // appropriate for the current content mode (explicit/mature hide moderated
+  // providers). This is the same filter used for the full "All Models" list.
+  const availableRecommended = RECOMMENDED_MODELS.filter(rec => {
+    const model = models.find(m => m.id === rec.id);
+    return model !== undefined && filterModelByContentMode(model, contentMode);
+  });
 
   // User-starred models that exist in the fetched list
   const availableFavorites = starredModels.filter(id =>
@@ -538,25 +509,25 @@ export function Settings({ onClose }: SettingsProps) {
                     // Full three-section picker
                     <div className="max-h-72 overflow-y-auto rounded border border-border bg-bg-primary">
 
-                      {/* Staff Picks */}
-                      {availableStaffPicks.length > 0 && (
+                      {/* Recommended */}
+                      {availableRecommended.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
                             <p className="text-xs font-semibold text-indigo-400">
-                              ★ Staff Picks
+                              ★ Recommended
                             </p>
                           </div>
-                          {availableStaffPicks.map(sp => {
-                            const model = models.find(m => m.id === sp.id)!;
+                          {availableRecommended.map(rec => {
+                            const model = models.find(m => m.id === rec.id)!;
                             return (
                               <ModelRow
-                                key={sp.id}
+                                key={rec.id}
                                 model={model}
-                                note={sp.note}
-                                isSelected={selectedModel === sp.id}
-                                isStarred={starredModels.includes(sp.id)}
-                                onSelect={() => setSelectedModel(sp.id)}
-                                onToggleStar={() => toggleStar(sp.id)}
+                                note={rec.note}
+                                isSelected={selectedModel === rec.id}
+                                isStarred={starredModels.includes(rec.id)}
+                                onSelect={() => setSelectedModel(rec.id)}
+                                onToggleStar={() => toggleStar(rec.id)}
                               />
                             );
                           })}

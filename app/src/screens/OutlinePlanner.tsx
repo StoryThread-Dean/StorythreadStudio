@@ -18,6 +18,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronDown, ChevronRight, ArrowLeft } from "lucide-react";
 import type { ProjectInfo } from "../types/project";
+import { autoSizeTextarea } from "../utils/autoSizeTextarea";
 
 const API_BASE = "http://localhost:8000";
 
@@ -120,20 +121,19 @@ function SectionCard({ section, expanded, onToggle, onChange }: SectionCardProps
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize the textarea to fit its content whenever it is shown or
-  // its content changes. The "auto" trick collapses then re-measures.
+  // its content changes. autoSizeTextarea preserves the scroll container's
+  // position across the measure (see the util) -- without that, typing in a
+  // long section yanks the whole page to the bottom on every keystroke.
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta || !expanded) return;
-    ta.style.height = "auto";
-    ta.style.height = ta.scrollHeight + "px";
+    autoSizeTextarea(ta);
   }, [expanded, section.content]);
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     onChange(e.target.value);
-    // Keep height in sync while typing.
-    const ta = e.currentTarget;
-    ta.style.height = "auto";
-    ta.style.height = ta.scrollHeight + "px";
+    // Keep height in sync while typing, without disturbing scroll position.
+    autoSizeTextarea(e.currentTarget);
   }
 
   // Count non-empty lines for a preview when collapsed.

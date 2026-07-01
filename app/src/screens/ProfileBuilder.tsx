@@ -41,6 +41,7 @@ import { v4 as uuidv4 } from "uuid";
 import { IMPORTANCE_HELP, getSectionHelp } from "../data/profileHelp";
 import type { ImportanceLevelHelp, SectionHelp } from "../data/profileHelp";
 import { formatProfileForAI } from "../utils/profileFormat";
+import { autoSizeTextarea } from "../utils/autoSizeTextarea";
 import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "../components/RightPanelResizer";
 
 const API_BASE = "http://localhost:8000";
@@ -316,10 +317,11 @@ function AutoTextarea({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = "auto";
     const lineH = 20;
     const minH = minRows * lineH + 12;
-    el.style.height = Math.max(el.scrollHeight, minH) + "px";
+    // Preserve scroll position across the resize (see util) so typing in a long
+    // trait field doesn't fling the form to the bottom on every keystroke.
+    autoSizeTextarea(el, { minH });
   }, [value, minRows]);
 
   // Always tag with .text-entry so profile description and notes fields
@@ -1797,15 +1799,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
               value={chatInput}
               onChange={e => {
                 setChatInput(e.target.value);
-                const el = e.target;
-                el.style.height = "auto";
                 // maxH = 7 lines × ~24px line-height + padding. Sized for
                 // text-sm at the default UI scale; bigger UI scales still
                 // fit ~5-6 visible lines before scrolling because
                 // el.scrollHeight tracks the live rendered font size.
-                const maxH = 7 * 24 + 14;
-                el.style.height = Math.min(el.scrollHeight, maxH) + "px";
-                el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+                autoSizeTextarea(e.currentTarget, { maxH: 7 * 24 + 14 });
               }}
               onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey) {

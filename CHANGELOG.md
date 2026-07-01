@@ -21,6 +21,23 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
+## [1.0.7] - 2026-07-01
+
+### New
+
+- **Enhance** -- a new mode in the Writing Companion. Highlight any passage and tell the AI how you want it improved: add sensory detail, deepen the mood, adjust how a character comes across, tighten the pacing, or work in a description. Choose how far it goes, Restate (reword at the same length), Default (a richer pass), or Expanded (a fuller rewrite), and it draws on the surrounding scene for continuity. Nothing changes automatically; the rewrite appears in the chat for you to place where you want it.
+- **Scene break suggestions** -- click "Suggest Breaks" and the AI reads your chapter and points out where a scene break would strengthen the pacing, with a short reason for each. You decide what to use.
+- **Canon or Reference for your attachments** -- when you attach character profiles, an outline, or locations, you can now choose how the AI uses them: Canon keeps your writing consistent with them, or Reference lets your in-the-moment instructions lead. A built-in tip explains when to use each.
+- **"New ask"** -- start a fresh request in the Writing Companion any time, without clearing the conversation you want to keep.
+
+### Refinements
+
+- Friendlier guidance if an AI model you used in a past session is no longer available, and model changes now take effect right away.
+- And to make picking a replacement easy, a refreshed, up-to-date list of recommended models in Settings, tailored to your project's content mode, for example: **DeepSeek V3** (best budget quality) · **xAI Grok 4.3** (vivid drafts, unmoderated) · **Sao10K Llama 3.3 Euryale 70B** (tuned for immersive fiction).
+- Smoother, steadier typing in the Outline and Profile editors.
+
+---
+
 ## [1.0.6] - 2026-06-18
 
 ### Added

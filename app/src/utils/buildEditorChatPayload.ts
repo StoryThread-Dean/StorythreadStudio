@@ -10,10 +10,10 @@
 // has not seen yet. Anything "established" (sent in a prior turn) already
 // lives in the message history and would just waste tokens if resent.
 
-import type { ContextChip, EditorChatCategory } from "../types/ai";
+import type { ContextChip, EditorChatCategory, EnhanceLevel } from "../types/ai";
 
 export interface BuildEditorChatPayloadInput {
-  /** The category to send. "chat" for discussion, "draft" for prose drafting. */
+  /** The category to send. "chat" for discussion, "draft" for prose drafting, "enhance" to expand a selection. */
   category: EditorChatCategory;
   /** Raw selected text from the editor (may be empty / whitespace). */
   selectedText: string;
@@ -33,6 +33,14 @@ export interface BuildEditorChatPayloadInput {
    * just needs the canned "keep going" turn, not a fresh passage.
    */
   suppressText?: boolean;
+  /** Enhance mode only: the expansion level to send. */
+  enhanceLevel?: EnhanceLevel;
+  /**
+   * Enhance mode only: the precomputed window of paragraphs around the
+   * selection (grounding). Computed by the caller via computeSurroundingWindow
+   * because it needs the live selection offsets into the full chapter.
+   */
+  surroundingContext?: string;
 }
 
 export interface BuiltEditorChatPayload {
@@ -41,6 +49,10 @@ export interface BuiltEditorChatPayload {
   is_full_chapter: boolean;
   /** Only the chips that are new this turn. */
   context_chips: ContextChip[];
+  /** Enhance mode only: grounding window ("" for other modes). */
+  surrounding_context: string;
+  /** Enhance mode only: expansion level (defaults to "prompt"). */
+  enhance_level: EnhanceLevel;
 }
 
 /**
@@ -60,14 +72,26 @@ export function buildEditorChatPayload(
     contextChips,
     establishedChipKeys,
     suppressText = false,
+    enhanceLevel = "default",
+    surroundingContext = "",
   } = input;
 
   let text_content = "";
   let is_full_chapter = false;
+  let surrounding_context = "";
 
   if (!suppressText) {
     const selected = selectedText.trim();
-    if (selected) {
+    if (category === "enhance") {
+      // Enhance always operates on the highlighted selection and ALWAYS resends
+      // it (and its grounding window) every turn -- the exact target must be in
+      // front of the model on follow-ups like "now make it darker", so we
+      // deliberately ignore chapterEstablished here. text_content may be "" when
+      // nothing is highlighted; the caller blocks the send in that case.
+      text_content = selected;
+      is_full_chapter = false;
+      surrounding_context = surroundingContext;
+    } else if (selected) {
       // Writer highlighted a specific passage -- always new context.
       text_content = selected;
       is_full_chapter = false;
@@ -84,7 +108,73 @@ export function buildEditorChatPayload(
     (chip) => !establishedChipKeys.has(`${chip.type}:${chip.name}`),
   );
 
-  return { category, text_content, is_full_chapter, context_chips };
+  return {
+    category,
+    text_content,
+    is_full_chapter,
+    context_chips,
+    surrounding_context,
+    enhance_level: enhanceLevel,
+  };
+}
+
+// ── Surrounding-context window for enhance mode ─────────────────────────────
+// Enhance expands ONLY the highlighted selection, but the model needs grounding
+// (what just happened, who's present, how the scene resolves). We give it a
+// window of whole paragraphs immediately before and after the selection. Pure
+// function so it can be unit-tested without an editor.
+//
+//   fullText           the whole chapter
+//   selectionFrom/To   character offsets of the selection within fullText
+//   paragraphsEachSide how many blank-line-delimited paragraphs to take per side
+//   maxChars           hard cap on the combined window (trims far paragraphs
+//                      first, then truncates the outermost kept block)
+export function computeSurroundingWindow(
+  fullText: string,
+  selectionFrom: number,
+  selectionTo: number,
+  paragraphsEachSide = 3,
+  maxChars = 12_000,
+): string {
+  if (!fullText || selectionFrom < 0 || selectionTo > fullText.length || selectionFrom > selectionTo) {
+    return "";
+  }
+
+  const before = fullText.slice(0, selectionFrom);
+  const after = fullText.slice(selectionTo);
+
+  // Split into paragraphs on blank lines. Keep only non-empty blocks.
+  const splitParas = (s: string) =>
+    s.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 0);
+
+  const beforeParas = splitParas(before).slice(-paragraphsEachSide);
+  const afterParas = splitParas(after).slice(0, paragraphsEachSide);
+
+  if (beforeParas.length === 0 && afterParas.length === 0) return "";
+
+  // Assemble with a marker showing where the selected passage sits.
+  let beforeBlock = beforeParas.join("\n\n");
+  let afterBlock = afterParas.join("\n\n");
+
+  // Enforce the cap. We bias toward keeping text nearest the selection, so trim
+  // the outer (farther) ends: drop leading "before" paragraphs and trailing
+  // "after" paragraphs until under the cap, then hard-truncate if still over.
+  const assemble = (b: string, a: string) =>
+    [b, "[... selected passage ...]", a].filter(s => s.length > 0).join("\n\n");
+
+  let combined = assemble(beforeBlock, afterBlock);
+  if (combined.length > maxChars) {
+    // Hard-truncate from the outer edges inward as a last resort.
+    const overflow = combined.length - maxChars;
+    // Trim half from the start of beforeBlock, half from the end of afterBlock.
+    const trimEach = Math.ceil(overflow / 2);
+    beforeBlock = beforeBlock.slice(Math.min(trimEach, beforeBlock.length));
+    afterBlock = afterBlock.slice(0, Math.max(0, afterBlock.length - trimEach));
+    combined = assemble(beforeBlock, afterBlock);
+    if (combined.length > maxChars) combined = combined.slice(0, maxChars);
+  }
+
+  return combined;
 }
 
 // ── Weak-model detection for the drafting nudge ─────────────────────────────

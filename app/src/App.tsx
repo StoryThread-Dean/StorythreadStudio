@@ -34,13 +34,15 @@ import { ExportModal } from "./components/ExportModal";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import type { ProfileType, Profile } from "./types/profile";
 import type {
-  ContextChip, ChipIncludeFlags, EditorChatMessage,
+  ContextChip, ChipIncludeFlags, EditorChatMessage, EnhanceLevel,
   SceneSummaryInfo, SplitChapterScenesResponse, GenerateSceneSummaryResponse,
+  SuggestSceneBreaksResponse,
 } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
 import type { ChipIncludeOptions } from "./utils/profileFormat";
-import { buildEditorChatPayload, isWeakDraftingModel } from "./utils/buildEditorChatPayload";
+import { buildEditorChatPayload, isWeakDraftingModel, computeSurroundingWindow } from "./utils/buildEditorChatPayload";
+import { autoSizeTextarea } from "./utils/autoSizeTextarea";
 import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
@@ -60,7 +62,7 @@ import { useBackendHealth } from "./hooks/useBackendHealth";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine } from "lucide-react";
+import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine, Sparkles, HelpCircle } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -216,6 +218,33 @@ function App() {
   // (cheap tiers produce generic prose). Never blocks; resets per session.
   const [showDraftModelNudge, setShowDraftModelNudge] = useState(false);
   const [draftNudgeDismissed, setDraftNudgeDismissed] = useState(false);
+
+  // Enhance mode: when ON, the writer highlights a passage and the AI returns a
+  // richer, expanded rewrite of ONLY that selection (grounded by surrounding
+  // paragraphs). Mutually exclusive with Draft mode. enhanceLevel controls how
+  // much it expands. A one-time dismissible nudge suggests attaching the
+  // chapter/outline/profiles as context for better grounding.
+  const [enhanceMode, setEnhanceMode] = useState(false);
+  const [enhanceLevel, setEnhanceLevel] = useState<EnhanceLevel>("default");
+  const [enhanceNudgeDismissed, setEnhanceNudgeDismissed] = useState(false);
+
+  // "New ask" boundaries: indices into chatMessages where a fresh ask begins.
+  // Only messages at/after the LAST boundary are sent to the AI, so an unrelated
+  // follow-up (e.g. a different highlighted passage) isn't contaminated by the
+  // prior ask -- without erasing the visible transcript (that's what Clear does).
+  const [askBoundaries, setAskBoundaries] = useState<number[]>([]);
+  // The selection text last submitted, so we can nudge "start a new ask" when the
+  // writer moves to a different passage after a result.
+  const [lastSentSelection, setLastSentSelection] = useState("");
+
+  // Canon/Reference toggle (attachment popup): when ON (default), attached
+  // profiles/outline/locations are treated as canon the AI must stay consistent
+  // with. When OFF, they are reference only and the writer's typed direction wins.
+  const [treatAsCanon, setTreatAsCanon] = useState(true);
+
+  // Scene-break suggestions: true while the "Suggest Breaks" toolbar request is
+  // in flight. Results are rendered into the Writing Companion chat below.
+  const [suggestBreaksRunning, setSuggestBreaksRunning] = useState(false);
 
   // Smart Advisor state. Currently-active issues are owned by the editor's
   // StateField (see components/editor/issueOverlay.ts); we mirror just the
@@ -1014,6 +1043,79 @@ function App() {
   }, [isDirty, handleSave, loadSceneSummaries, openChapterSummary]);
 
 
+  // --- Suggest scene breaks ---
+  // Sends the open chapter to the AI and asks where `---` scene breaks would
+  // help. Results are formatted into the Writing Companion chat (reusing
+  // ChatMarkdown), where the writer reads them and inserts breaks by hand.
+  // No auto-apply: this only suggests.
+  const handleSuggestSceneBreaks = useCallback(async () => {
+    const project = currentProjectRef.current;
+    const chapter = currentChapterRef.current;
+    if (!project || !chapter || suggestBreaksRunning) return;
+
+    // Use the live editor text (includes unsaved edits) so suggestions match
+    // what the writer is currently looking at.
+    const view = editorViewRef.current;
+    const chapterText = view ? view.state.doc.toString() : chapterContent;
+    if (!chapterText.trim()) return;
+
+    setSuggestBreaksRunning(true);
+    setChatError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/suggest-scene-breaks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapter_path: `${project.root_path}/manuscript/${chapter.filename}`,
+          project_path: project.root_path,
+          chapter_text: chapterText,
+          model_id:     project.default_model || undefined,
+          content_mode: project.content_mode_default ?? "general",
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail ?? `Request failed (${res.status})`);
+      }
+
+      const data: SuggestSceneBreaksResponse = await res.json();
+      if (data.model_used) setChatModelUsed(data.model_used);
+
+      // Format the structured result as markdown for the chat panel. The writer
+      // reads each quote-anchored suggestion and places the break themselves.
+      const severityLabel: Record<string, string> = {
+        strong: "Strong", moderate: "Moderate", subtle: "Subtle",
+      };
+      let reply: string;
+      if (data.suggestions.length === 0) {
+        reply = `**Scene break suggestions**\n\n${data.analysis || "No strong scene-break candidates found in this chapter."}`;
+      } else {
+        const items = data.suggestions.map(s =>
+          `**${severityLabel[s.severity] ?? "Suggested"}** — place a break after:\n\n> ${s.quote}\n\n${s.explanation}`
+        ).join("\n\n---\n\n");
+        reply = `**Scene break suggestions**\n\n${data.analysis}\n\n---\n\n${items}\n\n---\n\n_Insert a \`---\` line (blank line above and below) at each spot you agree with. Nothing was changed in your manuscript._`;
+      }
+
+      setChatMessages(prev => [
+        ...prev,
+        { role: "user", content: "Suggest scene breaks for this chapter." },
+        { role: "assistant", content: reply },
+      ]);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    } catch (err) {
+      if (err instanceof TypeError && err.message.toLowerCase().includes("failed to fetch")) {
+        setChatError("Could not reach the backend. Check that it is running on port 8000.");
+      } else {
+        setChatError(err instanceof Error ? err.message : "Scene-break request failed.");
+      }
+    } finally {
+      setSuggestBreaksRunning(false);
+    }
+  }, [suggestBreaksRunning, chapterContent]);
+
+
   // Selection-based flow: opens the preview modal. The modal runs the AI
   // generation itself on mount; we just seed it with the text and the list
   // of existing scene slots so its slot-picker can render the dropdown.
@@ -1101,17 +1203,27 @@ function App() {
     // When set, send this text as the user turn instead of the input box.
     // Used by the Continue button (a canned "keep going" message).
     overrideText?: string;
-    // Force a category. Defaults to draft-mode-aware "chat"/"draft".
-    category?: "chat" | "draft";
+    // Force a category. Defaults to mode-aware "chat"/"draft"/"enhance".
+    category?: "chat" | "draft" | "enhance";
     // Skip sending any chapter/selection text (Continue relies on history).
     suppressText?: boolean;
   }) => {
     const messageText = (opts?.overrideText ?? chatInput).trim();
     if (!messageText || chatLoading) return;
 
-    // Resolve the category: explicit override wins, else follow the toggle.
-    const category: "chat" | "draft" = opts?.category ?? (draftMode ? "draft" : "chat");
+    // Resolve the category: explicit override wins, else follow the toggles.
+    // Draft and Enhance are mutually exclusive (enforced by the toggle handlers),
+    // so at most one is on here.
+    const category: "chat" | "draft" | "enhance" =
+      opts?.category ?? (draftMode ? "draft" : enhanceMode ? "enhance" : "chat");
     const modelId = currentProjectRef.current?.default_model || undefined;
+
+    // Enhance needs a highlighted passage to expand. Guard early with a clear
+    // hint rather than sending an empty target.
+    if (category === "enhance" && !selectedText.trim()) {
+      setChatError("Highlight the passage you want to enhance first.");
+      return;
+    }
 
     // Non-blocking nudge: if we're about to draft on a weak model, surface a
     // one-time suggestion to switch to a stronger one. Never stops the request.
@@ -1123,15 +1235,27 @@ function App() {
     // Delegated to a pure helper so the branching is unit-tested. Continue
     // turns suppress text entirely (the prose so far is in the history).
     const view = editorViewRef.current;
+    const fullChapterText = view ? view.state.doc.toString() : null;
+
+    // For enhance, compute the surrounding-paragraph grounding window from the
+    // live selection offsets into the full chapter. (Other modes send "".)
+    let surroundingContext = "";
+    if (category === "enhance" && view && fullChapterText) {
+      const sel = view.state.selection.main;
+      surroundingContext = computeSurroundingWindow(fullChapterText, sel.from, sel.to);
+    }
+
     const payloadCore = buildEditorChatPayload({
       category,
       selectedText,
-      fullChapterText: view ? view.state.doc.toString() : null,
+      fullChapterText,
       includeChapter,
       chapterEstablished,
       contextChips,
       establishedChipKeys,
       suppressText: opts?.suppressText ?? false,
+      enhanceLevel,
+      surroundingContext,
     });
     const textContent = payloadCore.text_content;
     const newChips    = payloadCore.context_chips;
@@ -1139,6 +1263,9 @@ function App() {
     const userMsg: EditorChatMessage = { role: "user", content: messageText };
     const newMessages = [...chatMessages, userMsg];
     setChatMessages(newMessages);
+    // Remember which passage this ask was about, so we can nudge a "new ask" when
+    // the writer moves to a different selection later.
+    setLastSentSelection(selectedText);
     // Only clear the input box when we actually sent what was typed there.
     if (opts?.overrideText === undefined) setChatInput("");
     setChatLoading(true);
@@ -1171,11 +1298,19 @@ function App() {
           category:        category,
           text_content:    payloadCore.text_content,
           is_full_chapter: payloadCore.is_full_chapter,
-          messages:        newMessages,
+          // Only send messages from the current "new ask" boundary onward, so a
+          // fresh ask starts the AI with a clean slate (the full transcript stays
+          // visible in the UI). lastBoundary is 0 when no boundary is set.
+          messages:        newMessages.slice(askBoundaries[askBoundaries.length - 1] ?? 0),
           context_chips:   newChips,
           model_id:        modelId,
           content_mode:    currentProjectRef.current?.content_mode_default ?? "general",
           project_path:    currentProjectRef.current?.root_path ?? null,
+          // Enhance mode only; harmless empties for other modes (backend ignores).
+          surrounding_context: payloadCore.surrounding_context,
+          enhance_level:       payloadCore.enhance_level,
+          // Canon/Reference toggle: how the AI treats attached chips.
+          treat_attachments_as_canon: treatAsCanon,
         }),
       });
 
@@ -1232,7 +1367,26 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed]);
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon]);
+
+
+  // --- Start a new ask ---
+  // Drops a boundary at the current end of the transcript. Subsequent turns send
+  // only messages after this point to the AI (clean slate), while the visible
+  // transcript is preserved. Attached chips are kept but re-armed so they attach
+  // to the fresh ask; the chapter is re-sendable again too.
+  const startNewAsk = useCallback(() => {
+    setAskBoundaries(prev => {
+      const boundary = chatMessages.length;
+      // No-op if we're already at a fresh boundary (nothing new since last one).
+      if (prev[prev.length - 1] === boundary) return prev;
+      return [...prev, boundary];
+    });
+    setEstablishedChipKeys(new Set());
+    setChapterEstablished(false);
+    setLastSentSelection("");
+    setChatError(null);
+  }, [chatMessages.length]);
 
 
   // --- Cancel an in-flight chat request ---
@@ -1286,6 +1440,8 @@ function App() {
     setChapterEstablished(false);
     setContextChips([]);
     setChatInput("");
+    setAskBoundaries([]);
+    setLastSentSelection("");
   }, []);
 
 
@@ -1819,6 +1975,13 @@ function App() {
               : undefined
           }
           autoSplitRunning={autoSplitProgress !== null}
+          onSuggestSceneBreaks={
+            // Chapter-scoped, like scene summaries: only when a chapter is open.
+            currentView === "editor" && currentChapter
+              ? handleSuggestSceneBreaks
+              : undefined
+          }
+          suggestBreaksRunning={suggestBreaksRunning}
           onReaderMode={currentProject && chapters.length > 0 ? () => setShowReaderMode(true) : undefined}
         />
 
@@ -1949,8 +2112,10 @@ function App() {
             // based scene summarization is conceptually a Writing Companion
             // action on the selected passage.
             <div className="flex items-center justify-between gap-2">
-              <p className={`min-w-0 flex-1 truncate text-xs ${chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
-                {chapterEstablished ? "Selection (new context)" : "Using selected text"} ({selectedText.length.toLocaleString()} chars)
+              <p className={`min-w-0 flex-1 truncate text-xs ${enhanceMode ? "text-violet-400" : chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
+                {enhanceMode
+                  ? "Passage to enhance"
+                  : chapterEstablished ? "Selection (new context)" : "Using selected text"} ({selectedText.length.toLocaleString()} chars)
               </p>
               <button
                 onClick={handleSummarizeAsScene}
@@ -1961,6 +2126,12 @@ function App() {
                 Summarize as Scene
               </button>
             </div>
+          ) : currentChapter && enhanceMode ? (
+            // Enhance is on but nothing is highlighted -- the feature needs a
+            // target passage, so prompt the writer to select one.
+            <p className="text-xs text-violet-400">
+              Highlight a passage in the editor to enhance
+            </p>
           ) : currentChapter ? (
             // No selection -- show chapter toggle
             <div className="flex items-center justify-between">
@@ -2002,6 +2173,13 @@ function App() {
           <div className="mb-1 flex items-center justify-between">
             <p className="text-xs text-text-muted">
               Context: {contextChips.length === 0 ? "none attached" : `${contextChips.length} profile${contextChips.length > 1 ? "s" : ""}`}
+              {/* Surface the stance when attachments are set to Reference, since it
+                  changes how the AI uses them and is otherwise hidden in the popup. */}
+              {contextChips.length > 0 && !treatAsCanon && (
+                <span className="ml-1 text-amber-400" title="Attachments are reference only; your direction takes precedence. Change in + Add.">
+                  · reference
+                </span>
+              )}
             </p>
             <button
               onClick={() => setShowChipPicker(prev => !prev)}
@@ -2020,6 +2198,8 @@ function App() {
               existingChips={contextChips}
               onAdd={(chip) => { setContextChips(prev => [...prev, chip]); setShowChipPicker(false); }}
               onClose={() => setShowChipPicker(false)}
+              treatAsCanon={treatAsCanon}
+              onTreatAsCanonChange={setTreatAsCanon}
             />
           )}
 
@@ -2080,12 +2260,20 @@ function App() {
               </div>
               <p className="text-sm font-medium text-text-muted">Writing Companion</p>
               <div className="w-full rounded border border-border bg-bg-primary p-2.5 text-left">
-                <p className="mb-1 text-xs font-medium text-text-muted">{draftMode ? "Try drafting:" : "Try asking:"}</p>
+                <p className="mb-1 text-xs font-medium text-text-muted">
+                  {draftMode ? "Try drafting:" : enhanceMode ? "Try enhancing (highlight a passage first):" : "Try asking:"}
+                </p>
                 {(draftMode
                   ? [
                       "Write the opening scene where they first meet",
                       "Draft a tense confrontation in the throne room",
                       "Write the next scene from the premise in my outline",
+                    ]
+                  : enhanceMode
+                  ? [
+                      "Work in a description of the setting",
+                      "Make this character's reply more reluctant",
+                      "Sharpen the tension and tighten the pacing",
                     ]
                   : [
                       "What do you think of this passage?",
@@ -2107,7 +2295,17 @@ function App() {
 
           {/* Chat messages */}
           {chatMessages.map((msg, i) => (
-            <div key={i} className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div key={i}>
+              {/* "New ask" divider: everything below this line is a fresh ask; the
+                  AI only sees messages from the latest divider onward. */}
+              {askBoundaries.includes(i) && (
+                <div className="my-3 flex items-center gap-2" aria-label="new ask">
+                  <div className="h-px flex-1 bg-violet-800/50" />
+                  <span className="text-[10px] uppercase tracking-wide text-violet-400">New ask</span>
+                  <div className="h-px flex-1 bg-violet-800/50" />
+                </div>
+              )}
+              <div className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               {msg.role === "assistant" && (
                 <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-indigo-400">
                   <Bot size={11} />
@@ -2129,6 +2327,7 @@ function App() {
                   <span className="text-xs font-bold">W</span>
                 </div>
               )}
+              </div>
             </div>
           ))}
 
@@ -2222,9 +2421,32 @@ function App() {
             </div>
           )}
 
-          {/* Draft mode toggle. Off = discussion chat. On = the AI writes a
-              scene/chapter segment from your message + attached context. */}
-          <div className="mb-2 flex items-center justify-between">
+          {/* Enhance-mode context nudge: shown once when Enhance is on, suggesting
+              the writer attach grounding (chapter/outline/profiles) for better
+              results. Dismissible, never blocks. */}
+          {enhanceMode && !enhanceNudgeDismissed && (
+            <div className="mb-2 rounded border border-violet-800/60 bg-violet-950/30 p-2">
+              <p className="text-xs text-violet-200">
+                For the richest results, attach your outline, chapter or scene
+                summaries, and relevant character profiles as context (use + Add
+                above). Enhance already includes the paragraphs around your
+                selection automatically.
+              </p>
+              <div className="mt-1 flex items-center gap-3">
+                <button
+                  onClick={() => setEnhanceNudgeDismissed(true)}
+                  className="text-xs text-faint transition-colors hover:text-text-muted"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mode toggles. Draft and Enhance are mutually exclusive; turning one
+              on turns the other off. Off (both) = discussion chat. */}
+          <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {/* Draft mode: the AI writes a new scene/segment from your message. */}
             <label
               className="flex cursor-pointer items-center gap-1.5"
               title="When on, the AI writes story prose from your message and attached context. When off, it discusses your writing."
@@ -2233,30 +2455,83 @@ function App() {
               <span className={`text-xs ${draftMode ? "text-emerald-400" : "text-faint"}`}>Draft mode</span>
               <div
                 className={`relative h-4 w-7 rounded-full transition-colors ${draftMode ? "bg-emerald-600" : "bg-border"}`}
-                onClick={() => setDraftMode(v => !v)}
+                onClick={() => setDraftMode(v => { const next = !v; if (next) setEnhanceMode(false); return next; })}
               >
                 <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${draftMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
               </div>
             </label>
+
+            {/* Enhance mode: the AI expands your HIGHLIGHTED passage into richer prose. */}
+            <label
+              className="flex cursor-pointer items-center gap-1.5"
+              title="When on, highlight a passage and the AI rewrites it as richer, more vivid prose (keeping the same events). Output appears in chat for you to copy."
+            >
+              <Sparkles size={12} className={enhanceMode ? "text-violet-400" : "text-faint"} />
+              <span className={`text-xs ${enhanceMode ? "text-violet-400" : "text-faint"}`}>Enhance</span>
+              <div
+                className={`relative h-4 w-7 rounded-full transition-colors ${enhanceMode ? "bg-violet-600" : "bg-border"}`}
+                onClick={() => setEnhanceMode(v => { const next = !v; if (next) setDraftMode(false); return next; })}
+              >
+                <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enhanceMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
+              </div>
+            </label>
+
             {draftMode && (
               <span className="text-[10px] text-faint">AI writes prose &middot; use Continue to extend</span>
             )}
+
+            {/* New ask: start a fresh AI context without erasing the transcript.
+                Appears once there's an exchange in the current segment; it pulses
+                violet when the selection has changed (a likely new, unrelated ask). */}
+            {chatMessages.length > (askBoundaries[askBoundaries.length - 1] ?? 0) && (
+              <button
+                onClick={startNewAsk}
+                title="Start a new ask: the AI gets a clean slate (your attachments stay). Your transcript is kept."
+                className={`ml-auto flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] transition-colors ${
+                  selectedText.trim() !== "" && selectedText !== lastSentSelection
+                    ? "border-violet-500 bg-violet-950/50 text-violet-200"
+                    : "border-border text-faint hover:border-violet-700 hover:text-violet-300"
+                }`}
+              >
+                <CornerDownRight size={11} />
+                New ask
+              </button>
+            )}
           </div>
+
+          {/* Enhance level: how much to expand the highlighted passage. */}
+          {enhanceMode && (
+            <div className="mb-2 flex items-center gap-1.5">
+              <span className="text-[10px] text-faint">Amount:</span>
+              {([
+                { value: "restate",  label: "Restate",  hint: "Rework the wording, about the same length" },
+                { value: "default",  label: "Default",  hint: "Richer pass, about 1.5x to 2.2x" },
+                { value: "expanded", label: "Expanded", hint: "Most immersive, about 2.2x to 4x" },
+              ] as { value: EnhanceLevel; label: string; hint: string }[]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setEnhanceLevel(opt.value)}
+                  title={opt.hint}
+                  className={`rounded border px-2 py-0.5 text-[10px] transition-colors ${
+                    enhanceLevel === opt.value
+                      ? "border-violet-500 bg-violet-950/50 text-violet-200"
+                      : "border-border text-faint hover:border-violet-700 hover:text-violet-300"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="relative flex items-end gap-2">
             <textarea
               value={chatInput}
               onChange={e => {
                 setChatInput(e.target.value);
-                const el = e.target;
-                el.style.height = "auto";
-                // maxH = 7 lines × ~24px line-height + padding. Larger than
-                // before to accommodate the bumped text-sm size and to leave
-                // room when the UI scale is raised. el.scrollHeight is in
-                // rendered pixels so it tracks the live font size correctly.
-                const maxH = 7 * 24 + 14;
-                el.style.height = Math.min(el.scrollHeight, maxH) + "px";
-                el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+                // maxH = 7 lines × ~24px line-height + padding. el.scrollHeight
+                // tracks the live rendered font size, so this adapts to UI scale.
+                autoSizeTextarea(e.currentTarget, { maxH: 7 * 24 + 14 });
               }}
               onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -2269,8 +2544,16 @@ function App() {
                   ? "Open a chapter first"
                   : draftMode
                     ? "Describe the scene to write... (Enter to send)"
-                    : "Ask about your writing... (Enter to send)"
+                    : enhanceMode
+                      ? (selectedText.trim()
+                          ? "Describe how to enrich the highlighted passage... (Enter to send)"
+                          : "Type your direction, then highlight the passage to enhance")
+                      : "Ask about your writing... (Enter to send)"
               }
+              // Enhance requires a selection, but we DON'T disable the box for it:
+              // the writer can type their direction first, then highlight. The
+              // missing-selection case is caught at send time with a clear hint
+              // (see sendEditorChat). Disabling the whole box just reads as broken.
               disabled={!currentChapter || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
@@ -2878,6 +3161,10 @@ interface ChipPickerProps {
   existingChips: ContextChip[];
   onAdd: (chip: ContextChip) => void;
   onClose: () => void;
+  // Canon/Reference stance for how the AI treats attachments (global, applies to
+  // all attached context). Shown as a toggle at the top of the picker.
+  treatAsCanon: boolean;
+  onTreatAsCanonChange: (v: boolean) => void;
 }
 
 // Shape of an item in the chapter-summaries list endpoint. Mirrors
@@ -2915,7 +3202,7 @@ interface PendingProfile {
   profile:  Profile;           // The fully fetched profile object
 }
 
-function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChips, onAdd, onClose }: ChipPickerProps) {
+function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChips, onAdd, onClose, treatAsCanon, onTreatAsCanonChange }: ChipPickerProps) {
   const [loading, setLoading] = useState(false);
   const [profileType, setProfileType] = useState("character");
   const [profiles, setProfiles] = useState<{ filename: string; name: string }[]>([]);
@@ -3265,6 +3552,8 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
           onShowHelp={() => setShowHelp(true)}
           onCancel={() => setPending(null)}
           onAttach={confirmAttach}
+          treatAsCanon={treatAsCanon}
+          onTreatAsCanonChange={onTreatAsCanonChange}
         />
       )}
 
@@ -3537,11 +3826,17 @@ interface ConfigureAttachPanelProps {
   onShowHelp:  () => void;
   onCancel:    () => void;
   onAttach:    () => void;
+  // Canon/Reference stance for how the AI treats attachments (global).
+  treatAsCanon:         boolean;
+  onTreatAsCanonChange: (v: boolean) => void;
 }
 
 function ConfigureAttachPanel({
   include, onChange, tokens, hasTraits, hasSummary, onShowHelp, onCancel, onAttach,
+  treatAsCanon, onTreatAsCanonChange,
 }: ConfigureAttachPanelProps) {
+  // Local expand state for the Canon/Reference tutorial helptip.
+  const [showCanonHelp, setShowCanonHelp] = useState(false);
   // A single helper to flip one flag without losing the others. Keeps the JSX
   // below readable -- otherwise every checkbox needs a four-field spread.
   const toggle = (key: keyof ChipIncludeOptions) =>
@@ -3606,6 +3901,58 @@ function ConfigureAttachPanel({
         Estimated cost: ~{tokens.toLocaleString()} tokens
         {isHuge ? " (very heavy -- consider trimming)" : isLarge ? " (heavy)" : ""}
       </p>
+
+      {/* Canon / Reference stance -- how the AI treats everything you attach
+          (global, applies to all attachments). Lives here, just under the token
+          estimate, with a tutorial helptip. */}
+      <div className="mb-2 border-t border-indigo-800/40 pt-2">
+        <div className="flex items-center justify-between gap-2">
+          <label className="flex cursor-pointer items-center gap-1.5" title="How the AI treats your attachments">
+            <span className={`text-xs font-medium ${treatAsCanon ? "text-indigo-300" : "text-amber-400"}`}>
+              {treatAsCanon ? "Canon" : "Reference"}
+            </span>
+            <div
+              className={`relative h-4 w-7 rounded-full transition-colors ${treatAsCanon ? "bg-indigo-600" : "bg-amber-600"}`}
+              onClick={() => onTreatAsCanonChange(!treatAsCanon)}
+            >
+              <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${treatAsCanon ? "translate-x-3.5" : "translate-x-0.5"}`} />
+            </div>
+          </label>
+          <button
+            onClick={() => setShowCanonHelp(v => !v)}
+            className="flex items-center gap-1 text-[11px] text-text-muted transition-colors hover:text-indigo-300"
+            title="What does this do?"
+          >
+            <HelpCircle size={12} />
+            {showCanonHelp ? "Hide" : "What's this?"}
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-text-muted">
+          {treatAsCanon
+            ? "Attachments are treated as established truth; the AI keeps your writing consistent with them."
+            : "Attachments are reference only; your typed instructions take precedence over them."}
+        </p>
+        {showCanonHelp && (
+          <div className="mt-2 space-y-2 border-t border-indigo-800/40 pt-2 text-[11px] leading-relaxed text-text-muted">
+            <p>
+              <span className="font-semibold text-indigo-300">Toggle (On) Canon:</span> the AI treats attached
+              profiles, outline, and locations as established truth and keeps your writing consistent with
+              them. Use when drafting a scene where characters should stay true to their established traits,
+              or when you want the profile enforced.
+            </p>
+            <p>
+              <span className="font-semibold text-amber-400">Toggle (Off) Reference:</span> the AI uses attachments
+              as helpful reference but follows <em>your</em> instructions first, drawing on the details that
+              fit this moment. Use when you're deliberately showing a different side of a character, writing a
+              turning point or exception, or your specific direction matters more than strict consistency right now.
+            </p>
+            <p>
+              Tip: if a Draft or Enhance result feels like it's arguing with what you asked by clinging to
+              profile traits, switch this to Reference.
+            </p>
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-end gap-2">
         <button

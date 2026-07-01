@@ -35,7 +35,9 @@ from app.ai.prompts import (
     generate_chapter_summary_prompt,
     generate_scene_summary_prompt,
     generate_scene_title_prompt,
+    generate_scene_break_suggestions_prompt,
     content_mode_instruction,
+    context_stance_instruction,
     EDITOR_PASS_SUBCATEGORIES,
     TEMPERATURE_DEFAULTS,
 )
@@ -489,6 +491,36 @@ async def run_assistant(request: RunAssistantRequest):
 # failed" message (useless), we translate the most common codes into sentences
 # the writer can actually act on.
 
+def _openrouter_msg(e: httpx.HTTPStatusError) -> str:
+    """
+    Pull OpenRouter's own human-readable error message out of the response body.
+
+    OpenRouter returns errors as JSON shaped like
+    {"error": {"message": "Grok 3 Mini is deprecated...", "code": 404}}.
+    That message is frequently the single most useful thing for the writer (it
+    often names the exact replacement model), so we surface it instead of
+    discarding the body and showing only a bare status code.
+
+    Returns "" when the body is missing, not JSON, or not in a shape we know.
+    The response is already fully buffered by httpx at this point (we make
+    non-streaming calls), so reading .json() here is safe and synchronous.
+    """
+    try:
+        body = e.response.json()
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    # Preferred shape: {"error": {"message": "..."}}
+    err = body.get("error")
+    if isinstance(err, dict) and isinstance(err.get("message"), str):
+        return err["message"].strip()
+    # Some shapes put the message at the top level instead.
+    if isinstance(body.get("message"), str):
+        return body["message"].strip()
+    return ""
+
+
 def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
     """
     Convert an OpenRouter HTTPStatusError into a user-facing FastAPI exception.
@@ -498,6 +530,9 @@ def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
     consistent and only need updating in one place when OpenRouter changes behaviour.
     """
     status = e.response.status_code
+    # OpenRouter's own message, if it sent one. Appended to our friendlier text
+    # so the writer sees both "what to do" and "what the provider actually said".
+    provider_msg = _openrouter_msg(e)
     if status == 401:
         return HTTPException(
             status_code=401,
@@ -521,6 +556,23 @@ def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
                 "Suggestion: Deposit $5-10. Go-to app Settings>Model Cost Tier> Budget or Free. It sips tokens, promise"
             ),
         )
+    if status == 404:
+        # A 404 from a chat completion almost always means the chosen model is
+        # gone -- deprecated or renamed by its provider -- or simply not a valid
+        # model ID. This is the failure that looks like "OpenRouter is down"
+        # even though the account and key are fine. OpenRouter's body usually
+        # names the exact replacement (e.g. "switch to Grok 4.3"), so we lead
+        # with actionable guidance and append their message verbatim.
+        base = (
+            "The AI model this project uses is unavailable on OpenRouter, "
+            "usually because the provider deprecated or renamed it. "
+            "Pick a current model in Project Settings (this project may override "
+            "the global model in Settings)."
+        )
+        return HTTPException(
+            status_code=502,
+            detail=f"{base} OpenRouter says: {provider_msg}" if provider_msg else base,
+        )
     if status >= 500:
         return HTTPException(
             status_code=502,
@@ -529,9 +581,10 @@ def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
                 "This is on their end -- try again in a few seconds."
             ),
         )
+    base = f"OpenRouter returned an unexpected error: HTTP {status}."
     return HTTPException(
         status_code=502,
-        detail=f"OpenRouter returned an unexpected error: HTTP {status}.",
+        detail=f"{base} OpenRouter says: {provider_msg}" if provider_msg else base,
     )
 
 
@@ -1336,6 +1389,119 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
     )
 
 
+# ── Scene Break Suggestions ───────────────────────────────────────────────────
+# Reads a whole chapter and proposes where to insert `---` scene breaks. Like
+# every AI feature here, it only SUGGESTS: the writer places the breaks by hand
+# (the locked no-auto-apply rule). Suggestions are quote-anchored (verbatim text
+# just before each break) because line numbers aren't stable but exact text is.
+
+class SuggestSceneBreaksRequest(BaseModel):
+    chapter_path: str | None = None          # for context/logging; not required
+    project_path: str | None = None          # for story-context injection
+    chapter_text: str                        # the full chapter markdown
+    model_id:     str | None = None
+    content_mode: str = "general"
+
+
+class SceneBreakSuggestion(BaseModel):
+    quote:       str                         # verbatim text just before the break
+    explanation: str                         # why a break here helps
+    severity:    str                         # "strong" | "moderate" | "subtle"
+
+
+class SuggestSceneBreaksResponse(BaseModel):
+    suggestions: list[SceneBreakSuggestion]
+    analysis:    str                         # overall pacing commentary
+    model_used:  str
+
+
+_VALID_BREAK_SEVERITIES = {"strong", "moderate", "subtle"}
+
+
+@router.post("/suggest-scene-breaks", response_model=SuggestSceneBreaksResponse)
+async def suggest_scene_breaks(request: SuggestSceneBreaksRequest):
+    """Suggest where to place `---` scene breaks in a chapter (review-only)."""
+    api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    settings = load_settings()
+    _validate_model_content_mode(settings, model_id, request.content_mode)
+    _validate_model_allowed(settings, model_id)
+
+    chapter_text = request.chapter_text.strip()
+    if not chapter_text:
+        raise HTTPException(status_code=400, detail="Chapter text is empty.")
+    # Same full-chapter cap as the editor-pass / editor-chat full-chapter path.
+    if len(chapter_text) > 100_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Chapter is too long ({len(chapter_text):,} chars, max 100,000). "
+                   f"Try splitting it first."
+        )
+
+    system_prompt = generate_scene_break_suggestions_prompt(request.content_mode)
+    story_context = _build_story_context(request.project_path)
+    if story_context:
+        system_prompt = story_context + system_prompt
+
+    user_message = (
+        "Analyze the following chapter and suggest where scene breaks would help.\n\n"
+        "--- BEGIN CHAPTER TEXT ---\n"
+        f"{chapter_text}\n"
+        "--- END CHAPTER TEXT ---"
+    )
+
+    try:
+        # critique temperature (0.3): identifying structural beats is analytic
+        # work, not creative generation -- we want consistency, not drift.
+        raw = await run_chat(
+            api_key       = api_key,
+            model_id      = model_id,
+            system_prompt = system_prompt,
+            messages      = [{"role": "user", "content": user_message}],
+            temperature   = TEMPERATURE_DEFAULTS["critique"],
+        )
+    except httpx.HTTPStatusError as e:
+        raise _openrouter_exc(e)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+
+    # Parse the model's JSON. Tolerate fences/preamble via the shared extractor.
+    # A malformed response yields no suggestions rather than a 500 -- the writer
+    # just sees "no suggestions" instead of a crash.
+    parsed: dict = {}
+    block = _extract_json_block(raw)
+    if block:
+        try:
+            loaded = json.loads(block)
+            if isinstance(loaded, dict):
+                parsed = loaded
+        except json.JSONDecodeError:
+            parsed = {}
+
+    suggestions: list[SceneBreakSuggestion] = []
+    for s in parsed.get("suggestions", []):
+        if not isinstance(s, dict):
+            continue
+        quote = sanitize(str(s.get("quote", "")).strip())
+        explanation = sanitize(str(s.get("explanation", "")).strip())
+        if not quote or not explanation:
+            continue
+        severity = str(s.get("severity", "moderate")).strip().lower()
+        if severity not in _VALID_BREAK_SEVERITIES:
+            severity = "moderate"
+        suggestions.append(SceneBreakSuggestion(
+            quote=quote, explanation=explanation, severity=severity,
+        ))
+
+    analysis = sanitize(str(parsed.get("analysis", "")).strip())
+
+    return SuggestSceneBreaksResponse(
+        suggestions = suggestions,
+        analysis    = analysis,
+        model_used  = model_id,
+    )
+
+
 @router.post("/profile-chat", response_model=ProfileChatResponse)
 async def profile_chat(request: ProfileChatRequest):
     """
@@ -1412,14 +1578,25 @@ class EditorChatMessage(BaseModel):
 
 class EditorChatRequest(BaseModel):
     """One turn of the Writing Companion chat in the main editor."""
-    category:        str                     # "readability" | "structure" | "context"
-    text_content:    str                     # Selected text OR full chapter
+    category:        str                     # "readability" | "structure" | "context" | "chat" | "draft" | "enhance"
+    text_content:    str                     # Selected text OR full chapter (for enhance: the passage to expand)
     is_full_chapter: bool = False
     messages:        list[EditorChatMessage]
     context_chips:   list[ContextChip] = []
     model_id:        str | None = None
     content_mode:    str = "general"
     project_path:    str | None = None
+    # Enhance mode only: a window of paragraphs around the selection, sent as
+    # grounding (facts/continuity/outcomes) that the model must NOT rewrite.
+    # Empty for every other mode.
+    surrounding_context: str = ""
+    # Enhance mode only: the length budget. "restate" = ~same length rewrite;
+    # "default" = 1.5-2.2x; "expanded" = 2.2-4x. The writer's message is the direction.
+    enhance_level:   str = "default"
+    # The writer's Canon/Reference toggle. True (default) = attached profiles/
+    # outline/locations are canon the AI must stay consistent with. False = they
+    # are reference only and the writer's typed direction takes precedence.
+    treat_attachments_as_canon: bool = True
 
 
 class EditorChatResponse(BaseModel):
@@ -1427,19 +1604,94 @@ class EditorChatResponse(BaseModel):
     model_used: str = ""  # The resolved model ID so the UI can display it
 
 
+# Absolute ceiling on a single Enhance rewrite, in approximate words. Multiplier
+# targets are clamped to this so a large highlight can't demand a runaway rewrite
+# (which is where coherence falls apart). Effect is an ADAPTIVE multiplier: the
+# bigger the selection, the smaller the effective ratio. LLMs enhance a few lines
+# to a paragraph reliably; past that, focused beats sprawling.
+_ENHANCE_MAX_WORDS = 800
+
+# Multiplier band per level: (low, high). Restate is ~same length; the writer's
+# chat message positions within the band and supplies the direction.
+_ENHANCE_BANDS = {
+    "restate":  (1.0, 1.2),
+    "default":  (1.5, 2.2),
+    "expanded": (2.2, 4.0),
+}
+
+
+def _enhance_length_directive(level: str, selection: str) -> str:
+    """
+    Build the per-turn ENHANCEMENT LEVEL directive with a CONCRETE word target
+    computed from the selection size. The band sets the target; it is then clamped
+    to _ENHANCE_MAX_WORDS so a large highlight can't balloon. Goes in the user
+    materials message (not the system prompt) so the system prompt stays stable.
+    """
+    words = max(1, round(len(selection) / 6))          # ~6 chars/word incl. spacing
+    if level not in _ENHANCE_BANDS:
+        level = "default"                              # unknown -> default band + label
+    low_mult, high_mult = _ENHANCE_BANDS[level]
+
+    if level == "restate":
+        return (
+            f"ENHANCEMENT LEVEL: Restate. The passage is about {words} words. Keep your rewrite "
+            f"about the same length (roughly {words} words); rework the wording to satisfy my "
+            f"direction above, do not pad it out. Flex slightly longer only if the direction "
+            f"genuinely requires it, such as splitting one sentence into two."
+        )
+
+    low = round(words * low_mult)
+    high = round(words * high_mult)
+    capped = high > _ENHANCE_MAX_WORDS
+    if capped:
+        high = _ENHANCE_MAX_WORDS
+    if low > high:
+        low = high
+    label = "Default" if level == "default" else "Expanded"
+    directive = (
+        f"ENHANCEMENT LEVEL: {label}. The passage is about {words} words. Aim for roughly "
+        f"{low} to {high} words total. Add the depth my direction calls for"
+        + (", including a line of dialogue if it fits" if level == "default" else "")
+        + ", and break the result into natural paragraphs."
+    )
+    if capped:
+        directive += (
+            " This is a large passage, so keep the rewrite focused and within this word "
+            "target rather than expanding every sentence."
+        )
+    return directive
+
+
 def _build_materials_message(
     text_content: str,
     is_full_chapter: bool,
     context_chips: list[ContextChip],
+    surrounding_context: str = "",
+    enhance_level: str = "default",
+    is_enhance: bool = False,
+    treat_as_canon: bool = True,
 ) -> dict:
     """
     Build a user message containing all variable content (selected text,
     context chips). This keeps the system prompt stable and instruction-only.
+
+    treat_as_canon controls how the attached chips are framed (the writer's
+    Canon/Reference toggle): canon = established truth, reference = the writer's
+    typed direction takes precedence. The matching stance instruction is added to
+    the system prompt by the caller.
+
+    For enhance mode (is_enhance=True) the message has a specific shape so the
+    model can tell grounding from target:
+      chips -> SURROUNDING CONTEXT (grounding, do-not-rewrite) -> PASSAGE TO
+      ENHANCE (the only thing to rewrite) -> the level directive.
     """
     lines = []
 
     if context_chips:
-        lines.append("ATTACHED CONTEXT (treat as canon for this story):")
+        if treat_as_canon:
+            lines.append("ATTACHED CONTEXT (treat as canon for this story):")
+        else:
+            lines.append("ATTACHED REFERENCE (details you may draw on; my direction takes precedence):")
         lines.append("")
         # Each chip is wrapped in BEGIN/END delimiters so the model treats it
         # as an isolated block. Without these markers, when several characters
@@ -1457,14 +1709,36 @@ def _build_materials_message(
         lines.append("---")
         lines.append("")
 
+    # Enhance mode: the surrounding paragraphs are grounding only. Same BEGIN/END
+    # framing as chips so the boundary with the target passage is unambiguous.
+    if is_enhance and surrounding_context.strip():
+        lines.append(
+            "SURROUNDING CONTEXT (grounding only -- do NOT rewrite or expand this; "
+            "use it for facts, names, continuity, and outcomes):"
+        )
+        lines.append("=== BEGIN SURROUNDING CONTEXT ===")
+        lines.append(surrounding_context.strip())
+        lines.append("=== END SURROUNDING CONTEXT ===")
+        lines.append("")
+
     # Only include the text section if there's actual text. When the writer
     # has Include Chapter toggled OFF and nothing selected, text_content is
     # empty -- adding an empty "SELECTED PASSAGE:" header confuses the AI
     # into thinking the context failed to load.
     if text_content.strip():
-        label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
-        lines.append(f"{label}:")
-        lines.append(text_content)
+        if is_enhance:
+            # The target passage. Wrapped in explicit markers so the model never
+            # confuses it with the surrounding grounding block above.
+            lines.append("PASSAGE TO ENHANCE (rewrite ONLY this):")
+            lines.append("=== BEGIN PASSAGE TO ENHANCE ===")
+            lines.append(text_content)
+            lines.append("=== END PASSAGE TO ENHANCE ===")
+            lines.append("")
+            lines.append(_enhance_length_directive(enhance_level, text_content))
+        else:
+            label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
+            lines.append(f"{label}:")
+            lines.append(text_content)
 
     return {"role": "user", "content": "\n".join(lines)}
 
@@ -1487,6 +1761,17 @@ async def editor_chat(request: EditorChatRequest):
                    f"max {max_len:,}). Try a shorter passage."
         )
 
+    # Enhance mode also ships a surrounding-paragraph window; bound it too so a
+    # huge window can't blow past context limits.
+    if len(request.surrounding_context) > 30_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The surrounding context is too long ({len(request.surrounding_context):,} chars, "
+                   f"max 30,000). Try enhancing a passage with less text around it."
+        )
+
+    is_enhance = request.category == "enhance"
+
     # 1. System prompt = instructions only (no story text, no chips)
     system_prompt = build_editor_chat_system_prompt(
         category     = request.category,
@@ -1498,37 +1783,52 @@ async def editor_chat(request: EditorChatRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
+    # Attachment stance: when the writer has attached chips, tell the model whether
+    # to treat them as canon (enforce) or reference (the writer's direction wins).
+    # Driven by the Canon/Reference toggle in the attachment popup.
+    if request.context_chips:
+        system_prompt = system_prompt + "\n\n" + context_stance_instruction(request.treat_attachments_as_canon)
+
     # 2. Build a "materials" user message with variable content -- but only if
     #    the frontend actually sent something new. On follow-up turns the frontend
     #    omits text_content and chips that were already sent in a prior turn (they're
     #    already in the conversation history). Skipping the materials message here
     #    avoids resending the same chapter + profiles on every single turn.
-    has_new_materials = bool(request.text_content.strip()) or bool(request.context_chips)
+    has_new_materials = (
+        bool(request.text_content.strip())
+        or bool(request.context_chips)
+        or bool(request.surrounding_context.strip())
+    )
 
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
     if has_new_materials:
         materials = _build_materials_message(
-            text_content    = request.text_content,
-            is_full_chapter = request.is_full_chapter,
-            context_chips   = request.context_chips,
+            text_content        = request.text_content,
+            is_full_chapter     = request.is_full_chapter,
+            context_chips       = request.context_chips,
+            surrounding_context = request.surrounding_context,
+            enhance_level       = request.enhance_level,
+            is_enhance          = is_enhance,
+            treat_as_canon      = request.treat_attachments_as_canon,
         )
         messages = [materials] + conversation
     else:
         messages = conversation
 
-    # Pick temperature: creative modes (open chat + scene drafting) get higher
-    # randomness; the structured review categories get lower randomness.
+    # Pick temperature: creative modes (open chat, scene drafting, and prose
+    # enhancement) get higher randomness; the structured review categories get
+    # lower randomness.
     temp = (
-        TEMPERATURE_DEFAULTS["generation"] if request.category in ("chat", "draft")
+        TEMPERATURE_DEFAULTS["generation"] if request.category in ("chat", "draft", "enhance")
         else TEMPERATURE_DEFAULTS["critique"]
     )
 
-    # Pick the sanitizer mode. Draft mode produces story prose, where an
-    # approved ' -- ' is legitimate punctuation, so we use the prose sanitizer
-    # (strips em/en dashes only). Every other mode is conversational and uses
-    # the chat sanitizer, which also folds ' -- ' down to commas.
-    sanitize_mode = "prose" if request.category == "draft" else "chat"
+    # Pick the sanitizer mode. Draft and Enhance both produce story prose, where
+    # an approved ' -- ' is legitimate punctuation, so they use the prose
+    # sanitizer (strips em/en dashes only). Every other mode is conversational
+    # and uses the chat sanitizer, which also folds ' -- ' down to commas.
+    sanitize_mode = "prose" if request.category in ("draft", "enhance") else "chat"
 
     try:
         reply = await run_chat(api_key=api_key, model_id=model_id,

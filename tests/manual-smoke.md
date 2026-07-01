@@ -174,6 +174,40 @@ Expected:
 
 ---
 
+## 7. Deprecated project model — error message + picker + live save
+
+**Touches:** OpenRouter error translation (`_openrouter_exc`), per-project
+model resolution (`project.json` `default_model`), the Project Settings
+model picker, and the in-memory project update after save.
+
+This covers the failure where a project pinned to a model the provider
+later deprecated produced a cryptic `HTTP 404` that looked like an
+OpenRouter outage, and the picker/save flow made it hard to recover.
+Run it whenever the OpenRouter integration or the model picker changes.
+
+Steps:
+1. With the app closed, edit a throwaway project's `project.json` and set
+   `"default_model": "x-ai/grok-3-mini"` (a known-deprecated slug). Launch
+   the app and open that project.
+2. Run any AI feature (Writing Companion chat, a Smart Advisor pass, or a
+   chapter summary).
+3. Open Project Settings for the same project and look at the model picker.
+4. Pick a current model (e.g. Grok 4.3 / `x-ai/grok-4.3`) and click Save.
+   Do NOT reopen the project.
+5. Run the same AI feature again.
+
+Expected:
+- Step 2: the error names the model as unavailable, points the writer to
+  Project Settings, and quotes OpenRouter's own message (e.g. "Grok 3 Mini
+  is deprecated... switch to Grok 4.3"). It is NOT a bare "HTTP 404."
+- Step 3: the dropdown shows the stored model flagged
+  `x-ai/grok-3-mini (unavailable -- select a current model)` plus an amber
+  warning, instead of silently displaying a different model.
+- Step 5: the AI feature works immediately after Save, with no project
+  reopen required.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

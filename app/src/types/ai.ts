@@ -184,7 +184,15 @@ export type EditorChatCategory =
   | "context"
   | "chat"
   | "draft"
+  | "enhance"
   | null;
+
+// Enhance length budget. The writer's chat message supplies the direction;
+// the level governs how long the rewrite is relative to the original passage:
+//   "restate"  -- about the same length (rework wording in place)
+//   "default"  -- ~1.5x to 2.2x
+//   "expanded" -- ~2.2x to 4x
+export type EnhanceLevel = "restate" | "default" | "expanded";
 
 export interface EditorChatMessage {
   role: "user" | "assistant";
@@ -193,13 +201,45 @@ export interface EditorChatMessage {
 
 export interface EditorChatPayload {
   category:        EditorChatCategory;
-  text_content:    string;          // Selected text OR full chapter
+  text_content:    string;          // Selected text OR full chapter (enhance: the passage to expand)
   is_full_chapter: boolean;
   messages:        EditorChatMessage[];
   context_chips?:  ContextChip[];
   model_id?:       string;
   content_mode?:   string;
   project_path?:   string;
+  // Enhance mode only: paragraphs around the selection (grounding, not rewritten).
+  surrounding_context?: string;
+  // Enhance mode only: how much to expand.
+  enhance_level?:  EnhanceLevel;
+}
+
+
+// ── Scene Break Suggestions ──────────────────────────────────────────────────
+// Mirrors SuggestSceneBreaksRequest/Response in backend/app/routers/ai.py. The
+// AI reads a chapter and proposes where to place `---` scene breaks; each
+// suggestion is anchored to a verbatim quote the writer can find. Review-only:
+// the writer inserts the breaks by hand.
+export type SceneBreakSeverity = "strong" | "moderate" | "subtle";
+
+export interface SceneBreakSuggestion {
+  quote:       string;            // verbatim text just before the suggested break
+  explanation: string;            // why a break here helps
+  severity:    SceneBreakSeverity;
+}
+
+export interface SuggestSceneBreaksPayload {
+  chapter_path?: string;
+  project_path?: string;
+  chapter_text:  string;
+  model_id?:     string;
+  content_mode?: string;
+}
+
+export interface SuggestSceneBreaksResponse {
+  suggestions: SceneBreakSuggestion[];
+  analysis:    string;
+  model_used:  string;
 }
 
 
