@@ -3200,7 +3200,6 @@ interface PendingProfile {
 
 function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChips, onAdd, onClose, treatAsCanon, onTreatAsCanonChange }: ChipPickerProps) {
   const [loading, setLoading] = useState(false);
-  const [showCanonHelp, setShowCanonHelp] = useState(false);
   const [profileType, setProfileType] = useState("character");
   const [profiles, setProfiles] = useState<{ filename: string; name: string }[]>([]);
   const [adding, setAdding] = useState<string | null>(null);
@@ -3535,58 +3534,6 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
         <button onClick={onClose} className="text-xs text-faint hover:text-text-muted">✕</button>
       </div>
 
-      {/* Canon / Reference stance -- how the AI treats everything attached here.
-          Global (applies to all attachments), with a tutorial helptip. */}
-      <div className="mb-3 rounded border border-border bg-bg-panel p-2">
-        <div className="flex items-center justify-between gap-2">
-          <label className="flex cursor-pointer items-center gap-1.5" title="How the AI treats your attachments">
-            <span className={`text-xs font-medium ${treatAsCanon ? "text-indigo-300" : "text-amber-400"}`}>
-              {treatAsCanon ? "Canon" : "Reference"}
-            </span>
-            <div
-              className={`relative h-4 w-7 rounded-full transition-colors ${treatAsCanon ? "bg-indigo-600" : "bg-amber-600"}`}
-              onClick={() => onTreatAsCanonChange(!treatAsCanon)}
-            >
-              <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${treatAsCanon ? "translate-x-3.5" : "translate-x-0.5"}`} />
-            </div>
-          </label>
-          <button
-            onClick={() => setShowCanonHelp(v => !v)}
-            className="flex items-center gap-1 text-[10px] text-faint transition-colors hover:text-indigo-300"
-            title="What does this do?"
-          >
-            <HelpCircle size={12} />
-            {showCanonHelp ? "Hide" : "What's this?"}
-          </button>
-        </div>
-        <p className="mt-1 text-[10px] text-faint">
-          {treatAsCanon
-            ? "Attachments are treated as established truth; the AI keeps your writing consistent with them."
-            : "Attachments are reference only; your typed instructions take precedence over them."}
-        </p>
-        {showCanonHelp && (
-          <div className="mt-2 space-y-2 border-t border-border pt-2 text-[10px] leading-relaxed text-text-muted">
-            <p>
-              <span className="font-semibold text-indigo-300">Canon (on):</span> the AI treats attached
-              profiles, outline, and locations as established truth and keeps your writing consistent with
-              them. <span className="text-faint">Use when drafting a scene where characters should stay true
-              to their established traits, or when you want the profile enforced.</span>
-            </p>
-            <p>
-              <span className="font-semibold text-amber-400">Reference (off):</span> the AI uses attachments
-              as helpful reference but follows <em>your</em> instructions first, drawing on the details that
-              fit this moment. <span className="text-faint">Use when you're deliberately showing a different
-              side of a character, writing a turning point or exception, or your specific direction matters
-              more than strict consistency right now.</span>
-            </p>
-            <p className="text-faint">
-              Tip: if a Draft or Enhance result feels like it's arguing with what you asked by clinging to
-              profile traits, switch this to Reference.
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* Configure-attachment panel -- replaces the browse list while a
           profile is pending. Shows the four include checkboxes, a token
           estimate, and a help button. The checkboxes write to pendingInclude
@@ -3601,6 +3548,8 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
           onShowHelp={() => setShowHelp(true)}
           onCancel={() => setPending(null)}
           onAttach={confirmAttach}
+          treatAsCanon={treatAsCanon}
+          onTreatAsCanonChange={onTreatAsCanonChange}
         />
       )}
 
@@ -3873,11 +3822,17 @@ interface ConfigureAttachPanelProps {
   onShowHelp:  () => void;
   onCancel:    () => void;
   onAttach:    () => void;
+  // Canon/Reference stance for how the AI treats attachments (global).
+  treatAsCanon:         boolean;
+  onTreatAsCanonChange: (v: boolean) => void;
 }
 
 function ConfigureAttachPanel({
   include, onChange, tokens, hasTraits, hasSummary, onShowHelp, onCancel, onAttach,
+  treatAsCanon, onTreatAsCanonChange,
 }: ConfigureAttachPanelProps) {
+  // Local expand state for the Canon/Reference tutorial helptip.
+  const [showCanonHelp, setShowCanonHelp] = useState(false);
   // A single helper to flip one flag without losing the others. Keeps the JSX
   // below readable -- otherwise every checkbox needs a four-field spread.
   const toggle = (key: keyof ChipIncludeOptions) =>
@@ -3942,6 +3897,58 @@ function ConfigureAttachPanel({
         Estimated cost: ~{tokens.toLocaleString()} tokens
         {isHuge ? " (very heavy -- consider trimming)" : isLarge ? " (heavy)" : ""}
       </p>
+
+      {/* Canon / Reference stance -- how the AI treats everything you attach
+          (global, applies to all attachments). Lives here, just under the token
+          estimate, with a tutorial helptip. */}
+      <div className="mb-2 border-t border-indigo-800/40 pt-2">
+        <div className="flex items-center justify-between gap-2">
+          <label className="flex cursor-pointer items-center gap-1.5" title="How the AI treats your attachments">
+            <span className={`text-xs font-medium ${treatAsCanon ? "text-indigo-300" : "text-amber-400"}`}>
+              {treatAsCanon ? "Canon" : "Reference"}
+            </span>
+            <div
+              className={`relative h-4 w-7 rounded-full transition-colors ${treatAsCanon ? "bg-indigo-600" : "bg-amber-600"}`}
+              onClick={() => onTreatAsCanonChange(!treatAsCanon)}
+            >
+              <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${treatAsCanon ? "translate-x-3.5" : "translate-x-0.5"}`} />
+            </div>
+          </label>
+          <button
+            onClick={() => setShowCanonHelp(v => !v)}
+            className="flex items-center gap-1 text-[11px] text-text-muted transition-colors hover:text-indigo-300"
+            title="What does this do?"
+          >
+            <HelpCircle size={12} />
+            {showCanonHelp ? "Hide" : "What's this?"}
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-text-muted">
+          {treatAsCanon
+            ? "Attachments are treated as established truth; the AI keeps your writing consistent with them."
+            : "Attachments are reference only; your typed instructions take precedence over them."}
+        </p>
+        {showCanonHelp && (
+          <div className="mt-2 space-y-2 border-t border-indigo-800/40 pt-2 text-[11px] leading-relaxed text-text-muted">
+            <p>
+              <span className="font-semibold text-indigo-300">Toggle (On) Canon:</span> the AI treats attached
+              profiles, outline, and locations as established truth and keeps your writing consistent with
+              them. Use when drafting a scene where characters should stay true to their established traits,
+              or when you want the profile enforced.
+            </p>
+            <p>
+              <span className="font-semibold text-amber-400">Toggle (Off) Reference:</span> the AI uses attachments
+              as helpful reference but follows <em>your</em> instructions first, drawing on the details that
+              fit this moment. Use when you're deliberately showing a different side of a character, writing a
+              turning point or exception, or your specific direction matters more than strict consistency right now.
+            </p>
+            <p>
+              Tip: if a Draft or Enhance result feels like it's arguing with what you asked by clinging to
+              profile traits, switch this to Reference.
+            </p>
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-end gap-2">
         <button
