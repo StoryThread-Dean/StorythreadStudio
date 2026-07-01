@@ -62,7 +62,7 @@ import { useBackendHealth } from "./hooks/useBackendHealth";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine, Sparkles } from "lucide-react";
+import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine, Sparkles, HelpCircle } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -227,6 +227,20 @@ function App() {
   const [enhanceMode, setEnhanceMode] = useState(false);
   const [enhanceLevel, setEnhanceLevel] = useState<EnhanceLevel>("default");
   const [enhanceNudgeDismissed, setEnhanceNudgeDismissed] = useState(false);
+
+  // "New ask" boundaries: indices into chatMessages where a fresh ask begins.
+  // Only messages at/after the LAST boundary are sent to the AI, so an unrelated
+  // follow-up (e.g. a different highlighted passage) isn't contaminated by the
+  // prior ask -- without erasing the visible transcript (that's what Clear does).
+  const [askBoundaries, setAskBoundaries] = useState<number[]>([]);
+  // The selection text last submitted, so we can nudge "start a new ask" when the
+  // writer moves to a different passage after a result.
+  const [lastSentSelection, setLastSentSelection] = useState("");
+
+  // Canon/Reference toggle (attachment popup): when ON (default), attached
+  // profiles/outline/locations are treated as canon the AI must stay consistent
+  // with. When OFF, they are reference only and the writer's typed direction wins.
+  const [treatAsCanon, setTreatAsCanon] = useState(true);
 
   // Scene-break suggestions: true while the "Suggest Breaks" toolbar request is
   // in flight. Results are rendered into the Writing Companion chat below.
@@ -1249,6 +1263,9 @@ function App() {
     const userMsg: EditorChatMessage = { role: "user", content: messageText };
     const newMessages = [...chatMessages, userMsg];
     setChatMessages(newMessages);
+    // Remember which passage this ask was about, so we can nudge a "new ask" when
+    // the writer moves to a different selection later.
+    setLastSentSelection(selectedText);
     // Only clear the input box when we actually sent what was typed there.
     if (opts?.overrideText === undefined) setChatInput("");
     setChatLoading(true);
@@ -1281,7 +1298,10 @@ function App() {
           category:        category,
           text_content:    payloadCore.text_content,
           is_full_chapter: payloadCore.is_full_chapter,
-          messages:        newMessages,
+          // Only send messages from the current "new ask" boundary onward, so a
+          // fresh ask starts the AI with a clean slate (the full transcript stays
+          // visible in the UI). lastBoundary is 0 when no boundary is set.
+          messages:        newMessages.slice(askBoundaries[askBoundaries.length - 1] ?? 0),
           context_chips:   newChips,
           model_id:        modelId,
           content_mode:    currentProjectRef.current?.content_mode_default ?? "general",
@@ -1289,6 +1309,8 @@ function App() {
           // Enhance mode only; harmless empties for other modes (backend ignores).
           surrounding_context: payloadCore.surrounding_context,
           enhance_level:       payloadCore.enhance_level,
+          // Canon/Reference toggle: how the AI treats attached chips.
+          treat_attachments_as_canon: treatAsCanon,
         }),
       });
 
@@ -1345,7 +1367,26 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel]);
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon]);
+
+
+  // --- Start a new ask ---
+  // Drops a boundary at the current end of the transcript. Subsequent turns send
+  // only messages after this point to the AI (clean slate), while the visible
+  // transcript is preserved. Attached chips are kept but re-armed so they attach
+  // to the fresh ask; the chapter is re-sendable again too.
+  const startNewAsk = useCallback(() => {
+    setAskBoundaries(prev => {
+      const boundary = chatMessages.length;
+      // No-op if we're already at a fresh boundary (nothing new since last one).
+      if (prev[prev.length - 1] === boundary) return prev;
+      return [...prev, boundary];
+    });
+    setEstablishedChipKeys(new Set());
+    setChapterEstablished(false);
+    setLastSentSelection("");
+    setChatError(null);
+  }, [chatMessages.length]);
 
 
   // --- Cancel an in-flight chat request ---
@@ -1399,6 +1440,8 @@ function App() {
     setChapterEstablished(false);
     setContextChips([]);
     setChatInput("");
+    setAskBoundaries([]);
+    setLastSentSelection("");
   }, []);
 
 
@@ -2130,6 +2173,13 @@ function App() {
           <div className="mb-1 flex items-center justify-between">
             <p className="text-xs text-text-muted">
               Context: {contextChips.length === 0 ? "none attached" : `${contextChips.length} profile${contextChips.length > 1 ? "s" : ""}`}
+              {/* Surface the stance when attachments are set to Reference, since it
+                  changes how the AI uses them and is otherwise hidden in the popup. */}
+              {contextChips.length > 0 && !treatAsCanon && (
+                <span className="ml-1 text-amber-400" title="Attachments are reference only; your direction takes precedence. Change in + Add.">
+                  · reference
+                </span>
+              )}
             </p>
             <button
               onClick={() => setShowChipPicker(prev => !prev)}
@@ -2148,6 +2198,8 @@ function App() {
               existingChips={contextChips}
               onAdd={(chip) => { setContextChips(prev => [...prev, chip]); setShowChipPicker(false); }}
               onClose={() => setShowChipPicker(false)}
+              treatAsCanon={treatAsCanon}
+              onTreatAsCanonChange={setTreatAsCanon}
             />
           )}
 
@@ -2243,7 +2295,17 @@ function App() {
 
           {/* Chat messages */}
           {chatMessages.map((msg, i) => (
-            <div key={i} className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div key={i}>
+              {/* "New ask" divider: everything below this line is a fresh ask; the
+                  AI only sees messages from the latest divider onward. */}
+              {askBoundaries.includes(i) && (
+                <div className="my-3 flex items-center gap-2" aria-label="new ask">
+                  <div className="h-px flex-1 bg-violet-800/50" />
+                  <span className="text-[10px] uppercase tracking-wide text-violet-400">New ask</span>
+                  <div className="h-px flex-1 bg-violet-800/50" />
+                </div>
+              )}
+              <div className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               {msg.role === "assistant" && (
                 <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-indigo-400">
                   <Bot size={11} />
@@ -2265,6 +2327,7 @@ function App() {
                   <span className="text-xs font-bold">W</span>
                 </div>
               )}
+              </div>
             </div>
           ))}
 
@@ -2364,9 +2427,10 @@ function App() {
           {enhanceMode && !enhanceNudgeDismissed && (
             <div className="mb-2 rounded border border-violet-800/60 bg-violet-950/30 p-2">
               <p className="text-xs text-violet-200">
-                For the richest results, attach the full chapter, your outline, and
-                relevant character profiles as context (use + Add above). Enhance
-                already sends the paragraphs around your selection automatically.
+                For the richest results, attach your outline, chapter or scene
+                summaries, and relevant character profiles as context (use + Add
+                above). Enhance already includes the paragraphs around your
+                selection automatically.
               </p>
               <div className="mt-1 flex items-center gap-3">
                 <button
@@ -2414,6 +2478,24 @@ function App() {
 
             {draftMode && (
               <span className="text-[10px] text-faint">AI writes prose &middot; use Continue to extend</span>
+            )}
+
+            {/* New ask: start a fresh AI context without erasing the transcript.
+                Appears once there's an exchange in the current segment; it pulses
+                violet when the selection has changed (a likely new, unrelated ask). */}
+            {chatMessages.length > (askBoundaries[askBoundaries.length - 1] ?? 0) && (
+              <button
+                onClick={startNewAsk}
+                title="Start a new ask: the AI gets a clean slate (your attachments stay). Your transcript is kept."
+                className={`ml-auto flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] transition-colors ${
+                  selectedText.trim() !== "" && selectedText !== lastSentSelection
+                    ? "border-violet-500 bg-violet-950/50 text-violet-200"
+                    : "border-border text-faint hover:border-violet-700 hover:text-violet-300"
+                }`}
+              >
+                <CornerDownRight size={11} />
+                New ask
+              </button>
             )}
           </div>
 
@@ -3075,6 +3157,10 @@ interface ChipPickerProps {
   existingChips: ContextChip[];
   onAdd: (chip: ContextChip) => void;
   onClose: () => void;
+  // Canon/Reference stance for how the AI treats attachments (global, applies to
+  // all attached context). Shown as a toggle at the top of the picker.
+  treatAsCanon: boolean;
+  onTreatAsCanonChange: (v: boolean) => void;
 }
 
 // Shape of an item in the chapter-summaries list endpoint. Mirrors
@@ -3112,8 +3198,9 @@ interface PendingProfile {
   profile:  Profile;           // The fully fetched profile object
 }
 
-function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChips, onAdd, onClose }: ChipPickerProps) {
+function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChips, onAdd, onClose, treatAsCanon, onTreatAsCanonChange }: ChipPickerProps) {
   const [loading, setLoading] = useState(false);
+  const [showCanonHelp, setShowCanonHelp] = useState(false);
   const [profileType, setProfileType] = useState("character");
   const [profiles, setProfiles] = useState<{ filename: string; name: string }[]>([]);
   const [adding, setAdding] = useState<string | null>(null);
@@ -3446,6 +3533,58 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
           {pending ? `Attach: ${pending.name}` : "Attach Context"}
         </p>
         <button onClick={onClose} className="text-xs text-faint hover:text-text-muted">✕</button>
+      </div>
+
+      {/* Canon / Reference stance -- how the AI treats everything attached here.
+          Global (applies to all attachments), with a tutorial helptip. */}
+      <div className="mb-3 rounded border border-border bg-bg-panel p-2">
+        <div className="flex items-center justify-between gap-2">
+          <label className="flex cursor-pointer items-center gap-1.5" title="How the AI treats your attachments">
+            <span className={`text-xs font-medium ${treatAsCanon ? "text-indigo-300" : "text-amber-400"}`}>
+              {treatAsCanon ? "Canon" : "Reference"}
+            </span>
+            <div
+              className={`relative h-4 w-7 rounded-full transition-colors ${treatAsCanon ? "bg-indigo-600" : "bg-amber-600"}`}
+              onClick={() => onTreatAsCanonChange(!treatAsCanon)}
+            >
+              <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${treatAsCanon ? "translate-x-3.5" : "translate-x-0.5"}`} />
+            </div>
+          </label>
+          <button
+            onClick={() => setShowCanonHelp(v => !v)}
+            className="flex items-center gap-1 text-[10px] text-faint transition-colors hover:text-indigo-300"
+            title="What does this do?"
+          >
+            <HelpCircle size={12} />
+            {showCanonHelp ? "Hide" : "What's this?"}
+          </button>
+        </div>
+        <p className="mt-1 text-[10px] text-faint">
+          {treatAsCanon
+            ? "Attachments are treated as established truth; the AI keeps your writing consistent with them."
+            : "Attachments are reference only; your typed instructions take precedence over them."}
+        </p>
+        {showCanonHelp && (
+          <div className="mt-2 space-y-2 border-t border-border pt-2 text-[10px] leading-relaxed text-text-muted">
+            <p>
+              <span className="font-semibold text-indigo-300">Canon (on):</span> the AI treats attached
+              profiles, outline, and locations as established truth and keeps your writing consistent with
+              them. <span className="text-faint">Use when drafting a scene where characters should stay true
+              to their established traits, or when you want the profile enforced.</span>
+            </p>
+            <p>
+              <span className="font-semibold text-amber-400">Reference (off):</span> the AI uses attachments
+              as helpful reference but follows <em>your</em> instructions first, drawing on the details that
+              fit this moment. <span className="text-faint">Use when you're deliberately showing a different
+              side of a character, writing a turning point or exception, or your specific direction matters
+              more than strict consistency right now.</span>
+            </p>
+            <p className="text-faint">
+              Tip: if a Draft or Enhance result feels like it's arguing with what you asked by clinging to
+              profile traits, switch this to Reference.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Configure-attachment panel -- replaces the browse list while a

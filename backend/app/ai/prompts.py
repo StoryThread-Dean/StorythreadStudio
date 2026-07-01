@@ -72,6 +72,28 @@ def content_mode_instruction(content_mode: str) -> str:
     return ""  # General mode needs no special instruction
 
 
+# ── Attachment Stance ───────────────────────────────────────────────────────
+# How the AI should treat attached profiles/outline/locations for an editor-chat
+# turn, driven by the writer's Canon/Reference toggle. Canon = enforce as truth;
+# Reference = the writer's typed direction takes precedence over the attachments.
+# Appended to the editor-chat system prompt only when chips are attached.
+
+def context_stance_instruction(treat_as_canon: bool) -> str:
+    if treat_as_canon:
+        return (
+            "ATTACHMENT STANCE: CANON. Treat the attached profiles, outline, and locations as "
+            "established truth. Keep your writing consistent with them and do not contradict "
+            "established traits, relationships, or facts."
+        )
+    return (
+        "ATTACHMENT STANCE: REFERENCE. Treat the attached profiles, outline, and locations as "
+        "reference, not law. Draw on the details relevant to this moment, but MY TYPED DIRECTION "
+        "TAKES PRECEDENCE: when my direction conflicts with an attached trait or detail, follow "
+        "my direction. Weight relevance to this scene over a trait's importance label, and do not "
+        "force in traits that do not fit the moment."
+    )
+
+
 # ── Base Writing Assistant Contract ─────────────────────────────────────────
 # The core identity shared by ALL chat-based AI interactions in the app.
 # Mode-specific addenda are appended after this. This ensures consistent
@@ -266,9 +288,8 @@ _ENHANCE_RESPONSE_RULES = (
     "- The SURROUNDING CONTEXT block (when present) is the prose just before and "
     "after the passage. Use it for continuity. Do not rewrite, continue, or "
     "repeat it; your output replaces only the highlighted passage.\n"
-    "- Treat any ATTACHED CONTEXT (character profiles, outline, locations) as "
-    "canon. If the direction references an attached profile, make the passage "
-    "consistent with it.\n\n"
+    "- Attached profiles, outline, and locations follow the ATTACHMENT STANCE "
+    "stated separately in these instructions; use them accordingly.\n\n"
     "HOW TO REWRITE:\n"
     "- Follow the writer's direction faithfully. You MAY change wording, sentence "
     "structure, description, pacing, and dialogue, and you may reshape the moment "

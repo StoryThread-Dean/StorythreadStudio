@@ -37,6 +37,7 @@ from app.ai.prompts import (
     generate_scene_title_prompt,
     generate_scene_break_suggestions_prompt,
     content_mode_instruction,
+    context_stance_instruction,
     EDITOR_PASS_SUBCATEGORIES,
     TEMPERATURE_DEFAULTS,
 )
@@ -1592,6 +1593,10 @@ class EditorChatRequest(BaseModel):
     # Enhance mode only: the length budget. "restate" = ~same length rewrite;
     # "default" = 1.5-2.2x; "expanded" = 2.2-4x. The writer's message is the direction.
     enhance_level:   str = "default"
+    # The writer's Canon/Reference toggle. True (default) = attached profiles/
+    # outline/locations are canon the AI must stay consistent with. False = they
+    # are reference only and the writer's typed direction takes precedence.
+    treat_attachments_as_canon: bool = True
 
 
 class EditorChatResponse(BaseModel):
@@ -1599,23 +1604,62 @@ class EditorChatResponse(BaseModel):
     model_used: str = ""  # The resolved model ID so the UI can display it
 
 
-# Per-turn length directives for enhance mode, keyed by enhance_level. These go
-# in the user materials message (not the system prompt) so the system prompt stays
-# stable/instruction-only while the active level can vary turn to turn. The level
-# is a HARD length budget; the writer's chat message supplies the direction.
-_ENHANCE_LEVEL_DIRECTIVES = {
-    "restate":  ("ENHANCEMENT LEVEL: Restate. Keep your rewrite about the SAME length as the "
-                 "passage to enhance (do not pad it out). Rework the wording to satisfy my "
-                 "direction above; flex slightly longer only if the direction genuinely "
-                 "requires it, such as splitting one sentence into two."),
-    "default":  ("ENHANCEMENT LEVEL: Default. Your rewrite should be roughly 1.5 to 2.2 times "
-                 "the length of the passage to enhance. Add the depth my direction calls for, "
-                 "including a line of dialogue if it fits, and break the result into natural "
-                 "paragraphs."),
-    "expanded": ("ENHANCEMENT LEVEL: Expanded. Your rewrite should be roughly 2.2 to 4 times the "
-                 "length of the passage to enhance, landing higher in that range the more my "
-                 "direction asks for. Break the result into natural paragraphs."),
+# Absolute ceiling on a single Enhance rewrite, in approximate words. Multiplier
+# targets are clamped to this so a large highlight can't demand a runaway rewrite
+# (which is where coherence falls apart). Effect is an ADAPTIVE multiplier: the
+# bigger the selection, the smaller the effective ratio. LLMs enhance a few lines
+# to a paragraph reliably; past that, focused beats sprawling.
+_ENHANCE_MAX_WORDS = 800
+
+# Multiplier band per level: (low, high). Restate is ~same length; the writer's
+# chat message positions within the band and supplies the direction.
+_ENHANCE_BANDS = {
+    "restate":  (1.0, 1.2),
+    "default":  (1.5, 2.2),
+    "expanded": (2.2, 4.0),
 }
+
+
+def _enhance_length_directive(level: str, selection: str) -> str:
+    """
+    Build the per-turn ENHANCEMENT LEVEL directive with a CONCRETE word target
+    computed from the selection size. The band sets the target; it is then clamped
+    to _ENHANCE_MAX_WORDS so a large highlight can't balloon. Goes in the user
+    materials message (not the system prompt) so the system prompt stays stable.
+    """
+    words = max(1, round(len(selection) / 6))          # ~6 chars/word incl. spacing
+    if level not in _ENHANCE_BANDS:
+        level = "default"                              # unknown -> default band + label
+    low_mult, high_mult = _ENHANCE_BANDS[level]
+
+    if level == "restate":
+        return (
+            f"ENHANCEMENT LEVEL: Restate. The passage is about {words} words. Keep your rewrite "
+            f"about the same length (roughly {words} words); rework the wording to satisfy my "
+            f"direction above, do not pad it out. Flex slightly longer only if the direction "
+            f"genuinely requires it, such as splitting one sentence into two."
+        )
+
+    low = round(words * low_mult)
+    high = round(words * high_mult)
+    capped = high > _ENHANCE_MAX_WORDS
+    if capped:
+        high = _ENHANCE_MAX_WORDS
+    if low > high:
+        low = high
+    label = "Default" if level == "default" else "Expanded"
+    directive = (
+        f"ENHANCEMENT LEVEL: {label}. The passage is about {words} words. Aim for roughly "
+        f"{low} to {high} words total. Add the depth my direction calls for"
+        + (", including a line of dialogue if it fits" if level == "default" else "")
+        + ", and break the result into natural paragraphs."
+    )
+    if capped:
+        directive += (
+            " This is a large passage, so keep the rewrite focused and within this word "
+            "target rather than expanding every sentence."
+        )
+    return directive
 
 
 def _build_materials_message(
@@ -1623,12 +1667,18 @@ def _build_materials_message(
     is_full_chapter: bool,
     context_chips: list[ContextChip],
     surrounding_context: str = "",
-    enhance_level: str = "prompt",
+    enhance_level: str = "default",
     is_enhance: bool = False,
+    treat_as_canon: bool = True,
 ) -> dict:
     """
     Build a user message containing all variable content (selected text,
     context chips). This keeps the system prompt stable and instruction-only.
+
+    treat_as_canon controls how the attached chips are framed (the writer's
+    Canon/Reference toggle): canon = established truth, reference = the writer's
+    typed direction takes precedence. The matching stance instruction is added to
+    the system prompt by the caller.
 
     For enhance mode (is_enhance=True) the message has a specific shape so the
     model can tell grounding from target:
@@ -1638,7 +1688,10 @@ def _build_materials_message(
     lines = []
 
     if context_chips:
-        lines.append("ATTACHED CONTEXT (treat as canon for this story):")
+        if treat_as_canon:
+            lines.append("ATTACHED CONTEXT (treat as canon for this story):")
+        else:
+            lines.append("ATTACHED REFERENCE (details you may draw on; my direction takes precedence):")
         lines.append("")
         # Each chip is wrapped in BEGIN/END delimiters so the model treats it
         # as an isolated block. Without these markers, when several characters
@@ -1681,7 +1734,7 @@ def _build_materials_message(
             lines.append(text_content)
             lines.append("=== END PASSAGE TO ENHANCE ===")
             lines.append("")
-            lines.append(_ENHANCE_LEVEL_DIRECTIVES.get(enhance_level, _ENHANCE_LEVEL_DIRECTIVES["default"]))
+            lines.append(_enhance_length_directive(enhance_level, text_content))
         else:
             label = "FULL CHAPTER" if is_full_chapter else "SELECTED PASSAGE"
             lines.append(f"{label}:")
@@ -1730,6 +1783,12 @@ async def editor_chat(request: EditorChatRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
+    # Attachment stance: when the writer has attached chips, tell the model whether
+    # to treat them as canon (enforce) or reference (the writer's direction wins).
+    # Driven by the Canon/Reference toggle in the attachment popup.
+    if request.context_chips:
+        system_prompt = system_prompt + "\n\n" + context_stance_instruction(request.treat_attachments_as_canon)
+
     # 2. Build a "materials" user message with variable content -- but only if
     #    the frontend actually sent something new. On follow-up turns the frontend
     #    omits text_content and chips that were already sent in a prior turn (they're
@@ -1751,6 +1810,7 @@ async def editor_chat(request: EditorChatRequest):
             surrounding_context = request.surrounding_context,
             enhance_level       = request.enhance_level,
             is_enhance          = is_enhance,
+            treat_as_canon      = request.treat_attachments_as_canon,
         )
         messages = [materials] + conversation
     else:

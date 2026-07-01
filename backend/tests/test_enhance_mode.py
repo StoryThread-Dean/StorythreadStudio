@@ -12,12 +12,13 @@ import httpx
 from app.ai.prompts import (
     _editor_chat_addendum,
     build_editor_chat_system_prompt,
+    context_stance_instruction,
     BASE_WRITING_ASSISTANT_CONTRACT,
     PUNCTUATION_RULE,
     _GENERAL_RESPONSE_RULES,
 )
 from app.routers import ai
-from app.routers.ai import _build_materials_message, _ENHANCE_LEVEL_DIRECTIVES, ContextChip
+from app.routers.ai import _build_materials_message, _enhance_length_directive, _ENHANCE_MAX_WORDS, ContextChip
 
 
 # ── The enhance addendum + system prompt (pure functions) ────────────────────
@@ -66,25 +67,73 @@ def test_materials_message_marks_target_and_grounding_for_enhance():
     assert "=== BEGIN SURROUNDING CONTEXT ===" in body
     assert "do NOT rewrite" in body
     assert "Earlier, they had left the safehouse." in body
-    # The active level directive is appended.
-    assert _ENHANCE_LEVEL_DIRECTIVES["expanded"] in body
+    # The active level directive is appended (label + a concrete word target).
+    assert "ENHANCEMENT LEVEL: Expanded" in body
+    assert "words" in body
 
 
 def test_materials_message_level_directive_varies():
-    for level in ("restate", "default", "expanded"):
+    for level, label in [("restate", "Restate"), ("default", "Default"), ("expanded", "Expanded")]:
         msg = _build_materials_message(
             text_content="A line.", is_full_chapter=False, context_chips=[],
             surrounding_context="", enhance_level=level, is_enhance=True,
         )
-        assert _ENHANCE_LEVEL_DIRECTIVES[level] in msg["content"]
+        assert f"ENHANCEMENT LEVEL: {label}" in msg["content"]
 
 
-def test_materials_message_unknown_level_falls_back_to_default():
+def test_materials_message_unknown_level_falls_back_to_default_band():
     msg = _build_materials_message(
         text_content="A line.", is_full_chapter=False, context_chips=[],
         surrounding_context="", enhance_level="bogus", is_enhance=True,
     )
-    assert _ENHANCE_LEVEL_DIRECTIVES["default"] in msg["content"]
+    assert "ENHANCEMENT LEVEL: Default" in msg["content"]
+
+
+# ── Adaptive length directive ────────────────────────────────────────────────
+
+def test_length_directive_scales_with_selection():
+    # ~120 words of selection at "default" (1.5-2.2x) -> ~180 to 264 words.
+    selection = "word " * 120
+    d = _enhance_length_directive("default", selection)
+    assert "about 100 words" in d or "about 120 words" in d  # ~120 words estimated
+    assert "words total" in d
+
+
+def test_length_directive_caps_large_selections():
+    # A very large selection at "expanded" must be clamped to the absolute cap,
+    # not 4x (which would be a runaway rewrite). This is the adaptive behavior.
+    selection = "word " * 4000        # ~3300 words
+    d = _enhance_length_directive("expanded", selection)
+    assert str(_ENHANCE_MAX_WORDS) in d          # high end clamped to the cap
+    assert "large passage" in d                  # the focus reminder kicks in
+
+
+def test_length_directive_restate_stays_same_length():
+    d = _enhance_length_directive("restate", "word " * 100)
+    assert "about the same length" in d
+    assert "do not pad" in d
+
+
+# ── Attachment stance (Canon/Reference toggle) ───────────────────────────────
+
+def test_canon_stance_enforces_attachments():
+    s = context_stance_instruction(True)
+    assert "CANON" in s
+    assert "consistent" in s
+
+
+def test_reference_stance_lets_direction_win():
+    s = context_stance_instruction(False)
+    assert "REFERENCE" in s
+    assert "DIRECTION" in s and "PRECEDENCE" in s
+
+
+def test_materials_chip_header_reflects_canon_toggle():
+    chip = ContextChip(type="character", name="Lara", content="brave")
+    canon = _build_materials_message("", False, [chip], treat_as_canon=True)["content"]
+    ref = _build_materials_message("", False, [chip], treat_as_canon=False)["content"]
+    assert "treat as canon" in canon
+    assert "ATTACHED REFERENCE" in ref and "direction takes precedence" in ref
 
 
 def test_materials_message_non_enhance_unchanged():
