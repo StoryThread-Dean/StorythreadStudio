@@ -2547,17 +2547,21 @@ function App() {
                     : enhanceMode
                       ? (selectedText.trim()
                           ? "Describe how to enrich the highlighted passage... (Enter to send)"
-                          : "Highlight a passage in the editor to enhance")
+                          : "Type your direction, then highlight the passage to enhance")
                       : "Ask about your writing... (Enter to send)"
               }
-              disabled={!currentChapter || chatLoading || (enhanceMode && !selectedText.trim())}
+              // Enhance requires a selection, but we DON'T disable the box for it:
+              // the writer can type their direction first, then highlight. The
+              // missing-selection case is caught at send time with a clear hint
+              // (see sendEditorChat). Disabling the whole box just reads as broken.
+              disabled={!currentChapter || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
               className="text-entry flex-1 rounded border border-border bg-border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <button
               onClick={() => sendEditorChat()}
-              disabled={!currentChapter || !chatInput.trim() || chatLoading || (enhanceMode && !selectedText.trim())}
+              disabled={!currentChapter || !chatInput.trim() || chatLoading}
               className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
               title="Send (Enter)"
             >
