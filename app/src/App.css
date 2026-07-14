@@ -210,8 +210,8 @@
  * This is the correct Tailwind v4 approach -- if this block were unlayered
  * (outside any @layer), "padding: 0" would silently override EVERY Tailwind
  * spacing utility across the entire app, because unlayered CSS always wins
- * over layered CSS regardless of specificity. That was the root cause of the
- * padding-not-rendering bug we saw in the Settings modal, ToolKit, and elsewhere.
+ * over layered CSS regardless of specificity. That was the root cause of a
+ * padding-not-rendering bug we saw in the Settings modal and elsewhere.
  *
  * Rule of thumb for Tailwind v4: reset/base styles → @layer base.
  *                                 utility overrides → @layer utilities.

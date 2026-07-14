@@ -12,9 +12,13 @@ import { useState, useEffect } from "react";
 import { X, ChevronDown, HelpCircle } from "lucide-react";
 import type { ProjectInfo, OutlineTemplateType } from "../types/project";
 import type { ModelInfo } from "../types/ai";
-// Content-mode filter + curated recommended list are shared with the global
-// Settings screen so the two pickers behave identically (see utils/modelFiltering.ts).
-import { filterModelByContentMode, RECOMMENDED_MODELS } from "../utils/modelFiltering";
+// Content-mode filter, cost tiers, media filter, and the curated recommended
+// list are shared with the global Settings screen so the two pickers behave
+// identically (see utils/modelFiltering.ts).
+import {
+  filterModelByContentMode, RECOMMENDED_MODELS,
+  modelPassesTier, modelIsTextOnly,
+} from "../utils/modelFiltering";
 
 const API_BASE = "http://localhost:8000";
 
@@ -29,11 +33,14 @@ const COST_ESTIMATES: Record<string, { startup: string; session: string }> = {
   premium:  { startup: "$2.00 - $6.00",   session: "$0.40 - $1.00" },
 };
 
+// Display labels for the four tier stops. The stored values are frozen (they
+// live in project.json on user machines); only labels may change. Kept in the
+// same order and naming as TIERS in utils/modelFiltering.ts.
 const TIER_LABELS: Record<string, string> = {
-  free:     "Free Only",
-  budget:   "Budget",
-  standard: "Standard",
-  premium:  "Premium",
+  free:     "Free",
+  budget:   "Lowest",
+  standard: "Pricier",
+  premium:  "Priority Best",
 };
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -58,6 +65,10 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
   // Model list for the per-project picker
   const [models, setModels] = useState<ModelInfo[]>([]);
+
+  // Global text-only preference -- the media-capability filter applies to this
+  // picker too so image/video output models stay out of a writing app's list.
+  const [textOnlyFilter, setTextOnlyFilter] = useState(true);
 
   // Outline template section -- tracks the current template and lets the writer
   // swap it. The initial value comes from project.json (may be null for older
@@ -103,8 +114,20 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
         }
       } catch { /* models optional */ }
     }
+    async function loadGlobalFilters() {
+      // Only the text-only preference is needed here; everything else in the
+      // global settings payload is irrelevant to this modal.
+      try {
+        const res = await fetch(`${API_BASE}/api/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          setTextOnlyFilter(data.text_only_filter ?? true);
+        }
+      } catch { /* default stays on */ }
+    }
     loadProjectSettings();
     loadModels();
+    loadGlobalFilters();
   }, [project.root_path]);
 
 
@@ -213,22 +236,22 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
   function getRecommendation(): string {
     if (contentMode === "explicit" && costTier === "free") {
-      return "Consider raising your tier floor to Budget. The improvement in AI output quality for explicit content is significant, and the cost is minimal ($0.30-0.80 to get started).";
+      return "Consider raising your tier to Lowest. The improvement in AI output quality for explicit content is significant, and the cost is minimal ($0.30-0.80 to get started).";
     }
     if (contentMode === "explicit" && costTier === "budget") {
-      return "Budget tier is a solid choice for explicit fiction. You will see noticeably better character voice and scene quality compared to free models.";
+      return "The Lowest paid tier is a solid choice for explicit fiction. You will see noticeably better character voice and scene quality compared to free models.";
     }
     if (contentMode === "explicit" && (costTier === "standard" || costTier === "premium")) {
-      return "Good choice for explicit fiction. Standard and premium models produce the most natural output for character-driven adult content.";
+      return "Good choice for explicit fiction. Pricier and Priority Best models produce the most natural output for character-driven adult content.";
     }
     if (contentMode === "mature" && costTier === "free") {
-      return "Free models handle most mature content, but may occasionally soften or refuse darker scenes. Budget tier eliminates this limitation.";
+      return "Free models handle most mature content, but may occasionally soften or refuse darker scenes. The Lowest paid tier eliminates this limitation.";
     }
     if (costTier === "free") {
       return "This setup works well for getting started. You can always raise the tier later if you want more detailed or nuanced AI feedback.";
     }
     if (costTier === "premium") {
-      return "Premium tier gives you access to the most capable models. Best for writers who want the highest quality AI feedback and are comfortable with higher costs.";
+      return "Priority Best gives you access to the most capable models. Best for writers who want the highest quality AI feedback and are comfortable with higher costs.";
     }
     return "This is a balanced setup. Good quality AI feedback at a reasonable cost.";
   }
@@ -243,7 +266,16 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   // fine and re-saving the stale, dead model on a blind Save. To prevent that
   // we detect the orphaned value and render an explicit option for it, clearly
   // flagged as unavailable, plus a warning nudging them to pick a current one.
-  const visibleModels = models.filter(m => filterModelByContentMode(m, contentMode));
+  // Candidate models for this project: content-mode compatible, within the
+  // project's cost tier, and (if the global preference is on) text-output only.
+  // This is where the project's cost tier actually filters candidates -- the
+  // tier is enforced at pick time rather than at request time because model
+  // prices only exist in the live OpenRouter list, not on the backend.
+  const visibleModels = models.filter(m =>
+    filterModelByContentMode(m, contentMode)
+    && modelPassesTier(m, costTier)
+    && (!textOnlyFilter || modelIsTextOnly(m))
+  );
   const projectModelInList =
     projectModel !== "" && visibleModels.some(m => m.id === projectModel);
   const projectModelMissing = projectModel !== "" && !projectModelInList;
@@ -447,21 +479,22 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 </div>
               </div>
 
-              {/* Model Tier Floor */}
+              {/* Model Cost Tier */}
               <div className="mb-5">
-                <label className="mb-1 block text-xs font-medium text-text-primary">Model Quality Floor</label>
+                <label className="mb-1 block text-xs font-medium text-text-primary">Model Cost Tier</label>
                 <p className="mb-2 text-xs text-faint">
-                  Sets the minimum AI model quality for this project. If blank, the global setting is used.
+                  Caps how expensive the models offered in this project's picker are.
+                  Also drives the cost guidance below.
                 </p>
                 <select
                   value={costTier}
                   onChange={e => setCostTier(e.target.value)}
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
                 >
-                  <option value="free">Free Only</option>
-                  <option value="budget">Budget ($0-1/M input)</option>
-                  <option value="standard">Standard ($1-15/M input)</option>
-                  <option value="premium">Premium (all models)</option>
+                  <option value="free">Free (free models only)</option>
+                  <option value="budget">Lowest ($0-1/M input)</option>
+                  <option value="standard">Pricier ($1-15/M input)</option>
+                  <option value="premium">Priority Best (all models)</option>
                 </select>
               </div>
 
@@ -542,8 +575,10 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 {projectModelMissing && models.length > 0 && (
                   <p className="mt-1 text-xs text-amber-500">
                     This project is set to <span className="font-mono">{projectModel}</span>, which
-                    is not in the current model list (likely deprecated, renamed, or hidden by this
-                    project's content mode). AI requests will fail until you pick a model above.
+                    is not in the current model list. If the provider deprecated or renamed it, AI
+                    requests will fail until you pick a current model above. If it is only hidden by
+                    this project's content mode, cost tier, or the text-only filter, requests still
+                    work, but consider picking a model that fits your filters.
                   </p>
                 )}
                 {projectModel && !projectModelMissing && (

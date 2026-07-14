@@ -58,9 +58,11 @@ MyNovel/
     relationships/
     locations/
     lore/
-  arcs/                            (series projects only) per-book overrides
-    characters/
-    relationships/
+    chapters/                      legacy (Phase 2 profile-based summaries); still scaffolded
+    scenes/                        legacy; current summaries live in summaries/ below
+    arcs/                          (series projects only) per-book overrides
+      characters/
+      relationships/
   summaries/
     chapters/                      one summary per chapter
     scenes/<chapter-stem>/         per-scene summaries
@@ -105,80 +107,106 @@ For a multi-book series, an additional `series.json` and shared `series-profiles
 
 ## API surface
 
-Routes are grouped by router. All paths are prefixed with `/api` unless noted.
+Routes are grouped by router. Each router carries its own prefix (shown in the heading); the health check is unprefixed.
 
 ### Health
 ```
 GET    /health
 ```
 
-### Projects
+### Projects — `/api/projects`
 ```
-POST   /projects/create
-POST   /projects/open
-POST   /projects/create-in-series
-GET    /projects/{project_id}
-POST   /projects/{project_id}/snapshot
-```
-
-### Series
-```
-POST   /series/create
-POST   /series/open
-GET    /series/list-books
-```
-
-### Documents
-```
-GET    /projects/{project_id}/documents
-GET    /documents/{document_id}
-PUT    /documents/{document_id}
-POST   /projects/{project_id}/documents/create
-DELETE /documents/{document_id}
-```
-
-### Profiles
-```
-GET    /projects/{project_id}/profiles
-GET    /profiles/{profile_id}
-PUT    /profiles/{profile_id}
-POST   /projects/{project_id}/profiles/create
-POST   /projects/{project_id}/profiles/import-fork
-DELETE /profiles/{profile_id}
-GET    /profiles/merged                          (series: canonical + arc overlay)
-GET    /profiles/arc/list
-GET    /profiles/arc/profile
-POST   /profiles/arc/create
-PUT    /profiles/arc/save
-POST   /profiles/{profile_id}/generate-section-summary
-POST   /profiles/{profile_id}/generate-full-summary
-POST   /profiles/{profile_id}/generate-usage-preview
-POST   /profiles/{profile_id}/trim-trait
-POST   /profiles/{profile_id}/audit-importance
-POST   /profiles/{profile_id}/builder-chat
-```
-
-### AI
-```
-POST   /ai/run-assistant
-POST   /ai/editor-chat
-POST   /ai/editor-pass
-POST   /ai/revise-suggestion
-POST   /ai/test-connection
-GET    /ai/models
-```
-
-### Settings
-```
+POST   /create
+POST   /open
+POST   /create-in-series
+GET    /recent
+DELETE /recent/{project_id}
 GET    /settings
 PUT    /settings
-POST   /settings/openrouter-key
+GET    /inspect-folder
+POST   /apply-outline-template
 ```
 
-### Export
+### Series — `/api/series`
 ```
-POST   /export/full-manuscript
-POST   /export/snapshot
+POST   /create
+POST   /open
+POST   /list-books
+```
+
+### Documents — `/api/documents`
+```
+GET    /chapters
+GET    /chapter                POST   /chapter                DELETE /chapter
+POST   /create-chapter
+POST   /rename-chapter
+GET    /manuscript-content
+GET    /note                   POST   /note
+GET    /outline                POST   /outline
+GET    /chapter-summary        POST   /chapter-summary        DELETE /chapter-summary
+GET    /chapter-summaries
+GET    /scene-summary          POST   /scene-summary          DELETE /scene-summary
+GET    /scene-summaries        DELETE /scene-summaries
+GET    /all-scene-summaries
+```
+
+### Profiles — `/api/profiles`
+```
+GET    /list
+GET    /profile
+POST   /create
+POST   /save
+DELETE /profile
+POST   /import
+GET    /merged                 (series: canonical + arc overlay)
+GET    /arc/list
+GET    /arc/profile
+POST   /arc/create
+POST   /arc/save
+```
+
+### AI — `/api/ai`
+```
+GET    /models
+POST   /editor-chat            (Writing Companion: chat / Draft / Enhance)
+POST   /editor-pass            (Smart Advisor category passes)
+POST   /revise-suggestion
+POST   /suggest-scene-breaks
+POST   /profile-chat           (Profile Builder companion)
+POST   /generate-usage-preview
+POST   /trim-trait
+POST   /audit-importance
+POST   /generate-section-summary
+POST   /generate-full-summary
+POST   /generate-chapter-summary
+POST   /split-chapter-scenes
+POST   /generate-scene-summary
+```
+
+### Settings — `/api/settings`
+```
+GET    /
+PUT    /
+POST   /test-connection
+```
+
+### Progress — `/api/progress`
+```
+GET    /summary                (project completion gauge)
+GET    /daily                  (daily tracker + 7-day sparkline)
+```
+
+### Search — `/api/search`
+```
+POST   /find
+POST   /replace                (snapshots touched files first)
+POST   /restore                (undo from the most recent snapshot)
+```
+
+### Export — `/api/export`
+```
+POST   /full-manuscript        (markdown / txt / docx / epub; optional appendix flags)
+POST   /snapshot
 ```
 
 ## CORS

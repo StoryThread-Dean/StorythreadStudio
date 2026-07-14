@@ -30,6 +30,7 @@ import type {
   ProgressDaily,
   TaskCreditEntry,
   DailySparklineCell,
+  ChapterProgress,
 } from "../../types/progress";
 
 
@@ -222,6 +223,22 @@ function SummaryBreakdown({ summary }: { summary: ProgressSummary | null }) {
         }`}
       />
 
+      {/* Per-chapter breakdown -- only rendered when the outline frontmatter
+          assigns word targets to chapters (chapters[].word_target). Untargeted
+          chapters still get an info row so the writer can see the whole
+          manuscript at a glance, but no bar. */}
+      {(summary.chapters ?? []).some(c => c.target_words != null) && (
+        <div className="border-t border-border px-3 py-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-text-primary">Chapters</span>
+            <span className="text-text-muted">vs. outline targets</span>
+          </div>
+          {summary.chapters.map(ch => (
+            <ChapterRow key={ch.filename} chapter={ch} />
+          ))}
+        </div>
+      )}
+
       {/* Outline */}
       <SegmentRow
         label="Outline"
@@ -289,6 +306,36 @@ function SummaryBreakdown({ summary }: { summary: ProgressSummary | null }) {
             : "No non-outline note files yet"
         }
       />
+    </div>
+  );
+}
+
+
+function ChapterRow({ chapter }: { chapter: ChapterProgress }) {
+  return (
+    <div className="mt-1.5 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-text-muted" title={chapter.filename}>
+          {chapter.title}
+        </span>
+        <span className="shrink-0 text-faint">
+          {chapter.actual_words.toLocaleString()}
+          {chapter.target_words != null &&
+            ` / ${chapter.target_words.toLocaleString()}`}
+        </span>
+      </div>
+      {chapter.target_words != null ? (
+        <div className="mt-0.5 h-1 w-full overflow-hidden rounded bg-bg-surface">
+          <div
+            className={`h-full rounded transition-all ${
+              (chapter.percent ?? 0) >= 100 ? "bg-emerald-500" : "bg-indigo-500"
+            }`}
+            style={{ width: `${Math.min(100, Math.max(0, chapter.percent ?? 0))}%` }}
+          />
+        </div>
+      ) : (
+        <p className="text-faint">no outline target</p>
+      )}
     </div>
   );
 }

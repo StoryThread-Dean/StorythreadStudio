@@ -2,7 +2,7 @@
 # =======================================
 # Enforces the no-em-dash rule at the OUTPUT layer.
 #
-# The rule is enforced at THREE layers (from 04-ai-assistants-and-routing.md):
+# The rule is enforced at THREE layers (see CLAUDE.md "The Em Dash Rule"):
 #   1. Prompt layer    -- every system prompt explicitly bans em dashes
 #   2. Sanitizer layer -- THIS FILE -- post-process all model output
 #   3. Style guide     -- the project's style guide Markdown records the rule
@@ -63,15 +63,16 @@ def sanitize_chat(text: str) -> str:
       2. Replaces ' -- ' (double hyphen with spaces) with ', '
 
     Why the second pass?
-    The writing assistants use ' -- ' as an approved alternative to em dashes
-    in prose suggestions, so we can't remove it globally. But in the profile
-    chat, ' -- ' is almost always being used as a dash substitute (connector,
-    elaboration, or parenthetical) where a comma or colon is more appropriate.
-    Replacing it here enforces the "use commas, parentheses, colons, or
-    semicolons instead" rule that the prompt instructs but models often ignore.
+    Prose-producing paths (Draft mode, revise suggestions) use ' -- ' as the
+    approved alternative to em dashes, so we can't remove it globally. But in
+    conversational chat, ' -- ' is almost always being used as a dash
+    substitute (connector, elaboration, or parenthetical) where a comma or
+    colon is more appropriate. Replacing it here enforces the "use commas,
+    parentheses, colons, or semicolons instead" rule that the prompt
+    instructs but models often ignore.
 
-    Note: this does NOT affect the writing assistant pipeline, which uses
-    sanitize() and sanitize_dict() separately.
+    Note: this does NOT affect the prose paths, which use sanitize() and
+    sanitize_dict() separately.
     """
     # Pass 1: replace actual em/en dash characters
     text = sanitize(text)

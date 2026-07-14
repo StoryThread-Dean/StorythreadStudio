@@ -62,7 +62,7 @@ import { useBackendHealth } from "./hooks/useBackendHealth";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine, Sparkles, HelpCircle } from "lucide-react";
+import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine, Sparkles, HelpCircle, Brain } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -228,6 +228,11 @@ function App() {
   const [enhanceLevel, setEnhanceLevel] = useState<EnhanceLevel>("default");
   const [enhanceNudgeDismissed, setEnhanceNudgeDismissed] = useState(false);
 
+  // Chat-mode help: expands an explanation panel under the Draft / Enhance /
+  // Reasoning toggles describing what each mode does and when to use it.
+  // Same pattern as the Canon/Reference "What's this?" help.
+  const [showModeHelp, setShowModeHelp] = useState(false);
+
   // "New ask" boundaries: indices into chatMessages where a fresh ask begins.
   // Only messages at/after the LAST boundary are sent to the AI, so an unrelated
   // follow-up (e.g. a different highlighted passage) isn't contaminated by the
@@ -241,6 +246,46 @@ function App() {
   // profiles/outline/locations are treated as canon the AI must stay consistent
   // with. When OFF, they are reference only and the writer's typed direction wins.
   const [treatAsCanon, setTreatAsCanon] = useState(true);
+
+  // Reasoning toggle: when ON, chat requests ask OpenRouter for the model's
+  // reasoning trace, shown as a collapsible block above the reply. Only offered
+  // when the active model supports reasoning (see the capability fetch below) --
+  // reasoningCapableIds holds the reasoning-capable slugs from the model list,
+  // and globalDefaultModel resolves which model is active when the project has
+  // no per-project override.
+  const [reasoningMode, setReasoningMode] = useState(false);
+  const [reasoningCapableIds, setReasoningCapableIds] = useState<Set<string>>(new Set());
+  const [globalDefaultModel, setGlobalDefaultModel] = useState("");
+
+  // One capability fetch per project open. Best-effort: without an API key the
+  // models call fails and the set stays empty, which simply hides the toggle.
+  useEffect(() => {
+    if (!currentProject?.root_path) return;
+    (async () => {
+      try {
+        const [mRes, sRes] = await Promise.all([
+          fetch(`${API_BASE}/api/ai/models`),
+          fetch(`${API_BASE}/api/settings`),
+        ]);
+        if (mRes.ok) {
+          const models: { id: string; supports_reasoning?: boolean }[] = await mRes.json();
+          setReasoningCapableIds(new Set(
+            models.filter(m => m.supports_reasoning).map(m => m.id)
+          ));
+        }
+        if (sRes.ok) {
+          const settings = await sRes.json();
+          setGlobalDefaultModel(settings.default_model ?? "");
+        }
+      } catch { /* toggle stays hidden */ }
+    })();
+  }, [currentProject?.root_path]);
+
+  // The model the next chat request will actually use: the project override
+  // if set, otherwise the global default from Settings.
+  const activeChatModel = currentProject?.default_model || globalDefaultModel;
+  const activeModelSupportsReasoning =
+    activeChatModel !== "" && reasoningCapableIds.has(activeChatModel);
 
   // Scene-break suggestions: true while the "Suggest Breaks" toolbar request is
   // in flight. Results are rendered into the Writing Companion chat below.
@@ -1311,6 +1356,9 @@ function App() {
           enhance_level:       payloadCore.enhance_level,
           // Canon/Reference toggle: how the AI treats attached chips.
           treat_attachments_as_canon: treatAsCanon,
+          // Reasoning toggle: only honored by reasoning-capable models, and the
+          // toggle is hidden otherwise, so this is false unless both are true.
+          include_reasoning: reasoningMode && activeModelSupportsReasoning,
         }),
       });
 
@@ -1329,7 +1377,13 @@ function App() {
 
       const data = await res.json();
       if (data.model_used) setChatModelUsed(data.model_used);
-      setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      setChatMessages(prev => [...prev, {
+        role: "assistant",
+        content: data.reply,
+        // Reasoning trace rides along when the toggle was on and the model
+        // emitted one; rendered as a collapsible block above the reply.
+        ...(data.reasoning ? { reasoning: data.reasoning } : {}),
+      }]);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
       // ── Mark materials as established after successful send ────────────
@@ -1367,7 +1421,7 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon]);
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning]);
 
 
   // --- Start a new ask ---
@@ -2319,7 +2373,21 @@ function App() {
                 {msg.role === "user" ? (
                   <span className="whitespace-pre-wrap">{msg.content}</span>
                 ) : (
-                  <ChatMarkdown content={msg.content} />
+                  <>
+                    {/* Reasoning trace (Reasoning toggle): collapsed by default so
+                        the reply stays the focus; native <details> needs no state. */}
+                    {msg.reasoning && (
+                      <details className="mb-2 rounded border border-sky-900/60 bg-sky-950/20 px-2 py-1">
+                        <summary className="cursor-pointer text-[11px] text-sky-400">
+                          Reasoning
+                        </summary>
+                        <p className="mt-1 whitespace-pre-wrap text-[11px] text-text-muted">
+                          {msg.reasoning}
+                        </p>
+                      </details>
+                    )}
+                    <ChatMarkdown content={msg.content} />
+                  </>
                 )}
               </div>
               {msg.role === "user" && (
@@ -2476,6 +2544,35 @@ function App() {
               </div>
             </label>
 
+            {/* Reasoning toggle: only offered when the active model can return a
+                reasoning trace. Composes with Chat/Draft/Enhance (not exclusive). */}
+            {activeModelSupportsReasoning && (
+              <label
+                className="flex cursor-pointer items-center gap-1.5"
+                title="When on, the AI's reasoning trace is shown above each reply as a collapsible block. Available because the active model supports reasoning."
+              >
+                <Brain size={12} className={reasoningMode ? "text-sky-400" : "text-faint"} />
+                <span className={`text-xs ${reasoningMode ? "text-sky-400" : "text-faint"}`}>Reasoning</span>
+                <div
+                  className={`relative h-4 w-7 rounded-full transition-colors ${reasoningMode ? "bg-sky-600" : "bg-border"}`}
+                  onClick={() => setReasoningMode(v => !v)}
+                >
+                  <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${reasoningMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                </div>
+              </label>
+            )}
+
+            {/* Mode help: expands a panel explaining Chat / Draft / Enhance /
+                Reasoning and when a writer would reach for each. */}
+            <button
+              onClick={() => setShowModeHelp(v => !v)}
+              className="flex items-center gap-1 text-[11px] text-text-muted transition-colors hover:text-indigo-300"
+              title="What do these modes do?"
+            >
+              <HelpCircle size={12} />
+              {showModeHelp ? "Hide" : "What's this?"}
+            </button>
+
             {draftMode && (
               <span className="text-[10px] text-faint">AI writes prose &middot; use Continue to extend</span>
             )}
@@ -2498,6 +2595,61 @@ function App() {
               </button>
             )}
           </div>
+
+          {/* Mode help panel: opened by the "What's this?" button above. Plain
+              language for writers new to AI tools -- what each mode does and
+              the situation where it earns its keep. */}
+          {showModeHelp && (
+            <div className="mb-2 space-y-2 rounded border border-border bg-bg-surface/60 px-2.5 py-2 text-[11px] leading-relaxed text-text-muted">
+              <div>
+                <span className="font-semibold text-text-primary">Chat (both toggles off)</span>
+                <p>
+                  A discussion partner. Ask questions, brainstorm plot ideas, talk
+                  through a scene that isn't working. The AI talks <em>about</em> your
+                  writing; it doesn't write story text. Use this most of the time.
+                </p>
+              </div>
+              <div>
+                <span className="font-semibold text-emerald-300">
+                  <PenLine size={11} className="mr-1 inline" />Draft mode
+                </span>
+                <p>
+                  The AI writes story prose from your message. Describe what should
+                  happen ("Kael confronts the smuggler at the docks") and it drafts the
+                  scene, using your attached profiles and outline as canon. A Continue
+                  button extends the scene segment by segment. Use it when you're stuck
+                  facing a blank page and want a first pass to react to and rewrite --
+                  the draft appears in the chat for you to place, never in your chapter.
+                </p>
+              </div>
+              <div>
+                <span className="font-semibold text-violet-300">
+                  <Sparkles size={11} className="mr-1 inline" />Enhance
+                </span>
+                <p>
+                  Rewrites a passage you've highlighted, following your direction: add
+                  sensory detail, deepen the mood, tighten the pacing. Amount controls
+                  how far it goes (Restate keeps the length; Expanded is a fuller
+                  rewrite). Use it when a moment reads flat or thin and you can name
+                  what's missing. The rewrite appears in the chat for you to copy.
+                </p>
+              </div>
+              <div>
+                <span className="font-semibold text-sky-300">
+                  <Brain size={11} className="mr-1 inline" />Reasoning
+                </span>
+                <p>
+                  Shows the AI's step-by-step thinking above each reply, in a
+                  collapsible block. Use it when you want to check <em>why</em> the AI
+                  said what it said -- did it actually use your attached profiles? did
+                  it understand the scene? -- or when weighing conflicting advice.
+                  Replies take longer and cost more with it on. This toggle only
+                  appears when your current model supports reasoning; if you don't see
+                  it, your model doesn't offer a trace.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Enhance level: how much to expand the highlighted passage. */}
           {enhanceMode && (

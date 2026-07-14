@@ -33,7 +33,7 @@
 - Explicit context attachment (the writer attaches profiles, summaries, etc.; AI never has implicit project access)
 - AI output is reviewed by the writer before use; auto-apply is reserved for designated AI-generated fields
 - AI may write directly only to designated fields: `ai_profile_summary`, `ai_section_summary`, `chapter_summary`, `scene_summary`
-- No em dashes in any AI output, ever — enforced at the prompt, sanitizer, and style guide layers
+- No em dash or en dash characters in any AI output, ever — enforced at the prompt, sanitizer, and style guide layers. `--` (double hyphen) is the approved substitute; conversational chat replies additionally fold `--` into commas, while drafted prose keeps it
 
 ## What the app helps with
 
@@ -61,6 +61,7 @@ These are intentional non-goals. Items here will not be added without revisiting
 - Autonomous, multi-step agent workflows
 - Persistent AI memory across Profile Builder chat sessions
 - Semantic search across the whole project
+- Client-side AI calls (API keys held in the WebView) — every AI request stays backend-mediated, permanently
 
 ## Success criteria
 

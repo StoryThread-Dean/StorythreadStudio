@@ -40,7 +40,7 @@ Steps:
 5. Close the app again. Re-run the port check from step 2.
 
 Expected:
-- Window opens; no "Backend unreachable" banner appears.
+- Window opens; no "Backend not responding" banner appears.
 - Left panel shows the project title, the Writing Progress gauge, and
   the Manuscript / Notes / Profiles navigation.
 - After step 5's port check, port 8000 is free — clean shutdown.
@@ -68,8 +68,10 @@ input), and the new project folder contains all of:
 - `profiles/relationships/`
 - `profiles/locations/`
 - `profiles/lore/`
-- `profiles/chapters/` — destination for AI chapter summaries
-- `profiles/scenes/` — destination for AI scene summaries
+- `profiles/chapters/` — legacy dir, still scaffolded; current chapter
+  summaries write to `summaries/chapters/`
+- `profiles/scenes/` — legacy dir, still scaffolded; current scene
+  summaries write to `summaries/scenes/<chapter-stem>/`
 - `exports/`
 - `.storythread/` — cache; `app.db` will appear here after the first
   save event
@@ -123,10 +125,8 @@ Expected:
   with YAML frontmatter (`id`, `name`, `type: character`, `importance`,
   `updated_at`).
 - Click the Writing Progress gauge — today's task list shows the new
-  profile file with reason "save".
-- Edit and re-save the same profile the same day. The task list should
-  still show the file exactly once (credit is idempotent per file per
-  day).
+  profile file with reason "save". (Per-file-per-day credit idempotency
+  is covered by `test_progress_store.py` — no need to re-save here.)
 
 ---
 
@@ -153,20 +153,19 @@ Expected:
 
 ## 6. Writing Progress + Settings round-trip
 
-**Touches:** settings persistence, Writing Progress gauge, daily
-tracker, slide-over layout, Skill Level + Night Owl wiring.
+**Touches:** Writing Progress gauge, daily tracker, slide-over layout,
+Skill Level + Night Owl wiring. (Settings persistence itself — save,
+reload, backup, corruption recovery — is covered by
+`test_settings_store.py`; no relaunch round-trip needed here.)
 
 Steps:
 1. Open Settings → Writing Progress.
 2. Change Skill Level to "Amateur" (2,500 words / 2 tasks per day).
 3. Toggle Night Owl on (4 AM rollover).
 4. Save and close Settings.
-5. Quit and relaunch the app.
-6. Open Settings again — verify the values stuck.
-7. With a project open, click the Writing Progress gauge.
+5. With a project open, click the Writing Progress gauge.
 
 Expected:
-- After relaunch, Skill Level shows "Amateur" and Night Owl is on.
 - The daily tracker reads "X / 2,500 words" and "X / 2 tasks".
 - The slide-over fits inside the left panel (no overflow into the
   editor area).
@@ -197,9 +196,9 @@ Steps:
 5. Run the same AI feature again.
 
 Expected:
-- Step 2: the error names the model as unavailable, points the writer to
-  Project Settings, and quotes OpenRouter's own message (e.g. "Grok 3 Mini
-  is deprecated... switch to Grok 4.3"). It is NOT a bare "HTTP 404."
+- Step 2: a clear model-unavailable error surfaces in the UI (not a
+  silent failure). The exact error translation — provider message
+  quoted, no bare "HTTP 404" — is covered by `test_openrouter_errors.py`.
 - Step 3: the dropdown shows the stored model flagged
   `x-ai/grok-3-mini (unavailable -- select a current model)` plus an amber
   warning, instead of silently displaying a different model.

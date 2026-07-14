@@ -18,7 +18,7 @@ Each project is a folder the user owns. The app reads and writes Markdown files 
 - `manuscript/` — one chapter per Markdown file
 - `notes/` — outline, style guide, themes, plus any free notes the writer adds
 - `profiles/` — character, relationship, location, lore profiles
-- `arcs/` — for series projects, per-book overrides on canonical profiles
+- `profiles/arcs/` — for series projects, per-book overrides on canonical profiles
 - `summaries/chapters/` — one summary file per chapter
 - `summaries/scenes/<chapter-stem>/scene-NN.md` — per-scene summaries
 - `exports/` — combined manuscript file plus dated snapshot folders
@@ -110,9 +110,19 @@ Issue ranges are managed through a CodeMirror `StateField` that auto-maps positi
 
 Subcategory checkboxes per category persist in `localStorage`, so the writer's preferences survive reloads.
 
+### Scene break suggestions
+
+A **Suggest Breaks** action (v1.0.7): the AI reads the chapter and proposes where a `---` scene break would strengthen the pacing, with a short reason for each. The writer decides what to apply.
+
 ## Writing Companion
 
-The right-side chat panel beside the editor. General-chat mode only — open conversational AI help (brainstorming, voice work, ad-hoc questions). Structured passes are handled by Smart Advisor, not chat.
+The right-side chat panel beside the editor. Structured feedback passes are handled by Smart Advisor; the Companion covers conversational and generative help:
+
+- **Chat (default)** — open conversational AI help: brainstorming, voice work, ad-hoc questions.
+- **Draft mode** (v1.0.6) — a toggle next to the chat input turns the AI into a drafting partner: the message is treated as a premise and the AI writes manuscript-style prose from it (roughly 800–1200 words per segment), using attached context chips as canon. A **Continue** button extends the scene segment by segment. Off by default; drafted prose keeps the approved `--` punctuation.
+- **Enhance mode** (v1.0.7) — highlight a passage and describe how it should be improved (sensory detail, mood, pacing, how a character comes across). Three reach levels: **Restate** (reword at the same length), **Default** (a richer pass), **Expanded** (a fuller rewrite). The rewrite appears in the chat for the writer to place manually; nothing changes automatically.
+
+Two supporting controls (v1.0.7): **"New ask"** starts a fresh request without clearing the conversation, and attached chips can be marked **Canon** (writing stays consistent with them) or **Reference** (in-the-moment instructions lead).
 
 ### Context chips
 
@@ -138,7 +148,7 @@ With nothing selected, the chat treats the whole chapter as context (capped at 1
 A series is a parent folder that contains multiple book projects plus a shared `series-profiles/` directory.
 
 - **Canonical profiles** live at the series level and stay consistent across books.
-- **Arc files** live in each book's `arcs/` folder and overlay book-specific changes onto the canonical profile (different relationship status, new injuries, evolving motivations).
+- **Arc files** live in each book's `profiles/arcs/` folder and overlay book-specific changes onto the canonical profile (different relationship status, new injuries, evolving motivations).
 - **Profile merge** combines canonical + arc at request time so AI sees the right state for the book the writer is in.
 - The **ChipPicker** offers a "This Book" / "Series Profiles" toggle so the writer can attach either source.
 - **Story context** (`series.json` + `project.json`) is automatically prepended to every AI system prompt so the model knows the project's tone, genre, content mode, and POV defaults.
@@ -192,7 +202,7 @@ If no eligible model exists for a request, the app shows a clear error rather th
 Three layers, all required:
 
 1. **Prompt layer** — every AI system prompt explicitly bans em dashes
-2. **Sanitizer layer** — `backend/app/ai/sanitizer.py` rewrites any em or en dashes in the response before the frontend sees it
+2. **Sanitizer layer** — `backend/app/ai/sanitizer.py` rewrites any em or en dash in the response to the approved `--` substitute before the frontend sees it. The conversational chat path additionally folds `--` into commas/colons; prose-producing paths (Draft mode, revise suggestions) keep `--`
 3. **Style guide layer** — the project's `notes/style-guide.md` records the rule for the writer's reference
 
 ## Auto-update

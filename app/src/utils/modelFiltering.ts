@@ -12,6 +12,46 @@
 
 import type { ModelInfo } from "../types/ai";
 
+// ── Cost tiers ────────────────────────────────────────────────────────────────
+// Four explicit stops shared by the global Settings slider and the per-project
+// tier select. The stored VALUES ("free"/"budget"/"standard"/"premium") are
+// frozen -- they live in settings.json and project.json files on user machines,
+// so only the display labels may change.
+//
+// Each tier is a price CAP: it filters the picker down to models at or below
+// that input cost. "Priority Best" (the top stop) shows everything and pins a
+// Flagship group at the top of the picker for one-click access to the
+// strongest models.
+export const TIERS = [
+  { value: "free",     label: "Free",          help: "Free models only" },
+  { value: "budget",   label: "Lowest",        help: "Up to $1/M input" },
+  { value: "standard", label: "Pricier",       help: "Up to $15/M input" },
+  { value: "premium",  label: "Priority Best", help: "All models; flagship picks pinned on top" },
+] as const;
+
+export type TierValue = (typeof TIERS)[number]["value"];
+
+export function tierIndex(value: TierValue): number {
+  return TIERS.findIndex(t => t.value === value);
+}
+
+// Price-cap filter applied to the model list to compute what the picker shows.
+export function modelPassesTier(m: ModelInfo, tier: string): boolean {
+  if (tier === "free")     return m.is_free;
+  if (tier === "budget")   return m.cost_input_per_million <= 1.0;
+  if (tier === "standard") return m.cost_input_per_million <= 15.0;
+  return true; // premium ("Priority Best"): everything
+}
+
+// ── Media-capability filter ───────────────────────────────────────────────────
+// True when a model outputs text only (or doesn't declare modalities, which in
+// practice means text). Used with the text_only_filter setting to keep image /
+// audio / video output models out of the pickers.
+export function modelIsTextOnly(m: ModelInfo): boolean {
+  return m.output_modalities.length === 0
+    || m.output_modalities.every(mod => mod === "text");
+}
+
 // ── Content-mode provider lists ───────────────────────────────────────────────
 // Providers whose models are content-moderated (they refuse or heavily soften
 // explicit/dark content). Hidden in "mature" mode.
@@ -58,18 +98,20 @@ export function filterModelByContentMode(m: ModelInfo, mode: string): boolean {
 // mode the moderated-provider entries (Anthropic/OpenAI) are filtered out by
 // filterModelByContentMode, leaving the unmoderated picks (Mistral, xAI, Sao10K,
 // DeepSeek, Llama) -- so explicit writers still see a useful spread.
-export const RECOMMENDED_MODELS: { id: string; note: string }[] = [
-  // Premium -- best prose quality (moderated: general/mature only)
-  { id: "anthropic/claude-opus-4.8",              note: "Top prose quality"           },
-  { id: "anthropic/claude-sonnet-4.6",            note: "Excellent prose, great value" },
+// `flagship` marks the strongest-in-class picks that get pinned in their own
+// group when the cost tier is at the top "Priority Best" stop.
+export const RECOMMENDED_MODELS: { id: string; note: string; flagship?: boolean }[] = [
+  // Flagship -- best prose quality (moderated entries: general/mature only)
+  { id: "anthropic/claude-opus-4.8",              note: "Top prose quality",           flagship: true },
+  { id: "anthropic/claude-sonnet-4.6",            note: "Excellent prose, great value", flagship: true },
   // Fast + affordable quality
   { id: "anthropic/claude-haiku-4.5",             note: "Fast, strong, affordable"    },
   { id: "openai/gpt-4.1-mini",                    note: "Fast, capable, low cost"     },
   // Budget
   { id: "deepseek/deepseek-chat",                 note: "Best budget quality"          },
   // Unmoderated -- best for mature / explicit fiction
-  { id: "mistralai/mistral-large",                note: "Strong, unmoderated prose"    },
-  { id: "x-ai/grok-4.3",                          note: "Vivid, unmoderated"           },
+  { id: "mistralai/mistral-large",                note: "Strong, unmoderated prose",   flagship: true },
+  { id: "x-ai/grok-4.3",                          note: "Vivid, unmoderated",          flagship: true },
   { id: "sao10k/l3.3-euryale-70b",                note: "Tuned for immersive fiction"  },
   { id: "mistralai/mistral-nemo",                 note: "Budget, unmoderated"          },
   // Free

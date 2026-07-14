@@ -50,6 +50,8 @@ const CONTEXT_SUBS: { key: ContextSubcategory; label: string; help: string }[] =
   { key: "relationships",         label: "Relationships",  help: "Interactions vs. attached relationship dynamics" },
   { key: "setting",               label: "Setting",        help: "Descriptions vs. attached locations" },
   { key: "lore",                  label: "Lore",           help: "Facts vs. attached world-building" },
+  { key: "timeline",              label: "Timeline",       help: "Event order, elapsed time, time-of-day and season continuity" },
+  { key: "scene_goal",            label: "Scene Goal",     help: "Whether each scene pursues a clear goal, conflict, or change" },
 ];
 
 

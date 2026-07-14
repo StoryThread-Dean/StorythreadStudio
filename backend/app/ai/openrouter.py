@@ -73,6 +73,16 @@ async def list_models(api_key: str) -> list[dict]:
         top_provider = m.get("top_provider", {}) or {}
         is_moderated = bool(top_provider.get("is_moderated", False))
 
+        # Reasoning support: OpenRouter lists each model's accepted request
+        # parameters. Models that accept "reasoning" (or the legacy
+        # "include_reasoning") can return a reasoning trace alongside the
+        # answer. Drives the Writing Companion's Reasoning toggle -- the
+        # toggle is hidden for models that can't honor it.
+        supported_params = m.get("supported_parameters", []) or []
+        supports_reasoning = (
+            "reasoning" in supported_params or "include_reasoning" in supported_params
+        )
+
         models.append({
             "id":                      model_id,
             "name":                    m.get("name", model_id),
@@ -82,6 +92,7 @@ async def list_models(api_key: str) -> list[dict]:
             "output_modalities":       output_modalities,
             "is_free":                 is_free,
             "is_moderated":            is_moderated,
+            "supports_reasoning":      supports_reasoning,
         })
 
     # Sort by name for a clean UI list
@@ -238,7 +249,8 @@ async def run_chat(
     messages: list[dict],
     temperature: float | None = None,
     sanitize_mode: str = "chat",
-) -> str:
+    include_reasoning: bool = False,
+) -> str | tuple[str, str | None]:
     """
     Send a multi-turn chat completion request to OpenRouter and return
     the assistant's reply as a plain string.
@@ -258,6 +270,14 @@ async def run_chat(
       - "prose": sanitize() -- strips em/en dashes only and KEEPS ' -- '.
         Right for drafted story prose, where ' -- ' is legitimate punctuation
         and turning it into commas would damage the writing.
+
+    `include_reasoning` changes the RETURN SHAPE (deliberately, so the seven
+    existing call sites stay untouched):
+      - False (default): returns the reply string, exactly as before.
+      - True: asks OpenRouter for the model's reasoning trace and returns a
+        (reply, reasoning) tuple. `reasoning` is None when the model didn't
+        emit a trace despite the request. Only reasoning-capable models
+        honor the request; others simply ignore the extra parameter.
     """
     from app.ai.sanitizer import sanitize, sanitize_chat
 
@@ -272,6 +292,11 @@ async def run_chat(
     # Include temperature only when explicitly provided.
     if temperature is not None:
         payload["temperature"] = temperature
+
+    # Ask for the reasoning trace. "medium" effort is OpenRouter's balanced
+    # default; the trace comes back on message.reasoning in the response.
+    if include_reasoning:
+        payload["reasoning"] = {"effort": "medium"}
 
     # --- Observability: same pattern as run_completion ---
     # Sum all message lengths (system + every turn) for a true payload size
@@ -307,13 +332,21 @@ async def run_chat(
             model_id, prompt_chars, len(messages), elapsed, call_status,
         )
 
-    raw_reply = data["choices"][0]["message"]["content"]
+    message = data["choices"][0]["message"]
+    raw_reply = message["content"]
 
     # Apply the sanitizer chosen by the caller. Prose drafting keeps ' -- ';
     # everything else folds it to a comma (see sanitize_mode docstring above).
-    if sanitize_mode == "prose":
-        return sanitize(raw_reply)
-    return sanitize_chat(raw_reply)
+    clean = sanitize(raw_reply) if sanitize_mode == "prose" else sanitize_chat(raw_reply)
+
+    if not include_reasoning:
+        return clean
+
+    # Reasoning trace: present only when requested AND the model emitted one.
+    # It's displayed in the UI, so the em dash rule applies to it too.
+    raw_reasoning = message.get("reasoning")
+    reasoning = sanitize_chat(raw_reasoning) if isinstance(raw_reasoning, str) and raw_reasoning.strip() else None
+    return clean, reasoning
 
 
 def _per_million(price_str: str) -> float:

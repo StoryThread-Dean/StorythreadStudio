@@ -2,8 +2,10 @@
 
 All notable changes to Storythread Studio will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Versioning is simple release counting, not semver: the last number bumps by
+one each release (and keeps counting past 9). A middle-number bump is
+reserved for a fundamental change.
 
 The release script reads entries under `## [Unreleased]` and moves them
 into a new tagged section when cutting a release. To add a changelog
@@ -15,7 +17,16 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **Smart Advisor: Timeline and Scene Goal checks.** Two new subcategories under the Context pass: Timeline flags event-order, elapsed-time, time-of-day, and season continuity slips; Scene Goal flags passages that drift from the scene's apparent purpose or stall without advancing anything.
+- **Per-chapter word targets in Writing Progress.** When the outline frontmatter assigns `chapters[].word_target` values, the Progress slide-over now shows a per-chapter breakdown with a mini progress bar for each targeted chapter (green at 100%). Chapters without a target show their word count as an info row.
+- **Reasoning toggle in the Writing Companion.** When the active model can return a reasoning trace, a Reasoning toggle appears next to Draft and Enhance. With it on, each AI reply includes a collapsible "Reasoning" block showing how the model thought through its answer. Hidden entirely for models that don't support it.
+- **"What's this?" help for chat modes.** A help button beside the Draft / Enhance / Reasoning toggles expands a plain-language panel explaining what each mode does and when a writer would use it -- including default Chat, and a note on why the Reasoning toggle is sometimes absent.
+
 ### Changed
+
+- **Cost tier slider: four explicit stops.** The tier control in Settings and Project Settings now reads Free / Lowest / Pricier / Priority Best. At Priority Best, flagship-class picks are pinned in their own group at the top of the model list for one-click access. Stored values are unchanged, so existing settings carry over.
+- **Project cost tier now filters the project model picker.** The per-project tier (previously guidance-only) caps which models the Project Settings picker offers, alongside the existing content-mode filter.
+- **Text-only model filter now applies everywhere.** The "hide models that output images, audio, or video" preference from Settings now also filters the per-project model picker, not just the global one.
 
 ### Fixed
 
@@ -159,6 +170,11 @@ First public release.
 - Backend sidecar hung at startup in installed builds, causing "Failed to fetch" errors on first project open. The Tauri shell plugin pipes the child process's stdout and stderr through a Receiver that the setup hook was dropping; uvicorn's startup log lines filled the OS pipe buffer and blocked the backend from binding to port 8000. The setup hook now drains the receiver in a detached task so the backend can start cleanly.
 - API requests from the installed app were blocked by CORS even after the backend started, because the allowlist only included Tauri v1's `tauri://localhost` origin. Tauri v2 on Windows uses `http://tauri.localhost`; both Tauri v2 origins are now on the allowlist.
 
-[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.6...v1.0.7
+[1.0.6]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.5...v1.0.6
+[1.0.5]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.4...v1.0.5
+[1.0.4]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.3...v1.0.4
+[1.0.3]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.1...v1.0.3
 [1.0.1]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/StoryThread-Dean/StorythreadStudio/releases/tag/v1.0.0

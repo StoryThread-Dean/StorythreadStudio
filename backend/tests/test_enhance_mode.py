@@ -7,7 +7,6 @@
 # surrounding context is rejected). HTTP tests monkeypatch the model call and
 # auth so nothing touches the network or the user's real settings.
 
-import httpx
 
 from app.ai.prompts import (
     _editor_chat_addendum,
