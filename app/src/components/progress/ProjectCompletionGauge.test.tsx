@@ -44,6 +44,7 @@ const MOCK_SUMMARY: ProgressSummary = {
     file_count: 0,
     weight: 0,
   },
+  chapters: [],
 };
 
 // 7-day sparkline: 6 empty days + today with some words
@@ -190,5 +191,46 @@ describe("ProjectCompletionGauge", () => {
     // The compact bar is a single <button>. Click it.
     await user.click(screen.getByRole("button"));
     expect(onToggle).toHaveBeenCalledOnce();
+  });
+
+
+  it("shows the per-chapter breakdown when outline targets exist", async () => {
+    mockFetch({
+      chapters: [
+        { filename: "01-a.md", title: "Return to Ash", actual_words: 1_500, target_words: 3_000, percent: 50.0 },
+        { filename: "02-b.md", title: "The Hollow Crown", actual_words: 900, target_words: null, percent: null },
+      ],
+    });
+    render(
+      <ProjectCompletionGauge
+        projectPath="/fake/project"
+        isOpen={true}
+        onToggle={() => undefined}
+      />
+    );
+    expect(await screen.findByText("Chapters")).toBeTruthy();
+    expect(await screen.findByText("Return to Ash")).toBeTruthy();
+    // Targeted chapter shows "actual / target"; untargeted shows the info note.
+    expect(await screen.findByText("1,500 / 3,000")).toBeTruthy();
+    expect(await screen.findByText("no outline target")).toBeTruthy();
+  });
+
+
+  it("hides the per-chapter section when no chapter has a target", async () => {
+    mockFetch({
+      chapters: [
+        { filename: "01-a.md", title: "Return to Ash", actual_words: 1_500, target_words: null, percent: null },
+      ],
+    });
+    render(
+      <ProjectCompletionGauge
+        projectPath="/fake/project"
+        isOpen={true}
+        onToggle={() => undefined}
+      />
+    );
+    // Wait for the slide-over content, then confirm no Chapters section.
+    expect(await screen.findByText("Manuscript")).toBeTruthy();
+    expect(screen.queryByText("Chapters")).toBeNull();
   });
 });

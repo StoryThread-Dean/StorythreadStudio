@@ -226,7 +226,8 @@ def _clean_trait_yaml(content: str) -> str:
     Pre-process raw trait block YAML to fix two classes of problems that cause
     yaml.safe_load() to fail, silently returning [] and making all traits vanish.
 
-    PROBLEM 1 -- JSON code block wrappers in ai_usage_example fields:
+    PROBLEM 1 -- JSON code block wrappers in ai_usage_example fields
+    (a legacy field removed in Phase 5A; old profiles on disk may still have it):
         ai_usage_example: ```json
         {"ai_usage_example": "When generating scenes..."}
         ```
@@ -332,17 +333,19 @@ def _parse_trait_blocks(content: str) -> list[TraitBlock]:
     """
     Parse YAML-formatted trait block entries from a section's text content.
 
-    Expected format (from the spec):
+    Expected format:
         - trait: observant, punctual, eloquent
           description: She is always on time...
-          influence: core
-          ai_usage_example: AI should reflect this through deliberate choices...
-          notes: optional note
+          importance: core
+
+    Legacy profiles may instead have an "influence" field (auto-migrated to
+    importance) plus "ai_usage_example" / "notes" fields (removed in Phase 5A
+    and ignored here).
 
     This is valid YAML (a list of dicts), parsed with yaml.safe_load().
     Before parsing, _clean_trait_yaml() strips any JSON code block wrappers
-    that some AI responses embed in ai_usage_example fields -- those break
-    the YAML parser and would cause all traits in the section to vanish.
+    embedded in legacy ai_usage_example fields -- those break the YAML
+    parser and would cause all traits in the section to vanish.
 
     Returns an empty list if content is empty or doesn't parse as a trait list.
     """

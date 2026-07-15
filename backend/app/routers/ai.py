@@ -1,24 +1,21 @@
-# routers/ai.py -- AI Assistant API
+# routers/ai.py -- AI API
 # ====================================
-# Handles running writing assistants, listing models, and connection testing.
+# Every AI-powered endpoint lives here: the Writing Companion chat (including
+# Draft and Enhance modes), Smart Advisor editor passes and revisions, scene
+# break suggestions, the Profile Builder companion and its generation tools,
+# chapter/scene summaries, plus model listing for the Settings picker.
 #
-# Routes:
-#   GET  /api/ai/models          -- list OpenRouter models (for Settings model picker)
-#   POST /api/ai/run-assistant   -- run a writing assistant on selected text
-#
-# The run-assistant pipeline:
-#   1. Validate the request (assistant ID, non-empty text, API key present)
-#   2. Look up the assistant's system prompt from assistants.py
-#   3. Build the user message (the selected text, cleanly wrapped)
-#   4. Call OpenRouter via openrouter.py (which handles timeouts and errors)
-#   5. Sanitize the response (em dash removal)
-#   6. Return the structured response to the frontend
+# The shared pipeline for each endpoint:
+#   1. Validate the request (non-empty text, API key present, model eligible)
+#   2. Build the system prompt from prompts.py
+#   3. Call OpenRouter via openrouter.py (which handles timeouts and errors)
+#   4. Sanitize the response (em dash removal)
+#   5. Return the structured response to the frontend
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.settings_store import load_settings
-from app.ai.assistants import ASSISTANT_BY_ID, ASSISTANTS
 from app.ai.openrouter import run_completion, run_chat, list_models
 from app.ai.sanitizer import sanitize
 from app.ai.prompts import (
@@ -26,7 +23,6 @@ from app.ai.prompts import (
     build_editor_pass_system_prompt,
     build_revise_suggestion_system_prompt,
     build_profile_chat_system_prompt,
-    wrap_assistant_prompt,
     generate_usage_preview_prompt,
     trim_trait_prompt,
     audit_importance_prompt,
@@ -36,7 +32,6 @@ from app.ai.prompts import (
     generate_scene_summary_prompt,
     generate_scene_title_prompt,
     generate_scene_break_suggestions_prompt,
-    content_mode_instruction,
     context_stance_instruction,
     EDITOR_PASS_SUBCATEGORIES,
     TEMPERATURE_DEFAULTS,
@@ -69,16 +64,7 @@ class ContextChip(BaseModel):
     content: str # The profile summary or relevant content to include as context
 
 
-class RunAssistantRequest(BaseModel):
-    assistant_id: str                   # Must match an AssistantDef.id in assistants.py
-    selected_text: str                  # The text the writer has highlighted in the editor
-    model_id: str | None = None         # Optional override; falls back to settings default
-    context_chips: list[ContextChip] = []  # Explicitly attached profile context (Phase 4)
-    project_path: str | None = None     # Project root path -- used to inject series/book context
-    content_mode: str = "general"       # "general" | "mature" | "explicit" -- for routing
-
-
-# ── Phase 4 Generation Models ─────────────────────────────────────────────────
+# ── Profile Generation Models ─────────────────────────────────────────────────
 
 class GenerateUsagePreviewRequest(BaseModel):
     """
@@ -269,7 +255,7 @@ class ProfileChatRequest(BaseModel):
     """
     profile_name:    str
     profile_type:    str
-    profile_content: str              # Only the ToolKit-selected context
+    profile_content: str              # Full formatted profile text from the frontend
     messages:        list[ProfileChatMessage]
     model_id:        str | None = None
     behavior_mode:   str        = "general"   # Which AI behavior is active
@@ -290,30 +276,6 @@ class ProfileChatResponse(BaseModel):
     model_used: str = ""  # The resolved model ID so the UI can display it
 
 
-class AssistantSuggestion(BaseModel):
-    label: str
-    content: str
-
-
-class RunAssistantResponse(BaseModel):
-    assistant_id: str
-    assistant_name: str
-    summary: str
-    suggestions: list[AssistantSuggestion]
-    notes: list[str]
-    model_used: str
-    had_em_dashes: bool   # True if the sanitizer had to fix the model's output
-
-
-class AssistantMeta(BaseModel):
-    """Lightweight assistant info returned by the registry endpoint."""
-    id: str
-    name: str
-    category: str
-    scope: str
-    description: str
-
-
 class ModelInfo(BaseModel):
     id: str
     name: str
@@ -323,28 +285,10 @@ class ModelInfo(BaseModel):
     output_modalities: list[str] = ["text"]  # e.g. ["text"] or ["text", "image"]
     is_free: bool = False                     # True if id ends in :free or cost == 0
     is_moderated: bool = False                # True if model has content filters (refuses explicit)
+    supports_reasoning: bool = False          # True if the model can return a reasoning trace
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
-
-@router.get("/assistants", response_model=list[AssistantMeta])
-async def list_assistants():
-    """
-    Returns the full list of registered assistants with their metadata.
-    The frontend uses this to build the assistant buttons in the right panel.
-    For Phase 3, this is a static list seeded from assistants.py.
-    """
-    return [
-        AssistantMeta(
-            id=a.id,
-            name=a.name,
-            category=a.category,
-            scope=a.scope,
-            description=a.description,
-        )
-        for a in ASSISTANTS
-    ]
-
 
 @router.get("/models", response_model=list[ModelInfo])
 async def get_models():
@@ -371,118 +315,6 @@ async def get_models():
             status_code=503,
             detail=f"Could not reach OpenRouter: {e}"
         )
-
-
-@router.post("/run-assistant", response_model=RunAssistantResponse)
-async def run_assistant(request: RunAssistantRequest):
-    """
-    Run a writing assistant on the writer's selected text.
-
-    Steps:
-      1. Validate the assistant ID and selected text
-      2. Load the API key and resolve the model to use
-      3. Build and send the request to OpenRouter
-      4. Return the sanitized, structured response
-
-    The response always includes had_em_dashes=True if the sanitizer had to
-    fix em dashes that the model included despite the prompt instruction.
-    This is useful for debugging prompt quality.
-    """
-    # 1. Validate assistant
-    assistant = ASSISTANT_BY_ID.get(request.assistant_id)
-    if not assistant:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown assistant: '{request.assistant_id}'. "
-                   f"Valid options: {list(ASSISTANT_BY_ID.keys())}"
-        )
-
-    # 2. Validate selected text
-    selected = request.selected_text.strip()
-    if not selected:
-        raise HTTPException(
-            status_code=400,
-            detail="No text selected. Highlight some text in the editor before running an assistant."
-        )
-    if len(selected) > 8000:
-        raise HTTPException(
-            status_code=400,
-            detail="Selected text is too long (max 8000 characters). Select a smaller passage."
-        )
-
-    # 3. Resolve API key and model
-    settings = load_settings()
-    api_key = settings.get("openrouter_api_key", "")
-    if not api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="No OpenRouter API key found. Add your key in Settings first."
-        )
-
-    model_id = request.model_id or settings.get("default_model", "openai/gpt-4o-mini")
-
-    # 3b. Content mode routing: check if the resolved model supports the requested mode
-    _validate_model_content_mode(settings, model_id, request.content_mode)
-
-    # 3c. Allowlist/blocklist filtering
-    _validate_model_allowed(settings, model_id)
-
-    # 4. Build the user message.
-    # If the writer has attached context chips, prepend them before the selected text.
-    # This is the "explicit context attachment" rule from the spec -- the AI never
-    # has implicit access to the full project; only what the writer explicitly shares.
-    context_block = ""
-    if request.context_chips:
-        lines = ["ATTACHED CONTEXT (provided by the writer for reference):\n"]
-        for chip in request.context_chips:
-            lines.append(f"[{chip.type.replace('_', ' ').title()}: {chip.name}]")
-            lines.append(chip.content.strip())
-            lines.append("")
-        lines.append("---\n")
-        context_block = "\n".join(lines)
-
-    user_message = (
-        f"{context_block}"
-        f"Please review the following passage:\n\n---\n{selected}\n---"
-    )
-
-    # 5. Call OpenRouter -- wrap the assistant prompt with unified punctuation rule,
-    #    then prepend story context if available
-    system_prompt = wrap_assistant_prompt(assistant.system_prompt)
-    story_context = _build_story_context(request.project_path)
-    if story_context:
-        system_prompt = story_context + system_prompt
-
-    try:
-        result = await run_completion(
-            api_key=api_key,
-            model_id=model_id,
-            system_prompt=system_prompt,
-            user_message=user_message,
-            temperature=TEMPERATURE_DEFAULTS["critique"],
-        )
-    except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
-    except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Could not reach OpenRouter: {e}. Check your internet connection."
-        )
-
-    # 6. Build and return the response
-    return RunAssistantResponse(
-        assistant_id=assistant.id,
-        assistant_name=assistant.name,
-        summary=result.get("summary", ""),
-        suggestions=[
-            AssistantSuggestion(**s)
-            for s in result.get("suggestions", [])
-            if isinstance(s, dict) and "label" in s and "content" in s
-        ],
-        notes=result.get("notes", []),
-        model_used=result.get("model_used", model_id),
-        had_em_dashes=result.get("had_em_dashes", False),
-    )
 
 
 # ── OpenRouter Error Translation ─────────────────────────────────────────────
@@ -671,7 +503,9 @@ def _validate_model_allowed(settings: dict, model_id: str) -> None:
 # prepended to AI system prompts. Book-level non-null values override series.
 # This gives AI awareness of genre, tone, pacing, and other story settings.
 
-from app.routers.series import read_series_settings
+# Imported here (not at the top) deliberately, next to the only code that uses
+# it -- noqa silences ruff's E402 module-level-import placement warning.
+from app.routers.series import read_series_settings  # noqa: E402
 
 
 def _build_story_context(project_path: str | None) -> str:
@@ -907,10 +741,9 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
     """
     Generate a prose explanation of how a trait's importance level affects AI behavior.
 
-    Unlike the old ai_usage_example (which was stored in YAML), this preview
-    is generated on demand and shown in a popover -- not persisted. It helps
-    the writer understand what their importance setting actually means for
-    this specific trait.
+    The preview is generated on demand and shown in a popover -- never persisted.
+    It helps the writer understand what their importance setting actually means
+    for this specific trait.
     """
     api_key, model_id = _resolve_model_and_key(request.model_id)
 
@@ -928,7 +761,7 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
     try:
         result = await run_completion(api_key=api_key, model_id=model_id,
                                       system_prompt=system_prompt, user_message=user_message,
-                                      temperature=TEMPERATURE_DEFAULTS["extraction"])
+                                      temperature=TEMPERATURE_DEFAULTS["critique"])
     except httpx.HTTPStatusError as e:
         raise _openrouter_exc(e)
     except httpx.RequestError as e:
@@ -1018,7 +851,7 @@ async def audit_importance(request: AuditImportanceRequest):
     try:
         result = await run_completion(api_key=api_key, model_id=model_id,
                                       system_prompt=system_prompt, user_message=user_message,
-                                      temperature=TEMPERATURE_DEFAULTS["extraction"])
+                                      temperature=TEMPERATURE_DEFAULTS["critique"])
     except httpx.HTTPStatusError as e:
         raise _openrouter_exc(e)
     except httpx.RequestError as e:
@@ -1549,7 +1382,7 @@ async def profile_chat(request: ProfileChatRequest):
 
     # Pick temperature based on behavior mode
     if request.behavior_mode in ("extract_traits", "check_consistency"):
-        temp = TEMPERATURE_DEFAULTS["extraction"]
+        temp = TEMPERATURE_DEFAULTS["critique"]
     elif request.behavior_mode == "guide":
         temp = TEMPERATURE_DEFAULTS["generation"]
     else:
@@ -1597,11 +1430,16 @@ class EditorChatRequest(BaseModel):
     # outline/locations are canon the AI must stay consistent with. False = they
     # are reference only and the writer's typed direction takes precedence.
     treat_attachments_as_canon: bool = True
+    # Reasoning toggle: when True (and the model supports it), OpenRouter is
+    # asked for the model's reasoning trace, returned alongside the reply.
+    # The frontend only offers the toggle for reasoning-capable models.
+    include_reasoning: bool = False
 
 
 class EditorChatResponse(BaseModel):
     reply: str
-    model_used: str = ""  # The resolved model ID so the UI can display it
+    model_used: str = ""       # The resolved model ID so the UI can display it
+    reasoning: str | None = None  # The model's reasoning trace, when requested + emitted
 
 
 # Absolute ceiling on a single Enhance rewrite, in approximate words. Multiplier
@@ -1831,15 +1669,23 @@ async def editor_chat(request: EditorChatRequest):
     sanitize_mode = "prose" if request.category in ("draft", "enhance") else "chat"
 
     try:
-        reply = await run_chat(api_key=api_key, model_id=model_id,
-                               system_prompt=system_prompt, messages=messages,
-                               temperature=temp, sanitize_mode=sanitize_mode)
+        if request.include_reasoning:
+            # Tuple return shape -- see run_chat's include_reasoning docstring.
+            reply, reasoning = await run_chat(api_key=api_key, model_id=model_id,
+                                              system_prompt=system_prompt, messages=messages,
+                                              temperature=temp, sanitize_mode=sanitize_mode,
+                                              include_reasoning=True)
+        else:
+            reply = await run_chat(api_key=api_key, model_id=model_id,
+                                   system_prompt=system_prompt, messages=messages,
+                                   temperature=temp, sanitize_mode=sanitize_mode)
+            reasoning = None
     except httpx.HTTPStatusError as e:
         raise _openrouter_exc(e)
     except httpx.RequestError as e:
         raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
 
-    return EditorChatResponse(reply=reply, model_used=model_id)
+    return EditorChatResponse(reply=reply, model_used=model_id, reasoning=reasoning)
 
 
 # ── Editor Pass (Inline Overlay Feedback) ─────────────────────────────────────

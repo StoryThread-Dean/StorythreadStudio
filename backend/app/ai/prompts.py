@@ -28,10 +28,9 @@ PUNCTUATION_RULE = (
 # to run_chat() / run_completion() so each mode gets appropriate randomness.
 
 TEMPERATURE_DEFAULTS = {
-    "critique":    0.3,   # structured feedback, extraction, consistency checks
+    "critique":    0.3,   # structured feedback, trait extraction, audits, consistency checks
     "generation":  0.7,   # creative continuation, brainstorming, guide mode
     "profile":     0.5,   # profile chat, summaries, general profile work
-    "extraction":  0.3,   # trait extraction, audits, usage previews
 }
 
 
@@ -469,6 +468,8 @@ EDITOR_PASS_SUBCATEGORIES: dict[str, dict[str, str]] = {
         "relationships":         "Interactions vs. established relationship dynamics in attached profiles.",
         "setting":               "Setting descriptions vs. established locations in attached profiles.",
         "lore":                  "Facts vs. established world-building in attached profiles.",
+        "timeline":              "Timeline continuity -- event order, elapsed time, time-of-day and season consistency within the chapter and against attached summaries or outline context.",
+        "scene_goal":            "Scene goal alignment -- whether each scene pursues a clear goal, conflict, or change; flag passages that drift from the scene's apparent purpose or stall without advancing anything.",
     },
 }
 
@@ -483,7 +484,7 @@ fence, no trailing commentary. The JSON must validate against this shape:
 {
   "issues": [
     {
-      "category": "<one of the active subcategory keys, e.g. grammar | clarity | redundancy | descriptive | dialogue | pov | tone | character | pacing | character_consistency | relationships | setting | lore>",
+      "category": "<one of the active subcategory keys, e.g. grammar | clarity | redundancy | descriptive | dialogue | pov | tone | character | pacing | character_consistency | relationships | setting | lore | timeline | scene_goal>",
       "severity": "praise" | "issue" | "suggestion",
       "quote": "<the EXACT verbatim passage from the chapter that you are commenting on -- copy character-for-character so the frontend can locate it>",
       "explanation": "<one to three sentences. WHY this is a problem (or worth praising), referencing the quoted text. No generic encouragement.>",
@@ -797,10 +798,8 @@ def _profile_chat_addendum(
             "WHEN THE WRITER WANTS GENERATED OUTPUT:\n"
             "You may output profile-ready text such as:\n\n"
             "Trait: [short phrase]\n"
-            "Description: [1-3 sentences grounded in this profile]\n"
-            "Notes: [optional brief supporting note]\n\n"
+            "Description: [1-3 sentences grounded in this profile]\n\n"
             "Or AI-facing content such as:\n"
-            "- ai_usage_example\n"
             "- ai_section_summary\n"
             "- ai_profile_summary\n\n"
             "AVOID:\n"
@@ -1026,18 +1025,6 @@ def build_profile_chat_system_prompt(
     parts.append(_profile_chat_addendum(behavior_mode, profile_type, section_labels))
 
     return "\n".join(parts)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# ASSISTANT PROMPT WRAPPER
-# ══════════════════════════════════════════════════════════════════════════════
-# The 9 writing assistants in assistants.py each have their own system_prompt.
-# This wrapper appends the unified punctuation rule so we don't need to
-# maintain it inside each assistant definition.
-
-def wrap_assistant_prompt(raw_assistant_prompt: str) -> str:
-    """Append the unified punctuation rule to any assistant's system prompt."""
-    return raw_assistant_prompt + "\n\n" + PUNCTUATION_RULE
 
 
 # ══════════════════════════════════════════════════════════════════════════════

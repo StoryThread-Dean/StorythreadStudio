@@ -6,15 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Current phase: Phase 6 (Export and Polish) -- complete. Post-MVP polish next.**
+**Status: shipped.** The current release is **v1.0.7** -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+
+The phase history below is the pre-1.0 build record, kept for context. Some items it names were later replaced -- those are marked inline. The biggest post-phase change: structured feedback moved out of the chat panel into the **Smart Advisor** toolbar (inline issue overlays via `POST /api/ai/editor-pass`), and the Writing Companion chat gained **Draft mode** (v1.0.6) and **Enhance mode** (v1.0.7).
 
 Phases 0-4, 5A-5E, and 6 are complete and merged into `main`. Phase 5 was redesigned into an AI Respec with 5 sub-phases (5A-5E). Phase 6 delivered full-manuscript export (with opt-in chapter summaries / scene summaries / notes / profiles), manual snapshot export, scene summaries (per-scene files with auto-split and selection-based preview), summary quality tuning (cliff-notes reframing + preamble filter), relationship-aware full profile summaries, and a backend-health banner for uniform error handling.
 
 ### Phases 1-3 -- Complete
-Core app: Tauri shell + React scaffold, FastAPI backend, project create/open, CodeMirror Markdown editor, file save, profiles (character/relationship/location/lore/summaries), OpenRouter integration, 9 writing assistants, Settings modal, em dash enforcement.
+Core app: Tauri shell + React scaffold, FastAPI backend, project create/open, CodeMirror Markdown editor, file save, profiles (character/relationship/location/lore/summaries), OpenRouter integration, 9 writing assistants (later replaced by Smart Advisor + Writing Companion), Settings modal, em dash enforcement.
 
 ### Phase 4 + Polish -- Complete
-Context chips, ai_usage_example generation, section/full summaries, Profile Builder chat with 7 behavior modes, ToolKit context selector, visual polish pass.
+Context chips, ai_usage_example generation (removed in 5A), section/full summaries, Profile Builder chat with 7 behavior modes (reduced to 4 in 5A), ToolKit context selector (replaced by the auto-suggest ChipPicker in 5D), visual polish pass.
 
 ### Phase 5A -- Profile Builder Rebuild -- Complete
 - **Importance levels** replace influence scale: Core / Present / Background / Contextual / Hidden
@@ -56,6 +58,7 @@ Context chips, ai_usage_example generation, section/full summaries, Profile Buil
 - Structured feedback: AI quotes specific passages, labels as Praise/Issue/Suggestion, provides before/after rewrites
 - General chat mode (no tab selected): open conversational, no structured format
 - Selection highlight persists when clicking into chat panel (drawSelection: true, transparent line backgrounds)
+- **Superseded since:** the category tabs moved out of the chat into the Smart Advisor toolbar (inline overlays, `POST /api/ai/editor-pass` + `/api/ai/revise-suggestion`). The Writing Companion is now general chat plus Draft and Enhance modes -- see `docs/features.md`.
 
 ### Post-5E Polish
 - Fixed AI copying instruction template into output (prompt used example-based format instead of numbered template)
@@ -77,11 +80,11 @@ A **Windows desktop, local-first Markdown writing app** for fiction writers. The
 
 ---
 
-## Planned Tech Stack
+## Tech Stack
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Desktop shell | Tauri v2 | Packages the app as a native Windows `.exe`; bridges OS features (file dialogs, window management) to the web UI |
+| Desktop shell | Tauri v2 | Packages the app as a Windows `.msi` installer; bridges OS features (file dialogs, window management) to the web UI |
 | Frontend | React + TypeScript (Vite) | All UI panels and screens |
 | UI components | shadcn/ui + Tailwind CSS v4 | Pre-built, dark-mode-ready components the developer can understand and modify |
 | State management | Zustand | Simple, beginner-friendly global state for React |
@@ -95,7 +98,7 @@ A **Windows desktop, local-first Markdown writing app** for fiction writers. The
 ## Repository Structure
 
 ```
-StorythreadStudio/        <- repo root (spec docs + config live here)
+StorythreadStudio/        <- repo root
   app/                    <- Tauri + React frontend (run npm commands from here)
     src/                  <- React/TypeScript source files
     src-tauri/            <- Tauri/Rust shell
@@ -105,8 +108,11 @@ StorythreadStudio/        <- repo root (spec docs + config live here)
       main.py             <- FastAPI entry point and route registration
       __init__.py         <- marks app/ as a Python package
     pyproject.toml        <- Python dependencies managed by uv
-  01-product-scope.md     <- spec docs
-  ...
+    tests/                <- pytest suite
+  docs/                   <- product docs (scope, architecture, features, roadmap, releasing)
+  tests/                  <- manual-smoke.md release checklist
+  scripts/                <- release.ps1 and helper scripts
+  CHANGELOG.md
   CLAUDE.md
 ```
 
@@ -165,11 +171,22 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
 ### Test layout
 
 - `backend/tests/` -- pytest + pytest-asyncio. Uses FastAPI's `TestClient` for HTTP-level tests and `async with open_db(tmp_path)` for store-level tests. Test files named `test_*.py`. Current files:
-  - `test_outline_frontmatter.py` -- YAML frontmatter parser (11 tests)
-  - `test_progress_store.py` -- word counting, night-owl rollover, event recording (14 tests)
-  - `test_progress_routes.py` -- `/api/progress/summary` and `/api/progress/daily` HTTP endpoints (11 tests)
+  - `test_outline_frontmatter.py` -- outline YAML frontmatter parser
+  - `test_outline_sections.py` -- outline section parsing / reconstruction (Planner corruption regressions)
+  - `test_progress_store.py` -- word counting, night-owl rollover, event recording
+  - `test_progress_routes.py` -- `/api/progress/summary` and `/api/progress/daily` HTTP endpoints
+  - `test_settings_store.py` -- settings persistence, atomic writes, backup/corruption recovery
+  - `test_editor_chat_prompts.py` -- Writing Companion prompt construction
+  - `test_enhance_mode.py` -- Enhance mode payloads and prompts
+  - `test_sanitizer_routing.py` -- em-dash sanitizer routing per AI path
+  - `test_openrouter_errors.py` -- OpenRouter error translation (401/402/404/429/5xx)
+  - `test_scene_breaks.py` -- scene break suggestions
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
-  - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode, onToggle callback (7 tests)
+  - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
+  - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
+  - `src/utils/spellcheck.test.ts` -- spellcheck suggestions
+  - `src/utils/buildEditorChatPayload.test.ts` -- Writing Companion payload builder
+  - `src/utils/modelFiltering.test.ts` -- model list filtering + recommended models
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands
@@ -251,7 +268,7 @@ Storythread Studio uses a **three-layer local architecture**. No cloud. No sync.
 Two storage systems work together:
 
 - **Markdown files** -- the permanent source of truth. Chapters, profiles, notes, and summaries all live as `.md` files in the project folder. These are human-readable and can be backed up or published to GitHub as-is.
-- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. Stores parsed profile data, settings, model registry, and the assistant registry. Can be rebuilt from Markdown if corrupted or deleted.
+- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. Stores parsed profile data, app settings, and the model registry cache. Can be rebuilt from Markdown if corrupted or deleted.
 
 Think of Markdown as the filing cabinet and SQLite as the index cards on your desk -- the cabinet is what matters; the index cards just make lookup faster.
 
@@ -261,15 +278,17 @@ Each writing project the user creates gets its own folder:
 
 ```
 MyNovel/
-  project.json          <- project settings (model, content mode, etc.)
+  project.json          <- project settings (model, content mode, series linkage)
   manuscript/           <- chapter .md files
   notes/                <- outline, style guide, themes
-  profiles/             <- characters, relationships, locations, lore, summaries
+  profiles/             <- characters, relationships, locations, lore
+    arcs/               <- (series projects only) per-book character/relationship arcs
+  summaries/            <- AI summaries: chapters/ + scenes/<chapter-stem>/scene-NN.md
   exports/              <- combined manuscripts and dated snapshots
-  .storythread/          <- app.db, cache, logs (NOT source code)
+  .storythread/         <- app.db, cache, logs (NOT source code)
 ```
 
-Full folder schema is in `02-architecture-and-storage.md`.
+Full folder schema is in `docs/architecture.md`.
 
 ---
 
@@ -288,11 +307,13 @@ AI must **never silently overwrite** human-authored prose, profile descriptions,
 
 ### The Em Dash Rule
 
-**AI must never output em dashes (`,;:` is fine; `--` is not).** This is a locked product rule enforced at three layers:
+**AI must never output em dash or en dash characters (U+2014 / U+2013).** The approved substitute is `--` (double hyphen). This is a locked product rule enforced at three layers:
 
 1. **Prompt layer** -- every system prompt explicitly bans em dashes
-2. **Sanitizer layer** -- post-process all model output to detect and replace em dashes before displaying
+2. **Sanitizer layer** -- `backend/app/ai/sanitizer.py` post-processes all model output, replacing any em/en dash with `--`
 3. **Style guide layer** -- the project's style guide Markdown file records this rule
+
+Path nuance (since v1.0.6): prose-producing paths (Draft mode, revise suggestions) keep the approved `--` punctuation; the conversational chat path additionally folds `--` into commas/colons so replies read naturally. Routing is covered by `backend/tests/test_sanitizer_routing.py`.
 
 ### Content Mode
 

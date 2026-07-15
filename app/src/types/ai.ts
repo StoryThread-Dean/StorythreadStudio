@@ -47,31 +47,7 @@ export interface ModelInfo {
   output_modalities: string[];  // e.g. ["text"] or ["text","image"]
   is_free: boolean;             // true if :free suffix or zero cost
   is_moderated: boolean;        // true if model has content filters (refuses explicit)
-}
-
-// ── Assistants ────────────────────────────────────────────────────────────────
-
-export interface AssistantMeta {
-  id: string;
-  name: string;
-  category: string;
-  scope: string;
-  description: string;
-}
-
-export interface AssistantSuggestion {
-  label: string;
-  content: string;
-}
-
-export interface AssistantResponse {
-  assistant_id: string;
-  assistant_name: string;
-  summary: string;
-  suggestions: AssistantSuggestion[];
-  notes: string[];
-  model_used: string;
-  had_em_dashes: boolean;
+  supports_reasoning: boolean;  // true if the model can return a reasoning trace
 }
 
 // ── Importance Levels ─────────────────────────────────────────────────────────
@@ -98,7 +74,7 @@ export interface ChipIncludeFlags {
 }
 
 // A context chip is a piece of profile content the writer explicitly attaches
-// to an AI assistant request. The AI only sees what the writer chooses to share.
+// to an AI request. The AI only sees what the writer chooses to share.
 export interface ContextChip {
   type: string;    // "character" | "relationship" | "location" | "lore" | etc.
   name: string;    // Display name, e.g. "Elara Voss"
@@ -106,13 +82,6 @@ export interface ContextChip {
   // Optional metadata describing what slices were included when the chip was
   // built. Older chips may not have this; treat its absence as "unknown".
   include?: ChipIncludeFlags;
-}
-
-export interface RunAssistantPayload {
-  assistant_id: string;
-  selected_text: string;
-  model_id?: string;
-  context_chips?: ContextChip[];
 }
 
 // ── Profile Builder: Generation Payloads ─────────────────────────────────────
@@ -197,6 +166,10 @@ export type EnhanceLevel = "restate" | "default" | "expanded";
 export interface EditorChatMessage {
   role: "user" | "assistant";
   content: string;
+  // The model's reasoning trace for this assistant reply, present only when
+  // the Reasoning toggle was on and the model emitted one. Display-only --
+  // the backend ignores it when the message is sent back as history.
+  reasoning?: string;
 }
 
 export interface EditorChatPayload {
@@ -212,6 +185,9 @@ export interface EditorChatPayload {
   surrounding_context?: string;
   // Enhance mode only: how much to expand.
   enhance_level?:  EnhanceLevel;
+  // Reasoning toggle: ask for the model's reasoning trace (reasoning-capable
+  // models only; the UI hides the toggle otherwise).
+  include_reasoning?: boolean;
 }
 
 
@@ -264,7 +240,7 @@ export type IssueSeverity = "praise" | "issue" | "suggestion";
 // returns a category the frontend doesn't know how to color.
 export type ReadabilitySubcategory = "grammar" | "clarity" | "redundancy" | "descriptive";
 export type StructureSubcategory   = "dialogue" | "pov" | "tone" | "character" | "pacing";
-export type ContextSubcategory     = "character_consistency" | "relationships" | "setting" | "lore";
+export type ContextSubcategory     = "character_consistency" | "relationships" | "setting" | "lore" | "timeline" | "scene_goal";
 export type IssueSubcategory       = ReadabilitySubcategory | StructureSubcategory | ContextSubcategory;
 
 // One AI-flagged issue. The frontend matches `quote` against the editor's

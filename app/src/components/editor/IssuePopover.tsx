@@ -68,6 +68,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   relationships:         "Relationship",
   setting:               "Setting",
   lore:                  "Lore",
+  timeline:              "Timeline",
+  scene_goal:            "Scene Goal",
 };
 
 

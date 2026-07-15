@@ -1,22 +1,18 @@
-// ProfileBuilder.tsx -- The Profile Builder Screen (Phase 5A Rebuild)
+// ProfileBuilder.tsx -- The Profile Builder Screen
 // ====================================================================
 // Three-panel layout:
 //   Left   -- profile type tabs, list of profiles, create/import buttons
 //   Center -- structured form editor with importance-level trait blocks
+//            (core/present/background/contextual/hidden) and an adaptive
+//            word count gauge per trait block
 //   Right  -- Profile Companion chat with 4 behavior modes
+//            (chat/extract_traits/check_consistency/refine)
 //
 // Data flow:
 //   1. On mount / type change: fetch profile list from backend
 //   2. On profile click: fetch full profile, display in editor
 //   3. As writer edits: update local state (dirty tracking)
 //   4. On Ctrl+S or Save: POST to backend, mark saved
-//
-// This is a clean rebuild from Phase 4. Key changes:
-//   - importance levels replace influence scale (core/present/background/contextual/hidden)
-//   - ai_usage_example and notes fields removed from trait blocks
-//   - adaptive word count gauge per trait block
-//   - 4 behavior modes (chat/extract_traits/check_consistency/refine)
-//   - ToolKit removed (replaced by auto-suggest in Phase 5D)
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X } from "lucide-react";
@@ -1035,8 +1031,8 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     const timeoutId = setTimeout(() => controller.abort(), 90_000);
 
     try {
-      // Build context: for now, send full profile content.
-      // Phase 5D will add auto-suggested Toolkit context.
+      // The Profile Companion always receives the full formatted profile
+      // as its context -- no per-section selection.
       const profileContent = formatProfileForAI(profile);
 
       const res = await fetch(`${API_BASE}/api/ai/profile-chat`, {

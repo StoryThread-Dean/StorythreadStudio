@@ -383,7 +383,6 @@ def _build_docx(chapters: list[tuple[str, str]], title: str) -> bytes:
       - Body lines get inline bold/italic from their Markdown spans
     """
     from docx import Document
-    from docx.shared import Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     doc = Document()

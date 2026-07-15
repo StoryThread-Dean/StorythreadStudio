@@ -37,6 +37,14 @@ export interface NotesSummary {
   weight:     number;
 }
 
+export interface ChapterProgress {
+  filename:     string;            // e.g. "01-landing.md"
+  title:        string;            // from the chapter's first # heading, or the filename
+  actual_words: number;
+  target_words: number | null;     // from outline chapters[].word_target, if matched
+  percent:      number | null;     // 0-100 toward the target; null when no target
+}
+
 export interface ProgressSummary {
   story_type:  string;
   is_serial:   boolean;            // serial_fiction projects render placeholder card
@@ -45,6 +53,7 @@ export interface ProgressSummary {
   outline:     OutlineSummary;
   profiles:    ProfilesSummary;
   notes:       NotesSummary;
+  chapters:    ChapterProgress[];  // per-chapter breakdown, manuscript order
 }
 
 export interface TaskCreditEntry {

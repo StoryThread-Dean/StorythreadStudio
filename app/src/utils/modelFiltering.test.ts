@@ -11,6 +11,10 @@ import {
   RECOMMENDED_MODELS,
   MODERATED_PROVIDERS,
   EXPLICIT_ALLOWED_PROVIDERS,
+  TIERS,
+  tierIndex,
+  modelPassesTier,
+  modelIsTextOnly,
 } from "./modelFiltering";
 import type { ModelInfo } from "../types/ai";
 
@@ -25,6 +29,7 @@ function model(id: string, opts: Partial<ModelInfo> = {}): ModelInfo {
     output_modalities: ["text"],
     is_free: false,
     is_moderated: false,
+    supports_reasoning: false,
     ...opts,
   };
 }
@@ -74,5 +79,55 @@ describe("RECOMMENDED_MODELS", () => {
       MODERATED_PROVIDERS.some(p => rec.id.startsWith(p)),
     );
     expect(moderated.length).toBeGreaterThan(0);
+  });
+
+  it("has flagship picks, including at least one unmoderated for explicit mode", () => {
+    const flagships = RECOMMENDED_MODELS.filter(rec => rec.flagship);
+    expect(flagships.length).toBeGreaterThan(0);
+    const explicitOk = flagships.filter(rec =>
+      EXPLICIT_ALLOWED_PROVIDERS.some(p => rec.id.startsWith(p)),
+    );
+    expect(explicitOk.length).toBeGreaterThan(0);
+  });
+});
+
+describe("cost tiers", () => {
+  it("defines four stops with frozen stored values in slider order", () => {
+    // The VALUES are stored in settings.json / project.json on user machines;
+    // renaming one silently orphans saved settings. Labels may change freely.
+    expect(TIERS.map(t => t.value)).toEqual(["free", "budget", "standard", "premium"]);
+    expect(tierIndex("free")).toBe(0);
+    expect(tierIndex("premium")).toBe(3);
+  });
+
+  it("modelPassesTier caps by input price per tier", () => {
+    const free   = model("a/free",   { is_free: true, cost_input_per_million: 0 });
+    const cheap  = model("a/cheap",  { cost_input_per_million: 0.8 });
+    const mid    = model("a/mid",    { cost_input_per_million: 10 });
+    const flag   = model("a/flag",   { cost_input_per_million: 30 });
+
+    expect(modelPassesTier(free,  "free")).toBe(true);
+    expect(modelPassesTier(cheap, "free")).toBe(false);
+
+    expect(modelPassesTier(cheap, "budget")).toBe(true);
+    expect(modelPassesTier(mid,   "budget")).toBe(false);
+
+    expect(modelPassesTier(mid,  "standard")).toBe(true);
+    expect(modelPassesTier(flag, "standard")).toBe(false);
+
+    // Priority Best (top stop): everything passes.
+    expect(modelPassesTier(flag, "premium")).toBe(true);
+  });
+});
+
+describe("modelIsTextOnly", () => {
+  it("passes text-only and undeclared-modality models", () => {
+    expect(modelIsTextOnly(model("a/text", { output_modalities: ["text"] }))).toBe(true);
+    expect(modelIsTextOnly(model("a/none", { output_modalities: [] }))).toBe(true);
+  });
+
+  it("rejects models with image/audio/video output", () => {
+    expect(modelIsTextOnly(model("a/img", { output_modalities: ["text", "image"] }))).toBe(false);
+    expect(modelIsTextOnly(model("a/vid", { output_modalities: ["video"] }))).toBe(false);
   });
 });

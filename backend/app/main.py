@@ -99,15 +99,3 @@ app.include_router(series.router)
 app.include_router(export.router)
 app.include_router(progress.router)
 app.include_router(search.router)
-
-
-# --- What Comes Next ---
-# As we build out phases 1-6, we will add more routes here (or in separate
-# router files that we "include" into this app). For example:
-#
-#   from app.routers import projects, documents, profiles, ai
-#   app.include_router(profiles.router)
-#   app.include_router(ai.router)
-#
-# Each router file will handle one area of the app (projects, chapters, etc.)
-# and keeps this main.py clean and readable.

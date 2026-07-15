@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from app.outline_frontmatter import parse_outline_frontmatter
 from app.outline_templates import TEMPLATE_DEFAULTS
 from app.progress_store import count_words, local_date_for, open_db
+from app.routers.documents import _title_from_file
 from app.settings_store import get_rollover_hour, load_settings
 
 
@@ -73,6 +74,20 @@ class ManuscriptSummary(BaseModel):
     weight: float                # contribution to the overall gauge (0-100)
 
 
+class ChapterProgress(BaseModel):
+    """
+    One manuscript chapter's word count, paired (when possible) with its
+    per-chapter word target from the outline frontmatter's `chapters:` list.
+    Chapters without a matching outline entry report target_words=None --
+    the slide-over shows them as info rows without a bar.
+    """
+    filename: str                # e.g. "01-landing.md"
+    title: str                   # from the first # heading, or the filename
+    actual_words: int
+    target_words: int | None     # from outline chapters[].word_target, if matched
+    percent: float | None        # 0-100 toward the target; None when no target
+
+
 class OutlineSummary(BaseModel):
     present: bool
     has_frontmatter: bool
@@ -106,6 +121,7 @@ class SummaryResponse(BaseModel):
     outline: OutlineSummary
     profiles: ProfilesSummary
     notes: NotesSummary
+    chapters: list[ChapterProgress] = []  # per-chapter breakdown, manuscript order
 
 
 class TaskCreditEntry(BaseModel):
@@ -241,14 +257,18 @@ def _loose_name_match(outline_name: str, profile_names: list[str]) -> str | None
 
 # ── Helpers: file system word counts ─────────────────────────────────────────
 
-def _manuscript_word_count(project_path: str) -> tuple[int, int]:
-    """Return (total_words, chapter_count) for the manuscript/ folder."""
+def _manuscript_chapter_counts(project_path: str) -> list[tuple[str, str, int]]:
+    """
+    Return (filename, title, word_count) for every chapter in manuscript/,
+    in filename (= reading) order. The title comes from the chapter's first
+    `# Heading` line, falling back to a prettified filename -- the same rule
+    the chapter list in the left panel uses (_title_from_file).
+    """
     folder = os.path.join(project_path, "manuscript")
     if not os.path.isdir(folder):
-        return 0, 0
+        return []
 
-    total = 0
-    chapters = 0
+    chapters: list[tuple[str, str, int]] = []
     for fname in sorted(os.listdir(folder)):
         if not fname.endswith(".md"):
             continue
@@ -257,11 +277,58 @@ def _manuscript_word_count(project_path: str) -> tuple[int, int]:
             continue
         try:
             with open(path, "r", encoding="utf-8") as f:
-                total += count_words(f.read())
-            chapters += 1
+                words = count_words(f.read())
         except OSError:
             continue
-    return total, chapters
+        chapters.append((fname, _title_from_file(path, fname), words))
+    return chapters
+
+
+def _chapter_progress_list(
+    chapter_counts: list[tuple[str, str, int]],
+    frontmatter: dict[str, Any],
+) -> list[ChapterProgress]:
+    """
+    Pair each manuscript chapter with its word target from the outline
+    frontmatter's `chapters:` list (entries look like {title, word_target}).
+
+    Matching uses the same loose case-insensitive substring rule as the
+    profiles bucket, tried against the chapter's heading title first and its
+    filename second. Each outline entry can credit at most one chapter file
+    (first match wins, in reading order) so one generic outline title can't
+    hand the same target to every chapter.
+    """
+    # Normalize the outline entries defensively -- this YAML is hand-edited,
+    # so entries can be missing fields or be the wrong type mid-keystroke.
+    raw = frontmatter.get("chapters", []) or []
+    outline_entries: list[dict[str, Any]] = []
+    if isinstance(raw, list):
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            title = str(entry.get("title", "") or "").strip()
+            target = entry.get("word_target")
+            if title and isinstance(target, int) and target > 0:
+                outline_entries.append({"title": title, "word_target": target})
+
+    unclaimed = list(outline_entries)   # entries not yet matched to a file
+    result: list[ChapterProgress] = []
+    for fname, title, words in chapter_counts:
+        target: int | None = None
+        for entry in unclaimed:
+            if (_loose_name_match(entry["title"], [title])
+                    or _loose_name_match(entry["title"], [fname[:-3].replace("-", " ")])):
+                target = entry["word_target"]
+                unclaimed.remove(entry)
+                break
+        result.append(ChapterProgress(
+            filename=fname,
+            title=title,
+            actual_words=words,
+            target_words=target,
+            percent=round(min(100.0, 100.0 * words / target), 1) if target else None,
+        ))
+    return result
 
 
 def _notes_present(project_path: str) -> tuple[bool, int]:
@@ -309,7 +376,11 @@ async def get_summary(project_path: str) -> SummaryResponse:
     has_frontmatter = bool(frontmatter)
 
     # Manuscript -- words on disk vs. target from outline (or template default).
-    manuscript_actual, chapter_count = _manuscript_word_count(project_path)
+    # The per-chapter list also feeds the slide-over's chapter breakdown.
+    chapter_counts = _manuscript_chapter_counts(project_path)
+    manuscript_actual = sum(words for _, _, words in chapter_counts)
+    chapter_count = len(chapter_counts)
+    chapter_progress = _chapter_progress_list(chapter_counts, frontmatter)
     target_from_outline = frontmatter.get("target_word_count")
     if isinstance(target_from_outline, int) and target_from_outline > 0:
         manuscript_target: int | None = target_from_outline
@@ -422,6 +493,7 @@ async def get_summary(project_path: str) -> SummaryResponse:
             file_count=notes_count,
             weight=notes_weight,
         ),
+        chapters=chapter_progress,
     )
 
 

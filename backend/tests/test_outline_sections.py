@@ -8,7 +8,6 @@
 # with \n. The result is sections become permanently invisible in the Planner
 # and a subsequent Planner save deletes them from the file entirely.
 
-import pytest
 from app.routers.documents import (
     _parse_outline_sections,
     _reconstruct_outline,

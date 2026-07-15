@@ -18,34 +18,15 @@ import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star, Folder, Sun, Moon }
 import type { AppSettings, ModelInfo } from "../types/ai";
 import { useTheme } from "../hooks/useTheme";
 import { useUiScale, UI_SCALE_PX, type UiScale } from "../hooks/useUiScale";
-// Content-mode filter + curated recommended list now live in a shared util so
-// Settings and ProjectSettings can't drift apart (see utils/modelFiltering.ts).
-import { filterModelByContentMode, RECOMMENDED_MODELS } from "../utils/modelFiltering";
+// Content-mode filter, cost tiers, media filter, and the curated recommended
+// list all live in a shared util so Settings and ProjectSettings can't drift
+// apart (see utils/modelFiltering.ts).
+import {
+  filterModelByContentMode, RECOMMENDED_MODELS,
+  TIERS, tierIndex, modelPassesTier, modelIsTextOnly, type TierValue,
+} from "../utils/modelFiltering";
 
 const API_BASE = "http://localhost:8000";
-
-// ── Tier Slider ───────────────────────────────────────────────────────────────
-// Maps a 0-3 integer position to a label and a filter function.
-// The filter is applied to the model list to compute what the picker shows.
-const TIERS = [
-  { value: "free",     label: "Free Only",      threshold: 0    },
-  { value: "budget",   label: "Budget",          threshold: 1.0  },
-  { value: "standard", label: "Standard",        threshold: 15.0 },
-  { value: "premium",  label: "Premium",         threshold: Infinity },
-] as const;
-
-type TierValue = (typeof TIERS)[number]["value"];
-
-function tierIndex(value: TierValue): number {
-  return TIERS.findIndex(t => t.value === value);
-}
-
-function modelPassesTier(m: ModelInfo, tier: TierValue): boolean {
-  if (tier === "free")     return m.is_free;
-  if (tier === "budget")   return m.cost_input_per_million <= 1.0;
-  if (tier === "standard") return m.cost_input_per_million <= 15.0;
-  return true; // premium: everything
-}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface SettingsProps {
@@ -113,9 +94,7 @@ export function Settings({ onClose }: SettingsProps) {
   // Applies tier threshold + text-only filter.
   // Always includes the currently selected model (prevents it disappearing).
   const visibleModels = models.filter(m => {
-    const textOk = !textOnlyFilter
-      || m.output_modalities.every(mod => mod === "text")
-      || m.output_modalities.length === 0;
+    const textOk = !textOnlyFilter || modelIsTextOnly(m);
     // Content mode filter: mature hides strict providers, explicit whitelists known unmoderated
     const contentOk = filterModelByContentMode(m, contentMode);
     return modelPassesTier(m, costTier) && textOk && contentOk;
@@ -136,6 +115,16 @@ export function Settings({ onClose }: SettingsProps) {
     const model = models.find(m => m.id === rec.id);
     return model !== undefined && filterModelByContentMode(model, contentMode);
   });
+
+  // At the top "Priority Best" stop, the flagship-class picks get their own
+  // pinned group for one-click access. They're pulled OUT of the Recommended
+  // group while the flagship group is visible so each model appears once.
+  const flagshipPicks = costTier === "premium"
+    ? availableRecommended.filter(rec => rec.flagship)
+    : [];
+  const recommendedPicks = flagshipPicks.length > 0
+    ? availableRecommended.filter(rec => !rec.flagship)
+    : availableRecommended;
 
   // User-starred models that exist in the fetched list
   const availableFavorites = starredModels.filter(id =>
@@ -421,6 +410,8 @@ export function Settings({ onClose }: SettingsProps) {
                   <p className="mb-3 text-xs text-faint">
                     Filters which models appear in the picker below.
                     Your selected model is always used regardless of this setting.
+                    At Priority Best, flagship-class picks are pinned at the top
+                    of the list for one-click access.
                   </p>
                   <input
                     type="range"
@@ -509,15 +500,41 @@ export function Settings({ onClose }: SettingsProps) {
                     // Full three-section picker
                     <div className="max-h-72 overflow-y-auto rounded border border-border bg-bg-primary">
 
+                      {/* Flagship -- only at the Priority Best tier stop */}
+                      {flagshipPicks.length > 0 && (
+                        <>
+                          <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
+                            <p className="text-xs font-semibold text-amber-400">
+                              ★ Flagship
+                            </p>
+                          </div>
+                          {flagshipPicks.map(rec => {
+                            const model = models.find(m => m.id === rec.id)!;
+                            return (
+                              <ModelRow
+                                key={rec.id}
+                                model={model}
+                                note={rec.note}
+                                isSelected={selectedModel === rec.id}
+                                isStarred={starredModels.includes(rec.id)}
+                                onSelect={() => setSelectedModel(rec.id)}
+                                onToggleStar={() => toggleStar(rec.id)}
+                              />
+                            );
+                          })}
+                          <div className="border-b border-border" />
+                        </>
+                      )}
+
                       {/* Recommended */}
-                      {availableRecommended.length > 0 && (
+                      {recommendedPicks.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
                             <p className="text-xs font-semibold text-indigo-400">
                               ★ Recommended
                             </p>
                           </div>
-                          {availableRecommended.map(rec => {
+                          {recommendedPicks.map(rec => {
                             const model = models.find(m => m.id === rec.id)!;
                             return (
                               <ModelRow
