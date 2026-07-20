@@ -48,6 +48,179 @@ const TIER_LABELS: Record<string, string> = {
   premium:  "Priority Best",
 };
 
+// ── Suggestion picker data ────────────────────────────────────────────────────
+// Clickable checkbox options for the free-text story fields (Genre, Tone,
+// Target Audience). New writers often freeze at a blank box; these are
+// training wheels, not a taxonomy -- clicking one inserts its text into the
+// box, clicking again removes it, and hand-typing anything unique ("High
+// Space Adventure") always works. Grouped most-popular-first: the first
+// group is the broad categories, the following groups are the popular
+// subcategories under each.
+
+interface SuggestionGroup {
+  label:   string;
+  options: string[];
+}
+
+const GENRE_SUGGESTIONS: SuggestionGroup[] = [
+  { label: "Popular categories", options: [
+    "Fantasy", "Romance", "Mystery", "Thriller", "Science Fiction",
+    "Horror", "Historical Fiction", "Literary Fiction",
+  ]},
+  { label: "Fantasy subcategories", options: [
+    "Epic Fantasy", "Urban Fantasy", "Dark Fantasy", "Cozy Fantasy", "Romantasy",
+  ]},
+  { label: "Sci-Fi subcategories", options: [
+    "Space Opera", "Sci-Fi Thriller", "Dystopian", "Cyberpunk", "Time Travel",
+  ]},
+  { label: "Romance subcategories", options: [
+    "Contemporary Romance", "Historical Romance", "Paranormal Romance", "Romantic Comedy",
+  ]},
+  { label: "Mystery & Thriller subcategories", options: [
+    "Cozy Mystery", "Police Procedural", "Psychological Thriller", "Noir",
+  ]},
+  { label: "More", options: [
+    "Adventure", "Coming of Age", "Magical Realism", "Western", "Satire",
+  ]},
+];
+
+const TONE_SUGGESTIONS: SuggestionGroup[] = [
+  { label: "Popular", options: [
+    "Dark", "Lighthearted", "Humorous", "Hopeful",
+    "Atmospheric", "Fast-paced", "Emotional", "Gritty",
+  ]},
+  { label: "More", options: [
+    "Whimsical", "Suspenseful", "Melancholic", "Cozy", "Wry",
+    "Epic", "Bleak", "Romantic", "Slow burn", "Satirical",
+  ]},
+];
+
+const AUDIENCE_SUGGESTIONS: SuggestionGroup[] = [
+  { label: "Popular", options: [
+    "Adult", "Young Adult (13-18)", "Middle Grade (8-12)", "New Adult (18-25)",
+  ]},
+  { label: "More", options: [
+    "Children (5-8)", "Adult 18+ (mature content)", "All ages",
+  ]},
+];
+
+// ── Comma-list helpers for the suggestion picker ─────────────────────────────
+// The field value is treated as a comma-separated list ("Fantasy, Romantasy").
+// A suggestion is "checked" when it appears as one of those parts
+// (case-insensitive), so hand-typed entries and clicked entries coexist.
+
+// Exported for unit tests (ProjectSettings.helpers.test.ts) -- this little
+// parser must never mangle a hand-typed value.
+export function splitParts(value: string): string[] {
+  return value.split(",").map(p => p.trim()).filter(Boolean);
+}
+
+export function hasPart(value: string, option: string): boolean {
+  return splitParts(value).some(p => p.toLowerCase() === option.toLowerCase());
+}
+
+export function togglePart(value: string, option: string): string {
+  const parts = splitParts(value);
+  const remaining = parts.filter(p => p.toLowerCase() !== option.toLowerCase());
+  if (remaining.length !== parts.length) {
+    return remaining.join(", ");        // was checked -> remove it
+  }
+  return [...parts, option].join(", "); // wasn't -> append it
+}
+
+// ── SuggestionPicker ─────────────────────────────────────────────────────────
+// The "Show suggestions" toggle + grouped checkbox chips under a text field.
+// Collapsed by default so experienced writers who just type see no clutter.
+function SuggestionPicker({
+  value,
+  onChange,
+  groups,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  groups: SuggestionGroup[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="text-[11px] text-indigo-300/80 transition-colors hover:text-indigo-300"
+        title="Common choices -- click to add or remove them from the box above"
+      >
+        {open ? "Hide suggestions" : "Show suggestions..."}
+      </button>
+
+      {open && (
+        <div className="mt-1.5 space-y-2 rounded border border-border bg-bg-surface/50 p-2">
+          {groups.map(group => (
+            <div key={group.label}>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                {group.label}
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {group.options.map(opt => {
+                  const checked = hasPart(value, opt);
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => onChange(togglePart(value, opt))}
+                      className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors ${
+                        checked
+                          ? "border-indigo-500/60 bg-indigo-900/30 text-indigo-300"
+                          : "border-border bg-bg-panel text-text-muted hover:border-faint hover:text-text-primary"
+                      }`}
+                      title={checked ? `Remove "${opt}"` : `Add "${opt}"`}
+                    >
+                      <span aria-hidden="true">{checked ? "☑" : "☐"}</span>
+                      <span>{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Point of View help content ───────────────────────────────────────────────
+// Plain-language explanations + a popularity-based recommendation, shown
+// behind a "What's this?" toggle next to the POV label. Same embedded-help
+// philosophy as the Writing Companion's mode help.
+const POV_HELP: { name: string; what: string; note: string }[] = [
+  {
+    name: "First",
+    what: "The narrator IS a character: \"I walked into the room.\" The reader lives inside one head, hearing every thought.",
+    note: "Very popular in Young Adult, romance, and thrillers. Maximum intimacy; the tradeoff is you can only show what that one character sees and knows.",
+  },
+  {
+    name: "Second",
+    what: "The story addresses the reader directly: \"You walk into the room.\"",
+    note: "Rare and experimental -- striking in short fiction, exhausting over a novel. Pick it deliberately, not by default.",
+  },
+  {
+    name: "Third Limited",
+    what: "\"She walked into the room\" -- but the camera stays behind ONE character's eyes per scene, sharing only their thoughts.",
+    note: "The most popular choice in modern fiction, and the safest default: nearly first-person intimacy with more flexibility.",
+  },
+  {
+    name: "Third Omniscient",
+    what: "An all-knowing narrator who can dip into anyone's thoughts and comment on the story from above -- the classic 19th-century voice.",
+    note: "Gives an epic, storyteller feel but is the hardest to control: sliding between heads mid-scene (\"head-hopping\") reads as a mistake unless handled deliberately.",
+  },
+  {
+    name: "Multiple",
+    what: "Several point-of-view characters, each owning their chapters or scenes (each usually written in first or third limited).",
+    note: "Standard for epic fantasy and dual-POV romance. Works best with clear breaks at every switch so the reader always knows whose head they're in.",
+  },
+];
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface ProjectSettingsProps {
   project: ProjectInfo;
@@ -100,6 +273,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
   // Help guide expanded state
   const [showGuide, setShowGuide] = useState(false);
+  // Point of View "What's this?" panel
+  const [showPovHelp, setShowPovHelp] = useState(false);
 
   // UI state
   const [saving, setSaving]   = useState(false);
@@ -391,6 +566,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   placeholder="e.g. epic fantasy, sci-fi thriller, contemporary romance"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
+                <SuggestionPicker value={genre} onChange={setGenre} groups={GENRE_SUGGESTIONS} />
               </div>
 
               <div className="mb-4">
@@ -405,6 +581,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   placeholder="e.g. dark, atmospheric, slow burn, humorous"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
+                <SuggestionPicker value={tone} onChange={setTone} groups={TONE_SUGGESTIONS} />
               </div>
 
               <div className="mb-4">
@@ -452,9 +629,25 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
               </div>
 
               {/* POV and Tense side by side -- both are short pick-lists */}
-              <div className="mb-4 grid grid-cols-2 gap-3">
+              <div className="mb-3 grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-text-primary">Point of View</label>
+                  <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-text-primary">
+                    Point of View
+                    <button
+                      type="button"
+                      onClick={() => setShowPovHelp(h => !h)}
+                      className={`flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] transition-colors ${
+                        showPovHelp
+                          ? "text-indigo-300"
+                          : "text-faint hover:text-indigo-300"
+                      }`}
+                      title="What do these options mean, and which should I pick?"
+                      aria-expanded={showPovHelp}
+                    >
+                      <HelpCircle size={11} />
+                      <span>What's this?</span>
+                    </button>
+                  </label>
                   <select
                     value={pointOfView}
                     onChange={e => setPointOfView(e.target.value)}
@@ -484,6 +677,31 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 </div>
               </div>
 
+              {/* POV explainer -- expands full-width below the POV/Tense row
+                  so the two-column grid doesn't squeeze the text. */}
+              {showPovHelp && (
+                <div className="mb-3 rounded border border-indigo-800/40 bg-indigo-950/20 p-3">
+                  <div className="space-y-2">
+                    {POV_HELP.map(pov => (
+                      <div key={pov.name}>
+                        <p className="text-xs font-semibold text-indigo-300">{pov.name}</p>
+                        <p className="text-xs text-text-muted">{pov.what}</p>
+                        <p className="text-xs text-faint">{pov.note}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 border-t border-indigo-800/40 pt-2 text-xs text-text-muted">
+                    <span className="font-semibold text-indigo-300">Not sure? </span>
+                    Pick <span className="text-text-primary">Third Limited</span> -- it's
+                    the most popular choice in modern fiction and the easiest to keep
+                    consistent. Writing Young Adult or romance and want the reader glued
+                    to one voice? <span className="text-text-primary">First</span> is the
+                    genre favorite. Juggling a big cast (epic fantasy, dual-POV romance)?
+                    Choose <span className="text-text-primary">Multiple</span>.
+                  </p>
+                </div>
+              )}
+
               <div className="mb-4">
                 <label className="mb-1 block text-xs font-medium text-text-primary">Target Audience</label>
                 <p className="mb-1 text-xs text-faint">
@@ -496,6 +714,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   placeholder="e.g. Adult, Young Adult, Middle Grade"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
+                <SuggestionPicker value={targetAudience} onChange={setTargetAudience} groups={AUDIENCE_SUGGESTIONS} />
               </div>
 
               {/* Series info (read-only if applicable) */}
