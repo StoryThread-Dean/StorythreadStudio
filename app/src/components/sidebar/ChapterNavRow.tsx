@@ -16,6 +16,8 @@ import { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
 import type { ChapterInfo } from "../../types/project";
 import type { SceneSummaryInfo } from "../../types/ai";
+import { RowMenu } from "./RowMenu";
+import type { RowMenuItem } from "./RowMenu";
 
 export function ChapterNavRow({
   chapter,
@@ -35,6 +37,7 @@ export function ChapterNavRow({
   onToggleScenesExpanded,
   onOpenScene,
   onDeleteScene,
+  menuItems,
 }: {
   chapter:                ChapterInfo;
   isExpanded:             boolean;
@@ -59,6 +62,11 @@ export function ChapterNavRow({
   onToggleScenesExpanded: () => void;
   onOpenScene:            (index: number) => void;
   onDeleteScene:          (index: number) => void;
+  // When provided, the hover trash icon is replaced by a RowMenu holding
+  // these items (Move up / Move to Act / Delete...). One hover control per
+  // row keeps the tree calm; the acts view uses this, the flat fallback
+  // view keeps the plain trash.
+  menuItems?:             RowMenuItem[];
 }) {
   // Softer highlight for the parent chapter row when the child summary is
   // active -- helps the eye trace back up the tree without dominating the row.
@@ -141,14 +149,18 @@ export function ChapterNavRow({
           </button>
         )}
         {!editing && (
-          <button
-            onClick={onDeleteChapter}
-            className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
-            title={`Delete ${chapter.title}`}
-            aria-label={`Delete ${chapter.title}`}
-          >
-            <Trash2 size={12} />
-          </button>
+          menuItems ? (
+            <RowMenu items={menuItems} ariaLabel={`Chapter actions for ${chapter.title}`} />
+          ) : (
+            <button
+              onClick={onDeleteChapter}
+              className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+              title={`Delete ${chapter.title}`}
+              aria-label={`Delete ${chapter.title}`}
+            >
+              <Trash2 size={12} />
+            </button>
+          )
         )}
       </div>
 
