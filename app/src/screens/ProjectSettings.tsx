@@ -60,48 +60,123 @@ const TIER_LABELS: Record<string, string> = {
 interface SuggestionGroup {
   label:   string;
   options: string[];
+  // Optional per-option explanations, revealed by the group's "What's this?"
+  // toggle. Keyed by the exact option string. Embedded help is a first-class
+  // feature here -- new writers shouldn't have to google "what is noir".
+  help?:   Record<string, string>;
 }
 
 const GENRE_SUGGESTIONS: SuggestionGroup[] = [
-  { label: "Popular categories", options: [
-    "Fantasy", "Romance", "Mystery", "Thriller", "Science Fiction",
-    "Horror", "Historical Fiction", "Literary Fiction",
-  ]},
-  { label: "Fantasy subcategories", options: [
-    "Epic Fantasy", "Urban Fantasy", "Dark Fantasy", "Cozy Fantasy", "Romantasy",
-  ]},
-  { label: "Sci-Fi subcategories", options: [
-    "Space Opera", "Sci-Fi Thriller", "Dystopian", "Cyberpunk", "Time Travel",
-  ]},
-  { label: "Romance subcategories", options: [
-    "Contemporary Romance", "Historical Romance", "Paranormal Romance", "Romantic Comedy",
-  ]},
-  { label: "Mystery & Thriller subcategories", options: [
-    "Cozy Mystery", "Police Procedural", "Psychological Thriller", "Noir",
-  ]},
-  { label: "More", options: [
-    "Adventure", "Coming of Age", "Magical Realism", "Western", "Satire",
-  ]},
+  { label: "Popular categories",
+    options: [
+      "Fantasy", "Romance", "Mystery", "Thriller", "Science Fiction",
+      "Horror", "Historical Fiction", "Literary Fiction",
+    ],
+    help: {
+      "Fantasy": "Magic, invented worlds, or the supernatural at the core of the story.",
+      "Romance": "The love story is the main plot; readers expect an emotionally satisfying ending.",
+      "Mystery": "A crime or puzzle drives the plot; the reader follows clues toward the solution.",
+      "Thriller": "Constant tension and high stakes -- the hero races to stop a threat.",
+      "Science Fiction": "Speculative stories grounded in science, technology, or the future.",
+      "Horror": "Written to frighten or unsettle: dread, monsters, the uncanny.",
+      "Historical Fiction": "Set in a real past era, blending invented characters with period detail.",
+      "Literary Fiction": "Character- and prose-driven work that prioritizes theme and style over plot.",
+    }},
+  { label: "Fantasy subcategories",
+    options: ["Epic Fantasy", "Urban Fantasy", "Dark Fantasy", "Cozy Fantasy", "Romantasy"],
+    help: {
+      "Epic Fantasy": "Large-scale, often multi-book quests across richly built worlds -- sweeping wars, chosen heroes.",
+      "Urban Fantasy": "Magic hidden inside the modern real world: present-day cities and the supernatural.",
+      "Dark Fantasy": "Fantasy with horror's mood -- grim, violent, morally shadowed.",
+      "Cozy Fantasy": "Low-stakes, comforting fantasy: warmth, community, small adventures.",
+      "Romantasy": "Fantasy and romance in equal measure -- the love story matters as much as the magic.",
+    }},
+  { label: "Sci-Fi subcategories",
+    options: ["Space Opera", "Sci-Fi Thriller", "Dystopian", "Cyberpunk", "Time Travel"],
+    help: {
+      "Space Opera": "Grand adventure across galaxies -- starships, empires, larger-than-life stakes.",
+      "Sci-Fi Thriller": "Fast, tense plots powered by a scientific or technological threat.",
+      "Dystopian": "A broken or oppressive future society the characters must survive or resist.",
+      "Cyberpunk": "High tech, low life -- hackers, megacorps, neon cities.",
+      "Time Travel": "Plots built around moving through time and dealing with the consequences.",
+    }},
+  { label: "Romance subcategories",
+    options: ["Contemporary Romance", "Historical Romance", "Paranormal Romance", "Romantic Comedy"],
+    help: {
+      "Contemporary Romance": "Present-day love stories in realistic settings.",
+      "Historical Romance": "Romance set in a past era -- Regency, Victorian, and the like.",
+      "Paranormal Romance": "Love stories with supernatural partners: vampires, shifters, ghosts.",
+      "Romantic Comedy": "Light, funny romance with a feel-good tone.",
+    }},
+  { label: "Mystery & Thriller subcategories",
+    options: ["Cozy Mystery", "Police Procedural", "Psychological Thriller", "Noir"],
+    help: {
+      "Cozy Mystery": "Gentle, low-gore mysteries -- often an amateur sleuth in a small community.",
+      "Police Procedural": "Crime solved through realistic police investigation and detective work.",
+      "Psychological Thriller": "Tension from the mind: unreliable narrators, manipulation, paranoia.",
+      "Noir": "Bleak, morally gray crime fiction with a cynical, atmospheric edge.",
+    }},
+  { label: "More",
+    options: ["Adventure", "Coming of Age", "Magical Realism", "Western", "Satire"],
+    help: {
+      "Adventure": "Action, journeys, and physical danger drive the story.",
+      "Coming of Age": "A young protagonist grows into adulthood and self-understanding.",
+      "Magical Realism": "Realistic worlds where magic is woven in matter-of-factly.",
+      "Western": "Frontier settings -- the American Old West and its myths.",
+      "Satire": "Uses humor and exaggeration to criticize society or human folly.",
+    }},
 ];
 
 const TONE_SUGGESTIONS: SuggestionGroup[] = [
-  { label: "Popular", options: [
-    "Dark", "Lighthearted", "Humorous", "Hopeful",
-    "Atmospheric", "Fast-paced", "Emotional", "Gritty",
-  ]},
-  { label: "More", options: [
-    "Whimsical", "Suspenseful", "Melancholic", "Cozy", "Wry",
-    "Epic", "Bleak", "Romantic", "Slow burn", "Satirical",
-  ]},
+  { label: "Popular",
+    options: [
+      "Dark", "Lighthearted", "Humorous", "Hopeful",
+      "Atmospheric", "Fast-paced", "Emotional", "Gritty",
+    ],
+    help: {
+      "Dark": "Heavy, serious, often grim subject matter and mood.",
+      "Lighthearted": "Easygoing and fun -- nothing weighs the reader down.",
+      "Humorous": "Written for laughs: wit, comedy, absurdity.",
+      "Hopeful": "Even through hardship, the mood points toward something better.",
+      "Atmospheric": "Mood and setting are vivid enough to feel like a character.",
+      "Fast-paced": "Short scenes, quick momentum, little downtime.",
+      "Emotional": "Aims straight for the reader's feelings.",
+      "Gritty": "Raw, unglamorous realism -- hardship shown unflinchingly.",
+    }},
+  { label: "More",
+    options: [
+      "Whimsical", "Suspenseful", "Melancholic", "Cozy", "Wry",
+      "Epic", "Bleak", "Romantic", "Slow burn", "Satirical",
+    ],
+    help: {
+      "Whimsical": "Playful, fanciful, charmingly odd.",
+      "Suspenseful": "Keeps the reader anxious about what happens next.",
+      "Melancholic": "A wistful, sad, reflective mood.",
+      "Cozy": "Warm, safe, and comforting.",
+      "Wry": "Dry, ironic humor delivered with a straight face.",
+      "Epic": "Grand, sweeping, larger than life.",
+      "Bleak": "Little comfort or hope -- heavy and stark.",
+      "Romantic": "Centered on love, longing, and connection.",
+      "Slow burn": "Tension or romance built gradually over a long stretch.",
+      "Satirical": "Mocking, critical humor aimed at a target.",
+    }},
 ];
 
 const AUDIENCE_SUGGESTIONS: SuggestionGroup[] = [
-  { label: "Popular", options: [
-    "Adult", "Young Adult (13-18)", "Middle Grade (8-12)", "New Adult (18-25)",
-  ]},
-  { label: "More", options: [
-    "Children (5-8)", "All ages",
-  ]},
+  { label: "Popular",
+    options: ["Adult", "Young Adult (13-18)", "Middle Grade (8-12)", "New Adult (18-25)"],
+    help: {
+      "Adult": "Written for grown readers; no category content restrictions.",
+      "Young Adult (13-18)": "Teen protagonists and themes -- the biggest crossover market.",
+      "Middle Grade (8-12)": "For older children: age-appropriate stakes, no explicit content.",
+      "New Adult (18-25)": "Protagonists in their late teens to twenties navigating early adulthood.",
+    }},
+  { label: "More",
+    options: ["Children (5-8)", "All ages"],
+    help: {
+      "Children (5-8)": "Early readers -- simple language and gentle themes.",
+      "All ages": "Written to appeal across every age band.",
+    }},
 ];
 
 // ── NSFW suggestion sets ──────────────────────────────────────────────────────
@@ -117,36 +192,99 @@ const AUDIENCE_SUGGESTIONS: SuggestionGroup[] = [
 // suggestions" toggle and styled in red so it never surprises anyone.
 
 const GENRE_NSFW: SuggestionGroup[] = [
-  { label: "Erotica & erotic romance", options: [
-    "Erotica", "Erotic Romance", "Erotic Thriller", "Erotic Fantasy",
-    "Erotic Sci-Fi", "Erotic Horror", "Contemporary Erotica", "Historical Erotica",
-  ]},
-  { label: "Romance heat subgenres", options: [
-    "Dark Romance", "Spicy Romance", "Steamy Romance", "Monster Romance",
-    "Reverse Harem", "Why Choose", "Mafia Romance", "Motorcycle Club Romance",
-    "Bully Romance", "Forbidden Romance",
-  ]},
-  { label: "Kink & theme", options: [
-    "BDSM", "Kink", "LGBTQ+ Erotica", "MM Romance", "FF Romance",
-    "Polyamory", "Taboo", "Age Gap",
-  ]},
+  { label: "Erotica & erotic romance",
+    options: [
+      "Erotica", "Erotic Romance", "Erotic Thriller", "Erotic Fantasy",
+      "Erotic Sci-Fi", "Erotic Horror", "Contemporary Erotica", "Historical Erotica",
+    ],
+    help: {
+      "Erotica": "Explicit sexual content is central to the story, not incidental.",
+      "Erotic Romance": "A full romance arc where explicit sex is integral to the relationship.",
+      "Erotic Thriller": "A suspense plot carried by strong explicit sexual content.",
+      "Erotic Fantasy": "Fantasy worlds with explicit sexual content.",
+      "Erotic Sci-Fi": "Science fiction with explicit sexual content.",
+      "Erotic Horror": "Horror blended with explicit sexual content.",
+      "Contemporary Erotica": "Present-day explicit fiction.",
+      "Historical Erotica": "Explicit fiction set in a past era.",
+    }},
+  { label: "Romance heat subgenres",
+    options: [
+      "Dark Romance", "Spicy Romance", "Steamy Romance", "Monster Romance",
+      "Reverse Harem", "Why Choose", "Mafia Romance", "Motorcycle Club Romance",
+      "Bully Romance", "Forbidden Romance",
+    ],
+    help: {
+      "Dark Romance": "Romance with dangerous or morally gray partners and heavy themes (captivity, dubious consent -- as fiction tropes).",
+      "Spicy Romance": "Romance with frequent, explicit sex scenes ('high heat').",
+      "Steamy Romance": "Sensual romance with on-page sex, moderate to high heat.",
+      "Monster Romance": "Romance with non-human or monstrous love interests.",
+      "Reverse Harem": "One protagonist with several love interests who don't compete jealously.",
+      "Why Choose": "Like reverse harem -- the lead ends up with multiple partners rather than picking one.",
+      "Mafia Romance": "Romance centered on organized-crime figures.",
+      "Motorcycle Club Romance": "Romance set in biker-club culture.",
+      "Bully Romance": "The love interest starts as an antagonist or bully (a trope, not an endorsement).",
+      "Forbidden Romance": "Love that breaks a rule or taboo -- age gap, boss/employee, and the like.",
+    }},
+  { label: "Kink & theme",
+    options: [
+      "BDSM", "Kink", "LGBTQ+ Erotica", "MM Romance", "FF Romance",
+      "Polyamory", "Taboo", "Age Gap",
+    ],
+    help: {
+      "BDSM": "Stories featuring bondage/discipline, dominance/submission, and sadomasochism dynamics.",
+      "Kink": "Fiction organized around specific kinks or fetishes.",
+      "LGBTQ+ Erotica": "Explicit fiction centering queer characters and relationships.",
+      "MM Romance": "Male/male romance.",
+      "FF Romance": "Female/female romance.",
+      "Polyamory": "Relationships involving more than two committed partners.",
+      "Taboo": "Deliberately transgressive themes, presented as fiction.",
+      "Age Gap": "A significant age difference between adult partners.",
+    }},
 ];
 
 const TONE_NSFW: SuggestionGroup[] = [
-  { label: "Heat & sensuality", options: [
-    "Sensual", "Steamy", "Spicy", "Explicit", "Graphic", "Seductive",
-    "Provocative", "Smutty", "Slow-burn sensual", "Filthy",
-  ]},
-  { label: "Edge", options: [
-    "Taboo", "Kinky", "Dark and erotic", "Dominant", "Submissive", "Forbidden",
-  ]},
+  { label: "Heat & sensuality",
+    options: [
+      "Sensual", "Steamy", "Spicy", "Explicit", "Graphic", "Seductive",
+      "Provocative", "Smutty", "Slow-burn sensual", "Filthy",
+    ],
+    help: {
+      "Sensual": "Emphasis on physical sensation and desire.",
+      "Steamy": "Frequent on-page intimacy.",
+      "Spicy": "High heat -- lots of explicit content.",
+      "Explicit": "Sex is shown directly and in detail.",
+      "Graphic": "Very detailed, unflinching depiction.",
+      "Seductive": "A mood of enticement and allure.",
+      "Provocative": "Meant to arouse or push boundaries.",
+      "Smutty": "Playful term for high-heat, sex-forward writing.",
+      "Slow-burn sensual": "Desire built gradually before the payoff.",
+      "Filthy": "Very explicit and uninhibited in tone.",
+    }},
+  { label: "Edge",
+    options: ["Taboo", "Kinky", "Dark and erotic", "Dominant", "Submissive", "Forbidden"],
+    help: {
+      "Taboo": "Transgressive, boundary-pushing themes.",
+      "Kinky": "Centered on kink dynamics.",
+      "Dark and erotic": "Combines a grim mood with explicit content.",
+      "Dominant": "Emphasis on a dominant partner's perspective or dynamic.",
+      "Submissive": "Emphasis on a submissive partner's perspective or dynamic.",
+      "Forbidden": "The eroticism comes from breaking a rule or taboo.",
+    }},
 ];
 
 const AUDIENCE_NSFW: SuggestionGroup[] = [
-  { label: "Adult (18+)", options: [
-    "Adult 18+ (mature content)", "Adult 18+ (explicit content)",
-    "Erotica readers", "Spicy romance readers", "Dark romance readers",
-  ]},
+  { label: "Adult (18+)",
+    options: [
+      "Adult 18+ (mature content)", "Adult 18+ (explicit content)",
+      "Erotica readers", "Spicy romance readers", "Dark romance readers",
+    ],
+    help: {
+      "Adult 18+ (mature content)": "For adults -- mature themes, violence, or strong language.",
+      "Adult 18+ (explicit content)": "For adults -- contains explicit sexual content.",
+      "Erotica readers": "Readers specifically seeking explicit fiction.",
+      "Spicy romance readers": "Romance readers who want high heat.",
+      "Dark romance readers": "Readers who want darker, edgier romance themes.",
+    }},
 ];
 
 // ── Comma-list helpers for the suggestion picker ─────────────────────────────
@@ -173,8 +311,10 @@ export function togglePart(value: string, option: string): string {
   return [...parts, option].join(", "); // wasn't -> append it
 }
 
-// A single group of chips. `accent` swaps the palette between the standard
-// (indigo) and NSFW (red) lists so the two are unmistakable at a glance.
+// A single group of chips, with an optional per-group "What's this?" toggle
+// that lists a one-line definition of every option. `accent` swaps the
+// palette between the standard (indigo) and NSFW (red) lists so the two are
+// unmistakable at a glance.
 function ChipGroup({
   value,
   onChange,
@@ -186,15 +326,48 @@ function ChipGroup({
   group: SuggestionGroup;
   accent: "indigo" | "red";
 }) {
+  const [showHelp, setShowHelp] = useState(false);
+
   const checkedClass = accent === "red"
     ? "border-red-500/60 bg-red-900/30 text-red-300"
     : "border-indigo-500/60 bg-indigo-900/30 text-indigo-300";
+  const helpLinkClass = accent === "red"
+    ? "text-red-400/70 hover:text-red-400"
+    : "text-indigo-300/70 hover:text-indigo-300";
+  const helpTermClass = accent === "red" ? "text-red-300" : "text-indigo-300";
 
   return (
     <div>
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
-        {group.label}
-      </p>
+      <div className="mb-1 flex items-center gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+          {group.label}
+        </p>
+        {group.help && (
+          <button
+            type="button"
+            onClick={() => setShowHelp(h => !h)}
+            className={`text-[10px] transition-colors ${helpLinkClass}`}
+            title="Explain each option in this group"
+            aria-expanded={showHelp}
+          >
+            {showHelp ? "Hide" : "What's this?"}
+          </button>
+        )}
+      </div>
+
+      {/* Definitions, shown above the chips so the reader has context before
+          clicking. Only the options that actually have help text appear. */}
+      {showHelp && group.help && (
+        <dl className="mb-1.5 space-y-0.5 rounded bg-bg-panel/60 px-2 py-1.5 text-[11px] leading-snug">
+          {group.options.filter(opt => group.help?.[opt]).map(opt => (
+            <div key={opt}>
+              <dt className={`inline font-semibold ${helpTermClass}`}>{opt}</dt>
+              <dd className="inline text-text-muted"> &ndash; {group.help?.[opt]}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
       <div className="flex flex-wrap gap-1">
         {group.options.map(opt => {
           const checked = hasPart(value, opt);
