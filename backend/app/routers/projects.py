@@ -21,6 +21,7 @@ import re
 from fastapi import APIRouter, HTTPException
 from app.recent_projects import load_recent, track_project, remove_project
 from app.outline_templates import render_outline, OutlineMetadata
+from app.outline_frontmatter import parse_outline_frontmatter, set_target_word_count
 from app.settings_store import get_vault_root
 from pydantic import BaseModel
 
@@ -83,8 +84,11 @@ PROJECT_FOLDERS = [
 # inside create_project() and create_book_in_series() using the
 # outline_templates module.
 STARTER_FILES = {
-    # The first chapter -- ready to write
-    "manuscript/01-chapter-one.md": "# Chapter One\n\n",
+    # The first chapter -- ready to write. Numeric ("Chapter 1", not
+    # "Chapter One") so it matches the default the new-chapter dialog
+    # proposes for every later chapter ("Chapter 2" -> 02-chapter-2.md).
+    # Before this change the starter was the odd one out on disk.
+    "manuscript/01-chapter-1.md": "# Chapter 1\n\n",
 
     # Style guide -- pre-populated with the no-em-dash rule
     "notes/style-guide.md": (
@@ -618,6 +622,18 @@ class UpdateProjectSettingsRequest(BaseModel):
     content_mode_default: str | None = None
     cost_tier:            str | None = None
     default_model:        str | None = None
+    # Book Details fields (sidebar panel). Stored flat in project.json.
+    # target_audience deliberately reuses the same key series.json uses so
+    # the book-over-series merge in _build_story_context works unchanged.
+    theme:                str | None = None
+    setting:              str | None = None
+    point_of_view:        str | None = None
+    tense:                str | None = None
+    target_audience:      str | None = None
+    # Word Count target is NOT stored in project.json -- the outline
+    # frontmatter is the single source of truth (the Progress gauge reads
+    # it from there). When provided, we patch notes/outline.md instead.
+    target_word_count:    int | None = None
 
 
 @router.get("/recent", response_model=list[RecentProjectItem])
@@ -634,11 +650,33 @@ async def remove_recent_project(project_id: str):
     return {"status": "ok"}
 
 
+def _read_outline_target(root_path: str) -> int | None:
+    """
+    Read target_word_count from notes/outline.md frontmatter, or None.
+
+    The Book Details panel shows the project word target alongside the
+    project.json fields, but the target actually lives in the outline (the
+    Progress gauge's source of truth). This helper lets GET /settings serve
+    everything from one request.
+    """
+    outline_path = os.path.join(root_path, "notes", "outline.md")
+    try:
+        with open(outline_path, "r", encoding="utf-8") as f:
+            frontmatter = parse_outline_frontmatter(f.read())
+    except OSError:
+        return None
+    value = frontmatter.get("target_word_count")
+    return value if isinstance(value, int) else None
+
+
 @router.get("/settings")
 async def get_project_settings(root_path: str):
     """Read and return the full project.json for a given project."""
     data = _read_project_json(root_path)
     data["root_path"] = root_path
+    # Computed field: the word target from the outline frontmatter, so the
+    # Book Details form has a single read surface (see _read_outline_target).
+    data["target_word_count"] = _read_outline_target(root_path)
     return data
 
 
@@ -885,6 +923,17 @@ async def update_project_settings(request: UpdateProjectSettingsRequest):
         data["cost_tier"] = request.cost_tier
     if request.default_model is not None:
         data["default_model"] = request.default_model
+    # Book Details fields (all optional strings, same partial-update rule)
+    if request.theme is not None:
+        data["theme"] = request.theme
+    if request.setting is not None:
+        data["setting"] = request.setting
+    if request.point_of_view is not None:
+        data["point_of_view"] = request.point_of_view
+    if request.tense is not None:
+        data["tense"] = request.tense
+    if request.target_audience is not None:
+        data["target_audience"] = request.target_audience
 
     data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -892,5 +941,76 @@ async def update_project_settings(request: UpdateProjectSettingsRequest):
     with open(project_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
+    # Word Count target goes to the outline frontmatter, not project.json
+    # (single source of truth for the Progress gauge). Soft failure: if
+    # outline.md is missing the helper logs a warning and we carry on.
+    if request.target_word_count is not None:
+        set_target_word_count(root_path, request.target_word_count)
+
     data["root_path"] = root_path
+    # Echo the effective target back so the Book Details form can show it
+    # without a second request.
+    data["target_word_count"] = _read_outline_target(root_path)
     return data
+
+
+# ── Per-project UI state ─────────────────────────────────────────────────────
+# Small remembered-UI details that should follow the BOOK, not the machine:
+# which sidebar sections the writer collapsed, whether Book Details is open,
+# etc. Stored as an opaque JSON blob at <project>/.storythread/ui-state.json:
+#
+#   - Not project.json: that file is user-facing metadata; churning its
+#     updated_at every time a section collapses would be noise.
+#   - Not localStorage: that dies with the browser profile and doesn't travel
+#     when the writer moves or syncs the project folder.
+#   - Opaque (no Pydantic model for the contents): the keys will change with
+#     every UI iteration, and the worst case of garbage state is the frontend
+#     falling back to defaults -- validation buys nothing here.
+#
+# GET never errors: a missing or corrupt file just means "no saved state",
+# and the frontend renders its defaults.
+
+class UiStateUpdateRequest(BaseModel):
+    root_path: str
+    state:     dict
+
+
+def _ui_state_path(root_path: str) -> str:
+    return os.path.join(root_path, ".storythread", "ui-state.json")
+
+
+@router.get("/ui-state")
+async def get_ui_state(root_path: str):
+    """Return the saved per-project UI state, or {} when none exists."""
+    if not os.path.isfile(os.path.join(root_path, "project.json")):
+        raise HTTPException(status_code=404, detail="Not a project folder (no project.json).")
+
+    try:
+        with open(_ui_state_path(root_path), "r", encoding="utf-8") as f:
+            state = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        # Missing file, unreadable file, or corrupt JSON -- all mean the same
+        # thing to the frontend: start from defaults.
+        state = {}
+
+    if not isinstance(state, dict):
+        state = {}
+    return {"state": state}
+
+
+@router.put("/ui-state")
+async def put_ui_state(request: UiStateUpdateRequest):
+    """Save the per-project UI state blob (full replacement)."""
+    root_path = request.root_path
+    if not os.path.isfile(os.path.join(root_path, "project.json")):
+        raise HTTPException(status_code=404, detail="Not a project folder (no project.json).")
+
+    path = _ui_state_path(root_path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(request.state, f, indent=2)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not save UI state: {e}")
+
+    return {"status": "ok"}

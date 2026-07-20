@@ -31,6 +31,7 @@ from app.outline_templates import TEMPLATE_DEFAULTS
 from app.progress_store import count_words, local_date_for, open_db
 from app.routers.documents import _title_from_file
 from app.settings_store import get_rollover_hour, load_settings
+from app.utils.structure_store import order_rank
 
 
 router = APIRouter(prefix="/api/progress", tags=["progress"])
@@ -260,7 +261,8 @@ def _loose_name_match(outline_name: str, profile_names: list[str]) -> str | None
 def _manuscript_chapter_counts(project_path: str) -> list[tuple[str, str, int]]:
     """
     Return (filename, title, word_count) for every chapter in manuscript/,
-    in filename (= reading) order. The title comes from the chapter's first
+    in reading order (structure manifest when the project uses acts,
+    filename order otherwise). The title comes from the chapter's first
     `# Heading` line, falling back to a prettified filename -- the same rule
     the chapter list in the left panel uses (_title_from_file).
     """
@@ -268,8 +270,14 @@ def _manuscript_chapter_counts(project_path: str) -> list[tuple[str, str, int]]:
     if not os.path.isdir(folder):
         return []
 
+    rank = order_rank(project_path)
+    ordered = sorted(
+        os.listdir(folder),
+        key=lambda name: (rank.get(name, len(rank)), name),
+    )
+
     chapters: list[tuple[str, str, int]] = []
-    for fname in sorted(os.listdir(folder)):
+    for fname in ordered:
         if not fname.endswith(".md"):
             continue
         path = os.path.join(folder, fname)

@@ -31,7 +31,10 @@ import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "./comp
 import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
+import { EditorMenu } from "./components/EditorMenu";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
+import { toPutPayload } from "./types/structure";
+import type { StructureManifest } from "./types/structure";
 import type { ProfileType, Profile } from "./types/profile";
 import type {
   ContextChip, ChipIncludeFlags, EditorChatMessage, EnhanceLevel,
@@ -46,6 +49,10 @@ import { autoSizeTextarea } from "./utils/autoSizeTextarea";
 import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
+import { NavSection } from "./components/sidebar/NavSection";
+import { NavItem } from "./components/sidebar/NavItem";
+import { ChapterNavRow } from "./components/sidebar/ChapterNavRow";
+import { ActGroup } from "./components/sidebar/ActGroup";
 import { GlobalSearchModal } from "./components/GlobalSearchModal";
 import { IssuePopover } from "./components/editor/IssuePopover";
 import { ISSUE_CLICK_EVENT, clearIssuesEffect } from "./components/editor/issueOverlay";
@@ -59,10 +66,11 @@ import { PostUpdateBanner } from "./components/update/PostUpdateBanner";
 import { AboutPanel } from "./components/about/AboutPanel";
 import { DonationPrompt } from "./components/about/DonationPrompt";
 import { useBackendHealth } from "./hooks/useBackendHealth";
+import { useProjectUiState } from "./hooks/useProjectUiState";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { Bot, Send, ChevronDown, Settings2, Trash2, CornerDownRight, PenLine, Sparkles, HelpCircle, Brain } from "lucide-react";
+import { Bot, Send, ChevronDown, CornerDownRight, PenLine, Sparkles, HelpCircle, Brain } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -87,6 +95,11 @@ function App() {
 
   // Which project is currently open. null = show home screen.
   const [currentProject, setCurrentProject] = useState<ProjectInfo | null>(null);
+
+  // Per-book remembered UI state (sidebar collapse states, Book Details
+  // expansion). Persisted inside the project folder via the backend so it
+  // survives restarts, updates, and moving the project between machines.
+  const projectUi = useProjectUiState(currentProject?.root_path ?? null);
 
   // Phase 6: poll the backend /health endpoint in the background so we can
   // show one clear "backend not responding" banner instead of letting every
@@ -347,6 +360,13 @@ function App() {
 
   // The list of chapter files found in the project's manuscript/ folder.
   const [chapters, setChapters] = useState<ChapterInfo[]>([]);
+
+  // The acts/order tree from manuscript/structure.json (null = load failed
+  // or not loaded yet -> the sidebar falls back to the flat chapter list, so
+  // the app keeps working even if the structure endpoint is unavailable).
+  // `chapters` above stays the single source of chapter METADATA; this tree
+  // only groups and orders filenames.
+  const [structure, setStructure] = useState<StructureManifest | null>(null);
 
   // The chapter currently open in the editor.
   const [currentChapter, setCurrentChapter] = useState<ChapterInfo | null>(null);
@@ -645,6 +665,153 @@ function App() {
 
 
   // --- Create a new chapter file and open it in the editor ---
+  // ── Acts / structure tree (manuscript/structure.json) ────────────────────
+  // The manifest is the manuscript's reading-order authority. Every mutation
+  // follows one pattern: adjust the tree in memory, PUT the whole thing, and
+  // adopt the server's echoed (validated + healed) version as truth. There
+  // are no per-operation endpoints -- see backend/app/routers/structure.py.
+
+  const loadStructure = useCallback(async (projectPath: string) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/structure?folder_path=${encodeURIComponent(projectPath)}`
+      );
+      if (!res.ok) throw new Error();
+      setStructure(await res.json());
+    } catch {
+      // Graceful degradation: with no tree the sidebar renders the flat
+      // chapter list, exactly like before acts existed.
+      setStructure(null);
+    }
+  }, []);
+
+  const putStructure = useCallback(async (next: StructureManifest) => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+    setStructure(next);   // optimistic -- the sidebar responds instantly
+    try {
+      const res = await fetch(`${API_BASE}/api/structure`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(toPutPayload(project.root_path, next)),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.detail ?? "Could not save manuscript structure.");
+      }
+      // Adopt the healed echo (server may have assigned ids to new acts or
+      // dropped files that vanished mid-operation).
+      setStructure(await res.json());
+      setEditorError(null);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not save structure.");
+      await loadStructure(project.root_path);   // resync with disk truth
+    }
+  }, [loadStructure]);
+
+  // Create a new act at the end of the act list.
+  const handleAddAct = useCallback(() => {
+    if (!structure) return;
+    const name = window.prompt("Act name:", `Act ${structure.acts.length + 1}`);
+    if (!name || !name.trim()) return;
+    void putStructure({
+      ...structure,
+      acts: [...structure.acts, { id: "", title: name.trim(), chapters: [] }],
+    });
+  }, [structure, putStructure]);
+
+  const handleRenameAct = useCallback((actId: string, newTitle: string) => {
+    if (!structure) return;
+    void putStructure({
+      ...structure,
+      acts: structure.acts.map(a => a.id === actId ? { ...a, title: newTitle } : a),
+    });
+  }, [structure, putStructure]);
+
+  // Move an act up/down in the act list. delta is -1 or +1.
+  const handleMoveAct = useCallback((actId: string, delta: number) => {
+    if (!structure) return;
+    const idx = structure.acts.findIndex(a => a.id === actId);
+    const to  = idx + delta;
+    if (idx < 0 || to < 0 || to >= structure.acts.length) return;
+    const acts = [...structure.acts];
+    [acts[idx], acts[to]] = [acts[to], acts[idx]];
+    void putStructure({ ...structure, acts });
+  }, [structure, putStructure]);
+
+  // Delete an act. Its chapters are NOT deleted -- they drop back into the
+  // unassigned bucket (an act is just a grouping, never a container that
+  // owns files).
+  const handleDeleteAct = useCallback((actId: string) => {
+    if (!structure) return;
+    const act = structure.acts.find(a => a.id === actId);
+    if (!act) return;
+    if (act.chapters.length > 0) {
+      const ok = window.confirm(
+        `Delete "${act.title}"? Its ${act.chapters.length} chapter(s) are NOT deleted -- they move to Unassigned.`
+      );
+      if (!ok) return;
+    }
+    void putStructure({
+      ...structure,
+      acts: structure.acts.filter(a => a.id !== actId),
+      unassigned: [...structure.unassigned, ...act.chapters],
+    });
+  }, [structure, putStructure]);
+
+  // Move a chapter into another act (or the unassigned bucket when
+  // targetActId is null). Appends at the end of the target.
+  const handleMoveChapterToAct = useCallback((filename: string, targetActId: string | null) => {
+    if (!structure) return;
+    let moved = structure.unassigned.find(c => c.filename === filename)
+      ?? structure.acts.flatMap(a => a.chapters).find(c => c.filename === filename);
+    if (!moved) return;
+    const without = {
+      ...structure,
+      acts: structure.acts.map(a => ({
+        ...a, chapters: a.chapters.filter(c => c.filename !== filename),
+      })),
+      unassigned: structure.unassigned.filter(c => c.filename !== filename),
+    };
+    void putStructure(targetActId === null
+      ? { ...without, unassigned: [...without.unassigned, moved] }
+      : {
+          ...without,
+          acts: without.acts.map(a =>
+            a.id === targetActId ? { ...a, chapters: [...a.chapters, moved] } : a
+          ),
+        });
+  }, [structure, putStructure]);
+
+  // Move a chapter up/down WITHIN its current container (act or unassigned).
+  const handleMoveChapterWithin = useCallback((filename: string, delta: number) => {
+    if (!structure) return;
+
+    const moveIn = (list: typeof structure.unassigned) => {
+      const idx = list.findIndex(c => c.filename === filename);
+      const to  = idx + delta;
+      if (idx < 0 || to < 0 || to >= list.length) return null;
+      const next = [...list];
+      [next[idx], next[to]] = [next[to], next[idx]];
+      return next;
+    };
+
+    for (const act of structure.acts) {
+      const next = moveIn(act.chapters);
+      if (next) {
+        void putStructure({
+          ...structure,
+          acts: structure.acts.map(a => a.id === act.id ? { ...a, chapters: next } : a),
+        });
+        return;
+      }
+      if (act.chapters.some(c => c.filename === filename)) return; // at edge
+    }
+    const next = moveIn(structure.unassigned);
+    if (next) void putStructure({ ...structure, unassigned: next });
+  }, [structure, putStructure]);
+
+
   const handleCreateChapter = useCallback(async () => {
     if (!currentProject) return;
 
@@ -673,20 +840,90 @@ function App() {
         path: data.path,
       };
 
-      // Add to chapter list and open it
+      // Add to chapter list and open it. The structure tree is refetched so
+      // the new chapter appears in the sidebar's Unassigned bucket.
       setChapters((prev) => [...prev, newChapter].sort((a, b) => a.filename.localeCompare(b.filename)));
+      void loadStructure(currentProject.root_path);
       loadChapter(newChapter, currentProject);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not create chapter.");
     }
-  }, [currentProject, chapters.length, loadChapter]);
+  }, [currentProject, chapters.length, loadChapter, loadStructure]);
 
+
+  // --- Rename cascade bookkeeping ---
+  // A rename now changes the FILENAME too, and filenames are the key for a
+  // lot of App state (Sets, Maps, open views). This helper owns the entire
+  // swap in one place so nothing keyed on the old name goes stale.
+  const migrateChapterKey = useCallback((
+    oldFilename: string,
+    newFilename: string,
+    newTitle: string,
+    newPath: string,
+  ) => {
+    // ⚠ CRITICAL ORDER: if the renamed chapter is the OPEN one, snapshot the
+    // live editor buffer into chapterContent BEFORE touching
+    // currentChapter.filename. MarkdownEditor is keyed on the filename --
+    // changing it remounts the editor from `chapterContent`, and without
+    // this snapshot any unsaved typing would silently revert to the last
+    // saved text. (isDirty is left as-is, so the unsaved indicator and
+    // Ctrl+S keep working across the remount.)
+    if (currentChapterRef.current?.filename === oldFilename && editorViewRef.current) {
+      setChapterContent(editorViewRef.current.state.doc.toString());
+    }
+
+    const swapRef = (c: { filename: string; title: string }) =>
+      c.filename === oldFilename ? { filename: newFilename, title: newTitle } : c;
+
+    setChapters(prev => prev.map(c =>
+      c.filename === oldFilename
+        ? { filename: newFilename, title: newTitle, path: newPath }
+        : c
+    ));
+    setCurrentChapter(prev =>
+      prev && prev.filename === oldFilename
+        ? { filename: newFilename, title: newTitle, path: newPath }
+        : prev
+    );
+    setStructure(prev => prev === null ? prev : {
+      ...prev,
+      acts: prev.acts.map(a => ({ ...a, chapters: a.chapters.map(swapRef) })),
+      unassigned: prev.unassigned.map(swapRef),
+    });
+    setExpandedChapters(prev => {
+      if (!prev.has(oldFilename)) return prev;
+      const next = new Set(prev);
+      next.delete(oldFilename);
+      next.add(newFilename);
+      return next;
+    });
+    setExpandedSceneGroups(prev => {
+      if (!prev.has(oldFilename)) return prev;
+      const next = new Set(prev);
+      next.delete(oldFilename);
+      next.add(newFilename);
+      return next;
+    });
+    setSceneSummariesByChapter(prev => {
+      if (!prev.has(oldFilename)) return prev;
+      const next = new Map(prev);
+      next.set(newFilename, next.get(oldFilename)!);
+      next.delete(oldFilename);
+      return next;
+    });
+    setCurrentSummaryChapter(prev => (prev === oldFilename ? newFilename : prev));
+    setCurrentSummaryScene(prev =>
+      prev?.chapterFile === oldFilename ? { ...prev, chapterFile: newFilename } : prev
+    );
+  }, []);
 
   // --- Rename a chapter inline from the left nav ---
-  // The backend rewrites the first `# heading` line inside the chapter file
-  // (the filename is kept stable so numeric ordering survives). After a
-  // successful save we patch the chapter list and, if the renamed chapter is
-  // currently open, update the title shown in the editor header too.
+  // The backend rewrites the first `# heading` line AND renames the file so
+  // the slug matches the title (NN- prefix kept), cascading the chapter
+  // summary, scene folder, structure manifest, and progress history along.
+  // We patch every piece of state keyed on the old filename via
+  // migrateChapterKey. Older backends that return no filename change fall
+  // back to a title-only patch.
   const handleRenameChapter = useCallback(async (filename: string, newTitle: string) => {
     const project = currentProjectRef.current;
     if (!project) return;
@@ -713,19 +950,54 @@ function App() {
         throw new Error(err.detail ?? "Rename failed.");
       }
       const data = await res.json();
-      setChapters(prev => prev.map(c =>
-        c.filename === filename ? { ...c, title: data.title } : c
-      ));
-      // If the renamed chapter is currently open, reflect the new title in
-      // the editor header without forcing a full chapter reload.
-      setCurrentChapter(prev =>
-        prev && prev.filename === filename ? { ...prev, title: data.title } : prev
-      );
+
+      if (data.filename && data.filename !== filename) {
+        // File was renamed -- swap every filename-keyed piece of state.
+        migrateChapterKey(filename, data.filename, data.title, data.path);
+
+        // The cascade steps after the file rename are fail-soft on the
+        // backend; surface a gentle heads-up if any were skipped so the
+        // writer isn't surprised by an un-paired summary later.
+        const flags: [string, boolean][] = [
+          ["chapter summary",   data.summary_moved   ?? true],
+          ["scene summaries",   data.scenes_moved    ?? true],
+          ["act assignment",    data.structure_updated ?? true],
+          ["progress history",  data.progress_migrated ?? true],
+        ];
+        const skipped = flags.filter(([, ok]) => !ok).map(([label]) => label);
+        if (skipped.length > 0) {
+          setEditorError(
+            `Renamed, but could not update: ${skipped.join(", ")}. ` +
+            "These re-pair automatically the next time they're touched."
+          );
+          return;
+        }
+      } else {
+        // Title-only change (same slug) -- patch titles in place.
+        setChapters(prev => prev.map(c =>
+          c.filename === filename ? { ...c, title: data.title } : c
+        ));
+        setCurrentChapter(prev =>
+          prev && prev.filename === filename ? { ...prev, title: data.title } : prev
+        );
+        setStructure(prev => prev === null ? prev : {
+          ...prev,
+          acts: prev.acts.map(a => ({
+            ...a,
+            chapters: a.chapters.map(c =>
+              c.filename === filename ? { ...c, title: data.title } : c
+            ),
+          })),
+          unassigned: prev.unassigned.map(c =>
+            c.filename === filename ? { ...c, title: data.title } : c
+          ),
+        });
+      }
       setEditorError(null);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not rename chapter.");
     }
-  }, [chapters]);
+  }, [chapters, migrateChapterKey]);
 
 
   // --- Delete a chapter (and its paired summary, if any) ---
@@ -790,11 +1062,14 @@ function App() {
         next.delete(chapter.filename);
         return next;
       });
+      // The backend already removed the chapter from structure.json --
+      // refetch so the sidebar tree drops the row too.
+      void loadStructure(project.root_path);
       setEditorError(null);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not delete chapter.");
     }
-  }, [currentSummaryChapter, currentSummaryScene]);
+  }, [currentSummaryChapter, currentSummaryScene, loadStructure]);
 
 
   // --- Delete a chapter summary (without touching the chapter itself) ---
@@ -843,10 +1118,16 @@ function App() {
   const handleProjectOpen = useCallback(async (project: ProjectInfo) => {
     setCurrentProject(project);
     setChapters([]);
+    setStructure(null);
     setCurrentChapter(null);
     setChapterContent("");
     setIsDirty(false);
     setEditorError(null);
+
+    // Fetch the acts tree in parallel with the chapter list -- neither
+    // depends on the other, and a structure failure only costs the acts
+    // grouping (flat list fallback), never the chapters themselves.
+    void loadStructure(project.root_path);
 
     try {
       const params = new URLSearchParams({ folder_path: project.root_path });
@@ -868,7 +1149,7 @@ function App() {
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not load project chapters.");
     }
-  }, [loadChapter]);
+  }, [loadChapter, loadStructure]);
 
 
   // --- Called by MarkdownEditor every time the writer types anything ---
@@ -926,6 +1207,27 @@ function App() {
       setIsDirty(false);
       // Refresh word count against the exact bytes that just hit disk.
       setWordCount(countWords(content));
+
+      // Keep the sidebar title in sync with the saved content. The backend
+      // derives a chapter's display title from its first "# " heading, but
+      // the `chapters` list is only fetched at project open -- so if the
+      // writer edits the H1 in the editor, the sidebar would show the old
+      // title until an app restart. Re-derive it here from the exact bytes
+      // we just saved (same rule the backend uses: first H1 wins).
+      if (activeView !== "notes" && chapter) {
+        const h1 = content.match(/^#\s+(.+)$/m);
+        const newTitle = h1?.[1].trim();
+        if (newTitle && newTitle !== chapter.title) {
+          setChapters(prev => prev.map(c =>
+            c.filename === chapter.filename ? { ...c, title: newTitle } : c
+          ));
+          setCurrentChapter(prev =>
+            prev && prev.filename === chapter.filename
+              ? { ...prev, title: newTitle }
+              : prev
+          );
+        }
+      }
 
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not save.");
@@ -1683,7 +1985,10 @@ function App() {
             <ThemeToggle />
           </div>
 
-          {/* Project title + switcher dropdown + settings gear */}
+          {/* Project title + switcher dropdown. The old settings gear that
+              sat next to the title is gone -- everything it opened now
+              lives in the Book Details popout (see the BOOK DETAILS section
+              at the top of the nav below). */}
           <div className="relative mt-1">
             <div className="flex items-center gap-1">
               <button
@@ -1702,13 +2007,6 @@ function App() {
               >
                 <span className="truncate text-xs text-text-muted">{currentProject.title}</span>
                 <ChevronDown size={10} className="shrink-0 text-faint" />
-              </button>
-              <button
-                onClick={() => setShowProjectSettings(true)}
-                className="shrink-0 rounded p-1 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
-                title="Project settings"
-              >
-                <Settings2 size={12} />
               </button>
             </div>
 
@@ -1764,18 +2062,6 @@ function App() {
           </div>
         </div>
 
-        {/* Writing Progress gauge (v1.0.2). Sits below the project title and
-            above the navigation. The slide-over breakdown is constrained to
-            the aside's bounds (the wrapping div has relative positioning
-            inside the gauge component) so it never crosses into the editor. */}
-        <div className="border-b border-border px-3 py-3">
-          <ProjectCompletionGauge
-            projectPath={currentProject.root_path}
-            isOpen={progressOpen}
-            onToggle={() => setProgressOpen(o => !o)}
-          />
-        </div>
-
         <nav className="flex-1 overflow-y-auto px-2 py-4">
 
           {/* Main Menu return -- Phase 6. Always-visible button at the top
@@ -1792,64 +2078,232 @@ function App() {
             <span>Main Menu</span>
           </button>
 
-          {/* Manuscript section -- Phase 6 nested tree:
-              Each chapter is a collapsible row. Expanding reveals a single
-              "Chapter Summary" child. Clicking the chapter name opens the
-              chapter in the editor; clicking the summary child opens the
-              summary editor. Expanded state lives in App-level state so it
-              persists as the writer navigates between views. */}
+          {/* Book Details -- opens the popout modal (formerly "Project
+              Settings" behind a tiny gear icon; the gear is gone and this
+              section is the one entry point). The modal holds the story
+              facts that feed AI prompts (genre, tone, theme, setting, POV,
+              tense, audience), the word-count target, plus content mode
+              and the model picker. */}
+          <div className="mb-4">
+            <button
+              onClick={() => setShowProjectSettings(true)}
+              className="flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs font-semibold uppercase tracking-wider text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+              title="Title, genre, tone, POV, word target, AI model... everything about this book"
+            >
+              <span>Book Details</span>
+              <span aria-hidden="true" className="normal-case text-faint">&#8599;</span>
+            </button>
+          </div>
+
+          {/* Manuscript section -- the acts tree.
+              Story > Act > Chapter > (Chapter Summary + Scenes). Acts come
+              from manuscript/structure.json (see loadStructure); a project
+              that never made an act just shows its chapters flat, exactly
+              like before. Moving/reordering is menu-based (hover the '...'
+              on a row) -- drag-and-drop is a roadmap enhancement. */}
           <NavSection label="Manuscript">
             {chapters.length === 0 && (
               <p className="px-2 text-xs text-faint">No chapters found.</p>
             )}
-            {chapters.map((chapter) => {
-              const isExpanded        = expandedChapters.has(chapter.filename);
-              const isActiveChapter   = currentView === "editor" && currentChapter?.filename === chapter.filename;
-              const isChapterSummaryActive = currentView === "chapter_summary" && currentSummaryChapter === chapter.filename;
-              // "Summary ancestor" -- any descendant of this chapter is the
-              // active view. Used to subtly highlight the chapter row so the
-              // writer can trace back up the tree.
-              const isSceneSummaryActiveInThisChapter =
-                currentView === "scene_summary" &&
-                currentSummaryScene?.chapterFile === chapter.filename;
-              const isSummaryAncestor = isChapterSummaryActive || isSceneSummaryActiveInThisChapter;
+            {(() => {
+              // One row renderer shared by every container (acts, the
+              // unassigned bucket, and the flat no-structure fallback).
+              // `pos` describes the chapter's place in its container so the
+              // menu can offer/disable Move up / Move down correctly; null
+              // means "no move menu" (flat fallback keeps the plain trash).
+              const chapterByFilename = new Map(chapters.map(c => [c.filename, c]));
 
-              const sceneSummaries  = sceneSummariesByChapter.get(chapter.filename);
-              const isScenesExpanded = expandedSceneGroups.has(chapter.filename);
-              const activeSceneIndex = isSceneSummaryActiveInThisChapter
-                ? (currentSummaryScene?.index ?? null)
-                : null;
+              const renderChapterRow = (
+                filename: string,
+                fallbackTitle: string,
+                pos: { actId: string | null; index: number; count: number } | null,
+              ) => {
+                // Metadata comes from `chapters`; a manifest entry we don't
+                // have metadata for yet (file added mid-session) degrades to
+                // its manifest title and loads fine by filename.
+                const chapter: ChapterInfo = chapterByFilename.get(filename)
+                  ?? { filename, title: fallbackTitle, path: "" };
+
+                const isExpanded        = expandedChapters.has(filename);
+                const isActiveChapter   = currentView === "editor" && currentChapter?.filename === filename;
+                const isChapterSummaryActive = currentView === "chapter_summary" && currentSummaryChapter === filename;
+                // "Summary ancestor" -- any descendant of this chapter is
+                // the active view; subtly highlight the chapter row so the
+                // writer can trace back up the tree.
+                const isSceneSummaryActiveInThisChapter =
+                  currentView === "scene_summary" &&
+                  currentSummaryScene?.chapterFile === filename;
+                const isSummaryAncestor = isChapterSummaryActive || isSceneSummaryActiveInThisChapter;
+
+                const sceneSummaries  = sceneSummariesByChapter.get(filename);
+                const isScenesExpanded = expandedSceneGroups.has(filename);
+                const activeSceneIndex = isSceneSummaryActiveInThisChapter
+                  ? (currentSummaryScene?.index ?? null)
+                  : null;
+
+                // The hover '...' menu: reorder within the container, move
+                // between acts, delete. Rename stays double-click-the-title.
+                const menuItems = pos === null || structure === null ? undefined : [
+                  {
+                    label: "Move up",
+                    disabled: pos.index === 0,
+                    onClick: () => handleMoveChapterWithin(filename, -1),
+                  },
+                  {
+                    label: "Move down",
+                    disabled: pos.index === pos.count - 1,
+                    onClick: () => handleMoveChapterWithin(filename, +1),
+                  },
+                  {
+                    label: "Move to Act",
+                    submenu: [
+                      ...structure.acts
+                        .filter(a => a.id !== pos.actId)
+                        .map(a => ({
+                          label: a.title,
+                          onClick: () => handleMoveChapterToAct(filename, a.id),
+                        })),
+                      ...(pos.actId !== null ? [{
+                        label: "(Unassigned)",
+                        hint: "Remove from its act without deleting anything",
+                        onClick: () => handleMoveChapterToAct(filename, null),
+                      }] : []),
+                    ],
+                  },
+                  {
+                    label: "Delete",
+                    danger: true,
+                    hint: "Delete the chapter file (and its summaries) from disk",
+                    onClick: () => handleDeleteChapter(chapter),
+                  },
+                ];
+
+                return (
+                  <ChapterNavRow
+                    key={filename}
+                    chapter={chapter}
+                    isExpanded={isExpanded}
+                    isActiveChapter={isActiveChapter}
+                    isSummaryAncestor={isSummaryAncestor}
+                    isChapterSummaryActive={isChapterSummaryActive}
+                    sceneSummaries={sceneSummaries}
+                    isScenesExpanded={isScenesExpanded}
+                    activeSceneIndex={activeSceneIndex}
+                    onToggleExpand={() => toggleChapterExpanded(filename)}
+                    onOpenChapter={() => {
+                      if (currentView !== "editor" || currentChapter?.filename !== filename) {
+                        loadChapter(chapter, currentProject);
+                      }
+                    }}
+                    onOpenChapterSummary={() => openChapterSummary(filename)}
+                    onRenameChapter={(newTitle) => handleRenameChapter(filename, newTitle)}
+                    onDeleteChapter={() => handleDeleteChapter(chapter)}
+                    onDeleteChapterSummary={() => handleDeleteChapterSummary(chapter)}
+                    onToggleScenesExpanded={() => toggleSceneGroupExpanded(filename)}
+                    onOpenScene={(index) => openSceneSummary(filename, index)}
+                    onDeleteScene={(index) => handleDeleteSceneSummary(filename, index)}
+                    menuItems={menuItems}
+                  />
+                );
+              };
+
+              // Fallback: structure endpoint unavailable -> flat list,
+              // exactly the pre-acts behavior (trash icon, no move menu).
+              if (structure === null) {
+                return chapters.map(c => renderChapterRow(c.filename, c.title, null));
+              }
+
+              const collapsedActs = projectUi.uiState.collapsedActs ?? [];
+              const toggleActCollapsed = (actId: string) => projectUi.update({
+                collapsedActs: collapsedActs.includes(actId)
+                  ? collapsedActs.filter(id => id !== actId)
+                  : [...collapsedActs, actId],
+              });
+
+              // Defensive union: a chapter with metadata but missing from
+              // the manifest (should be healed away server-side, but never
+              // hide a chapter over a bookkeeping gap).
+              const known = new Set([
+                ...structure.acts.flatMap(a => a.chapters.map(c => c.filename)),
+                ...structure.unassigned.map(c => c.filename),
+              ]);
+              const strays = chapters.filter(c => !known.has(c.filename));
 
               return (
-                <ChapterNavRow
-                  key={chapter.filename}
-                  chapter={chapter}
-                  isExpanded={isExpanded}
-                  isActiveChapter={isActiveChapter}
-                  isSummaryAncestor={isSummaryAncestor}
-                  isChapterSummaryActive={isChapterSummaryActive}
-                  sceneSummaries={sceneSummaries}
-                  isScenesExpanded={isScenesExpanded}
-                  activeSceneIndex={activeSceneIndex}
-                  onToggleExpand={() => toggleChapterExpanded(chapter.filename)}
-                  onOpenChapter={() => {
-                    if (currentView !== "editor" || currentChapter?.filename !== chapter.filename) {
-                      loadChapter(chapter, currentProject);
-                    }
-                  }}
-                  onOpenChapterSummary={() => openChapterSummary(chapter.filename)}
-                  onRenameChapter={(newTitle) => handleRenameChapter(chapter.filename, newTitle)}
-                  onDeleteChapter={() => handleDeleteChapter(chapter)}
-                  onDeleteChapterSummary={() => handleDeleteChapterSummary(chapter)}
-                  onToggleScenesExpanded={() => toggleSceneGroupExpanded(chapter.filename)}
-                  onOpenScene={(index) => openSceneSummary(chapter.filename, index)}
-                  onDeleteScene={(index) => handleDeleteSceneSummary(chapter.filename, index)}
-                />
+                <>
+                  {structure.acts.map((act, actIdx) => (
+                    <ActGroup
+                      key={act.id}
+                      title={act.title}
+                      chapterCount={act.chapters.length}
+                      collapsed={collapsedActs.includes(act.id)}
+                      onToggleCollapsed={() => toggleActCollapsed(act.id)}
+                      onRename={(t) => handleRenameAct(act.id, t)}
+                      menuItems={[
+                        {
+                          label: "Move up",
+                          disabled: actIdx === 0,
+                          onClick: () => handleMoveAct(act.id, -1),
+                        },
+                        {
+                          label: "Move down",
+                          disabled: actIdx === structure.acts.length - 1,
+                          onClick: () => handleMoveAct(act.id, +1),
+                        },
+                        {
+                          label: "Delete act",
+                          danger: true,
+                          hint: "Chapters are kept -- they move to Unassigned",
+                          onClick: () => handleDeleteAct(act.id),
+                        },
+                      ]}
+                    >
+                      {act.chapters.map((ref, i) =>
+                        renderChapterRow(ref.filename, ref.title, {
+                          actId: act.id, index: i, count: act.chapters.length,
+                        })
+                      )}
+                    </ActGroup>
+                  ))}
+
+                  {/* Unassigned bucket -- only labeled when acts exist;
+                      an act-less project reads as a plain chapter list. */}
+                  {structure.acts.length > 0 && structure.unassigned.length > 0 && (
+                    <p className="mb-0.5 mt-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                      Unassigned
+                    </p>
+                  )}
+                  {structure.unassigned.map((ref, i) =>
+                    renderChapterRow(ref.filename, ref.title, {
+                      actId: null, index: i, count: structure.unassigned.length,
+                    })
+                  )}
+                  {strays.map(c => renderChapterRow(c.filename, c.title, null))}
+
+                  {/* Ghost button: create the next act. First use is what
+                      materializes structure.json on disk. */}
+                  <button
+                    onClick={handleAddAct}
+                    className="mt-1 w-full rounded border border-dashed border-border px-2 py-1 text-left text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300"
+                    title="Group chapters into acts (Act I, Act II...). Chapters can be moved between acts from their row menu."
+                  >
+                    + New Act
+                  </button>
+                </>
               );
-            })}
+            })()}
           </NavSection>
 
-          <NavSection label="Notes">
+          {/* Notes and Profiles are collapsible; their collapsed state is
+              remembered PER BOOK (useProjectUiState) so a writer who folds
+              Profiles in one project finds it folded there forever after --
+              across restarts and app updates -- while other books keep the
+              default expanded layout. */}
+          <NavSection label="Notes"
+            collapsed={projectUi.uiState.notesCollapsed ?? false}
+            onToggle={() => projectUi.update({
+              notesCollapsed: !(projectUi.uiState.notesCollapsed ?? false),
+            })}>
             <NavItem label="Outline"     hint="Story structure, targets, and plot beats"
               active={currentView === "outline_planner"}
               onClick={() => setCurrentView("outline_planner")} />
@@ -1858,7 +2312,11 @@ function App() {
               onClick={() => loadNote("style-guide.md", "Style Guide", currentProject)} />
           </NavSection>
 
-          <NavSection label="Profiles">
+          <NavSection label="Profiles"
+            collapsed={projectUi.uiState.profilesCollapsed ?? false}
+            onToggle={() => projectUi.update({
+              profilesCollapsed: !(projectUi.uiState.profilesCollapsed ?? false),
+            })}>
             <NavItem label="Characters"    hint="Character profiles and trait blocks"
               onClick={() => { setProfileType("character");    setCurrentView("profiles"); }} />
             <NavItem label="Relationships" hint="Relationship profiles and dynamic notes"
@@ -1869,15 +2327,21 @@ function App() {
               onClick={() => { setProfileType("lore");         setCurrentView("profiles"); }} />
           </NavSection>
 
-          {/* Scene Summaries remain reachable here for legacy profile access.
-              Chapter summaries moved to the nested Manuscript tree in Phase 6
-              (plain-Markdown files under summaries/chapters/ via SummaryView),
-              so the old profile-builder link for them has been removed. */}
-          <NavSection label="Summaries">
-            <NavItem label="Scene Summaries" hint="Per-scene summaries used as AI context"
-              onClick={() => { setProfileType("scene_summary"); setCurrentView("profiles"); }} />
-          </NavSection>
         </nav>
+
+        {/* Writing Progress gauge. Pinned BELOW the scrollable nav so it
+            never scrolls out of sight no matter how many acts/chapters/
+            scenes the writer expands above it. The aside is a flex column:
+            header (fixed) / nav (flex-1, scrolls) / gauge (fixed) / footer
+            (fixed). The breakdown slide-over opens UPWARD from here (see
+            ProjectCompletionGauge) so it stays inside the aside. */}
+        <div className="border-t border-border px-3 py-3">
+          <ProjectCompletionGauge
+            projectPath={currentProject.root_path}
+            isOpen={progressOpen}
+            onToggle={() => setProgressOpen(o => !o)}
+          />
+        </div>
 
         <div className="border-t border-border px-4 py-3">
           <button
@@ -1990,13 +2454,35 @@ function App() {
             >
               Save
             </button>
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
-              title="Export manuscript to the exports/ folder"
-            >
-              Export
-            </button>
+            {/* Tools menu -- collects the one-off features (scene/chapter
+                summary generation, Reader Mode, Export) that used to be
+                separate toolbar/header buttons. Chapter-scoped items are
+                only passed when a chapter is open, so the menu adapts. */}
+            <EditorMenu
+              onGenerateSceneSummaries={
+                currentView === "editor" && currentChapter
+                  ? handleGenerateSceneSummaries
+                  : undefined
+              }
+              autoSplitRunning={autoSplitProgress !== null}
+              onSuggestSceneBreaks={
+                currentView === "editor" && currentChapter
+                  ? handleSuggestSceneBreaks
+                  : undefined
+              }
+              suggestBreaksRunning={suggestBreaksRunning}
+              onOpenChapterSummary={
+                currentView === "editor" && currentChapter
+                  ? () => openChapterSummary(currentChapter.filename)
+                  : undefined
+              }
+              onReaderMode={
+                currentProject && chapters.length > 0
+                  ? () => setShowReaderMode(true)
+                  : undefined
+              }
+              onExport={() => setShowExportModal(true)}
+            />
           </div>
         </div>
 
@@ -2010,7 +2496,9 @@ function App() {
         )}
 
         {/* Formatting toolbar -- onNewTemplate only passed when outline.md is
-            the active file so the [+ New Template] button appears contextually */}
+            the active file so the [+ New Template] button appears contextually.
+            The one-off feature buttons (scene summaries, Reader Mode, ...)
+            moved from here into the Tools menu in the title bar above. */}
         <EditorToolbar
           editorView={editorView}
           currentFont={currentFont}
@@ -2020,23 +2508,6 @@ function App() {
               ? () => setShowTemplateDialog(true)
               : undefined
           }
-          onGenerateSceneSummaries={
-            // Only surface the button when a chapter is open in the editor.
-            // Scene summaries are chapter-scoped, so the button has no
-            // meaning while a note or the project home is showing.
-            currentView === "editor" && currentChapter
-              ? handleGenerateSceneSummaries
-              : undefined
-          }
-          autoSplitRunning={autoSplitProgress !== null}
-          onSuggestSceneBreaks={
-            // Chapter-scoped, like scene summaries: only when a chapter is open.
-            currentView === "editor" && currentChapter
-              ? handleSuggestSceneBreaks
-              : undefined
-          }
-          suggestBreaksRunning={suggestBreaksRunning}
-          onReaderMode={currentProject && chapters.length > 0 ? () => setShowReaderMode(true) : undefined}
         />
 
         {/* Smart Advisor toolbar -- only relevant for chapter editing.
@@ -2976,287 +3447,9 @@ function App() {
 
 
 // ── Helper Components ─────────────────────────────────────────────────────────
-
-function NavSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-5">
-      <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
-        {label}
-      </p>
-      {children}
-    </div>
-  );
-}
-
-function NavItem({
-  label,
-  hint,
-  active = false,
-  onClick,
-}: {
-  label: string;
-  hint: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`mb-0.5 w-full rounded px-2 py-1.5 text-left text-sm transition-colors ${
-        active ? "bg-indigo-600/20 text-indigo-300" : "text-text-primary hover:bg-bg-surface"
-      }`}
-      title={hint}
-    >
-      {label}
-    </button>
-  );
-}
-
-
-// ── ChapterNavRow (Phase 6) ───────────────────────────────────────────────────
-// One row in the Manuscript tree. Combines a chapter-opening button with an
-// expand/collapse caret that reveals a single "Chapter Summary" child row.
-//
-// Clicking the caret toggles the subtree. Clicking the chapter name opens
-// the chapter in the editor. These are separate click targets so the writer
-// can navigate to the summary without inadvertently switching chapters.
-
-function ChapterNavRow({
-  chapter,
-  isExpanded,
-  isActiveChapter,
-  isSummaryAncestor,
-  isChapterSummaryActive,
-  sceneSummaries,
-  isScenesExpanded,
-  activeSceneIndex,
-  onToggleExpand,
-  onOpenChapter,
-  onOpenChapterSummary,
-  onRenameChapter,
-  onDeleteChapter,
-  onDeleteChapterSummary,
-  onToggleScenesExpanded,
-  onOpenScene,
-  onDeleteScene,
-}: {
-  chapter:                ChapterInfo;
-  isExpanded:             boolean;
-  isActiveChapter:        boolean;  // the chapter .md is open in the editor
-  isSummaryAncestor:      boolean;  // this chapter's summary is the active view
-  isChapterSummaryActive: boolean;  // the Chapter Summary child is currently active
-  // Scene Summaries subtree (Phase 6):
-  //   sceneSummaries      = filled scene slots fetched from the backend (or
-  //                         undefined if the writer hasn't expanded yet).
-  //   isScenesExpanded    = whether the Scene Summaries group is open.
-  //   activeSceneIndex    = the scene currently shown in SceneSummaryView, or
-  //                         null when a different view is active.
-  sceneSummaries:         SceneSummaryInfo[] | undefined;
-  isScenesExpanded:       boolean;
-  activeSceneIndex:       number | null;
-  onToggleExpand:         () => void;
-  onOpenChapter:          () => void;
-  onOpenChapterSummary:   () => void;
-  onRenameChapter:        (newTitle: string) => void;
-  onDeleteChapter:        () => void;
-  onDeleteChapterSummary: () => void;
-  onToggleScenesExpanded: () => void;
-  onOpenScene:            (index: number) => void;
-  onDeleteScene:          (index: number) => void;
-}) {
-  // Softer highlight for the parent chapter row when the child summary is
-  // active -- helps the eye trace back up the tree without dominating the row.
-  const parentGhostBg = isSummaryAncestor && !isActiveChapter ? "bg-indigo-900/10" : "";
-
-  // Inline-rename state: when `editing` is true the title <button> swaps to
-  // an <input>. Start with a local draft so Escape can discard without ever
-  // calling the rename API.
-  const [editing, setEditing] = useState(false);
-  const [draft,   setDraft]   = useState(chapter.title);
-
-  // Keep the draft in sync when the chapter title changes from outside
-  // (e.g., another action renames the same chapter) and we're not editing.
-  useEffect(() => {
-    if (!editing) setDraft(chapter.title);
-  }, [chapter.title, editing]);
-
-  const commitRename = () => {
-    setEditing(false);
-    const next = draft.trim();
-    if (!next || next === chapter.title) {
-      setDraft(chapter.title);
-      return;
-    }
-    onRenameChapter(next);
-  };
-
-  return (
-    <div className="mb-0.5">
-      {/* Header row: caret + chapter name + trash. Separate click targets so
-          expanding, opening, renaming, and deleting can't be confused with
-          each other. `group` lets the trash icon stay hidden until hover. */}
-      <div
-        className={`group flex items-stretch rounded transition-colors ${
-          isActiveChapter ? "bg-indigo-600/20" : `hover:bg-bg-surface ${parentGhostBg}`
-        }`}
-      >
-        <button
-          onClick={onToggleExpand}
-          className="flex w-6 shrink-0 items-center justify-center text-xs text-text-muted hover:text-indigo-300"
-          title={isExpanded ? "Collapse" : "Expand"}
-          aria-label={isExpanded ? "Collapse chapter" : "Expand chapter"}
-        >
-          {isExpanded ? "v" : ">"}
-        </button>
-        {editing ? (
-          // Inline rename input: shown when the writer double-clicked the
-          // title. Enter saves, Escape cancels, blur saves (so clicking
-          // anywhere else commits the change, matching the example flow the
-          // writer described: "click into it, change it, click out").
-          <input
-            autoFocus
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={e => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                (e.currentTarget as HTMLInputElement).blur();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setDraft(chapter.title);
-                setEditing(false);
-              }
-            }}
-            onFocus={e => e.currentTarget.select()}
-            className="flex-1 min-w-0 rounded border border-indigo-500/50 bg-bg-surface px-1 py-1 text-sm text-text-primary outline-none focus:border-indigo-400"
-            title="Rename chapter -- Enter to save, Escape to cancel"
-          />
-        ) : (
-          <button
-            onClick={onOpenChapter}
-            onDoubleClick={() => { setDraft(chapter.title); setEditing(true); }}
-            className={`flex-1 min-w-0 truncate px-1 py-1.5 text-left text-sm ${
-              isActiveChapter ? "text-indigo-300" : "text-text-primary"
-            }`}
-            title={`Open ${chapter.filename} -- double-click to rename`}
-          >
-            {chapter.title}
-          </button>
-        )}
-        {!editing && (
-          <button
-            onClick={onDeleteChapter}
-            className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
-            title={`Delete ${chapter.title}`}
-            aria-label={`Delete ${chapter.title}`}
-          >
-            <Trash2 size={12} />
-          </button>
-        )}
-      </div>
-
-      {/* Expanded subtree: the Chapter Summary child row with its own trash
-          button. Wrapped in a `group` container so the trash can reveal on
-          hover independently of the parent chapter row. */}
-      {isExpanded && (
-        <div className="ml-6 mt-0.5 border-l border-border pl-2">
-          <div
-            className={`group flex items-stretch rounded transition-colors ${
-              isChapterSummaryActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
-            }`}
-          >
-            <button
-              onClick={onOpenChapterSummary}
-              className={`flex-1 min-w-0 truncate px-2 py-1.5 text-left text-sm ${
-                isChapterSummaryActive ? "text-indigo-300" : "text-text-primary"
-              }`}
-              title="AI-generated continuity brief for this chapter"
-            >
-              Chapter Summary
-            </button>
-            <button
-              onClick={onDeleteChapterSummary}
-              className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
-              title="Delete chapter summary (keeps the chapter)"
-              aria-label="Delete chapter summary"
-            >
-              <Trash2 size={12} />
-            </button>
-          </div>
-
-          {/* Scene Summaries subtree. Separate expandable group so collapsing
-              the scenes doesn't hide the Chapter Summary row too. The group
-              row always shows so the writer knows where to look; the list
-              below only appears when expanded AND there are filled slots. */}
-          <div className="mt-0.5">
-            <button
-              onClick={onToggleScenesExpanded}
-              className="group flex w-full items-stretch rounded text-left text-sm text-text-primary transition-colors hover:bg-bg-surface"
-              title="Per-scene AI summaries (click to expand)"
-            >
-              <span className="flex w-5 shrink-0 items-center justify-center text-xs text-text-muted group-hover:text-indigo-300">
-                {isScenesExpanded ? "v" : ">"}
-              </span>
-              <span className="flex-1 min-w-0 truncate px-1 py-1.5 text-left">
-                Scene Summaries
-                {sceneSummaries && sceneSummaries.length > 0 && (
-                  <span className="ml-1 text-xs text-text-muted">
-                    ({sceneSummaries.length})
-                  </span>
-                )}
-              </span>
-            </button>
-
-            {isScenesExpanded && (
-              <div className="ml-5 mt-0.5 border-l border-border pl-2">
-                {sceneSummaries === undefined ? (
-                  <p className="px-2 py-1 text-xs text-faint">Loading...</p>
-                ) : sceneSummaries.length === 0 ? (
-                  <p className="px-2 py-1 text-xs text-faint">
-                    No scene summaries yet. Use the toolbar's Generate Scene Summaries button.
-                  </p>
-                ) : (
-                  sceneSummaries.map(scene => {
-                    const isActive = activeSceneIndex === scene.index;
-                    return (
-                      <div
-                        key={scene.index}
-                        className={`group flex items-stretch rounded transition-colors ${
-                          isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
-                        }`}
-                      >
-                        <button
-                          onClick={() => onOpenScene(scene.index)}
-                          className={`flex-1 min-w-0 truncate px-2 py-1 text-left text-xs ${
-                            isActive ? "text-indigo-300" : "text-text-primary"
-                          }`}
-                          title={`Scene ${scene.index}: ${scene.title}`}
-                        >
-                          <span className="text-text-muted">Scene {scene.index}</span>
-                          <span className="mx-1 text-faint">&mdash;</span>
-                          {scene.title}
-                        </button>
-                        <button
-                          onClick={() => onDeleteScene(scene.index)}
-                          className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
-                          title={`Delete scene ${scene.index} summary`}
-                          aria-label={`Delete scene ${scene.index} summary`}
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+// NavSection, NavItem, and ChapterNavRow used to live here; they moved to
+// components/sidebar/ during the sidebar overhaul so the nav pieces have a
+// home of their own instead of the bottom of this file.
 
 
 // ── Context chip type config ──────────────────────────────────────────────────

@@ -308,19 +308,30 @@ export interface ReviseSuggestionResponse {
 
 // Metadata returned by the list endpoint -- one entry per filled slot. The
 // sidebar uses this to render Scene N grandchildren under each chapter.
+// One beat: a planning checkpoint inside a scene ("MC finds the letter").
+// Beats live in the scene's sidecar summary file as a `## Beats` checklist
+// -- never in the manuscript prose. `done` maps to - [ ] vs - [x].
+export interface Beat {
+  text: string;
+  done: boolean;
+}
+
 export interface SceneSummaryInfo {
   index:    number;   // 1-based positional index
   title:    string;   // From the `# Heading` line of the scene file
   filename: string;   // e.g. "scene-01.md"
+  beats:    Beat[];   // the scene's beats, for the sidebar's beat children
 }
 
 // Body returned when loading one scene summary. `exists` is false when the
 // file hasn't been created yet -- UI uses that to show an empty state.
+// `content` never contains the `## Beats` section; beats arrive separately.
 export interface SceneSummaryResponse {
   index:   number;
   title:   string;
   content: string;
   exists:  boolean;
+  beats:   Beat[];
 }
 
 // Payload for saving a scene summary. The backend prepends "# <title>" to

@@ -11,6 +11,7 @@
 from app.progress_store import (
     count_words,
     local_date_for,
+    migrate_file_relpath,
     open_db,
     record_advisor_run,
     record_save_event,
@@ -216,3 +217,53 @@ async def test_record_multiple_advisor_runs_same_chapter(tmp_path):
 
     categories = {row[0] for row in rows}
     assert categories == {"readability", "structure", "context"}
+
+
+# ── migrate_file_relpath ─────────────────────────────────────────────────────
+# Used by the chapter rename cascade: repoints history rows so task-credit
+# dedupe and per-file history survive a file rename.
+
+async def test_migrate_file_relpath_updates_matching_rows_only(tmp_path):
+    await record_save_event(str(tmp_path), "manuscript/old.md", "a b c", "")
+    await record_save_event(str(tmp_path), "manuscript/other.md", "x y", "")
+
+    ok = await migrate_file_relpath(
+        str(tmp_path), "manuscript/old.md", "manuscript/new.md"
+    )
+    assert ok is True
+
+    async with open_db(tmp_path) as db:
+        cursor = await db.execute(
+            "SELECT DISTINCT file_relpath FROM progress_event ORDER BY file_relpath"
+        )
+        rows = [r[0] for r in await cursor.fetchall()]
+        await cursor.close()
+
+    assert "manuscript/old.md" not in rows
+    assert "manuscript/new.md" in rows
+    assert "manuscript/other.md" in rows   # untouched
+
+
+async def test_migrate_file_relpath_preserves_task_credit_dedupe(tmp_path):
+    # Save under the old name (earns today's credit), rename, save under the
+    # new name -- must NOT double-grant today's task credit for that file.
+    await record_save_event(str(tmp_path), "manuscript/old.md", "a b c", "")
+    await migrate_file_relpath(str(tmp_path), "manuscript/old.md", "manuscript/new.md")
+    await record_save_event(str(tmp_path), "manuscript/new.md", "a b c d", "a b c")
+
+    async with open_db(tmp_path) as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM progress_event WHERE event_type = 'task_credit'"
+        )
+        (count,) = await cursor.fetchone()
+        await cursor.close()
+
+    assert count == 1
+
+
+async def test_migrate_file_relpath_never_raises(tmp_path):
+    # Missing DB / fresh project: still returns a bool, never throws.
+    ok = await migrate_file_relpath(
+        str(tmp_path / "no-such-project"), "manuscript/a.md", "manuscript/b.md"
+    )
+    assert ok in (True, False)

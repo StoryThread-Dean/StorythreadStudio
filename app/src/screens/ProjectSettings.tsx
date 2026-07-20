@@ -1,8 +1,13 @@
-// ProjectSettings.tsx -- Project-Level Settings Modal
-// =====================================================
+// ProjectSettings.tsx -- The "Book Details" Modal
+// =================================================
 // Separate from the global Settings modal (API key, model picker).
-// This shows and edits the project.json values for the currently open project:
-// title, description, content mode, model tier floor.
+// Opened from the BOOK DETAILS section at the top of the left nav (the old
+// gear icon next to the project title was removed -- this modal is the one
+// home for everything book-level). It shows and edits the project.json
+// values for the currently open project: title, description, the story
+// facts that feed AI prompts (genre, tone, theme, setting, POV, tense,
+// audience), the word-count target (stored in the outline frontmatter, not
+// project.json), content mode, and the model tier/picker.
 //
 // Includes the dynamic Model Help Guide that changes text based on
 // the writer's current settings -- educating novice writers on how
@@ -43,6 +48,453 @@ const TIER_LABELS: Record<string, string> = {
   premium:  "Priority Best",
 };
 
+// ── Suggestion picker data ────────────────────────────────────────────────────
+// Clickable checkbox options for the free-text story fields (Genre, Tone,
+// Target Audience). New writers often freeze at a blank box; these are
+// training wheels, not a taxonomy -- clicking one inserts its text into the
+// box, clicking again removes it, and hand-typing anything unique ("High
+// Space Adventure") always works. Grouped most-popular-first: the first
+// group is the broad categories, the following groups are the popular
+// subcategories under each.
+
+interface SuggestionGroup {
+  label:   string;
+  options: string[];
+  // Optional per-option explanations, revealed by the group's "What's this?"
+  // toggle. Keyed by the exact option string. Embedded help is a first-class
+  // feature here -- new writers shouldn't have to google "what is noir".
+  help?:   Record<string, string>;
+}
+
+const GENRE_SUGGESTIONS: SuggestionGroup[] = [
+  { label: "Popular categories",
+    options: [
+      "Fantasy", "Romance", "Mystery", "Thriller", "Science Fiction",
+      "Horror", "Historical Fiction", "Literary Fiction",
+    ],
+    help: {
+      "Fantasy": "Magic, invented worlds, or the supernatural at the core of the story.",
+      "Romance": "The love story is the main plot; readers expect an emotionally satisfying ending.",
+      "Mystery": "A crime or puzzle drives the plot; the reader follows clues toward the solution.",
+      "Thriller": "Constant tension and high stakes -- the hero races to stop a threat.",
+      "Science Fiction": "Speculative stories grounded in science, technology, or the future.",
+      "Horror": "Written to frighten or unsettle: dread, monsters, the uncanny.",
+      "Historical Fiction": "Set in a real past era, blending invented characters with period detail.",
+      "Literary Fiction": "Character- and prose-driven work that prioritizes theme and style over plot.",
+    }},
+  { label: "Fantasy subcategories",
+    options: ["Epic Fantasy", "Urban Fantasy", "Dark Fantasy", "Cozy Fantasy", "Romantasy"],
+    help: {
+      "Epic Fantasy": "Large-scale, often multi-book quests across richly built worlds -- sweeping wars, chosen heroes.",
+      "Urban Fantasy": "Magic hidden inside the modern real world: present-day cities and the supernatural.",
+      "Dark Fantasy": "Fantasy with horror's mood -- grim, violent, morally shadowed.",
+      "Cozy Fantasy": "Low-stakes, comforting fantasy: warmth, community, small adventures.",
+      "Romantasy": "Fantasy and romance in equal measure -- the love story matters as much as the magic.",
+    }},
+  { label: "Sci-Fi subcategories",
+    options: ["Space Opera", "Sci-Fi Thriller", "Dystopian", "Cyberpunk", "Time Travel"],
+    help: {
+      "Space Opera": "Grand adventure across galaxies -- starships, empires, larger-than-life stakes.",
+      "Sci-Fi Thriller": "Fast, tense plots powered by a scientific or technological threat.",
+      "Dystopian": "A broken or oppressive future society the characters must survive or resist.",
+      "Cyberpunk": "High tech, low life -- hackers, megacorps, neon cities.",
+      "Time Travel": "Plots built around moving through time and dealing with the consequences.",
+    }},
+  { label: "Romance subcategories",
+    options: ["Contemporary Romance", "Historical Romance", "Paranormal Romance", "Romantic Comedy"],
+    help: {
+      "Contemporary Romance": "Present-day love stories in realistic settings.",
+      "Historical Romance": "Romance set in a past era -- Regency, Victorian, and the like.",
+      "Paranormal Romance": "Love stories with supernatural partners: vampires, shifters, ghosts.",
+      "Romantic Comedy": "Light, funny romance with a feel-good tone.",
+    }},
+  { label: "Mystery & Thriller subcategories",
+    options: ["Cozy Mystery", "Police Procedural", "Psychological Thriller", "Noir"],
+    help: {
+      "Cozy Mystery": "Gentle, low-gore mysteries -- often an amateur sleuth in a small community.",
+      "Police Procedural": "Crime solved through realistic police investigation and detective work.",
+      "Psychological Thriller": "Tension from the mind: unreliable narrators, manipulation, paranoia.",
+      "Noir": "Bleak, morally gray crime fiction with a cynical, atmospheric edge.",
+    }},
+  { label: "More",
+    options: ["Adventure", "Coming of Age", "Magical Realism", "Western", "Satire"],
+    help: {
+      "Adventure": "Action, journeys, and physical danger drive the story.",
+      "Coming of Age": "A young protagonist grows into adulthood and self-understanding.",
+      "Magical Realism": "Realistic worlds where magic is woven in matter-of-factly.",
+      "Western": "Frontier settings -- the American Old West and its myths.",
+      "Satire": "Uses humor and exaggeration to criticize society or human folly.",
+    }},
+];
+
+const TONE_SUGGESTIONS: SuggestionGroup[] = [
+  { label: "Popular",
+    options: [
+      "Dark", "Lighthearted", "Humorous", "Hopeful",
+      "Atmospheric", "Fast-paced", "Emotional", "Gritty",
+    ],
+    help: {
+      "Dark": "Heavy, serious, often grim subject matter and mood.",
+      "Lighthearted": "Easygoing and fun -- nothing weighs the reader down.",
+      "Humorous": "Written for laughs: wit, comedy, absurdity.",
+      "Hopeful": "Even through hardship, the mood points toward something better.",
+      "Atmospheric": "Mood and setting are vivid enough to feel like a character.",
+      "Fast-paced": "Short scenes, quick momentum, little downtime.",
+      "Emotional": "Aims straight for the reader's feelings.",
+      "Gritty": "Raw, unglamorous realism -- hardship shown unflinchingly.",
+    }},
+  { label: "More",
+    options: [
+      "Whimsical", "Suspenseful", "Melancholic", "Cozy", "Wry",
+      "Epic", "Bleak", "Romantic", "Slow burn", "Satirical",
+    ],
+    help: {
+      "Whimsical": "Playful, fanciful, charmingly odd.",
+      "Suspenseful": "Keeps the reader anxious about what happens next.",
+      "Melancholic": "A wistful, sad, reflective mood.",
+      "Cozy": "Warm, safe, and comforting.",
+      "Wry": "Dry, ironic humor delivered with a straight face.",
+      "Epic": "Grand, sweeping, larger than life.",
+      "Bleak": "Little comfort or hope -- heavy and stark.",
+      "Romantic": "Centered on love, longing, and connection.",
+      "Slow burn": "Tension or romance built gradually over a long stretch.",
+      "Satirical": "Mocking, critical humor aimed at a target.",
+    }},
+];
+
+const AUDIENCE_SUGGESTIONS: SuggestionGroup[] = [
+  { label: "Popular",
+    options: ["Adult", "Young Adult (13-18)", "Middle Grade (8-12)", "New Adult (18-25)"],
+    help: {
+      "Adult": "Written for grown readers; no category content restrictions.",
+      "Young Adult (13-18)": "Teen protagonists and themes -- the biggest crossover market.",
+      "Middle Grade (8-12)": "For older children: age-appropriate stakes, no explicit content.",
+      "New Adult (18-25)": "Protagonists in their late teens to twenties navigating early adulthood.",
+    }},
+  { label: "More",
+    options: ["Children (5-8)", "All ages"],
+    help: {
+      "Children (5-8)": "Early readers -- simple language and gentle themes.",
+      "All ages": "Written to appeal across every age band.",
+    }},
+];
+
+// ── NSFW suggestion sets ──────────────────────────────────────────────────────
+// Adult / erotica is a large, legitimate fiction-publishing market with its
+// own standard classification labels (the same ones Amazon KDP, romance
+// publishers, and reader communities use). These are self-classification
+// tags for the writer's own work -- they help an adult-fiction author pick
+// the right genre/tone the same way the standard list helps everyone else.
+//
+// Deliberately NOT gated on the AI content-mode setting: labeling your book
+// as erotic romance is a metadata choice, independent of whether you ask the
+// AI to generate explicit text. Kept behind its own collapsed "Show NSFW
+// suggestions" toggle and styled in red so it never surprises anyone.
+
+const GENRE_NSFW: SuggestionGroup[] = [
+  { label: "Erotica & erotic romance",
+    options: [
+      "Erotica", "Erotic Romance", "Erotic Thriller", "Erotic Fantasy",
+      "Erotic Sci-Fi", "Erotic Horror", "Contemporary Erotica", "Historical Erotica",
+    ],
+    help: {
+      "Erotica": "Explicit sexual content is central to the story, not incidental.",
+      "Erotic Romance": "A full romance arc where explicit sex is integral to the relationship.",
+      "Erotic Thriller": "A suspense plot carried by strong explicit sexual content.",
+      "Erotic Fantasy": "Fantasy worlds with explicit sexual content.",
+      "Erotic Sci-Fi": "Science fiction with explicit sexual content.",
+      "Erotic Horror": "Horror blended with explicit sexual content.",
+      "Contemporary Erotica": "Present-day explicit fiction.",
+      "Historical Erotica": "Explicit fiction set in a past era.",
+    }},
+  { label: "Romance heat subgenres",
+    options: [
+      "Dark Romance", "Spicy Romance", "Steamy Romance", "Monster Romance",
+      "Reverse Harem", "Why Choose", "Mafia Romance", "Motorcycle Club Romance",
+      "Bully Romance", "Forbidden Romance",
+    ],
+    help: {
+      "Dark Romance": "Romance with dangerous or morally gray partners and heavy themes (captivity, dubious consent -- as fiction tropes).",
+      "Spicy Romance": "Romance with frequent, explicit sex scenes ('high heat').",
+      "Steamy Romance": "Sensual romance with on-page sex, moderate to high heat.",
+      "Monster Romance": "Romance with non-human or monstrous love interests.",
+      "Reverse Harem": "One protagonist with several love interests who don't compete jealously.",
+      "Why Choose": "Like reverse harem -- the lead ends up with multiple partners rather than picking one.",
+      "Mafia Romance": "Romance centered on organized-crime figures.",
+      "Motorcycle Club Romance": "Romance set in biker-club culture.",
+      "Bully Romance": "The love interest starts as an antagonist or bully (a trope, not an endorsement).",
+      "Forbidden Romance": "Love that breaks a rule or taboo -- age gap, boss/employee, and the like.",
+    }},
+  { label: "Kink & theme",
+    options: [
+      "BDSM", "Kink", "LGBTQ+ Erotica", "MM Romance", "FF Romance",
+      "Polyamory", "Taboo", "Age Gap",
+    ],
+    help: {
+      "BDSM": "Stories featuring bondage/discipline, dominance/submission, and sadomasochism dynamics.",
+      "Kink": "Fiction organized around specific kinks or fetishes.",
+      "LGBTQ+ Erotica": "Explicit fiction centering queer characters and relationships.",
+      "MM Romance": "Male/male romance.",
+      "FF Romance": "Female/female romance.",
+      "Polyamory": "Relationships involving more than two committed partners.",
+      "Taboo": "Deliberately transgressive themes, presented as fiction.",
+      "Age Gap": "A significant age difference between adult partners.",
+    }},
+];
+
+const TONE_NSFW: SuggestionGroup[] = [
+  { label: "Heat & sensuality",
+    options: [
+      "Sensual", "Steamy", "Spicy", "Explicit", "Graphic", "Seductive",
+      "Provocative", "Smutty", "Slow-burn sensual", "Filthy",
+    ],
+    help: {
+      "Sensual": "Emphasis on physical sensation and desire.",
+      "Steamy": "Frequent on-page intimacy.",
+      "Spicy": "High heat -- lots of explicit content.",
+      "Explicit": "Sex is shown directly and in detail.",
+      "Graphic": "Very detailed, unflinching depiction.",
+      "Seductive": "A mood of enticement and allure.",
+      "Provocative": "Meant to arouse or push boundaries.",
+      "Smutty": "Playful term for high-heat, sex-forward writing.",
+      "Slow-burn sensual": "Desire built gradually before the payoff.",
+      "Filthy": "Very explicit and uninhibited in tone.",
+    }},
+  { label: "Edge",
+    options: ["Taboo", "Kinky", "Dark and erotic", "Dominant", "Submissive", "Forbidden"],
+    help: {
+      "Taboo": "Transgressive, boundary-pushing themes.",
+      "Kinky": "Centered on kink dynamics.",
+      "Dark and erotic": "Combines a grim mood with explicit content.",
+      "Dominant": "Emphasis on a dominant partner's perspective or dynamic.",
+      "Submissive": "Emphasis on a submissive partner's perspective or dynamic.",
+      "Forbidden": "The eroticism comes from breaking a rule or taboo.",
+    }},
+];
+
+const AUDIENCE_NSFW: SuggestionGroup[] = [
+  { label: "Adult (18+)",
+    options: [
+      "Adult 18+ (mature content)", "Adult 18+ (explicit content)",
+      "Erotica readers", "Spicy romance readers", "Dark romance readers",
+    ],
+    help: {
+      "Adult 18+ (mature content)": "For adults -- mature themes, violence, or strong language.",
+      "Adult 18+ (explicit content)": "For adults -- contains explicit sexual content.",
+      "Erotica readers": "Readers specifically seeking explicit fiction.",
+      "Spicy romance readers": "Romance readers who want high heat.",
+      "Dark romance readers": "Readers who want darker, edgier romance themes.",
+    }},
+];
+
+// ── Comma-list helpers for the suggestion picker ─────────────────────────────
+// The field value is treated as a comma-separated list ("Fantasy, Romantasy").
+// A suggestion is "checked" when it appears as one of those parts
+// (case-insensitive), so hand-typed entries and clicked entries coexist.
+
+// Exported for unit tests (ProjectSettings.helpers.test.ts) -- this little
+// parser must never mangle a hand-typed value.
+export function splitParts(value: string): string[] {
+  return value.split(",").map(p => p.trim()).filter(Boolean);
+}
+
+export function hasPart(value: string, option: string): boolean {
+  return splitParts(value).some(p => p.toLowerCase() === option.toLowerCase());
+}
+
+export function togglePart(value: string, option: string): string {
+  const parts = splitParts(value);
+  const remaining = parts.filter(p => p.toLowerCase() !== option.toLowerCase());
+  if (remaining.length !== parts.length) {
+    return remaining.join(", ");        // was checked -> remove it
+  }
+  return [...parts, option].join(", "); // wasn't -> append it
+}
+
+// A single group of chips, with an optional per-group "What's this?" toggle
+// that lists a one-line definition of every option. `accent` swaps the
+// palette between the standard (indigo) and NSFW (red) lists so the two are
+// unmistakable at a glance.
+function ChipGroup({
+  value,
+  onChange,
+  group,
+  accent,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  group: SuggestionGroup;
+  accent: "indigo" | "red";
+}) {
+  const [showHelp, setShowHelp] = useState(false);
+
+  const checkedClass = accent === "red"
+    ? "border-red-500/60 bg-red-900/30 text-red-300"
+    : "border-indigo-500/60 bg-indigo-900/30 text-indigo-300";
+  const helpLinkClass = accent === "red"
+    ? "text-red-400/70 hover:text-red-400"
+    : "text-indigo-300/70 hover:text-indigo-300";
+  const helpTermClass = accent === "red" ? "text-red-300" : "text-indigo-300";
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+          {group.label}
+        </p>
+        {group.help && (
+          <button
+            type="button"
+            onClick={() => setShowHelp(h => !h)}
+            className={`text-[10px] transition-colors ${helpLinkClass}`}
+            title="Explain each option in this group"
+            aria-expanded={showHelp}
+          >
+            {showHelp ? "Hide" : "What's this?"}
+          </button>
+        )}
+      </div>
+
+      {/* Definitions, shown above the chips so the reader has context before
+          clicking. Only the options that actually have help text appear. */}
+      {showHelp && group.help && (
+        <dl className="mb-1.5 space-y-0.5 rounded bg-bg-panel/60 px-2 py-1.5 text-[11px] leading-snug">
+          {group.options.filter(opt => group.help?.[opt]).map(opt => (
+            <div key={opt}>
+              <dt className={`inline font-semibold ${helpTermClass}`}>{opt}</dt>
+              <dd className="inline text-text-muted"> &ndash; {group.help?.[opt]}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      <div className="flex flex-wrap gap-1">
+        {group.options.map(opt => {
+          const checked = hasPart(value, opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(togglePart(value, opt))}
+              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors ${
+                checked
+                  ? checkedClass
+                  : "border-border bg-bg-panel text-text-muted hover:border-faint hover:text-text-primary"
+              }`}
+              title={checked ? `Remove "${opt}"` : `Add "${opt}"`}
+            >
+              <span aria-hidden="true">{checked ? "☑" : "☐"}</span>
+              <span>{opt}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── SuggestionPicker ─────────────────────────────────────────────────────────
+// The "Show suggestions" toggle + grouped checkbox chips under a text field.
+// Collapsed by default so experienced writers who just type see no clutter.
+//
+// Optional `nsfwGroups`: an adult/erotica set behind its own SECOND toggle
+// at the bottom ("Show NSFW suggestions"), styled red. It's independent of
+// the standard toggle and of the AI content-mode setting -- classifying your
+// book's genre is metadata, not a generation switch.
+function SuggestionPicker({
+  value,
+  onChange,
+  groups,
+  nsfwGroups,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  groups: SuggestionGroup[];
+  nsfwGroups?: SuggestionGroup[];
+}) {
+  const [open, setOpen]         = useState(false);
+  const [nsfwOpen, setNsfwOpen] = useState(false);
+
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="text-[11px] text-indigo-300/80 transition-colors hover:text-indigo-300"
+        title="Common choices -- click to add or remove them from the box above"
+      >
+        {open ? "Hide suggestions" : "Show suggestions..."}
+      </button>
+
+      {open && (
+        <div className="mt-1.5 space-y-2 rounded border border-border bg-bg-surface/50 p-2">
+          {groups.map(group => (
+            <ChipGroup key={group.label} value={value} onChange={onChange} group={group} accent="indigo" />
+          ))}
+
+          {/* NSFW sub-section: its own toggle at the bottom, always available
+              (not tied to the AI content mode), red so it's distinct. */}
+          {nsfwGroups && nsfwGroups.length > 0 && (
+            <div className="border-t border-border pt-2">
+              <button
+                type="button"
+                onClick={() => setNsfwOpen(o => !o)}
+                className="text-[11px] font-medium text-red-400/90 transition-colors hover:text-red-400"
+                title="Adult / erotica classification labels -- optional, for mature fiction"
+              >
+                {nsfwOpen ? "Hide NSFW suggestions" : "Show NSFW suggestions..."}
+              </button>
+
+              {nsfwOpen && (
+                <div className="mt-1.5 space-y-2 rounded border border-red-900/50 bg-red-950/20 p-2">
+                  <p className="text-[10px] text-red-400/70">
+                    Adult / erotica labels for classifying mature fiction. Optional, and separate from your AI content-mode setting.
+                  </p>
+                  {nsfwGroups.map(group => (
+                    <ChipGroup key={group.label} value={value} onChange={onChange} group={group} accent="red" />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Point of View help content ───────────────────────────────────────────────
+// Plain-language explanations + a popularity-based recommendation, shown
+// behind a "What's this?" toggle next to the POV label. Same embedded-help
+// philosophy as the Writing Companion's mode help.
+const POV_HELP: { name: string; what: string; note: string }[] = [
+  {
+    name: "First",
+    what: "The narrator IS a character: \"I walked into the room.\" The reader lives inside one head, hearing every thought.",
+    note: "Very popular in Young Adult, romance, and thrillers. Maximum intimacy; the tradeoff is you can only show what that one character sees and knows.",
+  },
+  {
+    name: "Second",
+    what: "The story addresses the reader directly: \"You walk into the room.\"",
+    note: "Rare and experimental -- striking in short fiction, exhausting over a novel. Pick it deliberately, not by default.",
+  },
+  {
+    name: "Third Limited",
+    what: "\"She walked into the room\" -- but the camera stays behind ONE character's eyes per scene, sharing only their thoughts.",
+    note: "The most popular choice in modern fiction, and the safest default: nearly first-person intimacy with more flexibility.",
+  },
+  {
+    name: "Third Omniscient",
+    what: "An all-knowing narrator who can dip into anyone's thoughts and comment on the story from above -- the classic 19th-century voice.",
+    note: "Gives an epic, storyteller feel but is the hardest to control: sliding between heads mid-scene (\"head-hopping\") reads as a mistake unless handled deliberately.",
+  },
+  {
+    name: "Multiple",
+    what: "Several point-of-view characters, each owning their chapters or scenes (each usually written in first or third limited).",
+    note: "Standard for epic fantasy and dual-POV romance. Works best with clear breaks at every switch so the reader always knows whose head they're in.",
+  },
+];
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface ProjectSettingsProps {
   project: ProjectInfo;
@@ -59,6 +511,17 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   const [description, setDescription] = useState(project.description);
   const [genre, setGenre]             = useState("");
   const [tone, setTone]               = useState("");
+  // Story facts added with the Book Details rework. All of these (plus
+  // genre/tone above) are auto-injected into AI prompts as STORY CONTEXT.
+  const [theme, setTheme]                     = useState("");
+  const [storySetting, setStorySetting]       = useState("");   // "setting" clashes with React naming habits
+  const [pointOfView, setPointOfView]         = useState("");
+  const [tense, setTense]                     = useState("");
+  const [targetAudience, setTargetAudience]   = useState("");
+  // Word Count target -- kept as a string for the input; parsed on save.
+  // The backend stores it in notes/outline.md frontmatter (the Progress
+  // gauge's source of truth), never in project.json.
+  const [targetWordCount, setTargetWordCount] = useState("");
   const [contentMode, setContentMode] = useState(project.content_mode_default);
   const [costTier, setCostTier]       = useState("standard");
   const [projectModel, setProjectModel] = useState(project.default_model ?? "");
@@ -84,6 +547,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
   // Help guide expanded state
   const [showGuide, setShowGuide] = useState(false);
+  // Point of View "What's this?" panel
+  const [showPovHelp, setShowPovHelp] = useState(false);
 
   // UI state
   const [saving, setSaving]   = useState(false);
@@ -100,6 +565,14 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           const data = await res.json();
           setGenre(data.genre ?? "");
           setTone(data.tone ?? "");
+          setTheme(data.theme ?? "");
+          setStorySetting(data.setting ?? "");
+          setPointOfView(data.point_of_view ?? "");
+          setTense(data.tense ?? "");
+          setTargetAudience(data.target_audience ?? "");
+          setTargetWordCount(
+            data.target_word_count != null ? String(data.target_word_count) : ""
+          );
           setCostTier(data.cost_tier ?? "standard");
           setProjectModel(data.default_model ?? "");
         }
@@ -137,6 +610,15 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
     setSaved(false);
     setError(null);
 
+    // Word Count target: only sent when it parses as a positive number.
+    // Blank = leave the outline's value alone (never zero it by accident).
+    const parsedTarget = parseInt(targetWordCount.replace(/[,\s]/g, ""), 10);
+    if (targetWordCount.trim() !== "" && (!Number.isFinite(parsedTarget) || parsedTarget < 0)) {
+      setError("Word Count target must be a number.");
+      setSaving(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/projects/settings`, {
         method: "PUT",
@@ -147,6 +629,12 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           description:          description,
           genre:                genre,
           tone:                 tone,
+          theme:                theme,
+          setting:              storySetting,
+          point_of_view:        pointOfView,
+          tense:                tense,
+          target_audience:      targetAudience,
+          ...(targetWordCount.trim() !== "" ? { target_word_count: parsedTarget } : {}),
           content_mode_default: contentMode,
           cost_tier:            costTier,
           default_model:        projectModel || null,  // empty string = use global
@@ -301,7 +789,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           className="flex shrink-0 items-center justify-between border-b border-border"
           style={{ padding: "1rem 1.5rem" }}
         >
-          <h2 className="text-base font-semibold text-text-primary">Project Settings</h2>
+          <h2 className="text-base font-semibold text-text-primary">Book Details</h2>
           <button
             onClick={onClose}
             className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
@@ -352,6 +840,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   placeholder="e.g. epic fantasy, sci-fi thriller, contemporary romance"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
+                <SuggestionPicker value={genre} onChange={setGenre} groups={GENRE_SUGGESTIONS} nsfwGroups={GENRE_NSFW} />
               </div>
 
               <div className="mb-4">
@@ -366,6 +855,140 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   placeholder="e.g. dark, atmospheric, slow burn, humorous"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
+                <SuggestionPicker value={tone} onChange={setTone} groups={TONE_SUGGESTIONS} nsfwGroups={TONE_NSFW} />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Theme</label>
+                <p className="mb-1 text-xs text-faint">
+                  The idea the story keeps returning to. Auto-injected into AI prompts.
+                </p>
+                <input
+                  type="text"
+                  value={theme}
+                  onChange={e => setTheme(e.target.value)}
+                  placeholder="e.g. redemption, found family, the cost of power"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Setting</label>
+                <p className="mb-1 text-xs text-faint">
+                  Where and when the story happens. Auto-injected into AI prompts.
+                </p>
+                <input
+                  type="text"
+                  value={storySetting}
+                  onChange={e => setStorySetting(e.target.value)}
+                  placeholder="e.g. a storm-locked island kingdom, near-future Chicago"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Word Count Target</label>
+                <p className="mb-1 text-xs text-faint">
+                  Target length in words. Drives the Writing Progress gauge
+                  (stored in the outline, not project settings). Leave blank to keep the current target.
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={targetWordCount}
+                  onChange={e => setTargetWordCount(e.target.value)}
+                  placeholder="e.g. 90000"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* POV and Tense side by side -- both are short pick-lists */}
+              <div className="mb-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-text-primary">
+                    Point of View
+                    <button
+                      type="button"
+                      onClick={() => setShowPovHelp(h => !h)}
+                      className={`flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] transition-colors ${
+                        showPovHelp
+                          ? "text-indigo-300"
+                          : "text-faint hover:text-indigo-300"
+                      }`}
+                      title="What do these options mean, and which should I pick?"
+                      aria-expanded={showPovHelp}
+                    >
+                      <HelpCircle size={11} />
+                      <span>What's this?</span>
+                    </button>
+                  </label>
+                  <select
+                    value={pointOfView}
+                    onChange={e => setPointOfView(e.target.value)}
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                    title="Narration perspective. Auto-injected into AI prompts."
+                  >
+                    <option value="">(not set)</option>
+                    <option value="First">First</option>
+                    <option value="Second">Second</option>
+                    <option value="Third Limited">Third Limited</option>
+                    <option value="Third Omniscient">Third Omniscient</option>
+                    <option value="Multiple">Multiple</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-primary">Tense</label>
+                  <select
+                    value={tense}
+                    onChange={e => setTense(e.target.value)}
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                    title="Narration tense. Auto-injected into AI prompts."
+                  >
+                    <option value="">(not set)</option>
+                    <option value="Past">Past</option>
+                    <option value="Present">Present</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* POV explainer -- expands full-width below the POV/Tense row
+                  so the two-column grid doesn't squeeze the text. */}
+              {showPovHelp && (
+                <div className="mb-3 rounded border border-indigo-800/40 bg-indigo-950/20 p-3">
+                  <div className="space-y-2">
+                    {POV_HELP.map(pov => (
+                      <div key={pov.name}>
+                        <p className="text-xs font-semibold text-indigo-300">{pov.name}</p>
+                        <p className="text-xs text-text-muted">{pov.what}</p>
+                        <p className="text-xs text-faint">{pov.note}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 border-t border-indigo-800/40 pt-2 text-xs text-text-muted">
+                    <span className="font-semibold text-indigo-300">Not sure? </span>
+                    Pick <span className="text-text-primary">Third Limited</span> -- it's
+                    the most popular choice in modern fiction and the easiest to keep
+                    consistent. Writing Young Adult or romance and want the reader glued
+                    to one voice? <span className="text-text-primary">First</span> is the
+                    genre favorite. Juggling a big cast (epic fantasy, dual-POV romance)?
+                    Choose <span className="text-text-primary">Multiple</span>.
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Target Audience</label>
+                <p className="mb-1 text-xs text-faint">
+                  Who the book is for. Auto-injected into AI prompts.
+                </p>
+                <input
+                  type="text"
+                  value={targetAudience}
+                  onChange={e => setTargetAudience(e.target.value)}
+                  placeholder="e.g. Adult, Young Adult, Middle Grade"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+                <SuggestionPicker value={targetAudience} onChange={setTargetAudience} groups={AUDIENCE_SUGGESTIONS} nsfwGroups={AUDIENCE_NSFW} />
               </div>
 
               {/* Series info (read-only if applicable) */}

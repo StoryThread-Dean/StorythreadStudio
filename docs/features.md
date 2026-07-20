@@ -5,9 +5,10 @@ This is a snapshot of what Storythread Studio does today. For where it is going 
 ## Editor
 
 - CodeMirror 6 Markdown editor with a serif typeface optimized for long reading
-- Manual save (`Ctrl+S` or Save button); unsaved-change indicator with a confirm-before-close prompt
+- Manual save (`Ctrl+S` or Save button); unsaved-change indicator with a confirm-before-close prompt; saving refreshes the sidebar title from the chapter's `# Heading`
 - Session undo and redo
 - Formatting toolbar, font selector, find and replace
+- A **Tools** pulldown in the title bar collects the one-off actions: Generate Scene Summaries, Suggest Scene Breaks, Chapter Summary, Reader Mode, and Export
 - Light and dark themes (app-wide, persisted)
 - Selection highlight persists when the writer moves focus into the chat or Smart Advisor panels
 
@@ -15,14 +16,25 @@ This is a snapshot of what Storythread Studio does today. For where it is going 
 
 Each project is a folder the user owns. The app reads and writes Markdown files inside that folder; it never touches anything outside it.
 
-- `manuscript/` — one chapter per Markdown file
+- `manuscript/` — one chapter per Markdown file; `structure.json` holds acts + reading order once the writer uses acts
 - `notes/` — outline, style guide, themes, plus any free notes the writer adds
 - `profiles/` — character, relationship, location, lore profiles
 - `profiles/arcs/` — for series projects, per-book overrides on canonical profiles
 - `summaries/chapters/` — one summary file per chapter
-- `summaries/scenes/<chapter-stem>/scene-NN.md` — per-scene summaries
+- `summaries/scenes/<chapter-stem>/scene-NN.md` — per-scene summaries (with an optional `## Beats` checklist)
 - `exports/` — combined manuscript file plus dated snapshot folders
-- `.storythread/` — local cache (safe to delete; rebuilt from Markdown)
+- `.storythread/` — local cache (safe to delete; rebuilt from Markdown) + per-book remembered UI state
+
+## Sidebar and manuscript hierarchy
+
+The left panel presents Story > Act > Chapter > Scene > Beat:
+
+- **Book Details** — a section header at the top that opens the Book Details popout (formerly "Project Settings" behind a gear icon, now the single home for everything book-level): Title, Description, Genre, Tone, Theme, Setting, Word Count target, Point of View, Tense, Target Audience, plus outline template, content mode, and the model picker. All story fields but the word target flow into AI prompts as STORY CONTEXT.
+- **Acts** — created with "+ New Act"; chapters move between acts and reorder via each row's hover "..." menu (Move up / Move down / Move to Act). Acts collapse, and the collapsed state is remembered per book. Moves never rename chapter files.
+- **Chapters** — double-click to rename. A rename updates the heading AND the filename (slug follows the title, `NN-` prefix kept), and carries the chapter's summary, scene summaries, act slot, and progress history along.
+- **Scenes** — expandable under each chapter (from scene summaries); each scene with beats shows a done/total badge and expandable read-only beat rows.
+- **Notes / Profiles** — collapsible sections; collapse state remembered per book across restarts and updates.
+- **Writing Progress** — pinned at the bottom of the panel, always visible no matter how much of the tree is expanded; the breakdown slide-over opens upward.
 
 ## Profile Builder
 
@@ -167,6 +179,10 @@ Per-scene files at `summaries/scenes/<chapter-stem>/scene-NN.md`. Two ways to cr
 - **Selection-based** — a modal lets the writer preview a summary of the selected text and pick the slot it belongs in
 
 The sidebar shows scene summaries as expandable grandchildren under each chapter.
+
+### Scene beats
+
+Each scene summary can carry a **Beats** checklist — planning checkpoints like "MC finds the letter" — edited in the scene summary view (check off, edit in place, reorder, delete, add). Beats are stored as a `## Beats` section at the end of the scene's summary file, never in the manuscript prose, and regenerating the summary with AI leaves them untouched. The sidebar shows each scene's beats as read-only children with a done/total badge.
 
 ## Export
 

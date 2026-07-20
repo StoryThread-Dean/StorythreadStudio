@@ -205,13 +205,22 @@ export interface UpdateProjectSettingsPayload {
   content_mode_default?: string;
   cost_tier?:            string;
   default_model?:        string;
+  // Book Details fields (sidebar panel). Stored flat in project.json.
+  theme?:                string;
+  setting?:              string;
+  point_of_view?:        string;
+  tense?:                string;
+  target_audience?:      string;
+  // Word Count target. The backend writes this into the OUTLINE frontmatter
+  // (the Progress gauge's source of truth), never project.json.
+  target_word_count?:    number;
 }
 
 // --- ChapterInfo ---
 // Metadata about one chapter file, returned by GET /api/documents/chapters.
 // The editor uses this to build the chapter list in the left nav panel.
 export interface ChapterInfo {
-  filename: string;   // e.g. "01-chapter-one.md"
-  title: string;      // e.g. "Chapter One"
+  filename: string;   // e.g. "01-chapter-1.md"
+  title: string;      // e.g. "Chapter 1"
   path: string;       // Full absolute path on disk
 }

@@ -136,7 +136,7 @@ Expected:
 `ebooklib` / Markdown serializers.
 
 Steps:
-1. Open the Export modal from project actions.
+1. Open the Export modal (Tools menu in the editor title bar > Export Manuscript).
 2. Select "Full Manuscript".
 3. Check all four format options (Markdown, TXT, DOCX, EPUB).
 4. Confirm export and pick a destination folder.

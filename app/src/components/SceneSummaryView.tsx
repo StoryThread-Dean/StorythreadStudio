@@ -23,6 +23,7 @@ import type { ProjectInfo } from "../types/project";
 import type { FontValue } from "./EditorToolbar";
 import { MarkdownEditor } from "./MarkdownEditor";
 import type {
+  Beat,
   SceneSummaryResponse,
   SplitChapterScenesResponse,
   GenerateSceneSummaryResponse,
@@ -66,6 +67,14 @@ export function SceneSummaryView({
   const [error,          setError]          = useState<string | null>(null);
   const [statusMessage,  setStatusMessage]  = useState<string | null>(null);
 
+  // Beats: the scene's planning checklist (see the Beats panel below the
+  // title strip). Saved through their own endpoint (/scene-beats) so a
+  // checkbox toggle never rewrites the summary body -- and the summary
+  // Save never touches beats (the backend preserves them when the field
+  // is omitted).
+  const [beats,       setBeats]       = useState<Beat[]>([]);
+  const [newBeatText, setNewBeatText] = useState("");
+
   const [reloadKey, setReloadKey] = useState(0);
 
   const editorViewRef = useRef<EditorView | null>(null);
@@ -97,6 +106,7 @@ export function SceneSummaryView({
         setInitialContent(data.content ?? "");
         setTitle(data.title ?? "");
         setExists(Boolean(data.exists));
+        setBeats(data.beats ?? []);
         setReloadKey(k => k + 1);
         setIsDirty(false);
       } catch (err) {
@@ -272,6 +282,50 @@ export function SceneSummaryView({
   }, [isDirty, chapterFile, project.root_path, sceneIndex, title, onSidebarRefresh]);
 
 
+  // ── Beats: save the full list through /scene-beats ──────────────────────
+  // Every mutation (toggle, add, edit, reorder, delete) is "adjust the
+  // array, save the whole thing" -- beats are a handful of items, and one
+  // code path means one place for optimistic state + error handling.
+  const saveBeats = useCallback(async (next: Beat[]) => {
+    setBeats(next);   // optimistic -- checkbox responds instantly
+    try {
+      const res = await fetch(`${API_BASE}/api/documents/scene-beats`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          folder_path:      project.root_path,
+          chapter_filename: chapterFile,
+          index:            sceneIndex,
+          beats:            next,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail ?? `Saving beats failed (${res.status})`);
+      }
+      setError(null);
+      onSidebarRefresh?.();   // sidebar shows beat counts / children
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save beats.");
+    }
+  }, [project.root_path, chapterFile, sceneIndex, onSidebarRefresh]);
+
+  const addBeat = useCallback(() => {
+    const text = newBeatText.trim();
+    if (!text) return;
+    setNewBeatText("");
+    void saveBeats([...beats, { text, done: false }]);
+  }, [newBeatText, beats, saveBeats]);
+
+  const moveBeat = useCallback((index: number, delta: number) => {
+    const to = index + delta;
+    if (to < 0 || to >= beats.length) return;
+    const next = [...beats];
+    [next[index], next[to]] = [next[to], next[index]];
+    void saveBeats(next);
+  }, [beats, saveBeats]);
+
+
   // ── Delete this scene summary ───────────────────────────────────────────
   const handleDelete = useCallback(async () => {
     const ok = window.confirm(
@@ -383,6 +437,96 @@ export function SceneSummaryView({
           }}
           placeholder="Untitled scene"
           className="flex-1 rounded border border-border bg-bg-panel px-2 py-0.5 text-xs text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none"
+        />
+      </div>
+
+      {/* Beats panel -- the scene's planning checklist. Lives between the
+          title strip and the summary editor: beats are "what should happen
+          here", the summary below is "what does happen". Each control saves
+          immediately through /scene-beats (never the summary body). */}
+      <div className="shrink-0 border-b border-border bg-bg-panel/30 px-4 py-2">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-faint"
+          title="Planning checkpoints for this scene. Check them off as the prose covers them. Stored with the scene summary -- never in your manuscript.">
+          Beats
+          {beats.length > 0 && (
+            <span className="ml-1.5 font-normal normal-case tracking-normal">
+              {beats.filter(b => b.done).length}/{beats.length} done
+            </span>
+          )}
+        </p>
+
+        {beats.length > 0 && (
+          <div className="mb-1.5 max-h-36 space-y-0.5 overflow-y-auto">
+            {beats.map((beat, i) => (
+              <div key={i} className="group flex items-center gap-1.5">
+                <button
+                  onClick={() => void saveBeats(beats.map((b, bi) =>
+                    bi === i ? { ...b, done: !b.done } : b
+                  ))}
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] transition-colors ${
+                    beat.done
+                      ? "border-emerald-600 bg-emerald-900/40 text-emerald-400"
+                      : "border-border text-transparent hover:border-emerald-600"
+                  }`}
+                  title={beat.done ? "Mark as not done" : "Mark as done"}
+                  aria-label={beat.done ? `Mark "${beat.text}" not done` : `Mark "${beat.text}" done`}
+                >
+                  ✓
+                </button>
+                {/* The text is always an input -- edit in place, blur saves. */}
+                <input
+                  value={beat.text}
+                  onChange={e => setBeats(prev => prev.map((b, bi) =>
+                    bi === i ? { ...b, text: e.target.value } : b
+                  ))}
+                  onBlur={e => {
+                    const text = e.target.value.trim();
+                    if (!text) {
+                      // Emptied out = delete the beat.
+                      void saveBeats(beats.filter((_, bi) => bi !== i));
+                    } else {
+                      void saveBeats(beats.map((b, bi) => bi === i ? { ...b, text } : b));
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  className={`min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs outline-none transition-colors focus:border-indigo-500 focus:bg-bg-surface ${
+                    beat.done ? "text-faint line-through" : "text-text-primary"
+                  }`}
+                  title="Edit the beat -- blur or Enter saves, empty deletes"
+                />
+                <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={() => moveBeat(i, -1)}
+                    disabled={i === 0}
+                    className="px-0.5 text-[10px] text-faint hover:text-text-primary disabled:opacity-30"
+                    title="Move beat up" aria-label="Move beat up"
+                  >▲</button>
+                  <button
+                    onClick={() => moveBeat(i, +1)}
+                    disabled={i === beats.length - 1}
+                    className="px-0.5 text-[10px] text-faint hover:text-text-primary disabled:opacity-30"
+                    title="Move beat down" aria-label="Move beat down"
+                  >▼</button>
+                  <button
+                    onClick={() => void saveBeats(beats.filter((_, bi) => bi !== i))}
+                    className="px-0.5 text-[10px] text-faint hover:text-red-400"
+                    title="Delete beat" aria-label="Delete beat"
+                  >✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <input
+          value={newBeatText}
+          onChange={e => setNewBeatText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") addBeat(); }}
+          onBlur={addBeat}
+          placeholder="Add a beat (what should happen in this scene)... Enter to add"
+          className="w-full rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none"
         />
       </div>
 

@@ -18,7 +18,6 @@ import {
   Bold, Italic, Underline, Strikethrough,
   Eraser, Heading1, Heading2, Heading3,
   List, ListOrdered, Minus, ChevronDown, FilePlus2,
-  Sparkles, BookOpen, Scissors,
 } from "lucide-react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
@@ -48,22 +47,10 @@ interface EditorToolbarProps {
   // toolbar. The parent should only pass this when notes/outline.md is the
   // active file -- the toolbar itself doesn't know about filenames.
   onNewTemplate?: () => void;
-  // When present, a [Generate Scene Summaries] button appears on the right
-  // side of the toolbar. Parent should only pass this when a chapter is open
-  // (scene summaries are chapter-scoped).
-  onGenerateSceneSummaries?: () => void;
-  // True while the auto-split loop is running. Disables the button and
-  // changes its label so the writer knows work is in progress.
-  autoSplitRunning?: boolean;
-  // When present, a [Suggest Breaks] button appears on the right side. Parent
-  // should only pass this when a chapter is open (it analyzes the open chapter).
-  onSuggestSceneBreaks?: () => void;
-  // True while the scene-break suggestion request is in flight. Disables the
-  // button and changes its label.
-  suggestBreaksRunning?: boolean;
-  // When present, a [Reader Mode] button appears on the right side. Only
-  // meaningful when a project is open with at least one chapter.
-  onReaderMode?: () => void;
+  // NOTE: the one-off feature buttons (Generate Scene Summaries, Suggest
+  // Breaks, Reader Mode) moved to the Tools menu in the editor title bar
+  // (components/EditorMenu.tsx) during the sidebar overhaul. This toolbar
+  // is now formatting-only, plus the contextual [+ New Template] button.
 }
 
 
@@ -348,11 +335,6 @@ export function EditorToolbar({
   currentFont,
   onFontChange,
   onNewTemplate,
-  onGenerateSceneSummaries,
-  autoSplitRunning,
-  onSuggestSceneBreaks,
-  suggestBreaksRunning,
-  onReaderMode,
 }: EditorToolbarProps) {
   const view = editorView;
 
@@ -429,48 +411,6 @@ export function EditorToolbar({
         >
           <FilePlus2 size={12} />
           <span>+ New Template</span>
-        </button>
-      )}
-
-      {/* [Generate Scene Summaries] -- only visible when a chapter is open.
-          Runs the auto-split flow: parse the chapter by ---, walk each scene,
-          prompt for overwrite if existing, save each summary. */}
-      {onGenerateSceneSummaries && (
-        <button
-          onClick={onGenerateSceneSummaries}
-          disabled={autoSplitRunning}
-          title="Split chapter by --- and generate a summary for each scene"
-          className="mr-2 flex items-center gap-1 rounded border border-indigo-700/50 bg-indigo-950/40 px-2 py-0.5 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Sparkles size={12} />
-          <span>{autoSplitRunning ? "Generating..." : "Generate Scene Summaries"}</span>
-        </button>
-      )}
-
-      {/* [Suggest Breaks] -- ask the AI where to place scene breaks. Review-only:
-          suggestions appear in the Writing Companion chat; the writer inserts the
-          --- markers by hand. Only visible when a chapter is open. */}
-      {onSuggestSceneBreaks && (
-        <button
-          onClick={onSuggestSceneBreaks}
-          disabled={suggestBreaksRunning}
-          title="Ask the AI where scene breaks (---) would strengthen this chapter"
-          className="mr-2 flex items-center gap-1 rounded border border-violet-700/50 bg-violet-950/40 px-2 py-0.5 text-xs text-violet-300 transition-colors hover:border-violet-500 hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Scissors size={12} />
-          <span>{suggestBreaksRunning ? "Analyzing..." : "Suggest Breaks"}</span>
-        </button>
-      )}
-
-      {/* [Reader Mode] -- open the full-screen manuscript reader */}
-      {onReaderMode && (
-        <button
-          onClick={onReaderMode}
-          title="Read the full manuscript in Reader Mode"
-          className="mr-2 flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-emerald-600 hover:text-emerald-400"
-        >
-          <BookOpen size={12} />
-          <span>Reader Mode</span>
         </button>
       )}
 

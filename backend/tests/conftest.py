@@ -12,7 +12,30 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app import recent_projects
 from app.main import app
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_recent_projects(tmp_path_factory) -> None:
+    """
+    Redirect the recent-projects file into a session temp directory.
+
+    recent_projects.py stores its list at ~/.storythread/storythread.json --
+    the USER'S real file. Tests that create or open projects through the API
+    (POST /api/projects/create etc.) call track_project(), which would append
+    every throwaway test project to the real dashboard list. That actually
+    happened: a pytest run filled the Recent Projects screen with 130+ dead
+    "Struct Novel" entries pointing at deleted pytest temp folders.
+
+    autouse + session scope means NO test can touch the real file, including
+    future tests nobody has written yet. (Same idea as test_settings_store's
+    per-test isolated_settings fixture, but suite-wide because project
+    creation happens all over the suite.)
+    """
+    sandbox = tmp_path_factory.mktemp("storythread-home")
+    recent_projects.STORYTHREAD_DIR = sandbox
+    recent_projects.RECENT_FILE = sandbox / "storythread.json"
 
 
 @pytest.fixture(scope="session")

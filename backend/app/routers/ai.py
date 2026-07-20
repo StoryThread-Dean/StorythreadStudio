@@ -534,8 +534,16 @@ def _build_story_context(project_path: str | None) -> str:
     series_path = project_data.get("series_path", "")
     series_data = read_series_settings(series_path) if series_path else None
 
-    # Merge: book-level overrides series-level for these fields
-    context_fields = ["genre", "subgenre", "tone", "pacing", "target_audience", "content_mode", "keywords"]
+    # Merge: book-level overrides series-level for these fields. Ordered so
+    # related fields read together in the prompt: what the story is (genre/
+    # tone/theme/setting), how it's told (pacing/POV/tense), then audience.
+    # theme/setting/point_of_view/tense come from the Book Details panel and
+    # exist only in project.json (series.json has no such fields -- the
+    # .get() below just returns "" for them at series level).
+    context_fields = [
+        "genre", "subgenre", "tone", "theme", "setting", "pacing",
+        "point_of_view", "tense", "target_audience", "content_mode", "keywords",
+    ]
 
     merged: dict[str, str] = {}
     for field in context_fields:
@@ -552,10 +560,13 @@ def _build_story_context(project_path: str | None) -> str:
     if not merged:
         return ""
 
-    # Build the block
+    # Build the block. Labels are auto-derived from the key ("target_audience"
+    # -> "Target Audience"); the override map catches the one key where
+    # .title() gets English capitalization wrong ("Point Of View").
+    label_overrides = {"point_of_view": "Point of View"}
     lines = ["STORY CONTEXT (auto-injected from project/series settings):"]
     for key, val in merged.items():
-        label = key.replace("_", " ").title()
+        label = label_overrides.get(key) or key.replace("_", " ").title()
         lines.append(f"  {label}: {val}")
     lines.append("")
 

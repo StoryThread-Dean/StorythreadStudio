@@ -17,7 +17,19 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **Acts in the manuscript tree.** The sidebar now shows Story > Act > Chapter: create acts with "+ New Act", collapse them (remembered per book), and move chapters between acts or reorder them from each row's hover "..." menu. Acts live in a small `manuscript/structure.json` manifest -- chapter files are never renamed or renumbered by a move, and projects that never use acts look exactly as before.
+- **Scene beats.** Each scene summary can now hold a Beats checklist -- planning checkpoints like "MC finds the letter" -- edited in the scene summary view (check off, reorder, edit in place) and shown as expandable children under each scene in the sidebar with a done/total badge. Beats are stored in the scene's summary file, never in the manuscript prose, and AI summary regeneration leaves them untouched.
+- **Book Details popout.** The old Project Settings modal (previously hidden behind a tiny gear icon) is now "Book Details", opened from a section header at the top of the left nav, and gains the full set of story fields: Theme, Setting, Word Count target, Point of View, Tense, and Target Audience alongside Title, Description, Genre, and Tone. Everything except the word target is auto-injected into AI prompts as story context; the word target feeds the Writing Progress gauge via the outline. The gear icon is gone.
+- **Tools menu.** Generate Scene Summaries, Suggest Scene Breaks, Chapter Summary, Reader Mode, and Export now live in one "Tools" pulldown in the editor title bar, freeing toolbar space around the writing area.
+- **Per-book sidebar memory.** Collapsing Profiles, Notes, Book Details, or an act is remembered for that book -- across restarts and app updates -- via a small UI-state file stored inside the project folder.
+
 ### Changed
+
+- **Renaming a chapter now renames its file too.** The filename slug follows the new title (numeric prefix kept for on-disk reading order), and everything keyed to the old name moves along: chapter summary, scene summaries, act assignment, and writing-progress history. Unsaved editor text survives renaming the open chapter.
+- **Chapter titles update on save.** Editing the `# Heading` line and saving now refreshes the sidebar immediately -- no more restart or project switch to see the new name.
+- **Default chapter naming unified.** New projects start with `01-chapter-1.md` ("Chapter 1"), matching the "Chapter N" default of the new-chapter dialog. Creating after a delete no longer collides with existing chapter numbers.
+- **Writing Progress tile pinned at the bottom.** The progress tile moved from the top of the left panel to below the navigation, where it stays visible no matter how many chapters or acts are expanded; its breakdown now opens upward.
+- **Removed the leftover "Summaries > Scene Summaries" nav section.** Scene summaries live in the Manuscript tree under each chapter; the old legacy link did nothing useful.
 
 ### Fixed
 
