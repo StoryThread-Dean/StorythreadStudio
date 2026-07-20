@@ -25,8 +25,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.outline_frontmatter import parse_outline_frontmatter, strip_outline_frontmatter
-from app.progress_store import record_save_event
+from app.progress_store import record_save_event, migrate_file_relpath
 from app.settings_store import get_rollover_hour
+from app.utils.structure_store import (
+    order_rank,
+    sync_add_chapter,
+    sync_remove_chapter,
+    sync_rename_chapter,
+)
 
 
 # --- Router ---
@@ -78,23 +84,28 @@ class CreateChapterResponse(BaseModel):
 
 
 class RenameChapterRequest(BaseModel):
-    """What the frontend sends when the writer renames a chapter inline.
-
-    Filename stays the same -- the numeric prefix (01-, 02-, ...) preserves
-    ordering, and changing it would break any external references. We only
-    update the first `# heading` line inside the file, which is what the UI
-    displays as the chapter title.
-    """
+    """What the frontend sends when the writer renames a chapter inline."""
     folder_path: str
     filename:    str
     new_title:   str
 
 
 class RenameChapterResponse(BaseModel):
-    """Confirmation returned after a successful rename."""
-    filename: str
-    title:    str
-    path:     str
+    """
+    What comes back after a rename. Since the sidebar overhaul a rename
+    changes the FILE NAME too (slug follows the title, numeric prefix kept),
+    so the response carries both names plus per-step cascade flags. A False
+    flag means that step failed softly -- the rename itself succeeded, and
+    the affected piece self-heals or re-pairs later (see rename_chapter).
+    """
+    filename:     str    # the (possibly new) filename after the rename
+    old_filename: str    # what it was -- frontend patches its state with this
+    title:        str
+    path:         str    # absolute path after the rename
+    summary_moved:     bool = False   # summaries/chapters/<stem>.md followed
+    scenes_moved:      bool = False   # summaries/scenes/<stem>/ followed
+    structure_updated: bool = False   # structure.json entry swapped in place
+    progress_migrated: bool = False   # progress history rows repointed
 
 
 # --- Helpers ---
@@ -135,9 +146,9 @@ def _title_from_file(filepath: str, filename: str) -> str:
 @router.get("/chapters", response_model=list[ChapterInfo])
 async def list_chapters(folder_path: str):
     """
-    Returns a list of all .md files in the project's manuscript/ folder,
-    sorted by filename (which sorts by chapter number when files are
-    named like 01-chapter-one.md, 02-chapter-two.md, etc.)
+    Returns a list of all .md files in the project's manuscript/ folder in
+    READING ORDER: manuscript/structure.json order when the project uses
+    acts, plain filename order (01-, 02-, ...) when it doesn't.
 
     The frontend calls this when a project is opened to populate the
     chapter list in the left navigation panel.
@@ -162,8 +173,11 @@ async def list_chapters(folder_path: str):
                     path=entry.path,
                 ))
 
-    # Sort by filename so chapters appear in numeric order
-    chapters.sort(key=lambda c: c.filename)
+    # Reading order comes from the structure manifest (falls back to
+    # filename order for projects without one). Files the manifest hasn't
+    # seen yet sort last by name -- rank.get() default handles that.
+    rank = order_rank(folder_path)
+    chapters.sort(key=lambda c: (rank.get(c.filename, len(rank)), c.filename))
     return chapters
 
 
@@ -297,9 +311,10 @@ async def list_chapter_summaries(folder_path: str):
                 summary_filename = entry.name,
             ))
 
-    # Sort by filename so the picker shows chapters in numeric order
-    # (01-, 02-, ...). Matches the chapter list ordering.
-    results.sort(key=lambda r: r.summary_filename)
+    # Sort in reading order (structure manifest, filename fallback) so the
+    # picker matches the sidebar's chapter ordering.
+    rank = order_rank(folder_path)
+    results.sort(key=lambda r: (rank.get(r.chapter_filename, len(rank)), r.summary_filename))
     return results
 
 
@@ -468,11 +483,14 @@ async def list_all_scene_summaries(folder_path: str):
 
     groups: list[SceneSummaryGroup] = []
 
-    # Iterate chapters in filename order so the picker shows them numerically
-    # (Chapter 1, 2, 3, ...). Same ordering rule as list_chapters.
+    # Iterate chapters in reading order (structure manifest, filename
+    # fallback). Same ordering rule as list_chapters so the picker matches
+    # the sidebar.
+    rank = order_rank(folder_path)
     chapter_filenames = sorted(
-        e.name for e in os.scandir(manuscript)
-        if e.is_file() and e.name.endswith(".md")
+        (e.name for e in os.scandir(manuscript)
+         if e.is_file() and e.name.endswith(".md")),
+        key=lambda name: (rank.get(name, len(rank)), name),
     )
 
     for chapter_filename in chapter_filenames:
@@ -797,6 +815,11 @@ async def create_chapter(request: CreateChapterRequest):
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Could not create file: {e}")
 
+    # Keep the structure manifest in step (no-op for projects without one).
+    # New chapters land in the "unassigned" bucket until the writer files
+    # them into an act.
+    sync_add_chapter(request.folder_path, filename)
+
     return CreateChapterResponse(
         filename=filename,
         title=request.title,
@@ -863,6 +886,9 @@ async def delete_chapter(folder_path: str, filename: str):
     except OSError:
         pass
 
+    # Keep the structure manifest in step (no-op for projects without one).
+    sync_remove_chapter(folder_path, filename)
+
     return {
         "filename":        filename,
         "summary_removed": summary_removed,
@@ -899,16 +925,23 @@ async def delete_chapter_summary(folder_path: str, chapter_filename: str):
 @router.post("/rename-chapter", response_model=RenameChapterResponse)
 async def rename_chapter(request: RenameChapterRequest):
     """
-    Rename a chapter by updating the first `# heading` line inside the file.
+    Rename a chapter: update the first `# heading` line AND rename the file
+    so the slug always matches the title ("The Storm" -> 03-the-storm.md).
+    The numeric NN- prefix is preserved -- it's the on-disk reading-order
+    hint -- only the slug part changes.
 
-    Why update the heading instead of the filename?
-    The filename carries the numeric prefix (01-landing.md, 02-storm.md) that
-    drives manuscript sort order. Changing it would either break ordering or
-    require re-numbering every chapter after it. The heading is what the UI
-    displays as the title -- updating only the heading keeps the rename cheap
-    and reversible without touching the manuscript's structural ordering.
+    Before the sidebar overhaul this endpoint was heading-only, which left
+    files permanently named after their FIRST title. That drift confused
+    writers browsing the folder ("01-chapter-one.md" containing "The
+    Beginning of X"), so renames now cascade.
 
-    If the file has no `# heading`, we insert one at the top.
+    Cascade order matters. Everything up to os.rename() is fail-hard (500,
+    nothing moved). Everything AFTER it is fail-SOFT with a reported flag:
+    a half-finished cascade leaves an annoying-but-self-consistent project
+    (an unmoved summary just un-pairs until regenerated; the structure
+    manifest heals on next load), whereas refusing the rename because a
+    sidecar move failed would be worse. Frontend shows a soft warning when
+    any flag comes back False.
     """
     new_title = request.new_title.strip()
     if not new_title:
@@ -924,6 +957,35 @@ async def rename_chapter(request: RenameChapterRequest):
     if not os.path.isfile(chapter_path):
         raise HTTPException(status_code=404, detail=f"Chapter not found: {request.filename}")
 
+    # ── Compute the target filename: keep the NN- prefix, re-slug the rest ──
+    # Same slug rule as create_chapter so names stay consistent either way
+    # a chapter gets its title.
+    prefix_match = re.match(r"^(\d+-)", request.filename)
+    prefix = prefix_match.group(1) if prefix_match else ""
+    slug = re.sub(r"[^a-z0-9]+", "-", new_title.lower()).strip("-")
+    if not slug:
+        slug = "untitled"
+    new_filename = f"{prefix}{slug}.md"
+    new_path     = os.path.realpath(os.path.join(manuscript, new_filename))
+
+    if not new_path.startswith(safe_root + os.sep) and new_path != safe_root:
+        raise HTTPException(status_code=400, detail="Invalid new filename.")
+
+    # Collision guard. One subtlety: Windows filesystems are case-insensitive,
+    # so renaming "03-the-storm.md" to "03-The-Storm.md" makes exists() report
+    # the SOURCE file itself. A case-only rename must be allowed through.
+    renaming_file = new_filename != request.filename
+    if (
+        renaming_file
+        and os.path.exists(new_path)
+        and new_filename.lower() != request.filename.lower()
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"A file named {new_filename} already exists.",
+        )
+
+    # ── Step 1 (fail-hard): rewrite the heading in the old file ─────────────
     try:
         with open(chapter_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -947,10 +1009,79 @@ async def rename_chapter(request: RenameChapterRequest):
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Could not write chapter: {e}")
 
+    # Title unchanged as a filename? Then this is a heading-only rename
+    # (e.g. only capitalization of words the slug flattens) -- done.
+    if not renaming_file:
+        return RenameChapterResponse(
+            filename=request.filename,
+            old_filename=request.filename,
+            title=new_title,
+            path=chapter_path,
+        )
+
+    # ── Step 2 (fail-hard pivot): rename the manuscript file ────────────────
+    # If this fails the chapter is still fully valid under its old name with
+    # the new heading -- consistent, just not renamed.
+    try:
+        os.rename(chapter_path, new_path)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not rename file: {e}")
+
+    # ── Steps 3-6 (fail-soft): move everything keyed by the old stem ────────
+    summary_moved = False
+    try:
+        _dir, old_summary = _chapter_summary_paths(request.folder_path, request.filename)
+        _dir, new_summary = _chapter_summary_paths(request.folder_path, new_filename)
+        if os.path.isfile(old_summary) and not os.path.exists(new_summary):
+            os.rename(old_summary, new_summary)
+            summary_moved = True
+        elif not os.path.isfile(old_summary):
+            summary_moved = True   # nothing to move counts as success
+    except (HTTPException, OSError):
+        pass
+
+    scenes_moved = False
+    try:
+        old_scene_dir, _ = _scene_summary_paths(request.folder_path, request.filename)
+        new_scene_dir, _ = _scene_summary_paths(request.folder_path, new_filename)
+        if os.path.isdir(old_scene_dir) and not os.path.exists(new_scene_dir):
+            os.rename(old_scene_dir, new_scene_dir)
+            scenes_moved = True
+        elif not os.path.isdir(old_scene_dir):
+            scenes_moved = True    # nothing to move counts as success
+    except (HTTPException, OSError):
+        pass
+
+    structure_updated = False
+    try:
+        structure_updated = sync_rename_chapter(
+            request.folder_path, request.filename, new_filename
+        )
+    except OSError:
+        pass
+
+    # Progress history rows store "manuscript/<filename>" -- repoint them so
+    # daily task-credit dedupe and per-file history survive the rename.
+    progress_migrated = False
+    try:
+        progress_migrated = await migrate_file_relpath(
+            request.folder_path,
+            f"manuscript/{request.filename}",
+            f"manuscript/{new_filename}",
+        )
+    except Exception:
+        # progress is a nicety; never fail the rename over it
+        pass
+
     return RenameChapterResponse(
-        filename=request.filename,
+        filename=new_filename,
+        old_filename=request.filename,
         title=new_title,
-        path=chapter_path,
+        path=new_path,
+        summary_moved=summary_moved,
+        scenes_moved=scenes_moved,
+        structure_updated=structure_updated,
+        progress_migrated=progress_migrated,
     )
 
 
@@ -996,7 +1127,10 @@ async def load_manuscript_content(folder_path: str):
                 content  = content,
             ))
 
-    chapters.sort(key=lambda c: c.filename)
+    # Reader Mode presents the book as a reader would see it -- reading
+    # order comes from the structure manifest (filename fallback).
+    rank = order_rank(folder_path)
+    chapters.sort(key=lambda c: (rank.get(c.filename, len(rank)), c.filename))
     return chapters
 
 

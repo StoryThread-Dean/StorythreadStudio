@@ -328,3 +328,37 @@ async def record_advisor_run(
     except Exception:
         log.exception("record_advisor_run failed for %s/%s/%s",
                       project_path, file_relpath, category)
+
+
+async def migrate_file_relpath(
+    project_path: str | Path,
+    old_relpath: str,
+    new_relpath: str,
+) -> bool:
+    """
+    Repoint every progress_event row from one file path to another.
+
+    Called by the chapter rename cascade: history rows store the relpath
+    ("manuscript/01-the-storm.md"), so a file rename would otherwise strand
+    them -- today's task credit would double-grant under the new name and
+    per-file history would split in two.
+
+    This is a plain data UPDATE, not a schema migration -- it deliberately
+    does NOT belong in _MIGRATIONS (that list is for schema changes only).
+
+    Best-effort like every other write in this module: returns True on
+    success, False after logging on any failure. Never raises.
+    """
+    try:
+        async with open_db(project_path) as db:
+            await db.execute(
+                "UPDATE progress_event SET file_relpath = ? "
+                "WHERE project_path = ? AND file_relpath = ?",
+                (new_relpath, str(project_path), old_relpath),
+            )
+            await db.commit()
+        return True
+    except Exception:
+        log.exception("migrate_file_relpath failed for %s (%s -> %s)",
+                      project_path, old_relpath, new_relpath)
+        return False

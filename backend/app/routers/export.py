@@ -26,6 +26,8 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.utils.structure_store import order_rank
+
 
 # --- Router ---
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -147,8 +149,11 @@ def _collect_chapters(
                 # than to fail the whole operation
                 pass
 
-    # Sort by filename so chapters appear in numeric/alphabetical order
-    chapters.sort(key=lambda c: c[0])
+    # Sort in reading order: the structure manifest is the ordering
+    # authority when the project uses acts; filename order otherwise.
+    # The exported book must match what the sidebar and Reader Mode show.
+    rank = order_rank(folder_path)
+    chapters.sort(key=lambda c: (rank.get(c[0], len(rank)), c[0]))
     return chapters
 
 
