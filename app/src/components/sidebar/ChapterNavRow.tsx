@@ -78,6 +78,15 @@ export function ChapterNavRow({
   const [editing, setEditing] = useState(false);
   const [draft,   setDraft]   = useState(chapter.title);
 
+  // Which scenes show their beat children. Session-only by design (like
+  // chapter expansion) -- beats are glanceable planning info, not layout.
+  const [expandedBeats, setExpandedBeats] = useState<Set<number>>(new Set());
+  const toggleBeats = (index: number) => setExpandedBeats(prev => {
+    const next = new Set(prev);
+    if (next.has(index)) next.delete(index); else next.add(index);
+    return next;
+  });
+
   // Keep the draft in sync when the chapter title changes from outside
   // (e.g., another action renames the same chapter) and we're not editing.
   useEffect(() => {
@@ -226,33 +235,80 @@ export function ChapterNavRow({
                   </p>
                 ) : (
                   sceneSummaries.map(scene => {
-                    const isActive = activeSceneIndex === scene.index;
+                    const isActive  = activeSceneIndex === scene.index;
+                    const hasBeats  = scene.beats && scene.beats.length > 0;
+                    const beatsOpen = expandedBeats.has(scene.index);
+                    const beatsDone = hasBeats ? scene.beats.filter(b => b.done).length : 0;
                     return (
-                      <div
-                        key={scene.index}
-                        className={`group flex items-stretch rounded transition-colors ${
-                          isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
-                        }`}
-                      >
-                        <button
-                          onClick={() => onOpenScene(scene.index)}
-                          className={`flex-1 min-w-0 truncate px-2 py-1 text-left text-xs ${
-                            isActive ? "text-indigo-300" : "text-text-primary"
+                      <div key={scene.index}>
+                        <div
+                          className={`group flex items-stretch rounded transition-colors ${
+                            isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
                           }`}
-                          title={`Scene ${scene.index}: ${scene.title}`}
                         >
-                          <span className="text-text-muted">Scene {scene.index}</span>
-                          <span className="mx-1 text-faint">&mdash;</span>
-                          {scene.title}
-                        </button>
-                        <button
-                          onClick={() => onDeleteScene(scene.index)}
-                          className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
-                          title={`Delete scene ${scene.index} summary`}
-                          aria-label={`Delete scene ${scene.index} summary`}
-                        >
-                          <Trash2 size={11} />
-                        </button>
+                          {/* Beat caret -- only when the scene has beats, so
+                              beat-less scenes keep their clean single row. */}
+                          {hasBeats && (
+                            <button
+                              onClick={() => toggleBeats(scene.index)}
+                              className="flex w-4 shrink-0 items-center justify-center text-[10px] text-text-muted hover:text-indigo-300"
+                              title={beatsOpen ? "Hide beats" : `Show beats (${beatsDone}/${scene.beats.length} done)`}
+                              aria-label={beatsOpen ? "Hide beats" : "Show beats"}
+                            >
+                              {beatsOpen ? "v" : ">"}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onOpenScene(scene.index)}
+                            className={`flex-1 min-w-0 truncate px-2 py-1 text-left text-xs ${
+                              isActive ? "text-indigo-300" : "text-text-primary"
+                            }`}
+                            title={`Scene ${scene.index}: ${scene.title}`}
+                          >
+                            <span className="text-text-muted">Scene {scene.index}</span>
+                            <span className="mx-1 text-faint">&mdash;</span>
+                            {scene.title}
+                            {hasBeats && (
+                              <span className="ml-1 text-[10px] text-faint">
+                                ({beatsDone}/{scene.beats.length})
+                              </span>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => onDeleteScene(scene.index)}
+                            className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+                            title={`Delete scene ${scene.index} summary`}
+                            aria-label={`Delete scene ${scene.index} summary`}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+
+                        {/* Beat children: read-only in the sidebar (edit
+                            them in the scene summary view). Done beats dim
+                            and strike through; clicking any beat opens the
+                            scene so the writer lands where editing lives. */}
+                        {hasBeats && beatsOpen && (
+                          <div className="ml-4 border-l border-border/60 pl-1.5">
+                            {scene.beats.map((beat, bi) => (
+                              <button
+                                key={bi}
+                                onClick={() => onOpenScene(scene.index)}
+                                className="flex w-full items-start gap-1.5 rounded px-1.5 py-0.5 text-left text-[11px] transition-colors hover:bg-bg-surface"
+                                title="Open the scene summary to edit beats"
+                              >
+                                <span className={`shrink-0 ${beat.done ? "text-emerald-500" : "text-faint"}`}>
+                                  {beat.done ? "✓" : "○"}
+                                </span>
+                                <span className={`min-w-0 truncate ${
+                                  beat.done ? "text-faint line-through" : "text-text-muted"
+                                }`}>
+                                  {beat.text}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })
