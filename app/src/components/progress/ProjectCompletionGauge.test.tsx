@@ -140,6 +140,23 @@ describe("ProjectCompletionGauge", () => {
   });
 
 
+  it("opens the slide-over upward (gauge is pinned at the sidebar bottom)", async () => {
+    const { container } = render(
+      <ProjectCompletionGauge
+        projectPath="/fake/project"
+        isOpen={true}
+        onToggle={() => undefined}
+      />
+    );
+    await screen.findByText("Writing Progress");
+    // The gauge sits at the bottom of the left panel, so the panel must
+    // anchor above the compact bar (bottom-full), never below (top-full)
+    // where it would render off-screen.
+    expect(container.querySelector(".bottom-full")).toBeTruthy();
+    expect(container.querySelector(".top-full")).toBeNull();
+  });
+
+
   it("shows Manuscript segment in slide-over after fetch resolves", async () => {
     render(
       <ProjectCompletionGauge

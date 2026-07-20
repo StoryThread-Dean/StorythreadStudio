@@ -1,14 +1,17 @@
 // ProjectCompletionGauge.tsx
 // =====================================================================
-// The v1.0.2 Writing Progress gauge. Lives in the left panel, below the
-// project title and above the Chapters/Notes/Profiles navigation. Two modes:
+// The v1.0.2 Writing Progress gauge. Lives in the left panel, PINNED at the
+// bottom below the scrollable navigation (moved there in the sidebar
+// overhaul so expanding many chapters can never push it out of sight).
+// Two modes:
 //
 //   - Compact: a clickable horizontal bar showing X% and the manuscript
 //     word count. Always rendered.
 //   - Expanded: a slide-over panel (absolutely-positioned inside the aside
 //     so it never crosses into the editor area) showing the per-segment
 //     breakdown, today's daily-goal status, the task credit list, and a
-//     7-day hit/miss sparkline.
+//     7-day hit/miss sparkline. Opens UPWARD (bottom-full) because the
+//     gauge now sits at the bottom of the panel.
 //
 // Two fetches power it:
 //   GET /api/progress/summary  -- the gauge math
@@ -141,7 +144,7 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
           scroll for long breakdowns. */}
       {isOpen && (
         <div
-          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-[80vh] overflow-y-auto rounded border border-border bg-bg-panel shadow-xl"
+          className="absolute left-0 right-0 bottom-full z-20 mb-1 max-h-[80vh] overflow-y-auto rounded border border-border bg-bg-panel shadow-xl"
         >
           <SlideOverHeader onClose={onToggle} />
           {error && (

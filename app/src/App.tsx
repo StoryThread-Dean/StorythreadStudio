@@ -31,6 +31,7 @@ import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "./comp
 import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
+import { EditorMenu } from "./components/EditorMenu";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import type { ProfileType, Profile } from "./types/profile";
 import type {
@@ -930,6 +931,27 @@ function App() {
       // Refresh word count against the exact bytes that just hit disk.
       setWordCount(countWords(content));
 
+      // Keep the sidebar title in sync with the saved content. The backend
+      // derives a chapter's display title from its first "# " heading, but
+      // the `chapters` list is only fetched at project open -- so if the
+      // writer edits the H1 in the editor, the sidebar would show the old
+      // title until an app restart. Re-derive it here from the exact bytes
+      // we just saved (same rule the backend uses: first H1 wins).
+      if (activeView !== "notes" && chapter) {
+        const h1 = content.match(/^#\s+(.+)$/m);
+        const newTitle = h1?.[1].trim();
+        if (newTitle && newTitle !== chapter.title) {
+          setChapters(prev => prev.map(c =>
+            c.filename === chapter.filename ? { ...c, title: newTitle } : c
+          ));
+          setCurrentChapter(prev =>
+            prev && prev.filename === chapter.filename
+              ? { ...prev, title: newTitle }
+              : prev
+          );
+        }
+      }
+
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not save.");
     }
@@ -1767,18 +1789,6 @@ function App() {
           </div>
         </div>
 
-        {/* Writing Progress gauge (v1.0.2). Sits below the project title and
-            above the navigation. The slide-over breakdown is constrained to
-            the aside's bounds (the wrapping div has relative positioning
-            inside the gauge component) so it never crosses into the editor. */}
-        <div className="border-b border-border px-3 py-3">
-          <ProjectCompletionGauge
-            projectPath={currentProject.root_path}
-            isOpen={progressOpen}
-            onToggle={() => setProgressOpen(o => !o)}
-          />
-        </div>
-
         <nav className="flex-1 overflow-y-auto px-2 py-4">
 
           {/* Main Menu return -- Phase 6. Always-visible button at the top
@@ -1872,15 +1882,21 @@ function App() {
               onClick={() => { setProfileType("lore");         setCurrentView("profiles"); }} />
           </NavSection>
 
-          {/* Scene Summaries remain reachable here for legacy profile access.
-              Chapter summaries moved to the nested Manuscript tree in Phase 6
-              (plain-Markdown files under summaries/chapters/ via SummaryView),
-              so the old profile-builder link for them has been removed. */}
-          <NavSection label="Summaries">
-            <NavItem label="Scene Summaries" hint="Per-scene summaries used as AI context"
-              onClick={() => { setProfileType("scene_summary"); setCurrentView("profiles"); }} />
-          </NavSection>
         </nav>
+
+        {/* Writing Progress gauge. Pinned BELOW the scrollable nav so it
+            never scrolls out of sight no matter how many acts/chapters/
+            scenes the writer expands above it. The aside is a flex column:
+            header (fixed) / nav (flex-1, scrolls) / gauge (fixed) / footer
+            (fixed). The breakdown slide-over opens UPWARD from here (see
+            ProjectCompletionGauge) so it stays inside the aside. */}
+        <div className="border-t border-border px-3 py-3">
+          <ProjectCompletionGauge
+            projectPath={currentProject.root_path}
+            isOpen={progressOpen}
+            onToggle={() => setProgressOpen(o => !o)}
+          />
+        </div>
 
         <div className="border-t border-border px-4 py-3">
           <button
@@ -1993,13 +2009,35 @@ function App() {
             >
               Save
             </button>
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
-              title="Export manuscript to the exports/ folder"
-            >
-              Export
-            </button>
+            {/* Tools menu -- collects the one-off features (scene/chapter
+                summary generation, Reader Mode, Export) that used to be
+                separate toolbar/header buttons. Chapter-scoped items are
+                only passed when a chapter is open, so the menu adapts. */}
+            <EditorMenu
+              onGenerateSceneSummaries={
+                currentView === "editor" && currentChapter
+                  ? handleGenerateSceneSummaries
+                  : undefined
+              }
+              autoSplitRunning={autoSplitProgress !== null}
+              onSuggestSceneBreaks={
+                currentView === "editor" && currentChapter
+                  ? handleSuggestSceneBreaks
+                  : undefined
+              }
+              suggestBreaksRunning={suggestBreaksRunning}
+              onOpenChapterSummary={
+                currentView === "editor" && currentChapter
+                  ? () => openChapterSummary(currentChapter.filename)
+                  : undefined
+              }
+              onReaderMode={
+                currentProject && chapters.length > 0
+                  ? () => setShowReaderMode(true)
+                  : undefined
+              }
+              onExport={() => setShowExportModal(true)}
+            />
           </div>
         </div>
 
@@ -2013,7 +2051,9 @@ function App() {
         )}
 
         {/* Formatting toolbar -- onNewTemplate only passed when outline.md is
-            the active file so the [+ New Template] button appears contextually */}
+            the active file so the [+ New Template] button appears contextually.
+            The one-off feature buttons (scene summaries, Reader Mode, ...)
+            moved from here into the Tools menu in the title bar above. */}
         <EditorToolbar
           editorView={editorView}
           currentFont={currentFont}
@@ -2023,23 +2063,6 @@ function App() {
               ? () => setShowTemplateDialog(true)
               : undefined
           }
-          onGenerateSceneSummaries={
-            // Only surface the button when a chapter is open in the editor.
-            // Scene summaries are chapter-scoped, so the button has no
-            // meaning while a note or the project home is showing.
-            currentView === "editor" && currentChapter
-              ? handleGenerateSceneSummaries
-              : undefined
-          }
-          autoSplitRunning={autoSplitProgress !== null}
-          onSuggestSceneBreaks={
-            // Chapter-scoped, like scene summaries: only when a chapter is open.
-            currentView === "editor" && currentChapter
-              ? handleSuggestSceneBreaks
-              : undefined
-          }
-          suggestBreaksRunning={suggestBreaksRunning}
-          onReaderMode={currentProject && chapters.length > 0 ? () => setShowReaderMode(true) : undefined}
         />
 
         {/* Smart Advisor toolbar -- only relevant for chapter editing.
