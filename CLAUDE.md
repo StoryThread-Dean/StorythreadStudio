@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Status: shipped.** The current release is **v1.0.7** -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+**Status: shipped.** The current release is **v1.0.8** -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
 
 The phase history below is the pre-1.0 build record, kept for context. Some items it names were later replaced -- those are marked inline. The biggest post-phase change: structured feedback moved out of the chat panel into the **Smart Advisor** toolbar (inline issue overlays via `POST /api/ai/editor-pass`), and the Writing Companion chat gained **Draft mode** (v1.0.6) and **Enhance mode** (v1.0.7).
 
@@ -181,9 +181,17 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_sanitizer_routing.py` -- em-dash sanitizer routing per AI path
   - `test_openrouter_errors.py` -- OpenRouter error translation (401/402/404/429/5xx)
   - `test_scene_breaks.py` -- scene break suggestions
+  - `test_chapter_progress.py` -- per-chapter word-target matching
+  - `test_structure_manifest.py` -- acts/order manifest: synthesis, healing, PUT, ordering consumers
+  - `test_rename_chapter_cascade.py` -- file-renaming chapter rename + cascade (summaries, structure, progress)
+  - `test_scene_beats.py` -- `## Beats` parsing, preservation on AI regen, /scene-beats
+  - `test_story_context_fields.py` -- Book Details fields in _build_story_context
+  - `test_project_settings_fields.py` -- Book Details persistence, outline word target, ui-state, numeric starter
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
+  - `src/components/sidebar/ActGroup.test.tsx` -- acts tree pieces (ActGroup + RowMenu)
+  - `src/hooks/useProjectUiState.test.ts` -- per-book UI-state hook (load guard, debounce)
   - `src/utils/spellcheck.test.ts` -- spellcheck suggestions
   - `src/utils/buildEditorChatPayload.test.ts` -- Writing Companion payload builder
   - `src/utils/modelFiltering.test.ts` -- model list filtering + recommended models

@@ -47,6 +47,7 @@ Every project is a folder the user owns. Storythread does not touch anything out
 MyNovel/
   project.json                     project settings
   manuscript/                      chapter .md files (one chapter per file)
+    structure.json                 acts + chapter reading order (only once acts are used)
     01-chapter-1.md
     02-the-storm.md
   notes/                           outline, style guide, themes
@@ -65,15 +66,45 @@ MyNovel/
       relationships/
   summaries/
     chapters/                      one summary per chapter
-    scenes/<chapter-stem>/         per-scene summaries
+    scenes/<chapter-stem>/         per-scene summaries (+ optional ## Beats section)
       scene-01.md
       scene-02.md
   exports/                         full-manuscript and dated snapshots
   .storythread/                    app cache; safe to delete and rebuild
     app.db
+    ui-state.json                  per-book remembered UI state (sidebar collapse etc.)
     cache/
     logs/
 ```
+
+### Acts and chapter order (`manuscript/structure.json`)
+
+The manuscript hierarchy is Story > Act > Chapter > Scene > Beat:
+
+- **Acts** and chapter **reading order** live in one small manifest,
+  `manuscript/structure.json` (`{version, acts: [{id, title, chapters: [filenames]}], unassigned: [filenames]}`).
+  Moving or reordering chapters edits the manifest only -- files are never
+  renamed or renumbered by a move. Projects that never use acts have no
+  manifest and fall back to plain filename order everywhere.
+- The manifest **self-heals** on every load: files deleted by hand are
+  dropped, files added by hand are appended to `unassigned`, and a corrupt
+  manifest is treated as absent rather than crashing the chapter list.
+- **Scenes** stay embedded in the chapter as `---` horizontal-rule sections
+  (parsed by `scene_parser.py`); their summaries live in the per-scene
+  sidecar files.
+- **Beats** are a `## Beats` checklist (`- [ ] text` / `- [x] text`) stored
+  as the last section of a scene's sidecar summary file -- planning data
+  never touches the manuscript prose. Saving a scene summary without a
+  beats payload preserves the section, so AI regeneration cannot wipe beats.
+
+### Chapter renames
+
+Renaming a chapter rewrites its `# Heading` AND renames the file so the slug
+matches the title (the numeric `NN-` prefix is preserved). The backend
+cascades everything keyed to the old filename stem: the chapter summary
+file, the scene-summary folder, the structure.json entry (in place, so act
+membership and position survive), and writing-progress history rows. Steps
+after the file rename are fail-soft with per-step flags in the response.
 
 For a multi-book series, an additional `series.json` and shared `series-profiles/` folder live one level above each book.
 
@@ -96,6 +127,15 @@ For a multi-book series, an additional `series.json` and shared `series-profiles
   "updated_at": "ISO_DATETIME"
 }
 ```
+
+Book Details fields (`genre`, `tone`, `theme`, `setting`, `point_of_view`,
+`tense`, `target_audience`) are added to `project.json` the first time the
+writer fills them in the sidebar's Book Details panel; all of them are
+auto-injected into AI prompts as the STORY CONTEXT block (book values
+override series values). The Word Count target is deliberately NOT stored
+here -- it lives in `notes/outline.md` frontmatter (`target_word_count`),
+the Writing Progress gauge's single source of truth; the Book Details panel
+reads and writes it through the settings endpoints.
 
 ## Editor behavior
 
@@ -123,6 +163,7 @@ GET    /recent
 DELETE /recent/{project_id}
 GET    /settings
 PUT    /settings
+GET    /ui-state               PUT    /ui-state    (per-book sidebar memory)
 GET    /inspect-folder
 POST   /apply-outline-template
 ```
@@ -139,7 +180,7 @@ POST   /list-books
 GET    /chapters
 GET    /chapter                POST   /chapter                DELETE /chapter
 POST   /create-chapter
-POST   /rename-chapter
+POST   /rename-chapter         (renames the file + cascades summaries/structure/progress)
 GET    /manuscript-content
 GET    /note                   POST   /note
 GET    /outline                POST   /outline
@@ -148,6 +189,13 @@ GET    /chapter-summaries
 GET    /scene-summary          POST   /scene-summary          DELETE /scene-summary
 GET    /scene-summaries        DELETE /scene-summaries
 GET    /all-scene-summaries
+POST   /scene-beats            (rewrites only a scene's ## Beats section)
+```
+
+### Structure — `/api/structure`
+```
+GET    /                       (acts + chapter order; synthesized when no manifest)
+PUT    /                       (full replacement; validated, healed, echoed)
 ```
 
 ### Profiles — `/api/profiles`
