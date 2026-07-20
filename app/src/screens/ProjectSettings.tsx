@@ -100,7 +100,52 @@ const AUDIENCE_SUGGESTIONS: SuggestionGroup[] = [
     "Adult", "Young Adult (13-18)", "Middle Grade (8-12)", "New Adult (18-25)",
   ]},
   { label: "More", options: [
-    "Children (5-8)", "Adult 18+ (mature content)", "All ages",
+    "Children (5-8)", "All ages",
+  ]},
+];
+
+// ── NSFW suggestion sets ──────────────────────────────────────────────────────
+// Adult / erotica is a large, legitimate fiction-publishing market with its
+// own standard classification labels (the same ones Amazon KDP, romance
+// publishers, and reader communities use). These are self-classification
+// tags for the writer's own work -- they help an adult-fiction author pick
+// the right genre/tone the same way the standard list helps everyone else.
+//
+// Deliberately NOT gated on the AI content-mode setting: labeling your book
+// as erotic romance is a metadata choice, independent of whether you ask the
+// AI to generate explicit text. Kept behind its own collapsed "Show NSFW
+// suggestions" toggle and styled in red so it never surprises anyone.
+
+const GENRE_NSFW: SuggestionGroup[] = [
+  { label: "Erotica & erotic romance", options: [
+    "Erotica", "Erotic Romance", "Erotic Thriller", "Erotic Fantasy",
+    "Erotic Sci-Fi", "Erotic Horror", "Contemporary Erotica", "Historical Erotica",
+  ]},
+  { label: "Romance heat subgenres", options: [
+    "Dark Romance", "Spicy Romance", "Steamy Romance", "Monster Romance",
+    "Reverse Harem", "Why Choose", "Mafia Romance", "Motorcycle Club Romance",
+    "Bully Romance", "Forbidden Romance",
+  ]},
+  { label: "Kink & theme", options: [
+    "BDSM", "Kink", "LGBTQ+ Erotica", "MM Romance", "FF Romance",
+    "Polyamory", "Taboo", "Age Gap",
+  ]},
+];
+
+const TONE_NSFW: SuggestionGroup[] = [
+  { label: "Heat & sensuality", options: [
+    "Sensual", "Steamy", "Spicy", "Explicit", "Graphic", "Seductive",
+    "Provocative", "Smutty", "Slow-burn sensual", "Filthy",
+  ]},
+  { label: "Edge", options: [
+    "Taboo", "Kinky", "Dark and erotic", "Dominant", "Submissive", "Forbidden",
+  ]},
+];
+
+const AUDIENCE_NSFW: SuggestionGroup[] = [
+  { label: "Adult (18+)", options: [
+    "Adult 18+ (mature content)", "Adult 18+ (explicit content)",
+    "Erotica readers", "Spicy romance readers", "Dark romance readers",
   ]},
 ];
 
@@ -128,19 +173,74 @@ export function togglePart(value: string, option: string): string {
   return [...parts, option].join(", "); // wasn't -> append it
 }
 
+// A single group of chips. `accent` swaps the palette between the standard
+// (indigo) and NSFW (red) lists so the two are unmistakable at a glance.
+function ChipGroup({
+  value,
+  onChange,
+  group,
+  accent,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  group: SuggestionGroup;
+  accent: "indigo" | "red";
+}) {
+  const checkedClass = accent === "red"
+    ? "border-red-500/60 bg-red-900/30 text-red-300"
+    : "border-indigo-500/60 bg-indigo-900/30 text-indigo-300";
+
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
+        {group.label}
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {group.options.map(opt => {
+          const checked = hasPart(value, opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(togglePart(value, opt))}
+              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors ${
+                checked
+                  ? checkedClass
+                  : "border-border bg-bg-panel text-text-muted hover:border-faint hover:text-text-primary"
+              }`}
+              title={checked ? `Remove "${opt}"` : `Add "${opt}"`}
+            >
+              <span aria-hidden="true">{checked ? "☑" : "☐"}</span>
+              <span>{opt}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── SuggestionPicker ─────────────────────────────────────────────────────────
 // The "Show suggestions" toggle + grouped checkbox chips under a text field.
 // Collapsed by default so experienced writers who just type see no clutter.
+//
+// Optional `nsfwGroups`: an adult/erotica set behind its own SECOND toggle
+// at the bottom ("Show NSFW suggestions"), styled red. It's independent of
+// the standard toggle and of the AI content-mode setting -- classifying your
+// book's genre is metadata, not a generation switch.
 function SuggestionPicker({
   value,
   onChange,
   groups,
+  nsfwGroups,
 }: {
   value: string;
   onChange: (next: string) => void;
   groups: SuggestionGroup[];
+  nsfwGroups?: SuggestionGroup[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]         = useState(false);
+  const [nsfwOpen, setNsfwOpen] = useState(false);
 
   return (
     <div className="mt-1.5">
@@ -156,33 +256,34 @@ function SuggestionPicker({
       {open && (
         <div className="mt-1.5 space-y-2 rounded border border-border bg-bg-surface/50 p-2">
           {groups.map(group => (
-            <div key={group.label}>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
-                {group.label}
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {group.options.map(opt => {
-                  const checked = hasPart(value, opt);
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => onChange(togglePart(value, opt))}
-                      className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors ${
-                        checked
-                          ? "border-indigo-500/60 bg-indigo-900/30 text-indigo-300"
-                          : "border-border bg-bg-panel text-text-muted hover:border-faint hover:text-text-primary"
-                      }`}
-                      title={checked ? `Remove "${opt}"` : `Add "${opt}"`}
-                    >
-                      <span aria-hidden="true">{checked ? "☑" : "☐"}</span>
-                      <span>{opt}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <ChipGroup key={group.label} value={value} onChange={onChange} group={group} accent="indigo" />
           ))}
+
+          {/* NSFW sub-section: its own toggle at the bottom, always available
+              (not tied to the AI content mode), red so it's distinct. */}
+          {nsfwGroups && nsfwGroups.length > 0 && (
+            <div className="border-t border-border pt-2">
+              <button
+                type="button"
+                onClick={() => setNsfwOpen(o => !o)}
+                className="text-[11px] font-medium text-red-400/90 transition-colors hover:text-red-400"
+                title="Adult / erotica classification labels -- optional, for mature fiction"
+              >
+                {nsfwOpen ? "Hide NSFW suggestions" : "Show NSFW suggestions..."}
+              </button>
+
+              {nsfwOpen && (
+                <div className="mt-1.5 space-y-2 rounded border border-red-900/50 bg-red-950/20 p-2">
+                  <p className="text-[10px] text-red-400/70">
+                    Adult / erotica labels for classifying mature fiction. Optional, and separate from your AI content-mode setting.
+                  </p>
+                  {nsfwGroups.map(group => (
+                    <ChipGroup key={group.label} value={value} onChange={onChange} group={group} accent="red" />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -566,7 +667,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   placeholder="e.g. epic fantasy, sci-fi thriller, contemporary romance"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
-                <SuggestionPicker value={genre} onChange={setGenre} groups={GENRE_SUGGESTIONS} />
+                <SuggestionPicker value={genre} onChange={setGenre} groups={GENRE_SUGGESTIONS} nsfwGroups={GENRE_NSFW} />
               </div>
 
               <div className="mb-4">
@@ -581,7 +682,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   placeholder="e.g. dark, atmospheric, slow burn, humorous"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
-                <SuggestionPicker value={tone} onChange={setTone} groups={TONE_SUGGESTIONS} />
+                <SuggestionPicker value={tone} onChange={setTone} groups={TONE_SUGGESTIONS} nsfwGroups={TONE_NSFW} />
               </div>
 
               <div className="mb-4">
@@ -714,7 +815,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   placeholder="e.g. Adult, Young Adult, Middle Grade"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
-                <SuggestionPicker value={targetAudience} onChange={setTargetAudience} groups={AUDIENCE_SUGGESTIONS} />
+                <SuggestionPicker value={targetAudience} onChange={setTargetAudience} groups={AUDIENCE_SUGGESTIONS} nsfwGroups={AUDIENCE_NSFW} />
               </div>
 
               {/* Series info (read-only if applicable) */}
