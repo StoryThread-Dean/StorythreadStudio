@@ -760,12 +760,20 @@ async def create_chapter(request: CreateChapterRequest):
             detail=f"manuscript/ folder not found in: {request.folder_path}"
         )
 
-    # Count existing .md files to determine the next chapter number
+    # Determine the next chapter number from the HIGHEST existing numeric
+    # prefix, not the file count. Counting files breaks after a delete:
+    # with 01- and 03- on disk, count+1 would produce another "03-" and
+    # collide. max(prefix)+1 always steps past every file that exists.
     existing = [
         f for f in os.listdir(manuscript)
         if f.endswith(".md") and os.path.isfile(os.path.join(manuscript, f))
     ]
-    next_num = len(existing) + 1
+    highest = 0
+    for f in existing:
+        m = re.match(r"^(\d+)-", f)
+        if m:
+            highest = max(highest, int(m.group(1)))
+    next_num = max(highest, len(existing)) + 1
 
     # Convert the title to a filename-safe slug: "The Storm" -> "the-storm"
     slug = re.sub(r"[^a-z0-9]+", "-", request.title.lower()).strip("-")

@@ -211,7 +211,7 @@ export interface UpdateProjectSettingsPayload {
 // Metadata about one chapter file, returned by GET /api/documents/chapters.
 // The editor uses this to build the chapter list in the left nav panel.
 export interface ChapterInfo {
-  filename: string;   // e.g. "01-chapter-one.md"
-  title: string;      // e.g. "Chapter One"
+  filename: string;   // e.g. "01-chapter-1.md"
+  title: string;      // e.g. "Chapter 1"
   path: string;       // Full absolute path on disk
 }

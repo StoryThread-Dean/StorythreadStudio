@@ -83,8 +83,11 @@ PROJECT_FOLDERS = [
 # inside create_project() and create_book_in_series() using the
 # outline_templates module.
 STARTER_FILES = {
-    # The first chapter -- ready to write
-    "manuscript/01-chapter-one.md": "# Chapter One\n\n",
+    # The first chapter -- ready to write. Numeric ("Chapter 1", not
+    # "Chapter One") so it matches the default the new-chapter dialog
+    # proposes for every later chapter ("Chapter 2" -> 02-chapter-2.md).
+    # Before this change the starter was the odd one out on disk.
+    "manuscript/01-chapter-1.md": "# Chapter 1\n\n",
 
     # Style guide -- pre-populated with the no-em-dash rule
     "notes/style-guide.md": (

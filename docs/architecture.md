@@ -47,8 +47,8 @@ Every project is a folder the user owns. Storythread does not touch anything out
 MyNovel/
   project.json                     project settings
   manuscript/                      chapter .md files (one chapter per file)
-    01-chapter-one.md
-    02-chapter-two.md
+    01-chapter-1.md
+    02-the-storm.md
   notes/                           outline, style guide, themes
     outline.md
     style-guide.md
