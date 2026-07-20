@@ -11,8 +11,12 @@
 // enhancement once the tree is stable.
 //
 // House dropdown pattern: relative wrapper, absolute panel, close on
-// outside-mousedown / Escape / item click. Items with `submenu` render a
-// nested flyout ("Move to Act >" -> the act list).
+// outside-mousedown / Escape / item click. Items with `submenu` expand
+// INLINE below the parent item ("Move to Act v" -> indented act list).
+// A sideways flyout was tried first and failed: the sidebar is a fixed
+// 256px column, so a right-opening panel overflowed into a horizontal
+// scrollbar, and grabbing that scrollbar counted as an outside click
+// that closed the whole menu. Expanding downward stays inside the panel.
 
 import { useEffect, useRef, useState } from "react";
 import { MoreVertical } from "lucide-react";
@@ -86,7 +90,7 @@ export function RowMenu({ items, ariaLabel }: { items: RowMenuItem[]; ariaLabel:
           className="absolute right-0 top-full z-30 mt-0.5 w-44 rounded border border-border bg-bg-panel py-1 shadow-xl"
         >
           {items.map((it, i) => (
-            <div key={it.label} className="relative">
+            <div key={it.label}>
               <button
                 disabled={it.disabled}
                 title={it.hint}
@@ -96,13 +100,19 @@ export function RowMenu({ items, ariaLabel }: { items: RowMenuItem[]; ariaLabel:
                 className={itemClass(it)}
               >
                 <span className="truncate">{it.label}</span>
-                {it.submenu && <span aria-hidden="true" className="text-faint">&gt;</span>}
+                {it.submenu && (
+                  <span aria-hidden="true" className="text-faint">
+                    {subOpenIdx === i ? "v" : ">"}
+                  </span>
+                )}
               </button>
 
+              {/* Inline submenu: indented list right below the parent item,
+                  inside the same panel -- nothing can overflow the sidebar. */}
               {it.submenu && subOpenIdx === i && (
                 <div
                   role="menu"
-                  className="absolute left-full top-0 z-40 ml-0.5 max-h-56 w-44 overflow-y-auto rounded border border-border bg-bg-panel py-1 shadow-xl"
+                  className="ml-2 max-h-56 overflow-y-auto border-l border-border/60 py-0.5"
                 >
                   {it.submenu.length === 0 ? (
                     <p className="px-2.5 py-1 text-xs text-faint">No other acts yet</p>
