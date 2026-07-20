@@ -28,10 +28,9 @@ const API_BASE = "http://localhost:8000";
 // iterations, and unknown keys from a newer app version must not crash an
 // older one. Garbage state degrades to defaults, never to an error.
 export interface ProjectUiState {
-  profilesCollapsed?:   boolean;
-  notesCollapsed?:      boolean;
-  bookDetailsExpanded?: boolean;
-  collapsedActs?:       string[];   // act ids from manuscript/structure.json
+  profilesCollapsed?: boolean;
+  notesCollapsed?:    boolean;
+  collapsedActs?:     string[];   // act ids from manuscript/structure.json
 }
 
 const DEBOUNCE_MS = 800;

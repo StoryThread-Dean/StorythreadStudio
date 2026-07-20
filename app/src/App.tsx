@@ -53,7 +53,6 @@ import { NavSection } from "./components/sidebar/NavSection";
 import { NavItem } from "./components/sidebar/NavItem";
 import { ChapterNavRow } from "./components/sidebar/ChapterNavRow";
 import { ActGroup } from "./components/sidebar/ActGroup";
-import { BookDetailsPanel } from "./components/sidebar/BookDetailsPanel";
 import { GlobalSearchModal } from "./components/GlobalSearchModal";
 import { IssuePopover } from "./components/editor/IssuePopover";
 import { ISSUE_CLICK_EVENT, clearIssuesEffect } from "./components/editor/issueOverlay";
@@ -71,7 +70,7 @@ import { useProjectUiState } from "./hooks/useProjectUiState";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { Bot, Send, ChevronDown, Settings2, CornerDownRight, PenLine, Sparkles, HelpCircle, Brain } from "lucide-react";
+import { Bot, Send, ChevronDown, CornerDownRight, PenLine, Sparkles, HelpCircle, Brain } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 // The base URL for all API calls to the Python FastAPI backend.
@@ -1986,7 +1985,10 @@ function App() {
             <ThemeToggle />
           </div>
 
-          {/* Project title + switcher dropdown + settings gear */}
+          {/* Project title + switcher dropdown. The old settings gear that
+              sat next to the title is gone -- everything it opened now
+              lives in the Book Details popout (see the BOOK DETAILS section
+              at the top of the nav below). */}
           <div className="relative mt-1">
             <div className="flex items-center gap-1">
               <button
@@ -2005,13 +2007,6 @@ function App() {
               >
                 <span className="truncate text-xs text-text-muted">{currentProject.title}</span>
                 <ChevronDown size={10} className="shrink-0 text-faint" />
-              </button>
-              <button
-                onClick={() => setShowProjectSettings(true)}
-                className="shrink-0 rounded p-1 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
-                title="Project settings"
-              >
-                <Settings2 size={12} />
               </button>
             </div>
 
@@ -2083,22 +2078,22 @@ function App() {
             <span>Main Menu</span>
           </button>
 
-          {/* Book Details -- story-level facts (genre, tone, POV, ...) that
-              feed the AI's STORY CONTEXT block. Lives here at the top of the
-              nav (above Manuscript) so writers actually find and fill it;
-              the old home was a small gear-icon modal. Expansion state is
-              remembered per book. */}
-          <BookDetailsPanel
-            projectPath={currentProject.root_path}
-            expanded={projectUi.uiState.bookDetailsExpanded ?? false}
-            onToggleExpanded={() => projectUi.update({
-              bookDetailsExpanded: !(projectUi.uiState.bookDetailsExpanded ?? false),
-            })}
-            onTitleSaved={(newTitle) =>
-              setCurrentProject(prev => prev ? { ...prev, title: newTitle } : prev)
-            }
-            onOpenAdvancedSettings={() => setShowProjectSettings(true)}
-          />
+          {/* Book Details -- opens the popout modal (formerly "Project
+              Settings" behind a tiny gear icon; the gear is gone and this
+              section is the one entry point). The modal holds the story
+              facts that feed AI prompts (genre, tone, theme, setting, POV,
+              tense, audience), the word-count target, plus content mode
+              and the model picker. */}
+          <div className="mb-4">
+            <button
+              onClick={() => setShowProjectSettings(true)}
+              className="flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs font-semibold uppercase tracking-wider text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+              title="Title, genre, tone, POV, word target, AI model... everything about this book"
+            >
+              <span>Book Details</span>
+              <span aria-hidden="true" className="normal-case text-faint">&#8599;</span>
+            </button>
+          </div>
 
           {/* Manuscript section -- the acts tree.
               Story > Act > Chapter > (Chapter Summary + Scenes). Acts come

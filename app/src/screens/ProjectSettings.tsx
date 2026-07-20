@@ -1,8 +1,13 @@
-// ProjectSettings.tsx -- Project-Level Settings Modal
-// =====================================================
+// ProjectSettings.tsx -- The "Book Details" Modal
+// =================================================
 // Separate from the global Settings modal (API key, model picker).
-// This shows and edits the project.json values for the currently open project:
-// title, description, content mode, model tier floor.
+// Opened from the BOOK DETAILS section at the top of the left nav (the old
+// gear icon next to the project title was removed -- this modal is the one
+// home for everything book-level). It shows and edits the project.json
+// values for the currently open project: title, description, the story
+// facts that feed AI prompts (genre, tone, theme, setting, POV, tense,
+// audience), the word-count target (stored in the outline frontmatter, not
+// project.json), content mode, and the model tier/picker.
 //
 // Includes the dynamic Model Help Guide that changes text based on
 // the writer's current settings -- educating novice writers on how
@@ -59,6 +64,17 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   const [description, setDescription] = useState(project.description);
   const [genre, setGenre]             = useState("");
   const [tone, setTone]               = useState("");
+  // Story facts added with the Book Details rework. All of these (plus
+  // genre/tone above) are auto-injected into AI prompts as STORY CONTEXT.
+  const [theme, setTheme]                     = useState("");
+  const [storySetting, setStorySetting]       = useState("");   // "setting" clashes with React naming habits
+  const [pointOfView, setPointOfView]         = useState("");
+  const [tense, setTense]                     = useState("");
+  const [targetAudience, setTargetAudience]   = useState("");
+  // Word Count target -- kept as a string for the input; parsed on save.
+  // The backend stores it in notes/outline.md frontmatter (the Progress
+  // gauge's source of truth), never in project.json.
+  const [targetWordCount, setTargetWordCount] = useState("");
   const [contentMode, setContentMode] = useState(project.content_mode_default);
   const [costTier, setCostTier]       = useState("standard");
   const [projectModel, setProjectModel] = useState(project.default_model ?? "");
@@ -100,6 +116,14 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           const data = await res.json();
           setGenre(data.genre ?? "");
           setTone(data.tone ?? "");
+          setTheme(data.theme ?? "");
+          setStorySetting(data.setting ?? "");
+          setPointOfView(data.point_of_view ?? "");
+          setTense(data.tense ?? "");
+          setTargetAudience(data.target_audience ?? "");
+          setTargetWordCount(
+            data.target_word_count != null ? String(data.target_word_count) : ""
+          );
           setCostTier(data.cost_tier ?? "standard");
           setProjectModel(data.default_model ?? "");
         }
@@ -137,6 +161,15 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
     setSaved(false);
     setError(null);
 
+    // Word Count target: only sent when it parses as a positive number.
+    // Blank = leave the outline's value alone (never zero it by accident).
+    const parsedTarget = parseInt(targetWordCount.replace(/[,\s]/g, ""), 10);
+    if (targetWordCount.trim() !== "" && (!Number.isFinite(parsedTarget) || parsedTarget < 0)) {
+      setError("Word Count target must be a number.");
+      setSaving(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/projects/settings`, {
         method: "PUT",
@@ -147,6 +180,12 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           description:          description,
           genre:                genre,
           tone:                 tone,
+          theme:                theme,
+          setting:              storySetting,
+          point_of_view:        pointOfView,
+          tense:                tense,
+          target_audience:      targetAudience,
+          ...(targetWordCount.trim() !== "" ? { target_word_count: parsedTarget } : {}),
           content_mode_default: contentMode,
           cost_tier:            costTier,
           default_model:        projectModel || null,  // empty string = use global
@@ -301,7 +340,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           className="flex shrink-0 items-center justify-between border-b border-border"
           style={{ padding: "1rem 1.5rem" }}
         >
-          <h2 className="text-base font-semibold text-text-primary">Project Settings</h2>
+          <h2 className="text-base font-semibold text-text-primary">Book Details</h2>
           <button
             onClick={onClose}
             className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
@@ -364,6 +403,97 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={tone}
                   onChange={e => setTone(e.target.value)}
                   placeholder="e.g. dark, atmospheric, slow burn, humorous"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Theme</label>
+                <p className="mb-1 text-xs text-faint">
+                  The idea the story keeps returning to. Auto-injected into AI prompts.
+                </p>
+                <input
+                  type="text"
+                  value={theme}
+                  onChange={e => setTheme(e.target.value)}
+                  placeholder="e.g. redemption, found family, the cost of power"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Setting</label>
+                <p className="mb-1 text-xs text-faint">
+                  Where and when the story happens. Auto-injected into AI prompts.
+                </p>
+                <input
+                  type="text"
+                  value={storySetting}
+                  onChange={e => setStorySetting(e.target.value)}
+                  placeholder="e.g. a storm-locked island kingdom, near-future Chicago"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Word Count Target</label>
+                <p className="mb-1 text-xs text-faint">
+                  Target length in words. Drives the Writing Progress gauge
+                  (stored in the outline, not project settings). Leave blank to keep the current target.
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={targetWordCount}
+                  onChange={e => setTargetWordCount(e.target.value)}
+                  placeholder="e.g. 90000"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* POV and Tense side by side -- both are short pick-lists */}
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-primary">Point of View</label>
+                  <select
+                    value={pointOfView}
+                    onChange={e => setPointOfView(e.target.value)}
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                    title="Narration perspective. Auto-injected into AI prompts."
+                  >
+                    <option value="">(not set)</option>
+                    <option value="First">First</option>
+                    <option value="Second">Second</option>
+                    <option value="Third Limited">Third Limited</option>
+                    <option value="Third Omniscient">Third Omniscient</option>
+                    <option value="Multiple">Multiple</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-primary">Tense</label>
+                  <select
+                    value={tense}
+                    onChange={e => setTense(e.target.value)}
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                    title="Narration tense. Auto-injected into AI prompts."
+                  >
+                    <option value="">(not set)</option>
+                    <option value="Past">Past</option>
+                    <option value="Present">Present</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Target Audience</label>
+                <p className="mb-1 text-xs text-faint">
+                  Who the book is for. Auto-injected into AI prompts.
+                </p>
+                <input
+                  type="text"
+                  value={targetAudience}
+                  onChange={e => setTargetAudience(e.target.value)}
+                  placeholder="e.g. Adult, Young Adult, Middle Grade"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
               </div>

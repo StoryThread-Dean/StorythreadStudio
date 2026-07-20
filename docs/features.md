@@ -29,7 +29,7 @@ Each project is a folder the user owns. The app reads and writes Markdown files 
 
 The left panel presents Story > Act > Chapter > Scene > Beat:
 
-- **Book Details** — an expandable section at the top (Title, Genre, Tone, Theme, Setting, Word Count target, Point of View, Tense, Target Audience). Fields save on blur; all but the word target flow into AI prompts as STORY CONTEXT. "AI & advanced settings" links to the Project Settings modal (model, content mode, outline template).
+- **Book Details** — a section header at the top that opens the Book Details popout (formerly "Project Settings" behind a gear icon, now the single home for everything book-level): Title, Description, Genre, Tone, Theme, Setting, Word Count target, Point of View, Tense, Target Audience, plus outline template, content mode, and the model picker. All story fields but the word target flow into AI prompts as STORY CONTEXT.
 - **Acts** — created with "+ New Act"; chapters move between acts and reorder via each row's hover "..." menu (Move up / Move down / Move to Act). Acts collapse, and the collapsed state is remembered per book. Moves never rename chapter files.
 - **Chapters** — double-click to rename. A rename updates the heading AND the filename (slug follows the title, `NN-` prefix kept), and carries the chapter's summary, scene summaries, act slot, and progress history along.
 - **Scenes** — expandable under each chapter (from scene summaries); each scene with beats shows a done/total badge and expandable read-only beat rows.
