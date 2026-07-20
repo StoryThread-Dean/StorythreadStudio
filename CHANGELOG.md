@@ -17,11 +17,22 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+---
+
+## [1.0.9] - 2026-07-20
+
+### Added
+
 - **Acts in the manuscript tree.** The sidebar now shows Story > Act > Chapter: create acts with "+ New Act", collapse them (remembered per book), and move chapters between acts or reorder them from each row's hover "..." menu. Acts live in a small `manuscript/structure.json` manifest -- chapter files are never renamed or renumbered by a move, and projects that never use acts look exactly as before.
 - **Scene beats.** Each scene summary can now hold a Beats checklist -- planning checkpoints like "MC finds the letter" -- edited in the scene summary view (check off, reorder, edit in place) and shown as expandable children under each scene in the sidebar with a done/total badge. Beats are stored in the scene's summary file, never in the manuscript prose, and AI summary regeneration leaves them untouched.
 - **Book Details popout.** The old Project Settings modal (previously hidden behind a tiny gear icon) is now "Book Details", opened from a section header at the top of the left nav, and gains the full set of story fields: Theme, Setting, Word Count target, Point of View, Tense, and Target Audience alongside Title, Description, Genre, and Tone. Everything except the word target is auto-injected into AI prompts as story context; the word target feeds the Writing Progress gauge via the outline. The gear icon is gone.
+- **Guided suggestions in Book Details.** Genre, Tone, and Target Audience each offer a collapsible list of common choices, grouped most-popular-first -- click to add or remove them, or keep hand-typing your own. Every group has a "What's this?" explainer defining each option, and there is a separate (red) NSFW list of adult / erotica classification labels. Point of View has its own "What's this?" guide with recommendations for which to pick.
 - **Tools menu.** Generate Scene Summaries, Suggest Scene Breaks, Chapter Summary, Reader Mode, and Export now live in one "Tools" pulldown in the editor title bar, freeing toolbar space around the writing area.
-- **Per-book sidebar memory.** Collapsing Profiles, Notes, Book Details, or an act is remembered for that book -- across restarts and app updates -- via a small UI-state file stored inside the project folder.
+- **Per-book sidebar memory.** Collapsing Profiles, Notes, or an act is remembered for that book -- across restarts and app updates -- via a small UI-state file stored inside the project folder.
 
 ### Changed
 
@@ -30,8 +41,6 @@ entry while working on a feature, append it under Unreleased.
 - **Default chapter naming unified.** New projects start with `01-chapter-1.md` ("Chapter 1"), matching the "Chapter N" default of the new-chapter dialog. Creating after a delete no longer collides with existing chapter numbers.
 - **Writing Progress tile pinned at the bottom.** The progress tile moved from the top of the left panel to below the navigation, where it stays visible no matter how many chapters or acts are expanded; its breakdown now opens upward.
 - **Removed the leftover "Summaries > Scene Summaries" nav section.** Scene summaries live in the Manuscript tree under each chapter; the old legacy link did nothing useful.
-
-### Fixed
 
 ---
 
@@ -190,7 +199,8 @@ First public release.
 - Backend sidecar hung at startup in installed builds, causing "Failed to fetch" errors on first project open. The Tauri shell plugin pipes the child process's stdout and stderr through a Receiver that the setup hook was dropping; uvicorn's startup log lines filled the OS pipe buffer and blocked the backend from binding to port 8000. The setup hook now drains the receiver in a detached task so the backend can start cleanly.
 - API requests from the installed app were blocked by CORS even after the backend started, because the allowlist only included Tauri v1's `tauri://localhost` origin. Tauri v2 on Windows uses `http://tauri.localhost`; both Tauri v2 origins are now on the allowlist.
 
-[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.9...HEAD
+[1.0.9]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.5...v1.0.6
