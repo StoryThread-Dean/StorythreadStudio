@@ -50,6 +50,7 @@ import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionG
 import { NavSection } from "./components/sidebar/NavSection";
 import { NavItem } from "./components/sidebar/NavItem";
 import { ChapterNavRow } from "./components/sidebar/ChapterNavRow";
+import { BookDetailsPanel } from "./components/sidebar/BookDetailsPanel";
 import { GlobalSearchModal } from "./components/GlobalSearchModal";
 import { IssuePopover } from "./components/editor/IssuePopover";
 import { ISSUE_CLICK_EVENT, clearIssuesEffect } from "./components/editor/issueOverlay";
@@ -63,6 +64,7 @@ import { PostUpdateBanner } from "./components/update/PostUpdateBanner";
 import { AboutPanel } from "./components/about/AboutPanel";
 import { DonationPrompt } from "./components/about/DonationPrompt";
 import { useBackendHealth } from "./hooks/useBackendHealth";
+import { useProjectUiState } from "./hooks/useProjectUiState";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -91,6 +93,11 @@ function App() {
 
   // Which project is currently open. null = show home screen.
   const [currentProject, setCurrentProject] = useState<ProjectInfo | null>(null);
+
+  // Per-book remembered UI state (sidebar collapse states, Book Details
+  // expansion). Persisted inside the project folder via the backend so it
+  // survives restarts, updates, and moving the project between machines.
+  const projectUi = useProjectUiState(currentProject?.root_path ?? null);
 
   // Phase 6: poll the backend /health endpoint in the background so we can
   // show one clear "backend not responding" banner instead of letting every
@@ -1805,6 +1812,23 @@ function App() {
             <span>Main Menu</span>
           </button>
 
+          {/* Book Details -- story-level facts (genre, tone, POV, ...) that
+              feed the AI's STORY CONTEXT block. Lives here at the top of the
+              nav (above Manuscript) so writers actually find and fill it;
+              the old home was a small gear-icon modal. Expansion state is
+              remembered per book. */}
+          <BookDetailsPanel
+            projectPath={currentProject.root_path}
+            expanded={projectUi.uiState.bookDetailsExpanded ?? false}
+            onToggleExpanded={() => projectUi.update({
+              bookDetailsExpanded: !(projectUi.uiState.bookDetailsExpanded ?? false),
+            })}
+            onTitleSaved={(newTitle) =>
+              setCurrentProject(prev => prev ? { ...prev, title: newTitle } : prev)
+            }
+            onOpenAdvancedSettings={() => setShowProjectSettings(true)}
+          />
+
           {/* Manuscript section -- Phase 6 nested tree:
               Each chapter is a collapsible row. Expanding reveals a single
               "Chapter Summary" child. Clicking the chapter name opens the
@@ -1862,7 +1886,16 @@ function App() {
             })}
           </NavSection>
 
-          <NavSection label="Notes">
+          {/* Notes and Profiles are collapsible; their collapsed state is
+              remembered PER BOOK (useProjectUiState) so a writer who folds
+              Profiles in one project finds it folded there forever after --
+              across restarts and app updates -- while other books keep the
+              default expanded layout. */}
+          <NavSection label="Notes"
+            collapsed={projectUi.uiState.notesCollapsed ?? false}
+            onToggle={() => projectUi.update({
+              notesCollapsed: !(projectUi.uiState.notesCollapsed ?? false),
+            })}>
             <NavItem label="Outline"     hint="Story structure, targets, and plot beats"
               active={currentView === "outline_planner"}
               onClick={() => setCurrentView("outline_planner")} />
@@ -1871,7 +1904,11 @@ function App() {
               onClick={() => loadNote("style-guide.md", "Style Guide", currentProject)} />
           </NavSection>
 
-          <NavSection label="Profiles">
+          <NavSection label="Profiles"
+            collapsed={projectUi.uiState.profilesCollapsed ?? false}
+            onToggle={() => projectUi.update({
+              profilesCollapsed: !(projectUi.uiState.profilesCollapsed ?? false),
+            })}>
             <NavItem label="Characters"    hint="Character profiles and trait blocks"
               onClick={() => { setProfileType("character");    setCurrentView("profiles"); }} />
             <NavItem label="Relationships" hint="Relationship profiles and dynamic notes"

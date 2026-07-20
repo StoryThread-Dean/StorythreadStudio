@@ -205,6 +205,15 @@ export interface UpdateProjectSettingsPayload {
   content_mode_default?: string;
   cost_tier?:            string;
   default_model?:        string;
+  // Book Details fields (sidebar panel). Stored flat in project.json.
+  theme?:                string;
+  setting?:              string;
+  point_of_view?:        string;
+  tense?:                string;
+  target_audience?:      string;
+  // Word Count target. The backend writes this into the OUTLINE frontmatter
+  // (the Progress gauge's source of truth), never project.json.
+  target_word_count?:    number;
 }
 
 // --- ChapterInfo ---
