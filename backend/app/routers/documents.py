@@ -328,20 +328,37 @@ async def list_chapter_summaries(folder_path: str):
 # summaries). The chapter stem is derived from the chapter filename so a
 # chapter renamed or re-ordered via filename also moves its scene folder.
 
+class Beat(BaseModel):
+    """
+    One beat: a planning checkpoint inside a scene ("MC finds the letter").
+    Beats live INSIDE the scene's sidecar summary file as a `## Beats`
+    checklist section -- never in the manuscript prose itself, which stays
+    100% clean. `done` maps to the checkbox: - [ ] vs - [x].
+    """
+    text: str
+    done: bool = False
+
+
 class SceneSummaryInfo(BaseModel):
     """One entry in the scene-summaries list. Filled slots only."""
     index:    int   # 1-based positional index (matches scene-NN.md)
     title:    str   # Extracted from the `# Heading` line in the scene summary file
     filename: str   # e.g., "scene-01.md" -- useful for log messages and UI debugging
+    # The scene's beats, so the sidebar can render Scene > Beats children
+    # from the single list call it already makes.
+    beats:    list[Beat] = []
 
 
 class SceneSummaryResponse(BaseModel):
     """Returned from GET /scene-summary. `exists` distinguishes not-yet-created
-    from empty-on-purpose so the UI can show the right empty state."""
+    from empty-on-purpose so the UI can show the right empty state.
+    `content` NEVER includes the `## Beats` section -- beats come back as
+    structured data so the raw checklist can't leak into the summary editor."""
     index:   int
     title:   str
     content: str
     exists:  bool
+    beats:   list[Beat] = []
 
 
 class SaveSceneSummaryRequest(BaseModel):
@@ -350,6 +367,14 @@ class SaveSceneSummaryRequest(BaseModel):
     index:            int     # 1-based positional index
     title:            str
     content:          str     # Summary body (no `# title` line -- we prepend it)
+    # Beats handling -- the None default is LOAD-BEARING:
+    #   None  => PRESERVE whatever `## Beats` section is on disk. The AI
+    #            regeneration path saves through this endpoint without any
+    #            beats field; without this rule every regenerate would
+    #            silently wipe the writer's beats.
+    #   []    => remove the Beats section on purpose.
+    #   [...] => write exactly this list.
+    beats:            list[Beat] | None = None
 
 
 class SaveSceneSummaryResponse(BaseModel):
@@ -402,6 +427,58 @@ def _index_from_scene_filename(name: str) -> int | None:
     return int(m.group(1))
 
 
+# The `## Beats` section: always the LAST section of a scene sidecar file.
+# `- [ ] text` / `- [x] text` lines are beats; anything else inside the
+# section is ignored on parse and dropped on rewrite (the section is
+# app-owned; the free-form summary body above it belongs to the writer).
+_BEATS_HEADING_RE = re.compile(r"^##\s+beats\s*$", re.IGNORECASE | re.MULTILINE)
+_BEAT_LINE_RE     = re.compile(r"^-\s*\[( |x|X)\]\s*(.+)$")
+
+
+def _split_beats_section(raw: str) -> tuple[str, list[Beat]]:
+    """
+    Split a scene sidecar file into (text_without_beats_section, beats).
+
+    The cut happens at the first `## Beats` heading; everything from that
+    heading to the end of the file is the beats section. Files with no
+    such heading come back unchanged with an empty list.
+    """
+    m = _BEATS_HEADING_RE.search(raw)
+    if not m:
+        return raw, []
+
+    before  = raw[: m.start()].rstrip("\n") + "\n" if raw[: m.start()].strip() else ""
+    section = raw[m.end():]
+
+    beats: list[Beat] = []
+    for line in section.splitlines():
+        bm = _BEAT_LINE_RE.match(line.strip())
+        if bm:
+            beats.append(Beat(text=bm.group(2).strip(), done=bm.group(1).lower() == "x"))
+    return before, beats
+
+
+def _render_beats_section(beats: list[Beat]) -> str:
+    """The `## Beats` block ready to append to a sidecar file ("" if empty)."""
+    if not beats:
+        return ""
+    lines = "\n".join(
+        f"- [{'x' if b.done else ' '}] {b.text.strip()}" for b in beats if b.text.strip()
+    )
+    if not lines:
+        return ""
+    return f"\n## Beats\n\n{lines}\n"
+
+
+def _read_beats_on_disk(scene_file: str) -> list[Beat]:
+    """Beats currently stored in a sidecar file ([] if missing/unreadable)."""
+    try:
+        with open(scene_file, "r", encoding="utf-8") as f:
+            return _split_beats_section(f.read())[1]
+    except OSError:
+        return []
+
+
 def _scene_title_from_file(filepath: str) -> str:
     """
     Read the first `# Heading` line from a scene summary file as its title.
@@ -450,6 +527,9 @@ async def list_scene_summaries(folder_path: str, chapter_filename: str):
                 index    = idx,
                 title    = _scene_title_from_file(entry.path),
                 filename = entry.name,
+                # Sidecar files are small (a few hundred words); reading each
+                # one for its beats keeps the sidebar to this single request.
+                beats    = _read_beats_on_disk(entry.path),
             ))
 
     # Sort by index so the sidebar shows Scene 1, 2, 3 in order even if the
@@ -542,7 +622,11 @@ async def load_scene_summary(folder_path: str, chapter_filename: str, index: int
         return SceneSummaryResponse(index=index, title="", content="", exists=False)
 
     with open(scene_file, "r", encoding="utf-8") as f:
-        raw = f.read()
+        file_raw = f.read()
+
+    # Split the app-owned `## Beats` section off FIRST -- it comes back as
+    # structured data, never as text the summary editor could mangle.
+    raw, beats = _split_beats_section(file_raw)
 
     # Pull the `# Title` line off the top (first non-blank line). Whatever
     # follows that line (minus the blank separator) is the summary body.
@@ -572,6 +656,7 @@ async def load_scene_summary(folder_path: str, chapter_filename: str, index: int
         title   = title or "Scene",
         content = body,
         exists  = True,
+        beats   = beats,
     )
 
 
@@ -593,12 +678,19 @@ async def save_scene_summary(request: SaveSceneSummaryRequest):
     title = request.title.strip() or "Scene"
     body  = request.content.strip()
 
+    # Beats rule (see SaveSceneSummaryRequest): None = preserve what's on
+    # disk. This is what keeps AI regeneration -- which saves through this
+    # endpoint with no beats field -- from wiping the writer's beats.
+    beats = request.beats if request.beats is not None else _read_beats_on_disk(scene_file)
+
     os.makedirs(scene_dir, exist_ok=True)
 
     # We always write with exactly one blank line between the heading and the
     # body, plus a trailing newline. Consistent formatting = fewer surprising
-    # diffs when the writer edits the file by hand later.
+    # diffs when the writer edits the file by hand later. The `## Beats`
+    # section, when present, is always the last section of the file.
     text = f"# {title}\n\n{body}\n" if body else f"# {title}\n"
+    text += _render_beats_section(beats)
     try:
         with open(scene_file, "w", encoding="utf-8") as f:
             f.write(text)
@@ -610,6 +702,62 @@ async def save_scene_summary(request: SaveSceneSummaryRequest):
         index    = request.index,
         message  = "Scene summary saved.",
     )
+
+
+# --- POST /api/documents/scene-beats (beats only) ---
+# The beats workhorse: toggling a checkbox, adding, editing, or reordering
+# beats rewrites ONLY the `## Beats` section, leaving the title and summary
+# body byte-identical. A checkbox click must never round-trip and rewrite
+# prose the writer may be editing at the same moment. The client always
+# sends the FULL list (beats are ~5-15 items; per-beat endpoints would be
+# ceremony for nothing).
+
+class SceneBeatsRequest(BaseModel):
+    folder_path:      str
+    chapter_filename: str
+    index:            int
+    beats:            list[Beat]
+
+
+@router.post("/scene-beats")
+async def save_scene_beats(request: SceneBeatsRequest):
+    """
+    Replace a scene's `## Beats` section. Creates the sidecar file (with a
+    placeholder title, no summary body) if the scene has no summary yet --
+    a writer can plan beats before any summary exists.
+    """
+    scene_dir, scene_file = _scene_summary_paths(
+        request.folder_path, request.chapter_filename, request.index
+    )
+    assert scene_file is not None
+
+    if os.path.isfile(scene_file):
+        try:
+            with open(scene_file, "r", encoding="utf-8") as f:
+                raw = f.read()
+        except OSError as e:
+            raise HTTPException(status_code=500, detail=f"Could not read scene summary: {e}")
+        # Keep everything except the old beats section, byte-for-byte.
+        base, _old = _split_beats_section(raw)
+        if not base.strip():
+            base = f"# Scene {request.index}\n"
+    else:
+        base = f"# Scene {request.index}\n"
+
+    os.makedirs(scene_dir, exist_ok=True)
+    text = base.rstrip("\n") + "\n" + _render_beats_section(request.beats)
+    try:
+        with open(scene_file, "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not write scene beats: {e}")
+
+    return {
+        "filename": f"scene-{request.index:02d}.md",
+        "index":    request.index,
+        "beats":    request.beats,
+        "message":  "Beats saved.",
+    }
 
 
 # --- DELETE /api/documents/scene-summary (one) ---
