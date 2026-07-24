@@ -51,6 +51,18 @@ def test_prompt_includes_a_worked_example():
     assert "match the flow" in text
 
 
+def test_prompt_hierarchy_role_is_lens_traits_are_evidence():
+    # Second polish pass: Role + Tags frame the story, the want drives it,
+    # and traits are a pool to SELECT from -- the coverage compulsion of
+    # weaving in every fragment is what fragmented the early outputs.
+    text = generate_quick_overview_prompt()
+    assert "STORY FUNCTION (Role + Tags) is the LENS" in text
+    assert "The WANT is the ENGINE" in text
+    assert "EVIDENCE, not a checklist" in text
+    assert "4-6" in text
+    assert "LEAVE THE REST OUT" in text
+
+
 # ── The endpoint (hermetic: no network, no real settings) ────────────────────
 
 def _patch(monkeypatch, captured):
@@ -88,6 +100,35 @@ def test_endpoint_builds_prompt_from_filled_fields_only(client, monkeypatch):
     assert "humor, timing" in user_msg
     assert "dry one-liners" in user_msg
     assert "Motivations" not in user_msg  # empty section dropped
+
+
+def test_endpoint_structures_message_as_lens_engine_material(client, monkeypatch):
+    # The user message mirrors the hierarchy in the data itself: story
+    # function first, the Motivations text promoted to the WANT slot, and
+    # everything else demoted to selectable raw material.
+    captured = {}
+    _patch(monkeypatch, captured)
+
+    resp = client.post("/api/ai/generate-quick-overview", json={
+        "name": "Elenore",
+        "role": "Rival",
+        "tags": ["competitor", "foil"],
+        "sections": {
+            "Motivations": "wants to finally beat their rival at something that counts",
+            "Voice Notes": "quotes books that do not exist with page numbers",
+        },
+    })
+    assert resp.status_code == 200, resp.text
+    msg = captured["messages"][0]["content"]
+
+    lens_at = msg.index("STORY FUNCTION")
+    want_at = msg.index("WANT (the engine")
+    raw_at = msg.index("RAW MATERIAL")
+    assert lens_at < want_at < raw_at
+
+    # The want text lives in the engine slot, not among the fragments.
+    assert "beat their rival" in msg[want_at:raw_at]
+    assert "quotes books" in msg[raw_at:]
 
 
 def test_endpoint_uses_generation_temperature_and_prose_sanitizer(client, monkeypatch):

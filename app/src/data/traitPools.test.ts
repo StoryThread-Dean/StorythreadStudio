@@ -48,11 +48,16 @@ describe("pool contents", () => {
     }
   });
 
-  it("the explicit tier favors fill-in-the-blank phrasing", () => {
+  it("the explicit tier mixes blanks with filled-in inspiration, majority blank", () => {
+    // The writer's chosen balance: fill-in-the-blank stays the majority
+    // (personalization over prescription), but a real share of options are
+    // filled in -- concrete sparks to deviate from or expand on.
     for (const s of SECTIONS) {
-      for (const option of TRAIT_POOLS[s].explicit) {
-        expect(option).toContain("____");
-      }
+      const options = TRAIT_POOLS[s].explicit;
+      const blanks = options.filter(o => o.includes("____")).length;
+      const filled = options.length - blanks;
+      expect(blanks).toBeGreaterThanOrEqual(Math.ceil(options.length / 2));
+      expect(filled).toBeGreaterThanOrEqual(Math.floor(options.length / 4));
     }
   });
 

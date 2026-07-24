@@ -874,20 +874,40 @@ async def generate_quick_overview(request: QuickOverviewRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
-    parts = [f"Name: {request.name}"]
+    # The user message mirrors the prompt's hierarchy in the DATA itself:
+    # story function first (the lens), the want next (the engine), then the
+    # trait fragments demoted to raw material the model selects from.
+    lens = [f"Name: {request.name}"]
     if request.role.strip():
-        parts.append(f"Role: {request.role.strip()}")
+        lens.append(f"Role: {request.role.strip()}")
     if request.tags:
-        parts.append(f"Tags: {', '.join(request.tags)}")
+        lens.append(f"Tags: {', '.join(request.tags)}")
+
+    want_text = ""
+    raw_parts: list[str] = []
     for heading, text in request.sections.items():
-        if text.strip():
-            parts.append(f"{heading}:\n{text.strip()}")
+        if not text.strip():
+            continue
+        # The Motivations section carries the want -- promote it to the
+        # engine slot rather than leaving it buried among the fragments.
+        if heading.strip().lower().startswith("motivation"):
+            want_text = text.strip()
+        else:
+            raw_parts.append(f"{heading}:\n{text.strip()}")
+
     user_message = (
-        "Character details -- shorthand fragments, retell them in flowing prose, "
-        "do not quote them verbatim:\n\n"
-        + "\n\n".join(parts)
-        + "\n\nWrite the overview."
+        "STORY FUNCTION (the lens -- what this character is FOR):\n"
+        + "\n".join(lens)
     )
+    if want_text:
+        user_message += "\n\nWANT (the engine -- open with this):\n" + want_text
+    if raw_parts:
+        user_message += (
+            "\n\nRAW MATERIAL (shorthand fragments -- evidence, not a checklist; "
+            "select only the few that best dramatize the role):\n\n"
+            + "\n\n".join(raw_parts)
+        )
+    user_message += "\n\nWrite the overview."
 
     try:
         reply = await run_chat(
