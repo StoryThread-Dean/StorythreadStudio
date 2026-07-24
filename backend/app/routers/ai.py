@@ -25,6 +25,7 @@ from app.ai.prompts import (
     build_revise_suggestion_system_prompt,
     build_profile_chat_system_prompt,
     generate_usage_preview_prompt,
+    generate_quick_overview_prompt,
     trim_trait_prompt,
     audit_importance_prompt,
     generate_section_summary_prompt,
@@ -34,6 +35,7 @@ from app.ai.prompts import (
     generate_scene_title_prompt,
     generate_scene_break_suggestions_prompt,
     context_stance_instruction,
+    content_mode_instruction,
     EDITOR_PASS_SUBCATEGORIES,
     TEMPERATURE_DEFAULTS,
 )
@@ -826,6 +828,86 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
 
     text = _extract_text_field(result, "usage_preview")
     return GenerateUsagePreviewResponse(usage_preview=sanitize(text.strip()))
+
+
+class QuickOverviewRequest(BaseModel):
+    """POST /generate-quick-overview -- side/background characters only.
+
+    The frontend sends whatever the writer has already filled in; empty
+    fields are simply omitted from the prompt. A deliberate, writer-clicked
+    exception to the no-ghostwriting stance, scoped to fast side-character
+    assembly: output lands in the editable Overview field, nothing saves
+    until the writer saves, clicking again rerolls a different angle.
+    """
+    name: str
+    role: str = ""
+    tags: list[str] = []
+    # Section heading -> the writer's text for it (Quick Build lines etc.).
+    sections: dict[str, str] = {}
+    model_id: str | None = None
+    content_mode: str = "general"
+    project_path: str | None = None
+
+
+class QuickOverviewResponse(BaseModel):
+    overview: str
+    model_used: str = ""
+
+
+@router.post("/generate-quick-overview", response_model=QuickOverviewResponse)
+async def generate_quick_overview(request: QuickOverviewRequest):
+    """
+    Turn a side character's filled-in fields into a compact Overview -- a
+    mini encapsulated story of who this person is. Regenerating gives a
+    varied result (generation temperature + an explicit vary-your-angle
+    instruction in the prompt).
+    """
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+
+    system_prompt = generate_quick_overview_prompt()
+    mode_block = content_mode_instruction(request.content_mode)
+    if mode_block:
+        system_prompt = system_prompt + "\n" + mode_block
+
+    # Story context (genre/tone/setting...) shades the overview's voice.
+    story_context = _build_story_context(request.project_path)
+    if story_context:
+        system_prompt = story_context + system_prompt
+
+    parts = [f"Name: {request.name}"]
+    if request.role.strip():
+        parts.append(f"Role: {request.role.strip()}")
+    if request.tags:
+        parts.append(f"Tags: {', '.join(request.tags)}")
+    for heading, text in request.sections.items():
+        if text.strip():
+            parts.append(f"{heading}:\n{text.strip()}")
+    user_message = (
+        "Write the overview for this character from these details:\n\n"
+        + "\n\n".join(parts)
+    )
+
+    try:
+        reply = await run_chat(
+            provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
+            api_key       = api_key,
+            model_id      = model_id,
+            system_prompt = system_prompt,
+            messages      = [{"role": "user", "content": user_message}],
+            # generation temperature: the vary-each-click behavior comes from
+            # sampling randomness plus the prompt's vary-your-angle rule.
+            temperature   = TEMPERATURE_DEFAULTS["generation"],
+            # prose mode keeps the approved ' -- ' punctuation -- this text
+            # lands in the profile, not in a chat bubble.
+            sanitize_mode = "prose",
+        )
+    except httpx.HTTPStatusError as e:
+        raise _provider_exc(e, provider)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
+
+    return QuickOverviewResponse(overview=reply.strip(), model_used=model_id)
 
 
 # ── Word count "Good" ranges per importance (mirrors frontend GAUGE_THRESHOLDS) ──

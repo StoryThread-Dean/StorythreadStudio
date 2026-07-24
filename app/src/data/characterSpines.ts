@@ -320,6 +320,24 @@ export function spineOptionById(options: SpineOption[], id: string): SpineOption
   return options.find(o => o.id === id);
 }
 
+/**
+ * Match a profile's free-text Role field back to an archetype id, so the
+ * Quick Build Story Role select can default to what the writer already
+ * chose (its own selection is session-only and resets when the profile is
+ * reopened). Matches the full label or any slash-separated part of it,
+ * case-insensitively: "Villain" -> Shadow / Villain, "mentor" -> Mentor /
+ * Sage. Blank or unrecognized roles return "" (the Any role default).
+ */
+export function archetypeIdForRole(role: string | null | undefined): string {
+  const norm = (role ?? "").trim().toLowerCase();
+  if (!norm) return "";
+  for (const o of ARCHETYPE_OPTIONS) {
+    if (o.label.toLowerCase() === norm) return o.id;
+    if (o.label.split("/").some(part => part.trim().toLowerCase() === norm)) return o.id;
+  }
+  return "";
+}
+
 // ── Role-pick side effects ───────────────────────────────────────────────────
 // Picking a Story Role also fills the profile's Role field and adds a few
 // key-aspect Tags (deduped against existing ones). Keyed by SpineOption.id.

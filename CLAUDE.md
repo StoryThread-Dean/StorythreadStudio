@@ -195,6 +195,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_editor_chat_materials_flow.py` -- materials echo + placement, stance persistence, temperature split
   - `test_profile_chat_prompts.py` -- profile-chat prompt builder incl. Interview mode contract (interviewer-not-inventor, triggers/origins, full-block rounds)
   - `test_character_kinds.py` -- Main vs Side character templates: kind frontmatter, tolerant trait-section parsing, plain-text round trip
+  - `test_quick_overview.py` -- side-character Generate Overview: prompt guardrails (grounding, subtext, vary-angle) + endpoint payload
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -321,6 +322,8 @@ AI output may only be written directly to these **designated generated-content f
 - `ai_section_summary`
 - `chapter_summary`
 - `scene_summary`
+
+One deliberate, user-approved exception (v1.0.10): the **[Generate Overview] button on SIDE/BACKGROUND character profiles** fills the Overview field from the writer's own filled-in fields. It is writer-clicked per use, lands in an editable field, and saves nothing until the writer saves. Scoped to fast side-character assembly only -- do NOT generalize this pattern to other human-authored fields without explicit user direction.
 
 AI must **never silently overwrite** human-authored prose, profile descriptions, notes, or story drafts. All other AI output goes to the side panel only, where the writer copies it manually.
 

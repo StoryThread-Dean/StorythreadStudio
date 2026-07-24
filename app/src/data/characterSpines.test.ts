@@ -7,7 +7,9 @@
 // the AI sanitizer can't protect static app content from).
 
 import { describe, it, expect } from "vitest";
-import { ENNEAGRAM_OPTIONS, ARCHETYPE_OPTIONS, spineOptionById } from "./characterSpines";
+import {
+  ENNEAGRAM_OPTIONS, ARCHETYPE_OPTIONS, spineOptionById, archetypeIdForRole,
+} from "./characterSpines";
 
 describe("ENNEAGRAM_OPTIONS", () => {
   it("has all nine types with complete fields", () => {
@@ -78,5 +80,26 @@ describe("spineOptionById", () => {
   it("finds by id and returns undefined for unknowns", () => {
     expect(spineOptionById(ENNEAGRAM_OPTIONS, "e8")?.label).toContain("Challenger");
     expect(spineOptionById(ARCHETYPE_OPTIONS, "nope")).toBeUndefined();
+  });
+});
+
+describe("archetypeIdForRole", () => {
+  // Reopening a side character re-derives the Quick Build Story Role from
+  // the profile's Role field -- these pin the matching rules.
+  it("matches full labels case-insensitively", () => {
+    expect(archetypeIdForRole("Comic Relief")).toBe("comic_relief");
+    expect(archetypeIdForRole("comic relief")).toBe("comic_relief");
+  });
+
+  it("matches any slash-separated part of a label", () => {
+    expect(archetypeIdForRole("Villain")).toBe("shadow");
+    expect(archetypeIdForRole("Mentor")).toBe("mentor");
+    expect(archetypeIdForRole("Sage")).toBe("mentor");
+  });
+
+  it("returns the Any-role default for blank or unmatched roles", () => {
+    expect(archetypeIdForRole("")).toBe("");
+    expect(archetypeIdForRole(undefined)).toBe("");
+    expect(archetypeIdForRole("protagonist")).toBe("");
   });
 });

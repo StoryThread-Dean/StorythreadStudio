@@ -955,6 +955,53 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
 
   // ── AI Generation Handlers ───────────────────────────────────────────────
 
+  // Side-character Quick Build: spin the already-filled fields (Role, Tags,
+  // trait lines, relationships, notes) into a compact Overview. A deliberate
+  // writer-clicked exception to the no-ghostwriting stance -- output lands in
+  // the editable Overview field, nothing saves until Ctrl+S, and clicking
+  // again rerolls a different angle.
+  const [quickOverviewLoading, setQuickOverviewLoading] = useState(false);
+  async function generateQuickOverview() {
+    if (!profile || quickOverviewLoading) return;
+    setQuickOverviewLoading(true);
+    setError(null);
+    try {
+      // Everything the writer has filled in, except the Overview itself.
+      const sectionTexts: Record<string, string> = {};
+      for (const cfg of sections) {
+        if (cfg.key === "overview") continue;
+        const text = (profile.sections[cfg.key]?.content ?? "").trim();
+        if (text) sectionTexts[cfg.heading] = text;
+      }
+      const res = await fetch(`${API_BASE}/api/ai/generate-quick-overview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profile.name,
+          role: profile.role,
+          tags: profile.tags,
+          sections: sectionTexts,
+          model_id: project.default_model || undefined,
+          content_mode: project.content_mode_default ?? "general",
+          project_path: project.root_path,
+        }),
+      });
+      if (!res.ok) {
+        let detail = `Server returned ${res.status}.`;
+        try { const err = await res.json(); detail = err.detail ?? detail; } catch { /* ignore */ }
+        throw new Error(detail);
+      }
+      const data = await res.json();
+      // Replaces the Overview field -- regenerate-for-variety is the point.
+      // Still just unsaved editor state until the writer hits Ctrl+S.
+      updateSection("overview", { content: data.overview ?? "" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate the overview.");
+    } finally {
+      setQuickOverviewLoading(false);
+    }
+  }
+
   async function generateSectionSummary(sectionKey: string, sectionHeading: string) {
     if (!profile) return;
     setGeneratingField(sectionKey);
@@ -1728,6 +1775,11 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                   the matching section's text as a new line. */}
               {isSideCharacter && (
                 <QuickBuildPanel
+                  // Keyed by filename so switching profiles remounts the
+                  // panel -- its Story Role select re-derives from the new
+                  // profile's Role field instead of carrying stale state.
+                  key={profile.filename}
+                  initialRoleLabel={profile.role}
                   onInsert={(sectionKey, text) =>
                     appendToSectionContent(sectionKey, text, "\n")}
                   onInsertRoleSummary={(_trait, description) =>
@@ -1760,6 +1812,10 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     generatingField={generatingField}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
                     showAiSummary={!isSideCharacter}
+                    onGenerateOverview={
+                      isSideCharacter && cfg.key === "overview" ? generateQuickOverview : undefined
+                    }
+                    generatingOverview={quickOverviewLoading}
                   />
                   </div>
                 );
@@ -2137,6 +2193,11 @@ interface ProfileSectionEditorProps {
   // sections are short single fields -- summarizing them adds nothing; the
   // Full AI Summary at the bottom covers the whole profile).
   showAiSummary?: boolean;
+  // Side-character Overview only: the [Generate Overview] button. A
+  // writer-clicked exception to the no-ghostwriting stance, scoped to fast
+  // side-character assembly -- output stays editable and unsaved.
+  onGenerateOverview?: () => void;
+  generatingOverview?: boolean;
 }
 
 function ProfileSectionEditor({
@@ -2155,6 +2216,8 @@ function ProfileSectionEditor({
   generatingField,
   onFocus,
   showAiSummary = true,
+  onGenerateOverview,
+  generatingOverview = false,
 }: ProfileSectionEditorProps) {
   const isGeneratingSummary = generatingField === sectionKey;
 
@@ -2168,6 +2231,19 @@ function ProfileSectionEditor({
             Only renders if help content exists for this section. */}
         {!hasTraitBlocks && (
           <SectionHelpPopover profileType={profileType} sectionKey={sectionKey} />
+        )}
+        {/* Side-character Overview: spin the filled-in fields into a mini
+            encapsulated story. Click again for a different angle. */}
+        {onGenerateOverview && (
+          <button
+            onClick={onGenerateOverview}
+            disabled={generatingOverview}
+            className="ml-auto flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+            title="AI writes a short overview from the fields you've filled in (Role, Tags, traits, notes). Click again for a different take -- always editable, never saved until you save."
+          >
+            <Sparkles size={11} />
+            {generatingOverview ? "Generating..." : "Generate Overview"}
+          </button>
         )}
       </div>
 

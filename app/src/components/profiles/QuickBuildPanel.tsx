@@ -19,9 +19,9 @@
 // Deliberately NOT gated on the AI content-mode setting and never
 // auto-enabled by genre -- always the writer's explicit, per-character call.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Dices } from "lucide-react";
-import { ARCHETYPE_OPTIONS, spineOptionById } from "../../data/characterSpines";
+import { ARCHETYPE_OPTIONS, archetypeIdForRole, spineOptionById } from "../../data/characterSpines";
 import { rollTraitOptions, type TraitSection } from "../../data/traitPools";
 
 // How many options each row shows per roll -- enough for a real choice,
@@ -44,16 +44,20 @@ interface QuickBuildPanelProps {
   onInsert: (sectionKey: string, text: string) => void;
   // Append the chosen archetype's summary to the Personality section.
   onInsertRoleSummary: (trait: string, description: string) => void;
+  // The profile's Role field. The Story Role select is session-only state,
+  // so on reopen it defaults to whichever archetype matches this role
+  // ("Villain" -> Shadow / Villain); blank or unmatched -> Any role.
+  initialRoleLabel?: string;
 }
 
-export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPanelProps) {
+export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabel }: QuickBuildPanelProps) {
   const [open, setOpen] = useState(true);
-  const [archetypeId, setArchetypeId] = useState("");
+  const [archetypeId, setArchetypeId] = useState(() => archetypeIdForRole(initialRoleLabel));
   const [nsfw, setNsfw] = useState(false);
   const [explicit, setExplicit] = useState(false);
 
-  // The currently visible options per row. Rolled on first open and
-  // rerolled per row (or all rows) on demand.
+  // The currently visible options per row. Rolled on mount (the panel
+  // starts open) and rerolled per row (or all rows) on demand.
   const [rolls, setRolls] = useState<Record<TraitSection, string[]>>({
     physical: [], mannerism: [], voice: [], want: [], hidden: [],
   });
@@ -109,6 +113,14 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPan
   };
 
   const chosenArchetype = archetypeId ? spineOptionById(ARCHETYPE_OPTIONS, archetypeId) : undefined;
+
+  // The panel starts open, so deal the first hands on mount (the toggle
+  // handler only covers reopen-after-collapse). Runs once; archetypeId is
+  // already initialized from the Role field at this point.
+  useEffect(() => {
+    rollAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="mb-4 rounded border border-border bg-bg-primary" data-testid="quick-build-panel">
