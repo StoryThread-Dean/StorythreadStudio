@@ -883,8 +883,10 @@ async def generate_quick_overview(request: QuickOverviewRequest):
         if text.strip():
             parts.append(f"{heading}:\n{text.strip()}")
     user_message = (
-        "Write the overview for this character from these details:\n\n"
+        "Character details -- shorthand fragments, retell them in flowing prose, "
+        "do not quote them verbatim:\n\n"
         + "\n\n".join(parts)
+        + "\n\nWrite the overview."
     )
 
     try:

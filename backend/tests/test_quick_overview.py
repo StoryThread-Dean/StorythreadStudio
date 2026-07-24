@@ -21,7 +21,7 @@ def test_prompt_grounds_and_limits_embellishment():
 def test_prompt_keeps_hidden_details_as_subtext():
     text = generate_quick_overview_prompt()
     assert "subtext only" in text
-    assert "NEVER state it" in text
+    assert "NEVER state the secret itself" in text
 
 
 def test_prompt_varies_angle_and_stays_compact():
@@ -30,6 +30,25 @@ def test_prompt_varies_angle_and_stays_compact():
     assert "80-150 words" in text
     # Output must be bare prose the frontend can drop into the field.
     assert "No preamble" in text
+
+
+def test_prompt_demands_retelling_around_a_through_line():
+    # The v1 prompt produced jumbled trait-stitching. The fix: inputs are
+    # declared shorthand to be RETOLD, the want is the through-line, and the
+    # hook / body / undercurrent shape is spelled out.
+    text = generate_quick_overview_prompt()
+    assert "RETELL" in text
+    assert "through-line is the character's WANT" in text
+    assert "HOOK" in text and "UNDERCURRENT" in text
+    assert "Jumbled trait-listing is failure" in text
+
+
+def test_prompt_includes_a_worked_example():
+    # Few-shot: one full example in the target register anchors the flow
+    # far better than rules alone.
+    text = generate_quick_overview_prompt()
+    assert "Maren Voss" in text
+    assert "match the flow" in text
 
 
 # ── The endpoint (hermetic: no network, no real settings) ────────────────────
