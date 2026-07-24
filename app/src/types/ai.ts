@@ -132,7 +132,10 @@ export interface GenerateFullSummaryPayload {
 // "check_consistency" = flag contradictions, overlaps, importance mismatches
 // "refine" = sharpen traits, interpret importance, summarize (replaces old
 //            refine_traits + interpret_profile + generate_summary)
-export type ProfileBehaviorMode = "chat" | "extract_traits" | "check_consistency" | "refine";
+// "interview" = guided character interview: the AI asks the questions, the
+// writer answers, and the AI organizes the answers into copy/paste profile
+// sections. Interviewer and organizer, never the inventor.
+export type ProfileBehaviorMode = "chat" | "extract_traits" | "check_consistency" | "refine" | "interview";
 
 export interface ProfileChatMessage {
   role: "user" | "assistant";

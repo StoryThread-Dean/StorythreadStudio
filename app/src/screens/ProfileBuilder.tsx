@@ -39,6 +39,11 @@ import type { ImportanceLevelHelp, SectionHelp } from "../data/profileHelp";
 import { formatProfileForAI } from "../utils/profileFormat";
 import { autoSizeTextarea } from "../utils/autoSizeTextarea";
 import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "../components/RightPanelResizer";
+// Character-creation helpers: personality-spine dropdowns (Enneagram +
+// archetype cheat sheets) and the side-character quick-build randomizer.
+// Both insert canned, editable trait blocks -- zero AI calls.
+import { SpinePickers } from "../components/profiles/SpinePickers";
+import { QuickBuildPanel } from "../components/profiles/QuickBuildPanel";
 
 const API_BASE = "http://localhost:8000";
 
@@ -394,9 +399,15 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   const [chatModelUsed, setChatModelUsed] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Behavior mode (4 modes: chat, extract_traits, check_consistency, refine)
+  // Behavior mode (5 modes: chat, refine, extract_traits, check_consistency, interview)
   const [behaviorMode, setBehaviorMode] = useState<ProfileBehaviorMode>("chat");
   const [behaviorPanelOpen, setBehaviorPanelOpen] = useState(false);
+
+  // Interview mode only: which sections the writer has checked for the next
+  // expansion round. Sent as a plain line appended to their message (the
+  // backend is stateless -- the checked list travels IN the chat text, so
+  // the writer sees exactly what the AI sees) and cleared after each send.
+  const [expandPicks, setExpandPicks] = useState<Set<string>>(new Set());
 
   // Importance Audit state -- AI reviews all trait blocks for importance mismatches
   const [auditFlags, setAuditFlags] = useState<{ trait: string; current_importance: string; suggested_importance: string; reason: string }[]>([]);
@@ -836,6 +847,35 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     setIsDirty(true);
   }
 
+  // Insert a PRE-FILLED trait block -- used by the spine dropdowns and the
+  // quick-build randomizer. Unlike addTraitBlock (which adds an empty block
+  // for hand-typing), this one arrives with canned text already in place;
+  // it is still a perfectly normal block the writer edits or deletes.
+  function insertPrefilledTraitBlock(
+    sectionKey: string, trait: string, description: string, importance: ImportanceLevel,
+  ) {
+    const newBlock: TraitBlock = {
+      id: uuidv4(),
+      trait,
+      description,
+      importance,
+    };
+    setProfile(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        sections: {
+          ...prev.sections,
+          [sectionKey]: {
+            ...prev.sections[sectionKey],
+            trait_blocks: [...prev.sections[sectionKey].trait_blocks, newBlock],
+          },
+        },
+      };
+    });
+    setIsDirty(true);
+  }
+
   function updateTraitBlock(sectionKey: string, blockId: string, updates: Partial<TraitBlock>) {
     setProfile(prev => {
       if (!prev) return prev;
@@ -1016,11 +1056,19 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   async function sendChatMessage() {
     if (!profile || !chatInput.trim() || chatLoading) return;
 
-    const userMessage: ProfileChatMessage = { role: "user", content: chatInput.trim() };
+    // Interview mode: the checked expansion sections travel inside the
+    // message text itself -- visible to the writer, no hidden state.
+    let messageText = chatInput.trim();
+    if (behaviorMode === "interview" && expandPicks.size > 0) {
+      messageText += `\n\nExpand these sections: ${[...expandPicks].join(", ")}`;
+    }
+
+    const userMessage: ProfileChatMessage = { role: "user", content: messageText };
     const newMessages = [...chatMessages, userMessage];
 
     setChatMessages(newMessages);
     setChatInput("");
+    setExpandPicks(new Set());
     setChatLoading(true);
     setChatError(null);
     setChatModelUsed(project.default_model || null);
@@ -1523,14 +1571,34 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 </div>
               )}
 
+              {/* Quick Build -- characters only. Roll canned traits for side/
+                  background characters; every click inserts an editable
+                  [present] trait block into the matching section. */}
+              {profile.type === "character" && (
+                <QuickBuildPanel
+                  onInsert={(sectionKey, trait, description) =>
+                    insertPrefilledTraitBlock(sectionKey, trait, description, "present")}
+                  onInsertRoleSummary={(trait, description) =>
+                    insertPrefilledTraitBlock("personality_traits", trait, description, "core")}
+                />
+              )}
+
               {/* Profile sections */}
               {sections.map(cfg => {
                 const section = profile.sections[cfg.key] ?? {
                   content: "", trait_blocks: [], ai_summary: "",
                 };
                 return (
+                  <div key={cfg.key}>
+                  {/* Personality spine -- characters only, sits directly above
+                      the Personality Traits section it inserts into. */}
+                  {profile.type === "character" && cfg.key === "personality_traits" && (
+                    <SpinePickers
+                      onInsert={(trait, description) =>
+                        insertPrefilledTraitBlock("personality_traits", trait, description, "core")}
+                    />
+                  )}
                   <ProfileSectionEditor
-                    key={cfg.key}
                     sectionKey={cfg.key}
                     heading={cfg.heading}
                     hasTraitBlocks={cfg.hasTraitBlocks}
@@ -1546,6 +1614,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     generatingField={generatingField}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
                   />
+                  </div>
                 );
               })}
 
@@ -1704,12 +1773,20 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 </p>
               </div>
               <div className="w-full rounded border border-border bg-bg-primary p-2.5 text-left">
-                <p className="mb-1 text-xs font-medium text-text-muted">Try asking:</p>
-                {[
-                  "How would AI use the core traits?",
-                  "What's missing from this profile?",
-                  "How does her voice trait affect dialogue?",
-                ].map(q => (
+                <p className="mb-1 text-xs font-medium text-text-muted">
+                  {behaviorMode === "interview" ? "Try starting with:" : "Try asking:"}
+                </p>
+                {(behaviorMode === "interview"
+                  ? [
+                      "Start the interview.",
+                      "Interview me about this character from scratch.",
+                    ]
+                  : [
+                      "How would AI use the core traits?",
+                      "What's missing from this profile?",
+                      "How does her voice trait affect dialogue?",
+                    ]
+                ).map(q => (
                   <button
                     key={q}
                     onClick={() => setChatInput(q)}
@@ -1785,8 +1862,44 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             setBehaviorPanelOpen(false);
             setChatMessages([]);
             setChatError(null);
+            setExpandPicks(new Set());
           }}
         />
+
+        {/* Interview mode: section-expansion checkboxes. Checked sections are
+            appended to the next message ("Expand these sections: ...") so the
+            AI knows which rounds of questions to run next. */}
+        {behaviorMode === "interview" && profile && (
+          <div className="border-t border-border px-3 py-2">
+            <p className="mb-1.5 text-[11px] text-faint">
+              Expand on next send:
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {sections.filter(c => c.heading !== "Overview").map(c => {
+                const checked = expandPicks.has(c.heading);
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setExpandPicks(prev => {
+                      const next = new Set(prev);
+                      if (next.has(c.heading)) next.delete(c.heading);
+                      else next.add(c.heading);
+                      return next;
+                    })}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                      checked
+                        ? "border-indigo-500 bg-indigo-950/40 text-indigo-200"
+                        : "border-border bg-bg-surface text-faint hover:border-indigo-500 hover:text-text-muted"
+                    }`}
+                  >
+                    {checked ? "☑" : "☐"} {c.heading}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Chat input */}
         <div className="border-t border-border p-3">
@@ -2360,6 +2473,11 @@ const BEHAVIOR_MODES: { id: ProfileBehaviorMode; label: string; description: str
     id: "check_consistency",
     label: "Check Consistency",
     description: "Flags contradictions, overlaps, and importance level mismatches.",
+  },
+  {
+    id: "interview",
+    label: "Interview Me",
+    description: "The AI interviews YOU about this character, then organizes your answers into copy/paste profile sections.",
   },
 ];
 

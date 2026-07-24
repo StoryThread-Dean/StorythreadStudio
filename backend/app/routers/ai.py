@@ -1452,7 +1452,9 @@ async def profile_chat(request: ProfileChatRequest):
     else:
         messages = conversation
 
-    # Pick temperature based on behavior mode
+    # Pick temperature based on behavior mode. "interview" deliberately takes
+    # the default profile temperature (0.5): it asks focused questions and
+    # organizes the writer's answers -- it should not get creative.
     if request.behavior_mode in ("extract_traits", "check_consistency"):
         temp = TEMPERATURE_DEFAULTS["critique"]
     elif request.behavior_mode == "guide":
