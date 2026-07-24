@@ -10,13 +10,7 @@ For shipped releases see [`../CHANGELOG.md`](../CHANGELOG.md).
 
 Committed work for the near-term roadmap.
 
-### NanoGPT provider
-
-First slice of "Alternative AI providers" (see Proposed below and [`research-multi-provider.md`](research-multi-provider.md)); scoped for the next implementation session. NanoGPT is OpenAI-compatible at `https://nano-gpt.com/api/v1` — the same call shape as the existing OpenRouter client with a different base URL and key, including model listing. Work: a `provider` field in settings, a provider-parameterized client config in the backend (`openrouter.py` generalized), NanoGPT key entry + model list in Settings, and the content-mode/allowlist filters made provider-aware. Streaming is NOT a prerequisite.
-
-### Prompt caching toggle
-
-Wire OpenRouter's cache headers for static context (profile chips, lore, style guide) so repeated requests in a session do not re-bill the same tokens. Settings toggle, default on.
+*(Nothing currently scheduled -- the NanoGPT provider and the prompt caching toggle shipped in v1.0.10. Next candidates live under Proposed below; "Local model providers" is the natural successor since the provider plumbing it needs now exists.)*
 
 ---
 
@@ -26,7 +20,7 @@ Worth building, prioritization not yet committed.
 
 ### Local model providers (Ollama / LM Studio / llama.cpp)
 
-Second slice of "Alternative AI providers" — NanoGPT (Scheduled above) ships first and builds the provider plumbing this reuses. Research complete: see [`research-multi-provider.md`](research-multi-provider.md). Key facts locked down so far:
+Second slice of "Alternative AI providers" — NanoGPT shipped (v1.0.10) and built the provider plumbing this reuses: adding a runtime is one backend `ProviderConfig` (`backend/app/ai/providers.py`) plus one frontend panel entry (`app/src/components/settings/providerMeta.ts`), with `requires_api_key=False` already supported end to end. Research complete: see [`research-multi-provider.md`](research-multi-provider.md). Key facts locked down so far:
 
 - All local runtimes are OpenAI-compatible for chat, with **no auth header** (Ollama `:11434`, LM Studio `:1234`, llama.cpp `:8080`, plus a custom-URL option).
 - **Ollama lists models via its native `GET /api/tags`, not `/v1/models`** — the one runtime-specific code path. Strip the `:latest` suffix for display; if the user overrides the base URL, derive the tags URL by stripping `/v1`.

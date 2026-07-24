@@ -2,7 +2,7 @@
 
 ## High-level shape
 
-Storythread Studio is a three-layer local application. Nothing leaves the user's machine except AI requests, which go directly from the local backend to OpenRouter.
+Storythread Studio is a three-layer local application. Nothing leaves the user's machine except AI requests, which go directly from the local backend to the selected AI provider (OpenRouter by default, or NanoGPT).
 
 ```
 [ Tauri window ]
@@ -28,7 +28,9 @@ Renders the entire UI. Communicates with the backend over `fetch` to `http://127
 
 ### Backend — Python + FastAPI (managed by uv)
 
-A local-only HTTP server bound to `127.0.0.1:8000`. Handles file I/O, parses Markdown profiles into structured data, builds AI prompts, calls OpenRouter, runs the em-dash sanitizer over every response, and returns results to the frontend. In packaged builds the backend is frozen into a single `.exe` via PyInstaller and bundled as a Tauri sidecar.
+A local-only HTTP server bound to `127.0.0.1:8000`. Handles file I/O, parses Markdown profiles into structured data, builds AI prompts, calls the active AI provider, runs the em-dash sanitizer over every response, and returns results to the frontend. In packaged builds the backend is frozen into a single `.exe` via PyInstaller and bundled as a Tauri sidecar.
+
+**AI provider dispatch** (v1.0.10): `backend/app/ai/providers.py` holds a frozen `ProviderConfig` per connection (base URL, key storage field, capability flags). `backend/app/ai/openrouter.py` -- historically named for the first provider -- is a generic OpenAI-compatible client parameterized by that config, and `_resolve_model_and_key()` in `routers/ai.py` is the single seam that resolves `(provider, api_key, model_id)` for all AI endpoints, so switching providers in Settings reroutes every AI feature at once. Adding a provider is one `ProviderConfig` plus one panel entry in `app/src/components/settings/providerMeta.ts`. API keys never reach the WebView; each provider's key is stored (and masked) independently in global settings. Prompt caching (OpenRouter only, gated by `supports_cache_control`) marks the system prompt with an Anthropic-style `cache_control` block when the setting is on.
 
 ## Dual storage model
 

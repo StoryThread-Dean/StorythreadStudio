@@ -147,6 +147,8 @@ The writer attaches profiles, summaries, and notes as chips. Each chip has inclu
 
 Defaults are Summary + Traits on. The Profile Builder chat uses a more permissive default that includes the entire profile.
 
+Attached materials **persist for the whole conversation** (v1.0.10): the backend echoes the materials block it sent and the frontend stores it in the chat history as a hidden message, so profiles and the included chapter genuinely stay in front of the model on every later turn (they are sent over the wire once, then ride in history). The Canon/Reference stance stays active for as long as chips are attached. A VOICE FIDELITY rule in the base prompt keeps `[core]` voice and mannerism traits constant across turns and modes -- vary the expression, never drop the trait. The persisted chapter text is a snapshot from when it was attached; **New ask** refreshes it.
+
 ### Multi-character handling
 
 When multiple character chips are attached, each profile's body is wrapped with explicit `=== BEGIN <TYPE>: <NAME> ===` / `=== END ===` delimiters in the prompt so the AI does not conflate traits across characters.
@@ -195,8 +197,9 @@ Two export modes, both run from `POST /api/export/full-manuscript` and `POST /ap
 
 A modal accessible from the sidebar. Sections:
 
-- **API key** — OpenRouter key with masking and a Test Connection button
-- **Default model** — model picker populated from OpenRouter's catalog with a cost-tier slider
+- **AI Provider** — selector cards, one per connection, each with its own dedicated panel: tailored "How to connect" steps, its own masked API key, and a Test Connection button. Shipped connections: **OpenRouter** (recommended default; hosts the Prompt Caching toggle and the cost-tier slider) and **NanoGPT** (pay-per-prompt, many unmoderated models; no published pricing, so the cost-tier filter is hidden). Both keys stay stored — switching never loses one, and the switch only takes effect on Save, which reloads the model list from the new provider and warns if the saved default model isn't in its catalog. Panels are registry-driven (`providerMeta.ts` + `backend/app/ai/providers.py`), so a future connection (Ollama, LM Studio, llama.cpp, custom URL) is one entry on each side.
+- **Prompt Caching** (inside the OpenRouter panel, default on) — marks the unchanged part of each request (instructions + story context) as cacheable so supported models charge less and respond faster on repeats. Never sent to other providers.
+- **Default model** — model picker populated from the active provider's catalog, with a cost-tier slider on providers that publish pricing
 - **Content mode** — project-level default (`general`, `mature`, `explicit`) overridable per request
 - **Model Routing** — allowlist, blocklist, and per-model content-mode declarations enforced at request time
 - **Theme** — light / dark
