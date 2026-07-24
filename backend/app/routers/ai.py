@@ -734,6 +734,18 @@ def _resolve_model_and_key(model_id_override: str | None) -> tuple[ProviderConfi
     return provider, api_key, model_id
 
 
+def _prompt_cache_enabled(provider: ProviderConfig) -> bool:
+    """Should this request mark its system prompt as cacheable?
+
+    Two gates: the provider must understand cache_control (OpenRouter only
+    today -- see ProviderConfig.supports_cache_control) AND the writer's
+    Prompt Caching setting must be on (default on). Kept as a helper rather
+    than read inside run_chat/run_completion so hermetic tests can call the
+    real client functions without touching the developer's settings file.
+    """
+    return provider.supports_cache_control and bool(load_settings().get("prompt_caching", True))
+
+
 def _extract_text_field(result: dict, field_name: str) -> str:
     """
     Extract a specific text field from the model response dict.
@@ -804,6 +816,7 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
 
     try:
         result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["critique"])
     except httpx.HTTPStatusError as e:
@@ -853,6 +866,7 @@ async def trim_trait(request: TrimTraitRequest):
 
     try:
         result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["critique"])
     except httpx.HTTPStatusError as e:
@@ -894,6 +908,7 @@ async def audit_importance(request: AuditImportanceRequest):
 
     try:
         result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["critique"])
     except httpx.HTTPStatusError as e:
@@ -939,6 +954,7 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
 
     try:
         result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["profile"])
     except httpx.HTTPStatusError as e:
@@ -997,6 +1013,7 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
 
     try:
         result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["profile"])
     except httpx.HTTPStatusError as e:
@@ -1096,6 +1113,7 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
         # the creative "generation" temperature.
         body = await run_chat(
             provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -1216,6 +1234,7 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
         # creative continuation and would let the model drift.
         body = await run_chat(
             provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -1239,6 +1258,7 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
         try:
             title_reply = await run_chat(
                 provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
                 model_id      = model_id,
                 system_prompt = generate_scene_title_prompt(),
@@ -1335,6 +1355,7 @@ async def suggest_scene_breaks(request: SuggestSceneBreaksRequest):
         # work, not creative generation -- we want consistency, not drift.
         raw = await run_chat(
             provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -1438,6 +1459,7 @@ async def profile_chat(request: ProfileChatRequest):
 
     try:
         reply = await run_chat(provider=provider, api_key=api_key, model_id=model_id,
+                                   cache_prompts=_prompt_cache_enabled(provider),
                                system_prompt=system_prompt, messages=messages,
                                temperature=temp)
     except httpx.HTTPStatusError as e:
@@ -1720,11 +1742,13 @@ async def editor_chat(request: EditorChatRequest):
         if request.include_reasoning:
             # Tuple return shape -- see run_chat's include_reasoning docstring.
             reply, reasoning = await run_chat(provider=provider, api_key=api_key, model_id=model_id,
+                                   cache_prompts=_prompt_cache_enabled(provider),
                                               system_prompt=system_prompt, messages=messages,
                                               temperature=temp, sanitize_mode=sanitize_mode,
                                               include_reasoning=True)
         else:
             reply = await run_chat(provider=provider, api_key=api_key, model_id=model_id,
+                                   cache_prompts=_prompt_cache_enabled(provider),
                                    system_prompt=system_prompt, messages=messages,
                                    temperature=temp, sanitize_mode=sanitize_mode)
             reasoning = None
@@ -1923,6 +1947,7 @@ async def editor_pass(request: EditorPassRequest):
     try:
         raw = await run_chat(
             provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -2019,6 +2044,7 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
     try:
         raw = await run_chat(
             provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,

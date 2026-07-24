@@ -56,6 +56,12 @@ DEFAULT_SETTINGS: dict = {
     # Same handling rules: never sent to the frontend unmasked, empty = unset.
     "nanogpt_api_key":    "",
     "default_model":      "openai/gpt-4o-mini",
+    # prompt_caching: when True (default), OpenRouter requests mark the
+    # system prompt as cacheable so supported models (Anthropic-family)
+    # charge a fraction for the unchanged part of repeat requests. OpenAI
+    # models cache automatically either way; providers that don't understand
+    # the marker ignore it. Only applies to OpenRouter -- see ai/providers.py.
+    "prompt_caching":     True,
     "content_mode":       "general",
     # cost_tier: which price tier to filter models by in the Settings picker.
     # Values: "free" | "budget" | "standard" | "premium"

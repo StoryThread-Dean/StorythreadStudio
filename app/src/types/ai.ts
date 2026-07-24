@@ -12,6 +12,9 @@ export interface AppSettings {
   openrouter_api_key_set: boolean;
   nanogpt_api_key:        string;    // Masked, same rules as the OpenRouter key
   nanogpt_api_key_set:    boolean;
+  // Prompt caching (OpenRouter only): reuse the unchanged request prefix so
+  // supported models bill less on repeat requests. Default on.
+  prompt_caching:         boolean;
   default_model:          string;
   content_mode:           string;    // "general" | "mature" | "explicit"
   cost_tier:              string;    // "free" | "budget" | "standard" | "premium"
@@ -38,6 +41,7 @@ export interface UpdateSettingsPayload {
   openrouter_api_key?: string;
   // Non-empty replaces the stored NanoGPT key; empty string clears it.
   nanogpt_api_key?:    string;
+  prompt_caching?:     boolean;
   default_model?:      string;
   content_mode?:       string;
   cost_tier?:          string;

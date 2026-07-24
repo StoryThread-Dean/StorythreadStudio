@@ -39,6 +39,28 @@ REQUEST_TIMEOUT = 180.0
 log = logging.getLogger(__name__)
 
 
+def _system_message(system_prompt: str, cache_prompts: bool) -> dict:
+    """Build the system message, optionally marked for prompt caching.
+
+    Anthropic-style prompt caching via OpenRouter: the system content becomes
+    a structured content block carrying cache_control, telling the model
+    provider "this prefix repeats -- store it and charge a fraction next
+    time". The system prompt is the right (and only) cache target here: it
+    already contains the static story context, while the user messages mix
+    in per-request text that would never re-match.
+
+    Providers that don't support cache_control ignore it; OpenAI models
+    auto-cache without it. Prompts under a model's minimum cacheable size
+    (1024-4096 tokens depending on model) simply don't cache -- harmless,
+    so no size threshold is applied here.
+    """
+    if not cache_prompts:
+        return {"role": "system", "content": system_prompt}
+    return {"role": "system", "content": [
+        {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
+    ]}
+
+
 def _request_headers(api_key: str, provider: ProviderConfig) -> dict[str, str]:
     """Build the HTTP headers for one provider.
 
@@ -206,9 +228,15 @@ async def run_completion(
     user_message: str,
     temperature: float | None = None,
     provider: ProviderConfig = OPENROUTER,
+    cache_prompts: bool = False,
 ) -> dict:
     """
     Send a chat completion request to the provider and return the parsed result.
+
+    `cache_prompts` marks the system prompt as cacheable (see _system_message).
+    Callers gate it on the user's Prompt Caching setting AND the provider's
+    support flag; this function double-checks the flag so a stray True can
+    never send cache_control to a provider that might reject it.
 
     The response is expected to be JSON (our system prompts request it).
     If the model doesn't return valid JSON, we wrap the raw text in a
@@ -229,7 +257,7 @@ async def run_completion(
     payload = {
         "model": model_id,
         "messages": [
-            {"role": "system",  "content": system_prompt},
+            _system_message(system_prompt, cache_prompts and provider.supports_cache_control),
             {"role": "user",    "content": user_message},
         ],
         # Ask the model to respond in JSON format where supported.
@@ -322,6 +350,7 @@ async def run_chat(
     sanitize_mode: str = "chat",
     include_reasoning: bool = False,
     provider: ProviderConfig = OPENROUTER,
+    cache_prompts: bool = False,
 ) -> str | tuple[str, str | None]:
     """
     Send a multi-turn chat completion request to the provider and return
@@ -356,7 +385,9 @@ async def run_chat(
     payload = {
         "model": model_id,
         "messages": [
-            {"role": "system", "content": system_prompt},
+            # Optionally cache-marked -- see _system_message. Gated on the
+            # provider's support flag so only OpenRouter ever sees it.
+            _system_message(system_prompt, cache_prompts and provider.supports_cache_control),
             *messages,
         ],
     }

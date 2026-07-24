@@ -1,9 +1,9 @@
 # tests/test_settings_routes.py -- Settings API provider fields
 # ===============================================================
 # HTTP-level tests for the new provider-related settings fields:
-# ai_provider (with silent-ignore of unknown values) and the NanoGPT key
-# (set / mask / clear -- identical rules to the OpenRouter key). The
-# prompt_caching toggle round-trip is added with the caching feature.
+# ai_provider (with silent-ignore of unknown values), the NanoGPT key
+# (set / mask / clear -- identical rules to the OpenRouter key), and the
+# prompt_caching toggle round-trip.
 #
 # Each test redirects settings_store's file paths into a tmp sandbox so
 # the developer's real ~/.storythread/settings.json is never touched
@@ -31,6 +31,16 @@ def test_get_settings_defaults_to_openrouter(client):
     assert data["ai_provider"] == "openrouter"
     assert data["nanogpt_api_key"] == ""
     assert data["nanogpt_api_key_set"] is False
+    # Prompt caching defaults ON (roadmap decision).
+    assert data["prompt_caching"] is True
+
+
+def test_prompt_caching_toggle_round_trip(client):
+    resp = client.put("/api/settings", json={"prompt_caching": False})
+    assert resp.json()["prompt_caching"] is False
+    assert client.get("/api/settings").json()["prompt_caching"] is False
+    resp = client.put("/api/settings", json={"prompt_caching": True})
+    assert resp.json()["prompt_caching"] is True
 
 
 def test_switch_provider_round_trip(client):

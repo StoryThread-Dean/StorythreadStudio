@@ -31,6 +31,9 @@ class SettingsResponse(BaseModel):
     openrouter_api_key_set: bool       # True if a key has been saved
     nanogpt_api_key:        str        # Masked, same rules as the OpenRouter key
     nanogpt_api_key_set:    bool
+    # Prompt caching (OpenRouter only): mark the static part of each request
+    # as cacheable so repeat requests re-bill a fraction for it. Default on.
+    prompt_caching:         bool
     default_model:          str
     content_mode:           str
     cost_tier:              str
@@ -69,6 +72,7 @@ class UpdateSettingsRequest(BaseModel):
     # NanoGPT key: non-empty replaces, empty string clears -- identical
     # handling to the OpenRouter key.
     nanogpt_api_key:     str | None                   = None
+    prompt_caching:      bool | None                  = None
     default_model:       str | None                   = None
     content_mode:        str | None                   = None
     cost_tier:           str | None                   = None
@@ -113,6 +117,7 @@ async def get_settings():
         openrouter_api_key_set = bool(key),
         nanogpt_api_key        = _mask_key(nano_key),
         nanogpt_api_key_set    = bool(nano_key),
+        prompt_caching         = bool(settings.get("prompt_caching", True)),
         default_model          = settings.get("default_model", ""),
         content_mode           = settings.get("content_mode", "general"),
         cost_tier              = settings.get("cost_tier", "standard"),
@@ -148,6 +153,8 @@ async def update_settings(request: UpdateSettingsRequest):
         settings["openrouter_api_key"] = request.openrouter_api_key.strip()
     if request.nanogpt_api_key is not None:
         settings["nanogpt_api_key"] = request.nanogpt_api_key.strip()
+    if request.prompt_caching is not None:
+        settings["prompt_caching"] = request.prompt_caching
     if request.default_model is not None:
         settings["default_model"] = request.default_model
     if request.content_mode is not None:
@@ -205,6 +212,7 @@ async def update_settings(request: UpdateSettingsRequest):
         openrouter_api_key_set = bool(key),
         nanogpt_api_key        = _mask_key(nano_key),
         nanogpt_api_key_set    = bool(nano_key),
+        prompt_caching         = bool(settings.get("prompt_caching", True)),
         default_model          = settings.get("default_model", ""),
         content_mode           = settings.get("content_mode", "general"),
         cost_tier              = settings.get("cost_tier", "standard"),

@@ -63,6 +63,9 @@ export function Settings({ onClose }: SettingsProps) {
   // Tier + filter controls
   const [costTier, setCostTier]           = useState<TierValue>("standard");
   const [textOnlyFilter, setTextOnlyFilter] = useState(true);
+  // Prompt caching (OpenRouter only): reuse the unchanged part of each
+  // request so supported models bill less on repeats. Default on.
+  const [promptCaching, setPromptCaching] = useState(true);
   const [starredModels, setStarredModels] = useState<string[]>([]);
 
   // Content mode
@@ -179,6 +182,7 @@ export function Settings({ onClose }: SettingsProps) {
         setSelectedModel(data.default_model);
         setCostTier((data.cost_tier as TierValue) ?? "standard");
         setTextOnlyFilter(data.text_only_filter ?? true);
+        setPromptCaching(data.prompt_caching ?? true);
         setStarredModels(data.starred_models ?? []);
         setContentMode(data.content_mode ?? "general");
 
@@ -272,6 +276,7 @@ export function Settings({ onClose }: SettingsProps) {
         default_model:        selectedModel,
         cost_tier:            costTier,
         text_only_filter:     textOnlyFilter,
+        prompt_caching:       promptCaching,
         starred_models:       starredModels,
         content_mode:         contentMode,
         model_allowlist:      parsedAllowlist,
@@ -484,7 +489,36 @@ export function Settings({ onClose }: SettingsProps) {
                     saving={saving}
                     onTest={handleTest}
                     testResult={testResult}
-                  />
+                  >
+                    {/* Prompt Caching lives INSIDE the OpenRouter panel --
+                        it's a property of this connection, not a global
+                        preference (meta.supportsCaching gates it). */}
+                    {providerMetaById(selectedProvider).supportsCaching && (
+                      <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+                        <div>
+                          <p className="text-xs font-medium text-text-primary">Prompt Caching</p>
+                          <p className="text-xs text-faint">
+                            Reuse the unchanged part of each request (instructions and
+                            story context) so supported models charge less and respond
+                            faster on repeat requests.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setPromptCaching(v => !v)}
+                          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                            promptCaching ? "bg-indigo-600" : "bg-border"
+                          }`}
+                          title={promptCaching ? "Prompt caching on" : "Prompt caching off"}
+                        >
+                          <span
+                            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                              promptCaching ? "translate-x-4" : "translate-x-0.5"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </ProviderPanel>
                 </div>
 
                 {/* Cost Tier Slider -- hidden for providers without pricing
