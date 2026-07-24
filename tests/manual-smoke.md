@@ -234,6 +234,38 @@ error, not a bare HTTP code.
 
 ---
 
+## 9. Character creation tools (spine dropdowns, Quick Build, Interview Me)
+
+**Touches:** the personality-spine dropdowns, the Quick Build randomizer +
+NSFW tier toggles, trait-block insertion + save round-trip, and the
+Interview Me chat mode (needs a real API key).
+
+Steps:
+1. Create a throwaway character. Above Personality Traits, pick an
+   Enneagram type -- a [core] trait block appears pre-filled; pick a Story
+   Role -- a second block stacks. Both fully editable; the dropdowns snap
+   back to blank.
+2. Open Quick Build. Reroll a row, click an option -- it lands in the
+   matching section as a [present] block. Pick a Story Role and confirm
+   rolls lean toward it.
+3. NSFW semantics: Explicit checkbox starts greyed out. Toggle NSFW on --
+   options go red and adult, Explicit becomes clickable. Check Explicit --
+   options become fill-in-the-blank. Toggle NSFW off -- back to normal AND
+   Explicit unchecks itself.
+4. Save (Ctrl+S), reopen the profile -- all inserted blocks survived the
+   markdown round-trip with correct importance levels.
+5. Switch the chat to Interview Me, send "Start the interview." Expect
+   5-8 numbered basics, NOT invented character facts. Answer briefly;
+   expect a full copy/paste skeleton. Check two section chips above the
+   input, send -- expect 2-4 questions per checked section, ending in the
+   full updated block.
+
+Expected: no em dashes anywhere in inserted text; the AI never invents
+character details unlabeled; every interview round ends with the full
+copy/paste block.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

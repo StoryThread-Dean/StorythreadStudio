@@ -193,6 +193,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_settings_routes.py` -- ai_provider / NanoGPT key / prompt_caching over the Settings API
   - `test_prompt_caching.py` -- cache_control payload shapes, provider gating, NanoGPT headers
   - `test_editor_chat_materials_flow.py` -- materials echo + placement, stance persistence, temperature split
+  - `test_profile_chat_prompts.py` -- profile-chat prompt builder incl. Interview mode contract (interviewer-not-inventor, triggers/origins, full-block rounds)
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -202,6 +203,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/utils/buildEditorChatPayload.test.ts` -- Writing Companion payload builder + history persistence (appendTurnToHistory)
   - `src/utils/modelFiltering.test.ts` -- model list filtering + recommended models (provider-aware)
   - `src/components/settings/ProviderPanel.test.tsx` -- per-provider Settings panels + PROVIDER_META registry
+  - `src/data/characterSpines.test.ts` -- Enneagram/archetype canned-content contracts (fiction-first, fill-in hooks, no em dashes)
+  - `src/data/traitPools.test.ts` -- trait randomizer: tier replacement semantics, archetype flavor bias, deterministic rolls
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands
