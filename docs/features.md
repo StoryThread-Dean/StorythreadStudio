@@ -70,13 +70,22 @@ Replace an older "influence" scale. Importance controls when (and whether) a tra
 
 Each trait block shows a word count gauge tuned to its importance level. Higher-importance traits tolerate more words because they need detail to be useful in prompts. Hidden traits have no gauge.
 
+### Two character templates (Main vs Side/Background)
+
+Character creation offers a template choice, stored as `character_kind` in frontmatter (absent = main, so pre-v1.0.10 files are untouched):
+
+- **Main** — the full trait-block template: importance levels, word gauges, the Importance Audit.
+- **Side / Background** — every section is a single free-text field; Quick Build appends lines into them. Trait-section headings are shared between templates, and the parser round-trips plain paragraphs under a trait heading instead of dropping them.
+
+The Profile Builder's character list splits into collapsible **Main** and **Side / Background** groups; the chat attachment picker mirrors the same grouping.
+
 ### Personality spine dropdowns (characters)
 
-Two cheat-sheet dropdowns above the Personality Traits section, each with per-option "What's this?" help: **Personality (Enneagram)** — 9 types, each summary carrying the type's core desire, core fear, and stress behavior — and **Story Role (Archetype)** — the 12 Jungian archetypes plus Comic Relief, Confidant, and Rival. Picking one inserts a fiction-first starting paragraph (behavior + speech pattern + how they crack under pressure, ending in a trigger/origin fill-in hook) as an editable `[core]` trait block. Picks stack: role is the character's job in the story, Enneagram is the engine underneath. All canned text shipped in code — writer-initiated insertion, zero AI calls.
+Two cheat-sheet dropdowns in the profile header, under Status/Tags, each with per-option "What's this?" help: **Personality (Enneagram)** — 9 types, each summary carrying the type's core desire, core fear, and stress behavior — and **Story Role (Archetype)** — the 12 Jungian archetypes plus Comic Relief, Confidant, and Rival. Picking one inserts a fiction-first starting paragraph (behavior + speech pattern + how they crack under pressure, ending in a trigger/origin fill-in hook) into Personality Traits — a `[core]` trait block on Main, appended text on Side — with a confirmation note showing where it went. A Story Role pick also fills the Role field and merges its key-aspect Tags; the Role field additionally has a quick-pick list grouped Popular / Less Common / Niche. All canned text shipped in code — writer-initiated insertion, zero AI calls.
 
-### Quick Build (side and background characters)
+### Quick Build (side/background profiles)
 
-A collapsed panel at the top of character profiles. Pick a Story Role (weights the rolls), then reroll curated options per section — Physical, Mannerism, Voice, Want/Motivation — and click any option to insert it as an editable `[present]` trait block in the matching section. An opt-in **NSFW toggle** (red, per character, never automatic) swaps the pools: off = normal options with the Explicit box greyed out; on = NSFW pools replace normal; the Explicit checkbox swaps in a third fill-in-the-blank tier ("secretly wants to be ____") the writer completes.
+Opens at the top of Side/Background character profiles. Pick a Story Role (weights the rolls), then reroll curated sentence-length options per section — Physical, Mannerism, Voice, Want/Motivation — and click any option to append it to the matching section as a new line. Pools run 50+ options per section and rerolls page through the whole pool before anything repeats. An opt-in **NSFW toggle** (red, per character, never automatic) swaps the pools: off = normal options with the Explicit box greyed out; on = NSFW pools replace normal; the Explicit checkbox swaps in a third fill-in-the-blank tier ("secretly wants to be ____") the writer completes.
 
 ### Profile-level AI tools
 

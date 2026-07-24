@@ -3573,7 +3573,9 @@ interface PendingProfile {
 function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChips, onAdd, onClose, treatAsCanon, onTreatAsCanonChange }: ChipPickerProps) {
   const [loading, setLoading] = useState(false);
   const [profileType, setProfileType] = useState("character");
-  const [profiles, setProfiles] = useState<{ filename: string; name: string }[]>([]);
+  // character_kind rides along for characters so the picker can mirror the
+  // Profile Builder's Main vs Side/Background grouping.
+  const [profiles, setProfiles] = useState<{ filename: string; name: string; character_kind?: string }[]>([]);
   const [adding, setAdding] = useState<string | null>(null);
 
   // "suggested" chips: auto-fetched character profiles shown at the top as ghost chips
@@ -4147,29 +4149,47 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
         </p>
       ) : (
         <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
-          {profiles.map(p => {
-            const chipType = source === "series" ? `series_${profileType}` : profileType;
-            const alreadyAdded = existingChips.some(c => c.name === p.name && c.type === chipType);
+          {(() => {
+            const renderProfileRow = (p: { filename: string; name: string }) => {
+              const chipType = source === "series" ? `series_${profileType}` : profileType;
+              const alreadyAdded = existingChips.some(c => c.name === p.name && c.type === chipType);
+              return (
+                <button
+                  key={p.filename}
+                  onClick={() => !alreadyAdded && pickProfile(p.filename, p.name)}
+                  disabled={alreadyAdded || adding === p.filename}
+                  className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
+                    alreadyAdded
+                      ? "text-faint"
+                      : "text-text-primary hover:bg-indigo-600/20"
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full border ${typeColor}`} />
+                  {adding === p.filename
+                    ? "Adding..."
+                    : alreadyAdded
+                    ? <><span className="opacity-50">{p.name}</span><span className="ml-auto text-emerald-600">✓</span></>
+                    : p.name}
+                </button>
+              );
+            };
+
+            // Characters mirror the Profile Builder's Main vs Side/Background
+            // split so the writer attaches from the same mental groups. Other
+            // profile types stay flat.
+            if (profileType !== "character") return profiles.map(renderProfileRow);
+            const mains = profiles.filter(p => (p.character_kind ?? "main") !== "side");
+            const sides = profiles.filter(p => p.character_kind === "side");
+            if (sides.length === 0) return profiles.map(renderProfileRow);
             return (
-              <button
-                key={p.filename}
-                onClick={() => !alreadyAdded && pickProfile(p.filename, p.name)}
-                disabled={alreadyAdded || adding === p.filename}
-                className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
-                  alreadyAdded
-                    ? "text-faint"
-                    : "text-text-primary hover:bg-indigo-600/20"
-                }`}
-              >
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full border ${typeColor}`} />
-                {adding === p.filename
-                  ? "Adding..."
-                  : alreadyAdded
-                  ? <><span className="opacity-50">{p.name}</span><span className="ml-auto text-emerald-600">✓</span></>
-                  : p.name}
-              </button>
+              <>
+                <p className="px-2 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-faint">Main</p>
+                {mains.map(renderProfileRow)}
+                <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">Side / Background</p>
+                {sides.map(renderProfileRow)}
+              </>
             );
-          })}
+          })()}
         </div>
       )}
       </>

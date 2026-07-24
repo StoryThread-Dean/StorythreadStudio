@@ -22,11 +22,29 @@ function seededRng(): () => number {
 }
 
 describe("pool contents", () => {
-  it("every section has all three tiers, well stocked", () => {
+  it("every section has all three tiers, deeply stocked (5x expansion)", () => {
     for (const s of SECTIONS) {
-      expect(TRAIT_POOLS[s].normal.length).toBeGreaterThanOrEqual(10);
-      expect(TRAIT_POOLS[s].nsfw.length).toBeGreaterThanOrEqual(6);
-      expect(TRAIT_POOLS[s].explicit.length).toBeGreaterThanOrEqual(4);
+      expect(TRAIT_POOLS[s].normal.length).toBeGreaterThanOrEqual(50);
+      expect(TRAIT_POOLS[s].nsfw.length).toBeGreaterThanOrEqual(18);
+      expect(TRAIT_POOLS[s].explicit.length).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it("entries carry real texture, not fragments", () => {
+    // The v1 pools read too short -- lock in sentence-length entries.
+    for (const s of SECTIONS) {
+      for (const option of TRAIT_POOLS[s].normal) {
+        expect(option.split(/\s+/).length).toBeGreaterThanOrEqual(8);
+      }
+    }
+  });
+
+  it("no duplicate options within any tier", () => {
+    for (const s of SECTIONS) {
+      for (const tier of ["normal", "nsfw", "explicit"] as const) {
+        const list = TRAIT_POOLS[s][tier];
+        expect(new Set(list).size).toBe(list.length);
+      }
     }
   });
 
@@ -94,6 +112,30 @@ describe("rollTraitOptions -- archetype flavor", () => {
 
   it("unknown archetype ids fall back to the plain pool", () => {
     const rolled = rollTraitOptions("voice", 4, { archetypeId: "not-a-role" }, seededRng());
+    for (const o of rolled) expect(TRAIT_POOLS.voice.normal).toContain(o);
+  });
+});
+
+describe("rollTraitOptions -- no-repeat dealing", () => {
+  it("never re-deals excluded options while the pool has enough left", () => {
+    const seen = new Set<string>();
+    // Page through most of the pool: each roll must be repeat-free.
+    const poolSize = TRAIT_POOLS.want.normal.length;
+    const rounds = Math.floor((poolSize - 4) / 4);
+    for (let round = 0; round < rounds; round++) {
+      const rolled = rollTraitOptions("want", 4, { exclude: seen }, seededRng());
+      for (const o of rolled) {
+        expect(seen.has(o)).toBe(false);
+        seen.add(o);
+      }
+    }
+  });
+
+  it("resets the cycle when exclusions leave too little to deal", () => {
+    // Exclude everything: the pool has cycled, so the full pool is back.
+    const everything = new Set(TRAIT_POOLS.voice.normal);
+    const rolled = rollTraitOptions("voice", 4, { exclude: everything }, seededRng());
+    expect(rolled).toHaveLength(4);
     for (const o of rolled) expect(TRAIT_POOLS.voice.normal).toContain(o);
   });
 });

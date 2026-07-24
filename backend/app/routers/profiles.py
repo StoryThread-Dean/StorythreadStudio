@@ -152,6 +152,10 @@ class ProfileListItem(BaseModel):
     type: str
     role: str = ""
     status: str = ""
+    # Characters only: "main" (full trait-block template) or "side"
+    # (simplified one-field-per-section template). Non-characters keep the
+    # default and the frontend ignores it.
+    character_kind: str = "main"
 
 
 class Profile(BaseModel):
@@ -167,6 +171,17 @@ class Profile(BaseModel):
     full_ai_summary: str = ""
     created_at: str
     updated_at: str
+    # Characters only -- which template this profile uses. "main" = the full
+    # trait-block editor; "side" = the simplified side/background template
+    # where every section is a single free-text field. Older files have no
+    # character_kind in frontmatter and parse as "main".
+    character_kind: str = "main"
+
+
+# The two character templates. Kept tiny on purpose -- "background" was
+# considered and deliberately condensed into "side" (a third template added
+# complexity without adding capability).
+VALID_CHARACTER_KINDS = {"main", "side"}
 
 
 class CreateProfileRequest(BaseModel):
@@ -174,6 +189,8 @@ class CreateProfileRequest(BaseModel):
     type: str         # "character" | "relationship" | "location" | "lore"
     name: str
     role: str = ""
+    # Characters only: which template to start from (see Profile.character_kind).
+    character_kind: str = "main"
 
 
 class SaveProfileRequest(BaseModel):
@@ -445,9 +462,17 @@ def _parse_profile_markdown(raw: str, filename: str, profile_type: str) -> Profi
         main_content, ai_summary = _split_ai_summary(raw_section)
 
         if cfg.has_trait_blocks:
+            # Trait sections hold EITHER a YAML trait list (main-character
+            # template) OR plain paragraphs (side-character template). When
+            # the body doesn't parse as a trait list, keep it as content
+            # instead of dropping it -- this is what lets the simplified
+            # side template round-trip through the same section headings,
+            # and it also stops malformed legacy YAML from silently
+            # vanishing on load.
+            blocks = _parse_trait_blocks(main_content)
             sections[cfg.key] = ProfileSection(
-                content="",
-                trait_blocks=_parse_trait_blocks(main_content),
+                content="" if blocks else main_content.strip(),
+                trait_blocks=blocks,
                 ai_summary=ai_summary,
             )
         else:
@@ -463,6 +488,13 @@ def _parse_profile_markdown(raw: str, filename: str, profile_type: str) -> Profi
     if full_ai_summary == "_Generated on demand. Editable by writer._":
         full_ai_summary = ""
 
+    # character_kind: absent in pre-v1.0.10 files -> "main". Unknown values
+    # also fall back to "main" so a hand-edited frontmatter can't produce a
+    # template the UI doesn't know how to render.
+    kind = str(meta.get("character_kind", "main") or "main")
+    if kind not in VALID_CHARACTER_KINDS:
+        kind = "main"
+
     return Profile(
         profile_id=str(meta.get("profile_id", uuid.uuid4())),
         type=profile_type,
@@ -475,6 +507,7 @@ def _parse_profile_markdown(raw: str, filename: str, profile_type: str) -> Profi
         full_ai_summary=full_ai_summary,
         created_at=str(meta.get("created_at", "")),
         updated_at=str(meta.get("updated_at", "")),
+        character_kind=kind,
     )
 
 
@@ -502,6 +535,11 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
     if profile.role:
         lines += [f"role: {profile.role}"]
     lines += [f"status: {profile.status}"]
+    # character_kind only matters for characters; only write it when it says
+    # something (side). Main is the default, so omitting it keeps older
+    # files byte-stable on resave.
+    if profile_type == "character" and profile.character_kind == "side":
+        lines += ["character_kind: side"]
     if profile.tags:
         lines += ["tags:"]
         for tag in profile.tags:
@@ -528,6 +566,11 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
                     lines += [f"  description: {_json.dumps(safe_description)}"]
                     lines += [f"  importance: {block.importance}"]
                     lines += [""]
+            elif section.content:
+                # Side-character template: the section is plain paragraphs
+                # instead of a trait list. The parser's tolerant branch
+                # round-trips this back into content on load.
+                lines += [section.content, ""]
             else:
                 lines += [""]
         else:
@@ -548,7 +591,9 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
     return "\n".join(lines)
 
 
-def _make_empty_profile(profile_type: str, name: str, role: str, filename: str) -> Profile:
+def _make_empty_profile(
+    profile_type: str, name: str, role: str, filename: str, character_kind: str = "main",
+) -> Profile:
     """Build a blank Profile object with all sections empty. Used when creating new profiles."""
     now = datetime.now(timezone.utc).isoformat()
     configs = SECTION_CONFIGS.get(profile_type, [])
@@ -564,6 +609,7 @@ def _make_empty_profile(profile_type: str, name: str, role: str, filename: str) 
         full_ai_summary="",
         created_at=now,
         updated_at=now,
+        character_kind=character_kind if character_kind in VALID_CHARACTER_KINDS else "main",
     )
 
 
@@ -596,12 +642,14 @@ async def list_profiles(folder_path: str, type: str):
                 # Only read the frontmatter for the list -- no need to parse sections
                 parts = raw.split("---", 2)
                 meta: dict = yaml.safe_load(parts[1]) if len(parts) >= 3 else {}
+                kind = str(meta.get("character_kind", "main") or "main")
                 items.append(ProfileListItem(
                     filename=entry.name,
                     name=str(meta.get("name", entry.name.removesuffix(".md"))),
                     type=type,
                     role=str(meta.get("role", "")),
                     status=str(meta.get("status", "active")),
+                    character_kind=kind if kind in VALID_CHARACTER_KINDS else "main",
                 ))
             except Exception:
                 # Skip files that can't be read -- don't crash the whole list
@@ -667,7 +715,8 @@ async def create_profile(request: CreateProfileRequest):
         filename  = f"{base_slug}-{short_id}.md"
         filepath  = os.path.join(profile_dir, filename)
 
-    profile  = _make_empty_profile(request.type, request.name.strip(), request.role, filename)
+    profile  = _make_empty_profile(request.type, request.name.strip(), request.role, filename,
+                                   character_kind=request.character_kind)
     markdown = _generate_profile_markdown(profile, request.type)
 
     try:

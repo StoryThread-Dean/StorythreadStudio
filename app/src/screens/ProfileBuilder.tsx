@@ -41,9 +41,11 @@ import { autoSizeTextarea } from "../utils/autoSizeTextarea";
 import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "../components/RightPanelResizer";
 // Character-creation helpers: personality-spine dropdowns (Enneagram +
 // archetype cheat sheets) and the side-character quick-build randomizer.
-// Both insert canned, editable trait blocks -- zero AI calls.
+// Both insert canned, editable text -- zero AI calls.
 import { SpinePickers } from "../components/profiles/SpinePickers";
 import { QuickBuildPanel } from "../components/profiles/QuickBuildPanel";
+import { ROLE_SUGGESTIONS, ARCHETYPE_ROLE_TAGS } from "../data/characterSpines";
+import type { CharacterKind } from "../types/profile";
 
 const API_BASE = "http://localhost:8000";
 
@@ -373,7 +375,14 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState("");
+  // Characters only: which template the new profile starts from.
+  const [newKind, setNewKind] = useState<CharacterKind>("main");
   const [creating, setCreating] = useState(false);
+
+  // Character list grouping: Main vs Side/Background, each independently
+  // collapsible (session-only state -- the groups default open).
+  const [mainGroupCollapsed, setMainGroupCollapsed] = useState(false);
+  const [sideGroupCollapsed, setSideGroupCollapsed] = useState(false);
 
   // Refs for Ctrl+S handler (avoids stale closures)
   const profileRef = useRef<Profile | null>(null);
@@ -442,6 +451,13 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     () => SECTION_CONFIGS[profileType] ?? [],
     [profileType]
   );
+
+  // Which character template the OPEN profile uses. Side/background
+  // characters render every section as a single free-text field (no trait
+  // blocks) and get the Quick Build panel; main characters keep the full
+  // trait-block editor.
+  const isSideCharacter =
+    profile?.type === "character" && profile.character_kind === "side";
 
   // Which profile types appear as tabs in the left panel.
   // Chapter-summary and scene-summary entries are still parseable for legacy
@@ -752,6 +768,8 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           type: profileType,
           name: newName.trim(),
           role: newRole.trim(),
+          // Non-characters ignore this server-side; "main" is the default.
+          character_kind: profileType === "character" ? newKind : "main",
         }),
       });
       if (!res.ok) {
@@ -765,6 +783,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       setShowCreateForm(false);
       setNewName("");
       setNewRole("");
+      setNewKind("main");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create profile.");
     } finally {
@@ -840,6 +859,27 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           [sectionKey]: {
             ...prev.sections[sectionKey],
             trait_blocks: [...prev.sections[sectionKey].trait_blocks, newBlock],
+          },
+        },
+      };
+    });
+    setIsDirty(true);
+  }
+
+  // Append a line/paragraph to a section's free-text content -- the insert
+  // path for the SIDE-character template, where sections are single fields
+  // and Quick Build clicks land as new lines.
+  function appendToSectionContent(sectionKey: string, text: string, separator = "\n") {
+    setProfile(prev => {
+      if (!prev) return prev;
+      const existing = prev.sections[sectionKey]?.content ?? "";
+      return {
+        ...prev,
+        sections: {
+          ...prev.sections,
+          [sectionKey]: {
+            ...prev.sections[sectionKey],
+            content: existing.trim() ? existing.replace(/\s+$/, "") + separator + text : text,
           },
         },
       };
@@ -1203,43 +1243,72 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             </p>
           )}
 
-          {profileList.map(item => {
-            const isActive = profile?.filename === item.filename;
+          {(() => {
             // Row = the open-profile button on the left, a trash button on
             // the right. They're SEPARATE buttons because nesting a <button>
             // inside another <button> is invalid HTML. The `group` utility
             // lets the trash icon reveal on hover without flashing into
             // view when the writer is just scrolling the list.
-            return (
-              <div
-                key={item.filename}
-                className={`group mb-0.5 flex items-stretch rounded transition-colors ${
-                  isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
-                }`}
-              >
-                <button
-                  onClick={() => loadProfile(item)}
-                  className={`flex-1 min-w-0 px-2 py-1.5 text-left ${
-                    isActive ? "text-indigo-300" : "text-text-primary"
+            const renderRow = (item: ProfileListItem) => {
+              const isActive = profile?.filename === item.filename;
+              return (
+                <div
+                  key={item.filename}
+                  className={`group mb-0.5 flex items-stretch rounded transition-colors ${
+                    isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
                   }`}
-                  title={item.role ? `${item.role} -- ${item.filename}` : item.filename}
                 >
-                  <p className="truncate text-sm">{item.name}</p>
-                  {item.role && (
-                    <p className="truncate text-xs text-text-muted">{item.role}</p>
-                  )}
-                </button>
-                <button
-                  onClick={() => handleDelete(item)}
-                  className="shrink-0 px-2 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
-                  title={`Delete ${item.name}`}
-                  aria-label={`Delete ${item.name}`}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
+                  <button
+                    onClick={() => loadProfile(item)}
+                    className={`flex-1 min-w-0 px-2 py-1.5 text-left ${
+                      isActive ? "text-indigo-300" : "text-text-primary"
+                    }`}
+                    title={item.role ? `${item.role} -- ${item.filename}` : item.filename}
+                  >
+                    <p className="truncate text-sm">{item.name}</p>
+                    {item.role && (
+                      <p className="truncate text-xs text-text-muted">{item.role}</p>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item)}
+                    className="shrink-0 px-2 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+                    title={`Delete ${item.name}`}
+                    aria-label={`Delete ${item.name}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              );
+            };
+
+            // Characters split into Main and Side/Background groups, each
+            // collapsible. Other profile types keep the flat list.
+            if (profileType !== "character") return profileList.map(renderRow);
+
+            const mains = profileList.filter(i => (i.character_kind ?? "main") !== "side");
+            const sides = profileList.filter(i => i.character_kind === "side");
+            const groupHeader = (label: string, count: number, collapsed: boolean, onToggle: () => void) => (
+              <button
+                onClick={onToggle}
+                className="mb-0.5 mt-1 flex w-full items-center gap-1 rounded px-1 py-1 text-left text-xs font-semibold uppercase tracking-wide text-text-muted transition-colors hover:bg-bg-surface"
+              >
+                {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+                {label} <span className="font-normal text-faint">({count})</span>
+              </button>
             );
-          })}
+
+            return (
+              <>
+                {groupHeader("Main", mains.length, mainGroupCollapsed,
+                  () => setMainGroupCollapsed(c => !c))}
+                {!mainGroupCollapsed && mains.map(renderRow)}
+                {groupHeader("Side / Background", sides.length, sideGroupCollapsed,
+                  () => setSideGroupCollapsed(c => !c))}
+                {!sideGroupCollapsed && sides.map(renderRow)}
+              </>
+            );
+          })()}
         </div>
       </aside>
 
@@ -1423,6 +1492,38 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                   placeholder="e.g. protagonist, mentor, antagonist"
                   className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
+
+                {/* Template choice: Main = full trait-block editor; Side =
+                    simplified one-field sections + the Quick Build roller. */}
+                <label className="mb-1 block text-xs text-text-muted">Character template</label>
+                <div className="mb-3 flex flex-col gap-1.5">
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="radio"
+                      name="characterKind"
+                      checked={newKind === "main"}
+                      onChange={() => setNewKind("main")}
+                      className="mt-0.5 accent-indigo-500"
+                    />
+                    <span className="text-xs">
+                      <span className="font-medium text-text-primary">Main character</span>
+                      <span className="text-faint"> -- full template with trait blocks and importance levels</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="radio"
+                      name="characterKind"
+                      checked={newKind === "side"}
+                      onChange={() => setNewKind("side")}
+                      className="mt-0.5 accent-indigo-500"
+                    />
+                    <span className="text-xs">
+                      <span className="font-medium text-text-primary">Side / background character</span>
+                      <span className="text-faint"> -- simple one-field sections with the Quick Build trait roller</span>
+                    </span>
+                  </label>
+                </div>
               </>
             )}
             <div className="flex gap-2">
@@ -1480,14 +1581,37 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-text-muted">Role</label>
-                    <input
-                      type="text"
-                      value={profile.role}
-                      onChange={e => updateProfileField("role", e.target.value)}
-                      placeholder="e.g. protagonist"
-                      data-pb-field="role"
-                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
-                    />
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={profile.role}
+                        onChange={e => updateProfileField("role", e.target.value)}
+                        placeholder="e.g. protagonist"
+                        data-pb-field="role"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                      />
+                      {/* Role quick-pick: grouped Popular / Less Common /
+                          Niche story functions. Picking fills the field;
+                          hand-typing always works. Snaps back to blank --
+                          it's an inserter, not a stored value. */}
+                      {profile.type === "character" && (
+                        <select
+                          value=""
+                          onChange={e => { if (e.target.value) updateProfileField("role", e.target.value); }}
+                          className="w-24 shrink-0 rounded border border-border bg-bg-surface px-1 py-1.5 text-xs text-text-muted outline-none focus:border-indigo-500"
+                          title="Pick a common story role"
+                        >
+                          <option value="">Pick...</option>
+                          {ROLE_SUGGESTIONS.map(group => (
+                            <optgroup key={group.group} label={group.group}>
+                              {group.options.map(o => (
+                                <option key={o} value={o}>{o}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="mb-3 grid grid-cols-2 gap-3">
@@ -1519,10 +1643,38 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     />
                   </div>
                 </div>
+
+                {/* Personality spine -- characters only, right in the header
+                    under Status/Tags. Inserts into Personality Traits (trait
+                    block on main, appended paragraph on side); a Story Role
+                    pick also fills Role and merges its key-aspect tags. */}
+                {profile.type === "character" && (
+                  <div className="mt-1 border-t border-border pt-3">
+                    <SpinePickers
+                      onInsert={(trait, description) => {
+                        if (isSideCharacter) {
+                          appendToSectionContent("personality_traits", description, "\n\n");
+                        } else {
+                          insertPrefilledTraitBlock("personality_traits", trait, description, "core");
+                        }
+                      }}
+                      onRolePicked={picked => {
+                        updateProfileField("role", picked.label);
+                        const aspects = ARCHETYPE_ROLE_TAGS[picked.id] ?? [];
+                        const merged = [...profile.tags];
+                        for (const tag of aspects) {
+                          if (!merged.some(t => t.toLowerCase() === tag.toLowerCase())) merged.push(tag);
+                        }
+                        if (merged.length !== profile.tags.length) updateProfileField("tags", merged);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* Importance Audit button + results */}
-              {sections.some(s => s.hasTraitBlocks) && (
+              {/* Importance Audit button + results (main template only --
+                  side characters have no trait blocks to audit) */}
+              {!isSideCharacter && sections.some(s => s.hasTraitBlocks) && (
                 <div className="mb-6">
                   <button
                     onClick={runImportanceAudit}
@@ -1571,37 +1723,31 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 </div>
               )}
 
-              {/* Quick Build -- characters only. Roll canned traits for side/
-                  background characters; every click inserts an editable
-                  [present] trait block into the matching section. */}
-              {profile.type === "character" && (
+              {/* Quick Build -- SIDE/BACKGROUND characters only (the
+                  simplified template). Every click appends the option to
+                  the matching section's text as a new line. */}
+              {isSideCharacter && (
                 <QuickBuildPanel
-                  onInsert={(sectionKey, trait, description) =>
-                    insertPrefilledTraitBlock(sectionKey, trait, description, "present")}
-                  onInsertRoleSummary={(trait, description) =>
-                    insertPrefilledTraitBlock("personality_traits", trait, description, "core")}
+                  onInsert={(sectionKey, text) =>
+                    appendToSectionContent(sectionKey, text, "\n")}
+                  onInsertRoleSummary={(_trait, description) =>
+                    appendToSectionContent("personality_traits", description, "\n\n")}
                 />
               )}
 
-              {/* Profile sections */}
+              {/* Profile sections. Side characters render every section as a
+                  single free-text field -- trait blocks are a main-template
+                  feature, so hasTraitBlocks is forced off for them. */}
               {sections.map(cfg => {
                 const section = profile.sections[cfg.key] ?? {
                   content: "", trait_blocks: [], ai_summary: "",
                 };
                 return (
                   <div key={cfg.key}>
-                  {/* Personality spine -- characters only, sits directly above
-                      the Personality Traits section it inserts into. */}
-                  {profile.type === "character" && cfg.key === "personality_traits" && (
-                    <SpinePickers
-                      onInsert={(trait, description) =>
-                        insertPrefilledTraitBlock("personality_traits", trait, description, "core")}
-                    />
-                  )}
                   <ProfileSectionEditor
                     sectionKey={cfg.key}
                     heading={cfg.heading}
-                    hasTraitBlocks={cfg.hasTraitBlocks}
+                    hasTraitBlocks={cfg.hasTraitBlocks && !isSideCharacter}
                     section={section}
                     profileName={profile.name}
                     profileType={profile.type}

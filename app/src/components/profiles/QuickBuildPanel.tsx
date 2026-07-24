@@ -1,12 +1,15 @@
 // components/profiles/QuickBuildPanel.tsx -- Side-character quick build
 // =======================================================================
-// A collapsed-by-default panel at the top of a CHARACTER profile for
-// building side/background characters fast: pick a story role, roll a few
-// options per trait section, click the ones that fit. Every click inserts
-// an editable trait block into the matching profile section -- canned text,
-// writer-initiated, zero AI calls, fully editable after insert.
+// Shown on SIDE/BACKGROUND character profiles (the simplified template
+// where every section is one free-text field). Pick a story role, roll a
+// few options per trait section, click the ones that fit -- every click
+// APPENDS the option to the matching section's text as a new line. Canned
+// text, writer-initiated, zero AI calls, fully editable after insert.
 //
-// NSFW semantics (the writer's chosen design, see docs/roadmap.md):
+// Repeat protection: each row remembers what it has already dealt (per
+// tier) and pages through the whole pool before anything comes back.
+//
+// NSFW semantics (the writer's chosen design, see docs/features.md):
 //   - toggle OFF: normal pools only; the Explicit checkbox is greyed out
 //   - toggle ON:  NSFW pools REPLACE the normal ones; Explicit becomes
 //     clickable
@@ -16,7 +19,7 @@
 // Deliberately NOT gated on the AI content-mode setting and never
 // auto-enabled by genre -- always the writer's explicit, per-character call.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Dices } from "lucide-react";
 import { ARCHETYPE_OPTIONS, spineOptionById } from "../../data/characterSpines";
 import { rollTraitOptions, type TraitSection } from "../../data/traitPools";
@@ -26,7 +29,7 @@ import { rollTraitOptions, type TraitSection } from "../../data/traitPools";
 const ROLL_COUNT = 4;
 
 // Row order + display labels + where each section's picks land in the
-// profile (the profile section key ProfileBuilder inserts into).
+// profile (the profile section key the caller appends into).
 export const QUICK_BUILD_ROWS: { section: TraitSection; label: string; targetSectionKey: string }[] = [
   { section: "physical",  label: "Physical",  targetSectionKey: "physical_traits" },
   { section: "mannerism", label: "Mannerism", targetSectionKey: "personality_traits" },
@@ -35,35 +38,52 @@ export const QUICK_BUILD_ROWS: { section: TraitSection; label: string; targetSec
 ];
 
 interface QuickBuildPanelProps {
-  // Called with (profileSectionKey, traitName, description) -- ProfileBuilder
-  // inserts a new trait block (importance: present) into that section.
-  onInsert: (sectionKey: string, trait: string, description: string) => void;
-  // Insert the chosen archetype's summary as a Personality trait block.
+  // Called with (profileSectionKey, text) -- the caller appends the text to
+  // that section as a new line.
+  onInsert: (sectionKey: string, text: string) => void;
+  // Append the chosen archetype's summary to the Personality section.
   onInsertRoleSummary: (trait: string, description: string) => void;
 }
 
 export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPanelProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [archetypeId, setArchetypeId] = useState("");
   const [nsfw, setNsfw] = useState(false);
   const [explicit, setExplicit] = useState(false);
 
-  // The currently visible options per row. Rolled lazily on first open and
+  // The currently visible options per row. Rolled on first open and
   // rerolled per row (or all rows) on demand.
   const [rolls, setRolls] = useState<Record<TraitSection, string[]>>({
     physical: [], mannerism: [], voice: [], want: [],
   });
 
+  // Per-row-per-tier memory of options already dealt this cycle, so
+  // rerolling pages through the pool instead of circling back. A ref, not
+  // state: it never drives rendering, only the next deal.
+  const seenRef = useRef<Record<string, Set<string>>>({});
+
+  const tierKey = (section: TraitSection, o: { nsfw: boolean; explicit: boolean }) =>
+    `${section}:${o.nsfw ? (o.explicit ? "explicit" : "nsfw") : "normal"}`;
+
   const rollRow = (section: TraitSection, opts?: { nsfw: boolean; explicit: boolean; archetypeId: string }) => {
     const effective = opts ?? { nsfw, explicit, archetypeId };
-    setRolls(prev => ({
-      ...prev,
-      [section]: rollTraitOptions(section, ROLL_COUNT, {
-        nsfw: effective.nsfw,
-        explicit: effective.explicit,
-        archetypeId: effective.archetypeId || null,
-      }),
-    }));
+    const key = tierKey(section, effective);
+    const seen = seenRef.current[key] ?? new Set<string>();
+    const dealt = rollTraitOptions(section, ROLL_COUNT, {
+      nsfw: effective.nsfw,
+      explicit: effective.explicit,
+      archetypeId: effective.archetypeId || null,
+      exclude: seen,
+    });
+    // If anything dealt was already seen, the pool cycled -- start the
+    // memory over from this hand.
+    if (dealt.some(o => seen.has(o))) {
+      seenRef.current[key] = new Set(dealt);
+    } else {
+      for (const o of dealt) seen.add(o);
+      seenRef.current[key] = seen;
+    }
+    setRolls(prev => ({ ...prev, [section]: dealt }));
   };
 
   const rollAll = (opts?: { nsfw: boolean; explicit: boolean; archetypeId: string }) => {
@@ -98,14 +118,13 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPan
         onClick={() => {
           const next = !open;
           setOpen(next);
-          // First open deals the initial hands.
           if (next && rolls.physical.length === 0) rollAll();
         }}
         className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-bg-surface"
       >
         {open ? <ChevronDown size={14} className="text-faint" /> : <ChevronRight size={14} className="text-faint" />}
         <span className="text-xs font-medium text-text-primary">Quick Build</span>
-        <span className="text-xs text-faint">-- roll traits for side & background characters</span>
+        <span className="text-xs text-faint">-- roll traits, click to add them below</span>
       </button>
 
       {open && (
@@ -132,7 +151,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPan
                   type="button"
                   onClick={() => onInsertRoleSummary(`Story role: ${chosenArchetype.label}`, chosenArchetype.summary)}
                   className="shrink-0 rounded border border-border px-2 py-1.5 text-[11px] text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
-                  title="Insert this role's summary as a Personality trait block"
+                  title="Add this role's summary to the Personality section"
                 >
                   + Add role summary
                 </button>
@@ -181,7 +200,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPan
                   type="button"
                   onClick={() => rollRow(row.section)}
                   className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
-                  title={`Reroll the ${row.label} options`}
+                  title={`Reroll the ${row.label} options -- pages through the pool without repeating`}
                 >
                   <Dices size={11} />
                   Reroll
@@ -192,13 +211,13 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPan
                   <button
                     key={option}
                     type="button"
-                    onClick={() => onInsert(row.targetSectionKey, `${row.label} (quick build)`, option)}
-                    className={`rounded-full border px-2.5 py-1 text-left text-[11px] leading-snug transition-colors ${
+                    onClick={() => onInsert(row.targetSectionKey, option)}
+                    className={`rounded-lg border px-2.5 py-1 text-left text-[11px] leading-snug transition-colors ${
                       nsfw
                         ? "border-red-800/50 bg-red-950/20 text-red-300 hover:border-red-500 hover:text-red-200"
                         : "border-border bg-bg-surface text-text-muted hover:border-indigo-500 hover:text-text-primary"
                     }`}
-                    title="Insert as an editable trait block"
+                    title="Add to the matching section as a new line"
                   >
                     {option}
                   </button>
@@ -208,9 +227,8 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPan
           ))}
 
           <p className="text-[11px] text-faint">
-            Clicking an option inserts it as an editable trait block in the
-            matching section (importance: present). Fill any ____ blanks with
-            your own specifics.
+            Each click adds the line to the matching section below -- edit
+            freely and fill any ____ blanks with your own specifics.
           </p>
         </div>
       )}

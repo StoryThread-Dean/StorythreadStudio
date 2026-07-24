@@ -194,6 +194,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_prompt_caching.py` -- cache_control payload shapes, provider gating, NanoGPT headers
   - `test_editor_chat_materials_flow.py` -- materials echo + placement, stance persistence, temperature split
   - `test_profile_chat_prompts.py` -- profile-chat prompt builder incl. Interview mode contract (interviewer-not-inventor, triggers/origins, full-block rounds)
+  - `test_character_kinds.py` -- Main vs Side character templates: kind frontmatter, tolerant trait-section parsing, plain-text round trip
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover

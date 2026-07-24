@@ -319,3 +319,56 @@ export const ARCHETYPE_OPTIONS: SpineOption[] = [
 export function spineOptionById(options: SpineOption[], id: string): SpineOption | undefined {
   return options.find(o => o.id === id);
 }
+
+// ── Role-pick side effects ───────────────────────────────────────────────────
+// Picking a Story Role also fills the profile's Role field and adds a few
+// key-aspect Tags (deduped against existing ones). Keyed by SpineOption.id.
+
+export const ARCHETYPE_ROLE_TAGS: Record<string, string[]> = {
+  hero:         ["protagonist", "courage"],
+  mentor:       ["wisdom", "guide"],
+  caregiver:    ["nurturing", "protective"],
+  explorer:     ["restless", "freedom"],
+  rebel:        ["defiant", "disruptor"],
+  lover:        ["devotion", "passion"],
+  creator:      ["maker", "visionary"],
+  jester:       ["humor", "truth-teller"],
+  innocent:     ["sincere", "trusting"],
+  everyman:     ["relatable", "grounded"],
+  ruler:        ["authority", "control"],
+  shadow:       ["antagonist", "dark mirror"],
+  comic_relief: ["humor", "timing"],
+  confidant:    ["trusted", "discreet"],
+  rival:        ["competitor", "foil"],
+};
+
+// ── Role field suggestions ───────────────────────────────────────────────────
+// A quick-pick list for the Role [] field itself, grouped by how often the
+// role turns up in fiction. Picking one fills the field; hand-typing always
+// works. (These are STORY functions, broader than the archetype list --
+// e.g. "Red Herring" is a role, not a personality.)
+
+export const ROLE_SUGGESTIONS: { group: string; options: string[] }[] = [
+  {
+    group: "Popular",
+    options: [
+      "Protagonist", "Antagonist", "Love Interest", "Mentor", "Sidekick",
+      "Villain", "Best Friend", "Parent Figure",
+    ],
+  },
+  {
+    group: "Less Common",
+    options: [
+      "Anti-hero", "Rival", "Confidant", "Comic Relief", "Foil",
+      "Narrator", "Guardian", "Informant", "Employer", "Neighbor",
+    ],
+  },
+  {
+    group: "Niche",
+    options: [
+      "Red Herring", "Unreliable Narrator", "Catalyst", "Herald",
+      "Threshold Guardian", "Shapeshifter", "Scapegoat", "Greek Chorus",
+      "Wildcard", "Keeper of the Secret",
+    ],
+  },
+];
