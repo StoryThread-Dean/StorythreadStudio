@@ -41,6 +41,26 @@ def test_load_returns_defaults_when_no_file(isolated_settings):
     loaded = settings_store.load_settings()
     assert loaded["openrouter_api_key"] == ""
     assert loaded["default_model"] == settings_store.DEFAULT_SETTINGS["default_model"]
+    # Provider fields (added with the NanoGPT provider feature).
+    assert loaded["ai_provider"] == "openrouter"
+    assert loaded["nanogpt_api_key"] == ""
+
+
+def test_provider_fields_persist(isolated_settings):
+    """ai_provider + nanogpt_api_key survive a save/load round trip.
+
+    save_settings() only persists keys present in DEFAULT_SETTINGS, so this
+    also proves the new keys were properly registered there -- a missing
+    registration would silently drop them on save.
+    """
+    settings = settings_store.load_settings()
+    settings["ai_provider"] = "nanogpt"
+    settings["nanogpt_api_key"] = "nano-test-key"
+    settings_store.save_settings(settings)
+
+    loaded = settings_store.load_settings()
+    assert loaded["ai_provider"] == "nanogpt"
+    assert loaded["nanogpt_api_key"] == "nano-test-key"
 
 
 def test_save_then_load_roundtrip(isolated_settings):

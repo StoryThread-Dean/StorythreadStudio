@@ -5,8 +5,13 @@
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 export interface AppSettings {
+  // Which AI service requests are sent to: "openrouter" | "nanogpt".
+  // Each provider keeps its own stored key -- switching never loses one.
+  ai_provider:            string;
   openrouter_api_key:     string;    // Masked display value ("sk-or-...xyz" or "")
   openrouter_api_key_set: boolean;
+  nanogpt_api_key:        string;    // Masked, same rules as the OpenRouter key
+  nanogpt_api_key_set:    boolean;
   default_model:          string;
   content_mode:           string;    // "general" | "mature" | "explicit"
   cost_tier:              string;    // "free" | "budget" | "standard" | "premium"
@@ -28,7 +33,11 @@ export interface AppSettings {
 }
 
 export interface UpdateSettingsPayload {
+  // "openrouter" | "nanogpt". Unknown values are silently ignored server-side.
+  ai_provider?:        string;
   openrouter_api_key?: string;
+  // Non-empty replaces the stored NanoGPT key; empty string clears it.
+  nanogpt_api_key?:    string;
   default_model?:      string;
   content_mode?:       string;
   cost_tier?:          string;

@@ -1,11 +1,14 @@
-# ai/openrouter.py -- OpenRouter API Client
-# ===========================================
-# A thin async wrapper around the OpenRouter API.
-# OpenRouter speaks the OpenAI API format, so the request/response shapes
-# are identical to what you'd send to api.openai.com -- just a different URL
-# and API key header.
+# ai/openrouter.py -- OpenAI-Compatible Chat Client
+# ==================================================
+# A thin async wrapper around any OpenAI-compatible chat API. Historically
+# named for OpenRouter (the first and default provider), but every function
+# here now takes a ProviderConfig (see ai/providers.py) that supplies the
+# base URL, headers, and capability flags -- so the same client talks to
+# OpenRouter, NanoGPT, and (later) local runtimes without new request code.
+# A rename to something like client.py is deferred to the local-providers
+# milestone to keep this diff reviewable.
 #
-# Why OpenRouter?
+# Why OpenRouter as the default?
 # One API key gives access to many models from different providers
 # (OpenAI, Anthropic, Mistral, etc.). This lets Storythread Studio route requests
 # to different models based on task type and content mode without requiring
@@ -17,10 +20,12 @@ import json
 import logging
 import time
 import httpx
+from app.ai.providers import ProviderConfig, OPENROUTER
 from app.ai.sanitizer import sanitize_dict, contains_em_dash
 
-# OpenRouter's base URL and model list endpoint
-OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+# Kept as an alias for any code/tests that still import the old constant.
+# The live value used per request is provider.base_url.
+OPENROUTER_BASE = OPENROUTER.base_url
 
 # HTTP timeout for AI calls -- 180s gives heavy requests (multi-profile
 # consistency checks, outline-vs-profiles comparisons) room to finish on
@@ -34,21 +39,40 @@ REQUEST_TIMEOUT = 180.0
 log = logging.getLogger(__name__)
 
 
-async def list_models(api_key: str) -> list[dict]:
+def _request_headers(api_key: str, provider: ProviderConfig) -> dict[str, str]:
+    """Build the HTTP headers for one provider.
+
+    Every provider today authenticates with a Bearer key; the config's
+    extra_headers add anything provider-specific on top (OpenRouter's
+    attribution headers). Future local providers set requires_api_key=False
+    and simply get no Authorization header.
     """
-    Fetch the current list of available models from OpenRouter.
+    headers = {"Content-Type": "application/json"}
+    if provider.requires_api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    headers.update(provider.extra_headers)
+    return headers
+
+
+async def list_models(api_key: str, provider: ProviderConfig = OPENROUTER) -> list[dict]:
+    """
+    Fetch the current list of available models from the provider.
     Returns a simplified list with just the fields the UI needs.
 
-    The full OpenRouter response has many fields; we extract only what
-    Storythread Studio needs to display in the model picker and do routing.
+    OpenRouter's response is rich (pricing, moderation, modalities), so it
+    gets the detailed mapping below. Every other provider returns some
+    variation of a bare model list, handled by _normalize_generic_models().
     """
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         response = await client.get(
-            f"{OPENROUTER_BASE}/models",
-            headers={"Authorization": f"Bearer {api_key}"},
+            f"{provider.base_url}/models",
+            headers=_request_headers(api_key, provider),
         )
         response.raise_for_status()
         data = response.json()
+
+    if provider.key != "openrouter":
+        return _normalize_generic_models(data)
 
     models = []
     for m in data.get("data", []):
@@ -100,24 +124,76 @@ async def list_models(api_key: str) -> list[dict]:
     return models
 
 
-async def test_connection(api_key: str) -> dict:
+def _normalize_generic_models(data) -> list[dict]:
+    """Map a non-OpenRouter /models response into our simplified model shape.
+
+    Providers other than OpenRouter publish much thinner catalogs -- NanoGPT
+    returns {data: [{id, name, context_length}]} with no pricing, moderation,
+    or modality info, and local runtimes are even more inconsistent. So this
+    is deliberately tolerant (per docs/research-multi-provider.md):
+      - the list may live under "data", "models", or be the bare response
+      - the id may be under "id", "name", or "model"
+      - entries with no usable id are skipped, never raised on
+
+    Defaults for the missing fields are chosen so the UI stays honest:
+      - costs 0.0 because ModelInfo requires floats, but is_free stays False:
+        unknown pricing is NOT the same as free, and labeling it free would
+        mislead the writer. The frontend hides the cost-tier filter for
+        providers without pricing data instead.
+      - output_modalities ["text"] so the text-only filter passes.
+      - is_moderated False (no data -- the frontend applies its own
+        provider-specific content-mode rule).
+      - supports_reasoning False, which hides the Reasoning toggle rather
+        than offering a switch that silently does nothing.
+    """
+    if isinstance(data, dict):
+        raw = data.get("data") or data.get("models") or []
+    elif isinstance(data, list):
+        raw = data
+    else:
+        raw = []
+
+    models = []
+    for m in raw:
+        if not isinstance(m, dict):
+            continue
+        model_id = m.get("id") or m.get("name") or m.get("model") or ""
+        if not model_id:
+            continue
+        models.append({
+            "id":                      model_id,
+            "name":                    m.get("name") or model_id,
+            "context_length":          m.get("context_length", 0) or 0,
+            "cost_input_per_million":  0.0,
+            "cost_output_per_million": 0.0,
+            "output_modalities":       ["text"],
+            "is_free":                 False,
+            "is_moderated":            False,
+            "supports_reasoning":      False,
+        })
+
+    models.sort(key=lambda m: m["name"].lower())
+    return models
+
+
+async def test_connection(api_key: str, provider: ProviderConfig = OPENROUTER) -> dict:
     """
     Verify that the API key is valid by fetching the model list.
     Returns {"ok": True, "model_count": N} on success.
     Returns {"ok": False, "error": "..."} on failure.
     """
     try:
-        models = await list_models(api_key)
+        models = await list_models(api_key, provider=provider)
         return {"ok": True, "model_count": len(models)}
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            return {"ok": False, "error": "Invalid API key. Check your OpenRouter key in Settings."}
-        return {"ok": False, "error": f"OpenRouter returned HTTP {e.response.status_code}."}
+            return {"ok": False, "error": f"Invalid API key. Check your {provider.label} key in Settings."}
+        return {"ok": False, "error": f"{provider.label} returned HTTP {e.response.status_code}."}
     except httpx.RequestError as e:
-        return {"ok": False, "error": f"Could not reach OpenRouter: {e}"}
+        return {"ok": False, "error": f"Could not reach {provider.label}: {e}"}
     except Exception as e:
         # Catches SSL errors (missing cert bundle in frozen binary), JSON
-        # decode errors from malformed OpenRouter responses, and any other
+        # decode errors from malformed provider responses, and any other
         # unexpected failure. Returns a user-facing message instead of
         # letting FastAPI turn the exception into a 500 with no detail.
         return {"ok": False, "error": f"Connection check failed: {type(e).__name__}: {e}"}
@@ -129,9 +205,10 @@ async def run_completion(
     system_prompt: str,
     user_message: str,
     temperature: float | None = None,
+    provider: ProviderConfig = OPENROUTER,
 ) -> dict:
     """
-    Send a chat completion request to OpenRouter and return the parsed result.
+    Send a chat completion request to the provider and return the parsed result.
 
     The response is expected to be JSON (our system prompts request it).
     If the model doesn't return valid JSON, we wrap the raw text in a
@@ -176,14 +253,8 @@ async def run_completion(
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             response = await client.post(
-                f"{OPENROUTER_BASE}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type":  "application/json",
-                    # OpenRouter recommends these headers for tracking
-                    "HTTP-Referer":  "http://localhost:1420",
-                    "X-Title":       "Storythread Studio",
-                },
+                f"{provider.base_url}/chat/completions",
+                headers=_request_headers(api_key, provider),
                 json=payload,
             )
             response.raise_for_status()
@@ -197,8 +268,8 @@ async def run_completion(
     finally:
         elapsed = time.monotonic() - start_time
         log.info(
-            "run_completion model=%s prompt_chars=%d elapsed=%.2fs status=%s",
-            model_id, prompt_chars, elapsed, call_status,
+            "run_completion provider=%s model=%s prompt_chars=%d elapsed=%.2fs status=%s",
+            provider.key, model_id, prompt_chars, elapsed, call_status,
         )
 
     # Extract the text content from the first choice
@@ -250,9 +321,10 @@ async def run_chat(
     temperature: float | None = None,
     sanitize_mode: str = "chat",
     include_reasoning: bool = False,
+    provider: ProviderConfig = OPENROUTER,
 ) -> str | tuple[str, str | None]:
     """
-    Send a multi-turn chat completion request to OpenRouter and return
+    Send a multi-turn chat completion request to the provider and return
     the assistant's reply as a plain string.
 
     Used by the Profile Builder chat panel, where the writer has a
@@ -295,7 +367,9 @@ async def run_chat(
 
     # Ask for the reasoning trace. "medium" effort is OpenRouter's balanced
     # default; the trace comes back on message.reasoning in the response.
-    if include_reasoning:
+    # Only sent to providers that understand the parameter -- others would
+    # either reject the unknown field or silently drop it, so we don't ask.
+    if include_reasoning and provider.supports_reasoning_param:
         payload["reasoning"] = {"effort": "medium"}
 
     # --- Observability: same pattern as run_completion ---
@@ -308,13 +382,8 @@ async def run_chat(
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             response = await client.post(
-                f"{OPENROUTER_BASE}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type":  "application/json",
-                    "HTTP-Referer":  "http://localhost:1420",
-                    "X-Title":       "Storythread Studio",
-                },
+                f"{provider.base_url}/chat/completions",
+                headers=_request_headers(api_key, provider),
                 json=payload,
             )
             response.raise_for_status()
@@ -328,8 +397,8 @@ async def run_chat(
     finally:
         elapsed = time.monotonic() - start_time
         log.info(
-            "run_chat model=%s prompt_chars=%d turns=%d elapsed=%.2fs status=%s",
-            model_id, prompt_chars, len(messages), elapsed, call_status,
+            "run_chat provider=%s model=%s prompt_chars=%d turns=%d elapsed=%.2fs status=%s",
+            provider.key, model_id, prompt_chars, len(messages), elapsed, call_status,
         )
 
     message = data["choices"][0]["message"]

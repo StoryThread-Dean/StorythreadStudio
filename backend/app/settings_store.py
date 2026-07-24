@@ -47,7 +47,14 @@ def _default_vault_root() -> str:
 
 # Default values used when settings.json doesn't exist yet or is missing a key
 DEFAULT_SETTINGS: dict = {
+    # ai_provider: which AI service requests are sent to. "openrouter"
+    # (default) or "nanogpt". Each provider keeps its own API key below, so
+    # switching back and forth never loses a key. See app/ai/providers.py.
+    "ai_provider":        "openrouter",
     "openrouter_api_key": "",
+    # nanogpt_api_key: NanoGPT's key, stored separately from OpenRouter's.
+    # Same handling rules: never sent to the frontend unmasked, empty = unset.
+    "nanogpt_api_key":    "",
     "default_model":      "openai/gpt-4o-mini",
     "content_mode":       "general",
     # cost_tier: which price tier to filter models by in the Settings picker.

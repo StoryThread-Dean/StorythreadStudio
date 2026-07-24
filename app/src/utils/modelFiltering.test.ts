@@ -56,6 +56,42 @@ describe("filterModelByContentMode", () => {
   it("unknown mode falls through to showing the model", () => {
     expect(filterModelByContentMode(model("openai/gpt-4.1-mini"), "something-else")).toBe(true);
   });
+
+  it("defaults to the openrouter rules when no provider is given", () => {
+    // Backward compatibility: both screens called this without a provider
+    // argument before NanoGPT existed -- the OpenRouter prefix rules apply.
+    expect(filterModelByContentMode(model("anthropic/claude-opus-4.8"), "mature")).toBe(false);
+  });
+});
+
+describe("filterModelByContentMode -- nanogpt provider", () => {
+  // NanoGPT ids don't follow OpenRouter's "provider/model" slug convention,
+  // so the provider-prefix rules can't apply. Instead a substring blocklist
+  // hides models whose id/name suggests a moderated upstream family.
+  it("general mode shows everything", () => {
+    expect(filterModelByContentMode(model("gpt-5.2"), "general", "nanogpt")).toBe(true);
+    expect(filterModelByContentMode(model("some-local-tune"), "general", "nanogpt")).toBe(true);
+  });
+
+  it("mature and explicit hide moderated-family names", () => {
+    for (const mode of ["mature", "explicit"]) {
+      expect(filterModelByContentMode(model("gpt-5.2"), mode, "nanogpt")).toBe(false);
+      expect(filterModelByContentMode(model("claude-sonnet"), mode, "nanogpt")).toBe(false);
+      expect(filterModelByContentMode(model("gemini-pro"), mode, "nanogpt")).toBe(false);
+    }
+  });
+
+  it("mature and explicit keep unmoderated-looking models", () => {
+    for (const mode of ["mature", "explicit"]) {
+      expect(filterModelByContentMode(model("mythomax-13b"), mode, "nanogpt")).toBe(true);
+      expect(filterModelByContentMode(model("deepseek-v3"), mode, "nanogpt")).toBe(true);
+    }
+  });
+
+  it("matches fragments in the display name too, case-insensitively", () => {
+    const m = model("mystery-model", { name: "Repackaged ChatGPT Turbo" });
+    expect(filterModelByContentMode(m, "mature", "nanogpt")).toBe(false);
+  });
 });
 
 describe("RECOMMENDED_MODELS", () => {
