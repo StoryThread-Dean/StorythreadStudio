@@ -74,3 +74,38 @@ def test_chat_system_prompt_uses_general_rules_not_draft():
     prompt = build_editor_chat_system_prompt("chat", "general")
     assert "This is a chat, not a report" in prompt
     assert "Drafting story prose" not in prompt
+
+
+# ── Voice fidelity (chat-consistency fix) ────────────────────────────────────
+# Guards the prompt language that stops [core] Voice/Mannerism traits from
+# being "downplayed" into generic characters. The softener lines elsewhere in
+# the contract ("not a script", "guide, not a quota") gave the model license
+# to drop distinctive voices; VOICE FIDELITY pulls the other way.
+
+def test_base_contract_has_voice_fidelity():
+    assert "VOICE FIDELITY" in BASE_WRITING_ASSISTANT_CONTRACT
+    # Present in both discussion and drafting prompts (it lives in the base).
+    assert "VOICE FIDELITY" in build_editor_chat_system_prompt("chat", "general")
+    assert "VOICE FIDELITY" in build_editor_chat_system_prompt("draft", "general")
+
+
+def test_trait_softener_scoped_away_from_core():
+    # The "does not mean it must appear in every scene" softener must no
+    # longer apply to [core] traits -- only the lower importance levels.
+    assert (
+        "A `[present]`, `[background]`, or `[contextual]` trait being mentioned"
+        in BASE_WRITING_ASSISTANT_CONTRACT
+    )
+
+
+def test_draft_rules_keep_core_voice_on_stage():
+    draft = _editor_chat_addendum("draft")
+    assert "[core] voice and mannerism traits are always on stage" in draft
+
+
+def test_reference_stance_keeps_core_voice():
+    from app.ai.prompts import context_stance_instruction
+    reference = context_stance_instruction(False)
+    assert "[core] voice" in reference
+    # Canon stance is untouched by the fix.
+    assert "established truth" in context_stance_instruction(True)

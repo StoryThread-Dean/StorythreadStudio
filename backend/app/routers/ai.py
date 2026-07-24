@@ -1431,9 +1431,12 @@ async def profile_chat(request: ProfileChatRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
-    # 2. Materials message with profile content -- only on the first turn.
-    #    The frontend sends profile_content on the initial message and omits it
-    #    on follow-ups (it's already in the conversation history from turn 1).
+    # 2. Materials message with profile content. The Profile Builder frontend
+    #    recomputes formatProfileForAI(profile) and sends it on EVERY turn --
+    #    so edits made mid-conversation are always visible to the AI, and the
+    #    profile never drops out of context. (The Writing Companion solves
+    #    the same problem differently: it echoes materials back for the
+    #    frontend to persist in history -- see editor_chat.)
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
     if request.profile_content.strip():
@@ -1500,6 +1503,11 @@ class EditorChatRequest(BaseModel):
     # outline/locations are canon the AI must stay consistent with. False = they
     # are reference only and the writer's typed direction takes precedence.
     treat_attachments_as_canon: bool = True
+    # True when ANY chips are attached in the UI -- including ones already
+    # sent on an earlier turn (context_chips only carries the NEW ones).
+    # Keeps the ATTACHMENT STANCE instruction in the system prompt for the
+    # whole life of the attachment, not just the turn it was added.
+    has_attached_context: bool = False
     # Reasoning toggle: when True (and the model supports it), OpenRouter is
     # asked for the model's reasoning trace, returned alongside the reply.
     # The frontend only offers the toggle for reasoning-capable models.
@@ -1510,6 +1518,13 @@ class EditorChatResponse(BaseModel):
     reply: str
     model_used: str = ""       # The resolved model ID so the UI can display it
     reasoning: str | None = None  # The model's reasoning trace, when requested + emitted
+    # Echo of the materials message (chips + chapter text) the backend
+    # prepended this turn, so the frontend can persist it into the chat
+    # history as a hidden message. Without this, attached profiles were in
+    # front of the model for exactly ONE turn and then vanished -- the root
+    # cause of "the AI forgot my character's voice". None when no new
+    # materials were sent (or in enhance mode, which resends fresh per turn).
+    materials_content: str | None = None
 
 
 # Absolute ceiling on a single Enhance rewrite, in approximate words. Multiplier
@@ -1691,17 +1706,23 @@ async def editor_chat(request: EditorChatRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
-    # Attachment stance: when the writer has attached chips, tell the model whether
-    # to treat them as canon (enforce) or reference (the writer's direction wins).
-    # Driven by the Canon/Reference toggle in the attachment popup.
-    if request.context_chips:
+    # Attachment stance: when the writer has chips attached, tell the model
+    # whether to treat them as canon (enforce) or reference (the writer's
+    # direction wins). Driven by the Canon/Reference toggle in the attachment
+    # popup. Keyed on has_attached_context (attached in the UI at all), not
+    # just context_chips (only the NEW ones this turn) -- the stance must
+    # hold for as long as the chips are in play, and a byte-identical system
+    # prompt across turns is also what makes prompt caching effective.
+    if request.context_chips or request.has_attached_context:
         system_prompt = system_prompt + "\n\n" + context_stance_instruction(request.treat_attachments_as_canon)
 
     # 2. Build a "materials" user message with variable content -- but only if
     #    the frontend actually sent something new. On follow-up turns the frontend
-    #    omits text_content and chips that were already sent in a prior turn (they're
-    #    already in the conversation history). Skipping the materials message here
-    #    avoids resending the same chapter + profiles on every single turn.
+    #    omits text_content and chips that were already sent in a prior turn.
+    #    That dedup is safe because of the materials_content echo below: the
+    #    frontend persists the echoed materials into its chat history as a
+    #    hidden message, so "already sent" genuinely means "already in the
+    #    conversation the model sees" -- not "vanished after one turn".
     has_new_materials = (
         bool(request.text_content.strip())
         or bool(request.context_chips)
@@ -1710,6 +1731,7 @@ async def editor_chat(request: EditorChatRequest):
 
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
+    materials_content: str | None = None
     if has_new_materials:
         materials = _build_materials_message(
             text_content        = request.text_content,
@@ -1720,17 +1742,34 @@ async def editor_chat(request: EditorChatRequest):
             is_enhance          = is_enhance,
             treat_as_canon      = request.treat_attachments_as_canon,
         )
-        messages = [materials] + conversation
+        # Insert the materials just BEFORE the newest user message rather than
+        # at the front of the whole conversation. Turn 1 is identical either
+        # way; for chips attached mid-conversation this keeps the earlier
+        # messages byte-stable (append-only), which is what lets provider-side
+        # prompt caching keep matching the prefix.
+        if conversation:
+            messages = conversation[:-1] + [materials] + conversation[-1:]
+        else:
+            messages = [materials]
+        # Echo the materials so the frontend can persist them into history.
+        # Enhance stays transient by design -- it resends its target passage
+        # fresh every turn, and persisting each copy would bloat the history.
+        if not is_enhance:
+            materials_content = materials["content"]
     else:
         messages = conversation
 
-    # Pick temperature: creative modes (open chat, scene drafting, and prose
-    # enhancement) get higher randomness; the structured review categories get
-    # lower randomness.
-    temp = (
-        TEMPERATURE_DEFAULTS["generation"] if request.category in ("chat", "draft", "enhance")
-        else TEMPERATURE_DEFAULTS["critique"]
-    )
+    # Pick temperature: open chat gets the most randomness; Draft and Enhance
+    # write story prose FROM the attached materials, so they run slightly
+    # cooler (see draft_prose in TEMPERATURE_DEFAULTS) to keep character
+    # voice anchored to the profiles; the structured review categories run
+    # coolest of all.
+    if request.category == "chat":
+        temp = TEMPERATURE_DEFAULTS["generation"]
+    elif request.category in ("draft", "enhance"):
+        temp = TEMPERATURE_DEFAULTS["draft_prose"]
+    else:
+        temp = TEMPERATURE_DEFAULTS["critique"]
 
     # Pick the sanitizer mode. Draft and Enhance both produce story prose, where
     # an approved ' -- ' is legitimate punctuation, so they use the prose
@@ -1757,7 +1796,8 @@ async def editor_chat(request: EditorChatRequest):
     except httpx.RequestError as e:
         raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
-    return EditorChatResponse(reply=reply, model_used=model_id, reasoning=reasoning)
+    return EditorChatResponse(reply=reply, model_used=model_id, reasoning=reasoning,
+                              materials_content=materials_content)
 
 
 # ── Editor Pass (Inline Overlay Feedback) ─────────────────────────────────────

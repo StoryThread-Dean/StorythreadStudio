@@ -7,10 +7,14 @@
 //
 // The backend is stateless and the frontend owns conversation history, so on
 // follow-up turns we deliberately resend only NEW materials -- things the AI
-// has not seen yet. Anything "established" (sent in a prior turn) already
-// lives in the message history and would just waste tokens if resent.
+// has already seen live in the message history and would just waste tokens
+// if resent. That "lives in the history" part is real, not aspirational: the
+// backend echoes each turn's materials block back (materials_content), and
+// appendTurnToHistory() below persists it as a hidden history message. So an
+// attached character profile genuinely stays in front of the model on every
+// later turn -- the fix for characters losing their voice after turn one.
 
-import type { ContextChip, EditorChatCategory, EnhanceLevel } from "../types/ai";
+import type { ContextChip, EditorChatCategory, EditorChatMessage, EnhanceLevel } from "../types/ai";
 
 export interface BuildEditorChatPayloadInput {
   /** The category to send. "chat" for discussion, "draft" for prose drafting, "enhance" to expand a selection. */
@@ -116,6 +120,37 @@ export function buildEditorChatPayload(
     surrounding_context,
     enhance_level: enhanceLevel,
   };
+}
+
+// ── History persistence for a completed turn ────────────────────────────────
+
+/**
+ * Append one completed Writing Companion turn to the chat history.
+ *
+ * Order matters: the hidden materials message goes immediately BEFORE the
+ * user message that triggered it -- the same position the backend gave it on
+ * the wire -- so the history the model sees next turn is byte-identical to
+ * what it already processed. That append-only shape is also what lets
+ * provider-side prompt caching keep matching the growing prefix.
+ *
+ * materialsContent is the backend's echo of the materials block it built
+ * (chips + chapter text); null when the turn carried no new materials (or in
+ * enhance mode, which resends its passage fresh every turn instead).
+ *
+ * Pure function so vitest can pin the ordering without rendering the app.
+ */
+export function appendTurnToHistory(
+  history: EditorChatMessage[],
+  userMsg: EditorChatMessage,
+  materialsContent: string | null | undefined,
+  assistantMsg: EditorChatMessage,
+): EditorChatMessage[] {
+  const next = [...history];
+  if (materialsContent) {
+    next.push({ role: "user", content: materialsContent, hidden: true });
+  }
+  next.push(userMsg, assistantMsg);
+  return next;
 }
 
 // ── Surrounding-context window for enhance mode ─────────────────────────────

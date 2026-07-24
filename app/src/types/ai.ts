@@ -183,6 +183,12 @@ export interface EditorChatMessage {
   // the Reasoning toggle was on and the model emitted one. Display-only --
   // the backend ignores it when the message is sent back as history.
   reasoning?: string;
+  // Hidden messages are real conversation content the model must keep
+  // seeing -- the persisted materials block (attached profiles + chapter
+  // text) -- but rendering them would show the writer a wall of their own
+  // profile text, so the transcript skips them. They still ride along in
+  // every request's message history.
+  hidden?: boolean;
 }
 
 export interface EditorChatPayload {
@@ -201,6 +207,11 @@ export interface EditorChatPayload {
   // Reasoning toggle: ask for the model's reasoning trace (reasoning-capable
   // models only; the UI hides the toggle otherwise).
   include_reasoning?: boolean;
+  // True while ANY chips are attached in the UI -- context_chips above only
+  // carries the NEW ones for this turn (established chips live in history).
+  // Keeps the backend's ATTACHMENT STANCE instruction active on every turn
+  // of the attachment's life, not just the turn it was added.
+  has_attached_context?: boolean;
 }
 
 
