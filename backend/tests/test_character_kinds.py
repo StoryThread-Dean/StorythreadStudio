@@ -93,6 +93,28 @@ def test_main_template_trait_blocks_still_round_trip():
     assert back.sections["personality_traits"].content == ""
 
 
+def test_side_template_drops_per_section_ai_summary_placeholders():
+    # The simplified template keeps ONLY the Full AI Summary at the bottom.
+    # Per-section "## AI Summary:" placeholders are main-template furniture.
+    p = _make_empty_profile("character", "Tam", "", "tam.md", character_kind="side")
+    md = _generate_profile_markdown(p, "character")
+    assert "## AI Summary:" not in md
+    assert "# Full AI Summary" in md
+    # Main template keeps the per-section placeholders (regression guard).
+    main_md = _generate_profile_markdown(
+        _make_empty_profile("character", "Alexandra", "", "a.md"), "character")
+    assert "## AI Summary:" in main_md
+
+
+def test_side_template_preserves_existing_section_summary():
+    # A summary that already exists (e.g. the profile was Main once, or the
+    # writer generated one) must survive the resave, not be deleted.
+    p = _make_empty_profile("character", "Tam", "", "tam.md", character_kind="side")
+    p.sections["overview"] = ProfileSection(content="A barkeep.", ai_summary="Tam keeps the peace.")
+    back = _roundtrip(p)
+    assert back.sections["overview"].ai_summary == "Tam keeps the peace."
+
+
 def test_create_endpoint_accepts_kind_and_list_reports_it(client, tmp_path):
     # HTTP-level: create one of each kind, then list and check the kinds.
     project = tmp_path / "proj"

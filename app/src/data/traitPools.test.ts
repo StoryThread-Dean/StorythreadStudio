@@ -11,7 +11,7 @@ import {
   TRAIT_POOLS, ARCHETYPE_FLAVOR, rollTraitOptions, type TraitSection,
 } from "./traitPools";
 
-const SECTIONS: TraitSection[] = ["physical", "mannerism", "voice", "want"];
+const SECTIONS: TraitSection[] = ["physical", "mannerism", "voice", "want", "hidden"];
 
 // A deterministic rng: cycles through a fixed sequence so shuffles are
 // reproducible in tests without patching Math.random.

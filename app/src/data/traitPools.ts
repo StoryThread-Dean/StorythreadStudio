@@ -21,7 +21,7 @@
 // already shown, and deals from the rest of the pool until it runs dry --
 // so rerolling pages through the whole pool before anything comes back.
 
-export type TraitSection = "physical" | "mannerism" | "voice" | "want";
+export type TraitSection = "physical" | "mannerism" | "voice" | "want" | "hidden";
 
 export interface TraitPool {
   normal: string[];
@@ -417,7 +417,110 @@ export const TRAIT_POOLS: Record<TraitSection, TraitPool> = {
       "wants ____ exactly the way it happens in the books they hide, not the way it happened before",
     ],
   },
+
+  // Declared below as a hoisted function purely to keep this file readable
+  // -- the hidden pool is the newest and largest block of commentary.
+  hidden: hiddenPool(),
 };
+
+// hidden -- secrets, tells, and planted details for the Hidden and
+// Foreshadowing section. Written as things the READER can feel before they
+// are told: a behavior with a buried cause, a detail that pays off later.
+// (In the profile system these stay writer-side context; the AI expresses
+// hidden traits only as subtext, never by naming them.)
+function hiddenPool(): TraitPool {
+  return {
+  normal: [
+    "keeps a packed bag under the bed and rotates the food in it monthly, ready for a day they never name",
+    "is sending money somewhere every month, in cash, through a third party who thinks it's for a charity",
+    "was in the town the night of the famous fire, and their alibi has one hole nobody has ever poked",
+    "can read people's lips across a room and has learned far more than anyone suspects",
+    "wears a ring on a chain under their shirt that matches no marriage anyone remembers",
+    "goes pale at the smell of a specific flower and leaves any room it enters",
+    "knows exactly where the old tunnel, cellar, or crawlspace comes out, and checks the entrance monthly",
+    "answers to a second name when startled, then laughs it off a beat too late",
+    "keeps every letter they've ever received except one year -- that year is missing entirely",
+    "is quietly fluent in a language they claim not to speak, and listens hardest when it's spoken",
+    "never eats in front of other people, ever, and has an airtight excuse each time",
+    "has a standing appointment every month they will reschedule funerals to keep",
+    "flinches at the sound of their own surname said formally, as if it belongs to someone else",
+    "owns a weapon far too fine for their station, oiled and wrapped at the bottom of a chest",
+    "knows the villain's face -- knew it before the story started -- and has said nothing",
+    "practices signing a name that isn't theirs, late, by lamplight",
+    "planted a tree, stone, or post at the edge of the property that marks something no map shows",
+    "keeps the newspaper clipping of an accident they were never officially part of",
+    "was once the best in the county at the exact skill the plot will eventually demand",
+    "counts exits and strangers' hands by reflex, in that order, everywhere",
+    "pays for a room in another town that no one has ever seen them use",
+    "carries a child's toy, sock, or drawing in an inside pocket and touches it before hard decisions",
+    "never turns their back on the water, the woods, or the mine -- pick one, it's specific",
+    "has a scar that predates every story they tell about it",
+    "asks one strange question of every traveler -- always the same question -- and files the answers",
+    "keeps two sets of accounts, and the honest set is the hidden one",
+    "was disinherited by a family whose name would stop conversation in this town",
+    "recognizes the melody the stranger hums, and leaves before the second verse",
+    "tends a grave with no name on it, out past the fence line, on the same day each year",
+    "hoards medicine, thread, and salt in quantities that suggest they've survived a siege before",
+    "will not swear any oath, not even trivial ones, and deflects with jokes that aren't jokes",
+    "the dog, the horse, or the cat -- animals that hate everyone -- are calm around them, oddly calm",
+    "knows how to open locks, set bones, or forge seals, and claims a harmless hobby explains it",
+    "gets a letter every season, reads it by the fire, burns it, and is cheerful for exactly two days",
+    "wears gloves for one task no one else would think needs gloves",
+    "has already forgiven the person the town still hates, for reasons they've never shared",
+    "keeps the shop's back room locked and has repainted the lock's scratches twice",
+    "startles awake at the same hour every night, checks the same window, and never explains",
+    "once said a name in fever sleep that made the doctor go quiet and leave early",
+    "knows the marsh, ridge, or ruins better than someone who claims to have never gone",
+    "tips sailors, drifters, and messengers generously, always with a question folded into the coin",
+    "has a twin, a double, or a sibling the family photos have been carefully edited around",
+    "never celebrates their own birthday but marks a different date no one can place",
+    "learned to fight somewhere that teaches finishing, not sparring, and hides it badly when startled",
+    "keeps a promise to someone dead, and the promise is starting to cost more than they can pay",
+    "is the only one in town the old hermit, witch, or recluse will speak to",
+    "carries poison, a confession, or a deed -- something in that locket -- and checks the clasp hourly",
+    "has rehearsed a confession so many times it now sounds like a story about someone else",
+    "watched the bridge, barn, or boat burn and did not raise the alarm, and knows why",
+    "answers the door armed after dark, casually, as if everyone does",
+    "their oldest friendship is actually a debt neither of them has ever named aloud",
+  ],
+  nsfw: [
+    "is having the affair everyone jokes about, with the one person nobody has guessed",
+    "has a past life in a profession that would scandalize the parish, and one client who remembers",
+    "keeps a locked drawer of letters that would end three marriages, none of them their own",
+    "wears something under their clothes, every day, that belongs to someone they shouldn't miss",
+    "has a standing midnight arrangement everyone attributes to insomnia",
+    "was the anonymous author of the scandalous pamphlet, poem, or letters everyone still quotes",
+    "knows a birthmark, scar, or tattoo they could only know one way, on someone very respectable",
+    "left the capital, port, or court one step ahead of a scandal that had a title attached to it",
+    "keeps the key to a room in the inn that officially doesn't rent",
+    "is being quietly paid for discretion about a night involving someone now very important",
+    "has a signal -- a lamp, a flowerpot, a drawn curtain -- and someone answers it",
+    "the pilgrimage they take every spring is not a pilgrimage",
+    "taught the town's most respectable person everything that person pretends not to know",
+    "keeps a portrait, miniature, or photograph that must be turned face-down when certain guests call",
+    "their famous feud with the neighbor began in a bed, not over the fence line",
+    "collects the courting letters of half the town -- written FOR the senders, in their hand, for a fee",
+    "has been married before, somewhere with different laws, to someone who may not agree it ended",
+    "knows exactly which respectable house has a hidden door, and has used it",
+    "once modeled for the painting, statue, or illustration that hangs where everyone can see it",
+    "their vow of celibacy, mourning, or propriety has one standing exception with its own schedule",
+  ],
+  explicit: [
+    "secretly does ____ on the nights everyone assumes they're at prayer, cards, or the lodge",
+    "keeps the ____ from a past lover locked in ____, and takes it out when it storms",
+    "is known, in a city far from here, by the working name ____",
+    "will do anything asked of them by ____ because of what happened involving ____",
+    "has a hidden ____ dedicated entirely to ____, and one person alive has seen it",
+    "was trained in ____ by ____, and the skill leaks out at the worst possible moments",
+    "trades ____ for silence with ____, and the price has been rising",
+    "wrote the anonymous ____ describing ____, and the descriptions were from memory",
+    "keeps a coded diary of every ____, and the code is starting to be too clever for them",
+    "their scar, limp, or burn came from ____ during ____, not the story everyone was told",
+    "answers to ____ behind one particular locked door, and to nothing else there",
+    "the person they mourn publicly as ____ was actually their ____",
+  ],
+  };
+}
 
 // ── Archetype flavor -- role-weighted extras for the NORMAL tier ─────────────
 // Keyed by SpineOption.id from characterSpines.ts ARCHETYPE_OPTIONS. These
@@ -451,6 +554,7 @@ export const ARCHETYPE_FLAVOR: Partial<Record<string, Partial<Record<TraitSectio
   shadow: {
     voice: ["reasonable, patient, and always exactly three sentences away from a threat"],
     want: ["wants the hero to admit they were right about one thing, and would trade the victory for the admission"],
+    hidden: ["already knows the hero's secret and is saving it for the moment it buys the most"],
   },
   ruler: {
     mannerism: ["rearranges any table they sit at to face the door, including other people's tables"],
@@ -459,6 +563,7 @@ export const ARCHETYPE_FLAVOR: Partial<Record<string, Partial<Record<TraitSectio
   confidant: {
     mannerism: ["pours the drink before the confession starts, having read the walk-in correctly again"],
     want: ["wants to unburden the one secret they were never meant to be given"],
+    hidden: ["keeps one confession in writing, sealed, addressed, and unsent -- insurance or mercy, even they aren't sure"],
   },
 };
 

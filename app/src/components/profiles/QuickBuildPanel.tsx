@@ -35,6 +35,7 @@ export const QUICK_BUILD_ROWS: { section: TraitSection; label: string; targetSec
   { section: "mannerism", label: "Mannerism", targetSectionKey: "personality_traits" },
   { section: "voice",     label: "Voice",     targetSectionKey: "voice_notes" },
   { section: "want",      label: "Want / Motivation", targetSectionKey: "motivations" },
+  { section: "hidden",    label: "Hidden / Foreshadowing", targetSectionKey: "hidden_and_foreshadowing" },
 ];
 
 interface QuickBuildPanelProps {
@@ -54,7 +55,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary }: QuickBuildPan
   // The currently visible options per row. Rolled on first open and
   // rerolled per row (or all rows) on demand.
   const [rolls, setRolls] = useState<Record<TraitSection, string[]>>({
-    physical: [], mannerism: [], voice: [], want: [],
+    physical: [], mannerism: [], voice: [], want: [], hidden: [],
   });
 
   // Per-row-per-tier memory of options already dealt this cycle, so

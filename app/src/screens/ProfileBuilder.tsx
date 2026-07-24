@@ -1759,6 +1759,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
                     generatingField={generatingField}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
+                    showAiSummary={!isSideCharacter}
                   />
                   </div>
                 );
@@ -2132,6 +2133,10 @@ interface ProfileSectionEditorProps {
   onGenerateSectionSummary: () => void;
   generatingField: string | null;
   onFocus: () => void;
+  // Side-character template: per-section AI Summary tiles are hidden (the
+  // sections are short single fields -- summarizing them adds nothing; the
+  // Full AI Summary at the bottom covers the whole profile).
+  showAiSummary?: boolean;
 }
 
 function ProfileSectionEditor({
@@ -2149,6 +2154,7 @@ function ProfileSectionEditor({
   onGenerateSectionSummary,
   generatingField,
   onFocus,
+  showAiSummary = true,
 }: ProfileSectionEditorProps) {
   const isGeneratingSummary = generatingField === sectionKey;
 
@@ -2203,7 +2209,8 @@ function ProfileSectionEditor({
         />
       )}
 
-      {/* AI Summary sub-section */}
+      {/* AI Summary sub-section (hidden on the side-character template) */}
+      {showAiSummary && (
       <div className="rounded border border-border bg-bg-primary p-3">
         <div className="mb-1.5 flex items-center justify-between">
           <p className="text-xs font-medium text-text-muted">AI Summary: {heading}</p>
@@ -2226,6 +2233,7 @@ function ProfileSectionEditor({
           dataField={`section:${sectionKey}:ai_summary`}
         />
       </div>
+      )}
     </div>
   );
 }

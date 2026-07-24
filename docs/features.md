@@ -75,7 +75,7 @@ Each trait block shows a word count gauge tuned to its importance level. Higher-
 Character creation offers a template choice, stored as `character_kind` in frontmatter (absent = main, so pre-v1.0.10 files are untouched):
 
 - **Main** — the full trait-block template: importance levels, word gauges, the Importance Audit.
-- **Side / Background** — every section is a single free-text field; Quick Build appends lines into them. Trait-section headings are shared between templates, and the parser round-trips plain paragraphs under a trait heading instead of dropping them.
+- **Side / Background** — every section is a single free-text field; Quick Build appends lines into them. Per-section AI Summary tiles are dropped (only the Full AI Summary at the bottom remains; existing summaries survive a resave). Trait-section headings are shared between templates, and the parser round-trips plain paragraphs under a trait heading instead of dropping them.
 
 The Profile Builder's character list splits into collapsible **Main** and **Side / Background** groups; the chat attachment picker mirrors the same grouping.
 
@@ -85,7 +85,7 @@ Two cheat-sheet dropdowns in the profile header, under Status/Tags, each with pe
 
 ### Quick Build (side/background profiles)
 
-Opens at the top of Side/Background character profiles. Pick a Story Role (weights the rolls), then reroll curated sentence-length options per section — Physical, Mannerism, Voice, Want/Motivation — and click any option to append it to the matching section as a new line. Pools run 50+ options per section and rerolls page through the whole pool before anything repeats. An opt-in **NSFW toggle** (red, per character, never automatic) swaps the pools: off = normal options with the Explicit box greyed out; on = NSFW pools replace normal; the Explicit checkbox swaps in a third fill-in-the-blank tier ("secretly wants to be ____") the writer completes.
+Opens at the top of Side/Background character profiles. Pick a Story Role (weights the rolls), then reroll curated sentence-length options per section — Physical, Mannerism, Voice, Want/Motivation, and Hidden/Foreshadowing (secrets, tells, and planted details built to pay off later) — and click any option to append it to the matching section as a new line. Pools run 50+ options per section and rerolls page through the whole pool before anything repeats. An opt-in **NSFW toggle** (red, per character, never automatic) swaps the pools: off = normal options with the Explicit box greyed out; on = NSFW pools replace normal; the Explicit checkbox swaps in a third fill-in-the-blank tier ("secretly wants to be ____") the writer completes.
 
 ### Profile-level AI tools
 

@@ -578,10 +578,16 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
                 lines += [section.content]
             lines += [""]
 
-        # AI Summary subsection -- always present as a placeholder if empty
-        lines += [f"## AI Summary: {cfg.heading}"]
-        lines += [section.ai_summary if section.ai_summary else "_Generated on demand. Editable by writer._"]
-        lines += [""]
+        # AI Summary subsection -- always present as a placeholder on the
+        # main template. The SIDE template drops per-section summaries (the
+        # sections are short single fields; only the Full AI Summary at the
+        # bottom is kept) -- but any non-empty summary that already exists
+        # is preserved rather than deleted.
+        is_side = profile_type == "character" and profile.character_kind == "side"
+        if not is_side or section.ai_summary:
+            lines += [f"## AI Summary: {cfg.heading}"]
+            lines += [section.ai_summary if section.ai_summary else "_Generated on demand. Editable by writer._"]
+            lines += [""]
 
     # --- Full AI Summary ---
     lines += ["# Full AI Summary"]
