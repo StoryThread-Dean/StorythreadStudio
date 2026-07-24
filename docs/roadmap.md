@@ -10,7 +10,34 @@ For shipped releases see [`../CHANGELOG.md`](../CHANGELOG.md).
 
 Committed work for the near-term roadmap.
 
-*(Nothing currently scheduled -- the NanoGPT provider and the prompt caching toggle shipped in v1.0.10. Next candidates live under Proposed below; "Local model providers" is the natural successor since the provider plumbing it needs now exists.)*
+### Character creation overhaul (three stages, each independently shippable)
+
+Design locked 2026-07-24 after a feedback session; build in this order (effort ascending, each stage delivers on its own). Goal: kill the blank-page problem in the Profiles section and make side characters fast, without the AI ever inventing the character for the writer.
+
+**Shared design rules (all stages):**
+
+- **Fiction-first canned text, never "generalizations."** Every prefill paragraph is written as behavior + speech pattern + how they crack under pressure -- not the flattering personality-quiz register. House formula for traits: **trait + trigger + origin** ("untrusting *of new faces* because a stranger burned him once"), leaning on the existing `[contextual]` importance level. Canned paragraphs end with a fill-in hook: "...and this sharpens around ____ because ____."
+- **Writer-initiated insertion only.** Dropdown/randomizer picks insert canned text into editable boxes (same write-boundary logic as the Book Details suggestion chips). All canned content ships in code -- zero AI calls, instant, no em-dash risk.
+- **Three build speeds at character creation:** Main (spine dropdowns + guided interview), Supporting (quick-build mini-pickers + randomizer), Background (name + one line + a single roll).
+
+**Stage 1 -- Personality spine dropdowns (main characters).** Two selects at the top of the Personality section, both default blank, each with per-option "What's this?" help (Book Details chip pattern):
+
+- **Personality (Enneagram)** -- 9 types; each canned summary carries the type's core fear, core desire, and stress behavior (motivation + arc fuel).
+- **Story Role (Archetype)** -- the 12 Jungian archetypes (Hero, Mentor, Trickster, Shadow, Caregiver...) plus a few story-role extras.
+
+Selecting appends that pick's fiction-first paragraph into the editable box below; picking both stacks (Caregiver + Enneagram 8 reads very differently from Caregiver + Enneagram 2). A one-line nudge under the filled box: "This is a starting point -- what makes [character] not a textbook type?" Do NOT use "Myers-Briggs"/"MBTI" naming anywhere (trademarked); if a 16-type list is ever added, label it generically ("Personality Type (16-type)") with the four-letter codes.
+
+**Stage 2 -- Side-character quick-build + trait randomizer.** A compact template for supporting/background characters: a Role/Archetype dropdown, then per-section randomizer rows (Physical, Mannerism, Voice, Want/Motivation -- a single Want row is deliberate; the Want-vs-Need distinction is main-character interview territory). Each row has a reroll button that reshuffles its visible options from a curated pool; clicking an option inserts it into the editable box. Pools are organized by section so inserts land in the right trait block, and the chosen archetype WEIGHTS the pools (pick "Comic Relief" -> mannerism rolls lean toward timing-and-quips). Traits created this way default to `[present]`/`[background]`, not `[core]`.
+
+- **NSFW randomizer toggle** (red styling, per-character, opt-in -- same philosophy as the v1.0.9 Book Details NSFW lists; deliberately NOT gated on the AI content-mode setting and NEVER auto-enabled by genre). Semantics: toggled OFF = normal pools only, and the Explicit checkbox next to it is greyed out. Toggled ON = normal pools are replaced by NSFW pools, and the Explicit checkbox becomes clickable; checking it swaps in a third, spicier tier that OVERWRITES the NSFW options. The spiciest tier favors **fill-in-the-blank** options ("secretly wants to be ____") -- personalizes instead of prescribing, pairs with `[hidden]` traits, keeps canned text from having to be exhaustively specific. Rejected: parsing Book Details Genre to auto-enable (surprise factor + a book can be erotica while this character isn't sexual).
+
+**Stage 3 -- Guided interview mode (Profile Builder).** A new behavior mode alongside Chat / Refine / Extract Traits / Check Consistency. Hard rule: **the AI is the interviewer and organizer, never the inventor** -- it structures the writer's own answers; any invented detail is framed as an explicit take-or-discard suggestion.
+
+- First pass: 5-8 basics (one-line concept, role, age, spine-dropdown picks, one defining contradiction) -> a copy/paste skeleton with every section stubbed.
+- Expansion: checkbox chips for which sections to deepen (Physical / Personality / Motivations / Voice / Hidden & Foreshadowing / Relationships / Notes -- ChipGroup pattern). Per checked section, 2-4 pointed questions per round, shaped to extract **triggers and origins**, not adjectives ("You said he's untrusting -- of whom specifically? What happened?").
+- Every round ends with the full updated copy/paste block so the writer can bail at any point with something usable.
+- **Story-context flavoring:** the interview prompt instructs the AI to angle follow-up questions toward Book Details (Genre, Tone, Theme, Setting, Target Audience) when filled in -- `_build_story_context()` already injects these into profile-chat, so this is prompt-layer only. Rule: **shade, don't straitjacket** (the comic-relief neighbor stays funny in a horror novel; story context never overrides what the writer established about the character).
+- Output is shaped so it feeds directly into the existing Extract Traits mode: one step from finished interview to structured trait blocks.
 
 ---
 
