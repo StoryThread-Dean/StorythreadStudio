@@ -44,6 +44,8 @@ import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "../com
 // Both insert canned, editable text -- zero AI calls.
 import { SpinePickers } from "../components/profiles/SpinePickers";
 import { QuickBuildPanel } from "../components/profiles/QuickBuildPanel";
+import { NameGeneratorPanel } from "../components/profiles/NameGeneratorPanel";
+import { Dices } from "lucide-react";
 import { ROLE_SUGGESTIONS, ARCHETYPE_ROLE_TAGS } from "../data/characterSpines";
 import type { CharacterKind } from "../types/profile";
 
@@ -378,6 +380,10 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // Characters only: which template the new profile starts from.
   const [newKind, setNewKind] = useState<CharacterKind>("main");
   const [creating, setCreating] = useState(false);
+  // Name generator toggles: one for the create form, one for the header
+  // dice button on an open character profile.
+  const [showCreateNameGen, setShowCreateNameGen] = useState(false);
+  const [showHeaderNameGen, setShowHeaderNameGen] = useState(false);
 
   // Character list grouping: Main vs Side/Background, each independently
   // collapsible (session-only state -- the groups default open).
@@ -1530,6 +1536,22 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             />
             {profileType === "character" && (
               <>
+                {/* Name generator: roll given names + surnames by culture,
+                    era, or fantasy race and drop the pick into Name. */}
+                <button
+                  type="button"
+                  onClick={() => setShowCreateNameGen(v => !v)}
+                  className="mb-3 flex items-center gap-1.5 text-xs text-indigo-400 transition-colors hover:text-indigo-300"
+                >
+                  <Dices size={12} />
+                  {showCreateNameGen ? "Hide name generator" : "Need a name?"}
+                </button>
+                {showCreateNameGen && (
+                  <div className="mb-3">
+                    <NameGeneratorPanel onPick={name => setNewName(name)} />
+                  </div>
+                )}
+
                 <label className="mb-1 block text-xs text-text-muted">Role (optional)</label>
                 <input
                   type="text"
@@ -1618,13 +1640,30 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 <div className="mb-3 grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-1 block text-xs text-text-muted">Name</label>
-                    <input
-                      type="text"
-                      value={profile.name}
-                      onChange={e => updateProfileField("name", e.target.value)}
-                      data-pb-field="name"
-                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
-                    />
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={profile.name}
+                        onChange={e => updateProfileField("name", e.target.value)}
+                        data-pb-field="name"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
+                      />
+                      {/* Name generator toggle -- characters only */}
+                      {profile.type === "character" && (
+                        <button
+                          type="button"
+                          onClick={() => setShowHeaderNameGen(v => !v)}
+                          className={`shrink-0 rounded border px-2 transition-colors ${
+                            showHeaderNameGen
+                              ? "border-indigo-500 text-indigo-300"
+                              : "border-border text-text-muted hover:border-indigo-500 hover:text-indigo-300"
+                          }`}
+                          title="Roll a name (cultures, eras, fantasy races)"
+                        >
+                          <Dices size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-text-muted">Role</label>
@@ -1690,6 +1729,17 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     />
                   </div>
                 </div>
+
+                {/* Name generator -- opened by the dice button beside Name.
+                    Picking writes into the Name field as a normal unsaved
+                    edit (Ctrl+S keeps it). */}
+                {showHeaderNameGen && profile.type === "character" && (
+                  <div className="mb-3">
+                    <NameGeneratorPanel
+                      onPick={name => updateProfileField("name", name)}
+                    />
+                  </div>
+                )}
 
                 {/* Personality spine -- characters only, right in the header
                     under Status/Tags. Inserts into Personality Traits (trait

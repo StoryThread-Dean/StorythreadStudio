@@ -1,0 +1,97 @@
+[
+  {
+    "id": "egyptian",
+    "label": "Egyptian",
+    "region": "Middle East & Africa",
+    "sort": 10,
+    "given": {
+      "medieval": {
+        "male": ["Amr", "Khalid", "Ali", "Hasan", "Husayn", "Ahmad", "Muhammad", "Ibrahim", "Yusuf", "Salah", "Tariq", "Zayd", "Hamza", "Bilal", "Uthman", "Umar", "Abbas", "Jafar", "Harun", "Musa", "Isa", "Dawud", "Sulayman", "Yahya", "Zakariya", "Ismail", "Malik", "Nasir", "Rashid", "Karim"],
+        "female": ["Fatima", "Aisha", "Khadija", "Zaynab", "Maryam", "Amina", "Safiya", "Hafsa", "Ruqayya", "Layla", "Lubna", "Sukayna", "Rabia", "Zubayda", "Asma", "Salma", "Hind", "Jamila", "Karima", "Nafisa", "Halima", "Sawda", "Juwayriya", "Maymuna", "Ramla", "Atika", "Zahra", "Sumayya", "Khawla", "Umama"]
+      },
+      "colonial": {
+        "male": ["Mohamed", "Ahmed", "Mahmoud", "Mustafa", "Ismail", "Ibrahim", "Hassan", "Hussein", "Ali", "Omar", "Khalil", "Amin", "Tewfik", "Abbas", "Fouad", "Saad", "Sherif", "Selim", "Rashad", "Zaki", "Hamid", "Sabri", "Kamel", "Naguib", "Boutros", "Girgis", "Tadros", "Habib", "Awad", "Yacoub"],
+        "female": ["Fatma", "Aisha", "Zeinab", "Khadiga", "Amna", "Sakina", "Nabawiya", "Bahiya", "Zakiya", "Hamida", "Galila", "Aziza", "Naima", "Saniya", "Farida", "Nazira", "Nafisa", "Sayeda", "Halima", "Karima", "Fahima", "Zubaida", "Ratiba", "Tafida", "Hanem", "Nargis", "Mariam", "Warda", "Dawlat", "Ihsan"]
+      },
+      "early20": {
+        "male": ["Ahmed", "Mohamed", "Mahmoud", "Hassan", "Hussein", "Ali", "Gamal", "Anwar", "Farouk", "Fouad", "Naguib", "Taha", "Tawfiq", "Sayed", "Kamal", "Salah", "Fathi", "Ezzat", "Lotfi", "Shukri", "Zakaria", "Hamdi", "Bahgat", "Wahid", "Ragab", "Shaban", "Mounir", "Fakhry", "Sobhi", "Anis"],
+        "female": ["Fatma", "Zeinab", "Aisha", "Huda", "Safiya", "Amina", "Ihsan", "Doria", "Aziza", "Bahiga", "Ratiba", "Insaf", "Zakiya", "Hikmat", "Fawzia", "Farida", "Nazli", "Samira", "Karima", "Nabila", "Awatef", "Sania", "Tahiya", "Fathiya", "Hamida", "Naima", "Nagat", "Layla", "Dawlat", "Esmat"]
+      },
+      "mid20": {
+        "male": ["Adel", "Samir", "Magdy", "Mohsen", "Nabil", "Fawzy", "Hany", "Ashraf", "Ayman", "Emad", "Essam", "Hesham", "Hossam", "Ihab", "Khaled", "Medhat", "Mostafa", "Nader", "Osama", "Raafat", "Sami", "Sherif", "Tarek", "Wael", "Yasser", "Amr", "Alaa", "Gamal", "Hamdy", "Reda"],
+        "female": ["Mona", "Magda", "Nadia", "Laila", "Souad", "Faten", "Samia", "Nagwa", "Hala", "Hanan", "Manal", "Maha", "Mervat", "Nahed", "Afaf", "Amal", "Azza", "Eman", "Fatma", "Hoda", "Karima", "Nabila", "Naglaa", "Olfat", "Safaa", "Sahar", "Salwa", "Sanaa", "Shadia", "Zeinab"]
+      },
+      "current": {
+        "male": ["Omar", "Youssef", "Ahmed", "Mohamed", "Mahmoud", "Mostafa", "Karim", "Hassan", "Ziad", "Seif", "Marwan", "Amr", "Khaled", "Tamer", "Ramy", "Sherif", "Hazem", "Mazen", "Adham", "Yassin", "Ali", "Ibrahim", "Abdelrahman", "Hamza", "Malek", "Nour", "Eyad", "Anas", "Bilal", "Selim"],
+        "female": ["Nour", "Farida", "Malak", "Jana", "Hana", "Salma", "Mariam", "Habiba", "Rana", "Dina", "Menna", "Sara", "Yasmin", "Laila", "Aya", "Nada", "Mai", "Heba", "Rania", "Dalia", "Nourhan", "Shahd", "Reem", "Farah", "Alia", "Kenzy", "Nadine", "Zeina", "Ingy", "Mayar"]
+      }
+    },
+    "surnames": {
+      "any": ["El-Sayed", "El-Masry", "El-Shazly", "El-Gohary", "El-Banna", "El-Baz", "El-Sharkawy", "El-Attar", "El-Kholy", "El-Naggar", "Abdel-Rahman", "Abdel-Aziz", "Abdel-Hamid", "Mahmoud", "Hassan", "Hussein", "Ibrahim", "Mohamed", "Ahmed", "Mostafa", "Khalil", "Mansour", "Fahmy", "Shalaby", "Selim", "Amer", "Nassar", "Ghali", "Habib", "Girgis", "Boutros", "Iskander", "Awad", "Ramadan", "Shaheen", "Zaki", "Sabry", "Kamel", "Fawzy", "Hegazy", "Metwally", "Ashour", "Darwish", "Gaber", "Hafez", "Kandil", "Radwan", "Saleh", "Tantawy", "Zahran"]
+    }
+  },
+  {
+    "id": "turkish",
+    "label": "Turkish",
+    "region": "Middle East & Africa",
+    "sort": 20,
+    "given": {
+      "medieval": {
+        "male": ["Mehmed", "Ahmed", "Mustafa", "Murad", "Bayezid", "Selim", "Suleyman", "Orhan", "Osman", "Ibrahim", "Musa", "Isa", "Yakub", "Davud", "Hamza", "Iskender", "Kasim", "Sinan", "Hizir", "Ertugrul", "Alp", "Aslan", "Bahadir", "Cem", "Dursun", "Halil", "Hasan", "Huseyin", "Omer", "Yusuf"],
+        "female": ["Hatice", "Ayse", "Fatma", "Emine", "Hafsa", "Mihrimah", "Nurbanu", "Safiye", "Handan", "Hurrem", "Turhan", "Gulbahar", "Gulfem", "Esma", "Zeynep", "Rukiye", "Hanzade", "Beyhan", "Nilufer", "Gulcicek", "Devlet", "Halime", "Mahidevran", "Kamer", "Gevherhan", "Gulruh", "Huma", "Melek", "Sultan", "Rabia"]
+      },
+      "colonial": {
+        "male": ["Abdulhamid", "Abdulaziz", "Abdulmecid", "Mahmud", "Selim", "Mustafa", "Ahmed", "Mehmed", "Osman", "Ibrahim", "Ismail", "Halil", "Hasan", "Huseyin", "Ali", "Omer", "Resid", "Fuad", "Midhat", "Namik", "Ziya", "Cevdet", "Rifat", "Sadik", "Tevfik", "Kamil", "Nuri", "Sami", "Ragip", "Besim"],
+        "female": ["Ayse", "Fatma", "Emine", "Hatice", "Zeynep", "Serife", "Havva", "Zehra", "Naile", "Nazime", "Mediha", "Refia", "Cemile", "Fehime", "Hamide", "Adile", "Behice", "Seniha", "Leman", "Nigar", "Fitnat", "Makbule", "Munire", "Rabia", "Saliha", "Ummuhan", "Hanife", "Gulsum", "Dilber", "Sadiye"]
+      },
+      "early20": {
+        "male": ["Mustafa", "Kemal", "Ismet", "Enver", "Talat", "Cemal", "Fevzi", "Kazim", "Refik", "Celal", "Adnan", "Fuat", "Nuri", "Rauf", "Sukru", "Hasan", "Huseyin", "Ali", "Mehmet", "Ahmet", "Ibrahim", "Osman", "Ramazan", "Bekir", "Halil", "Recep", "Salih", "Veli", "Yasar", "Ihsan"],
+        "female": ["Fatma", "Ayse", "Emine", "Hatice", "Zeynep", "Havva", "Zehra", "Meryem", "Hanife", "Sabiha", "Halide", "Latife", "Muazzez", "Nezihe", "Melahat", "Nimet", "Perihan", "Saadet", "Turkan", "Nebahat", "Muzeyyen", "Bedia", "Leman", "Nadide", "Pakize", "Vasfiye", "Mualla", "Nuriye", "Sidika", "Kadriye"]
+      },
+      "mid20": {
+        "male": ["Mehmet", "Ahmet", "Mustafa", "Ali", "Huseyin", "Hasan", "Ibrahim", "Ismail", "Osman", "Yusuf", "Murat", "Omer", "Ramazan", "Halil", "Suleyman", "Abdullah", "Recep", "Salih", "Kemal", "Cengiz", "Erol", "Kenan", "Metin", "Orhan", "Tuncay", "Erdal", "Serdar", "Bulent", "Levent", "Aydin"],
+        "female": ["Fatma", "Ayse", "Emine", "Hatice", "Zeynep", "Sevim", "Sevgi", "Nurten", "Gulten", "Turkan", "Filiz", "Nilgun", "Serpil", "Sibel", "Aysel", "Gonul", "Nuray", "Oya", "Semra", "Suna", "Yildiz", "Zuhal", "Hulya", "Meral", "Mine", "Nurcan", "Gulsen", "Sultan", "Hacer", "Songul"]
+      },
+      "current": {
+        "male": ["Emre", "Yusuf", "Mustafa", "Mehmet", "Ahmet", "Eymen", "Omer", "Ali", "Berat", "Kerem", "Arda", "Deniz", "Efe", "Burak", "Can", "Cem", "Kaan", "Mert", "Onur", "Ozan", "Tolga", "Umut", "Yigit", "Baran", "Emir", "Alperen", "Furkan", "Hamza", "Aras", "Cinar"],
+        "female": ["Elif", "Zeynep", "Defne", "Azra", "Ecrin", "Zehra", "Nehir", "Miray", "Eylul", "Ada", "Melis", "Selin", "Merve", "Buse", "Ceren", "Damla", "Dilara", "Ebru", "Esra", "Gizem", "Irem", "Kubra", "Pelin", "Seda", "Sude", "Tugce", "Yasemin", "Aylin", "Duru", "Lina"]
+      }
+    },
+    "surnames": {
+      "medieval": ["Mehmedoglu", "Ahmedoglu", "Hasanoglu", "Huseyinoglu", "Alioglu", "Osmanoglu", "Karamanoglu", "Candaroglu", "Aydinoglu", "Ramazanoglu", "Dulkadiroglu", "Evrenosoglu", "Mihaloglu", "Malkocoglu", "Turahanoglu", "Yakuboglu", "Musaoglu", "Timurtasoglu", "Kara", "Uzun", "Sari", "Deli", "Kucuk", "Koca", "Genc", "Sofu", "Haci", "Molla", "Celebi", "Kadizade", "Seyhzade", "Sungur"],
+      "colonial": ["Ibrahimoglu", "Yusufoglu", "Haliloglu", "Mustafaoglu", "Suleymanoglu", "Ismailoglu", "Omeroglu", "Recepoglu", "Salihoglu", "Bekiroglu", "Karaosmanoglu", "Capanoglu", "Kopruluzade", "Rizazade", "Damatzade", "Hafizzade", "Imamzade", "Mollazade", "Hocazade", "Tepedelenli", "Alemdar", "Kalaycioglu", "Kuyumcuoglu", "Demircioglu", "Terzioglu", "Ekmekcioglu", "Bakkaloglu", "Kasapoglu", "Balcioglu", "Topaloglu", "Karabekir", "Kucukoglu"],
+      "any": ["Yilmaz", "Kaya", "Demir", "Ozturk", "Celik", "Sahin", "Yildiz", "Yildirim", "Aydin", "Arslan", "Dogan", "Kilic", "Aslan", "Cetin", "Kara", "Koc", "Kurt", "Ozkan", "Simsek", "Polat", "Ozdemir", "Erdogan", "Gunes", "Akin", "Aksoy", "Avci", "Bulut", "Cakir", "Duman", "Erdem", "Guler", "Gunay", "Isik", "Kaplan", "Karaca", "Keskin", "Korkmaz", "Kose", "Ozer", "Sezer", "Tas", "Tekin", "Toprak", "Tuncer", "Turan", "Ucar", "Unal", "Yalcin", "Yavuz", "Ates"]
+    }
+  },
+  {
+    "id": "west_african",
+    "label": "West African",
+    "region": "Middle East & Africa",
+    "sort": 30,
+    "given": {
+      "medieval": {
+        "male": ["Kofi", "Kwame", "Kwaku", "Kwabena", "Kwesi", "Kojo", "Yaw", "Adisa", "Babatunde", "Ajayi", "Akande", "Bankole", "Chike", "Emeka", "Ikenna", "Nnamdi", "Obiora", "Nwankwo", "Okonkwo", "Musa", "Ibrahim", "Sulayman", "Mamadou", "Ousmane", "Sekou", "Bakari", "Sundiata", "Dauda", "Garba", "Tunde"],
+        "female": ["Ama", "Abena", "Akosua", "Akua", "Adwoa", "Afua", "Yaa", "Efua", "Esi", "Amina", "Fatima", "Hauwa", "Zainab", "Halima", "Aissata", "Mariama", "Kadiatou", "Oumou", "Abike", "Adunni", "Asabi", "Ayoka", "Abeni", "Adaeze", "Ngozi", "Nneka", "Chinwe", "Nwakaego", "Uzoamaka", "Yetunde"]
+      },
+      "colonial": {
+        "male": ["Kwame", "Kofi", "Kwabena", "Yaw", "Kojo", "Kwesi", "Kwaku", "Adebayo", "Adewale", "Akintola", "Oladipo", "Ajayi", "Babatunde", "Chukwuemeka", "Obinna", "Nwabueze", "Emeka", "Nnamdi", "Ibrahim", "Usman", "Aliyu", "Sani", "Musa", "Garba", "Samuel", "Joseph", "Daniel", "Moses", "Emmanuel", "Mamadou"],
+        "female": ["Ama", "Abena", "Akosua", "Adwoa", "Afua", "Yaa", "Esi", "Efua", "Akua", "Adaeze", "Ngozi", "Nneka", "Chinwe", "Aduke", "Abike", "Adunni", "Yetunde", "Iyabo", "Amina", "Aisha", "Hauwa", "Zainab", "Halima", "Hadiza", "Mariama", "Aissata", "Mary", "Grace", "Comfort", "Charity"]
+      },
+      "early20": {
+        "male": ["Nnamdi", "Obafemi", "Kwame", "Kofi", "Kwabena", "Yaw", "Akinola", "Adetokunbo", "Ladipo", "Ayodele", "Olusegun", "Chukwuma", "Okechukwu", "Samuel", "Daniel", "Emmanuel", "Festus", "Nathaniel", "Benjamin", "Isaac", "Ahmadu", "Abubakar", "Aminu", "Sani", "Usman", "Ibrahim", "Ebenezer", "Theophilus", "Akwasi", "Kojo"],
+        "female": ["Funmilayo", "Amina", "Aisha", "Hauwa", "Hadiza", "Zainab", "Ama", "Abena", "Akosua", "Adwoa", "Yaa", "Esi", "Efua", "Ngozi", "Nneka", "Adaeze", "Chinwe", "Iyabo", "Yetunde", "Aduke", "Wuraola", "Victoria", "Margaret", "Agnes", "Beatrice", "Comfort", "Grace", "Mercy", "Felicia", "Mariama"]
+      },
+      "mid20": {
+        "male": ["Chinua", "Wole", "Femi", "Segun", "Tunde", "Bode", "Dele", "Kunle", "Yemi", "Chukwuemeka", "Chinedu", "Ikechukwu", "Obiora", "Emeka", "Nnamdi", "Kwame", "Kofi", "Kwesi", "Ato", "Kwadwo", "Yaw", "Murtala", "Shehu", "Yakubu", "Aliyu", "Bala", "Danladi", "Umaru", "Garba", "Olusegun"],
+        "female": ["Ngozi", "Chinwe", "Nkechi", "Ifeoma", "Adaobi", "Uche", "Amaka", "Funke", "Bisi", "Sade", "Yewande", "Ronke", "Kemi", "Bunmi", "Titi", "Efua", "Ama", "Akosua", "Adjoa", "Abena", "Amina", "Aisha", "Hadiza", "Fatima", "Maryam", "Hauwa", "Zainab", "Comfort", "Grace", "Patience"]
+      },
+      "current": {
+        "male": ["Ayomide", "Oluwaseun", "Oluwatobi", "Ayodeji", "Damilare", "Timilehin", "Emmanuel", "David", "Daniel", "Samuel", "Chidera", "Chibueze", "Chukwuebuka", "Somtochukwu", "Kelechi", "Ebuka", "Chinonso", "Kwame", "Kofi", "Kwabena", "Nana", "Kojo", "Abdullahi", "Umar", "Sadiq", "Bashir", "Khalid", "Musa", "Yusuf", "Tobiloba"],
+        "female": ["Amara", "Chioma", "Adaora", "Chidinma", "Chiamaka", "Ogechi", "Temiloluwa", "Oluwakemi", "Simisola", "Damilola", "Afia", "Adwoa", "Ama", "Akosua", "Abena", "Aisha", "Fatima", "Maryam", "Zainab", "Hadiza", "Amina", "Khadija", "Halima", "Blessing", "Precious", "Favour", "Esther", "Deborah", "Munachi", "Adesuwa"]
+      }
+    },
+    "surnames": {
+      "any": ["Okafor", "Okeke", "Okonkwo", "Okoro", "Eze", "Nwosu", "Nwachukwu", "Chukwu", "Anyanwu", "Igwe", "Adeyemi", "Adebayo", "Adesina", "Adewale", "Afolabi", "Akinyemi", "Balogun", "Fashola", "Ogunleye", "Olawale", "Oyelowo", "Soyinka", "Achebe", "Okonjo", "Mensah", "Owusu", "Boateng", "Appiah", "Asante", "Agyeman", "Osei", "Amoah", "Ofori", "Annan", "Danquah", "Acheampong", "Diallo", "Toure", "Traore", "Keita", "Cisse", "Konate", "Kone", "Coulibaly", "Sissoko", "Kante", "Bello", "Abubakar", "Sanusi", "Dantata"]
+    }
+  }
+]

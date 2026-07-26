@@ -15,7 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers -- each router handles one area of the API.
 # As we build more features, we'll add more routers here.
-from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search, structure
+from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search, structure, names
+from app.utils.names_store import seed_names_db
 
 
 # --- Create the FastAPI App ---
@@ -100,3 +101,18 @@ app.include_router(export.router)
 app.include_router(progress.router)
 app.include_router(search.router)
 app.include_router(structure.router)
+app.include_router(names.router)
+
+
+# --- Seed the name-generator database ---
+# names.db is an app-level SQLite cache built from JSON shipped with the
+# app (see utils/names_store.py). Seeding is a no-op when the version
+# matches; a failure must never stop the server from starting -- the Name
+# Generator degrades to empty pools while everything else keeps working.
+@app.on_event("startup")
+async def _seed_names() -> None:
+    try:
+        seed_names_db()
+    except Exception:  # noqa: BLE001 -- startup must survive bad seed data
+        import logging
+        logging.getLogger(__name__).exception("names.db seeding failed")

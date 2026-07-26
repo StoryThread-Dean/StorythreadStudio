@@ -1,0 +1,95 @@
+[
+  {
+    "id": "japanese",
+    "label": "Japanese",
+    "region": "Asia",
+    "sort": 10,
+    "given": {
+      "medieval": {
+        "male": ["Nobunaga", "Hideyoshi", "Ieyasu", "Hanzo", "Masamune", "Kenshin", "Shingen", "Yoshitsune", "Musashi", "Kojiro", "Motonari", "Yukimura", "Kanetsugu", "Toshiie", "Nagamasa", "Katsumoto", "Ujimasa", "Yoshimoto", "Hidetada", "Iemitsu", "Tadakatsu", "Naomasa", "Kiyomasa", "Masanori", "Mitsuhide", "Ranmaru", "Sasuke", "Goemon", "Jubei", "Denbei"],
+        "female": ["Tomoe", "Shizuka", "Tokiwa", "Masako", "Nene", "Oichi", "Chacha", "Hatsu", "Go", "Matsu", "Tama", "Sen", "Aoi", "Kame", "Tsuru", "Ume", "Kiku", "Fuji", "Hana", "Ito", "Toku", "Yodo", "Komatsu", "Chiyo", "Kaede", "Okatsu", "Oman", "Ofuku", "Okaji", "Take"]
+      },
+      "colonial": {
+        "male": ["Ryoma", "Shinsaku", "Takamori", "Toshimichi", "Hirobumi", "Yukichi", "Kaishu", "Isami", "Toshizo", "Soji", "Kogoro", "Shintaro", "Heihachiro", "Tesshu", "Munemitsu", "Aritomo", "Masayoshi", "Kiyotaka", "Takayoshi", "Tomomi", "Shigenobu", "Taisuke", "Genpaku", "Gennai", "Norinaga", "Keisuke", "Kanjuro", "Denzo", "Tetsutaro", "Sanosuke"],
+        "female": ["Ume", "Yae", "Sada", "Haru", "Kiku", "Tsune", "Toku", "Fumi", "Ine", "Rin", "Katsu", "Tami", "Shige", "Sono", "Koto", "Yoshi", "Masa", "Nobu", "Mitsu", "Sue", "Chika", "Hisa", "Naka", "Tome", "Umeko", "Sadako", "Haruko", "Yaeko", "Teru", "Kane"]
+      },
+      "early20": {
+        "male": ["Kiyoshi", "Hiroshi", "Minoru", "Shigeru", "Isamu", "Susumu", "Takashi", "Masao", "Tadashi", "Kazuo", "Ichiro", "Jiro", "Saburo", "Shiro", "Goro", "Akira", "Osamu", "Noboru", "Toshio", "Yoshio", "Haruo", "Teruo", "Mamoru", "Takeo", "Kenji", "Koji", "Eiji", "Shoichi", "Yukio", "Tamotsu"],
+        "female": ["Kiyoko", "Yoshiko", "Kazuko", "Hanako", "Fumiko", "Chiyoko", "Haruko", "Shizuko", "Toshiko", "Sachiko", "Michiko", "Setsuko", "Teruko", "Masako", "Emiko", "Hideko", "Sumiko", "Mitsuko", "Nobuko", "Akiko", "Yukiko", "Aiko", "Kimiko", "Takako", "Sadako", "Yaeko", "Ayako", "Reiko", "Tomiko", "Fusako"]
+      },
+      "mid20": {
+        "male": ["Takeshi", "Kenichi", "Makoto", "Shinji", "Yuji", "Hideo", "Kazuhiro", "Takahiro", "Hiroyuki", "Masahiro", "Tetsuya", "Kazuya", "Toru", "Satoshi", "Yasuo", "Nobuo", "Katsuhiro", "Mitsuo", "Shigeo", "Tadao", "Yoichi", "Ryoichi", "Isao", "Tatsuya", "Junichi", "Koichi", "Shuji", "Norio", "Masaru", "Mitsuru"],
+        "female": ["Keiko", "Yoko", "Junko", "Kumiko", "Yumiko", "Mariko", "Naoko", "Noriko", "Yuko", "Kyoko", "Rumiko", "Hiromi", "Mayumi", "Megumi", "Tomoko", "Atsuko", "Etsuko", "Harumi", "Kaori", "Miki", "Rie", "Yukari", "Chieko", "Sanae", "Machiko", "Ikuko", "Ryoko", "Miyuki", "Emi", "Akemi"]
+      },
+      "current": {
+        "male": ["Haruto", "Yuto", "Sota", "Ren", "Hinata", "Riku", "Kaito", "Yuma", "Sora", "Daiki", "Takumi", "Tsubasa", "Shota", "Kenta", "Yuki", "Ryota", "Kota", "Yamato", "Itsuki", "Minato", "Hayato", "Naoki", "Keita", "Shun", "Kazuki", "Yusuke", "Daisuke", "Taiga", "Asahi", "Soma"],
+        "female": ["Yui", "Sakura", "Hina", "Aoi", "Rin", "Mei", "Mio", "Koharu", "Himari", "Yuna", "Akari", "Hana", "Riko", "Miyu", "Saki", "Ayaka", "Haruka", "Misaki", "Nanami", "Honoka", "Momoka", "Yuka", "Airi", "Rina", "Mana", "Kokoro", "Ichika", "Tsumugi", "Sumire", "Kanna"]
+      }
+    },
+    "surnames": {
+      "any": ["Sato", "Suzuki", "Takahashi", "Tanaka", "Watanabe", "Ito", "Yamamoto", "Nakamura", "Kobayashi", "Kato", "Yoshida", "Yamada", "Sasaki", "Yamaguchi", "Matsumoto", "Inoue", "Kimura", "Hayashi", "Shimizu", "Saito", "Sakamoto", "Mori", "Abe", "Ikeda", "Hashimoto", "Ishikawa", "Ogawa", "Goto", "Okada", "Hasegawa", "Murakami", "Kondo", "Ishii", "Maeda", "Fujita", "Endo", "Aoki", "Fujii", "Nishimura", "Fukuda", "Ota", "Miura", "Fujiwara", "Okamoto", "Matsuda", "Nakajima", "Nakano", "Harada", "Ono", "Tamura"]
+    }
+  },
+  {
+    "id": "chinese",
+    "label": "Chinese",
+    "region": "Asia",
+    "sort": 20,
+    "given": {
+      "medieval": {
+        "male": ["Wei", "Jian", "Liang", "Yun", "Zhi", "Kang", "Bo", "Xuan", "Cheng", "Yong", "Guang", "Feng", "Hong", "Tao", "Han", "Heng", "Ren", "Yi", "De", "Zhen", "Gang", "Kuan", "Shan", "Qing", "Lin", "Xun", "Fu", "Chong", "Bai", "Mo"],
+        "female": ["Mei", "Xiu", "Lan", "Ying", "Hua", "Fang", "Yue", "Qiao", "Wan", "Ru", "Yan", "Xiang", "Lian", "Zhu", "Qin", "Shuang", "Ning", "Rou", "Die", "Xue", "Chun", "Ping", "Hui", "Juan", "Luan", "Wanru", "Yunxiu", "Meilin", "Qiuyue", "Feiyan"]
+      },
+      "colonial": {
+        "male": ["Guofan", "Hongzhang", "Zongtang", "Zexu", "Youwei", "Qichao", "Shikai", "Wenxiang", "Baozhen", "Guoquan", "Dingguo", "Anbang", "Shirong", "Wenzhong", "Jinglin", "Zhaolin", "Yude", "Chengen", "Guangqi", "Renjie", "Weiyuan", "Fucheng", "Yinhuan", "Tingfang", "Ruilin", "Changqing", "Baoqi", "Shouchang", "Deming", "Yixin"],
+        "female": ["Cuixiang", "Yuzhen", "Xiuying", "Guilan", "Fengjiao", "Chunhua", "Qiuxiang", "Yuehua", "Meiyu", "Lanying", "Baozhu", "Jinfeng", "Shuzhen", "Xiulan", "Guiying", "Fenglan", "Chunmei", "Qiuyun", "Yuzhu", "Cuihua", "Xiangyun", "Wanqing", "Peilan", "Suzhen", "Huiniang", "Yuniang", "Jinlian", "Yinhua", "Qiaoyun", "Meixiang"]
+      },
+      "early20": {
+        "male": ["Zhiyuan", "Wenbin", "Guowei", "Hanmin", "Shaowen", "Yunsong", "Boqun", "Xueliang", "Zuolin", "Qirui", "Shichang", "Yuanhong", "Peifu", "Zongren", "Chongxi", "Dingwen", "Xuezhi", "Bingwen", "Sicheng", "Shuming", "Yuanpei", "Renfu", "Dequan", "Yaozu", "Chuanfang", "Xiliang", "Guangqian", "Jishen", "Lizhong", "Hanqing"],
+        "female": ["Qingling", "Meiling", "Ailing", "Shuhua", "Peiyu", "Wanfen", "Yiwen", "Zhiying", "Huifen", "Shufen", "Yunzhi", "Peizhen", "Wanyi", "Ruolan", "Xiaoman", "Huiyin", "Shuwen", "Yayun", "Jingyi", "Zhilan", "Meifen", "Suxin", "Yueying", "Peihua", "Jinghua", "Shuqing", "Lanfen", "Yuying", "Xiuqin", "Wenshu"]
+      },
+      "mid20": {
+        "male": ["Jianguo", "Guoqiang", "Weidong", "Jianjun", "Jianhua", "Zhiqiang", "Yongqiang", "Zhigang", "Haifeng", "Dongsheng", "Weimin", "Aiguo", "Hongwei", "Xuejun", "Baoguo", "Zhenhua", "Liguo", "Guohua", "Shengli", "Chunsheng", "Fusheng", "Tiejun", "Xiaodong", "Xiaoming", "Xiaojun", "Jun", "Bin", "Gang", "Qiang", "Ping"],
+        "female": ["Xiaohong", "Xiaoyan", "Hongmei", "Chunyan", "Guihua", "Yulan", "Aihua", "Xiumei", "Fengying", "Shufang", "Guizhi", "Yufen", "Lihua", "Meihua", "Yanhong", "Limei", "Xiaomei", "Hongying", "Cuiping", "Yumei", "Junhua", "Shuqin", "Lanfang", "Weihong", "Haiyan", "Xuemei", "Yaping", "Liping", "Xiuhua", "Fengqin"]
+      },
+      "current": {
+        "male": ["Yichen", "Haoran", "Junjie", "Zihao", "Zeyu", "Muchen", "Boyang", "Junhao", "Mingze", "Haoyu", "Yuze", "Tianyu", "Jiahao", "Wenbo", "Chenhao", "Yifan", "Kaiwen", "Sihao", "Ruichen", "Zhiyuan", "Hanwen", "Yuhang", "Zichen", "Bowen", "Rui", "Hao", "Lei", "Kai", "Ming", "Jie"],
+        "female": ["Zihan", "Xinyi", "Yinuo", "Ruoxi", "Shiqi", "Yutong", "Xinyu", "Jiaqi", "Mengyao", "Yuxin", "Kexin", "Yaxuan", "Sitong", "Qianyu", "Wanting", "Yuhan", "Xinran", "Jiayi", "Keyi", "Anran", "Muyao", "Lingyu", "Shiyu", "Ziyan", "Jing", "Yan", "Na", "Ting", "Dan", "Lili"]
+      }
+    },
+    "surnames": {
+      "any": ["Wang", "Li", "Zhang", "Liu", "Chen", "Yang", "Huang", "Zhao", "Wu", "Zhou", "Xu", "Sun", "Ma", "Zhu", "Hu", "Guo", "He", "Lin", "Gao", "Luo", "Zheng", "Liang", "Xie", "Song", "Tang", "Deng", "Han", "Feng", "Cao", "Peng", "Zeng", "Xiao", "Tian", "Dong", "Pan", "Yuan", "Cai", "Jiang", "Yu", "Du", "Ye", "Cheng", "Wei", "Su", "Lu", "Ding", "Ren", "Shen", "Yao", "Fang"]
+    }
+  },
+  {
+    "id": "indian",
+    "label": "Indian",
+    "region": "Asia",
+    "sort": 30,
+    "given": {
+      "medieval": {
+        "male": ["Arjun", "Dev", "Vikram", "Raghav", "Govind", "Madhav", "Keshav", "Krishna", "Rama", "Baldev", "Bhima", "Karan", "Prithvi", "Jai", "Amar", "Harihar", "Narayan", "Raghunath", "Uday", "Pratap", "Rudra", "Veer", "Ajit", "Bhoj", "Someshwar", "Devraj", "Gopal", "Mukund", "Shankar", "Vasudev"],
+        "female": ["Lakshmi", "Sita", "Radha", "Rukmini", "Mira", "Padma", "Padmini", "Tara", "Ganga", "Yamuna", "Jodha", "Durga", "Parvati", "Uma", "Gauri", "Savitri", "Damayanti", "Shakuntala", "Chandrika", "Kamala", "Menaka", "Urvashi", "Mohini", "Bhanumati", "Ratnavali", "Rupmati", "Karnavati", "Jijabai", "Ambika", "Annapurna"]
+      },
+      "colonial": {
+        "male": ["Ram", "Shyam", "Hari", "Mohan", "Kishan", "Balram", "Ganpat", "Vithal", "Narasimha", "Venkata", "Ramaswamy", "Krishnaswamy", "Subramania", "Bankim", "Ishwar", "Rammohan", "Dwarkanath", "Debendranath", "Keshub", "Surendranath", "Bipin", "Lajpat", "Gopalkrishna", "Motilal", "Madan", "Jagannath", "Raghubir", "Shivprasad", "Durgadas", "Tulsiram"],
+        "female": ["Ramabai", "Anandibai", "Kashibai", "Tarabai", "Ahilyabai", "Savitribai", "Lakshmibai", "Radhabai", "Saraswati", "Sharada", "Kadambini", "Sarala", "Swarnakumari", "Janaki", "Kaveri", "Meenakshi", "Alamelu", "Ponnamma", "Bhagirathi", "Godavari", "Tulsi", "Chandramukhi", "Sushila", "Rajeshwari", "Visalakshi", "Nagamma", "Seethamma", "Muthulakshmi", "Yashoda", "Bhavani"]
+      },
+      "early20": {
+        "male": ["Rajendra", "Jatin", "Subhas", "Bhagat", "Chandrashekhar", "Harilal", "Manilal", "Ramdas", "Devdas", "Shantaram", "Baburao", "Ganesh", "Vishnu", "Dattatreya", "Vasant", "Madhukar", "Prabhakar", "Sadashiv", "Vinayak", "Raman", "Krishnan", "Srinivasa", "Venkataraman", "Nataraja", "Muthu", "Govindan", "Sankaran", "Balakrishnan", "Purushottam", "Jagdish"],
+        "female": ["Sarojini", "Indira", "Vijaya", "Kamala", "Kasturi", "Shanta", "Savita", "Sumati", "Sulochana", "Malati", "Kumud", "Kusum", "Nirmala", "Vimala", "Pramila", "Leela", "Lalita", "Aruna", "Usha", "Sucheta", "Durgabai", "Rajkumari", "Vidya", "Snehalata", "Hemlata", "Charulata", "Jayalakshmi", "Pattammal", "Rukmani", "Ahalya"]
+      },
+      "mid20": {
+        "male": ["Rajesh", "Ramesh", "Suresh", "Mahesh", "Dinesh", "Mukesh", "Rakesh", "Naresh", "Ashok", "Anil", "Sunil", "Vinod", "Pramod", "Prakash", "Vijay", "Ajay", "Sanjay", "Ravi", "Shashi", "Subhash", "Satish", "Girish", "Manoj", "Arun", "Deepak", "Rajiv", "Sanjiv", "Kamal", "Kishore", "Mahendra"],
+        "female": ["Sunita", "Anita", "Rita", "Geeta", "Seema", "Meena", "Neelam", "Poonam", "Rekha", "Asha", "Sudha", "Shobha", "Pushpa", "Kiran", "Suman", "Sarita", "Hema", "Jaya", "Sharmila", "Lata", "Shanti", "Kalpana", "Vandana", "Archana", "Ranjana", "Saroja", "Vasantha", "Padmavathi", "Manju", "Renu"]
+      },
+      "current": {
+        "male": ["Aarav", "Ishaan", "Vihaan", "Aditya", "Arjun", "Rohan", "Rahul", "Karthik", "Nikhil", "Siddharth", "Aryan", "Kabir", "Vivaan", "Reyansh", "Ayaan", "Dhruv", "Krish", "Shaurya", "Atharv", "Advait", "Yash", "Harsh", "Varun", "Akshay", "Abhishek", "Pranav", "Rishi", "Sai", "Arnav", "Ved"],
+        "female": ["Ananya", "Aadhya", "Saanvi", "Diya", "Anika", "Ishita", "Kavya", "Navya", "Myra", "Aarohi", "Avni", "Riya", "Siya", "Pari", "Prisha", "Anvi", "Kiara", "Trisha", "Shreya", "Sneha", "Pooja", "Neha", "Priya", "Divya", "Aishwarya", "Meera", "Nandini", "Vaishnavi", "Sanjana", "Tanvi"]
+      }
+    },
+    "surnames": {
+      "any": ["Sharma", "Verma", "Gupta", "Patel", "Singh", "Kumar", "Mehta", "Shah", "Desai", "Joshi", "Trivedi", "Chaturvedi", "Dwivedi", "Mishra", "Pandey", "Tiwari", "Yadav", "Chauhan", "Rathore", "Malhotra", "Kapoor", "Khanna", "Chopra", "Bhatia", "Arora", "Saxena", "Srivastava", "Agarwal", "Bansal", "Goel", "Jain", "Reddy", "Rao", "Naidu", "Iyer", "Iyengar", "Nair", "Menon", "Pillai", "Krishnan", "Subramanian", "Venkatesan", "Chatterjee", "Banerjee", "Mukherjee", "Bose", "Ghosh", "Das", "Sen", "Kulkarni"]
+    }
+  }
+]

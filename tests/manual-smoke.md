@@ -265,6 +265,14 @@ Steps:
    expect a full copy/paste skeleton. Check two section chips above the
    input, send -- expect 2-4 questions per checked section, ending in the
    full updated block.
+6. Name generator: in + New, click "Need a name?" -- pick British /
+   Medieval / Female, deal, select a given name only, Use -- the Name
+   field fills with just the given name. On an open character, click the
+   dice by Name -- pick American South + Medieval/Renaissance and confirm
+   the "closest available" note appears; pick Dark Elf and confirm the
+   era dropdown hides and names stay elf-flavored across rerolls.
+   IMPORTANT in the PACKAGED build: confirm the culture dropdown populates
+   at all -- it proves the name JSON was bundled into the frozen sidecar.
 
 Expected: no em dashes anywhere in inserted text; the AI never invents
 character details unlabeled; every interview round ends with the full

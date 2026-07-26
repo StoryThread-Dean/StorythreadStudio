@@ -79,6 +79,10 @@ Character creation offers a template choice, stored as `character_kind` in front
 
 The Profile Builder's character list splits into collapsible **Main** and **Side / Background** groups; the chat attachment picker mirrors the same grouping.
 
+### Name generator (characters)
+
+Opened from the dice button beside the Name field, or "Need a name?" in the + New form. Pick a culture (20, grouped by region) plus one of five era buckets (Medieval/Renaissance through Current, with an honest closest-available fallback when a culture doesn't reach that far back), or one of 12 fantasy races (assembled from race-true syllable components -- endless output). Deals 6 given names + 6 surnames per roll with no-repeat paging; given and surname select independently and either alone is a valid pick. Real-world pools are served by the backend from an app-level `~/.storythread/names.db`, seeded at startup from JSON shipped with the app (versioned reseed; delete the DB and it rebuilds) -- built to expand with more cultures and, later, writer-added names.
+
 ### Personality spine dropdowns (characters)
 
 Two cheat-sheet dropdowns in the profile header, under Status/Tags, each with per-option "What's this?" help: **Personality (Enneagram)** — 9 types, each summary carrying the type's core desire, core fear, and stress behavior — and **Story Role (Archetype)** — the 12 Jungian archetypes plus Comic Relief, Confidant, and Rival. Picking one inserts a fiction-first starting paragraph (behavior + speech pattern + how they crack under pressure, ending in a trigger/origin fill-in hook) into Personality Traits — a `[core]` trait block on Main, appended text on Side — with a confirmation note showing where it went. A Story Role pick also fills the Role field and merges its key-aspect Tags; the Role field additionally has a quick-pick list grouped Popular / Less Common / Niche. All canned text shipped in code — writer-initiated insertion, zero AI calls.
