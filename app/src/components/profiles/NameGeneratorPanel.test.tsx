@@ -128,6 +128,27 @@ describe("NameGeneratorPanel", () => {
     expect(chips.length).toBe(12);
   });
 
+  it("fantasy rerolls are row-independent (given reroll leaves surnames alone)", async () => {
+    render(<NameGeneratorPanel onPick={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("British")).toBeTruthy());
+    const [cultureSelect] = screen.getAllByRole("combobox");
+    fireEvent.change(cultureSelect, { target: { value: "f:orc" } });
+    await waitFor(() => expect(screen.getByText("Given names")).toBeTruthy());
+
+    const surnamesBefore = [...document.querySelectorAll("button.rounded-full")]
+      .map(c => c.textContent)
+      .slice(6);  // chips render given row first, surname row second
+
+    fireEvent.click(screen.getByTitle("Reroll given names"));
+
+    const surnamesAfter = [...document.querySelectorAll("button.rounded-full")]
+      .map(c => c.textContent)
+      .slice(6);
+    // Rerolling the given row must not reshuffle the surnames the writer
+    // is still considering.
+    expect(surnamesAfter).toEqual(surnamesBefore);
+  });
+
   it("shows the fallback note when the backend substituted the era", async () => {
     vi.stubGlobal("fetch", mockFetch("colonial"));
     render(<NameGeneratorPanel onPick={vi.fn()} />);

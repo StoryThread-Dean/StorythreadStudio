@@ -58,18 +58,49 @@ describe("generateFantasyGivenName", () => {
     expect(a.length).toBeGreaterThan(0);
   });
 
-  it("fuzz: 200 names per race stay speakable", () => {
+  it("exhaustive: EVERY component combination stays speakable", () => {
+    // Deterministic, total coverage: drive the rng to select each specific
+    // (start, mid?, end) combination instead of sampling randomly -- a
+    // random fuzz here was flaky, failing only on rare draws.
+    const drive = (vals: number[]) => {
+      let i = 0;
+      return () => vals[i++ % vals.length];
+    };
+    const frac = (index: number, len: number) => (index + 0.5) / len;
+
+    const check = (name: string, label: string) => {
+      expect(name[0], label).toBe(name[0].toUpperCase());
+      expect(name.length, label).toBeGreaterThanOrEqual(3);
+      expect(name.length, label).toBeLessThanOrEqual(16);
+      expect(name, label).not.toContain("____");
+      expect(name, label).not.toMatch(/([a-z])\1\1/i);
+      expect(name, label).not.toMatch(/[–—\s]/);
+    };
+
     for (const race of FANTASY_RACES) {
       for (const gender of ["male", "female"] as FantasyGender[]) {
-        for (let i = 0; i < 100; i++) {
-          const name = generateFantasyGivenName(race.id, gender);
-          // Capitalized, sane length, no fill-in blanks, no stutters.
-          expect(name[0]).toBe(name[0].toUpperCase());
-          expect(name.length).toBeGreaterThanOrEqual(3);
-          expect(name.length).toBeLessThanOrEqual(16);
-          expect(name).not.toContain("____");
-          expect(name).not.toMatch(/([a-z])\1\1/i);
-          expect(name).not.toMatch(/[–—\s]/);
+        const parts = race.given[gender];
+        for (let s = 0; s < parts.starts.length; s++) {
+          for (let e = 0; e < parts.ends.length; e++) {
+            // rng call order in the generator: start, end, mid-gate, mid.
+            // Without a middle (gate value 0.9 skips the 40% chance).
+            const plain = generateFantasyGivenName(
+              race.id, gender,
+              drive([frac(s, parts.starts.length), frac(e, parts.ends.length), 0.9]),
+            );
+            check(plain, `${race.id}/${gender}: ${parts.starts[s]}+${parts.ends[e]} -> ${plain}`);
+            // With every middle (0.1 passes the gate; cap may still skip it).
+            for (let m = 0; m < parts.mids.length; m++) {
+              const withMid = generateFantasyGivenName(
+                race.id, gender,
+                drive([
+                  frac(s, parts.starts.length), frac(e, parts.ends.length),
+                  0.1, frac(m, parts.mids.length),
+                ]),
+              );
+              check(withMid, `${race.id}/${gender}: ${parts.starts[s]}+${parts.mids[m]}+${parts.ends[e]} -> ${withMid}`);
+            }
+          }
         }
       }
     }

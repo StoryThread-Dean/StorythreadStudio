@@ -104,16 +104,25 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
   // Regions in backend-sorted order, deduped, for the optgroups.
   const regions = [...new Set(cultures.map(c => c.region))];
 
-  const dealFantasy = (sel: string, g: string) => {
+  // Fantasy deals are generated fresh; `kind` scopes the deal so the two
+  // Reroll buttons stay independent (rerolling given names must not
+  // reshuffle the surnames the writer is still considering).
+  const dealFantasy = (sel: string, g: string, kind: "given" | "surname" | "both" = "both") => {
     const raceId = bareId(sel);
-    const genderPick = () => (g === "any" ? (Math.random() < 0.5 ? "male" : "female") : g) as "male" | "female";
-    const given = new Set<string>();
-    while (given.size < DEAL_COUNT) given.add(generateFantasyGivenName(raceId, genderPick()));
-    const surnames = new Set<string>();
-    let guard = 0;
-    while (surnames.size < DEAL_COUNT && guard++ < 60) surnames.add(generateFantasySurname(raceId));
-    setGivenDeal([...given]);
-    setSurnameDeal([...surnames]);
+    if (kind !== "surname") {
+      const genderPick = () => (g === "any" ? (Math.random() < 0.5 ? "male" : "female") : g) as "male" | "female";
+      const given = new Set<string>();
+      while (given.size < DEAL_COUNT) given.add(generateFantasyGivenName(raceId, genderPick()));
+      setGivenDeal([...given]);
+    }
+    if (kind !== "given") {
+      const surnames = new Set<string>();
+      // Guard: goblin epithets are a finite list smaller than some pools --
+      // stop when the space is exhausted rather than spinning.
+      let guard = 0;
+      while (surnames.size < DEAL_COUNT && guard++ < 60) surnames.add(generateFantasySurname(raceId));
+      setSurnameDeal([...surnames]);
+    }
     setUsedEra(era);
   };
 
@@ -159,7 +168,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
   const rerollRow = (kind: "given" | "surname") => {
     if (!selection) return;
     if (isFantasy(selection)) {
-      dealFantasy(selection, gender);
+      dealFantasy(selection, gender, kind);
       return;
     }
     const pool = kind === "given" ? givenPool : surnamePool;

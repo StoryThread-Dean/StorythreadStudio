@@ -298,6 +298,19 @@ function joinParts(a: string, b: string): string {
   return a + b;
 }
 
+/** Collapse any run of 3+ identical letters down to 2 -- LOOPED until
+ *  stable, because a single regex pass doesn't rescan what it just wrote:
+ *  dragonkin's "vess" + "ss" + "ssa" stacks four esses, and one pass of
+ *  sss->ss leaves "Vesssa" still holding a triple. */
+function collapseTriples(s: string): string {
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(/([a-z])\1\1/gi, "$1$1");
+  } while (s !== prev);
+  return s;
+}
+
 /**
  * Assemble one given name for a race + gender. Deterministic under an
  * injected rng. Shape: start [+ mid ~40% of the time, skipped when it
@@ -324,8 +337,7 @@ export function generateFantasyGivenName(
     }
   }
   name = joinParts(name, end);
-  // Collapse any triple letter the seams produced ("lll" -> "ll").
-  name = name.replace(/([a-z])\1\1/gi, "$1$1");
+  name = collapseTriples(name);
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
@@ -341,5 +353,5 @@ export function generateFantasySurname(
   }
   const first = pick(race.surname.firsts, rng);
   const second = pick(race.surname.seconds, rng);
-  return joinParts(first, second).replace(/([a-z])\1\1/gi, "$1$1");
+  return collapseTriples(joinParts(first, second));
 }
