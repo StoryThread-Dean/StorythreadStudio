@@ -156,6 +156,25 @@ def test_any_gender_mixes_pools():
     assert len(both) > len(male)
 
 
+def test_empty_seed_never_stamps_success(tmp_path, monkeypatch):
+    # The real-world failure this guards: the backend started once while
+    # the data files were missing (mid-install, bad bundle -- or, as it
+    # actually happened, a dev reload racing the data authoring). A version
+    # stamp on an empty DB would mean "seeded, skip forever" and the Name
+    # Generator would silently show only Fantasy races.
+    real_data_dir = names_store._data_dir
+    empty_dir = tmp_path / "no-data"
+    empty_dir.mkdir()
+    monkeypatch.setattr(names_store, "_data_dir", lambda: empty_dir)
+    seed_names_db()
+    assert list_cultures() == []
+
+    # Data appears (install completes) -> the next startup seeds for real.
+    monkeypatch.setattr(names_store, "_data_dir", real_data_dir)
+    seed_names_db()
+    assert len(list_cultures()) == 20
+
+
 def test_reseed_on_version_bump(monkeypatch):
     seed_names_db()
     before = len(list_cultures())

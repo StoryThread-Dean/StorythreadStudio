@@ -76,7 +76,20 @@ def seed_names_db() -> None:
     try:
         conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
         row = conn.execute("SELECT value FROM meta WHERE key='seed_version'").fetchone()
-        if row and row[0] == SEED_VERSION:
+
+        # A matching version only counts if the DB actually HAS data. This
+        # guards against a first run where the data files were missing or
+        # unreadable (partial install, bad bundle) stamping success on an
+        # empty database and never retrying -- the exact failure mode is a
+        # Name Generator that silently shows only Fantasy races forever.
+        has_cultures = False
+        table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cultures'"
+        ).fetchone()
+        if table:
+            has_cultures = conn.execute("SELECT 1 FROM cultures LIMIT 1").fetchone() is not None
+
+        if row and row[0] == SEED_VERSION and has_cultures:
             return
 
         conn.execute("DROP TABLE IF EXISTS cultures")
@@ -112,10 +125,14 @@ def seed_names_db() -> None:
                         [(c["id"], era, n) for n in names],
                     )
 
-        conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES ('seed_version', ?)",
-            (SEED_VERSION,),
-        )
+        # Stamp the version ONLY when something was actually loaded --
+        # otherwise leave it unstamped so the next startup tries again.
+        inserted = conn.execute("SELECT COUNT(*) FROM cultures").fetchone()[0]
+        if inserted > 0:
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('seed_version', ?)",
+                (SEED_VERSION,),
+            )
         conn.commit()
     finally:
         conn.close()
