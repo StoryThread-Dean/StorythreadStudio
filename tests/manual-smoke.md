@@ -234,6 +234,44 @@ error, not a bare HTTP code.
 
 ---
 
+## 9. Character creation tools (spine dropdowns, Quick Build, Interview Me)
+
+**Touches:** the personality-spine dropdowns, the Quick Build randomizer +
+NSFW tier toggles, trait-block insertion + save round-trip, and the
+Interview Me chat mode (needs a real API key).
+
+Steps:
+1. Create a MAIN character (template radio in the + New form). In the
+   header under Status/Tags, pick an Enneagram type -- a [core] trait
+   block appears in Personality Traits and a note confirms it; pick a
+   Story Role -- a second block stacks, the Role field fills, and its
+   key-aspect Tags merge in. The Role field's own Pick... list (Popular /
+   Less Common / Niche) also fills the field.
+2. Create a SIDE character. Every section is a single text field (no
+   trait blocks, no Importance Audit). Quick Build opens on top: reroll a
+   row twice -- no repeats -- and click options; each lands in the
+   matching section as a new line. Pick a Story Role and confirm rolls
+   lean toward it.
+3. NSFW semantics: Explicit checkbox starts greyed out. Toggle NSFW on --
+   options go red and adult, Explicit becomes clickable. Check Explicit --
+   options become fill-in-the-blank. Toggle NSFW off -- back to normal AND
+   Explicit unchecks itself.
+4. Save (Ctrl+S) both profiles, reopen -- main's blocks keep importance
+   levels; side's plain-text sections survive the markdown round-trip.
+   The left list shows Main and Side / Background groups (collapsible);
+   the chat attachment picker shows the same grouping.
+5. Switch the chat to Interview Me, send "Start the interview." Expect
+   5-8 numbered basics, NOT invented character facts. Answer briefly;
+   expect a full copy/paste skeleton. Check two section chips above the
+   input, send -- expect 2-4 questions per checked section, ending in the
+   full updated block.
+
+Expected: no em dashes anywhere in inserted text; the AI never invents
+character details unlabeled; every interview round ends with the full
+copy/paste block.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

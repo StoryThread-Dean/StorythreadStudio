@@ -193,6 +193,9 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_settings_routes.py` -- ai_provider / NanoGPT key / prompt_caching over the Settings API
   - `test_prompt_caching.py` -- cache_control payload shapes, provider gating, NanoGPT headers
   - `test_editor_chat_materials_flow.py` -- materials echo + placement, stance persistence, temperature split
+  - `test_profile_chat_prompts.py` -- profile-chat prompt builder incl. Interview mode contract (interviewer-not-inventor, triggers/origins, full-block rounds)
+  - `test_character_kinds.py` -- Main vs Side character templates: kind frontmatter, tolerant trait-section parsing, plain-text round trip
+  - `test_quick_overview.py` -- side-character Generate Overview: prompt guardrails (grounding, subtext, vary-angle) + endpoint payload
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -202,6 +205,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/utils/buildEditorChatPayload.test.ts` -- Writing Companion payload builder + history persistence (appendTurnToHistory)
   - `src/utils/modelFiltering.test.ts` -- model list filtering + recommended models (provider-aware)
   - `src/components/settings/ProviderPanel.test.tsx` -- per-provider Settings panels + PROVIDER_META registry
+  - `src/data/characterSpines.test.ts` -- Enneagram/archetype canned-content contracts (fiction-first, fill-in hooks, no em dashes)
+  - `src/data/traitPools.test.ts` -- trait randomizer: tier replacement semantics, archetype flavor bias, deterministic rolls
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands
@@ -317,6 +322,8 @@ AI output may only be written directly to these **designated generated-content f
 - `ai_section_summary`
 - `chapter_summary`
 - `scene_summary`
+
+One deliberate, user-approved exception (v1.0.10): the **[Generate Overview] button on SIDE/BACKGROUND character profiles** fills the Overview field from the writer's own filled-in fields. It is writer-clicked per use, lands in an editable field, and saves nothing until the writer saves. Scoped to fast side-character assembly only -- do NOT generalize this pattern to other human-authored fields without explicit user direction.
 
 AI must **never silently overwrite** human-authored prose, profile descriptions, notes, or story drafts. All other AI output goes to the side panel only, where the writer copies it manually.
 

@@ -47,6 +47,12 @@ export interface ProfileSection {
 }
 
 // Full structured profile data -- what the backend parses from and writes to Markdown
+// Characters come in two templates (v1.0.10). "main" = the full trait-block
+// editor for viewpoint characters; "side" = the simplified side/background
+// template where every section is a single free-text field and Quick Build
+// appends lines. Older files have no kind on disk and load as "main".
+export type CharacterKind = "main" | "side";
+
 export interface Profile {
   profile_id: string;
   type: ProfileType;
@@ -59,6 +65,7 @@ export interface Profile {
   full_ai_summary: string;   // The # Full AI Summary section at the bottom of the file
   created_at: string;        // ISO datetime string
   updated_at: string;
+  character_kind?: CharacterKind;  // characters only; absent/main for non-characters
 }
 
 // Lightweight profile summary for the left-panel list (no sections loaded)
@@ -68,6 +75,7 @@ export interface ProfileListItem {
   type: ProfileType;
   role: string;
   status: string;
+  character_kind?: CharacterKind;
 }
 
 
@@ -78,6 +86,7 @@ export interface CreateProfilePayload {
   type: ProfileType;
   name: string;
   role: string;
+  character_kind?: CharacterKind;
 }
 
 export interface SaveProfilePayload {

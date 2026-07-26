@@ -70,6 +70,25 @@ Replace an older "influence" scale. Importance controls when (and whether) a tra
 
 Each trait block shows a word count gauge tuned to its importance level. Higher-importance traits tolerate more words because they need detail to be useful in prompts. Hidden traits have no gauge.
 
+### Two character templates (Main vs Side/Background)
+
+Character creation offers a template choice, stored as `character_kind` in frontmatter (absent = main, so pre-v1.0.10 files are untouched):
+
+- **Main** — the full trait-block template: importance levels, word gauges, the Importance Audit.
+- **Side / Background** — every section is a single free-text field; Quick Build appends lines into them. Per-section AI Summary tiles are dropped (only the Full AI Summary at the bottom remains; existing summaries survive a resave). Trait-section headings are shared between templates, and the parser round-trips plain paragraphs under a trait heading instead of dropping them.
+
+The Profile Builder's character list splits into collapsible **Main** and **Side / Background** groups; the chat attachment picker mirrors the same grouping.
+
+### Personality spine dropdowns (characters)
+
+Two cheat-sheet dropdowns in the profile header, under Status/Tags, each with per-option "What's this?" help: **Personality (Enneagram)** — 9 types, each summary carrying the type's core desire, core fear, and stress behavior — and **Story Role (Archetype)** — the 12 Jungian archetypes plus Comic Relief, Confidant, and Rival. Picking one inserts a fiction-first starting paragraph (behavior + speech pattern + how they crack under pressure, ending in a trigger/origin fill-in hook) into Personality Traits — a `[core]` trait block on Main, appended text on Side — with a confirmation note showing where it went. A Story Role pick also fills the Role field and merges its key-aspect Tags; the Role field additionally has a quick-pick list grouped Popular / Less Common / Niche. All canned text shipped in code — writer-initiated insertion, zero AI calls.
+
+### Quick Build (side/background profiles)
+
+Opens at the top of Side/Background character profiles. Pick a Story Role (weights the rolls; re-derived from the profile's Role field on reopen, so "Villain" finds Shadow / Villain), then reroll curated sentence-length options per section — Physical, Mannerism, Voice, Want/Motivation, and Hidden/Foreshadowing (secrets, tells, and planted details built to pay off later) — and click any option to append it to the matching section as a new line.
+
+A **[Generate Overview]** button on the Overview section spins the filled-in fields (Name, Role, Tags, trait lines, relationships, notes) into a compact mini-story of the character: grounded in the writer's own entries, lightly embellished to connect them, hidden details expressed as subtext only, and a varied angle on each click. Output lands in the editable Overview field and saves nothing until the writer saves. This is a deliberate, documented exception to the write boundary, scoped to side characters only (see `CLAUDE.md` AI Boundaries). Pools run 50+ options per section and rerolls page through the whole pool before anything repeats. An opt-in **NSFW toggle** (red, per character, never automatic) swaps the pools: off = normal options with the Explicit box greyed out; on = NSFW pools replace normal; the Explicit checkbox swaps in a third fill-in-the-blank tier ("secretly wants to be ____") the writer completes.
+
 ### Profile-level AI tools
 
 | Tool | What it does |
@@ -82,7 +101,9 @@ Each trait block shows a word count gauge tuned to its importance level. Higher-
 
 ### Profile Builder chat
 
-A right-side panel for refining a profile in conversation. Four behavior modes: **Chat**, **Refine**, **Extract Traits**, **Check Consistency**. Chat does not auto-write back to the profile; the writer accepts suggestions manually.
+A right-side panel for refining a profile in conversation. Five behavior modes: **Chat**, **Refine**, **Extract Traits**, **Check Consistency**, and **Interview Me**. Chat does not auto-write back to the profile; the writer accepts suggestions manually.
+
+**Interview Me** (v1.0.10) flips the direction: the AI interviews the writer about the character and organizes THEIR answers — interviewer and organizer, never the inventor (invented details are always labeled take-or-discard). The first pass asks 5–8 basics; section checkboxes above the chat input pick what to expand next, and each round asks 2–4 questions that dig for triggers and origins ("untrusting — of whom? what happened?") rather than adjectives. Every round ends with the full updated copy/paste profile block, so the writer can stop at any point with something usable. Book Details (genre, tone, theme, setting, audience) shade the questions when filled in — shade, never straitjacket.
 
 ### Profile import and fork
 
