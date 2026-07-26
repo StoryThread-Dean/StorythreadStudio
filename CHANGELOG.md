@@ -17,6 +17,16 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+---
+
+## [1.0.10] - 2026-07-25
+
+### Added
+
 - **NanoGPT as a second AI provider.** Settings gains an AI Provider section with a card per connection -- OpenRouter (the recommended default) and NanoGPT (pay-per-prompt, many unmoderated models) -- each with its own tailored connect instructions, its own stored API key, and its own Test Connection. Switching takes effect on Save: the model picker reloads from the new provider, and a warning flags a default model the new provider doesn't carry. NanoGPT publishes no pricing data, so the cost-tier filter is hidden for it and content-mode filtering uses a name-based heuristic instead of provider prefixes. Future local providers (Ollama, LM Studio, llama.cpp) plug into the same seams.
 - **Prompt Caching toggle (OpenRouter).** On by default, inside the OpenRouter panel: the unchanged part of each request (instructions plus story context) is marked cacheable, so supported models charge a fraction for it and respond faster on repeat requests. Never sent to other providers.
 - **Two character templates.** Creating a character now offers a choice: **Main character** (the full trait-block template with importance levels) or **Side / background character** (a simplified template where every section is a single free-text field). The character list in the Profile Builder splits into collapsible **Main** and **Side / Background** groups, and the chat attachment picker mirrors the same grouping. Older profiles are untouched -- they load as Main.
@@ -31,6 +41,8 @@ entry while working on a feature, append it under Unreleased.
 - **Attached context now stays with the conversation.** Previously an attached character profile (and the included chapter text) reached the AI on exactly one turn -- the turn it was attached -- and silently vanished from every later turn, which is why characters with a distinct Voice drifted into generic dialogue mid-conversation and Draft mode could write a character "blind" after a planning chat. The materials now persist in the conversation history (hidden from the transcript), the Canon/Reference stance stays active for as long as chips are attached, and a new VOICE FIDELITY rule instructs the AI that [core] voice and mannerism traits are constants -- vary the expression, never drop the trait. Draft and Enhance also run slightly cooler (0.6 instead of 0.7) to keep prose anchored to the profiles.
 
 ### Fixed
+
+- **Slow reasoning models no longer time out from prompt caching.** The cache marker (and the structured message shape carrying it) is now sent only to model families that use it (Anthropic, Google). Exotic provider routes -- AionLabs Aion-3.0 in live testing -- could stall on the shape until the 180-second timeout; they now receive the classic plain request and work as before.
 
 ---
 
@@ -210,7 +222,8 @@ First public release.
 - Backend sidecar hung at startup in installed builds, causing "Failed to fetch" errors on first project open. The Tauri shell plugin pipes the child process's stdout and stderr through a Receiver that the setup hook was dropping; uvicorn's startup log lines filled the OS pipe buffer and blocked the backend from binding to port 8000. The setup hook now drains the receiver in a detached task so the backend can start cleanly.
 - API requests from the installed app were blocked by CORS even after the backend started, because the allowlist only included Tauri v1's `tauri://localhost` origin. Tauri v2 on Windows uses `http://tauri.localhost`; both Tauri v2 origins are now on the allowlist.
 
-[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.9...HEAD
+[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.10...HEAD
+[1.0.10]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.6...v1.0.7
