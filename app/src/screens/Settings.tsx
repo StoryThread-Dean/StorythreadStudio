@@ -14,7 +14,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { X, Eye, EyeOff, CheckCircle, XCircle, Loader, Star, Folder, Sun, Moon } from "lucide-react";
+import { X, CheckCircle, Star, Folder, Sun, Moon } from "lucide-react";
 import type { AppSettings, ModelInfo } from "../types/ai";
 import { useTheme } from "../hooks/useTheme";
 import { useUiScale, UI_SCALE_PX, type UiScale } from "../hooks/useUiScale";
@@ -25,6 +25,11 @@ import {
   filterModelByContentMode, RECOMMENDED_MODELS,
   TIERS, tierIndex, modelPassesTier, modelIsTextOnly, type TierValue,
 } from "../utils/modelFiltering";
+// Per-connection provider cards + panels. Each AI provider gets its own
+// selector card and a dedicated panel with tailored connect instructions
+// (see components/settings/providerMeta.ts).
+import { PROVIDER_META, providerMetaById } from "../components/settings/providerMeta";
+import { ProviderPanel } from "../components/settings/ProviderPanel";
 
 const API_BASE = "http://localhost:8000";
 
@@ -39,8 +44,16 @@ export function Settings({ onClose }: SettingsProps) {
   // Loaded settings from backend
   const [settings, setSettings]           = useState<AppSettings | null>(null);
 
-  // API key input (separate from the masked saved key)
-  const [apiKeyInput, setApiKeyInput]     = useState("");
+  // AI provider selection. selectedProvider is the CARD the user is looking
+  // at; the SAVED provider (settings.ai_provider) is where requests actually
+  // go. Clicking a card never auto-switches -- Save makes it real.
+  const [selectedProvider, setSelectedProvider] = useState("openrouter");
+
+  // API key inputs (separate from the masked saved keys). One input per
+  // provider so switching cards never mixes keys up; both keys stay stored
+  // on the backend independently.
+  const [apiKeyInput, setApiKeyInput]           = useState("");   // OpenRouter
+  const [nanogptKeyInput, setNanogptKeyInput]   = useState("");   // NanoGPT
   const [showKey, setShowKey]             = useState(false);
 
   // Model list and selection
@@ -50,6 +63,9 @@ export function Settings({ onClose }: SettingsProps) {
   // Tier + filter controls
   const [costTier, setCostTier]           = useState<TierValue>("standard");
   const [textOnlyFilter, setTextOnlyFilter] = useState(true);
+  // Prompt caching (OpenRouter only): reuse the unchanged part of each
+  // request so supported models bill less on repeats. Default on.
+  const [promptCaching, setPromptCaching] = useState(true);
   const [starredModels, setStarredModels] = useState<string[]>([]);
 
   // Content mode
@@ -90,30 +106,51 @@ export function Settings({ onClose }: SettingsProps) {
   const [saved, setSaved]                 = useState(false);
 
 
+  // The SAVED provider governs the model list actually loaded (the backend
+  // fetches /models from whatever ai_provider is saved), so all list
+  // filtering keys on it -- not on which card is merely selected.
+  const savedProvider = settings?.ai_provider ?? "openrouter";
+  // Providers without published pricing (NanoGPT) can't do cost tiers --
+  // the slider is hidden and the tier filter is skipped entirely.
+  const tiersApply = providerMetaById(savedProvider).supportsTiers;
+
   // --- Computed: models visible in the picker ---
   // Applies tier threshold + text-only filter.
   // Always includes the currently selected model (prevents it disappearing).
   const visibleModels = models.filter(m => {
     const textOk = !textOnlyFilter || modelIsTextOnly(m);
     // Content mode filter: mature hides strict providers, explicit whitelists known unmoderated
-    const contentOk = filterModelByContentMode(m, contentMode);
-    return modelPassesTier(m, costTier) && textOk && contentOk;
+    const contentOk = filterModelByContentMode(m, contentMode, savedProvider);
+    const tierOk = !tiersApply || modelPassesTier(m, costTier);
+    return tierOk && textOk && contentOk;
   });
 
   // Is the selected model outside the current tier/filter? (show warning)
   const selectedOutsideTier = Boolean(
     selectedModel &&
     models.length > 0 &&
+    models.some(m => m.id === selectedModel) &&
     !visibleModels.some(m => m.id === selectedModel)
+  );
+
+  // Is the selected model missing from the ACTIVE provider's catalog
+  // entirely? Happens after switching providers while the old default model
+  // is still saved -- the writer needs to pick one from the new list.
+  const selectedMissingFromProvider = Boolean(
+    selectedModel &&
+    models.length > 0 &&
+    !models.some(m => m.id === selectedModel)
   );
 
   // Recommended models that (a) still exist in the live fetched list -- so a
   // deprecated slug silently drops out instead of 404-ing later -- AND (b) are
   // appropriate for the current content mode (explicit/mature hide moderated
   // providers). This is the same filter used for the full "All Models" list.
+  // Under NanoGPT the OpenRouter slugs simply don't exist in the live list,
+  // so the Recommended group disappears on its own.
   const availableRecommended = RECOMMENDED_MODELS.filter(rec => {
     const model = models.find(m => m.id === rec.id);
-    return model !== undefined && filterModelByContentMode(model, contentMode);
+    return model !== undefined && filterModelByContentMode(model, contentMode, savedProvider);
   });
 
   // At the top "Priority Best" stop, the flagship-class picks get their own
@@ -141,9 +178,11 @@ export function Settings({ onClose }: SettingsProps) {
         if (!res.ok) throw new Error("Could not load settings.");
         const data: AppSettings = await res.json();
         setSettings(data);
+        setSelectedProvider(data.ai_provider ?? "openrouter");
         setSelectedModel(data.default_model);
         setCostTier((data.cost_tier as TierValue) ?? "standard");
         setTextOnlyFilter(data.text_only_filter ?? true);
+        setPromptCaching(data.prompt_caching ?? true);
         setStarredModels(data.starred_models ?? []);
         setContentMode(data.content_mode ?? "general");
 
@@ -166,7 +205,12 @@ export function Settings({ onClose }: SettingsProps) {
         setWritingSkillLevel(data.writing_skill_level ?? "novice");
         setNightOwl((data.day_rollover_hour ?? 0) === 4);
 
-        if (data.openrouter_api_key_set) {
+        // Load the model list when the ACTIVE provider has a key saved --
+        // the /models endpoint fetches from whichever provider is active.
+        const activeKeySet = (data.ai_provider ?? "openrouter") === "nanogpt"
+          ? data.nanogpt_api_key_set
+          : data.openrouter_api_key_set;
+        if (activeKeySet) {
           fetchModels();
         }
       } catch (err) {
@@ -226,9 +270,13 @@ export function Settings({ onClose }: SettingsProps) {
       }
 
       const payload: Record<string, unknown> = {
+        // The provider switch only takes effect here, on Save -- clicking a
+        // provider card alone never reroutes requests.
+        ai_provider:          selectedProvider,
         default_model:        selectedModel,
         cost_tier:            costTier,
         text_only_filter:     textOnlyFilter,
+        prompt_caching:       promptCaching,
         starred_models:       starredModels,
         content_mode:         contentMode,
         model_allowlist:      parsedAllowlist,
@@ -245,6 +293,9 @@ export function Settings({ onClose }: SettingsProps) {
       if (apiKeyInput.trim()) {
         payload.openrouter_api_key = apiKeyInput.trim();
       }
+      if (nanogptKeyInput.trim()) {
+        payload.nanogpt_api_key = nanogptKeyInput.trim();
+      }
 
       const res = await fetch(`${API_BASE}/api/settings`, {
         method: "PUT",
@@ -257,6 +308,7 @@ export function Settings({ onClose }: SettingsProps) {
       const data: AppSettings = await res.json();
       setSettings(data);
       setApiKeyInput("");
+      setNanogptKeyInput("");
       // Reflect the resolved vault path back -- the backend substitutes the
       // default when we send "", so this re-fills the input with the real
       // path instead of leaving it blank.
@@ -268,8 +320,16 @@ export function Settings({ onClose }: SettingsProps) {
       setSaved(true);
       setTestResult(null);
 
-      if (data.openrouter_api_key_set) {
+      // Refetch the model list from the (possibly just-switched) active
+      // provider. With no key saved for it, clear the list instead of
+      // leaving the previous provider's models on screen.
+      const activeKeySet = (data.ai_provider ?? "openrouter") === "nanogpt"
+        ? data.nanogpt_api_key_set
+        : data.openrouter_api_key_set;
+      if (activeKeySet) {
         fetchModels();
+      } else {
+        setModels([]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save settings.");
@@ -285,13 +345,21 @@ export function Settings({ onClose }: SettingsProps) {
     setTestResult(null);
     setError(null);
 
-    if (apiKeyInput.trim()) {
+    // Typing a key implies "save first, then test" -- and handleSave also
+    // persists the provider switch, so after this the selected card IS the
+    // active provider.
+    const savedFirst = Boolean(apiKeyInput.trim() || nanogptKeyInput.trim());
+    if (savedFirst) {
       await handleSave();
     }
 
     try {
+      // Test the provider whose card is selected -- lets the writer verify
+      // a NanoGPT key BEFORE saving the switch to it.
       const res = await fetch(`${API_BASE}/api/settings/test-connection`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: selectedProvider }),
       });
       if (!res.ok) {
         // Server returned a non-2xx (e.g. 500). Try to read a detail message;
@@ -306,7 +374,12 @@ export function Settings({ onClose }: SettingsProps) {
 
       if (data.ok) {
         setTestResult({ ok: true, message: `Connected. ${data.model_count} models available.` });
-        fetchModels();
+        // /api/ai/models serves the SAVED provider, so only refetch when the
+        // tested provider is (now) the active one -- either it already was,
+        // or the save above just made it so.
+        if (savedFirst || selectedProvider === savedProvider) {
+          fetchModels();
+        }
       } else {
         setTestResult({ ok: false, message: data.error ?? "Connection failed." });
       }
@@ -349,60 +422,108 @@ export function Settings({ onClose }: SettingsProps) {
           ) : (
             <div className="space-y-8">
 
-              {/* ── SECTION 1: API & Model Selection ──────────────────────── */}
+              {/* ── SECTION 1: AI Provider ────────────────────────────────── */}
               <section>
                 <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                  API & Model Selection
+                  AI Provider
                 </h3>
 
-                {/* OpenRouter API Key */}
-                <div className="mb-5">
-                  <label className="mb-1 block text-xs font-medium text-text-primary">
-                    OpenRouter API Key
-                  </label>
-                  <p className="mb-2 text-xs text-faint">
-                    {settings?.openrouter_api_key_set
-                      ? `Current key: ${settings.openrouter_api_key} -- enter a new key to replace it`
-                      : "No key saved. Get one free at openrouter.ai"
-                    }
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type={showKey ? "text" : "password"}
-                        value={apiKeyInput}
-                        onChange={e => setApiKeyInput(e.target.value)}
-                        placeholder="sk-or-v1-..."
-                        className="w-full rounded border border-border bg-bg-surface px-3 py-2 pr-8 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
-                      />
+                {/* Provider selector cards -- one per connection. Clicking a
+                    card shows its panel below; the switch only becomes real
+                    on Save (the panel shows a hint when they differ). */}
+                <div className="mb-4 flex gap-2">
+                  {PROVIDER_META.map(p => {
+                    const keySet = p.id === "nanogpt"
+                      ? settings?.nanogpt_api_key_set
+                      : settings?.openrouter_api_key_set;
+                    const isActiveSaved = savedProvider === p.id;
+                    const status = isActiveSaved ? "Active" : keySet ? "Key saved" : "Not configured";
+                    return (
                       <button
-                        onClick={() => setShowKey(v => !v)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-faint hover:text-text-muted"
-                        title={showKey ? "Hide key" : "Show key"}
+                        key={p.id}
                         type="button"
+                        onClick={() => { setSelectedProvider(p.id); setTestResult(null); }}
+                        className={`flex flex-1 flex-col items-start gap-0.5 rounded border px-3 py-2 text-left transition-colors ${
+                          selectedProvider === p.id
+                            ? "border-indigo-500 bg-bg-surface"
+                            : "border-border bg-bg-panel hover:border-indigo-500"
+                        }`}
                       >
-                        {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                        <span className="flex w-full items-center justify-between">
+                          <span className="text-xs font-medium text-text-primary">{p.label}</span>
+                          <span className={`text-[10px] ${
+                            isActiveSaved ? "text-emerald-400" : keySet ? "text-indigo-300" : "text-faint"
+                          }`}>
+                            {status}
+                          </span>
+                        </span>
+                        <span className="text-xs text-faint">{p.tagline}</span>
                       </button>
-                    </div>
-                    <button
-                      onClick={handleTest}
-                      disabled={testing || saving}
-                      className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:opacity-50"
-                      title="Test if the API key works"
-                    >
-                      {testing ? <Loader size={12} className="animate-spin" /> : null}
-                      Test
-                    </button>
-                  </div>
-                  {testResult && (
-                    <div className={`mt-2 flex items-center gap-2 text-xs ${testResult.ok ? "text-emerald-400" : "text-red-400"}`}>
-                      {testResult.ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
-                      {testResult.message}
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
 
-                {/* Cost Tier Slider */}
+                {/* The selected connection's own panel: tailored instructions,
+                    key field, test button, provider-specific notes. */}
+                <div className="mb-5">
+                  <ProviderPanel
+                    meta={providerMetaById(selectedProvider)}
+                    isActive={savedProvider === selectedProvider}
+                    savedKeyMasked={
+                      selectedProvider === "nanogpt"
+                        ? settings?.nanogpt_api_key ?? ""
+                        : settings?.openrouter_api_key ?? ""
+                    }
+                    savedKeySet={
+                      selectedProvider === "nanogpt"
+                        ? settings?.nanogpt_api_key_set ?? false
+                        : settings?.openrouter_api_key_set ?? false
+                    }
+                    keyInput={selectedProvider === "nanogpt" ? nanogptKeyInput : apiKeyInput}
+                    onKeyInputChange={
+                      selectedProvider === "nanogpt" ? setNanogptKeyInput : setApiKeyInput
+                    }
+                    showKey={showKey}
+                    onToggleShowKey={() => setShowKey(v => !v)}
+                    testing={testing}
+                    saving={saving}
+                    onTest={handleTest}
+                    testResult={testResult}
+                  >
+                    {/* Prompt Caching lives INSIDE the OpenRouter panel --
+                        it's a property of this connection, not a global
+                        preference (meta.supportsCaching gates it). */}
+                    {providerMetaById(selectedProvider).supportsCaching && (
+                      <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+                        <div>
+                          <p className="text-xs font-medium text-text-primary">Prompt Caching</p>
+                          <p className="text-xs text-faint">
+                            Reuse the unchanged part of each request (instructions and
+                            story context) so supported models charge less and respond
+                            faster on repeat requests.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setPromptCaching(v => !v)}
+                          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                            promptCaching ? "bg-indigo-600" : "bg-border"
+                          }`}
+                          title={promptCaching ? "Prompt caching on" : "Prompt caching off"}
+                        >
+                          <span
+                            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                              promptCaching ? "translate-x-4" : "translate-x-0.5"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </ProviderPanel>
+                </div>
+
+                {/* Cost Tier Slider -- hidden for providers without pricing
+                    data (NanoGPT), where a price filter would hide everything. */}
+                {tiersApply && (
                 <div className="mb-5">
                   <label className="mb-1 block text-xs font-medium text-text-primary">
                     Model Cost Tier
@@ -438,6 +559,7 @@ export function Settings({ onClose }: SettingsProps) {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Text-Only Filter Toggle */}
                 <div className="mb-5 flex items-center justify-between">
@@ -468,6 +590,18 @@ export function Settings({ onClose }: SettingsProps) {
                     <p className="text-xs text-amber-300">
                       Your selected model is outside the current tier filter. It will still be used
                       until you pick a different one from the list below.
+                    </p>
+                  </div>
+                )}
+
+                {/* Cross-provider model warning: the saved default model came
+                    from a different provider's catalog and doesn't exist here. */}
+                {selectedMissingFromProvider && (
+                  <div className="mb-4 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
+                    <p className="text-xs text-amber-300">
+                      Your default model came from your previous provider and isn't
+                      available on {providerMetaById(savedProvider).label}. Pick a
+                      model from the list below.
                     </p>
                   </div>
                 )}

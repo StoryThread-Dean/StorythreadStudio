@@ -68,12 +68,40 @@ export const EXPLICIT_ALLOWED_PROVIDERS = [
   "eva-unit-01/", "microsoft/", "01-ai/", "liquid/", "ai21/",
 ];
 
+// NanoGPT content-mode heuristic. The prefix lists above are OpenRouter slug
+// conventions ("anthropic/...") and won't match NanoGPT's catalog ids, so for
+// NanoGPT we use a small substring BLOCKLIST instead: NanoGPT's catalog is
+// largely unmoderated-friendly, and whitelisting unknown slugs would hide
+// everything. This is a heuristic -- "gpt" or "claude" appearing in an id
+// usually means a moderated upstream family, but could over-block an odd
+// fine-tune. The backend never blocks on this; it only shapes the picker.
+export const MODERATED_NAME_FRAGMENTS = [
+  "gpt", "chatgpt", "openai", "claude", "gemini", "command",
+];
+
+function nanogptLooksModerated(m: ModelInfo): boolean {
+  const haystack = (m.id + " " + m.name).toLowerCase();
+  return MODERATED_NAME_FRAGMENTS.some(f => haystack.includes(f));
+}
+
 // Returns true if a model should be OFFERED for the given content mode.
+// OpenRouter (default):
 //   general  -> everything
 //   mature   -> hide content-moderated providers + any flagged is_moderated
 //   explicit -> show only the unmoderated-provider whitelist
-export function filterModelByContentMode(m: ModelInfo, mode: string): boolean {
+// NanoGPT:
+//   general  -> everything
+//   mature / explicit -> hide models whose id/name suggests a moderated
+//   upstream family (see MODERATED_NAME_FRAGMENTS above)
+export function filterModelByContentMode(
+  m: ModelInfo,
+  mode: string,
+  provider: string = "openrouter",
+): boolean {
   if (mode === "general") return true;
+  if (provider === "nanogpt") {
+    return !nanogptLooksModerated(m);
+  }
   if (mode === "mature") {
     if (m.is_moderated) return false;
     return !MODERATED_PROVIDERS.some(p => m.id.startsWith(p));

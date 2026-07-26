@@ -17,7 +17,12 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **NanoGPT as a second AI provider.** Settings gains an AI Provider section with a card per connection -- OpenRouter (the recommended default) and NanoGPT (pay-per-prompt, many unmoderated models) -- each with its own tailored connect instructions, its own stored API key, and its own Test Connection. Switching takes effect on Save: the model picker reloads from the new provider, and a warning flags a default model the new provider doesn't carry. NanoGPT publishes no pricing data, so the cost-tier filter is hidden for it and content-mode filtering uses a name-based heuristic instead of provider prefixes. Future local providers (Ollama, LM Studio, llama.cpp) plug into the same seams.
+- **Prompt Caching toggle (OpenRouter).** On by default, inside the OpenRouter panel: the unchanged part of each request (instructions plus story context) is marked cacheable, so supported models charge a fraction for it and respond faster on repeat requests. Never sent to other providers.
+
 ### Changed
+
+- **Attached context now stays with the conversation.** Previously an attached character profile (and the included chapter text) reached the AI on exactly one turn -- the turn it was attached -- and silently vanished from every later turn, which is why characters with a distinct Voice drifted into generic dialogue mid-conversation and Draft mode could write a character "blind" after a planning chat. The materials now persist in the conversation history (hidden from the transcript), the Canon/Reference stance stays active for as long as chips are attached, and a new VOICE FIDELITY rule instructs the AI that [core] voice and mannerism traits are constants -- vary the expression, never drop the trait. Draft and Enhance also run slightly cooler (0.6 instead of 0.7) to keep prose anchored to the profiles.
 
 ### Fixed
 

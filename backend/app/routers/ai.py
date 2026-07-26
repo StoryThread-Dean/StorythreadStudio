@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from app.settings_store import load_settings
 from app.ai.openrouter import run_completion, run_chat, list_models
+from app.ai.providers import ProviderConfig, OPENROUTER, active_provider
 from app.ai.sanitizer import sanitize
 from app.ai.prompts import (
     build_editor_chat_system_prompt,
@@ -293,41 +294,44 @@ class ModelInfo(BaseModel):
 @router.get("/models", response_model=list[ModelInfo])
 async def get_models():
     """
-    Fetches the current model list from OpenRouter and returns it.
+    Fetches the current model list from the active AI provider and returns it.
     The Settings screen uses this to populate the model picker dropdown.
 
-    Requires a valid API key to be saved in settings.
+    Requires a valid API key for the active provider to be saved in settings.
     """
-    api_key = load_settings().get("openrouter_api_key", "")
+    settings = load_settings()
+    provider = active_provider(settings)
+    api_key = settings.get(provider.api_key_setting, "")
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="No OpenRouter API key found. Add your key in Settings first."
+            detail=f"No {provider.label} API key found. Add your key in Settings first."
         )
 
     try:
-        models = await list_models(api_key)
+        models = await list_models(api_key, provider=provider)
         return [ModelInfo(**m) for m in models]
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=503,
-            detail=f"Could not reach OpenRouter: {e}"
+            detail=f"Could not reach {provider.label}: {e}"
         )
 
 
-# ── OpenRouter Error Translation ─────────────────────────────────────────────
-# OpenRouter returns standard HTTP status codes when something goes wrong on its
+# ── Provider Error Translation ────────────────────────────────────────────────
+# Providers return standard HTTP status codes when something goes wrong on their
 # end. Rather than showing the raw HTTP code (confusing) or a generic "AI request
 # failed" message (useless), we translate the most common codes into sentences
-# the writer can actually act on.
+# the writer can actually act on. Messages are templated on the provider so a
+# NanoGPT failure says "NanoGPT", not "OpenRouter".
 
-def _openrouter_msg(e: httpx.HTTPStatusError) -> str:
+def _provider_msg(e: httpx.HTTPStatusError) -> str:
     """
-    Pull OpenRouter's own human-readable error message out of the response body.
+    Pull the provider's own human-readable error message out of the response body.
 
-    OpenRouter returns errors as JSON shaped like
+    OpenAI-compatible services return errors as JSON shaped like
     {"error": {"message": "Grok 3 Mini is deprecated...", "code": 404}}.
     That message is frequently the single most useful thing for the writer (it
     often names the exact replacement model), so we surface it instead of
@@ -353,71 +357,82 @@ def _openrouter_msg(e: httpx.HTTPStatusError) -> str:
     return ""
 
 
-def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
+def _provider_exc(e: httpx.HTTPStatusError, provider: ProviderConfig = OPENROUTER) -> HTTPException:
     """
-    Convert an OpenRouter HTTPStatusError into a user-facing FastAPI exception.
+    Convert a provider HTTPStatusError into a user-facing FastAPI exception.
 
     Why a helper instead of inline if/elif chains?
     There are ~12 endpoint catch blocks. A single helper means the messages are
-    consistent and only need updating in one place when OpenRouter changes behaviour.
+    consistent and only need updating in one place when a provider changes behaviour.
     """
     status = e.response.status_code
-    # OpenRouter's own message, if it sent one. Appended to our friendlier text
+    # The provider's own message, if it sent one. Appended to our friendlier text
     # so the writer sees both "what to do" and "what the provider actually said".
-    provider_msg = _openrouter_msg(e)
+    provider_msg = _provider_msg(e)
+    name = provider.label
     if status == 401:
         return HTTPException(
             status_code=401,
-            detail="OpenRouter API key is invalid. Double-check your key in Settings.",
+            detail=f"{name} API key is invalid. Double-check your key in Settings.",
         )
     if status == 402:
         return HTTPException(
             status_code=402,
             detail=(
-                "OpenRouter account has insufficient credits. "
-                "Add credits at openrouter.ai or switch to Free and choose a new tiered model in Settings."
+                f"{name} account has insufficient credits. "
+                f"Add credits at {provider.key_hint} or switch to Free and choose a new tiered model in Settings."
             ),
         )
     if status == 429:
         return HTTPException(
             status_code=429,
             detail=(
-                "OpenRouter rate limit reached -- too many requests in a short window. "
+                f"{name} rate limit reached -- too many requests in a short window. "
                 "Wait a moment and try again. "
-                "If this keeps happening, check your OpenRouter plan limits at openrouter.ai or switch to a different model."
+                f"If this keeps happening, check your {name} plan limits at {provider.key_hint} or switch to a different model."
                 "Suggestion: Deposit $5-10. Go-to app Settings>Model Cost Tier> Budget or Free. It sips tokens, promise"
             ),
         )
     if status == 404:
         # A 404 from a chat completion almost always means the chosen model is
         # gone -- deprecated or renamed by its provider -- or simply not a valid
-        # model ID. This is the failure that looks like "OpenRouter is down"
-        # even though the account and key are fine. OpenRouter's body usually
-        # names the exact replacement (e.g. "switch to Grok 4.3"), so we lead
-        # with actionable guidance and append their message verbatim.
+        # model ID. This is the failure that looks like the service being down
+        # even though the account and key are fine. The body usually names the
+        # exact replacement (e.g. "switch to Grok 4.3"), so we lead with
+        # actionable guidance and append their message verbatim.
         base = (
-            "The AI model this project uses is unavailable on OpenRouter, "
+            f"The AI model this project uses is unavailable on {name}, "
             "usually because the provider deprecated or renamed it. "
             "Pick a current model in Project Settings (this project may override "
             "the global model in Settings)."
         )
         return HTTPException(
             status_code=502,
-            detail=f"{base} OpenRouter says: {provider_msg}" if provider_msg else base,
+            detail=f"{base} {name} says: {provider_msg}" if provider_msg else base,
         )
     if status >= 500:
         return HTTPException(
             status_code=502,
             detail=(
-                f"OpenRouter service error (HTTP {status}). "
+                f"{name} service error (HTTP {status}). "
                 "This is on their end -- try again in a few seconds."
             ),
         )
-    base = f"OpenRouter returned an unexpected error: HTTP {status}."
+    base = f"{name} returned an unexpected error: HTTP {status}."
     return HTTPException(
         status_code=502,
-        detail=f"{base} OpenRouter says: {provider_msg}" if provider_msg else base,
+        detail=f"{base} {name} says: {provider_msg}" if provider_msg else base,
     )
+
+
+# Backward-compatible aliases. test_openrouter_errors.py (and any older code)
+# calls these OpenRouter-flavored names; they now delegate to the templated
+# provider versions with OpenRouter fixed in.
+_openrouter_msg = _provider_msg
+
+
+def _openrouter_exc(e: httpx.HTTPStatusError) -> HTTPException:
+    return _provider_exc(e, OPENROUTER)
 
 
 # ── Content Mode and Model Routing ────────────────────────────────────────────
@@ -684,21 +699,51 @@ def _find_related_relationships(project_path: str, character_name: str) -> list[
 # summaries). Usage previews are shown on demand, not stored.
 
 
-def _resolve_model_and_key(model_id_override: str | None) -> tuple[str, str]:
+def _resolve_model_and_key(model_id_override: str | None) -> tuple[ProviderConfig, str, str]:
     """
-    Load settings, validate the API key exists, and resolve the model to use.
-    Raises HTTPException 400 if no API key is saved.
-    Helper shared by all Phase 4 generation endpoints.
+    Resolve which provider, API key, and model this request should use.
+    Returns a (provider, api_key, model_id) 3-tuple -- the single dispatch
+    seam every AI endpoint goes through, so switching providers in Settings
+    reroutes ALL AI features at once.
+
+    Model resolution order: request override (the project's default_model)
+    -> global settings default_model -> the provider's fallback model.
+    NanoGPT has no fallback (its catalog differs from OpenRouter's, so a
+    guessed slug would just 404) -- the writer must pick a model explicitly.
+
+    Raises HTTPException 400 if no API key is saved or no model resolves.
     """
     settings = load_settings()
-    api_key  = settings.get("openrouter_api_key", "")
+    provider = active_provider(settings)
+    api_key  = settings.get(provider.api_key_setting, "")
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="No OpenRouter API key found. Add your key in Settings first."
+            detail=f"No {provider.label} API key found. Add your key in Settings first."
         )
-    model_id = model_id_override or settings.get("default_model", "openai/gpt-4o-mini")
-    return api_key, model_id
+    model_id = (
+        model_id_override
+        or settings.get("default_model", "")
+        or provider.fallback_model
+    )
+    if not model_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No model selected. Pick a {provider.label} model in Settings."
+        )
+    return provider, api_key, model_id
+
+
+def _prompt_cache_enabled(provider: ProviderConfig) -> bool:
+    """Should this request mark its system prompt as cacheable?
+
+    Two gates: the provider must understand cache_control (OpenRouter only
+    today -- see ProviderConfig.supports_cache_control) AND the writer's
+    Prompt Caching setting must be on (default on). Kept as a helper rather
+    than read inside run_chat/run_completion so hermetic tests can call the
+    real client functions without touching the developer's settings file.
+    """
+    return provider.supports_cache_control and bool(load_settings().get("prompt_caching", True))
 
 
 def _extract_text_field(result: dict, field_name: str) -> str:
@@ -756,7 +801,7 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
     It helps the writer understand what their importance setting actually means
     for this specific trait.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     system_prompt = generate_usage_preview_prompt()
 
@@ -770,13 +815,14 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
     )
 
     try:
-        result = await run_completion(api_key=api_key, model_id=model_id,
+        result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["critique"])
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     text = _extract_text_field(result, "usage_preview")
     return GenerateUsagePreviewResponse(usage_preview=sanitize(text.strip()))
@@ -802,7 +848,7 @@ async def trim_trait(request: TrimTraitRequest):
     AI rewrites the description to land in the "Good" range while keeping
     all the key details the AI needs at that importance level.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     good_range = _GOOD_RANGES.get(request.importance, "30-80")
 
@@ -819,13 +865,14 @@ async def trim_trait(request: TrimTraitRequest):
     )
 
     try:
-        result = await run_completion(api_key=api_key, model_id=model_id,
+        result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["critique"])
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     text = _extract_text_field(result, "trimmed")
     return TrimTraitResponse(trimmed=sanitize(text.strip()))
@@ -839,7 +886,7 @@ async def audit_importance(request: AuditImportanceRequest):
     For example: a 'background' trait with rich emotional hooks should be 'core',
     or a 'core' trait with a vague one-liner should be fleshed out or downgraded.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     # Format the trait blocks as a readable list for the AI
     blocks_text = ""
@@ -860,13 +907,14 @@ async def audit_importance(request: AuditImportanceRequest):
     )
 
     try:
-        result = await run_completion(api_key=api_key, model_id=model_id,
+        result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["critique"])
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     # Parse the flags array from the AI response
     raw_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -892,7 +940,7 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
     Stored under the ## AI Summary: heading. Designed to be concise and
     prompt-efficient so it can be used as context without burning many tokens.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     system_prompt = generate_section_summary_prompt()
 
@@ -905,13 +953,14 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
     )
 
     try:
-        result = await run_completion(api_key=api_key, model_id=model_id,
+        result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["profile"])
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     text = _extract_text_field(result, "section_summary")
     return GenerateSectionSummaryResponse(section_summary=sanitize(text.strip()))
@@ -926,7 +975,7 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
     This is the primary content used when the writer attaches a profile as a
     context chip to an AI assistant request.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     system_prompt = generate_full_summary_prompt()
 
@@ -963,13 +1012,14 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
     )
 
     try:
-        result = await run_completion(api_key=api_key, model_id=model_id,
+        result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
+                                      cache_prompts=_prompt_cache_enabled(provider),
                                       system_prompt=system_prompt, user_message=user_message,
                                       temperature=TEMPERATURE_DEFAULTS["profile"])
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     text = _extract_text_field(result, "full_summary")
     return GenerateFullSummaryResponse(
@@ -1034,7 +1084,7 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
       4. Write the sanitized Markdown to summaries/chapters/<stem>.md
       5. Return the content + filename + model
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     chapter_text = _read_chapter_text(request.project_path, request.chapter_path)
     stem         = os.path.splitext(os.path.basename(request.chapter_path))[0]
@@ -1062,6 +1112,8 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
         # need the same low-randomness treatment as structured reviews, not
         # the creative "generation" temperature.
         body = await run_chat(
+            provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -1069,9 +1121,9 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
             temperature   = TEMPERATURE_DEFAULTS["critique"],
         )
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     filename     = f"{stem}.md"
     summary_dir  = os.path.join(request.project_path, "summaries", "chapters")
@@ -1143,7 +1195,7 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
       4. Return {title, content, model_used}. The frontend decides whether to
          save (overwrite prompt, preview modal, etc.) via /api/documents/scene-summary.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -1181,6 +1233,8 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
         # same as structured reviews. The "generation" temperature is for
         # creative continuation and would let the model drift.
         body = await run_chat(
+            provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -1188,9 +1242,9 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
             temperature   = TEMPERATURE_DEFAULTS["critique"],
         )
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     content = body.strip()
 
@@ -1203,7 +1257,9 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
     if not title:
         try:
             title_reply = await run_chat(
-                api_key       = api_key,
+                provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
+            api_key       = api_key,
                 model_id      = model_id,
                 system_prompt = generate_scene_title_prompt(),
                 messages      = [{"role": "user", "content": (
@@ -1265,7 +1321,7 @@ _VALID_BREAK_SEVERITIES = {"strong", "moderate", "subtle"}
 @router.post("/suggest-scene-breaks", response_model=SuggestSceneBreaksResponse)
 async def suggest_scene_breaks(request: SuggestSceneBreaksRequest):
     """Suggest where to place `---` scene breaks in a chapter (review-only)."""
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -1298,6 +1354,8 @@ async def suggest_scene_breaks(request: SuggestSceneBreaksRequest):
         # critique temperature (0.3): identifying structural beats is analytic
         # work, not creative generation -- we want consistency, not drift.
         raw = await run_chat(
+            provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -1305,9 +1363,9 @@ async def suggest_scene_breaks(request: SuggestSceneBreaksRequest):
             temperature   = TEMPERATURE_DEFAULTS["critique"],
         )
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     # Parse the model's JSON. Tolerate fences/preamble via the shared extractor.
     # A malformed response yields no suggestions rather than a 500 -- the writer
@@ -1358,7 +1416,7 @@ async def profile_chat(request: ProfileChatRequest):
     Session-only: no state on the server. Frontend sends full history each turn.
     Writer controls all profile edits -- AI only suggests, never writes directly.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     # 1. System prompt = instructions only (no profile content)
     system_prompt = build_profile_chat_system_prompt(
@@ -1373,9 +1431,12 @@ async def profile_chat(request: ProfileChatRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
-    # 2. Materials message with profile content -- only on the first turn.
-    #    The frontend sends profile_content on the initial message and omits it
-    #    on follow-ups (it's already in the conversation history from turn 1).
+    # 2. Materials message with profile content. The Profile Builder frontend
+    #    recomputes formatProfileForAI(profile) and sends it on EVERY turn --
+    #    so edits made mid-conversation are always visible to the AI, and the
+    #    profile never drops out of context. (The Writing Companion solves
+    #    the same problem differently: it echoes materials back for the
+    #    frontend to persist in history -- see editor_chat.)
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
     if request.profile_content.strip():
@@ -1400,13 +1461,14 @@ async def profile_chat(request: ProfileChatRequest):
         temp = TEMPERATURE_DEFAULTS["profile"]
 
     try:
-        reply = await run_chat(api_key=api_key, model_id=model_id,
+        reply = await run_chat(provider=provider, api_key=api_key, model_id=model_id,
+                                   cache_prompts=_prompt_cache_enabled(provider),
                                system_prompt=system_prompt, messages=messages,
                                temperature=temp)
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     return ProfileChatResponse(reply=reply, model_used=model_id)
 
@@ -1441,6 +1503,11 @@ class EditorChatRequest(BaseModel):
     # outline/locations are canon the AI must stay consistent with. False = they
     # are reference only and the writer's typed direction takes precedence.
     treat_attachments_as_canon: bool = True
+    # True when ANY chips are attached in the UI -- including ones already
+    # sent on an earlier turn (context_chips only carries the NEW ones).
+    # Keeps the ATTACHMENT STANCE instruction in the system prompt for the
+    # whole life of the attachment, not just the turn it was added.
+    has_attached_context: bool = False
     # Reasoning toggle: when True (and the model supports it), OpenRouter is
     # asked for the model's reasoning trace, returned alongside the reply.
     # The frontend only offers the toggle for reasoning-capable models.
@@ -1451,6 +1518,13 @@ class EditorChatResponse(BaseModel):
     reply: str
     model_used: str = ""       # The resolved model ID so the UI can display it
     reasoning: str | None = None  # The model's reasoning trace, when requested + emitted
+    # Echo of the materials message (chips + chapter text) the backend
+    # prepended this turn, so the frontend can persist it into the chat
+    # history as a hidden message. Without this, attached profiles were in
+    # front of the model for exactly ONE turn and then vanished -- the root
+    # cause of "the AI forgot my character's voice". None when no new
+    # materials were sent (or in enhance mode, which resends fresh per turn).
+    materials_content: str | None = None
 
 
 # Absolute ceiling on a single Enhance rewrite, in approximate words. Multiplier
@@ -1595,7 +1669,7 @@ def _build_materials_message(
 @router.post("/editor-chat", response_model=EditorChatResponse)
 async def editor_chat(request: EditorChatRequest):
     """Writing Companion chat endpoint for the main editor panel."""
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -1632,17 +1706,23 @@ async def editor_chat(request: EditorChatRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
-    # Attachment stance: when the writer has attached chips, tell the model whether
-    # to treat them as canon (enforce) or reference (the writer's direction wins).
-    # Driven by the Canon/Reference toggle in the attachment popup.
-    if request.context_chips:
+    # Attachment stance: when the writer has chips attached, tell the model
+    # whether to treat them as canon (enforce) or reference (the writer's
+    # direction wins). Driven by the Canon/Reference toggle in the attachment
+    # popup. Keyed on has_attached_context (attached in the UI at all), not
+    # just context_chips (only the NEW ones this turn) -- the stance must
+    # hold for as long as the chips are in play, and a byte-identical system
+    # prompt across turns is also what makes prompt caching effective.
+    if request.context_chips or request.has_attached_context:
         system_prompt = system_prompt + "\n\n" + context_stance_instruction(request.treat_attachments_as_canon)
 
     # 2. Build a "materials" user message with variable content -- but only if
     #    the frontend actually sent something new. On follow-up turns the frontend
-    #    omits text_content and chips that were already sent in a prior turn (they're
-    #    already in the conversation history). Skipping the materials message here
-    #    avoids resending the same chapter + profiles on every single turn.
+    #    omits text_content and chips that were already sent in a prior turn.
+    #    That dedup is safe because of the materials_content echo below: the
+    #    frontend persists the echoed materials into its chat history as a
+    #    hidden message, so "already sent" genuinely means "already in the
+    #    conversation the model sees" -- not "vanished after one turn".
     has_new_materials = (
         bool(request.text_content.strip())
         or bool(request.context_chips)
@@ -1651,6 +1731,7 @@ async def editor_chat(request: EditorChatRequest):
 
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
+    materials_content: str | None = None
     if has_new_materials:
         materials = _build_materials_message(
             text_content        = request.text_content,
@@ -1661,17 +1742,34 @@ async def editor_chat(request: EditorChatRequest):
             is_enhance          = is_enhance,
             treat_as_canon      = request.treat_attachments_as_canon,
         )
-        messages = [materials] + conversation
+        # Insert the materials just BEFORE the newest user message rather than
+        # at the front of the whole conversation. Turn 1 is identical either
+        # way; for chips attached mid-conversation this keeps the earlier
+        # messages byte-stable (append-only), which is what lets provider-side
+        # prompt caching keep matching the prefix.
+        if conversation:
+            messages = conversation[:-1] + [materials] + conversation[-1:]
+        else:
+            messages = [materials]
+        # Echo the materials so the frontend can persist them into history.
+        # Enhance stays transient by design -- it resends its target passage
+        # fresh every turn, and persisting each copy would bloat the history.
+        if not is_enhance:
+            materials_content = materials["content"]
     else:
         messages = conversation
 
-    # Pick temperature: creative modes (open chat, scene drafting, and prose
-    # enhancement) get higher randomness; the structured review categories get
-    # lower randomness.
-    temp = (
-        TEMPERATURE_DEFAULTS["generation"] if request.category in ("chat", "draft", "enhance")
-        else TEMPERATURE_DEFAULTS["critique"]
-    )
+    # Pick temperature: open chat gets the most randomness; Draft and Enhance
+    # write story prose FROM the attached materials, so they run slightly
+    # cooler (see draft_prose in TEMPERATURE_DEFAULTS) to keep character
+    # voice anchored to the profiles; the structured review categories run
+    # coolest of all.
+    if request.category == "chat":
+        temp = TEMPERATURE_DEFAULTS["generation"]
+    elif request.category in ("draft", "enhance"):
+        temp = TEMPERATURE_DEFAULTS["draft_prose"]
+    else:
+        temp = TEMPERATURE_DEFAULTS["critique"]
 
     # Pick the sanitizer mode. Draft and Enhance both produce story prose, where
     # an approved ' -- ' is legitimate punctuation, so they use the prose
@@ -1682,21 +1780,24 @@ async def editor_chat(request: EditorChatRequest):
     try:
         if request.include_reasoning:
             # Tuple return shape -- see run_chat's include_reasoning docstring.
-            reply, reasoning = await run_chat(api_key=api_key, model_id=model_id,
+            reply, reasoning = await run_chat(provider=provider, api_key=api_key, model_id=model_id,
+                                   cache_prompts=_prompt_cache_enabled(provider),
                                               system_prompt=system_prompt, messages=messages,
                                               temperature=temp, sanitize_mode=sanitize_mode,
                                               include_reasoning=True)
         else:
-            reply = await run_chat(api_key=api_key, model_id=model_id,
+            reply = await run_chat(provider=provider, api_key=api_key, model_id=model_id,
+                                   cache_prompts=_prompt_cache_enabled(provider),
                                    system_prompt=system_prompt, messages=messages,
                                    temperature=temp, sanitize_mode=sanitize_mode)
             reasoning = None
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
-    return EditorChatResponse(reply=reply, model_used=model_id, reasoning=reasoning)
+    return EditorChatResponse(reply=reply, model_used=model_id, reasoning=reasoning,
+                              materials_content=materials_content)
 
 
 # ── Editor Pass (Inline Overlay Feedback) ─────────────────────────────────────
@@ -1835,7 +1936,7 @@ async def editor_pass(request: EditorPassRequest):
     frontend renders as clickable highlights. See module-level docstring
     above for the architectural rationale.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -1885,6 +1986,8 @@ async def editor_pass(request: EditorPassRequest):
 
     try:
         raw = await run_chat(
+            provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -1894,9 +1997,9 @@ async def editor_pass(request: EditorPassRequest):
             temperature   = TEMPERATURE_DEFAULTS["critique"],
         )
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     allowed_keys = set(cat_defs.keys())
     issues_raw = _parse_pass_response(raw, allowed_keys)
@@ -1947,7 +2050,7 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
     modifier. Returns one new suggestion that replaces the old one in the
     issue popover; does not affect any other issue or the manuscript.
     """
-    api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -1980,6 +2083,8 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
 
     try:
         raw = await run_chat(
+            provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
             api_key       = api_key,
             model_id      = model_id,
             system_prompt = system_prompt,
@@ -1987,9 +2092,9 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
             temperature   = TEMPERATURE_DEFAULTS["generation"],
         )
     except httpx.HTTPStatusError as e:
-        raise _openrouter_exc(e)
+        raise _provider_exc(e, provider)
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach OpenRouter: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
     # Strip surrounding whitespace and any accidental markdown fence the
     # model wrapped around the prose. The prompt forbids these but weak

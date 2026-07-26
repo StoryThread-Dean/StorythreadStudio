@@ -44,7 +44,7 @@ import type {
 import { ChatMarkdown } from "./components/ChatMarkdown";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
 import type { ChipIncludeOptions } from "./utils/profileFormat";
-import { buildEditorChatPayload, isWeakDraftingModel, computeSurroundingWindow } from "./utils/buildEditorChatPayload";
+import { buildEditorChatPayload, appendTurnToHistory, isWeakDraftingModel, computeSurroundingWindow } from "./utils/buildEditorChatPayload";
 import { autoSizeTextarea } from "./utils/autoSizeTextarea";
 import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
@@ -1541,11 +1541,17 @@ function App() {
 
   // --- Send a message in the Writing Companion chat ---
   // Only sends materials (chapter text + context chips) that are NEW -- things
-  // the AI hasn't seen yet in this conversation. Materials from prior turns are
-  // already in the conversation history and don't need to be resent.
+  // the AI hasn't seen yet in this conversation. Materials from prior turns
+  // genuinely live in the conversation history: the backend echoes each
+  // turn's materials block back (materials_content) and the success handler
+  // persists it as a hidden history message, so it rides along in every
+  // later request. (Before this, "established" materials were sent exactly
+  // once and then vanished -- the AI forgot profiles after turn one.)
   //
-  // "Established" = sent in a prior turn (muted in UI, still in AI memory).
+  // "Established" = sent in a prior turn (muted in UI, in the AI's history).
   // "New"         = first time being sent (bright in UI, included in payload).
+  // Note: the persisted chapter text is a snapshot from when it was sent;
+  // Start a new ask to refresh it after heavy edits.
   const sendEditorChat = useCallback(async (opts?: {
     // When set, send this text as the user turn instead of the input box.
     // Used by the Continue button (a canned "keep going" message).
@@ -1658,6 +1664,10 @@ function App() {
           enhance_level:       payloadCore.enhance_level,
           // Canon/Reference toggle: how the AI treats attached chips.
           treat_attachments_as_canon: treatAsCanon,
+          // True while ANY chips are attached (context_chips above only
+          // carries the NEW ones) -- keeps the backend's ATTACHMENT STANCE
+          // instruction active for the whole life of the attachment.
+          has_attached_context: contextChips.length > 0,
           // Reasoning toggle: only honored by reasoning-capable models, and the
           // toggle is hidden otherwise, so this is false unless both are true.
           include_reasoning: reasoningMode && activeModelSupportsReasoning,
@@ -1679,13 +1689,21 @@ function App() {
 
       const data = await res.json();
       if (data.model_used) setChatModelUsed(data.model_used);
-      setChatMessages(prev => [...prev, {
+      // Rebuild the history from the pre-send snapshot (`chatMessages` is the
+      // closure value from before userMsg was optimistically appended --
+      // chatLoading serializes sends, so nothing else touched it since).
+      // appendTurnToHistory slots the backend's echoed materials block in as
+      // a HIDDEN message just before the user turn -- that's what keeps the
+      // attached profiles + chapter text in front of the model on every
+      // later turn instead of vanishing after the turn they were sent.
+      const assistantMsg: EditorChatMessage = {
         role: "assistant",
         content: data.reply,
         // Reasoning trace rides along when the toggle was on and the model
         // emitted one; rendered as a collapsible block above the reply.
         ...(data.reasoning ? { reasoning: data.reasoning } : {}),
-      }]);
+      };
+      setChatMessages(appendTurnToHistory(chatMessages, userMsg, data.materials_content, assistantMsg));
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
       // ── Mark materials as established after successful send ────────────
@@ -2830,6 +2848,10 @@ function App() {
                   <div className="h-px flex-1 bg-violet-800/50" />
                 </div>
               )}
+              {/* Hidden messages (the persisted materials block -- profiles +
+                  chapter text) stay in the history the AI sees but never
+                  render; the writer already sees their attachments as chips. */}
+              {!msg.hidden && (
               <div className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               {msg.role === "assistant" && (
                 <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-indigo-400">
@@ -2867,6 +2889,7 @@ function App() {
                 </div>
               )}
               </div>
+              )}
             </div>
           ))}
 
@@ -2988,7 +3011,7 @@ function App() {
             {/* Draft mode: the AI writes a new scene/segment from your message. */}
             <label
               className="flex cursor-pointer items-center gap-1.5"
-              title="When on, the AI writes story prose from your message and attached context. When off, it discusses your writing."
+              title="When on, the AI writes story prose from your message and attached context. When off, it discusses your writing. Draft uses this conversation as planning context -- use New Ask for a clean slate."
             >
               <PenLine size={12} className={draftMode ? "text-emerald-400" : "text-faint"} />
               <span className={`text-xs ${draftMode ? "text-emerald-400" : "text-faint"}`}>Draft mode</span>

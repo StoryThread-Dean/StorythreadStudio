@@ -8,7 +8,7 @@
 //   - Continue turn                  -> category "draft", no text, only new chips
 
 import { describe, it, expect } from "vitest";
-import { buildEditorChatPayload, isWeakDraftingModel, computeSurroundingWindow } from "./buildEditorChatPayload";
+import { buildEditorChatPayload, appendTurnToHistory, isWeakDraftingModel, computeSurroundingWindow } from "./buildEditorChatPayload";
 import type { ContextChip } from "../types/ai";
 
 const chip = (type: string, name: string, content = "x"): ContextChip => ({ type, name, content });
@@ -171,5 +171,47 @@ describe("isWeakDraftingModel", () => {
     expect(isWeakDraftingModel("openai/gpt-4o")).toBe(false);
     expect(isWeakDraftingModel(null)).toBe(false);
     expect(isWeakDraftingModel(undefined)).toBe(false);
+  });
+});
+
+describe("appendTurnToHistory", () => {
+  const user = { role: "user" as const, content: "draft the scene" };
+  const assistant = { role: "assistant" as const, content: "prose here" };
+  const prior = [
+    { role: "user" as const, content: "u1" },
+    { role: "assistant" as const, content: "a1" },
+  ];
+
+  it("inserts the hidden materials message just before the user turn", () => {
+    const out = appendTurnToHistory(prior, user, "ATTACHED CONTEXT: profile text", assistant);
+    expect(out.map(m => m.content)).toEqual([
+      "u1", "a1", "ATTACHED CONTEXT: profile text", "draft the scene", "prose here",
+    ]);
+    // The materials ride as a hidden USER message -- in the history the model
+    // sees, invisible in the transcript the writer sees.
+    expect(out[2].hidden).toBe(true);
+    expect(out[2].role).toBe("user");
+    // The visible turns are NOT hidden.
+    expect(out[3].hidden).toBeUndefined();
+    expect(out[4].hidden).toBeUndefined();
+  });
+
+  it("appends only user + assistant when there are no new materials", () => {
+    for (const materials of [null, undefined, ""]) {
+      const out = appendTurnToHistory(prior, user, materials, assistant);
+      expect(out.map(m => m.content)).toEqual(["u1", "a1", "draft the scene", "prose here"]);
+    }
+  });
+
+  it("does not mutate the input history (pure function)", () => {
+    const snapshot = [...prior];
+    appendTurnToHistory(prior, user, "materials", assistant);
+    expect(prior).toEqual(snapshot);
+  });
+
+  it("works on an empty history (first turn of a session)", () => {
+    const out = appendTurnToHistory([], user, "materials", assistant);
+    expect(out.map(m => m.content)).toEqual(["materials", "draft the scene", "prose here"]);
+    expect(out[0].hidden).toBe(true);
   });
 });

@@ -5,8 +5,16 @@
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 export interface AppSettings {
+  // Which AI service requests are sent to: "openrouter" | "nanogpt".
+  // Each provider keeps its own stored key -- switching never loses one.
+  ai_provider:            string;
   openrouter_api_key:     string;    // Masked display value ("sk-or-...xyz" or "")
   openrouter_api_key_set: boolean;
+  nanogpt_api_key:        string;    // Masked, same rules as the OpenRouter key
+  nanogpt_api_key_set:    boolean;
+  // Prompt caching (OpenRouter only): reuse the unchanged request prefix so
+  // supported models bill less on repeat requests. Default on.
+  prompt_caching:         boolean;
   default_model:          string;
   content_mode:           string;    // "general" | "mature" | "explicit"
   cost_tier:              string;    // "free" | "budget" | "standard" | "premium"
@@ -28,7 +36,12 @@ export interface AppSettings {
 }
 
 export interface UpdateSettingsPayload {
+  // "openrouter" | "nanogpt". Unknown values are silently ignored server-side.
+  ai_provider?:        string;
   openrouter_api_key?: string;
+  // Non-empty replaces the stored NanoGPT key; empty string clears it.
+  nanogpt_api_key?:    string;
+  prompt_caching?:     boolean;
   default_model?:      string;
   content_mode?:       string;
   cost_tier?:          string;
@@ -170,6 +183,12 @@ export interface EditorChatMessage {
   // the Reasoning toggle was on and the model emitted one. Display-only --
   // the backend ignores it when the message is sent back as history.
   reasoning?: string;
+  // Hidden messages are real conversation content the model must keep
+  // seeing -- the persisted materials block (attached profiles + chapter
+  // text) -- but rendering them would show the writer a wall of their own
+  // profile text, so the transcript skips them. They still ride along in
+  // every request's message history.
+  hidden?: boolean;
 }
 
 export interface EditorChatPayload {
@@ -188,6 +207,11 @@ export interface EditorChatPayload {
   // Reasoning toggle: ask for the model's reasoning trace (reasoning-capable
   // models only; the UI hides the toggle otherwise).
   include_reasoning?: boolean;
+  // True while ANY chips are attached in the UI -- context_chips above only
+  // carries the NEW ones for this turn (established chips live in history).
+  // Keeps the backend's ATTACHMENT STANCE instruction active on every turn
+  // of the attachment's life, not just the turn it was added.
+  has_attached_context?: boolean;
 }
 
 

@@ -207,6 +207,33 @@ Expected:
 
 ---
 
+## 8. AI provider switch (OpenRouter <-> NanoGPT)
+
+**Touches:** the provider selector cards + per-provider panels in Settings,
+per-provider key storage, live model-list fetch from each provider, and the
+cross-provider default-model warning. Needs real API keys for both
+providers; skip the NanoGPT half if you have no funded NanoGPT account.
+
+Steps:
+1. Open Settings. Confirm two provider cards render (OpenRouter / NanoGPT)
+   with correct status badges, and that each card's panel shows its own
+   connect instructions (openrouter.ai steps vs nano-gpt.com steps).
+2. Select the NanoGPT card, paste a NanoGPT key, click Test.
+3. Click Save. The model picker should reload with NanoGPT's catalog; the
+   cost-tier slider should be hidden; if your old default model isn't in
+   the list, an amber warning should say so.
+4. Pick a NanoGPT model, Save, and run a Writing Companion chat turn --
+   it should answer normally.
+5. Switch back to the OpenRouter card and Save. The OpenRouter key should
+   still be stored (masked), the tier slider returns, the Prompt Caching
+   toggle is visible inside the panel, and a chat turn works again.
+
+Expected: both keys survive round-trip switching; no request ever fails
+silently -- a stale cross-provider model produces a clear, provider-named
+error, not a bare HTTP code.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

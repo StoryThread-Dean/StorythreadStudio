@@ -29,8 +29,13 @@ PUNCTUATION_RULE = (
 
 TEMPERATURE_DEFAULTS = {
     "critique":    0.3,   # structured feedback, trait extraction, audits, consistency checks
-    "generation":  0.7,   # creative continuation, brainstorming, guide mode
+    "generation":  0.7,   # open chat, brainstorming, guide mode
     "profile":     0.5,   # profile chat, summaries, general profile work
+    # draft_prose: slightly below "generation". Drafting a scene from attached
+    # profiles is partly instruction-following -- a lower temperature biases
+    # the model toward the profile's voice and mannerisms over generic novelty,
+    # while 0.6 keeps enough variance for the prose to feel alive.
+    "draft_prose": 0.6,   # Draft mode + Enhance mode story prose
 }
 
 
@@ -89,7 +94,9 @@ def context_stance_instruction(treat_as_canon: bool) -> str:
         "reference, not law. Draw on the details relevant to this moment, but MY TYPED DIRECTION "
         "TAKES PRECEDENCE: when my direction conflicts with an attached trait or detail, follow "
         "my direction. Weight relevance to this scene over a trait's importance label, and do not "
-        "force in traits that do not fit the moment."
+        "force in traits that do not fit the moment. Reference stance loosens WHICH details you "
+        "draw on, not WHO the character is: keep each character's [core] voice and mannerism "
+        "traits intact unless my direction explicitly overrides them."
     )
 
 
@@ -113,7 +120,7 @@ USING ATTACHED PROFILES
 - Profiles describe who a character IS, not a script to follow literally.
 - Speech examples and catchphrases illustrate a character's voice style. Internalize the tone and rhythm; do not repeat example phrases verbatim.
 - Physical descriptions are reference material. Mention details naturally when relevant to the scene, not as an inventory list.
-- A trait being mentioned in a profile does not mean it must appear in every scene. Let traits surface when the scene calls for them.
+- A `[present]`, `[background]`, or `[contextual]` trait being mentioned in a profile does not mean it must appear in every scene. Let those traits surface when the scene calls for them. `[core]` voice and mannerism traits are different -- see VOICE FIDELITY below.
 - The "don't force every trait" guidance applies to GENERATION (writing scenes, dialogue, continuations). When the writer asks an ANALYTICAL question (consistency check, "is this in character", "does X fit", "why does Y feel off"), do the opposite: lean into the profile actively, quote or paraphrase the relevant traits by name, and cite their importance level so the writer can see your reasoning.
 - When multiple characters are attached, keep their traits separate. Each profile is delimited by `=== BEGIN <TYPE>: <NAME> ===` and `=== END <TYPE>: <NAME> ===` markers. Do not assign one character's trait to another.
 - A profile may include both an `## AI Summary` block and trait sections. Treat the AI Summary as the gist (who the character is at a glance, useful for orientation) and the trait sections as the operational detail (how they actually behave, speak, and decide). They are not in competition. Use the summary to orient; use the traits to act.
@@ -126,7 +133,12 @@ Every trait block carries a bracketed importance label that tells you how to wei
 - `[contextual]` -- only relevant when the situation the trait describes is in play. Otherwise, ignore it entirely.
 - `[hidden]` -- internal-only. NEVER name, describe, quote, or directly reference these traits in your output. They are influence material, not content. A hidden trait may shape: a character's body language, what they avoid looking at, the dialogue option they reach for under pressure, a small gesture, a beat of silence, an off-tone reaction when something external triggers it. The reader and the other characters should be able to feel the effect without ever being told the cause. If you find yourself about to write the hidden trait's name or a paraphrase that reveals it, stop and rewrite as observable behavior instead.
 
-Importance is a guide, not a quota. A `[core]` trait does not need to appear every paragraph; a `[background]` one may legitimately drive a moment if the scene leans that way. The labels tell you the default weight, not a strict rule.
+Importance is a guide, not a quota. A `[core]` trait does not need to appear every paragraph; a `[background]` one may legitimately drive a moment if the scene leans that way. The labels tell you the default weight, not a strict rule. Exception: a `[core]` voice or mannerism trait is a constant -- it colors every line of that character's dialogue and action even when nothing calls attention to it.
+
+VOICE FIDELITY
+- A character's [core] Voice, Speech, and Mannerism traits are constants, not optional flavor. They define how that character speaks and moves in EVERY scene, in every mode (discussing, drafting, enhancing), on every turn of this conversation.
+- Vary the EXPRESSION, never drop the TRAIT: rotate word choice, rhythm, and gesture so the trait never becomes a repeated tic, but a character with an animated, awkward voice must never read as a generic speaker.
+- These traits persist unless the writer explicitly directs otherwise (for example, "she is sedated in this scene").
 
 WHEN THE WRITER ASKS TO "CONTINUE", "KEEP GOING", OR "WRITE THE NEXT PART"
 
@@ -242,6 +254,9 @@ _DRAFT_RESPONSE_RULES = (
     "- Use the attached profiles for voice, physical detail, and motivation, "
     "weighted by their importance labels. Do not list traits; let them surface "
     "naturally as the scene calls for them.\n"
+    "- [core] voice and mannerism traits are always on stage with the "
+    "character: every line of their dialogue and action should sound like "
+    "THEM, per VOICE FIDELITY in your core instructions.\n"
     "- Match the POV, tense, and tone implied by the premise and any attached "
     "text. If the writer attached existing prose, match its voice.\n\n"
     "WHAT NOT TO DO:\n"

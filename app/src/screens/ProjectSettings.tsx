@@ -532,6 +532,9 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   // Global text-only preference -- the media-capability filter applies to this
   // picker too so image/video output models stay out of a writing app's list.
   const [textOnlyFilter, setTextOnlyFilter] = useState(true);
+  // Active AI provider (global setting). The model list is that provider's
+  // catalog, so warnings and filters here need to know which one it is.
+  const [aiProvider, setAiProvider] = useState("openrouter");
 
   // Outline template section -- tracks the current template and lets the writer
   // swap it. The initial value comes from project.json (may be null for older
@@ -588,13 +591,16 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
       } catch { /* models optional */ }
     }
     async function loadGlobalFilters() {
-      // Only the text-only preference is needed here; everything else in the
-      // global settings payload is irrelevant to this modal.
+      // The text-only preference plus the active AI provider. The provider
+      // matters here because the model list comes from whichever provider is
+      // active, and providers without pricing data (NanoGPT) can't use the
+      // cost-tier filter.
       try {
         const res = await fetch(`${API_BASE}/api/settings`);
         if (res.ok) {
           const data = await res.json();
           setTextOnlyFilter(data.text_only_filter ?? true);
+          setAiProvider(data.ai_provider ?? "openrouter");
         }
       } catch { /* default stays on */ }
     }
@@ -759,9 +765,12 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   // This is where the project's cost tier actually filters candidates -- the
   // tier is enforced at pick time rather than at request time because model
   // prices only exist in the live OpenRouter list, not on the backend.
+  // Providers without published pricing (NanoGPT) skip the tier filter --
+  // every model would fail a price cap when all costs read as unknown.
+  const tiersApply = aiProvider !== "nanogpt";
   const visibleModels = models.filter(m =>
-    filterModelByContentMode(m, contentMode)
-    && modelPassesTier(m, costTier)
+    filterModelByContentMode(m, contentMode, aiProvider)
+    && (!tiersApply || modelPassesTier(m, costTier))
     && (!textOnlyFilter || modelIsTextOnly(m))
   );
   const projectModelInList =
@@ -1198,10 +1207,12 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 {projectModelMissing && models.length > 0 && (
                   <p className="mt-1 text-xs text-amber-500">
                     This project is set to <span className="font-mono">{projectModel}</span>, which
-                    is not in the current model list. If the provider deprecated or renamed it, AI
-                    requests will fail until you pick a current model above. If it is only hidden by
-                    this project's content mode, cost tier, or the text-only filter, requests still
-                    work, but consider picking a model that fits your filters.
+                    is not in the current model list from your AI provider
+                    ({aiProvider === "nanogpt" ? "NanoGPT" : "OpenRouter"}). If the model came from a
+                    different provider, or was deprecated or renamed, AI requests will fail until you
+                    pick a current model above (or change the provider in Settings). If it is only
+                    hidden by this project's content mode, cost tier, or the text-only filter,
+                    requests still work, but consider picking a model that fits your filters.
                   </p>
                 )}
                 {projectModel && !projectModelMissing && (

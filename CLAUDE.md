@@ -187,14 +187,21 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_scene_beats.py` -- `## Beats` parsing, preservation on AI regen, /scene-beats
   - `test_story_context_fields.py` -- Book Details fields in _build_story_context
   - `test_project_settings_fields.py` -- Book Details persistence, outline word target, ui-state, numeric starter
+  - `test_providers.py` -- provider registry + _resolve_model_and_key dispatch (NanoGPT key/model rules)
+  - `test_nanogpt_models.py` -- tolerant /models normalization for thin catalogs
+  - `test_provider_errors.py` -- provider-templated error translation (NanoGPT messages)
+  - `test_settings_routes.py` -- ai_provider / NanoGPT key / prompt_caching over the Settings API
+  - `test_prompt_caching.py` -- cache_control payload shapes, provider gating, NanoGPT headers
+  - `test_editor_chat_materials_flow.py` -- materials echo + placement, stance persistence, temperature split
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
   - `src/components/sidebar/ActGroup.test.tsx` -- acts tree pieces (ActGroup + RowMenu)
   - `src/hooks/useProjectUiState.test.ts` -- per-book UI-state hook (load guard, debounce)
   - `src/utils/spellcheck.test.ts` -- spellcheck suggestions
-  - `src/utils/buildEditorChatPayload.test.ts` -- Writing Companion payload builder
-  - `src/utils/modelFiltering.test.ts` -- model list filtering + recommended models
+  - `src/utils/buildEditorChatPayload.test.ts` -- Writing Companion payload builder + history persistence (appendTurnToHistory)
+  - `src/utils/modelFiltering.test.ts` -- model list filtering + recommended models (provider-aware)
+  - `src/components/settings/ProviderPanel.test.tsx` -- per-provider Settings panels + PROVIDER_META registry
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands
