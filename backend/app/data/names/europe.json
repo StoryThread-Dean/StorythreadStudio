@@ -1,0 +1,283 @@
+[
+  {
+    "id": "british",
+    "label": "British",
+    "region": "Europe",
+    "sort": 10,
+    "given": {
+      "medieval": {
+        "male": ["William", "John", "Thomas", "Richard", "Robert", "Henry", "Geoffrey", "Hugh", "Walter", "Roger", "Ralph", "Gilbert", "Simon", "Nicholas", "Edmund", "Edward", "Adam", "Peter", "Stephen", "Bartholomew", "Miles", "Osbert", "Reginald", "Randal", "Alexander", "Christopher", "Francis", "George", "Humphrey", "Lawrence"],
+        "female": ["Alys", "Agnes", "Matilda", "Isabel", "Joan", "Margery", "Cecily", "Eleanor", "Katherine", "Margaret", "Elizabeth", "Anne", "Mary", "Edith", "Emma", "Beatrice", "Constance", "Avice", "Sybil", "Rohesia", "Juliana", "Philippa", "Idonea", "Lettice", "Maud", "Winifred", "Dorothy", "Frances", "Grace", "Ursula"]
+      },
+      "colonial": {
+        "male": ["John", "William", "Thomas", "George", "James", "Charles", "Henry", "Joseph", "Edward", "Samuel", "Richard", "Robert", "Frederick", "Arthur", "Albert", "Alfred", "Walter", "Ernest", "Herbert", "Harold", "Francis", "Benjamin", "Daniel", "Isaac", "Jacob", "Matthew", "Philip", "Reuben", "Josiah", "Edwin"],
+        "female": ["Mary", "Elizabeth", "Sarah", "Ann", "Jane", "Emma", "Alice", "Florence", "Edith", "Emily", "Charlotte", "Harriet", "Hannah", "Martha", "Margaret", "Ellen", "Fanny", "Louisa", "Caroline", "Lucy", "Amelia", "Sophia", "Eliza", "Rebecca", "Susannah", "Clara", "Agnes", "Rachel", "Esther", "Rose"]
+      },
+      "early20": {
+        "male": ["John", "William", "George", "Thomas", "James", "Arthur", "Frederick", "Albert", "Charles", "Ernest", "Harold", "Alfred", "Henry", "Leonard", "Stanley", "Sidney", "Reginald", "Ronald", "Kenneth", "Dennis", "Eric", "Norman", "Cyril", "Leslie", "Frank", "Percy", "Herbert", "Edward", "Peter", "Raymond"],
+        "female": ["Mary", "Margaret", "Doris", "Dorothy", "Kathleen", "Florence", "Elsie", "Edith", "Elizabeth", "Winifred", "Gladys", "Lilian", "Hilda", "Ivy", "Violet", "Ethel", "Joan", "Joyce", "Vera", "Irene", "Phyllis", "Eileen", "Marjorie", "Peggy", "Jean", "Audrey", "Betty", "Sylvia", "Iris", "Mabel"]
+      },
+      "mid20": {
+        "male": ["David", "John", "Michael", "Peter", "Stephen", "Paul", "Andrew", "Mark", "Ian", "Christopher", "Robert", "Richard", "Colin", "Brian", "Alan", "Keith", "Graham", "Trevor", "Nigel", "Barry", "Roger", "Geoffrey", "Derek", "Malcolm", "Anthony", "Simon", "Gary", "Kevin", "Neil", "Stuart"],
+        "female": ["Susan", "Linda", "Christine", "Carol", "Janet", "Patricia", "Barbara", "Sandra", "Jacqueline", "Julie", "Karen", "Deborah", "Tracey", "Sharon", "Alison", "Jane", "Helen", "Diane", "Gillian", "Angela", "Denise", "Wendy", "Lorraine", "Sally", "Amanda", "Claire", "Nicola", "Joanne", "Sarah", "Lisa"]
+      },
+      "current": {
+        "male": ["Oliver", "Jack", "Harry", "George", "Noah", "Charlie", "Jacob", "Thomas", "Oscar", "William", "James", "Leo", "Alfie", "Henry", "Joshua", "Freddie", "Archie", "Ethan", "Isaac", "Alexander", "Joseph", "Samuel", "Daniel", "Arthur", "Max", "Theo", "Lucas", "Mason", "Logan", "Finley"],
+        "female": ["Amelia", "Olivia", "Isla", "Emily", "Ava", "Jessica", "Poppy", "Sophie", "Sophia", "Lily", "Grace", "Evie", "Scarlett", "Ruby", "Chloe", "Daisy", "Freya", "Phoebe", "Charlotte", "Mia", "Ella", "Holly", "Emma", "Lucy", "Millie", "Sienna", "Imogen", "Rosie", "Alice", "Florence"]
+      }
+    },
+    "surnames": {
+      "any": ["Smith", "Jones", "Taylor", "Brown", "Williams", "Wilson", "Johnson", "Davies", "Robinson", "Wright", "Thompson", "Evans", "Walker", "White", "Roberts", "Green", "Hall", "Wood", "Jackson", "Clarke", "Harris", "Lewis", "Turner", "Scott", "Cooper", "Hill", "Ward", "Morris", "Moore", "Clark", "King", "Baker", "Harrison", "Morgan", "Allen", "James", "Bennett", "Edwards", "Hughes", "Carter", "Phillips", "Mitchell", "Parker", "Bailey", "Collins", "Foster", "Webb", "Chapman", "Mason", "Shaw"]
+    }
+  },
+  {
+    "id": "irish",
+    "label": "Irish",
+    "region": "Europe",
+    "sort": 20,
+    "given": {
+      "medieval": {
+        "male": ["Aodh", "Art", "Brian", "Cathal", "Cian", "Colm", "Conall", "Conor", "Cormac", "Diarmaid", "Domhnall", "Donnchadh", "Eoghan", "Faolán", "Fergus", "Fionn", "Lorcán", "Muiris", "Murchadh", "Niall", "Oisín", "Ruaidhrí", "Tadhg", "Turlough", "Éamonn", "Brendan", "Malachy", "Rónán", "Senán", "Fiachra"],
+        "female": ["Aoife", "Gormlaith", "Gráinne", "Sadhbh", "Órlaith", "Mór", "Bébhinn", "Caoimhe", "Ciara", "Deirdre", "Eithne", "Fionnuala", "Niamh", "Sorcha", "Úna", "Bríd", "Damhnait", "Dearbháil", "Méabh", "Muirenn", "Nuala", "Ailbhe", "Síle", "Máire", "Mairéad", "Éadaoin", "Íde", "Clíodhna", "Lasairíona", "Aifric"]
+      },
+      "colonial": {
+        "male": ["Patrick", "Michael", "John", "James", "Thomas", "Daniel", "William", "Denis", "Cornelius", "Timothy", "Jeremiah", "Owen", "Hugh", "Francis", "Peter", "Edward", "Martin", "Bartholomew", "Laurence", "Matthew", "Andrew", "Bernard", "Charles", "Christopher", "Dominick", "Felix", "Garrett", "Kieran", "Malachy", "Terence"],
+        "female": ["Mary", "Bridget", "Margaret", "Catherine", "Ellen", "Anne", "Johanna", "Honora", "Norah", "Eliza", "Julia", "Winifred", "Kate", "Hannah", "Maria", "Rose", "Sarah", "Alice", "Agnes", "Cecilia", "Teresa", "Frances", "Elizabeth", "Jane", "Delia", "Annie", "Maggie", "Nancy", "Susan", "Charlotte"]
+      },
+      "early20": {
+        "male": ["Patrick", "John", "James", "Michael", "Thomas", "William", "Joseph", "Peter", "Francis", "Daniel", "Denis", "Edward", "Martin", "Seán", "Séamus", "Liam", "Eamon", "Kevin", "Brendan", "Desmond", "Vincent", "Gerald", "Hugh", "Bernard", "Christopher", "Anthony", "Laurence", "Owen", "Cornelius", "Frank"],
+        "female": ["Mary", "Bridget", "Margaret", "Kathleen", "Eileen", "Nora", "Annie", "Josephine", "Elizabeth", "Ellen", "Catherine", "Maureen", "Sheila", "Peggy", "Nuala", "Una", "Rose", "Agnes", "Teresa", "Molly", "Nellie", "Julia", "Hannah", "Rita", "Frances", "Philomena", "Maura", "Sarah", "Kitty", "Delia"]
+      },
+      "mid20": {
+        "male": ["John", "Patrick", "Michael", "Seán", "James", "Brendan", "Kevin", "Declan", "Liam", "Niall", "Colm", "Brian", "Paul", "David", "Gerard", "Fergal", "Ronan", "Cormac", "Eoin", "Dermot", "Aidan", "Barry", "Ciarán", "Conor", "Donal", "Enda", "Fintan", "Kieran", "Noel", "Tomás"],
+        "female": ["Mary", "Margaret", "Ann", "Catherine", "Deirdre", "Fiona", "Sinéad", "Orla", "Máire", "Bernadette", "Geraldine", "Patricia", "Breda", "Carmel", "Colette", "Dolores", "Eithne", "Emer", "Gráinne", "Helen", "Imelda", "Jacinta", "Marian", "Mairéad", "Noreen", "Nuala", "Róisín", "Siobhán", "Úna", "Clare"]
+      },
+      "current": {
+        "male": ["Jack", "James", "Conor", "Daniel", "Seán", "Adam", "Cian", "Luke", "Fionn", "Oisín", "Liam", "Darragh", "Noah", "Charlie", "Harry", "Michael", "Patrick", "Rian", "Tadhg", "Cillian", "Finn", "Alex", "Ryan", "Dylan", "Aaron", "Eoin", "Oscar", "Senan", "Bobby", "Tom"],
+        "female": ["Emily", "Emma", "Sophie", "Ella", "Amelia", "Grace", "Mia", "Fiadh", "Hannah", "Ava", "Lucy", "Aoife", "Saoirse", "Caoimhe", "Éabha", "Chloe", "Anna", "Kate", "Lily", "Molly", "Sadie", "Ellie", "Robyn", "Holly", "Lauren", "Niamh", "Erin", "Clodagh", "Katie", "Zoe"]
+      }
+    },
+    "surnames": {
+      "any": ["Murphy", "Kelly", "O'Sullivan", "Walsh", "O'Brien", "Byrne", "Ryan", "O'Connor", "O'Neill", "O'Reilly", "Doyle", "McCarthy", "Gallagher", "Doherty", "Kennedy", "Lynch", "Murray", "Quinn", "Moore", "McLoughlin", "Carroll", "Connolly", "Daly", "O'Connell", "Dunne", "Brennan", "Burke", "Clarke", "Hughes", "Farrell", "Fitzgerald", "Duffy", "Kavanagh", "Nolan", "Flynn", "O'Callaghan", "McMahon", "Casey", "Foley", "Fitzpatrick", "O'Leary", "McGrath", "McDonnell", "Maguire", "Regan", "Donnelly", "Egan", "Higgins", "Keane", "Sheehan"]
+    }
+  },
+  {
+    "id": "german",
+    "label": "German",
+    "region": "Europe",
+    "sort": 30,
+    "given": {
+      "medieval": {
+        "male": ["Heinrich", "Friedrich", "Konrad", "Otto", "Ludwig", "Wilhelm", "Albrecht", "Dietrich", "Hermann", "Rudolf", "Ulrich", "Walther", "Gottfried", "Berthold", "Eberhard", "Gerhard", "Hartmann", "Johann", "Hans", "Georg", "Kaspar", "Lorenz", "Matthias", "Nikolaus", "Peter", "Siegfried", "Wolfgang", "Burkhard", "Ernst", "Veit"],
+        "female": ["Adelheid", "Mechthild", "Hildegard", "Gertrud", "Kunigunde", "Agnes", "Margarethe", "Elisabeth", "Katharina", "Anna", "Barbara", "Ursula", "Brigitta", "Christina", "Dorothea", "Hedwig", "Irmgard", "Jutta", "Clara", "Magdalena", "Ottilie", "Regina", "Sibylla", "Veronika", "Walburga", "Apollonia", "Felicitas", "Gisela", "Ida", "Susanna"]
+      },
+      "colonial": {
+        "male": ["Johann", "Friedrich", "Wilhelm", "Karl", "Heinrich", "Georg", "Ludwig", "Franz", "Josef", "Christian", "Gottlieb", "August", "Ferdinand", "Hermann", "Gustav", "Adolph", "Theodor", "Ernst", "Otto", "Rudolph", "Anton", "Jakob", "Michael", "Andreas", "Philipp", "Christoph", "Martin", "Sebastian", "Valentin", "Emil"],
+        "female": ["Anna", "Maria", "Elisabeth", "Katharina", "Margaretha", "Christina", "Johanna", "Wilhelmine", "Friederike", "Charlotte", "Louise", "Karoline", "Sophie", "Auguste", "Henriette", "Dorothea", "Rosina", "Barbara", "Magdalena", "Theresia", "Josepha", "Eleonore", "Emilie", "Franziska", "Amalie", "Bertha", "Clara", "Hermine", "Mathilde", "Pauline"]
+      },
+      "early20": {
+        "male": ["Hans", "Karl", "Heinrich", "Walter", "Wilhelm", "Kurt", "Werner", "Herbert", "Gerhard", "Helmut", "Günter", "Fritz", "Ernst", "Paul", "Otto", "Erich", "Rudolf", "Willi", "Alfred", "Georg", "Heinz", "Horst", "Hermann", "Josef", "Franz", "Ludwig", "Max", "Richard", "Siegfried", "Bruno"],
+        "female": ["Anna", "Maria", "Elisabeth", "Erna", "Gertrud", "Hildegard", "Ilse", "Irmgard", "Hertha", "Käthe", "Charlotte", "Frieda", "Else", "Margarete", "Hedwig", "Emma", "Martha", "Lieselotte", "Ursula", "Ingeborg", "Gisela", "Helga", "Ruth", "Edith", "Waltraud", "Erika", "Hannelore", "Christa", "Inge", "Renate"]
+      },
+      "mid20": {
+        "male": ["Hans", "Peter", "Klaus", "Wolfgang", "Jürgen", "Dieter", "Manfred", "Uwe", "Rainer", "Bernd", "Thomas", "Michael", "Andreas", "Stefan", "Frank", "Matthias", "Ralf", "Norbert", "Joachim", "Rolf", "Volker", "Detlef", "Reinhard", "Christian", "Markus", "Torsten", "Holger", "Axel", "Karsten", "Gerd"],
+        "female": ["Monika", "Sabine", "Petra", "Andrea", "Claudia", "Susanne", "Birgit", "Karin", "Angelika", "Heike", "Gabriele", "Martina", "Ute", "Christiane", "Silke", "Anja", "Kerstin", "Nicole", "Barbara", "Brigitte", "Elke", "Marion", "Ingrid", "Cornelia", "Dagmar", "Doris", "Jutta", "Regina", "Sigrid", "Renate"]
+      },
+      "current": {
+        "male": ["Ben", "Paul", "Leon", "Finn", "Elias", "Jonas", "Luis", "Noah", "Felix", "Lukas", "Maximilian", "Henry", "Emil", "Anton", "Jakob", "Oskar", "Liam", "Moritz", "Theo", "Matteo", "David", "Julian", "Niklas", "Tim", "Jan", "Fabian", "Simon", "Tobias", "Florian", "Sebastian"],
+        "female": ["Emma", "Mia", "Hannah", "Emilia", "Sofia", "Lina", "Anna", "Mila", "Lea", "Clara", "Leonie", "Marie", "Lena", "Amelie", "Luisa", "Johanna", "Charlotte", "Ella", "Frieda", "Ida", "Greta", "Mathilda", "Nele", "Paula", "Sarah", "Julia", "Laura", "Katharina", "Sophie", "Maja"]
+      }
+    },
+    "surnames": {
+      "any": ["Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Schulz", "Hoffmann", "Schäfer", "Koch", "Bauer", "Richter", "Klein", "Wolf", "Schröder", "Neumann", "Schwarz", "Zimmermann", "Braun", "Krüger", "Hartmann", "Lange", "Schmitt", "Werner", "Krause", "Meier", "Lehmann", "Schmid", "Schulze", "Maier", "Köhler", "Herrmann", "König", "Walter", "Mayer", "Huber", "Kaiser", "Fuchs", "Peters", "Lang", "Scholz", "Möller", "Weiß", "Jung", "Hahn", "Vogel", "Friedrich", "Keller"]
+    }
+  },
+  {
+    "id": "french",
+    "label": "French",
+    "region": "Europe",
+    "sort": 40,
+    "given": {
+      "medieval": {
+        "male": ["Guillaume", "Jean", "Pierre", "Jacques", "Étienne", "Henri", "Louis", "Charles", "Philippe", "Robert", "Richard", "Thibault", "Geoffroy", "Gautier", "Hugues", "Raoul", "Renaud", "Baudouin", "Aymeric", "Olivier", "Bertrand", "Guy", "Arnaud", "Foulques", "Enguerrand", "Amaury", "Gilles", "Denis", "Mathieu", "Nicolas"],
+        "female": ["Jeanne", "Marguerite", "Isabelle", "Alix", "Aliénor", "Blanche", "Mathilde", "Adèle", "Agnès", "Catherine", "Marie", "Jacqueline", "Perrette", "Sibylle", "Ermengarde", "Héloïse", "Yolande", "Béatrice", "Cécile", "Clémence", "Constance", "Éléonore", "Gisèle", "Huguette", "Iseult", "Mahaut", "Melisende", "Odette", "Jehanne", "Aveline"]
+      },
+      "colonial": {
+        "male": ["Jean", "Pierre", "Louis", "François", "Joseph", "Antoine", "Charles", "Jacques", "Nicolas", "Michel", "Claude", "André", "Étienne", "Henri", "Auguste", "Alexandre", "Alphonse", "Édouard", "Émile", "Eugène", "Ferdinand", "Gustave", "Hippolyte", "Jules", "Léon", "Marcel", "Paul", "Théodore", "Victor", "Adolphe"],
+        "female": ["Marie", "Jeanne", "Marguerite", "Françoise", "Anne", "Catherine", "Louise", "Madeleine", "Élisabeth", "Charlotte", "Geneviève", "Henriette", "Joséphine", "Adélaïde", "Angélique", "Céleste", "Clémentine", "Émilie", "Eugénie", "Félicité", "Hortense", "Julie", "Léonie", "Lucie", "Pauline", "Rosalie", "Sophie", "Thérèse", "Victoire", "Virginie"]
+      },
+      "early20": {
+        "male": ["Jean", "Pierre", "André", "René", "Marcel", "Georges", "Roger", "Robert", "Henri", "Maurice", "Louis", "Paul", "Raymond", "Albert", "Gaston", "Émile", "Fernand", "Gilbert", "Guy", "Jacques", "Lucien", "Marius", "Michel", "Yves", "Bernard", "Claude", "Serge", "Léon", "Armand", "Camille"],
+        "female": ["Marie", "Jeanne", "Marguerite", "Germaine", "Louise", "Yvonne", "Madeleine", "Suzanne", "Marcelle", "Denise", "Simone", "Renée", "Andrée", "Paulette", "Odette", "Lucienne", "Georgette", "Henriette", "Jacqueline", "Micheline", "Monique", "Colette", "Ginette", "Yvette", "Hélène", "Thérèse", "Raymonde", "Solange", "Gisèle", "Fernande"]
+      },
+      "mid20": {
+        "male": ["Jean", "Michel", "Alain", "Philippe", "Bernard", "Christian", "Daniel", "Gérard", "Patrick", "Dominique", "Pascal", "Thierry", "Éric", "Laurent", "Frédéric", "Olivier", "Stéphane", "Bruno", "Didier", "Franck", "Hervé", "Jean-Pierre", "Jean-Claude", "Jean-Luc", "Marc", "Nicolas", "Serge", "Sylvain", "Vincent", "Christophe"],
+        "female": ["Martine", "Françoise", "Monique", "Catherine", "Sylvie", "Nathalie", "Isabelle", "Chantal", "Véronique", "Christine", "Brigitte", "Dominique", "Valérie", "Sandrine", "Corinne", "Patricia", "Nicole", "Danielle", "Annie", "Michèle", "Josiane", "Évelyne", "Laurence", "Sophie", "Céline", "Karine", "Stéphanie", "Pascale", "Fabienne", "Nadine"]
+      },
+      "current": {
+        "male": ["Lucas", "Hugo", "Gabriel", "Louis", "Léo", "Raphaël", "Arthur", "Jules", "Adam", "Maël", "Nathan", "Théo", "Ethan", "Tom", "Noah", "Enzo", "Mathis", "Timéo", "Clément", "Baptiste", "Antoine", "Maxime", "Quentin", "Romain", "Alexandre", "Paul", "Victor", "Axel", "Robin", "Sacha"],
+        "female": ["Emma", "Léa", "Chloé", "Manon", "Camille", "Louise", "Alice", "Lina", "Jade", "Inès", "Zoé", "Juliette", "Charlotte", "Sarah", "Anaïs", "Océane", "Clara", "Éva", "Lucie", "Margaux", "Mathilde", "Pauline", "Romane", "Rose", "Ambre", "Julia", "Léna", "Maëlys", "Mila", "Agathe"]
+      }
+    },
+    "surnames": {
+      "any": ["Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand", "Leroy", "Moreau", "Simon", "Laurent", "Lefebvre", "Michel", "Fournier", "Girard", "Bonnet", "Dupont", "Lambert", "Fontaine", "Rousseau", "Vincent", "Faure", "Mercier", "Blanc", "Guérin", "Boyer", "Garnier", "Chevalier", "François", "Legrand", "Gauthier", "Perrin", "Robin", "Clément", "Morin", "Nicolas", "Henry", "Roussel", "Mathieu", "Gautier", "Masson", "Marchand", "Duval", "Denis", "Dumont", "Lemaire", "Noël", "Brun", "Blanchard"]
+    }
+  },
+  {
+    "id": "spanish",
+    "label": "Spanish",
+    "region": "Europe",
+    "sort": 50,
+    "given": {
+      "medieval": {
+        "male": ["Alfonso", "Sancho", "García", "Fernando", "Rodrigo", "Diego", "Juan", "Pedro", "Gonzalo", "Álvaro", "Ramiro", "Nuño", "Lope", "Íñigo", "Martín", "Pelayo", "Enrique", "Jaime", "Gutierre", "Andrés", "Bartolomé", "Cristóbal", "Esteban", "Felipe", "Francisco", "Hernando", "Luis", "Miguel", "Pablo", "Alonso"],
+        "female": ["María", "Juana", "Catalina", "Isabel", "Leonor", "Beatriz", "Constanza", "Elvira", "Sancha", "Urraca", "Teresa", "Inés", "Blanca", "Violante", "Mencía", "Aldonza", "Berenguela", "Jimena", "Ana", "Francisca", "Luisa", "Margarita", "Magdalena", "Antonia", "Gracia", "Marina", "Guiomar", "Estefanía", "Mayor", "Olalla"]
+      },
+      "colonial": {
+        "male": ["José", "Juan", "Manuel", "Francisco", "Antonio", "Pedro", "Miguel", "Ramón", "Vicente", "Joaquín", "Fernando", "Rafael", "Ignacio", "Domingo", "Andrés", "Agustín", "Santiago", "Tomás", "Salvador", "Mariano", "Cayetano", "Bernardo", "Esteban", "Félix", "Gregorio", "Isidro", "Julián", "Lorenzo", "Pascual", "Sebastián"],
+        "female": ["María", "Josefa", "Manuela", "Juana", "Antonia", "Francisca", "Isabel", "Ana", "Rosa", "Teresa", "Catalina", "Dolores", "Carmen", "Concepción", "Encarnación", "Gertrudis", "Ignacia", "Joaquina", "Luisa", "Margarita", "Mercedes", "Micaela", "Petra", "Ramona", "Rosario", "Soledad", "Tomasa", "Vicenta", "Pilar", "Inés"]
+      },
+      "early20": {
+        "male": ["José", "Antonio", "Manuel", "Francisco", "Juan", "Pedro", "Miguel", "Ángel", "Luis", "Jesús", "Rafael", "Enrique", "Emilio", "Fernando", "Ramón", "Vicente", "Joaquín", "Julio", "Alfonso", "Alberto", "Andrés", "Carlos", "Diego", "Eduardo", "Félix", "Gregorio", "Jaime", "Mariano", "Pablo", "Santiago"],
+        "female": ["María", "Carmen", "Josefa", "Dolores", "Pilar", "Concepción", "Ana", "Antonia", "Isabel", "Francisca", "Mercedes", "Rosario", "Juana", "Teresa", "Encarnación", "Manuela", "Amparo", "Ángeles", "Asunción", "Aurora", "Consuelo", "Elena", "Emilia", "Esperanza", "Julia", "Luisa", "Milagros", "Purificación", "Remedios", "Rosa"]
+      },
+      "mid20": {
+        "male": ["Antonio", "José", "Manuel", "Francisco", "Juan", "Javier", "Carlos", "Miguel", "Luis", "Ángel", "Pedro", "Rafael", "Fernando", "Jorge", "Alberto", "Enrique", "Vicente", "Andrés", "Ramón", "Emilio", "Ricardo", "Santiago", "Eduardo", "Óscar", "Alfredo", "Ignacio", "Julián", "Raúl", "Sergio", "Tomás"],
+        "female": ["María", "Carmen", "Ana", "Isabel", "Pilar", "Teresa", "Rosa", "Cristina", "Marta", "Elena", "Mercedes", "Dolores", "Nuria", "Montserrat", "Begoña", "Inmaculada", "Rocío", "Yolanda", "Susana", "Beatriz", "Silvia", "Raquel", "Mónica", "Sonia", "Eva", "Lourdes", "Amparo", "Gloria", "Esther", "Alicia"]
+      },
+      "current": {
+        "male": ["Hugo", "Daniel", "Pablo", "Alejandro", "Álvaro", "Adrián", "Mario", "Diego", "David", "Martín", "Lucas", "Nicolás", "Marcos", "Leo", "Sergio", "Javier", "Carlos", "Izan", "Manuel", "Alex", "Gonzalo", "Marco", "Antonio", "Miguel", "Iker", "Bruno", "Aitor", "Rubén", "Iván", "Samuel"],
+        "female": ["Lucía", "Sofía", "Martina", "María", "Julia", "Paula", "Valeria", "Emma", "Daniela", "Carla", "Alba", "Noa", "Sara", "Carmen", "Vega", "Claudia", "Alma", "Lara", "Olivia", "Ana", "Elena", "Adriana", "Valentina", "Marta", "Laia", "Irene", "Candela", "Aitana", "Inés", "Vera"]
+      }
+    },
+    "surnames": {
+      "any": ["García", "Rodríguez", "González", "Fernández", "López", "Martínez", "Sánchez", "Pérez", "Gómez", "Martín", "Jiménez", "Ruiz", "Hernández", "Díaz", "Moreno", "Muñoz", "Álvarez", "Romero", "Alonso", "Gutiérrez", "Navarro", "Torres", "Domínguez", "Vázquez", "Ramos", "Gil", "Ramírez", "Serrano", "Blanco", "Suárez", "Molina", "Morales", "Ortega", "Delgado", "Castro", "Ortiz", "Rubio", "Marín", "Sanz", "Iglesias", "Núñez", "Medina", "Garrido", "Cortés", "Castillo", "Santos", "Lozano", "Guerrero", "Cano", "Prieto"]
+    }
+  },
+  {
+    "id": "italian",
+    "label": "Italian",
+    "region": "Europe",
+    "sort": 60,
+    "given": {
+      "medieval": {
+        "male": ["Giovanni", "Francesco", "Antonio", "Pietro", "Giacomo", "Niccolò", "Lorenzo", "Matteo", "Andrea", "Bartolomeo", "Domenico", "Giuliano", "Marco", "Paolo", "Stefano", "Tommaso", "Federico", "Guido", "Jacopo", "Ludovico", "Cosimo", "Filippo", "Girolamo", "Leonardo", "Michele", "Raffaele", "Salvatore", "Vincenzo", "Cesare", "Ottavio"],
+        "female": ["Caterina", "Maria", "Giovanna", "Margherita", "Francesca", "Lucia", "Antonia", "Isabella", "Bianca", "Ginevra", "Lucrezia", "Costanza", "Fiammetta", "Alessandra", "Beatrice", "Camilla", "Chiara", "Elisabetta", "Laura", "Maddalena", "Vittoria", "Violante", "Simonetta", "Ippolita", "Angela", "Agnese", "Cecilia", "Dorotea", "Emilia", "Ortensia"]
+      },
+      "colonial": {
+        "male": ["Giuseppe", "Giovanni", "Antonio", "Francesco", "Luigi", "Pietro", "Angelo", "Vincenzo", "Domenico", "Salvatore", "Carlo", "Pasquale", "Gaetano", "Raffaele", "Michele", "Nicola", "Rocco", "Saverio", "Ferdinando", "Gennaro", "Ignazio", "Alessandro", "Benedetto", "Cesare", "Emanuele", "Federico", "Filippo", "Umberto", "Vittorio", "Achille"],
+        "female": ["Maria", "Anna", "Giuseppina", "Rosa", "Teresa", "Angela", "Giovanna", "Carmela", "Lucia", "Concetta", "Antonietta", "Filomena", "Assunta", "Caterina", "Domenica", "Elisabetta", "Francesca", "Gaetana", "Grazia", "Immacolata", "Luisa", "Maddalena", "Margherita", "Marianna", "Michelina", "Nunzia", "Raffaella", "Rosaria", "Vincenza", "Vittoria"]
+      },
+      "early20": {
+        "male": ["Giuseppe", "Giovanni", "Antonio", "Mario", "Luigi", "Francesco", "Angelo", "Vittorio", "Pietro", "Salvatore", "Carlo", "Bruno", "Aldo", "Alberto", "Arturo", "Attilio", "Benito", "Corrado", "Dante", "Dino", "Emilio", "Enrico", "Ettore", "Franco", "Guido", "Italo", "Lino", "Renato", "Sergio", "Ugo"],
+        "female": ["Maria", "Anna", "Rosa", "Giuseppina", "Angela", "Giovanna", "Teresa", "Lucia", "Carmela", "Elena", "Ada", "Adele", "Alba", "Amelia", "Bianca", "Bruna", "Carla", "Clara", "Elsa", "Emma", "Franca", "Gina", "Iolanda", "Irma", "Lidia", "Luciana", "Marisa", "Norma", "Rita", "Silvana"]
+      },
+      "mid20": {
+        "male": ["Giuseppe", "Antonio", "Giovanni", "Mario", "Luigi", "Roberto", "Paolo", "Franco", "Marco", "Andrea", "Stefano", "Maurizio", "Massimo", "Claudio", "Fabrizio", "Alessandro", "Giorgio", "Enzo", "Luciano", "Sergio", "Gianni", "Fabio", "Riccardo", "Daniele", "Davide", "Vincenzo", "Michele", "Renzo", "Sandro", "Walter"],
+        "female": ["Maria", "Anna", "Giuseppina", "Rosa", "Angela", "Giovanna", "Teresa", "Lucia", "Carmela", "Caterina", "Franca", "Antonella", "Daniela", "Paola", "Laura", "Patrizia", "Cristina", "Monica", "Simona", "Silvia", "Roberta", "Barbara", "Emanuela", "Alessandra", "Donatella", "Gabriella", "Loredana", "Ornella", "Rossana", "Tiziana"]
+      },
+      "current": {
+        "male": ["Leonardo", "Francesco", "Alessandro", "Lorenzo", "Mattia", "Andrea", "Gabriele", "Tommaso", "Riccardo", "Edoardo", "Matteo", "Giuseppe", "Nicolò", "Federico", "Antonio", "Diego", "Davide", "Christian", "Samuele", "Pietro", "Giovanni", "Marco", "Filippo", "Michele", "Alessio", "Emanuele", "Jacopo", "Luca", "Simone", "Enea"],
+        "female": ["Sofia", "Giulia", "Aurora", "Alice", "Ginevra", "Emma", "Giorgia", "Greta", "Beatrice", "Anna", "Vittoria", "Matilde", "Chiara", "Ludovica", "Camilla", "Martina", "Sara", "Gaia", "Alessia", "Francesca", "Bianca", "Nicole", "Elena", "Arianna", "Rebecca", "Elisa", "Viola", "Noemi", "Adele", "Margherita"]
+      }
+    },
+    "surnames": {
+      "any": ["Rossi", "Russo", "Ferrari", "Esposito", "Bianchi", "Romano", "Colombo", "Ricci", "Marino", "Greco", "Bruno", "Gallo", "Conti", "De Luca", "Mancini", "Costa", "Giordano", "Rizzo", "Lombardi", "Moretti", "Barbieri", "Fontana", "Santoro", "Mariani", "Rinaldi", "Caruso", "Ferrara", "Galli", "Martini", "Leone", "Longo", "Gentile", "Martinelli", "Vitale", "Lombardo", "Serra", "Coppola", "De Santis", "D'Angelo", "Marchetti", "Parisi", "Villa", "Conte", "Ferraro", "Ferri", "Fabbri", "Bianco", "Marini", "Grasso", "Valentini"]
+    }
+  },
+  {
+    "id": "greek",
+    "label": "Greek",
+    "region": "Europe",
+    "sort": 70,
+    "given": {
+      "medieval": {
+        "male": ["Alexios", "Andronikos", "Konstantinos", "Ioannes", "Michael", "Nikephoros", "Theodoros", "Manuel", "Demetrios", "Georgios", "Basileios", "Leon", "Romanos", "Isaakios", "Stephanos", "Petros", "Pavlos", "Nikolaos", "Anastasios", "Christophoros", "Gregorios", "Kosmas", "Loukas", "Markos", "Philippos", "Symeon", "Thomas", "Zacharias", "Athanasios", "Damianos"],
+        "female": ["Anna", "Theodora", "Eirene", "Maria", "Zoe", "Eudokia", "Helena", "Sophia", "Anastasia", "Euphrosyne", "Kassia", "Pulcheria", "Theophano", "Agathe", "Aikaterine", "Alexandra", "Christina", "Despoina", "Ioanna", "Kyra", "Magdalene", "Martha", "Photeine", "Thekla", "Xanthe", "Zenobia", "Kalliope", "Eugenia", "Melania", "Paraskeve"]
+      },
+      "colonial": {
+        "male": ["Georgios", "Ioannis", "Konstantinos", "Dimitrios", "Nikolaos", "Panagiotis", "Vasileios", "Athanasios", "Christos", "Petros", "Spyridon", "Theodoros", "Antonios", "Anastasios", "Apostolos", "Charalambos", "Eleftherios", "Emmanouil", "Evangelos", "Grigorios", "Ilias", "Lambros", "Michail", "Pavlos", "Sotirios", "Stavros", "Stylianos", "Alexandros", "Andreas", "Panteleimon"],
+        "female": ["Maria", "Eleni", "Ekaterini", "Vasiliki", "Georgia", "Sofia", "Anastasia", "Panagiota", "Konstantina", "Dimitra", "Athina", "Chrysoula", "Despina", "Eirini", "Evangelia", "Fotini", "Kalliopi", "Kyriaki", "Magdalini", "Paraskevi", "Polyxeni", "Stavroula", "Styliani", "Theodora", "Zoi", "Angeliki", "Argyro", "Sotiria", "Olga", "Garyfallia"]
+      },
+      "early20": {
+        "male": ["Georgios", "Ioannis", "Konstantinos", "Dimitrios", "Nikolaos", "Panagiotis", "Vasilis", "Christos", "Athanasios", "Spyros", "Petros", "Andreas", "Antonis", "Stavros", "Michalis", "Thanasis", "Kostas", "Yannis", "Takis", "Stelios", "Manolis", "Alekos", "Aristeidis", "Charilaos", "Evangelos", "Fotis", "Grigoris", "Leonidas", "Periklis", "Sotiris"],
+        "female": ["Maria", "Eleni", "Katina", "Despina", "Vasiliki", "Georgia", "Sofia", "Anna", "Anastasia", "Panagiota", "Athina", "Chrysanthi", "Dimitra", "Eirini", "Efthymia", "Eftychia", "Evangelia", "Fotini", "Ioanna", "Kalliopi", "Marika", "Melpomeni", "Olympia", "Pinelopi", "Polyxeni", "Smaragda", "Stamatia", "Ourania", "Charikleia", "Alexandra"]
+      },
+      "mid20": {
+        "male": ["Giorgos", "Yannis", "Kostas", "Dimitris", "Nikos", "Panos", "Vangelis", "Christos", "Thanos", "Alexandros", "Andreas", "Antonis", "Apostolos", "Aris", "Dionysis", "Ilias", "Lefteris", "Makis", "Manolis", "Michalis", "Panagiotis", "Pavlos", "Petros", "Sakis", "Spyros", "Stathis", "Stelios", "Takis", "Tasos", "Vasilis"],
+        "female": ["Maria", "Eleni", "Katerina", "Sofia", "Georgia", "Anna", "Dimitra", "Ioanna", "Vasiliki", "Anastasia", "Angeliki", "Christina", "Despina", "Efi", "Eirini", "Eleftheria", "Evangelia", "Fotini", "Margarita", "Niki", "Olga", "Panagiota", "Popi", "Rena", "Roula", "Soula", "Stella", "Toula", "Voula", "Kalliopi"]
+      },
+      "current": {
+        "male": ["Giorgos", "Dimitris", "Konstantinos", "Yannis", "Nikos", "Panagiotis", "Vasilis", "Christos", "Alexandros", "Andreas", "Stefanos", "Michalis", "Antonis", "Apostolos", "Athanasios", "Charalampos", "Dionysis", "Efthymis", "Ilias", "Lefteris", "Marios", "Nikolas", "Orestis", "Petros", "Rafail", "Spyros", "Stavros", "Stelios", "Thanasis", "Angelos"],
+        "female": ["Maria", "Eleni", "Katerina", "Sofia", "Georgia", "Ioanna", "Konstantina", "Vasiliki", "Anastasia", "Dimitra", "Angeliki", "Christina", "Despoina", "Eirini", "Evangelia", "Foteini", "Anna", "Alexandra", "Athina", "Chrysa", "Danai", "Eleftheria", "Elpida", "Iliana", "Kyriaki", "Marilena", "Myrto", "Nefeli", "Panagiota", "Zoi"]
+      }
+    },
+    "surnames": {
+      "any": ["Papadopoulos", "Papadakis", "Papageorgiou", "Papanikolaou", "Papakonstantinou", "Oikonomou", "Georgiou", "Dimitriou", "Nikolaou", "Ioannou", "Vasileiou", "Konstantinou", "Antoniou", "Christodoulou", "Makris", "Vlachos", "Angelopoulos", "Karagiannis", "Alexopoulos", "Apostolou", "Athanasiou", "Panagiotopoulos", "Spanos", "Triantafyllou", "Chatzis", "Chatzidakis", "Samaras", "Stavrou", "Kyriakou", "Diamantis", "Doukas", "Fotiou", "Galanis", "Kalogeropoulos", "Karras", "Katsaros", "Kokkinos", "Kouris", "Lambrou", "Michailidis", "Nikolaidis", "Georgiadis", "Dimitriadis", "Konstantinidis", "Pappas", "Petridis", "Raptis", "Sideris", "Sotiriou", "Theodorou"]
+    }
+  },
+  {
+    "id": "scandinavian",
+    "label": "Scandinavian",
+    "region": "Europe",
+    "sort": 80,
+    "given": {
+      "medieval": {
+        "male": ["Erik", "Olaf", "Harald", "Magnus", "Knud", "Sven", "Gunnar", "Bjørn", "Leif", "Ragnar", "Sigurd", "Torstein", "Håkon", "Ivar", "Rolf", "Ulf", "Halvard", "Einar", "Arne", "Asbjørn", "Eirik", "Finn", "Gorm", "Hemming", "Jon", "Kettil", "Nils", "Peder", "Sten", "Tore"],
+        "female": ["Astrid", "Ingrid", "Gunhild", "Sigrid", "Thora", "Ragnhild", "Helga", "Ingeborg", "Gudrun", "Åsa", "Estrid", "Freydis", "Gyda", "Hild", "Jorunn", "Kristin", "Margareta", "Mette", "Ranveig", "Signe", "Solveig", "Thyra", "Tove", "Ulfhild", "Bodil", "Cecilia", "Dorte", "Ellisiv", "Ingegerd", "Katarina"]
+      },
+      "colonial": {
+        "male": ["Anders", "Johan", "Erik", "Lars", "Nils", "Per", "Olof", "Karl", "Jan", "Hans", "Jens", "Niels", "Søren", "Peder", "Christen", "Ole", "Gustaf", "Axel", "Bengt", "Björn", "Carl", "Emil", "Fredrik", "Gunnar", "Henrik", "Ivar", "Knut", "Magnus", "Oskar", "Sven"],
+        "female": ["Anna", "Maria", "Karin", "Kerstin", "Brita", "Ingrid", "Margareta", "Elin", "Kristina", "Sara", "Johanna", "Katarina", "Elisabet", "Sofia", "Emma", "Hanna", "Ida", "Hulda", "Agnes", "Alma", "Amanda", "Augusta", "Beata", "Charlotta", "Christine", "Dorothea", "Gertrud", "Helena", "Inger", "Maren"]
+      },
+      "early20": {
+        "male": ["Karl", "Erik", "Sven", "Nils", "Gustav", "Olle", "Åke", "Bertil", "Gösta", "Stig", "Arne", "Bengt", "Lennart", "Rune", "Folke", "Ivar", "Helge", "Einar", "Ragnar", "Tage", "Torsten", "Harald", "Hjalmar", "Holger", "Kjell", "Knut", "Lars", "Sigurd", "Valdemar", "Verner"],
+        "female": ["Anna", "Elsa", "Karin", "Margit", "Astrid", "Ingrid", "Greta", "Maja", "Signe", "Ruth", "Gerda", "Ester", "Edith", "Elin", "Ellen", "Hjördis", "Ingeborg", "Inga", "Lilly", "Maj", "Märta", "Sigrid", "Solveig", "Svea", "Tyra", "Ulla", "Vera", "Viola", "Britta", "Dagny"]
+      },
+      "mid20": {
+        "male": ["Lars", "Anders", "Jan", "Per", "Hans", "Bo", "Ulf", "Leif", "Björn", "Bengt", "Sven", "Kjell", "Rolf", "Stefan", "Mikael", "Thomas", "Peter", "Mats", "Göran", "Håkan", "Jörgen", "Kenneth", "Kent", "Magnus", "Niklas", "Ola", "Roger", "Stig", "Tommy", "Torbjörn"],
+        "female": ["Eva", "Karin", "Birgitta", "Kerstin", "Anita", "Annika", "Åsa", "Barbro", "Berit", "Britt", "Camilla", "Carina", "Cecilia", "Elisabeth", "Gun", "Gunilla", "Helena", "Inger", "Katarina", "Lena", "Linda", "Maria", "Marianne", "Mona", "Monica", "Pia", "Susanne", "Ulrika", "Yvonne", "Ingela"]
+      },
+      "current": {
+        "male": ["William", "Noah", "Hugo", "Lucas", "Liam", "Oscar", "Oliver", "Elias", "Axel", "Leo", "Emil", "Viktor", "Alexander", "Theo", "Ludvig", "Adam", "Anton", "Albin", "Alfred", "Arvid", "Edvin", "Elliot", "Felix", "Filip", "Gustav", "Isak", "Melvin", "Nils", "Vincent", "Wilmer"],
+        "female": ["Alice", "Maja", "Elsa", "Astrid", "Wilma", "Freja", "Alma", "Saga", "Ebba", "Olivia", "Ella", "Vera", "Selma", "Agnes", "Lilly", "Signe", "Nora", "Emma", "Ellen", "Stella", "Clara", "Tuva", "Molly", "Ida", "Iris", "Juni", "Sofia", "Thea", "Tilde", "Lykke"]
+      }
+    },
+    "surnames": {
+      "medieval": ["Eriksson", "Sveinsson", "Olafsson", "Haraldsson", "Magnusson", "Knudsen", "Gunnarsson", "Bjornsson", "Sigurdsson", "Ragnarsson", "Thorsteinsson", "Hakonarson", "Ivarsson", "Ulfsson", "Einarsson", "Arnesson", "Leifsson", "Halvardsson", "Toresson", "Steinsson", "Nilsson", "Jonsson", "Eriksdotter", "Andersdotter", "Olafsdotter", "Sigurdsdotter", "Haraldsdotter", "Magnusdotter", "Gunnarsdotter", "Thorsdotter"],
+      "colonial": ["Andersson", "Johansson", "Karlsson", "Nilsson", "Eriksson", "Larsson", "Olsson", "Persson", "Svensson", "Gustafsson", "Pettersson", "Jonsson", "Jansson", "Hansson", "Bengtsson", "Jönsson", "Carlsson", "Danielsson", "Eliasson", "Fredriksson", "Gunnarsson", "Håkansson", "Isaksson", "Jakobsson", "Knutsson", "Persdotter", "Olsdotter", "Svensdotter", "Nilsdotter", "Mattsson"],
+      "any": ["Lindqvist", "Berg", "Lindberg", "Lindström", "Lindgren", "Bergström", "Bergman", "Holm", "Holmberg", "Lund", "Lundberg", "Lundgren", "Lundqvist", "Nyström", "Nyberg", "Sandberg", "Sjöberg", "Söderberg", "Ström", "Strand", "Dahl", "Dahlberg", "Eklund", "Engström", "Falk", "Forsberg", "Hagen", "Hansen", "Jensen", "Nielsen", "Pedersen", "Møller", "Bakken", "Solberg", "Haugen", "Wallin", "Björk", "Blom", "Norberg", "Åberg"]
+    }
+  },
+  {
+    "id": "slavic_russian",
+    "label": "Slavic / Russian",
+    "region": "Europe",
+    "sort": 90,
+    "given": {
+      "medieval": {
+        "male": ["Ivan", "Vladimir", "Yaroslav", "Mstislav", "Svyatoslav", "Igor", "Oleg", "Vsevolod", "Boris", "Gleb", "Dmitri", "Vasili", "Fyodor", "Mikhail", "Andrei", "Bogdan", "Kazimierz", "Mieszko", "Władysław", "Bolesław", "Stanisław", "Radomir", "Miroslav", "Rostislav", "Yuri", "Danilo", "Semyon", "Nikita", "Lev", "Zbigniew"],
+        "female": ["Olga", "Anna", "Maria", "Yevdokia", "Anastasia", "Ksenia", "Agafya", "Yefrosinya", "Marfa", "Praskovya", "Ludmila", "Rogneda", "Predslava", "Milena", "Jadwiga", "Dobrawa", "Wanda", "Bożena", "Libuše", "Svatava", "Vasilisa", "Ulyana", "Sofia", "Yelena", "Irina", "Daria", "Zlata", "Miroslava", "Yaroslava", "Feodosia"]
+      },
+      "colonial": {
+        "male": ["Ivan", "Pyotr", "Nikolai", "Alexander", "Mikhail", "Vasily", "Fyodor", "Dmitry", "Sergei", "Alexei", "Pavel", "Grigory", "Andrei", "Stepan", "Yakov", "Ilya", "Konstantin", "Timofei", "Yegor", "Semyon", "Arseny", "Gavriil", "Kirill", "Makar", "Matvei", "Osip", "Prokhor", "Savva", "Trofim", "Zakhar"],
+        "female": ["Maria", "Anna", "Yekaterina", "Natalya", "Elizaveta", "Alexandra", "Olga", "Tatyana", "Varvara", "Sofya", "Anastasia", "Yevdokia", "Praskovya", "Agafya", "Akulina", "Avdotya", "Darya", "Fyokla", "Glafira", "Irina", "Kseniya", "Lyubov", "Marfa", "Matryona", "Nadezhda", "Pelageya", "Ulyana", "Vera", "Yevgenia", "Zinaida"]
+      },
+      "early20": {
+        "male": ["Ivan", "Nikolai", "Alexander", "Mikhail", "Vasily", "Pyotr", "Sergei", "Vladimir", "Dmitry", "Alexei", "Pavel", "Andrei", "Boris", "Georgy", "Grigory", "Viktor", "Anatoly", "Arkady", "Fyodor", "Gennady", "Konstantin", "Leonid", "Lev", "Semyon", "Stepan", "Vadim", "Valentin", "Yakov", "Yefim", "Yevgeny"],
+        "female": ["Maria", "Anna", "Yekaterina", "Olga", "Tatyana", "Natalya", "Vera", "Nadezhda", "Lyubov", "Nina", "Valentina", "Zinaida", "Klavdiya", "Lidiya", "Antonina", "Yevdokia", "Anastasia", "Alexandra", "Galina", "Yelena", "Zoya", "Raisa", "Tamara", "Lyudmila", "Serafima", "Taisiya", "Faina", "Kira", "Yevgenia", "Sofya"]
+      },
+      "mid20": {
+        "male": ["Vladimir", "Sergei", "Alexander", "Andrei", "Alexei", "Dmitry", "Igor", "Oleg", "Yuri", "Viktor", "Nikolai", "Mikhail", "Ivan", "Anatoly", "Boris", "Valery", "Gennady", "Vyacheslav", "Vitaly", "Stanislav", "Yevgeny", "Leonid", "Ruslan", "Konstantin", "Pavel", "Pyotr", "Eduard", "Vadim", "Grigory", "Roman"],
+        "female": ["Natalya", "Elena", "Irina", "Olga", "Tatyana", "Svetlana", "Lyudmila", "Galina", "Marina", "Larisa", "Nadezhda", "Valentina", "Lyubov", "Nina", "Vera", "Tamara", "Alla", "Zhanna", "Oksana", "Inna", "Raisa", "Lidiya", "Anna", "Maria", "Yulia", "Ekaterina", "Alexandra", "Zoya", "Margarita", "Dina"]
+      },
+      "current": {
+        "male": ["Alexander", "Maxim", "Artyom", "Mikhail", "Ivan", "Daniil", "Dmitry", "Kirill", "Andrei", "Yegor", "Nikita", "Ilya", "Matvei", "Roman", "Timofey", "Vladislav", "Mark", "Fyodor", "Gleb", "Stepan", "Miloš", "Jakub", "Mateusz", "Szymon", "Tomáš", "Marek", "Pavel", "Oleksandr", "Bohdan", "Denys"],
+        "female": ["Sofia", "Anastasia", "Maria", "Anna", "Viktoria", "Polina", "Alisa", "Elizaveta", "Ksenia", "Yekaterina", "Varvara", "Veronika", "Alina", "Daria", "Milana", "Eva", "Arina", "Ulyana", "Kira", "Zlata", "Zuzanna", "Julia", "Katarzyna", "Agnieszka", "Tereza", "Eliška", "Oksana", "Iryna", "Kateryna", "Nadia"]
+      }
+    },
+    "surnames": {
+      "any": ["Ivanov", "Smirnov", "Kuznetsov", "Popov", "Vasiliev", "Petrov", "Sokolov", "Mikhailov", "Novikov", "Fedorov", "Morozov", "Volkov", "Alekseev", "Lebedev", "Semenov", "Egorov", "Pavlov", "Kozlov", "Stepanov", "Nikolaev", "Orlov", "Andreev", "Makarov", "Nikitin", "Zakharov", "Zaitsev", "Solovyov", "Borisov", "Yakovlev", "Grigoriev", "Romanov", "Sergeev", "Bogdanov", "Nowak", "Kowalski", "Wiśniewski", "Wójcik", "Kowalczyk", "Kamiński", "Lewandowski", "Zieliński", "Szymański", "Novák", "Svoboda", "Dvořák", "Černý", "Procházka", "Shevchenko", "Bondarenko", "Kovalenko"]
+    }
+  }
+]

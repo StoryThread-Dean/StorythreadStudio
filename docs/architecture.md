@@ -38,6 +38,7 @@ Two storage systems work together:
 
 - **Markdown files** are the permanent source of truth. Chapters, profiles, notes, and summaries live as `.md` files in the project folder. They are human-readable and can be version-controlled or backed up as plain text.
 - **SQLite** (`<project>/.storythread/app.db`) is a fast local cache. It stores parsed profile data, app settings, and the model registry cache. The cache can be rebuilt from Markdown if it is corrupted or deleted.
+- **SQLite, app-level** (`~/.storythread/names.db`) holds the Name Generator's pools (20 cultures x 5 eras of given names + surnames), seeded at backend startup from JSON shipped inside the app (`backend/app/data/names/`, bundled into the frozen sidecar via `backend.spec` datas). A version stamp triggers reseeding on app updates; deleting the file rebuilds it. Served by `GET /api/names/*`.
 
 Markdown is the filing cabinet; SQLite is the index card on the desk.
 

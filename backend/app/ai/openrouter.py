@@ -39,7 +39,17 @@ REQUEST_TIMEOUT = 180.0
 log = logging.getLogger(__name__)
 
 
-def _system_message(system_prompt: str, cache_prompts: bool) -> dict:
+# Model families that actually USE cache_control on OpenRouter. Everyone
+# else either caches automatically without it (OpenAI, DeepSeek, Grok) or
+# doesn't cache at all -- and some exotic provider routes mishandle the
+# structured content-array shape entirely (a live incident: AionLabs
+# Aion-3.0 stalling to the 180s timeout on requests that carried it).
+# Restricting the marker to families that benefit keeps every saving and
+# removes the risk for everyone else.
+CACHE_CONTROL_MODEL_PREFIXES = ("anthropic/", "google/")
+
+
+def _system_message(system_prompt: str, cache_prompts: bool, model_id: str = "") -> dict:
     """Build the system message, optionally marked for prompt caching.
 
     Anthropic-style prompt caching via OpenRouter: the system content becomes
@@ -49,12 +59,13 @@ def _system_message(system_prompt: str, cache_prompts: bool) -> dict:
     already contains the static story context, while the user messages mix
     in per-request text that would never re-match.
 
-    Providers that don't support cache_control ignore it; OpenAI models
-    auto-cache without it. Prompts under a model's minimum cacheable size
-    (1024-4096 tokens depending on model) simply don't cache -- harmless,
-    so no size threshold is applied here.
+    The marker (and the content-array shape that carries it) is only sent
+    to model families that support it -- see CACHE_CONTROL_MODEL_PREFIXES.
+    Prompts under a model's minimum cacheable size (1024-4096 tokens
+    depending on model) simply don't cache -- harmless, so no size
+    threshold is applied here.
     """
-    if not cache_prompts:
+    if not cache_prompts or not model_id.startswith(CACHE_CONTROL_MODEL_PREFIXES):
         return {"role": "system", "content": system_prompt}
     return {"role": "system", "content": [
         {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
@@ -257,7 +268,7 @@ async def run_completion(
     payload = {
         "model": model_id,
         "messages": [
-            _system_message(system_prompt, cache_prompts and provider.supports_cache_control),
+            _system_message(system_prompt, cache_prompts and provider.supports_cache_control, model_id),
             {"role": "user",    "content": user_message},
         ],
         # Ask the model to respond in JSON format where supported.
@@ -387,7 +398,7 @@ async def run_chat(
         "messages": [
             # Optionally cache-marked -- see _system_message. Gated on the
             # provider's support flag so only OpenRouter ever sees it.
-            _system_message(system_prompt, cache_prompts and provider.supports_cache_control),
+            _system_message(system_prompt, cache_prompts and provider.supports_cache_control, model_id),
             *messages,
         ],
     }

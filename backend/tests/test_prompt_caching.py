@@ -57,9 +57,10 @@ def _sent_system_message() -> dict:
 
 # ── run_chat ─────────────────────────────────────────────────────────────────
 
-async def test_chat_caching_on_openrouter_marks_system_block():
+async def test_chat_caching_marks_system_block_for_supporting_models():
     await run_chat(
-        api_key="x", model_id="m", system_prompt="the static instructions",
+        api_key="x", model_id="anthropic/claude-sonnet-4.6",
+        system_prompt="the static instructions",
         messages=[{"role": "user", "content": "go"}],
         provider=OPENROUTER, cache_prompts=True,
     )
@@ -75,9 +76,24 @@ async def test_chat_caching_on_openrouter_marks_system_block():
     assert _CapturingAsyncClient.last_payload["messages"][1]["content"] == "go"
 
 
+async def test_chat_caching_skips_models_that_do_not_use_cache_control():
+    # The live incident this guards: AionLabs Aion-3.0 stalled to the 180s
+    # timeout on requests carrying the structured system block. Families
+    # outside CACHE_CONTROL_MODEL_PREFIXES get a plain string even with
+    # caching enabled -- they never benefited from the marker anyway
+    # (OpenAI/DeepSeek auto-cache; others don't cache at all).
+    for model in ("aion-labs/aion-3.0", "openai/gpt-4.1-mini", "mistralai/mistral-large"):
+        await run_chat(
+            api_key="x", model_id=model, system_prompt="s",
+            messages=[{"role": "user", "content": "go"}],
+            provider=OPENROUTER, cache_prompts=True,
+        )
+        assert _sent_system_message()["content"] == "s", model
+
+
 async def test_chat_caching_off_keeps_plain_string():
     await run_chat(
-        api_key="x", model_id="m", system_prompt="s",
+        api_key="x", model_id="anthropic/claude-sonnet-4.6", system_prompt="s",
         messages=[{"role": "user", "content": "go"}],
         provider=OPENROUTER,  # cache_prompts defaults to False
     )
@@ -113,7 +129,7 @@ async def test_nanogpt_calls_use_its_base_url_and_no_attribution_headers():
 
 async def test_completion_caching_on_openrouter_marks_system_block():
     await run_completion(
-        api_key="x", model_id="m", system_prompt="instructions",
+        api_key="x", model_id="google/gemini-2.5-pro", system_prompt="instructions",
         user_message="do the thing",
         provider=OPENROUTER, cache_prompts=True,
     )

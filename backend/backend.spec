@@ -29,6 +29,12 @@ a = Analysis(
     # module; this datas entry pulls in the actual certificate file.
     datas=[
         (certifi.where(), 'certifi'),
+        # Name Generator seed data: the JSON files names_store.py loads into
+        # names.db at startup. In the frozen exe they extract to
+        # sys._MEIPASS/app/data/names -- names_store._data_dir() looks there
+        # when sys.frozen is set. Without this entry the packaged app would
+        # serve an empty Name Generator.
+        ('app/data/names', 'app/data/names'),
     ],
     hiddenimports=[
         # ── uvicorn internals ──────────────────────────────────────────────

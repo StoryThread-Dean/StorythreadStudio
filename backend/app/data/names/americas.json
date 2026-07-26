@@ -1,0 +1,137 @@
+[
+  {
+    "id": "american_south",
+    "label": "American South",
+    "region": "The Americas",
+    "sort": 10,
+    "given": {
+      "colonial": {
+        "male": ["Beauregard", "Josiah", "Jedediah", "Ezekiel", "Augustus", "Silas", "Rufus", "Amos", "Elijah", "Zachariah", "Abner", "Thaddeus", "Leander", "Cassius", "Jefferson", "Nathaniel", "Solomon", "Ephraim", "Bartholomew", "Cornelius", "Obadiah", "Hezekiah", "Jasper", "Micajah", "Percival", "Randolph", "Sterling", "Barnabas", "Gideon", "Moses"],
+        "female": ["Magnolia", "Susannah", "Arabella", "Dixie", "Georgia", "Camellia", "Delphine", "Eulalia", "Josephine", "Charlotte", "Caroline", "Amelia", "Beulah", "Lucinda", "Melinda", "Ophelia", "Rosalie", "Selah", "Tallulah", "Winnifred", "Cordelia", "Evangeline", "Belle", "Adelaide", "Henrietta", "Louisa", "Martha", "Sarah", "Rebecca", "Verity"]
+      },
+      "early20": {
+        "male": ["Earl", "Clyde", "Homer", "Virgil", "Otis", "Elmer", "Floyd", "Buford", "Cecil", "Dewey", "Ernest", "Grover", "Harlan", "Hoyt", "Jasper", "Lester", "Luther", "Marvin", "Odell", "Orville", "Roscoe", "Rufus", "Vernon", "Wilbur", "Woodrow", "Zeb", "Claude", "Delbert", "Emmett", "Garland"],
+        "female": ["Opal", "Pearl", "Ruby", "Hazel", "Myrtle", "Gladys", "Bessie", "Bertha", "Cora", "Dorothy", "Edna", "Eula", "Flossie", "Geneva", "Ida", "Inez", "Lois", "Lucille", "Mabel", "Mattie", "Maude", "Minnie", "Nellie", "Ola", "Thelma", "Velma", "Verna", "Willie", "Zelma", "Ethel"]
+      },
+      "mid20": {
+        "male": ["Billy", "Bobby", "Buddy", "Jimmy", "Johnny", "Tommy", "Jerry", "Larry", "Gary", "Ronnie", "Donnie", "Kenny", "Danny", "Randy", "Ricky", "Roy", "Wayne", "Dale", "Duane", "Travis", "Troy", "Buck", "Sonny", "Curtis", "Dwight", "Elvis", "Hank", "Merle", "Darrell", "Leroy"],
+        "female": ["Brenda", "Peggy", "Linda", "Donna", "Patsy", "Bobbie", "Betty", "Barbara", "Carolyn", "Charlene", "Darlene", "Dolly", "Loretta", "Tammy", "Wanda", "Glenda", "Gayle", "Judy", "Kathy", "Debbie", "Sandra", "Sherry", "Vicki", "Connie", "Jolene", "Norma", "Faye", "June", "Reba", "Sue"]
+      },
+      "current": {
+        "male": ["Waylon", "Wyatt", "Colton", "Austin", "Dallas", "Tucker", "Hunter", "Gunner", "Rhett", "Beau", "Brantley", "Bryce", "Cash", "Chase", "Cody", "Dawson", "Easton", "Gage", "Jackson", "Knox", "Landon", "Levi", "Maverick", "Memphis", "Raylan", "Ridge", "Sawyer", "Stetson", "Tanner", "Walker", "Weston"],
+        "female": ["Savannah", "Charlotte", "Harper", "Adalynn", "Annabelle", "Blakely", "Braelynn", "Carolina", "Ellie", "Emmylou", "Hadley", "Kinsley", "Magnolia", "Maisie", "McKenna", "Oakley", "Paisley", "Presley", "Raelynn", "Sadie", "Scarlett", "Shelby", "Sutton", "Tinsley", "Waverly", "Willow", "Birdie", "Dixie", "Josie", "Laney"]
+      }
+    },
+    "surnames": {
+      "any": ["Beauchamp", "Boudreaux", "Calhoun", "Whitfield", "Jackson", "Abernathy", "Ashford", "Baxter", "Beaumont", "Bell", "Blackwood", "Bowman", "Broussard", "Bryant", "Buford", "Caldwell", "Carter", "Clayton", "Coleman", "Crawford", "Culpepper", "Davenport", "Dawson", "Dubois", "Duke", "Fontaine", "Gaines", "Granger", "Hargrove", "Hawkins", "Hayes", "Holloway", "Huckabee", "Jenkins", "Landry", "Lee", "Mayfield", "McAllister", "Montgomery", "Pickett", "Prescott", "Ravenel", "Rhodes", "Sinclair", "Slater", "Tillman", "Vance", "Walker", "Whitaker", "Youngblood"]
+    }
+  },
+  {
+    "id": "american_northeast",
+    "label": "American Northeast",
+    "region": "The Americas",
+    "sort": 20,
+    "given": {
+      "colonial": {
+        "male": ["Ezekiel", "Increase", "Cotton", "Josiah", "Nathaniel", "Samuel", "Benjamin", "Ebenezer", "Elias", "Elisha", "Ichabod", "Jeremiah", "Jonathan", "Obadiah", "Peleg", "Phineas", "Silas", "Thomas", "William", "Zebulon", "Asa", "Caleb", "Eleazar", "Gideon", "Hezekiah", "Isaiah", "Jabez", "Micah", "Solomon", "Titus"],
+        "female": ["Prudence", "Mercy", "Patience", "Charity", "Constance", "Temperance", "Abigail", "Comfort", "Deliverance", "Dorcas", "Elizabeth", "Faith", "Hannah", "Hepzibah", "Hope", "Huldah", "Jerusha", "Keziah", "Lydia", "Mehitable", "Mindwell", "Priscilla", "Rachel", "Rebecca", "Remember", "Sarah", "Silence", "Susanna", "Tabitha", "Thankful"]
+      },
+      "early20": {
+        "male": ["John", "James", "Joseph", "Michael", "Edward", "Francis", "Patrick", "Thomas", "Vincent", "Salvatore", "Angelo", "Antonio", "Dominic", "Stanley", "Walter", "Chester", "Leo", "Hugh", "Bernard", "Eugene", "Harold", "Arthur", "Raymond", "Cornelius", "Owen", "Martin", "Peter", "Daniel", "George", "Albert"],
+        "female": ["Mary", "Margaret", "Catherine", "Helen", "Anna", "Rose", "Bridget", "Eileen", "Kathleen", "Nora", "Theresa", "Agnes", "Angelina", "Carmela", "Concetta", "Dorothy", "Eleanor", "Evelyn", "Florence", "Frances", "Gertrude", "Irene", "Josephine", "Lillian", "Loretta", "Marion", "Mildred", "Rita", "Sophie", "Veronica"]
+      },
+      "mid20": {
+        "male": ["Michael", "Robert", "Richard", "David", "John", "James", "Kevin", "Brian", "Sean", "Dennis", "Gerald", "Anthony", "Frank", "Joseph", "Paul", "Mark", "Stephen", "Gregory", "Timothy", "Patrick", "Peter", "Thomas", "Neil", "Vincent", "Christopher", "Matthew", "Daniel", "Edward", "William", "Ronald"],
+        "female": ["Mary", "Patricia", "Barbara", "Susan", "Karen", "Nancy", "Donna", "Linda", "Carol", "Sharon", "Diane", "Kathleen", "Maureen", "Eileen", "Colleen", "Denise", "Theresa", "Christine", "Cynthia", "Deborah", "Janet", "Joanne", "Judith", "Lorraine", "Marie", "Pamela", "Regina", "Roberta", "Sandra", "Angela"]
+      },
+      "current": {
+        "male": ["Liam", "Noah", "Jacob", "Michael", "Matthew", "Ryan", "Tyler", "Brandon", "Justin", "Nicholas", "Anthony", "Joseph", "Christopher", "Daniel", "Andrew", "Ethan", "Alexander", "Benjamin", "Dylan", "Connor", "Aidan", "Brendan", "Luca", "Giovanni", "Dominic", "Jack", "Owen", "Sean", "Patrick", "Julian"],
+        "female": ["Emma", "Olivia", "Sophia", "Isabella", "Ava", "Mia", "Emily", "Madison", "Abigail", "Hannah", "Sarah", "Grace", "Charlotte", "Ella", "Lily", "Chloe", "Samantha", "Alexis", "Kayla", "Brianna", "Gianna", "Aria", "Nicole", "Jessica", "Ashley", "Lauren", "Megan", "Erin", "Caitlin", "Maeve"]
+      }
+    },
+    "surnames": {
+      "any": ["Adams", "Winthrop", "Lowell", "Sullivan", "Rossi", "Kowalski", "Brennan", "Cabot", "Callahan", "Choate", "Cohen", "Connolly", "Costello", "DeLuca", "Donnelly", "Doyle", "Endicott", "Esposito", "Fitzgerald", "Flanagan", "Flynn", "Gallagher", "Goldberg", "Greco", "Hale", "Hancock", "Hutchinson", "Kaplan", "Kelleher", "Kennedy", "Lombardi", "Mancini", "Mather", "McCarthy", "Murphy", "Nowak", "O'Brien", "O'Connell", "O'Malley", "Peabody", "Quincy", "Ricci", "Russo", "Saltonstall", "Sargent", "Shea", "Sherman", "Walsh", "Whitney", "Wojcik"]
+    }
+  },
+  {
+    "id": "american_west",
+    "label": "American West",
+    "region": "The Americas",
+    "sort": 30,
+    "given": {
+      "colonial": {
+        "male": ["Wyatt", "Jesse", "Cole", "Buck", "Zeke", "Silas", "Amos", "Boone", "Butch", "Caleb", "Clay", "Colt", "Dutch", "Eli", "Ezra", "Gus", "Hank", "Ike", "Jed", "Jeremiah", "Levi", "Luke", "Morgan", "Roy", "Rufus", "Sam", "Tom", "Virgil", "Wade", "Emmett"],
+        "female": ["Clementine", "Annie", "Belle", "Abilene", "Ada", "Adelaide", "Agnes", "Alma", "Bonnie", "Cora", "Dora", "Edith", "Effie", "Ella", "Emma", "Etta", "Hattie", "Ida", "Jane", "Josie", "Kate", "Laura", "Lillie", "Lottie", "Mae", "Millie", "Nettie", "Pearl", "Rose", "Sadie"]
+      },
+      "early20": {
+        "male": ["Albert", "Arthur", "Carl", "Charlie", "Chester", "Clarence", "Clifford", "Clyde", "Earl", "Edgar", "Elmer", "Ernest", "Floyd", "Frank", "Fred", "George", "Glenn", "Harvey", "Herbert", "Homer", "Howard", "Lee", "Leonard", "Lloyd", "Milton", "Oscar", "Ralph", "Raymond", "Walter", "Harold"],
+        "female": ["Alice", "Bernice", "Beulah", "Clara", "Doris", "Dorothy", "Edna", "Eleanor", "Elsie", "Esther", "Ethel", "Eunice", "Fern", "Florence", "Frances", "Gladys", "Grace", "Hazel", "Helen", "Irene", "June", "Lois", "Lucille", "Mabel", "Marjorie", "Mildred", "Opal", "Ruth", "Thelma", "Viola"]
+      },
+      "mid20": {
+        "male": ["Dale", "Dean", "Dennis", "Doug", "Duane", "Gary", "Glen", "Jack", "Jerry", "Jim", "Ken", "Kirk", "Larry", "Monte", "Randy", "Rex", "Rick", "Rod", "Roger", "Ron", "Russ", "Scott", "Steve", "Ted", "Terry", "Tim", "Todd", "Wayne", "Craig", "Bruce"],
+        "female": ["Judy", "Karen", "Susan", "Linda", "Nancy", "Pam", "Debra", "Cindy", "Becky", "Cheryl", "Christine", "Connie", "Diane", "Gail", "Janice", "Jean", "Joyce", "Kathy", "Kim", "Laurie", "Lori", "Marcia", "Peggy", "Rhonda", "Sherri", "Shirley", "Tammy", "Terri", "Vicky", "Wendy"]
+      },
+      "current": {
+        "male": ["Wyatt", "Levi", "Logan", "Hunter", "Colton", "Boone", "Bridger", "Cash", "Chance", "Cody", "Cooper", "Dakota", "Denver", "Dustin", "Garrett", "Grady", "Holden", "Jace", "Kade", "Kyler", "Owen", "Parker", "Reno", "Ridge", "Ryder", "Tanner", "Trace", "Tyler", "Weston", "Zane"],
+        "female": ["Aspen", "Cheyenne", "Dakota", "Sierra", "Autumn", "Brooke", "Cassidy", "Ember", "Everly", "Harlow", "Hazel", "Josie", "Juniper", "Kinley", "Lainey", "Marley", "Meadow", "Montana", "Oakley", "Piper", "Quinn", "Raven", "Rylee", "Sage", "Shiloh", "Skye", "Tatum", "Teagan", "Willa", "Winter"]
+      }
+    },
+    "surnames": {
+      "any": ["Cassidy", "Holliday", "McCall", "Vasquez", "Barlow", "Beckett", "Bowie", "Bridger", "Buchanan", "Carson", "Chisholm", "Cody", "Colter", "Crockett", "Dalton", "Donner", "Fargo", "Garrett", "Goodnight", "Hardin", "Hickok", "Houston", "James", "Jameson", "Lawson", "Loving", "Maddox", "Masterson", "McQueen", "Mercer", "Navarro", "Ortega", "Pickens", "Rawlins", "Reyes", "Ringo", "Sheridan", "Slaughter", "Stockton", "Sutter", "Tate", "Thorn", "Trujillo", "Weaver", "Whitlock", "Wilder", "Yates", "Younger", "Boone", "Wheeler"]
+    }
+  },
+  {
+    "id": "mexican",
+    "label": "Mexican",
+    "region": "The Americas",
+    "sort": 40,
+    "given": {
+      "colonial": {
+        "male": ["José María", "Juan", "Francisco", "Antonio", "Manuel", "Pedro", "Ignacio", "Miguel", "Joaquín", "Agustín", "Ramón", "Vicente", "Cuauhtémoc", "Diego", "Fernando", "Gaspar", "Hipólito", "Isidro", "Lorenzo", "Mariano", "Nicolás", "Pablo", "Rafael", "Salvador", "Santiago", "Tomás", "Anselmo", "Bartolomé", "Cristóbal", "Esteban"],
+        "female": ["Guadalupe", "María", "Josefa", "Juana", "Francisca", "Antonia", "Manuela", "Dolores", "Xóchitl", "Concepción", "Ana", "Beatriz", "Catalina", "Feliciana", "Gertrudis", "Ignacia", "Isabel", "Jacinta", "Luisa", "Margarita", "Mercedes", "Micaela", "Paula", "Petra", "Refugio", "Rosa", "Soledad", "Teresa", "Tomasa", "Victoria"]
+      },
+      "early20": {
+        "male": ["Jesús", "Pedro", "Alfonso", "Alberto", "Arturo", "Aurelio", "Benito", "Carlos", "Emiliano", "Enrique", "Ernesto", "Federico", "Felipe", "Genaro", "Gregorio", "Guillermo", "Gustavo", "Heriberto", "Lázaro", "Leopoldo", "Luis", "Marcelino", "Porfirio", "Raúl", "Roberto", "Rodolfo", "Rubén", "Venustiano", "Álvaro", "Octavio"],
+        "female": ["Amparo", "Aurora", "Carmen", "Celia", "Consuelo", "Elena", "Elvira", "Emilia", "Esperanza", "Estela", "Genoveva", "Graciela", "Herminia", "Hortensia", "Imelda", "Inés", "Irene", "Leonor", "Lucía", "Magdalena", "Otilia", "Ramona", "Remedios", "Rosario", "Sara", "Socorro", "Trinidad", "Virginia", "Zenaida", "Ofelia"]
+      },
+      "mid20": {
+        "male": ["Alejandro", "Armando", "César", "Eduardo", "Fernando", "Francisco", "Gerardo", "Gilberto", "Héctor", "Hugo", "Humberto", "Ismael", "Jaime", "Javier", "Jorge", "José Luis", "Juan Carlos", "Julio", "Marco Antonio", "Mario", "Martín", "Miguel Ángel", "Óscar", "Ramiro", "René", "Ricardo", "Rogelio", "Rolando", "Sergio", "Víctor"],
+        "female": ["Adriana", "Alicia", "Alma", "Angélica", "Araceli", "Beatriz", "Blanca", "Claudia", "Elsa", "Gabriela", "Gloria", "Griselda", "Guadalupe", "Guillermina", "Irma", "Josefina", "Leticia", "Lourdes", "Marcela", "Margarita", "María Elena", "Martha", "Norma", "Olga", "Patricia", "Rocío", "Silvia", "Verónica", "Yolanda", "Teresa"]
+      },
+      "current": {
+        "male": ["Santiago", "Mateo", "Sebastián", "Leonardo", "Emiliano", "Diego", "Daniel", "Alexander", "Ángel", "Gael", "Iker", "Maximiliano", "Nicolás", "Samuel", "David", "Emmanuel", "Yael", "Dylan", "Ian", "Axel", "Bruno", "Damián", "Adrián", "Alejandro", "Rodrigo", "Emilio", "Julián", "Cristian", "Kevin", "Erick"],
+        "female": ["Ximena", "Sofía", "Valentina", "Regina", "Camila", "Valeria", "Renata", "María José", "Victoria", "Natalia", "Fernanda", "Daniela", "Mariana", "Isabella", "Luciana", "Andrea", "Julieta", "Emily", "Melanie", "Danna", "Romina", "Allison", "Xóchitl", "Citlali", "Itzel", "Yaretzi", "Zoe", "Frida", "Aitana", "Michelle"]
+      }
+    },
+    "surnames": {
+      "any": ["Hernández", "García", "Treviño", "Martínez", "López", "González", "Pérez", "Rodríguez", "Sánchez", "Ramírez", "Cruz", "Flores", "Gómez", "Morales", "Vázquez", "Reyes", "Jiménez", "Torres", "Díaz", "Gutiérrez", "Ruiz", "Mendoza", "Aguilar", "Ortiz", "Castillo", "Moreno", "Romero", "Álvarez", "Chávez", "Rivera", "Juárez", "Domínguez", "Herrera", "Medina", "Castro", "Vargas", "Guzmán", "Salazar", "Rojas", "Contreras", "Luna", "Ortega", "Cervantes", "Delgado", "Peña", "Ríos", "Soto", "Valdez", "Zavala", "Espinoza"]
+    }
+  },
+  {
+    "id": "peruvian",
+    "label": "Peruvian",
+    "region": "The Americas",
+    "sort": 50,
+    "given": {
+      "colonial": {
+        "male": ["José", "Juan", "Manuel", "Francisco", "Pedro", "Túpac", "Amaru", "Atahualpa", "Huáscar", "Mariano", "Ignacio", "Agustín", "Bernardo", "Buenaventura", "Casimiro", "Cipriano", "Dionisio", "Eusebio", "Faustino", "Fermín", "Gaspar", "Gregorio", "Hilario", "Isidro", "Melchor", "Narciso", "Pascual", "Santos", "Toribio", "Ventura"],
+        "female": ["María", "Micaela", "Juana", "Josefa", "Manuela", "Rosa", "Mercedes", "Dominga", "Tomasa", "Petronila", "Asunción", "Bárbara", "Bernarda", "Candelaria", "Cayetana", "Dolores", "Feliciana", "Gregoria", "Jacinta", "Juliana", "Lorenza", "Martina", "Matea", "Melchora", "Narcisa", "Nicolasa", "Paula", "Rosalía", "Úrsula", "Ocllo"]
+      },
+      "early20": {
+        "male": ["Alejandro", "Andrés", "Aníbal", "Augusto", "Belisario", "Carlos", "César", "Daniel", "Emilio", "Enrique", "Federico", "Felipe", "Fortunato", "Germán", "Guillermo", "Humberto", "Jorge", "Julio", "Leoncio", "Luis", "Máximo", "Nicanor", "Octavio", "Óscar", "Raúl", "Ricardo", "Teodoro", "Víctor", "Zenón", "Abelardo"],
+        "female": ["Alejandrina", "Amelia", "Angélica", "Aurelia", "Bertha", "Carmela", "Clorinda", "Delia", "Elvira", "Emperatriz", "Esther", "Eudocia", "Felícitas", "Filomena", "Flor", "Graciela", "Hilda", "Hortensia", "Isolina", "Julia", "Laura", "Leonor", "Luzmila", "Magda", "Natividad", "Olinda", "Rosario", "Teodora", "Victoria", "Zoila"]
+      },
+      "mid20": {
+        "male": ["Alberto", "Alfredo", "Américo", "Aurelio", "Edgar", "Edwin", "Eduardo", "Ernesto", "Fernando", "Freddy", "Gustavo", "Héctor", "Hugo", "Jaime", "Javier", "Jesús", "Marco", "Mario", "Miguel", "Moisés", "Nelson", "Pablo", "Percy", "Rómulo", "Rubén", "Santiago", "Segundo", "Teófilo", "Walter", "Wilfredo"],
+        "female": ["Ana María", "Carmen", "Cecilia", "Charo", "Consuelo", "Doris", "Edith", "Elena", "Elsa", "Flor de María", "Gladys", "Gloria", "Haydée", "Irma", "Lidia", "Liliana", "Lourdes", "Luz", "Marina", "Marta", "Maruja", "Nancy", "Nelly", "Norma", "Olga", "Pilar", "Rosa María", "Silvia", "Teresa", "Violeta", "Yolanda"]
+      },
+      "current": {
+        "male": ["Adriano", "Alonso", "André", "Benjamín", "Bruno", "Cristhian", "Diego", "Dylan", "Emilio", "Fabián", "Facundo", "Gael", "Gonzalo", "Ian", "Joaquín", "Leonardo", "Liam", "Luciano", "Marcelo", "Mateo", "Matías", "Nicolás", "Piero", "Rodrigo", "Salvador", "Santiago", "Sebastián", "Stefano", "Thiago", "Valentino", "Amaru"],
+        "female": ["Killa", "Valeria", "Luciana", "Valentina", "Camila", "Mía", "Zoe", "Alessandra", "Antonella", "Ariana", "Fernanda", "Flavia", "Gabriela", "Isabella", "Ivanna", "Luana", "Mariana", "Micaela", "Nicole", "Rafaella", "Renata", "Romina", "Samantha", "Sofía", "Thais", "Ximena", "Daniela", "Emilia", "Kiara", "Illari"]
+      }
+    },
+    "surnames": {
+      "any": ["Quispe", "Mamani", "Flores", "Huamán", "Chávez", "Condori", "Choque", "Huanca", "Apaza", "Yupanqui", "Ticona", "Puma", "Cárdenas", "Castillo", "Chacón", "Cornejo", "Dávila", "Delgado", "Espinoza", "Fernández", "Gonzales", "Guerrero", "Gutiérrez", "Herrera", "León", "Loayza", "Medina", "Meza", "Miranda", "Núñez", "Ochoa", "Palacios", "Paredes", "Pizarro", "Ponce", "Quiroz", "Ramos", "Reátegui", "Rivas", "Rojas", "Salas", "Salazar", "Sánchez", "Torres", "Valdivia", "Vargas", "Vásquez", "Velásquez", "Vilca", "Villanueva", "Zamora", "Zegarra"]
+    }
+  }
+]
