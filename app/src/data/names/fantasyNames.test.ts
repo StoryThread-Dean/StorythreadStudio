@@ -80,13 +80,25 @@ describe("generateFantasyGivenName", () => {
     for (const race of FANTASY_RACES) {
       for (const gender of ["male", "female"] as FantasyGender[]) {
         const parts = race.given[gender];
+        // Races with solo names spend an extra leading rng call on the
+        // solo gate -- 0.9 skips it so the assembly path is exercised.
+        const soloSkip = parts.solos?.length ? [0.9] : [];
+
+        // Every solo name dealt whole must also pass the rules.
+        for (let i = 0; i < (parts.solos?.length ?? 0); i++) {
+          const solo = generateFantasyGivenName(
+            race.id, gender, drive([0.1, frac(i, parts.solos!.length)]),
+          );
+          check(solo, `${race.id}/${gender} solo: ${parts.solos![i]} -> ${solo}`);
+        }
+
         for (let s = 0; s < parts.starts.length; s++) {
           for (let e = 0; e < parts.ends.length; e++) {
-            // rng call order in the generator: start, end, mid-gate, mid.
-            // Without a middle (gate value 0.9 skips the 40% chance).
+            // rng call order in the generator: [solo gate,] start, end,
+            // mid-gate, mid. Without a middle (gate 0.9 skips the 40%).
             const plain = generateFantasyGivenName(
               race.id, gender,
-              drive([frac(s, parts.starts.length), frac(e, parts.ends.length), 0.9]),
+              drive([...soloSkip, frac(s, parts.starts.length), frac(e, parts.ends.length), 0.9]),
             );
             check(plain, `${race.id}/${gender}: ${parts.starts[s]}+${parts.ends[e]} -> ${plain}`);
             // With every middle (0.1 passes the gate; cap may still skip it).
@@ -94,6 +106,7 @@ describe("generateFantasyGivenName", () => {
               const withMid = generateFantasyGivenName(
                 race.id, gender,
                 drive([
+                  ...soloSkip,
                   frac(s, parts.starts.length), frac(e, parts.ends.length),
                   0.1, frac(m, parts.mids.length),
                 ]),
@@ -125,6 +138,48 @@ describe("generateFantasySurname", () => {
   it("is deterministic under an injected rng", () => {
     expect(generateFantasySurname("orc", seededRng()))
       .toBe(generateFantasySurname("orc", seededRng()));
+  });
+});
+
+describe("solo names (short blunt draws)", () => {
+  it("orcs carry solo pools with genuinely short names", () => {
+    const orc = fantasyRaceById("orc")!;
+    for (const gender of ["male", "female"] as FantasyGender[]) {
+      const solos = orc.given[gender].solos ?? [];
+      expect(solos.length).toBeGreaterThanOrEqual(10);
+      // The point of solos: one compact unit, not two assembled ones.
+      for (const s of solos) expect(s.length).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("the solo gate deals a whole solo name, capitalized", () => {
+    const orc = fantasyRaceById("orc")!;
+    const solos = orc.given.male.solos!;
+    // rng: 0.1 passes the 30% solo gate; second value picks index 0.
+    let calls = 0;
+    const rng = () => (calls++ === 0 ? 0.1 : 0.05);
+    const name = generateFantasyGivenName("orc", "male", rng);
+    expect(name.toLowerCase()).toBe(solos[0].toLowerCase());
+    expect(name[0]).toBe(name[0].toUpperCase());
+  });
+});
+
+describe("dwarf recuration (user feedback: no gibberish)", () => {
+  it("every dwarf start+end pair lands on a two-beat Norse-pattern name", () => {
+    // Spot-anchor the register: these exact classics must be reachable.
+    const dwarf = fantasyRaceById("dwarf")!;
+    expect(dwarf.given.male.starts).toContain("thor");
+    expect(dwarf.given.male.ends).toContain("grim");
+    expect(dwarf.given.female.starts).toContain("gud");
+    expect(dwarf.given.female.ends).toContain("run");
+    // No start repeats verbatim as an end for the same gender -- that's
+    // what produced Durdur-style stutters in v1.
+    for (const gender of ["male", "female"] as FantasyGender[]) {
+      const starts = new Set(dwarf.given[gender].starts);
+      for (const end of dwarf.given[gender].ends) {
+        expect(starts.has(end)).toBe(false);
+      }
+    }
   });
 });
 

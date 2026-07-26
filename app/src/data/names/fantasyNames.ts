@@ -20,6 +20,10 @@ interface GenderComponents {
   starts: string[];
   mids: string[];
   ends: string[];
+  // Optional standalone names dealt whole (~30% of draws when present).
+  // Some races name short and blunt -- an orc can just be Grok -- and
+  // assembly alone always produces two units.
+  solos?: string[];
 }
 
 // Surnames are either compounds (first + second: Moon + whisper) or
@@ -144,11 +148,13 @@ export const FANTASY_RACES: FantasyRace[] = [
         starts: ["gro", "thok", "urz", "mog", "karg", "dur", "ska", "bru", "zug", "gha", "krum", "nar"],
         mids: ["g", "z", "ur", "ok", "ag"],
         ends: ["mash", "gash", "tusk", "nak", "rok", "gul", "uk", "thar", "dug", "zag"],
+        solos: ["grok", "karz", "throk", "durn", "zag", "mog", "krug", "bork", "skar", "thok", "ruk", "gor", "snag", "drog"],
       },
       female: {
         starts: ["ur", "sha", "gro", "maz", "kur", "bol", "zag", "dra", "hur", "gna", "ska", "mor"],
         mids: ["g", "z", "ur", "ak", "om"],
         ends: ["sha", "ga", "zra", "ka", "ura", "gra", "zha", "ma", "kka", "rga"],
+        solos: ["heka", "ular", "loar", "sha", "vosh", "naz", "urka", "zil", "mek", "ruga", "grisz", "okka"],
       },
     },
     surname: {
@@ -199,16 +205,21 @@ export const FANTASY_RACES: FantasyRace[] = [
   {
     id: "dwarf",
     label: "Dwarf",
+    // Recurated (user feedback: v1 combos read as gibberish). These
+    // components follow the Old Norse / Eddic Dvergatal patterns the whole
+    // fantasy-dwarf tradition descends from -- every start+end pair lands
+    // on a solid two-beat name: Borin, Thorgrim, Balmund, Kazgar, Thrain;
+    // Bryndis, Dagrun, Thorhild, Solveig, Gudrun.
     given: {
       male: {
-        starts: ["bor", "dval", "thra", "grum", "kild", "hjal", "sig", "run", "brok", "ei", "harn", "sten"],
-        mids: ["a", "o", "ur", "ain", "ri"],
-        ends: ["in", "ur", "grim", "nar", "olf", "mund", "rik", "din", "var", "thi"],
+        starts: ["bor", "thor", "bal", "grom", "har", "stur", "kaz", "mor", "bram", "dag", "orm", "brun", "thra"],
+        mids: ["a", "o", "ur", "al"],
+        ends: ["in", "din", "dur", "grim", "nar", "mund", "rik", "olf", "gar", "brand", "ain"],
       },
       female: {
-        starts: ["bryn", "dags", "thora", "grun", "kild", "hild", "sig", "runa", "eist", "asta", "berg", "sten"],
-        mids: ["a", "o", "ur", "ni", "vi"],
-        ends: ["a", "dis", "hild", "run", "veig", "ny", "ga", "borg", "unn", "vor"],
+        starts: ["bryn", "dag", "thor", "grun", "sig", "ast", "helg", "ing", "sol", "tor", "berg", "gud"],
+        mids: ["a", "i", "ur", "el"],
+        ends: ["a", "dis", "hild", "run", "veig", "ny", "ga", "borg", "unn", "frid", "gerd"],
       },
     },
     surname: {
@@ -324,6 +335,13 @@ export function generateFantasyGivenName(
   const race = fantasyRaceById(raceId);
   if (!race) return "";
   const parts = race.given[gender];
+
+  // Solo names first (races that have them): ~30% of draws come out whole
+  // and short -- Grok, Karz, Heka -- instead of always two assembled units.
+  if (parts.solos && parts.solos.length > 0 && rng() < 0.3) {
+    const solo = pick(parts.solos, rng);
+    return solo.charAt(0).toUpperCase() + solo.slice(1);
+  }
 
   const start = pick(parts.starts, rng);
   const end = pick(parts.ends, rng);
