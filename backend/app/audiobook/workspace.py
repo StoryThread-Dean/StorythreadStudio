@@ -168,6 +168,14 @@ def write_narration(workspace_path: str, content: str) -> dict:
         })
     _write_chapter_files(workspace_path, chapter_records)
 
+    # Re-derive the generation segments, carrying identity forward: an
+    # unchanged paragraph keeps its segment ID and any audio already
+    # generated for it (spec 23.1). Local import avoids a module cycle
+    # (segmenter imports markers, workspace imports both).
+    from app.audiobook import segmenter
+    manifest = segmenter.resegment(parsed, segmenter.load_segments(workspace_path))
+    segmenter.save_segments(workspace_path, manifest)
+
     return {"chapters": chapter_records, "warnings": parsed.warnings}
 
 

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.audiobook import import_service, pronunciation, recents_store, workspace
+from app.audiobook import import_service, pronunciation, recents_store, segmenter, workspace
 
 router = APIRouter(prefix="/api/audiobook", tags=["audiobook"])
 
@@ -125,6 +125,25 @@ def save_narration(request: SaveNarrationRequest):
     # then reports the re-derived chapter list and any marker warnings.
     result = workspace.write_narration(request.workspace_path, request.content)
     return result
+
+
+# ── Segments ──────────────────────────────────────────────────────────────────
+
+@router.get("/segments")
+def get_segments(workspace_path: str):
+    """
+    The book-wide segments manifest: what the generation queue will work
+    through, chapter by chapter, plus superseded segments awaiting cleanup.
+    Derived data -- rebuilt on every narration save.
+    """
+    _require_workspace(workspace_path)
+    manifest = segmenter.load_segments(workspace_path)
+    if manifest is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No segments manifest yet. Save the narration once to build it.",
+        )
+    return manifest
 
 
 # ── Pronunciation rules ───────────────────────────────────────────────────────
