@@ -80,7 +80,7 @@ describe("GenerationPanel", () => {
 
     const generateCall = fetchMock.mock.calls.find(([u]) => String(u).includes("/generate"));
     expect(JSON.parse(String(generateCall?.[1]?.body))).toEqual({
-      workspace_path: WS, provider: "local-kokoro", voice_id: "af_heart",
+      workspace_path: WS, provider: "local-kokoro", voice_id: "af_heart", force: false,
     });
     // Active run shows the between-segments controls.
     expect(screen.getByText("Pause")).toBeTruthy();
@@ -104,6 +104,37 @@ describe("GenerationPanel", () => {
     }));
     render(<GenerationPanel workspacePath={WS} />);
     await waitFor(() => expect(screen.getByText(/2 segments failed/)).toBeTruthy());
+  });
+
+  it("offers Regenerate Everything when the backend says up to date", async () => {
+    const calls: { force?: boolean }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      if (url.includes("/generation/status")) {
+        return { ok: true, json: async () => ({ run: null, active: false }) };
+      }
+      if (url.includes("/generate")) {
+        const body = JSON.parse(String(init?.body));
+        calls.push(body);
+        if (!body.force) {
+          return { ok: false, status: 400, json: async () => ({
+            detail: "Nothing to generate -- every segment in the selected chapters is already up to date with the current text, pronunciations, and voice.",
+          }) };
+        }
+        return { ok: true, json: async () => makeRun() };
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    }));
+
+    render(<GenerationPanel workspacePath={WS} />);
+    await waitFor(() => expect(screen.getByText("Generate Audiobook")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("Generate Audiobook"));
+    // The refusal surfaces WITH the escape hatch, not as a dead end.
+    await waitFor(() => expect(screen.getByText("Regenerate Everything Anyway")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("Regenerate Everything Anyway"));
+    await waitFor(() => expect(calls.some(c => c.force === true)).toBe(true));
   });
 
   it("engine unavailability shows the backend's honest message", async () => {

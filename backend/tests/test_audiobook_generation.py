@@ -136,9 +136,10 @@ def test_payload_prep_applies_say_and_pronunciations(tmp_path):
 
     generation.start_run(str(ws), SpyBackend(), voice_id="v")
     generation.wait_for_idle()
-    # [say] resolved, dictionary applied, ' -- ' became an em dash --
+    # [say] resolved (spoken form flattened so the engine can't spell it
+    # as an acronym), dictionary applied, ' -- ' became an em dash --
     # payload only; the narration file keeps the writer's text.
-    assert sent == ["KAY-lith met vair-ROTH—again."]
+    assert sent == ["kay lith met vair roth—again."]
     narration = (ws / "manuscript" / "narration-copy.md").read_text(encoding="utf-8")
     assert "[say:KAY-lith]Kaelith[/say]" in narration
 
@@ -193,6 +194,58 @@ def test_truncated_audio_fails_validation_and_is_kept_for_inspection(tmp_path):
     assert "possible truncation" in segment["failure_reason"]
     rejected = list((ws / "generated-segments" / "chapter-001").glob("*.rejected"))
     assert len(rejected) == 1                # kept on disk, never assembled
+
+
+# ── Staleness + force (the "already generated" complaint) ────────────────────
+
+def test_pronunciation_change_requeues_only_affected_segments(tmp_path):
+    src = tmp_path / "b.md"
+    src.write_text(
+        "# Chapter 1\n\nLara climbed the wall.\n\n[pause:0.4]\n\nNobody followed her.\n",
+        encoding="utf-8",
+    )
+    ws = tmp_path / "ws"
+    client.post("/api/audiobook/import", json={
+        "source_path": str(src), "workspace_path": str(ws), "title": "T"})
+
+    generation.start_run(str(ws), FakeBackend(), voice_id="v")
+    generation.wait_for_idle()
+    assert _run_record(ws)["status"] == "completed"
+
+    # A second run with nothing changed is honestly refused.
+    with pytest.raises(ValueError, match="up to date"):
+        generation.start_run(str(ws), FakeBackend(), voice_id="v")
+
+    # Add the Lara rule -- exactly the live scenario. Only the segment
+    # containing "Lara" goes stale; the other keeps its audio.
+    pronunciation.save_workspace_rules(str(ws), [
+        pronunciation.PronunciationRule("Lara", "LAR-uh"),
+    ])
+    run = generation.start_run(str(ws), FakeBackend(), voice_id="v")
+    assert run["total_segments"] == 1
+    generation.wait_for_idle()
+    assert _run_record(ws)["status"] == "completed"
+
+
+def test_voice_change_requeues_everything(tmp_path):
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    generation.start_run(str(ws), FakeBackend(), voice_id="af_heart")
+    generation.wait_for_idle()
+
+    run = generation.start_run(str(ws), FakeBackend(), voice_id="am_adam")
+    assert run["total_segments"] == 2        # the print-pass semantics
+    generation.wait_for_idle()
+
+
+def test_force_regenerates_regardless(tmp_path):
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    generation.start_run(str(ws), FakeBackend(), voice_id="v")
+    generation.wait_for_idle()
+
+    run = generation.start_run(str(ws), FakeBackend(), voice_id="v", force=True)
+    assert run["total_segments"] == 2
+    generation.wait_for_idle()
+    assert _run_record(ws)["status"] == "completed"
 
 
 # ── Control: pause, cancel, single-run, lock ─────────────────────────────────

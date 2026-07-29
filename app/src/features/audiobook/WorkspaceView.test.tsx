@@ -130,6 +130,36 @@ describe("WorkspaceView", () => {
     expect(textarea.value).toContain("[exclude]Second prose.[/exclude]");
   });
 
+  it("Remove strips markers from the selection, keeping the words", async () => {
+    const textarea = await renderLoaded();
+    const marked = "# Chapter 1\n\nKeep. [say:KAY-lith]Kaelith[/say] stays.\n\n[pause:1.5]\n\nEnd.";
+    fireEvent.change(textarea, { target: { value: marked } });
+    textarea.setSelectionRange(0, marked.length);
+
+    fireEvent.click(screen.getByText("Remove"));
+    expect(textarea.value).toBe("# Chapter 1\n\nKeep. Kaelith stays.\n\nEnd.");
+  });
+
+  it("Remove with no selection targets the paragraph under the caret", async () => {
+    const textarea = await renderLoaded();
+    const marked = "# Chapter 1\n\nFirst prose.\n\n[pause:1.5]\n\nSecond prose.";
+    fireEvent.change(textarea, { target: { value: marked } });
+    const caret = marked.indexOf("[pause") + 4;
+    textarea.setSelectionRange(caret, caret);
+
+    fireEvent.click(screen.getByText("Remove"));
+    expect(textarea.value).not.toContain("[pause");
+    expect(textarea.value).toContain("First prose.");
+    expect(textarea.value).toContain("Second prose.");
+  });
+
+  it("What's this opens the marker help with Hear it buttons", async () => {
+    await renderLoaded();
+    fireEvent.click(screen.getByText("What's this?"));
+    expect(screen.getByText(/generated live by the free local narrator/)).toBeTruthy();
+    expect(screen.getAllByText("Hear it")).toHaveLength(5);
+  });
+
   it("save is manual: PUT sends the buffer, chapters and warnings update", async () => {
     const textarea = await renderLoaded();
     fireEvent.change(textarea, { target: { value: NARRATION + "\n# Chapter 3\n\nNew.\n" } });

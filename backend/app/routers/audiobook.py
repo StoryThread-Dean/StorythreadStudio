@@ -208,6 +208,29 @@ def preview_voice(request: PreviewRequest):
     return Response(content=audio, media_type="audio/wav")
 
 
+class MarkerDemoRequest(BaseModel):
+    kind: str    # pause | scene-break | chapter-break | say | exclude
+
+
+@router.post("/marker-demo")
+def marker_demo(request: MarkerDemoRequest):
+    """An audible demo of one marker, rendered through the REAL pipeline
+    (synthesis + exact stitched silence) in the default reference voice.
+    Powers the narration toolbar's What's-this panel."""
+    from app.audiobook import marker_demos
+    if request.kind not in marker_demos.DEMO_SCRIPTS:
+        raise HTTPException(status_code=400, detail=f"Unknown marker demo '{request.kind}'.")
+    try:
+        backend = synthesis.resolve_backend("local-kokoro")
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    try:
+        audio = marker_demos.build_demo(request.kind, backend)
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(content=audio, media_type="audio/wav")
+
+
 # ── Generation ────────────────────────────────────────────────────────────────
 # The single-run engine. Start queues pending/failed segments in selected
 # chapters; pause/cancel act between segments; status is poll-friendly and
@@ -217,6 +240,9 @@ class StartGenerationRequest(BaseModel):
     workspace_path: str
     provider: str = "local-kokoro"
     voice_id: str
+    # The explicit "regenerate everything regardless" escape hatch --
+    # normal starts already re-queue stale audio automatically.
+    force: bool = False
 
 
 @router.post("/generate")
@@ -227,7 +253,8 @@ def start_generation(request: StartGenerationRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
-        return generation.start_run(request.workspace_path, backend, request.voice_id)
+        return generation.start_run(request.workspace_path, backend,
+                                    request.voice_id, force=request.force)
     except RuntimeError as e:            # a run is already active
         raise HTTPException(status_code=409, detail=str(e))
     except locking.WorkspaceLockedError as e:

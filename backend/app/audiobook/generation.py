@@ -16,6 +16,7 @@
 # progress counters).
 
 import ctypes
+import hashlib
 import json
 import os
 import threading
@@ -117,12 +118,31 @@ def request_cancel() -> None:
 
 # ── Starting a run ────────────────────────────────────────────────────────────
 
-def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str) -> dict:
+def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str) -> str:
     """
-    Queue every pending/failed segment in the selected chapters and start
-    the worker thread. Raises RuntimeError when a run is already active
-    anywhere (one audiobook at a time), ValueError when there is nothing
-    to generate, WorkspaceLockedError when another process holds the lock.
+    The generated-state identity of a segment's AUDIO (spec 24.1): the
+    prepared payload (so pronunciation rules and [say] edits count), the
+    voice, and the engine. A completed segment whose stored basis no
+    longer matches is stale and re-queues automatically -- changing a
+    pronunciation rule regenerates exactly the segments that contain the
+    word, and switching voice regenerates the whole book (the print pass).
+    """
+    raw = "|".join([payload_text, voice_id, backend.key, backend.model_id,
+                    backend.engine_version])
+    return "sha256-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
+              force: bool = False) -> dict:
+    """
+    Queue segments in the selected chapters and start the worker thread.
+    Queued = pending/failed, plus completed segments whose payload basis
+    changed (stale audio). `force=True` queues EVERYTHING selected -- the
+    writer's explicit "regenerate regardless" escape hatch.
+
+    Raises RuntimeError when a run is already active anywhere (one
+    audiobook at a time), ValueError when there is nothing to generate,
+    WorkspaceLockedError when another process holds the lock.
     """
     global _active_thread, _active_workspace
 
@@ -141,17 +161,31 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str) -> 
             c["chapter_id"] for c in workspace.list_chapters(workspace_path)
             if c.get("selected_for_generation", True)
         }
-        queue_ids = [
-            item["segment_id"]
-            for chapter in manifest["chapters"]
-            if chapter["chapter_id"] in selected_chapters
-            for item in chapter["items"]
-            if item.get("kind") == "segment" and item.get("status") in ("pending", "failed")
-        ]
+        rules = pronunciation.effective_rules(workspace_path)
+
+        queue_ids: list[str] = []
+        for chapter in manifest["chapters"]:
+            if chapter["chapter_id"] not in selected_chapters:
+                continue
+            for item in chapter["items"]:
+                if item.get("kind") != "segment":
+                    continue
+                if force or item.get("status") in ("pending", "failed"):
+                    queue_ids.append(item["segment_id"])
+                    continue
+                # Completed audio: stale when its payload basis moved.
+                basis = payload_basis(
+                    pronunciation.prepare_tts_text(item["text"], rules),
+                    backend, voice_id,
+                )
+                if item.get("payload_hash") != basis:
+                    queue_ids.append(item["segment_id"])
+
         if not queue_ids:
             raise ValueError(
                 "Nothing to generate -- every segment in the selected chapters "
-                "is already up to date."
+                "is already up to date with the current text, pronunciations, "
+                "and voice."
             )
 
         locking.acquire(workspace_path)     # WorkspaceLockedError propagates
@@ -295,6 +329,7 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
     segment.update({
         "status": "completed",
         "generated_hash": segment["content_hash"],
+        "payload_hash": payload_basis(payload, backend, voice_id),
         "provider": backend.key,
         "model": backend.model_id,
         "engine_version": backend.engine_version,

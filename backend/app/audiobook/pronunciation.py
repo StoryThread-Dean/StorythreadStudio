@@ -117,7 +117,9 @@ def apply_pronunciations(text: str, rules: list[PronunciationRule]) -> str:
     """
     Whole-word substitution of display_text -> spoken_text. Word boundaries
     keep "Kae" from mauling "Kaelith"; re.escape keeps punctuation in a
-    rule ("Dr. Vex") from becoming accidental regex.
+    rule ("Dr. Vex") from becoming accidental regex. The spoken form goes
+    in SPEAKABLE (caps-for-stress flattened) -- this function only ever
+    feeds provider payloads, never the screen.
     """
     out = text
     for rule in rules:
@@ -125,8 +127,30 @@ def apply_pronunciations(text: str, rules: list[PronunciationRule]) -> str:
             r"\b" + re.escape(rule.display_text) + r"\b",
             0 if rule.case_sensitive else re.IGNORECASE,
         )
-        out = pattern.sub(rule.spoken_text, out)
+        out = pattern.sub(speakable(rule.spoken_text), out)
     return out
+
+
+# ── Making spoken forms actually speakable ────────────────────────────────────
+# Writers type phonetic respellings the standard way: caps for the
+# stressed syllable, hyphens between syllables ("LAR-uh", "KAY-lith").
+# The espeak-based phonemizer reads ALL-CAPS tokens as ACRONYMS and spells
+# them letter by letter -- "LAR-uh" came out "L, A, R, uh" in live testing.
+# So every spoken form is flattened on its way into the payload: caps
+# syllables lowercased, hyphens opened into spaces ("lar uh"). The
+# dictionary file and everything on screen keep the writer's spelling.
+
+def speakable(spoken: str) -> str:
+    tokens = re.split(r"[-\s]+", spoken.strip())
+    out = []
+    for token in tokens:
+        # Only flatten tokens that LOOK like shouted syllables (letters,
+        # all caps, 2+ chars). Mixed case ("McRae") passes through.
+        if len(token) >= 2 and token.isalpha() and token.isupper():
+            out.append(token.lower())
+        else:
+            out.append(token)
+    return " ".join(t for t in out if t)
 
 
 # ── Inline [say] overrides ────────────────────────────────────────────────────
@@ -137,8 +161,8 @@ _SAY_RE = re.compile(r"\[say:([^\]]+)\](.*?)\[/say\]", re.IGNORECASE | re.DOTALL
 
 
 def resolve_say_markers(text: str) -> str:
-    """Payload side: replace each [say] span with its spoken form."""
-    return _SAY_RE.sub(lambda m: m.group(1).strip(), text)
+    """Payload side: replace each [say] span with its SPEAKABLE spoken form."""
+    return _SAY_RE.sub(lambda m: speakable(m.group(1)), text)
 
 
 def strip_say_markers(text: str) -> str:

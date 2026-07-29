@@ -13,11 +13,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft, BookMarked, Loader2, MessageSquareQuote, Save, Scissors,
+  ArrowLeft, BookMarked, EyeOff, HelpCircle, Loader2, MessageSquareQuote,
+  Save, Scissors,
 } from "lucide-react";
 
 import { fetchNarration, saveNarration } from "./api";
 import { GenerationPanel } from "./GenerationPanel";
+import { MarkerHelpPanel } from "./MarkerHelpPanel";
+import { paragraphBoundsAt, stripAudioMarkers } from "./markers";
 import { PronunciationDialog } from "./PronunciationDialog";
 import type { AudiobookChapter, AudiobookProjectPayload } from "./types";
 
@@ -48,6 +51,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [warnings, setWarnings] = useState<string[]>(payload.warnings ?? []);
   const [error, setError] = useState<string | null>(null);
   const [showPronunciations, setShowPronunciations] = useState(false);
+  const [showMarkerHelp, setShowMarkerHelp] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -122,6 +126,24 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const handleExclude = useCallback(() => {
     wrapSelection("[exclude]", "[/exclude]");
   }, [wrapSelection]);
+
+  /** [Remove]: strip audio markers from the selection -- or, with no
+      selection, from the paragraph under the caret (the common case:
+      caret sitting on a [pause:1.5] line the writer regrets). */
+  const handleRemoveMarkers = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    let start = ta.selectionStart ?? 0;
+    let end = ta.selectionEnd ?? start;
+    if (start === end) {
+      ({ start, end } = paragraphBoundsAt(content, start));
+    }
+    const cleaned = stripAudioMarkers(content.slice(start, end));
+    if (cleaned === content.slice(start, end)) return;   // nothing to do
+    setContent(content.slice(0, start) + cleaned + content.slice(end));
+    setDirty(true);
+    pendingRestoreRef.current = { caret: start + cleaned.length, scrollTop: ta.scrollTop };
+  }, [content]);
 
   /** Jump the caret to a chapter's heading line. */
   const jumpToChapter = useCallback((chapter: AudiobookChapter) => {
@@ -229,9 +251,25 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           title="Keep the selected text in the file but never narrate it"
           className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
-          <Scissors size={11} /> Exclude
+          <EyeOff size={11} /> Exclude
+        </button>
+        <button
+          onClick={handleRemoveMarkers}
+          title="Remove audio markers from the selection (or the paragraph under the cursor). Your words stay."
+          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-rose-600 hover:text-rose-300"
+        >
+          <Scissors size={11} /> Remove
+        </button>
+        <button
+          onClick={() => setShowMarkerHelp(v => !v)}
+          title="What do these buttons do? Includes audio examples."
+          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-zinc-500 hover:text-blue-300"
+        >
+          <HelpCircle size={11} /> {showMarkerHelp ? "Hide help" : "What's this?"}
         </button>
       </div>
+
+      {showMarkerHelp && <MarkerHelpPanel />}
 
       {/* Body: chapter rail + editor */}
       <div className="flex min-h-0 flex-1">

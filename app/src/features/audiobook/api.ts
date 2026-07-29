@@ -130,15 +130,31 @@ export async function previewVoice(
 export async function startGeneration(
   workspacePath: string,
   voiceId: string,
+  force = false,
 ): Promise<GenerationRun> {
   const res = await fetch(`${API_BASE}/api/audiobook/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       workspace_path: workspacePath, provider: "local-kokoro", voice_id: voiceId,
+      force,
     }),
   });
   return toJson<GenerationRun>(res);
+}
+
+export async function fetchMarkerDemo(kind: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/audiobook/marker-demo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind }),
+  });
+  if (!res.ok) {
+    let detail = `Demo failed (${res.status}).`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+    throw new Error(detail);
+  }
+  return res.blob();
 }
 
 export async function fetchGenerationStatus(

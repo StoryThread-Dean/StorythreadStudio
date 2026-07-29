@@ -109,15 +109,24 @@ export function GenerationPanel({ workspacePath }: GenerationPanelProps) {
     }
   }, [voiceId, previewing, previewUrl, workspacePath]);
 
-  const handleStart = useCallback(async () => {
+  const [offerForce, setOfferForce] = useState(false);
+
+  const handleStart = useCallback(async (force = false) => {
     if (!voiceId || busy) return;
     setBusy(true);
     setError(null);
+    setOfferForce(false);
     try {
-      await startGeneration(workspacePath, voiceId);
+      await startGeneration(workspacePath, voiceId, force);
       await pollOnce();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start generation.");
+      const message = e instanceof Error ? e.message : "Could not start generation.";
+      // "Everything is up to date" is not an error to a writer who wants a
+      // fresh pass anyway -- surface the escape hatch instead of a wall.
+      if (message.includes("up to date")) {
+        setOfferForce(true);
+      }
+      setError(message);
     } finally {
       setBusy(false);
     }
@@ -202,6 +211,17 @@ export function GenerationPanel({ workspacePath }: GenerationPanelProps) {
             >
               {busy && <Loader2 size={14} className="animate-spin" />}
               {resumable ? "Resume Generation" : "Generate Audiobook"}
+            </button>
+          )}
+          {/* The escape hatch when everything is "up to date" but the
+              writer wants a fresh pass regardless. */}
+          {!active && offerForce && (
+            <button
+              onClick={() => void handleStart(true)}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-xs text-zinc-200 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+            >
+              Regenerate Everything Anyway
             </button>
           )}
         </>
