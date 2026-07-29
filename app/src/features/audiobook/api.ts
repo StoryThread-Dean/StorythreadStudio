@@ -184,6 +184,30 @@ export async function previewSelection(
   return { blob: await res.blob(), warnings, trace };
 }
 
+export interface EngineStatus {
+  installed: boolean;
+  mode: "packaged" | "dev" | "none";
+  running: boolean;
+  installed_version: string | null;
+  available_version: string;
+  download_published: boolean;
+  download_size_mb: number | null;
+  install: { state: string; progress: number; error: string | null };
+}
+
+export async function fetchEngineStatus(): Promise<EngineStatus> {
+  const res = await fetch(`${API_BASE}/api/audiobook/local-engine/status`);
+  return toJson<EngineStatus>(res);
+}
+
+export async function installEngine(): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/local-engine/install`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  }));
+}
+
 export interface NarrationSettings {
   narrator_pace: number;
   dialogue_pace: number;

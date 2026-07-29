@@ -15,11 +15,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Ban, ChevronDown, ChevronRight, Loader2, Mic2, Pause, Play, Square } from "lucide-react";
 
 import {
-  cancelGeneration, fetchGenerationStatus, fetchNarrationSettings, fetchVoices,
-  pauseGeneration, previewSelection, previewVoice, resumeGeneration,
-  saveNarrationSettings, startGeneration,
+  cancelGeneration, fetchEngineStatus, fetchGenerationStatus,
+  fetchNarrationSettings, fetchVoices, installEngine, pauseGeneration,
+  previewSelection, previewVoice, resumeGeneration, saveNarrationSettings,
+  startGeneration,
 } from "./api";
-import type { NarrationSettings, PreviewTracePiece } from "./api";
+import type { EngineStatus, NarrationSettings, PreviewTracePiece } from "./api";
 import type { GenerationRun, NarratorVoice } from "./types";
 
 interface GenerationPanelProps {
@@ -33,6 +34,96 @@ interface GenerationPanelProps {
 const PREVIEW_SAMPLE =
   "The road disappeared beneath the gathering snow, and somewhere behind " +
   "her, a second set of footsteps stopped.";
+
+/** The component-manager block shown when no engine exists: one Install
+    button, live progress while the ~400MB artifact downloads, and a
+    retry path into the voices flow once it lands. */
+function InstallEngineBlock({ onInstalled }: { onInstalled: () => void }) {
+  const [status, setStatus] = useState<EngineStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try { setStatus(await fetchEngineStatus()); } catch { /* banner covers it */ }
+    })();
+  }, []);
+
+  // Poll while an install runs; hand off when it completes.
+  useEffect(() => {
+    if (!installing) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const fresh = await fetchEngineStatus();
+        setStatus(fresh);
+        if (fresh.install.state === "done") {
+          window.clearInterval(timer);
+          setInstalling(false);
+          onInstalled();
+        } else if (fresh.install.state === "error") {
+          window.clearInterval(timer);
+          setInstalling(false);
+          setError(fresh.install.error ?? "Install failed.");
+        }
+      } catch { /* keep polling; banner covers a dead backend */ }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [installing, onInstalled]);
+
+  const handleInstall = useCallback(async () => {
+    setError(null);
+    try {
+      await installEngine();
+      setInstalling(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Install failed to start.");
+    }
+  }, []);
+
+  const install = status?.install;
+  const busy = installing && install && ["starting", "downloading", "verifying", "extracting"].includes(install.state);
+
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+      <p className="mb-2 text-xs text-zinc-300">
+        The free local narrator is not installed.
+      </p>
+      {busy ? (
+        <>
+          <p className="mb-1 text-[11px] text-blue-300">
+            {install.state === "downloading"
+              ? `Downloading... ${Math.round(install.progress * 100)}%`
+              : install.state === "verifying" ? "Verifying download..."
+              : "Installing..."}
+          </p>
+          <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+            <div className="h-full bg-blue-500"
+                 style={{ width: `${Math.round((install.progress ?? 0) * 100)}%` }} />
+          </div>
+        </>
+      ) : (
+        <button
+          onClick={() => void handleInstall()}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+        >
+          Install Free Local Narrator
+          {status?.download_size_mb && (
+            <span className="font-normal opacity-75">(~{Math.round(status.download_size_mb)} MB)</span>
+          )}
+        </button>
+      )}
+      <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">
+        One download, all {""}voices included. Runs entirely on your
+        computer -- narration is free forever.
+      </p>
+      {error && (
+        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-[10px] text-rose-300">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function GenerationPanel({ workspacePath, getSelectionText }: GenerationPanelProps) {
   const [voices, setVoices] = useState<NarratorVoice[]>([]);
@@ -68,23 +159,20 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
   const pollTimer = useRef<number | null>(null);
 
   // ── Engine + voices (first call spawns the worker; can take a bit) ──────
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = await fetchVoices();
-        if (cancelled) return;
-        setVoices(list);
-        setVoiceId(prev => prev || (list[0]?.id ?? ""));
-        setEngineState("ready");
-      } catch (e) {
-        if (cancelled) return;
-        setEngineState("unavailable");
-        setEngineError(e instanceof Error ? e.message : "Local narrator unavailable.");
-      }
-    })();
-    return () => { cancelled = true; };
+  const loadVoices = useCallback(async () => {
+    setEngineState("starting");
+    try {
+      const list = await fetchVoices();
+      setVoices(list);
+      setVoiceId(prev => prev || (list[0]?.id ?? ""));
+      setEngineState("ready");
+    } catch (e) {
+      setEngineState("unavailable");
+      setEngineError(e instanceof Error ? e.message : "Local narrator unavailable.");
+    }
   }, []);
+
+  useEffect(() => { void loadVoices(); }, [loadVoices]);
 
   // ── Status polling ───────────────────────────────────────────────────────
   const pollOnce = useCallback(async () => {
@@ -252,9 +340,15 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
         </p>
       )}
       {engineState === "unavailable" && (
-        <p className="rounded border border-rose-800 bg-rose-950/60 px-3 py-2 text-xs text-rose-300">
-          {engineError}
-        </p>
+        engineError?.includes("not installed") ? (
+          // The engine simply isn't here yet -- offer the install, not an
+          // error wall. Success flows straight back into voice loading.
+          <InstallEngineBlock onInstalled={() => void loadVoices()} />
+        ) : (
+          <p className="rounded border border-rose-800 bg-rose-950/60 px-3 py-2 text-xs text-rose-300">
+            {engineError}
+          </p>
+        )
       )}
       {engineState === "ready" && (
         <>

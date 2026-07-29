@@ -149,6 +149,93 @@ def test_preview_endpoint_rejects_empty_text():
     assert response.status_code == 400
 
 
+# ── Install / remove flow (miniature fake artifact, no network) ──────────────
+
+def _make_worker_zip(tmp_path, with_exe: bool = True) -> str:
+    import zipfile
+    zip_path = tmp_path / "fake-worker.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        if with_exe:
+            archive.writestr("kokoro-worker.exe", b"fake engine bytes")
+        archive.writestr("_internal/runtime.dll", b"fake dll")
+        archive.writestr("models/kokoro-v1.0.onnx", b"fake model")
+    return str(zip_path)
+
+
+@pytest.fixture(autouse=True)
+def _reset_install_state():
+    local_worker._set_install("idle", 0.0)
+    yield
+    local_worker.wait_for_install(timeout=10)
+    local_worker._set_install("idle", 0.0)
+
+
+def test_install_from_local_zip_end_to_end(tmp_path):
+    zip_path = _make_worker_zip(tmp_path)
+    response = client.post("/api/audiobook/local-engine/install",
+                           json={"source_zip": zip_path})
+    assert response.status_code == 200
+    local_worker.wait_for_install()
+
+    status = client.get("/api/audiobook/local-engine/status").json()
+    assert status["install"]["state"] == "done"
+    assert status["mode"] == "packaged"
+    assert "local zip" in status["installed_version"]
+    assert (local_worker.WORKER_INSTALL_DIR / "kokoro-worker.exe").is_file()
+    assert (local_worker.WORKER_INSTALL_DIR / "models" / "kokoro-v1.0.onnx").is_file()
+
+    # Remove: files gone, mode back to none (dev is disabled in tests).
+    response = client.post("/api/audiobook/local-engine/remove")
+    assert response.status_code == 200
+    status = client.get("/api/audiobook/local-engine/status").json()
+    assert status["mode"] == "none"
+    assert not local_worker.WORKER_INSTALL_DIR.exists()
+
+
+def test_install_refuses_when_download_not_published(monkeypatch):
+    # No source override + no published sha256 = an honest 400, not a
+    # download attempt against a URL that may not exist.
+    monkeypatch.setitem(local_worker.WORKER_RELEASE, "sha256", None)
+    response = client.post("/api/audiobook/local-engine/install", json={})
+    assert response.status_code == 400
+    assert "not been published" in response.json()["detail"]
+
+
+def test_download_integrity_failure_installs_nothing(tmp_path, monkeypatch):
+    # Published-path download whose bytes do not match the pinned SHA256:
+    # the error is clear and NOTHING lands in the install dir.
+    monkeypatch.setitem(local_worker.WORKER_RELEASE, "sha256", "0" * 64)
+
+    class FakeStream:
+        def __init__(self):
+            self.headers = {"Content-Length": "9"}
+        def raise_for_status(self): pass
+        def iter_bytes(self, chunk_size): yield b"tampered!"
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(local_worker.httpx, "stream",
+                        lambda *a, **k: FakeStream())
+
+    client.post("/api/audiobook/local-engine/install", json={})
+    local_worker.wait_for_install()
+
+    status = client.get("/api/audiobook/local-engine/status").json()
+    assert status["install"]["state"] == "error"
+    assert "integrity check" in status["install"]["error"]
+    assert not local_worker.WORKER_INSTALL_DIR.exists()
+
+
+def test_archive_without_the_engine_is_rejected(tmp_path):
+    zip_path = _make_worker_zip(tmp_path, with_exe=False)
+    client.post("/api/audiobook/local-engine/install", json={"source_zip": zip_path})
+    local_worker.wait_for_install()
+    status = local_worker.install_status()
+    assert status["state"] == "error"
+    assert "does not contain the narrator engine" in status["error"]
+    assert not local_worker.WORKER_INSTALL_DIR.exists()
+
+
 # ── Select-text preview endpoint ──────────────────────────────────────────────
 
 def _import_workspace(tmp_path):

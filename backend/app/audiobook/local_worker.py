@@ -17,10 +17,16 @@
 # the app, same rule as the sidecar itself.
 
 import atexit
+import hashlib
+import json
+import os
+import shutil
 import socket
 import subprocess
+import tempfile
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 import httpx
@@ -30,6 +36,21 @@ from app.audiobook.synthesis import SynthesisBackend, SynthesisError
 # Packaged install location (component manager's target).
 WORKER_INSTALL_DIR = Path.home() / ".storythread" / "kokoro-worker"
 WORKER_EXE_NAME = "kokoro-worker.exe"
+
+# The published worker artifact (spec 14.1): a PRERELEASE GitHub asset so
+# it never becomes releases/latest (that would break the app updater's
+# latest.json lookup). sha256 and size are stamped by scripts/
+# build-worker.ps1 output when a worker version is published.
+WORKER_RELEASE = {
+    "version": "0.1.0",
+    "url": ("https://github.com/StoryThread-Dean/StorythreadStudio/releases/"
+            "download/kokoro-worker-v0.1.0/kokoro-worker-0.1.0-win64.zip"),
+    # SHA256 of the built kokoro-worker-0.1.0-win64.zip (2026-07-29).
+    # The download 404s until the prerelease is published with EXACTLY
+    # this file -- publish and pin travel together, always.
+    "sha256": "39f3d40d5fd25bb165e9687a38ef4287078933ef64dbf5438e634115a8678f0e",
+    "size_mb": 372.1,
+}
 
 # How long to wait for the worker's /health after spawn. First start pays
 # a 310MB model load; a cold exe on a slow disk needs real headroom.
@@ -52,7 +73,11 @@ class WorkerUnavailableError(Exception):
 
 def _dev_worker_dir() -> Path | None:
     """The repo's kokoro-worker/ project, when running from a checkout.
-    backend/app/audiobook/local_worker.py -> repo root is four parents up."""
+    backend/app/audiobook/local_worker.py -> repo root is four parents up.
+    STORYTHREAD_DISABLE_DEV_WORKER=1 hides it -- used to exercise the
+    packaged install path on a dev machine."""
+    if os.environ.get("STORYTHREAD_DISABLE_DEV_WORKER") == "1":
+        return None
     candidate = Path(__file__).resolve().parents[3] / "kokoro-worker"
     if (candidate / "main.py").is_file() and (candidate / "models").is_dir():
         return candidate
@@ -69,12 +94,148 @@ def installed_state() -> dict:
     """What the component manager and Settings show."""
     packaged = (WORKER_INSTALL_DIR / WORKER_EXE_NAME).is_file()
     dev = _dev_worker_dir() is not None
+    installed_version = None
+    try:
+        with open(WORKER_INSTALL_DIR / "installed.json", "r", encoding="utf-8") as f:
+            installed_version = json.load(f).get("version")
+    except (OSError, json.JSONDecodeError):
+        pass
     return {
         "installed": packaged or dev,
         "mode": "packaged" if packaged else ("dev" if dev else "none"),
         "running": _process is not None and _process.poll() is None,
         "health": _health,
+        "installed_version": installed_version,
+        "available_version": WORKER_RELEASE["version"],
+        "download_published": WORKER_RELEASE["sha256"] is not None,
+        "download_size_mb": WORKER_RELEASE["size_mb"],
+        "install": install_status(),
     }
+
+
+# ── Component manager: install / remove ──────────────────────────────────────
+# The download-verify-extract flow (spec 14.1): a background thread with a
+# poll-friendly progress state, SHA256 verification before a single byte
+# is trusted, and the running worker shut down before its files change.
+
+_install_lock = threading.Lock()
+_install_thread: threading.Thread | None = None
+_install_state = {"state": "idle", "progress": 0.0, "error": None}
+
+
+def install_status() -> dict:
+    with _install_lock:
+        return dict(_install_state)
+
+
+def _set_install(state: str, progress: float | None = None, error: str | None = None) -> None:
+    with _install_lock:
+        _install_state["state"] = state
+        if progress is not None:
+            _install_state["progress"] = round(progress, 3)
+        _install_state["error"] = error
+
+
+def start_install(source_zip: str | None = None) -> None:
+    """
+    Kick off an install on a background thread.
+
+    source_zip: a LOCAL zip path override, used for testing the flow
+    before (or without) the published download. The published path
+    requires WORKER_RELEASE to carry a sha256 -- no hash, no install.
+    """
+    global _install_thread
+    with _install_lock:
+        if _install_thread is not None and _install_thread.is_alive():
+            raise RuntimeError("An install is already in progress.")
+    if source_zip is None and WORKER_RELEASE["sha256"] is None:
+        raise ValueError(
+            "The local narrator download has not been published yet. "
+            "It arrives with this feature's release."
+        )
+    _set_install("starting", 0.0)
+    _install_thread = threading.Thread(
+        target=_install_worker, args=(source_zip,), name="kokoro-install", daemon=True)
+    _install_thread.start()
+
+
+def wait_for_install(timeout: float = 600.0) -> None:
+    """Tests and scripts only -- the UI polls install_status()."""
+    thread = _install_thread
+    if thread is not None:
+        thread.join(timeout)
+
+
+def _install_worker(source_zip: str | None) -> None:
+    staging = Path(tempfile.mkdtemp(prefix="stw-worker-install-"))
+    try:
+        zip_path = staging / "worker.zip"
+
+        if source_zip is not None:
+            _set_install("verifying", 0.5)
+            shutil.copyfile(source_zip, zip_path)
+        else:
+            _set_install("downloading", 0.0)
+            hasher = hashlib.sha256()
+            with httpx.stream("GET", WORKER_RELEASE["url"], timeout=60.0,
+                              follow_redirects=True) as response:
+                response.raise_for_status()
+                total = int(response.headers.get("Content-Length", 0)) or None
+                done = 0
+                with open(zip_path, "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=1 << 20):
+                        f.write(chunk)
+                        hasher.update(chunk)
+                        done += len(chunk)
+                        if total:
+                            _set_install("downloading", done / total)
+            _set_install("verifying", 1.0)
+            digest = hasher.hexdigest().lower()
+            if digest != WORKER_RELEASE["sha256"]:
+                raise ValueError(
+                    "The downloaded file failed its integrity check "
+                    f"(expected {WORKER_RELEASE['sha256'][:12]}..., got {digest[:12]}...). "
+                    "Nothing was installed -- try again."
+                )
+
+        # Extract to a scratch dir FIRST; only a complete, valid extract
+        # replaces the install dir. Zip-slip guarded.
+        _set_install("extracting", 1.0)
+        extract_dir = staging / "extract"
+        extract_dir.mkdir()
+        with zipfile.ZipFile(zip_path) as archive:
+            for member in archive.namelist():
+                target = (extract_dir / member).resolve()
+                if not str(target).startswith(str(extract_dir.resolve())):
+                    raise ValueError("The archive contains an unsafe path; refusing to install.")
+            archive.extractall(extract_dir)
+        if not (extract_dir / WORKER_EXE_NAME).is_file():
+            raise ValueError("The archive does not contain the narrator engine.")
+
+        # Swap in: stop any running worker, clear the old install, move
+        # the new one into place, stamp the version.
+        shutdown()
+        if WORKER_INSTALL_DIR.exists():
+            shutil.rmtree(WORKER_INSTALL_DIR, ignore_errors=True)
+        WORKER_INSTALL_DIR.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(extract_dir), str(WORKER_INSTALL_DIR))
+        with open(WORKER_INSTALL_DIR / "installed.json", "w", encoding="utf-8") as f:
+            json.dump({"version": WORKER_RELEASE["version"] if source_zip is None
+                       else f"{WORKER_RELEASE['version']} (local zip)"}, f)
+
+        _set_install("done", 1.0)
+    except Exception as e:
+        _set_install("error", error=str(e))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def remove_worker() -> None:
+    """Uninstall the packaged engine (files only -- generated audio and
+    workspaces are untouched; the dev checkout, if any, remains usable)."""
+    shutdown()
+    if WORKER_INSTALL_DIR.exists():
+        shutil.rmtree(WORKER_INSTALL_DIR, ignore_errors=True)
 
 
 def _spawn_command(port: int) -> tuple[list[str], str]:

@@ -161,9 +161,37 @@ def get_segments(workspace_path: str):
 
 @router.get("/local-engine/status")
 def local_engine_status():
-    """Installed / running state for the component manager UI. Never
-    spawns the worker -- status checks must stay instant."""
+    """Installed / running state for the component manager UI, including
+    live install progress. Never spawns the worker -- status checks must
+    stay instant."""
     return local_worker.installed_state()
+
+
+class InstallEngineRequest(BaseModel):
+    # Local zip override: lets the install flow be exercised before the
+    # download is published (and in tests). Absent = published download.
+    source_zip: str | None = None
+
+
+@router.post("/local-engine/install")
+def install_local_engine(request: InstallEngineRequest):
+    """Download (or copy), SHA256-verify, and install the local narrator.
+    Runs in the background; poll /local-engine/status for progress."""
+    try:
+        local_worker.start_install(request.source_zip)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@router.post("/local-engine/remove")
+def remove_local_engine():
+    """Uninstall the packaged engine. Workspaces and generated audio are
+    never touched -- this only frees the engine's disk space."""
+    local_worker.remove_worker()
+    return {"ok": True}
 
 
 @router.get("/voices")
