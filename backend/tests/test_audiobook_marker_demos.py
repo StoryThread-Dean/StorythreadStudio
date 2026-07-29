@@ -104,6 +104,9 @@ def test_say_demo_covers_both_use_cases():
     assert "larah" in spoken
     assert "lairah" in spoken
     assert "leerah" in spoken
+    # The closing act teaches the dictionary/say relationship out loud:
+    # dictionary = whole book, say = one spot, say wins.
+    assert "when both apply, say wins" in spoken
     assert "fine-tune your audiobook" in spoken
     assert "[say:" not in spoken                   # markup never narrated
 

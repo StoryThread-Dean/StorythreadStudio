@@ -37,11 +37,13 @@ const HELP_ITEMS: { kind: string; label: string; body: string }[] = [
     kind: "say",
     label: "[say] -- one-spot pronunciation",
     body: "Select a word, click [say], and type how it should sound "
-        + "(Jesus becomes HEY-zeus for a Spanish character). Only that one "
+        + "(Jesus becomes Hay-SOOS for a Spanish character). Only that one "
         + "spot changes. Perfect for names with regional pronunciations -- "
         + "Lara can be LOR-ah, LAR-ah, or LAIR-ah depending on who is "
         + "speaking and where. For every occurrence of a word, use the "
-        + "Pronunciations dictionary instead.",
+        + "Pronunciations dictionary instead -- and where both apply, [say] "
+        + "wins, so the dictionary sets the rule and [say] makes the "
+        + "exception.",
   },
   {
     kind: "exclude",
