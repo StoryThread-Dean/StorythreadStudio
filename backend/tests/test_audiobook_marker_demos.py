@@ -91,9 +91,10 @@ def test_say_demo_covers_both_use_cases():
     backend = DemoBackend()
     build_demo("say", backend)
     spoken = " ".join(backend.texts)
-    # Case 1 -- a word the engine cannot guess: raw form once, fixed form once.
-    assert "Saoirse." in spoken
-    assert "sersha" in spoken                      # flattened AND fused
+    # Case 1 -- the engine's guaranteed English default vs the forced
+    # Spanish name: raw form once, fused spoken form once.
+    assert "Jesus." in spoken
+    assert "heyzeus" in spoken                     # flattened AND fused
     # Case 2 -- regional variants of the same name: the engine's default
     # plus two forced pronunciations, no hesitation gaps.
     assert "says: Lara." in spoken

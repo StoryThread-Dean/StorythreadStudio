@@ -38,18 +38,18 @@ DEMO_SCRIPTS: dict[str, str] = {
         "\n\n[chapter-break]\n\n"
         "After three seconds of quiet, the story carries on."
     ),
-    # Two demo words, two reasons to reach for [say] (user-shaped design):
-    #   Saoirse -- a word the engine cannot guess (live finding: modern
-    #   engines guess MOST words right, so pure-failure demos are a
-    #   shrinking target; Kaelith sounded correct both times).
-    #   Lara -- a name with several RIGHT answers (LOR-ah in America,
-    #   LAR-ah in Britain, LAIR-ah in Spanish); the engine picks one, the
-    #   STORY decides which one a given character uses. Forcing variants
-    #   guarantees an audible contrast no engine improvement can erase.
+    # Two demo words, two acts (user-shaped design, third iteration):
+    #   Jesus -- the engine ALWAYS defaults to the English reading, so
+    #   [say:HEY-zeus] forcing the Spanish name is a guaranteed audible
+    #   contrast. (Kaelith sounded right both times; Saoirse got FIXED as
+    #   a side effect of syllable fusion -- pure-failure demo words are a
+    #   losing race against engine quality. Names where BOTH readings are
+    #   correct and the story picks one can never be out-improved.)
+    #   Lara -- three regional readings of one name; same principle.
     "say": (
-        "Some names the narrator cannot guess. It reads Saoirse as written: Saoirse."
+        "On its own, the narrator reads the name Jesus the English way: Jesus."
         "\n\n[pause:0.8]\n\n"
-        "A say marker fixes it: [say:SER-sha]Saoirse[/say]."
+        "A say marker gives a Spanish character his true name: [say:HEY-zeus]Jesus[/say]."
         "\n\n[pause:1.0]\n\n"
         "Other names have more than one right answer. On its own, the narrator says: Lara."
         "\n\n[pause:0.8]\n\n"
