@@ -94,15 +94,17 @@ def test_say_demo_covers_both_use_cases():
     # The demo opens by setting expectations: the engine is good; markers
     # are for VARIATIONS, not mass testing.
     assert "most pronunciations right" in spoken
-    # Case 1 -- the engine's guaranteed English default vs the forced
-    # Spanish name: raw form once, ear-tuned fused spoken form once.
-    assert "Jesus." in spoken
-    assert "heyZoosus" in spoken                   # tuned by listening, not spelling
-    # Case 2 -- regional variants of the same name: the engine's default
-    # plus two forced pronunciations, no hesitation gaps.
-    assert "says: Lara." in spoken
+    # Case 1 -- one "Jesus" doubles as the English default; the forced
+    # Spanish form arrives fused and ear-tuned.
+    assert "the name Jesus the English way" in spoken
+    assert "Haysoos" in spoken                     # tuned by listening, not spelling
+    # Case 2 -- regional variants: engine-default Lara plus three forced
+    # readings, no hesitation gaps, closing on the user's tagline.
+    assert "Lara, for example" in spoken
     assert "larah" in spoken
     assert "lairah" in spoken
+    assert "leerah" in spoken
+    assert "fine-tune your audiobook" in spoken
     assert "[say:" not in spoken                   # markup never narrated
 
 

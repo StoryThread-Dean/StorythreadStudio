@@ -51,19 +51,22 @@ DEMO_SCRIPTS: dict[str, str] = {
     # "Zeheus"). When editing, always regenerate and LISTEN -- the right
     # respelling is whatever the engine renders correctly, not whatever
     # reads best on paper.
+    # Script wording is the user's (2026-07-29 testing round). The first
+    # "Jesus" doubles as the English-default demonstration -- one mention
+    # is all that's needed. Hay-SOOS fuses to "Haysoos", ear-verified.
     "say": (
         "The local narrator gets most pronunciations right on its own. Reach "
-        "for a say marker when a word needs a specific variation, like these."
+        "for a say marker when a word needs a specific variation."
         "\n\n[pause:0.8]\n\n"
-        "On its own, the narrator reads the name Jesus the English way: Jesus."
-        "\n\n[pause:0.8]\n\n"
-        "A say marker gives a Spanish character his true name: [say:HEY-Zoosus]Jesus[/say]."
+        "On its own, the narrator reads the name Jesus the English way. The "
+        "say marker lets it speak the Spanish way instead: [say:Hay-SOOS]Jesus[/say]."
         "\n\n[pause:1.0]\n\n"
-        "Other names have more than one right answer. On its own, the narrator says: Lara."
+        "Other names have more than one pronunciation. Lara, for example: in "
+        "Britain she would be [say:LAR-ah]Lara[/say]. If she was from Madrid, "
+        "it might be [say:LAIR-ah]Lara[/say], or [say:LEER-ah]Lara[/say]."
         "\n\n[pause:0.8]\n\n"
-        "Her English friends call her [say:LAR-ah]Lara[/say]."
-        "\n\n[pause:0.8]\n\n"
-        "In Madrid she introduces herself as [say:LAIR-ah]Lara[/say]."
+        "Say is a powerful way to fine-tune your audiobook to just how you "
+        "want it to sound."
     ),
     "exclude": (
         "This sentence is narrated normally."
