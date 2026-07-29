@@ -143,11 +143,18 @@ export async function startGeneration(
   return toJson<GenerationRun>(res);
 }
 
+export interface PreviewTracePiece {
+  speed: number;
+  dialogue: boolean;
+  marker_pace: number | null;
+  snippet: string;
+}
+
 export async function previewSelection(
   workspacePath: string,
   text: string,
   voiceId: string,
-): Promise<{ blob: Blob; warnings: string[] }> {
+): Promise<{ blob: Blob; warnings: string[]; trace: PreviewTracePiece[] }> {
   const res = await fetch(`${API_BASE}/api/audiobook/preview-selection`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -161,15 +168,20 @@ export async function previewSelection(
     try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
     throw new Error(detail);
   }
-  // Marker parse warnings ride a header (the body is raw audio). They
-  // matter: a selection that cuts into a pace span plays at normal pace,
-  // and without the warning that reads as "pace doesn't work".
+  // Marker parse warnings and the render trace ride headers (the body is
+  // raw audio). The trace is the ground truth of what was rendered --
+  // exact speed per piece -- so pacing questions get answered by facts.
   let warnings: string[] = [];
-  const raw = res.headers.get("X-Preview-Warnings");
-  if (raw) {
-    try { warnings = JSON.parse(decodeURIComponent(raw)); } catch { /* none */ }
+  const rawWarnings = res.headers.get("X-Preview-Warnings");
+  if (rawWarnings) {
+    try { warnings = JSON.parse(decodeURIComponent(rawWarnings)); } catch { /* none */ }
   }
-  return { blob: await res.blob(), warnings };
+  let trace: PreviewTracePiece[] = [];
+  const rawTrace = res.headers.get("X-Preview-Trace");
+  if (rawTrace) {
+    try { trace = JSON.parse(decodeURIComponent(rawTrace)); } catch { /* none */ }
+  }
+  return { blob: await res.blob(), warnings, trace };
 }
 
 export interface NarrationSettings {

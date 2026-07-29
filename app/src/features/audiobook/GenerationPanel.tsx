@@ -19,7 +19,7 @@ import {
   pauseGeneration, previewSelection, previewVoice, resumeGeneration,
   saveNarrationSettings, startGeneration,
 } from "./api";
-import type { NarrationSettings } from "./api";
+import type { NarrationSettings, PreviewTracePiece } from "./api";
 import type { GenerationRun, NarratorVoice } from "./types";
 
 interface GenerationPanelProps {
@@ -46,14 +46,20 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
   const [previewing, setPreviewing] = useState<null | "voice" | "selection">(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
+  const [previewTrace, setPreviewTrace] = useState<PreviewTracePiece[]>([]);
 
   // Book-level narration settings: base narrator/dialogue speeds and
   // break silences. These tame the engine's own pacing instincts
   // globally; [pace] markers multiply on top for specific moments.
   const [settings, setSettings] = useState<NarrationSettings | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  // Unsaved settings are the classic silent trap: tweak the pace inputs,
+  // preview, hear nothing change -- because the preview reads what's
+  // SAVED. The amber "unsaved" tag makes that state impossible to miss.
+  const settingsDirty = settings !== null && JSON.stringify(settings) !== savedSnapshot;
 
   const [run, setRun] = useState<GenerationRun | null>(null);
   const [active, setActive] = useState(false);
@@ -99,7 +105,9 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
   useEffect(() => {
     (async () => {
       try {
-        setSettings(await fetchNarrationSettings(workspacePath));
+        const loaded = await fetchNarrationSettings(workspacePath);
+        setSettings(loaded);
+        setSavedSnapshot(JSON.stringify(loaded));
       } catch { /* backend banner covers unreachable; defaults render */ }
     })();
   }, [workspacePath]);
@@ -109,7 +117,9 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
     setSavingSettings(true);
     setError(null);
     try {
-      setSettings(await saveNarrationSettings(workspacePath, settings));
+      const saved = await saveNarrationSettings(workspacePath, settings);
+      setSettings(saved);
+      setSavedSnapshot(JSON.stringify(saved));
       setSettingsSaved(true);
       window.setTimeout(() => setSettingsSaved(false), 3000);
     } catch (e) {
@@ -163,11 +173,13 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
     setPreviewing("selection");
     setError(null);
     setPreviewWarnings([]);
+    setPreviewTrace([]);
     try {
-      const { blob, warnings } = await previewSelection(workspacePath, selected, voiceId);
+      const { blob, warnings, trace } = await previewSelection(workspacePath, selected, voiceId);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
       setPreviewWarnings(warnings);
+      setPreviewTrace(trace);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Selection preview failed.");
     } finally {
@@ -292,6 +304,22 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
                 {warning}
               </p>
             ))}
+            {/* The render trace: ground truth of what each piece used.
+                "Did my pace apply?" is answered here, not by ear. */}
+            {previewTrace.length > 0 && (
+              <div className="mt-1.5 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1.5">
+                {previewTrace.map((piece, i) => (
+                  <p key={i} className="truncate text-[10px] leading-relaxed text-zinc-500">
+                    <span className={piece.marker_pace ? "text-blue-300" : "text-zinc-400"}>
+                      {piece.speed.toFixed(2)}x
+                    </span>
+                    {piece.dialogue && <span className="text-emerald-400"> dialogue</span>}
+                    {piece.marker_pace != null && <span className="text-blue-300"> [pace:{piece.marker_pace}]</span>}
+                    {" "}&ldquo;{piece.snippet}...&rdquo;
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Book-level narration settings */}
@@ -303,7 +331,15 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
               >
                 {showSettings ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 Narration Settings
-                {settingsSaved && <span className="ml-auto text-[10px] font-normal text-emerald-400">saved</span>}
+                {settingsDirty && (
+                  <span className="ml-auto text-[10px] font-normal text-amber-400"
+                        title="Previews and generation use the SAVED values -- save to apply">
+                    unsaved
+                  </span>
+                )}
+                {!settingsDirty && settingsSaved && (
+                  <span className="ml-auto text-[10px] font-normal text-emerald-400">saved</span>
+                )}
               </button>
               {showSettings && (
                 <div className="space-y-2 px-3 pb-3">

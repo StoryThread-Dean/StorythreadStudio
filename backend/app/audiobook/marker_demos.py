@@ -113,9 +113,12 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
     so a preview is an exact rehearsal of the real thing -- same speeds,
     same cut points, same silences.
 
-    Returns (wav_bytes, parse_warnings). The warnings matter for previews:
-    a selection that cuts into a pace span would otherwise play at normal
-    pace with no explanation (a live-testing mystery).
+    Returns (wav_bytes, parse_warnings, trace). The warnings matter for
+    previews: a selection that cuts into a pace span would otherwise play
+    at normal pace with no explanation. The TRACE is the ground truth of
+    what was rendered -- one entry per spoken piece with the exact speed
+    used and whether it was treated as dialogue -- so "the pace reverted"
+    reports become checkable facts instead of ear-versus-ear debates.
 
     Raises ValueError when the text contains nothing narratable.
     """
@@ -126,14 +129,21 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
     parsed = parse_narration(f"# Preview\n\n{text}")
 
     pieces: list[bytes | int] = []
+    trace: list[dict] = []
     for chapter in parsed.chapters:
         for item in segmenter._segment_texts_from_elements(chapter.elements):
             kind = item["kind"]
             if kind == "segment_text":
                 payload = prepare_tts_text(item["text"], rules)
-                audio, _duration = backend.synthesize(
-                    payload, voice_id, effective_pace(item, settings))
+                speed = effective_pace(item, settings)
+                audio, _duration = backend.synthesize(payload, voice_id, speed)
                 pieces.append(audio)
+                trace.append({
+                    "speed": speed,
+                    "dialogue": bool(item.get("dialogue")),
+                    "marker_pace": item.get("pace"),
+                    "snippet": payload[:32],
+                })
             elif kind == "pause":
                 pieces.append(int(item["duration_ms"]))
             elif kind == "scene_break":
@@ -150,7 +160,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
     # to; drop gaps until the first spoken piece.
     while pieces and isinstance(pieces[0], int):
         pieces.pop(0)
-    return concat_wav(pieces), list(parsed.warnings)
+    return concat_wav(pieces), list(parsed.warnings), trace
 
 
 def build_demo(kind: str, backend: SynthesisBackend) -> bytes:
@@ -163,7 +173,7 @@ def build_demo(kind: str, backend: SynthesisBackend) -> bytes:
     if cached is not None:
         return cached
 
-    audio, warnings = render_marked_text(DEMO_SCRIPTS[kind], backend, DEMO_VOICE, rules=[])
+    audio, warnings, _trace = render_marked_text(DEMO_SCRIPTS[kind], backend, DEMO_VOICE, rules=[])
     assert not warnings, f"demo script '{kind}' must parse clean: {warnings}"
     _demo_cache[cache_key] = audio
     return audio

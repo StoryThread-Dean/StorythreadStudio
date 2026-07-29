@@ -150,7 +150,7 @@ def test_every_script_renders():
 def test_render_marked_text_applies_rules_and_silence():
     from app.audiobook.pronunciation import PronunciationRule
     backend = DemoBackend()
-    out, warnings = marker_demos.render_marked_text(
+    out, warnings, _trace = marker_demos.render_marked_text(
         "Lara waited.\n\n[pause:2.0]\n\nNobody came.",
         backend, DEMO_VOICE, rules=[PronunciationRule("Lara", "LAR-uh")],
     )
@@ -163,7 +163,7 @@ def test_render_marked_text_applies_rules_and_silence():
 
 def test_render_marked_text_drops_leading_silence():
     backend = DemoBackend()
-    out, _warnings = marker_demos.render_marked_text(
+    out, _warnings, _trace = marker_demos.render_marked_text(
         "[pause:5.0]\n\nOnly this is spoken.", backend, DEMO_VOICE, rules=[])
     assert _duration(out) == pytest.approx(1.0, abs=0.01)
 
@@ -172,13 +172,40 @@ def test_render_reports_a_cut_into_pace_span():
     # THE live-testing mystery: a preview selection starting inside a pace
     # span has no opener -- the stray closer must warn AND never be spoken.
     backend = DemoBackend()
-    _out, warnings = marker_demos.render_marked_text(
+    _out, warnings, _trace = marker_demos.render_marked_text(
         "This part was inside the span.[/pace]\n\nAnd this was after it.",
         backend, DEMO_VOICE, rules=[])
     assert any("no opening [pace:...]" in w for w in warnings)
     spoken = " ".join(backend.texts)
     assert "[/pace]" not in spoken
     assert "pace" not in spoken.lower()          # marker never narrated
+
+
+def test_post_span_text_returns_to_the_book_base_not_to_one():
+    # The live report: with narrator 0.85 / dialogue 0.95, text AFTER a
+    # closed [pace] span allegedly reverts to 1.0. Pin the truth: it must
+    # return to the BOOK BASE (0.85), and unmarked dialogue must get the
+    # dialogue base (0.95), before/inside/after any span.
+    speeds: list[float] = []
+
+    class SpeedSpy(DemoBackend):
+        def synthesize(self, text: str, voice_id: str, speed: float = 1.0):
+            speeds.append(speed)
+            return super().synthesize(text, voice_id)
+
+    settings = {"narrator_pace": 0.85, "dialogue_pace": 0.95,
+                "scene_break_ms": 2000, "chapter_break_ms": 3000}
+    _out, warnings, trace = marker_demos.render_marked_text(
+        'Narration before the span, moving at the book base.\n\n'
+        '[pace:0.8]The marked slow passage.[/pace]\n\n'
+        'Narration after the span -- the reported reversion spot.\n\n'
+        '"Unmarked dialogue right after," she said, "at the dialogue base."',
+        SpeedSpy(), DEMO_VOICE, rules=[], settings=settings)
+    assert warnings == []
+    assert speeds == [0.85, pytest.approx(0.68), 0.85, 0.95]
+    # The trace reports the same truth the audio used.
+    assert [t["speed"] for t in trace] == speeds
+    assert [t["dialogue"] for t in trace] == [False, False, False, True]
 
 
 def test_multi_paragraph_pace_span_with_embedded_markers():
@@ -191,7 +218,7 @@ def test_multi_paragraph_pace_span_with_embedded_markers():
             speeds.append(speed)
             return super().synthesize(text, voice_id)
 
-    _out, warnings = marker_demos.render_marked_text(
+    _out, warnings, _trace = marker_demos.render_marked_text(
         "Normal intro paragraph.\n\n"
         "[pace:0.8]Slow paragraph one.\n\n"
         "Slow paragraph two.\n\n"

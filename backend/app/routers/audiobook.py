@@ -281,18 +281,18 @@ def preview_selection(request: PreviewSelectionRequest):
     rules = pronunciation.effective_rules(request.workspace_path)
     settings = workspace.narration_settings(workspace.load_manifest(request.workspace_path))
     try:
-        audio, warnings = marker_demos.render_marked_text(
+        audio, warnings, trace = marker_demos.render_marked_text(
             text, backend, request.voice_id, rules, settings)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except synthesis.SynthesisError as e:
         raise HTTPException(status_code=502, detail=str(e))
-    headers = {}
+    # Headers must be latin-1; URI-encode so any message survives. The
+    # frontend decodes and shows these under the player. The trace turns
+    # "the pace reverted" into a checkable fact: exact speed per piece.
+    from urllib.parse import quote
+    headers = {"X-Preview-Trace": quote(json.dumps(trace))}
     if warnings:
-        # Headers must be latin-1; URI-encode so any message survives. The
-        # frontend decodes and shows these under the player -- a selection
-        # that cut into a pace span must never fail silently again.
-        from urllib.parse import quote
         headers["X-Preview-Warnings"] = quote(json.dumps(warnings))
     return Response(content=audio, media_type="audio/wav", headers=headers)
 
