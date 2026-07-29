@@ -319,8 +319,17 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           )}
         </div>
 
-        {/* Right rail: voice, preview, generate, run controls */}
-        <GenerationPanel workspacePath={workspacePath} />
+        {/* Right rail: voice, preview, generate, run controls. The
+            selection getter reads live from the textarea so Preview
+            Selection always rehearses exactly what is highlighted. */}
+        <GenerationPanel
+          workspacePath={workspacePath}
+          getSelectionText={() => {
+            const ta = textareaRef.current;
+            if (!ta) return "";
+            return content.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0);
+          }}
+        />
       </div>
 
       {showPronunciations && (

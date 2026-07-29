@@ -143,6 +143,27 @@ export async function startGeneration(
   return toJson<GenerationRun>(res);
 }
 
+export async function previewSelection(
+  workspacePath: string,
+  text: string,
+  voiceId: string,
+): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/audiobook/preview-selection`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspace_path: workspacePath, text, voice_id: voiceId,
+      provider: "local-kokoro",
+    }),
+  });
+  if (!res.ok) {
+    let detail = `Preview failed (${res.status}).`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+    throw new Error(detail);
+  }
+  return res.blob();
+}
+
 export async function fetchMarkerDemo(kind: string): Promise<Blob> {
   const res = await fetch(`${API_BASE}/api/audiobook/marker-demo`, {
     method: "POST",

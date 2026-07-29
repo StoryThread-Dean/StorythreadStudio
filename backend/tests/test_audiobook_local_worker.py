@@ -147,3 +147,69 @@ def test_preview_endpoint_rejects_empty_text():
         "text": "   ", "voice_id": "af_heart",
     })
     assert response.status_code == 400
+
+
+# ── Select-text preview endpoint ──────────────────────────────────────────────
+
+def _import_workspace(tmp_path):
+    src = tmp_path / "b.md"
+    src.write_text("# Chapter 1\n\nSome prose here.\n", encoding="utf-8")
+    ws = tmp_path / "ws"
+    response = client.post("/api/audiobook/import", json={
+        "source_path": str(src), "workspace_path": str(ws), "title": "T"})
+    assert response.status_code == 200
+    return ws
+
+
+def test_preview_selection_renders_markers_and_rules(tmp_path, monkeypatch):
+    ws = _import_workspace(tmp_path)
+
+    sent: list[str] = []
+
+    class FakeBackend(KokoroBackend):
+        def __init__(self):
+            super().__init__("http://x", {})
+        def synthesize(self, text, voice_id):
+            sent.append(text)
+            # A tiny real WAV so concat_wav can stitch it.
+            import io
+            import wave
+            buffer = io.BytesIO()
+            with wave.open(buffer, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(24000)
+                w.writeframes(b"\x01\x02" * 2400)
+            return buffer.getvalue(), 0.1
+
+    from app.audiobook import synthesis
+    monkeypatch.setattr(synthesis, "resolve_backend", lambda provider: FakeBackend())
+
+    response = client.post("/api/audiobook/preview-selection", json={
+        "workspace_path": str(ws),
+        "text": "She ran.\n\n[pause:0.5]\n\n[exclude]note[/exclude]\n\nShe stopped -- cold.",
+        "voice_id": "af_heart",
+    })
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("audio/wav")
+    # Markers were structural, not narrated; excluded text never spoken;
+    # payload prep ran ('--' became an em dash).
+    assert sent == ["She ran.", "She stopped—cold."]
+
+
+def test_preview_selection_caps_length(tmp_path, monkeypatch):
+    ws = _import_workspace(tmp_path)
+    response = client.post("/api/audiobook/preview-selection", json={
+        "workspace_path": str(ws), "text": "x" * 3001, "voice_id": "v",
+    })
+    assert response.status_code == 400
+    assert "3,000" in response.json()["detail"]
+
+
+def test_preview_selection_requires_a_selection(tmp_path):
+    ws = _import_workspace(tmp_path)
+    response = client.post("/api/audiobook/preview-selection", json={
+        "workspace_path": str(ws), "text": "   ", "voice_id": "v",
+    })
+    assert response.status_code == 400
+    assert "Select a passage" in response.json()["detail"]

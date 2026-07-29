@@ -126,6 +126,35 @@ def test_every_script_renders():
         assert len(build_demo(kind, DemoBackend())) > 44   # bigger than a WAV header
 
 
+# ── render_marked_text (the select-text preview renderer) ────────────────────
+
+def test_render_marked_text_applies_rules_and_silence():
+    from app.audiobook.pronunciation import PronunciationRule
+    backend = DemoBackend()
+    out = marker_demos.render_marked_text(
+        "Lara waited.\n\n[pause:2.0]\n\nNobody came.",
+        backend, DEMO_VOICE, rules=[PronunciationRule("Lara", "LAR-uh")],
+    )
+    # Two 1s speech clips + the 2s pause = 4s of audio.
+    assert _duration(out) == pytest.approx(4.0, abs=0.01)
+    # The dictionary rule reached the payload, fused.
+    assert any("laruh" in t for t in backend.texts)
+
+
+def test_render_marked_text_drops_leading_silence():
+    backend = DemoBackend()
+    out = marker_demos.render_marked_text(
+        "[pause:5.0]\n\nOnly this is spoken.", backend, DEMO_VOICE, rules=[])
+    assert _duration(out) == pytest.approx(1.0, abs=0.01)
+
+
+def test_render_marked_text_refuses_marker_only_selections():
+    with pytest.raises(ValueError, match="Nothing to preview"):
+        marker_demos.render_marked_text(
+            "[pause:1.0]\n\n[exclude]all hidden[/exclude]",
+            DemoBackend(), DEMO_VOICE, rules=[])
+
+
 def test_demos_are_cached_per_engine_version():
     backend = DemoBackend()
     first = build_demo("pause", backend)

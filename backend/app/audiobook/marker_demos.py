@@ -89,6 +89,47 @@ DEMO_SCRIPTS: dict[str, str] = {
 _demo_cache: dict[tuple[str, str, str], bytes] = {}
 
 
+def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
+                       rules: list) -> bytes:
+    """
+    The marker-aware renderer: any narration text -> one WAV, with real
+    stitched silence for pauses/breaks, excluded spans skipped, and the
+    full payload prep ([say] -> rules -> punctuation) applied per piece.
+    Powers both the Hear-it demos and the select-text preview -- a small
+    live rehearsal of exactly what full assembly will do at scale.
+
+    Raises ValueError when the text contains nothing narratable.
+    """
+    parsed = parse_narration(f"# Preview\n\n{text}")
+
+    pieces: list[bytes | int] = []
+    for chapter in parsed.chapters:
+        for element in chapter.elements:
+            etype = element["type"]
+            if etype == "text":
+                payload = prepare_tts_text(element["content"], rules)
+                audio, _duration = backend.synthesize(payload, voice_id)
+                pieces.append(audio)
+            elif etype == "pause":
+                pieces.append(int(element["duration_ms"]))
+            elif etype == "scene_break":
+                pieces.append(SCENE_BREAK_MS)
+            elif etype == "chapter_break":
+                pieces.append(CHAPTER_BREAK_MS)
+            # excluded elements: skipped, exactly like real generation.
+
+    if not any(isinstance(p, bytes) for p in pieces):
+        raise ValueError(
+            "Nothing to preview -- the selection contains only markers or "
+            "excluded text."
+        )
+    # Leading silence (selection starts on a marker) has nothing to attach
+    # to; drop gaps until the first spoken piece.
+    while pieces and isinstance(pieces[0], int):
+        pieces.pop(0)
+    return concat_wav(pieces)
+
+
 def build_demo(kind: str, backend: SynthesisBackend) -> bytes:
     """
     Render one marker demo to WAV bytes (cached per engine version).
@@ -99,24 +140,6 @@ def build_demo(kind: str, backend: SynthesisBackend) -> bytes:
     if cached is not None:
         return cached
 
-    script = DEMO_SCRIPTS[kind]
-    parsed = parse_narration(f"# Demo\n\n{script}")
-
-    pieces: list[bytes | int] = []
-    for element in parsed.chapters[0].elements:
-        etype = element["type"]
-        if etype == "text":
-            payload = prepare_tts_text(element["content"], rules=[])
-            audio, _duration = backend.synthesize(payload, DEMO_VOICE)
-            pieces.append(audio)
-        elif etype == "pause":
-            pieces.append(int(element["duration_ms"]))
-        elif etype == "scene_break":
-            pieces.append(SCENE_BREAK_MS)
-        elif etype == "chapter_break":
-            pieces.append(CHAPTER_BREAK_MS)
-        # excluded elements: skipped -- which is exactly the demo's point.
-
-    audio = concat_wav(pieces)
+    audio = render_marked_text(DEMO_SCRIPTS[kind], backend, DEMO_VOICE, rules=[])
     _demo_cache[cache_key] = audio
     return audio

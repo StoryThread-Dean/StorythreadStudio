@@ -16,19 +16,23 @@ import { Loader2, Mic2, Pause, Play, Square } from "lucide-react";
 
 import {
   cancelGeneration, fetchGenerationStatus, fetchVoices, pauseGeneration,
-  previewVoice, resumeGeneration, startGeneration,
+  previewSelection, previewVoice, resumeGeneration, startGeneration,
 } from "./api";
 import type { GenerationRun, NarratorVoice } from "./types";
 
 interface GenerationPanelProps {
   workspacePath: string;
+  /** Current editor selection (raw narration text incl. markers), "" when
+      nothing is selected. Provided by WorkspaceView so the Preview
+      Selection button can rehearse exactly what the writer highlighted. */
+  getSelectionText?: () => string;
 }
 
 const PREVIEW_SAMPLE =
   "The road disappeared beneath the gathering snow, and somewhere behind " +
   "her, a second set of footsteps stopped.";
 
-export function GenerationPanel({ workspacePath }: GenerationPanelProps) {
+export function GenerationPanel({ workspacePath, getSelectionText }: GenerationPanelProps) {
   const [voices, setVoices] = useState<NarratorVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
   const [engineState, setEngineState] = useState<"starting" | "ready" | "unavailable">("starting");
@@ -108,6 +112,29 @@ export function GenerationPanel({ workspacePath }: GenerationPanelProps) {
       setPreviewing(false);
     }
   }, [voiceId, previewing, previewUrl, workspacePath]);
+
+  // The pacing/pronunciation rehearsal: render EXACTLY what the writer
+  // highlighted -- markers become real silence, rules and [say] apply,
+  // excluded spans skip. Local and free.
+  const handlePreviewSelection = useCallback(async () => {
+    if (!voiceId || previewing) return;
+    const selected = getSelectionText?.() ?? "";
+    if (!selected.trim()) {
+      setError("Select a passage in the editor first.");
+      return;
+    }
+    setPreviewing(true);
+    setError(null);
+    try {
+      const blob = await previewSelection(workspacePath, selected, voiceId);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Selection preview failed.");
+    } finally {
+      setPreviewing(false);
+    }
+  }, [voiceId, previewing, previewUrl, workspacePath, getSelectionText]);
 
   const [offerForce, setOfferForce] = useState(false);
 
@@ -189,14 +216,26 @@ export function GenerationPanel({ workspacePath }: GenerationPanelProps) {
           </div>
 
           <div>
-            <button
-              onClick={() => void handlePreview()}
-              disabled={previewing || !voiceId}
-              className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
-            >
-              {previewing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-              Preview voice
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => void handlePreview()}
+                disabled={previewing || !voiceId}
+                className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+              >
+                {previewing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                Preview voice
+              </button>
+              <button
+                onClick={() => void handlePreviewSelection()}
+                disabled={previewing || !voiceId}
+                title="Highlight a passage in the editor, then hear exactly how it will sound -- pauses, pronunciations, and all. Local and free."
+                className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+              >
+                {previewing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                Preview selection
+              </button>
+            </div>
+            <p className="mt-1 text-[9px] text-zinc-600">local &middot; free &middot; up to 3,000 characters</p>
             {previewUrl && (
               <audio controls autoPlay src={previewUrl} className="mt-2 w-full" />
             )}

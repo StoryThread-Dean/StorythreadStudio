@@ -208,6 +208,53 @@ def preview_voice(request: PreviewRequest):
     return Response(content=audio, media_type="audio/wav")
 
 
+class PreviewSelectionRequest(BaseModel):
+    workspace_path: str
+    text: str
+    voice_id: str
+    provider: str = "local-kokoro"
+
+
+# Enough for a long scene beat (~3 minutes of audio) while keeping the
+# wait tolerable on CPU; the writer previews passages, not chapters.
+PREVIEW_SELECTION_MAX_CHARS = 3000
+
+
+@router.post("/preview-selection")
+def preview_selection(request: PreviewSelectionRequest):
+    """Select text in the narration editor, hear EXACTLY how it will
+    sound: markers become real silence, pronunciation rules and [say]
+    overrides apply, excluded spans are skipped. Local and free -- this
+    is the pacing/pronunciation rehearsal tool (spec 18.1)."""
+    _require_workspace(request.workspace_path)
+    text = request.text.strip()
+    if not text:
+        raise HTTPException(status_code=400,
+                            detail="Select a passage in the editor first.")
+    if len(text) > PREVIEW_SELECTION_MAX_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"That selection is {len(text):,} characters "
+                   f"(max {PREVIEW_SELECTION_MAX_CHARS:,} for a preview). "
+                   "Select a shorter passage -- full chapters are what "
+                   "Generate is for.",
+        )
+    try:
+        backend = synthesis.resolve_backend(request.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    from app.audiobook import marker_demos
+    rules = pronunciation.effective_rules(request.workspace_path)
+    try:
+        audio = marker_demos.render_marked_text(text, backend, request.voice_id, rules)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(content=audio, media_type="audio/wav")
+
+
 class MarkerDemoRequest(BaseModel):
     kind: str    # pause | scene-break | chapter-break | say | exclude
 
