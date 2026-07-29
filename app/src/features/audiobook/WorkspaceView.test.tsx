@@ -86,15 +86,28 @@ describe("WorkspaceView", () => {
     expect(screen.getByText("2. Chapter 2")).toBeTruthy();
   });
 
-  it("marker buttons insert the marker text at the caret", async () => {
+  it("pauses insert INLINE without shredding the paragraph", async () => {
     const textarea = await renderLoaded();
+    // Caret mid-paragraph, right after a sentence's period.
     const caret = NARRATION.indexOf("First prose.") + "First prose.".length;
     textarea.setSelectionRange(caret, caret);
 
     fireEvent.click(screen.getByText("Pause 0.8s"));
-    expect(textarea.value).toContain("First prose.\n\n[pause:0.8]\n\n");
+    // A space is added where one is missing; NO blank lines are injected
+    // (the paragraph-shredding was a live-testing complaint).
+    expect(textarea.value).toContain("First prose. [pause:0.8]");
+    expect(textarea.value).not.toContain("First prose.\n\n[pause:0.8]");
     // Inserting marks the buffer dirty -- Save lights up.
     expect(screen.getByTitle("Unsaved changes")).toBeTruthy();
+  });
+
+  it("scene breaks still get their own line (structure, not punctuation)", async () => {
+    const textarea = await renderLoaded();
+    const caret = NARRATION.indexOf("First prose.") + "First prose.".length;
+    textarea.setSelectionRange(caret, caret);
+
+    fireEvent.click(screen.getByText("Scene Break"));
+    expect(textarea.value).toContain("First prose.\n\n[scene-break]\n\n");
   });
 
   it("inserting a marker preserves the scroll position (no jump to bottom)", async () => {

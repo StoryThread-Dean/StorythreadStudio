@@ -29,14 +29,18 @@ interface WorkspaceViewProps {
   onBack: () => void;
 }
 
-// The quick-action pause set (spec 10.1 defaults; configurability arrives
-// with Settings in a later slice).
-const PAUSE_ACTIONS: { label: string; snippet: string; title: string }[] = [
-  { label: "Pause 0.4s", snippet: "[pause:0.4]", title: "Short pause" },
-  { label: "Pause 0.8s", snippet: "[pause:0.8]", title: "Medium pause" },
-  { label: "Pause 1.5s", snippet: "[pause:1.5]", title: "Long pause" },
-  { label: "Scene Break", snippet: "[scene-break]", title: "Scene-break silence (2.0s default)" },
-  { label: "Chapter Break", snippet: "[chapter-break]", title: "Timed silence only (3.0s default) -- chapters themselves come from # headings" },
+// The quick-action marker set (spec 10.1 defaults; configurability
+// arrives with Settings in a later slice). Placement matters: a pause is
+// PUNCTUATION and inserts inline right where the cursor sits -- wrapping
+// it in blank lines would visually shred the writer's paragraph (an
+// early-testing complaint; the parser reads markers inline just fine).
+// Scene and chapter breaks are STRUCTURE and get their own line.
+const PAUSE_ACTIONS: { label: string; snippet: string; title: string; inline: boolean }[] = [
+  { label: "Pause 0.4s", snippet: "[pause:0.4]", title: "Short pause -- inserts right where your cursor is", inline: true },
+  { label: "Pause 0.8s", snippet: "[pause:0.8]", title: "Medium pause -- inserts right where your cursor is", inline: true },
+  { label: "Pause 1.5s", snippet: "[pause:1.5]", title: "Long pause -- inserts right where your cursor is", inline: true },
+  { label: "Scene Break", snippet: "[scene-break]", title: "Scene-break silence (2.0s default) -- gets its own line", inline: false },
+  { label: "Chapter Break", snippet: "[chapter-break]", title: "Timed silence only (3.0s default) -- chapters themselves come from # headings", inline: false },
 ];
 
 export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
@@ -87,15 +91,28 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   }, [content]);
 
   /** Type `snippet` at the caret (replacing any selection), keep focus,
-      keep the writer's scroll position exactly where it was. */
-  const insertAtCursor = useCallback((snippet: string) => {
+      keep the writer's scroll position exactly where it was.
+
+      inline=true adds a space on either side only where one is missing,
+      so "posture.[pause:0.4]Her" never happens -- but no blank lines are
+      ever injected and the paragraph stays one paragraph. */
+  const insertAtCursor = useCallback((snippet: string, inline = false) => {
     const ta = textareaRef.current;
     if (!ta) return;
     const start = ta.selectionStart ?? content.length;
     const end = ta.selectionEnd ?? start;
-    setContent(content.slice(0, start) + snippet + content.slice(end));
+    let insert = snippet;
+    if (inline) {
+      const before = content.slice(0, start);
+      const after = content.slice(end);
+      if (before && !/\s$/.test(before)) insert = " " + insert;
+      if (after && !/^\s/.test(after)) insert = insert + " ";
+    } else {
+      insert = `\n\n${snippet}\n\n`;
+    }
+    setContent(content.slice(0, start) + insert + content.slice(end));
     setDirty(true);
-    pendingRestoreRef.current = { caret: start + snippet.length, scrollTop: ta.scrollTop };
+    pendingRestoreRef.current = { caret: start + insert.length, scrollTop: ta.scrollTop };
   }, [content]);
 
   /** Wrap the current selection in before/after (Exclude, Say). */
@@ -231,7 +248,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         {PAUSE_ACTIONS.map(action => (
           <button
             key={action.snippet}
-            onClick={() => insertAtCursor(`\n\n${action.snippet}\n\n`)}
+            onClick={() => insertAtCursor(action.snippet, action.inline)}
             title={action.title}
             className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
           >

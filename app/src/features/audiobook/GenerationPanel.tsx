@@ -12,7 +12,7 @@
 // them on the next poll, not instantly.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Mic2, Pause, Play, Square } from "lucide-react";
+import { Ban, Loader2, Mic2, Pause, Play, Square } from "lucide-react";
 
 import {
   cancelGeneration, fetchGenerationStatus, fetchVoices, pauseGeneration,
@@ -38,7 +38,10 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
   const [engineState, setEngineState] = useState<"starting" | "ready" | "unavailable">("starting");
   const [engineError, setEngineError] = useState<string | null>(null);
 
-  const [previewing, setPreviewing] = useState(false);
+  // Which preview is rendering right now. One at a time; the button that
+  // was clicked spins, the OTHER shows a ban icon -- two spinners made it
+  // look like both were running (live-testing feedback).
+  const [previewing, setPreviewing] = useState<null | "voice" | "selection">(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const [run, setRun] = useState<GenerationRun | null>(null);
@@ -100,7 +103,7 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
   // ── Actions ──────────────────────────────────────────────────────────────
   const handlePreview = useCallback(async () => {
     if (!voiceId || previewing) return;
-    setPreviewing(true);
+    setPreviewing("voice");
     setError(null);
     try {
       const blob = await previewVoice(PREVIEW_SAMPLE, voiceId, workspacePath);
@@ -109,7 +112,7 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview failed.");
     } finally {
-      setPreviewing(false);
+      setPreviewing(null);
     }
   }, [voiceId, previewing, previewUrl, workspacePath]);
 
@@ -123,7 +126,7 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
       setError("Select a passage in the editor first.");
       return;
     }
-    setPreviewing(true);
+    setPreviewing("selection");
     setError(null);
     try {
       const blob = await previewSelection(workspacePath, selected, voiceId);
@@ -132,9 +135,17 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
     } catch (e) {
       setError(e instanceof Error ? e.message : "Selection preview failed.");
     } finally {
-      setPreviewing(false);
+      setPreviewing(null);
     }
   }, [voiceId, previewing, previewUrl, workspacePath, getSelectionText]);
+
+  /** Icon logic shared by both preview buttons: the clicked one spins,
+      the other shows a ban while it waits its turn. */
+  const previewIcon = (own: "voice" | "selection") => {
+    if (previewing === own) return <Loader2 size={12} className="animate-spin" />;
+    if (previewing !== null) return <Ban size={12} className="text-zinc-600" />;
+    return <Play size={12} />;
+  };
 
   const [offerForce, setOfferForce] = useState(false);
 
@@ -219,19 +230,20 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => void handlePreview()}
-                disabled={previewing || !voiceId}
+                disabled={previewing !== null || !voiceId}
+                title={previewing === "selection" ? "Waiting for the selection preview to finish" : "Play a short sample sentence in this voice"}
                 className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
               >
-                {previewing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                {previewIcon("voice")}
                 Preview voice
               </button>
               <button
                 onClick={() => void handlePreviewSelection()}
-                disabled={previewing || !voiceId}
-                title="Highlight a passage in the editor, then hear exactly how it will sound -- pauses, pronunciations, and all. Local and free."
+                disabled={previewing !== null || !voiceId}
+                title={previewing === "voice" ? "Waiting for the voice preview to finish" : "Highlight a passage in the editor, then hear exactly how it will sound -- pauses, pronunciations, and all. Local and free."}
                 className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
               >
-                {previewing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                {previewIcon("selection")}
                 Preview selection
               </button>
             </div>
