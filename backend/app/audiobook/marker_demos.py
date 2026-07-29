@@ -38,10 +38,14 @@ DEMO_SCRIPTS: dict[str, str] = {
         "\n\n[chapter-break]\n\n"
         "After three seconds of quiet, the story carries on."
     ),
+    # The demo word must be one the engine genuinely mispronounces, or the
+    # before/after sounds identical (live finding: Kaelith came out right
+    # both times). Saoirse is reliably butchered by phonemizers and has a
+    # well-known correct form -- the contrast is unmistakable.
     "say": (
-        "Without help, the narrator reads the name Kaelith as written: Kaelith."
+        "Without help, the narrator reads the name Saoirse as written: Saoirse."
         "\n\n[pause:0.8]\n\n"
-        "Wrapped in a say marker, the same name becomes: [say:KAY-lith]Kaelith[/say]."
+        "Wrapped in a say marker, the same name becomes: [say:SER-sha]Saoirse[/say]."
     ),
     "exclude": (
         "This sentence is narrated normally."

@@ -87,11 +87,14 @@ def test_exclude_demo_never_speaks_the_excluded_text():
     assert "narrated normally" in spoken
 
 
-def test_say_demo_flattens_the_spoken_form():
+def test_say_demo_contrasts_a_genuinely_hard_word():
     backend = DemoBackend()
     build_demo("say", backend)
     spoken = " ".join(backend.texts)
-    assert "kay lith" in spoken                    # speakable() applied
+    # The raw form is narrated once (the "before")...
+    assert "Saoirse." in spoken
+    # ...and the say-marked occurrence arrives flattened (the "after").
+    assert "ser sha" in spoken                     # speakable() applied
     assert "[say:" not in spoken                   # markup never narrated
 
 
