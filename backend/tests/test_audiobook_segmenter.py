@@ -77,6 +77,27 @@ def test_markers_are_hard_cut_points_and_excludes_vanish():
     assert pause["duration_ms"] == 800
 
 
+def test_dialogue_paragraphs_segment_separately():
+    text = ('# C1\n\nShe walked to the gate without hurrying.\n\n'
+            '"You came back," he said. "After everything."\n\n'
+            '"I always come back."\n\n'
+            'The wind took whatever he said next.')
+    segments = _segments(_first_manifest(text))
+    assert [(s["text"].startswith('"'), s.get("dialogue", False)) for s in segments] == [
+        (False, False),      # narration
+        (True, True),        # both dialogue paragraphs group together
+        (False, False),      # narration resumes
+    ]
+
+
+def test_quote_dominant_paragraph_counts_as_dialogue():
+    from app.audiobook.segmenter import is_dialogue_paragraph
+    assert is_dialogue_paragraph('"Run," she said.')
+    assert is_dialogue_paragraph("“Curly quotes too,” he agreed, nodding along without another word.")
+    assert not is_dialogue_paragraph('He remembered her saying "run" once.')
+    assert not is_dialogue_paragraph("No quotes at all in this paragraph.")
+
+
 def test_pace_changes_are_segment_boundaries():
     text = ("# C1\n\nNormal prose here.\n\n"
             "[pace:0.8]Slow passage.[/pace]\n\nNormal after.")

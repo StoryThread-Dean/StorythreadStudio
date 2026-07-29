@@ -58,6 +58,12 @@ function mockFetch() {
     if (url.includes("/generation/status")) {
       return { ok: true, json: async () => ({ run: null, active: false }) };
     }
+    if (url.includes("/narration-settings")) {
+      return { ok: true, json: async () => ({
+        narrator_pace: 1.0, dialogue_pace: 1.0,
+        scene_break_ms: 2000, chapter_break_ms: 3000,
+      }) };
+    }
     throw new Error(`unexpected fetch ${url}`);
   });
 }

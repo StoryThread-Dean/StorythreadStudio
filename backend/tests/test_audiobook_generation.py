@@ -283,6 +283,75 @@ def test_pace_flows_to_the_engine_and_pace_edits_requeue(tmp_path):
     assert speeds[-1] == 1.0
 
 
+def test_narration_settings_drive_dialogue_and_narrator_pace(tmp_path):
+    src = tmp_path / "b.md"
+    src.write_text(
+        '# Chapter 1\n\nShe walked to the gate slowly.\n\n'
+        '"You came back," he said quietly.\n',
+        encoding="utf-8",
+    )
+    ws = tmp_path / "ws"
+    client.post("/api/audiobook/import", json={
+        "source_path": str(src), "workspace_path": str(ws), "title": "T"})
+
+    put = client.put("/api/audiobook/narration-settings", json={
+        "workspace_path": str(ws),
+        "narrator_pace": 0.95, "dialogue_pace": 0.85,
+        "scene_break_ms": 2500, "chapter_break_ms": 4000,
+    })
+    assert put.status_code == 200
+
+    speeds: list[float] = []
+
+    class SpeedSpy(FakeBackend):
+        def synthesize(self, text, voice_id, speed=1.0):
+            speeds.append(speed)
+            return super().synthesize(text, voice_id)
+
+    generation.start_run(str(ws), SpeedSpy(), voice_id="v")
+    generation.wait_for_idle()
+    # Narration paragraph at narrator pace, dialogue paragraph at dialogue pace.
+    assert speeds == [0.95, 0.85]
+
+    # Changing ONLY the dialogue pace re-queues only the dialogue segment.
+    client.put("/api/audiobook/narration-settings", json={
+        "workspace_path": str(ws),
+        "narrator_pace": 0.95, "dialogue_pace": 0.9,
+        "scene_break_ms": 2500, "chapter_break_ms": 4000,
+    })
+    run = generation.start_run(str(ws), SpeedSpy(), voice_id="v")
+    assert run["total_segments"] == 1
+    generation.wait_for_idle()
+    assert speeds[-1] == 0.9
+
+
+def test_marker_pace_multiplies_the_base(tmp_path):
+    src = tmp_path / "b.md"
+    src.write_text(
+        "# Chapter 1\n\n[pace:0.8]A slow passage on top of a slow book.[/pace]\n",
+        encoding="utf-8",
+    )
+    ws = tmp_path / "ws"
+    client.post("/api/audiobook/import", json={
+        "source_path": str(src), "workspace_path": str(ws), "title": "T"})
+    client.put("/api/audiobook/narration-settings", json={
+        "workspace_path": str(ws),
+        "narrator_pace": 0.9, "dialogue_pace": 1.0,
+        "scene_break_ms": 2000, "chapter_break_ms": 3000,
+    })
+
+    speeds: list[float] = []
+
+    class SpeedSpy(FakeBackend):
+        def synthesize(self, text, voice_id, speed=1.0):
+            speeds.append(speed)
+            return super().synthesize(text, voice_id)
+
+    generation.start_run(str(ws), SpeedSpy(), voice_id="v")
+    generation.wait_for_idle()
+    assert speeds == [pytest.approx(0.72)]      # 0.9 base * 0.8 marker
+
+
 # ── Control: pause, cancel, single-run, lock ─────────────────────────────────
 
 def test_pause_finishes_current_segment_then_stops(tmp_path):

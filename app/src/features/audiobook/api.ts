@@ -172,6 +172,32 @@ export async function previewSelection(
   return { blob: await res.blob(), warnings };
 }
 
+export interface NarrationSettings {
+  narrator_pace: number;
+  dialogue_pace: number;
+  scene_break_ms: number;
+  chapter_break_ms: number;
+}
+
+export async function fetchNarrationSettings(workspacePath: string): Promise<NarrationSettings> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/narration-settings?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<NarrationSettings>(res);
+}
+
+export async function saveNarrationSettings(
+  workspacePath: string,
+  settings: NarrationSettings,
+): Promise<NarrationSettings> {
+  const res = await fetch(`${API_BASE}/api/audiobook/narration-settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, ...settings }),
+  });
+  return toJson<NarrationSettings>(res);
+}
+
 export async function fetchMarkerDemo(kind: string): Promise<Blob> {
   const res = await fetch(`${API_BASE}/api/audiobook/marker-demo`, {
     method: "POST",

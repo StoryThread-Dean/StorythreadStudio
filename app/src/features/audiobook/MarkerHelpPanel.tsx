@@ -39,9 +39,10 @@ const HELP_ITEMS: { kind: string; label: string; body: string }[] = [
     body: "Wrap a passage to change its narration speed: Slow (0.8x) lets "
         + "a heavy moment breathe; Fast (1.2x) carries an action beat. "
         + "Normal is simply unmarked text. The number is adjustable by "
-        + "hand, like [pace:0.7], between 0.5 and 2.0. When previewing, "
-        + "select the WHOLE span including its [pace] tags -- a selection "
-        + "that cuts into a span plays at normal pace (and says so).",
+        + "hand, like [pace:0.7], between 0.5 and 2.0, and multiplies the "
+        + "book's Narration Settings base pace. When previewing, select "
+        + "the WHOLE span including its [pace] tags -- a selection that "
+        + "cuts into a span plays at normal pace (and says so).",
   },
   {
     kind: "say",

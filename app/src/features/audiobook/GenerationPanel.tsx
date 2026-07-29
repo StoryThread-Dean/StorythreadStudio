@@ -12,12 +12,14 @@
 // them on the next poll, not instantly.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ban, Loader2, Mic2, Pause, Play, Square } from "lucide-react";
+import { Ban, ChevronDown, ChevronRight, Loader2, Mic2, Pause, Play, Square } from "lucide-react";
 
 import {
-  cancelGeneration, fetchGenerationStatus, fetchVoices, pauseGeneration,
-  previewSelection, previewVoice, resumeGeneration, startGeneration,
+  cancelGeneration, fetchGenerationStatus, fetchNarrationSettings, fetchVoices,
+  pauseGeneration, previewSelection, previewVoice, resumeGeneration,
+  saveNarrationSettings, startGeneration,
 } from "./api";
+import type { NarrationSettings } from "./api";
 import type { GenerationRun, NarratorVoice } from "./types";
 
 interface GenerationPanelProps {
@@ -44,6 +46,14 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
   const [previewing, setPreviewing] = useState<null | "voice" | "selection">(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
+
+  // Book-level narration settings: base narrator/dialogue speeds and
+  // break silences. These tame the engine's own pacing instincts
+  // globally; [pace] markers multiply on top for specific moments.
+  const [settings, setSettings] = useState<NarrationSettings | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
   const [run, setRun] = useState<GenerationRun | null>(null);
   const [active, setActive] = useState(false);
@@ -85,6 +95,29 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
   useEffect(() => {
     void pollOnce();     // pick up an existing/interrupted run on mount
   }, [pollOnce]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setSettings(await fetchNarrationSettings(workspacePath));
+      } catch { /* backend banner covers unreachable; defaults render */ }
+    })();
+  }, [workspacePath]);
+
+  const handleSaveSettings = useCallback(async () => {
+    if (!settings || savingSettings) return;
+    setSavingSettings(true);
+    setError(null);
+    try {
+      setSettings(await saveNarrationSettings(workspacePath, settings));
+      setSettingsSaved(true);
+      window.setTimeout(() => setSettingsSaved(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save narration settings.");
+    } finally {
+      setSavingSettings(false);
+    }
+  }, [settings, savingSettings, workspacePath]);
 
   useEffect(() => {
     if (!active) {
@@ -260,6 +293,61 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
               </p>
             ))}
           </div>
+
+          {/* Book-level narration settings */}
+          {settings && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/40">
+              <button
+                onClick={() => setShowSettings(v => !v)}
+                className="flex w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-zinc-300 hover:text-blue-300"
+              >
+                {showSettings ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                Narration Settings
+                {settingsSaved && <span className="ml-auto text-[10px] font-normal text-emerald-400">saved</span>}
+              </button>
+              {showSettings && (
+                <div className="space-y-2 px-3 pb-3">
+                  {([
+                    ["narrator_pace", "Narrator pace", 0.5, 2.0, 0.05,
+                     "Base speed for all narration. 1.0 = the voice's natural pace."],
+                    ["dialogue_pace", "Dialogue pace", 0.5, 2.0, 0.05,
+                     "Speed for dialogue paragraphs -- where the engine's own pacing goes wildest. Try 0.9 if dialogue races."],
+                    ["scene_break_ms", "Scene break (ms)", 0, 15000, 250,
+                     "Silence at every [scene-break]."],
+                    ["chapter_break_ms", "Chapter break (ms)", 0, 15000, 250,
+                     "Silence at every [chapter-break]."],
+                  ] as [keyof NarrationSettings, string, number, number, number, string][]).map(
+                    ([key, label, min, max, step, hint]) => (
+                    <label key={key} className="block" title={hint}>
+                      <span className="mb-0.5 block text-[10px] text-zinc-500">{label}</span>
+                      <input
+                        type="number"
+                        min={min} max={max} step={step}
+                        value={settings[key]}
+                        onChange={e => setSettings({
+                          ...settings, [key]: Number(e.target.value),
+                        })}
+                        className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                  ))}
+                  <button
+                    onClick={() => void handleSaveSettings()}
+                    disabled={savingSettings}
+                    className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                  >
+                    {savingSettings && <Loader2 size={11} className="animate-spin" />}
+                    Save Settings
+                  </button>
+                  <p className="text-[9px] leading-relaxed text-zinc-600">
+                    Pace changes mark affected audio as outdated -- the next
+                    Generate re-does exactly those segments. [pace] markers
+                    multiply on top of these base speeds.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Start / resume -- the emerald path */}
           {!active && (

@@ -140,6 +140,17 @@ def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
     return "sha256-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
+def effective_pace(segment: dict, settings: dict) -> float:
+    """
+    The speed a segment actually synthesizes at: the book-level base
+    (dialogue segments use Dialogue Pace, everything else Narrator Pace)
+    MULTIPLIED by any [pace:...] marker -- so "Slow" always means slow
+    relative to the book's chosen baseline. Clamped to the engine range.
+    """
+    base = settings["dialogue_pace"] if segment.get("dialogue") else settings["narrator_pace"]
+    return max(0.5, min(2.0, round(base * segment.get("pace", 1.0), 3)))
+
+
 def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
               force: bool = False) -> dict:
     """
@@ -170,6 +181,7 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             if c.get("selected_for_generation", True)
         }
         rules = pronunciation.effective_rules(workspace_path)
+        settings = workspace.narration_settings(workspace.load_manifest(workspace_path))
 
         queue_ids: list[str] = []
         for chapter in manifest["chapters"]:
@@ -181,10 +193,11 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
                 if force or item.get("status") in ("pending", "failed"):
                     queue_ids.append(item["segment_id"])
                     continue
-                # Completed audio: stale when its payload basis moved.
+                # Completed audio: stale when its payload basis moved --
+                # including via the book-level pace settings.
                 basis = payload_basis(
                     pronunciation.prepare_tts_text(item["text"], rules),
-                    backend, voice_id, item.get("pace", 1.0),
+                    backend, voice_id, effective_pace(item, settings),
                 )
                 if item.get("payload_hash") != basis:
                     queue_ids.append(item["segment_id"])
@@ -235,6 +248,7 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
     _set_sleep_inhibit(True)
     try:
         rules = pronunciation.effective_rules(workspace_path)
+        settings = workspace.narration_settings(workspace.load_manifest(workspace_path))
         for segment_id in queue_ids:
             # Control flags are honored BETWEEN segments only -- a segment
             # in flight always finishes (or fails) before the run stops.
@@ -249,7 +263,7 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             if segment is None:
                 continue                    # re-segmented away mid-run
 
-            _generate_one(workspace_path, backend, voice_id, rules, segment)
+            _generate_one(workspace_path, backend, voice_id, rules, settings, segment)
 
             if segment["status"] == "completed":
                 run["completed_segments"] += 1
@@ -293,11 +307,11 @@ def _find_segment(manifest: dict | None, segment_id: str) -> dict | None:
 
 
 def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
-                  rules: list, segment: dict) -> None:
+                  rules: list, settings: dict, segment: dict) -> None:
     """One segment through the payload-prep + synthesize + validate path.
     Mutates the segment record in place; the caller persists it."""
     payload = pronunciation.prepare_tts_text(segment["text"], rules)
-    pace = segment.get("pace", 1.0)
+    pace = effective_pace(segment, settings)
 
     audio: bytes | None = None
     duration = 0.0

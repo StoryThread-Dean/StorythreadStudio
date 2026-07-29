@@ -14,13 +14,9 @@ from app.audiobook.markers import parse_narration
 from app.audiobook.pronunciation import prepare_tts_text
 from app.audiobook.synthesis import SynthesisBackend
 from app.audiobook.wav_assembly import concat_wav
+from app.audiobook.workspace import NARRATION_DEFAULTS
 
 DEMO_VOICE = "af_heart"
-
-# Spec 10.1 defaults for the break silences (configurable later; the
-# demos read the same constants generation will).
-SCENE_BREAK_MS = 2000
-CHAPTER_BREAK_MS = 3000
 
 DEMO_SCRIPTS: dict[str, str] = {
     "pause": (
@@ -105,13 +101,17 @@ _demo_cache: dict[tuple[str, str, str], bytes] = {}
 
 
 def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
-                       rules: list) -> tuple[bytes, list[str]]:
+                       rules: list, settings: dict | None = None) -> tuple[bytes, list[str]]:
     """
     The marker-aware renderer: any narration text -> one WAV, with real
     stitched silence for pauses/breaks, excluded spans skipped, and the
     full payload prep ([say] -> rules -> punctuation) applied per piece.
-    Powers both the Hear-it demos and the select-text preview -- a small
-    live rehearsal of exactly what full assembly will do at scale.
+    Powers both the Hear-it demos and the select-text preview.
+
+    The text runs through the SAME segment grouping generation uses
+    (dialogue detection, pace boundaries, book-level narration settings),
+    so a preview is an exact rehearsal of the real thing -- same speeds,
+    same cut points, same silences.
 
     Returns (wav_bytes, parse_warnings). The warnings matter for previews:
     a selection that cuts into a pace span would otherwise play at normal
@@ -119,24 +119,27 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
 
     Raises ValueError when the text contains nothing narratable.
     """
+    from app.audiobook import segmenter
+    from app.audiobook.generation import effective_pace
+
+    settings = settings or dict(NARRATION_DEFAULTS)
     parsed = parse_narration(f"# Preview\n\n{text}")
 
     pieces: list[bytes | int] = []
     for chapter in parsed.chapters:
-        for element in chapter.elements:
-            etype = element["type"]
-            if etype == "text":
-                payload = prepare_tts_text(element["content"], rules)
+        for item in segmenter._segment_texts_from_elements(chapter.elements):
+            kind = item["kind"]
+            if kind == "segment_text":
+                payload = prepare_tts_text(item["text"], rules)
                 audio, _duration = backend.synthesize(
-                    payload, voice_id, element.get("pace", 1.0))
+                    payload, voice_id, effective_pace(item, settings))
                 pieces.append(audio)
-            elif etype == "pause":
-                pieces.append(int(element["duration_ms"]))
-            elif etype == "scene_break":
-                pieces.append(SCENE_BREAK_MS)
-            elif etype == "chapter_break":
-                pieces.append(CHAPTER_BREAK_MS)
-            # excluded elements: skipped, exactly like real generation.
+            elif kind == "pause":
+                pieces.append(int(item["duration_ms"]))
+            elif kind == "scene_break":
+                pieces.append(int(settings["scene_break_ms"]))
+            elif kind == "chapter_break":
+                pieces.append(int(settings["chapter_break_ms"]))
 
     if not any(isinstance(p, bytes) for p in pieces):
         raise ValueError(

@@ -29,10 +29,16 @@ function makeRun(overrides: Partial<GenerationRun> = {}): GenerationRun {
   };
 }
 
+const DEFAULT_SETTINGS = {
+  narrator_pace: 1.0, dialogue_pace: 1.0,
+  scene_break_ms: 2000, chapter_break_ms: 3000,
+};
+
 function mockFetch(statusBody: { run: GenerationRun | null; active: boolean }) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
     if (url.includes("/generation/status")) return { ok: true, json: async () => statusBody };
+    if (url.includes("/narration-settings")) return { ok: true, json: async () => DEFAULT_SETTINGS };
     if (url.includes("/generate")) return { ok: true, json: async () => makeRun() };
     throw new Error(`unexpected fetch ${url} ${init?.method ?? "GET"}`);
   });
@@ -64,6 +70,9 @@ describe("GenerationPanel", () => {
         return { ok: true, json: async () => (
           started ? { run: makeRun(), active: true } : { run: null, active: false }
         ) };
+      }
+      if (url.includes("/narration-settings")) {
+        return { ok: true, json: async () => DEFAULT_SETTINGS };
       }
       if (url.includes("/generate")) {
         started = true;
@@ -113,6 +122,9 @@ describe("GenerationPanel", () => {
       if (url.includes("/generation/status")) {
         return { ok: true, json: async () => ({ run: null, active: false }) };
       }
+      if (url.includes("/narration-settings")) {
+        return { ok: true, json: async () => DEFAULT_SETTINGS };
+      }
       if (url.includes("/generate")) {
         const body = JSON.parse(String(init?.body));
         calls.push(body);
@@ -146,6 +158,9 @@ describe("GenerationPanel", () => {
       }
       if (url.includes("/generation/status")) {
         return { ok: true, json: async () => ({ run: null, active: false }) };
+      }
+      if (url.includes("/narration-settings")) {
+        return { ok: true, json: async () => DEFAULT_SETTINGS };
       }
       throw new Error(`unexpected fetch ${url}`);
     }));

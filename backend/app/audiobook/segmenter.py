@@ -41,6 +41,33 @@ SEGMENT_MAX_CHARS = 1500
 
 _SENTENCE_END_RE = re.compile(r"(?<=[.!?])\s+")
 
+# Dialogue detection (paragraph-level, deliberately): a paragraph that
+# opens with a quote mark, or whose characters are mostly inside quotes,
+# is dialogue. Paragraph-level avoids mid-sentence synthesis seams
+# ('"Run," she said' stays one piece) and matches how fiction is
+# paragraphed. Dialogue paragraphs segment separately so the book-level
+# Dialogue Pace setting can apply to them alone -- the engine's own pace
+# inference goes wildest on dialogue (live finding: chipmunk speed-ups).
+_QUOTE_OPEN = {'"', "“"}
+
+
+def is_dialogue_paragraph(paragraph: str) -> bool:
+    stripped = paragraph.lstrip()
+    if stripped[:1] in _QUOTE_OPEN:
+        return True
+    quoted = 0
+    in_quote = False
+    for ch in paragraph:
+        if ch == '"':
+            in_quote = not in_quote
+        elif ch == "“":
+            in_quote = True
+        elif ch == "”":
+            in_quote = False
+        elif in_quote:
+            quoted += 1
+    return len(paragraph) > 0 and quoted / len(paragraph) > 0.5
+
 
 def _new_segment_id() -> str:
     """Short, stable, greppable -- same style as structure_store act IDs."""
@@ -89,6 +116,7 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
     pending_paragraphs: list[str] = []
     pending_len = 0
     pending_pace = 1.0
+    pending_dialogue = False
 
     def flush() -> None:
         nonlocal pending_paragraphs, pending_len
@@ -97,6 +125,8 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
                     "text": "\n\n".join(pending_paragraphs)}
             if pending_pace != 1.0:
                 item["pace"] = pending_pace
+            if pending_dialogue:
+                item["dialogue"] = True
             items.append(item)
             pending_paragraphs = []
             pending_len = 0
@@ -110,10 +140,16 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
                 flush()
                 pending_pace = pace
             # Paragraphs group until the cap; oversize paragraphs split.
+            # A dialogue/narration change is ALSO a boundary, so the
+            # book-level Dialogue Pace can act on dialogue segments alone.
             for paragraph in element["content"].split("\n\n"):
                 paragraph = paragraph.strip()
                 if not paragraph:
                     continue
+                dialogue = is_dialogue_paragraph(paragraph)
+                if dialogue != pending_dialogue:
+                    flush()
+                    pending_dialogue = dialogue
                 pieces = ([paragraph] if len(paragraph) <= SEGMENT_MAX_CHARS
                           else _split_oversize_paragraph(paragraph))
                 for piece in pieces:
@@ -204,6 +240,8 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
                 }
                 if raw.get("pace"):
                     segment["pace"] = raw["pace"]
+                if raw.get("dialogue"):
+                    segment["dialogue"] = True
                 items.append(segment)
                 new_segment_slots.append(segment)
             else:
@@ -227,10 +265,11 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
             # identity; the payload basis catches the pace change and
             # re-queues the audio (never a new segment ID).
             preserved = {**old, "chapter_id": slot["chapter_id"]}
-            if slot.get("pace"):
-                preserved["pace"] = slot["pace"]
-            else:
-                preserved.pop("pace", None)
+            for attr in ("pace", "dialogue"):
+                if slot.get(attr):
+                    preserved[attr] = slot[attr]
+                else:
+                    preserved.pop(attr, None)
             slot.clear()
             slot.update(preserved)
         else:

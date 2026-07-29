@@ -209,6 +209,38 @@ def preview_voice(request: PreviewRequest):
     return Response(content=audio, media_type="audio/wav")
 
 
+class NarrationSettingsRequest(BaseModel):
+    workspace_path: str
+    narrator_pace: float = Field(ge=0.5, le=2.0)
+    dialogue_pace: float = Field(ge=0.5, le=2.0)
+    scene_break_ms: int = Field(ge=0, le=15000)
+    chapter_break_ms: int = Field(ge=0, le=15000)
+
+
+@router.get("/narration-settings")
+def get_narration_settings(workspace_path: str):
+    _require_workspace(workspace_path)
+    manifest = workspace.load_manifest(workspace_path)
+    return workspace.narration_settings(manifest)
+
+
+@router.put("/narration-settings")
+def save_narration_settings(request: NarrationSettingsRequest):
+    """Book-level pacing: narrator/dialogue base speeds and break silence
+    lengths. Changing paces marks affected audio stale via the payload
+    basis -- the next Generate re-queues exactly what changed."""
+    _require_workspace(request.workspace_path)
+    manifest = workspace.load_manifest(request.workspace_path)
+    manifest["narration"] = {
+        "narrator_pace": request.narrator_pace,
+        "dialogue_pace": request.dialogue_pace,
+        "scene_break_ms": request.scene_break_ms,
+        "chapter_break_ms": request.chapter_break_ms,
+    }
+    workspace.save_manifest(request.workspace_path, manifest)
+    return workspace.narration_settings(manifest)
+
+
 class PreviewSelectionRequest(BaseModel):
     workspace_path: str
     text: str
@@ -247,9 +279,10 @@ def preview_selection(request: PreviewSelectionRequest):
 
     from app.audiobook import marker_demos
     rules = pronunciation.effective_rules(request.workspace_path)
+    settings = workspace.narration_settings(workspace.load_manifest(request.workspace_path))
     try:
         audio, warnings = marker_demos.render_marked_text(
-            text, backend, request.voice_id, rules)
+            text, backend, request.voice_id, rules, settings)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except synthesis.SynthesisError as e:
