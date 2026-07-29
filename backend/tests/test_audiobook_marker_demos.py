@@ -121,7 +121,7 @@ def test_say_demo_covers_both_use_cases():
     assert "[say:" not in spoken                   # markup never narrated
 
 
-def test_pace_demo_sends_three_speeds():
+def test_pace_demo_sends_three_speeds_and_speaks_each_value():
     speeds: list[float] = []
 
     class SpeedDemoBackend(DemoBackend):
@@ -129,8 +129,15 @@ def test_pace_demo_sends_three_speeds():
             speeds.append(speed)
             return super().synthesize(text, voice_id)
 
-    build_demo("pace", SpeedDemoBackend())
+    backend = SpeedDemoBackend()
+    build_demo("pace", backend)
     assert speeds == [1.0, 0.8, 1.2]
+    # Each pace value is NARRATED while the listener experiences it, and
+    # the spoken value matches the speed actually in effect for that piece.
+    by_text = dict(zip(backend.texts, speeds))
+    assert by_text[next(t for t in backend.texts if "one point zero" in t)] == 1.0
+    assert by_text[next(t for t in backend.texts if "zero point eight" in t)] == 0.8
+    assert by_text[next(t for t in backend.texts if "one point two" in t)] == 1.2
 
 
 def test_every_script_renders():

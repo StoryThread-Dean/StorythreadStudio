@@ -74,14 +74,20 @@ DEMO_SCRIPTS: dict[str, str] = {
         "Say is a powerful way to fine-tune your audiobook to just how you "
         "want it to sound."
     ),
+    # The narration SPEAKS each pace value while the listener experiences
+    # it (user-shaped: hearing "zero point eight" AT 0.8x ties the number
+    # to the sensation, so writers know exactly what to type). Numbers are
+    # written as words -- the engine can't misread "zero point eight".
     "pace": (
-        "This sentence moves at the narrator's natural pace."
+        "This sentence moves at the narrator's natural pace: one point zero."
         "\n\n[pause:0.5]\n\n"
-        "[pace:0.8]When a moment needs weight, slow the narration down, and "
-        "let the scene breathe around the listener.[/pace]"
+        "[pace:0.8]You are now hearing pace zero point eight. When a moment "
+        "needs weight, slow the narration down, and let the scene breathe "
+        "around the listener.[/pace]"
         "\n\n[pause:0.5]\n\n"
-        "[pace:1.2]And when the fight breaks out, the pace quickens, blow "
-        "after blow, carrying the listener through the action.[/pace]"
+        "[pace:1.2]And this is pace one point two. When the fight breaks "
+        "out, the pace quickens, blow after blow, carrying the listener "
+        "through the action.[/pace]"
     ),
     "exclude": (
         "This sentence is narrated normally."
