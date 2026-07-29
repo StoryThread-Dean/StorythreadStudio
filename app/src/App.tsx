@@ -21,6 +21,7 @@ import "./App.css";
 import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
 import { ProjectHome } from "./screens/ProjectHome";
+import { AudiobookConverter } from "./features/audiobook/AudiobookConverter";
 import { ReaderMode } from "./screens/ReaderMode";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { OutlinePlanner } from "./screens/OutlinePlanner";
@@ -117,6 +118,10 @@ function App() {
   const [currentView, setCurrentView]   = useState<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary" | "outline_planner"
   >("editor");
+  // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
+  // when no writing project is open. Not part of currentView because it
+  // never coexists with the editor layout.
+  const [showAudiobookConverter, setShowAudiobookConverter] = useState(false);
   const [profileType, setProfileType]   = useState<ProfileType>("character");
 
   // --- Manuscript tree state (Phase 6) ---
@@ -1984,11 +1989,27 @@ function App() {
   );
 
   if (!currentProject) {
+    // The Audiobook Converter is a standalone tool beside the writing app:
+    // its own dashboard, its own workspaces, its own jewel-tone look. It is
+    // only reachable from Project Home (no project open), never from
+    // inside a writing project.
+    if (showAudiobookConverter) {
+      return (
+        <>
+          {backendDownBanner}
+          {updateOverlays}
+          <AudiobookConverter onExit={() => setShowAudiobookConverter(false)} />
+        </>
+      );
+    }
     return (
       <>
         {backendDownBanner}
         {updateOverlays}
-        <ProjectHome onProjectOpen={handleProjectOpen} />
+        <ProjectHome
+          onProjectOpen={handleProjectOpen}
+          onOpenAudiobooks={() => setShowAudiobookConverter(true)}
+        />
       </>
     );
   }

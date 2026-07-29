@@ -17,6 +17,8 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **Audiobook Converter -- Stage A foundation** (first slice of the v1.1.0 feature; see `docs/audiobook-converter-spec.md`). A standalone tool reached from the Project Home: import a manuscript (DOCX, EPUB, Markdown, TXT, or an existing Storythread project -- chapters detected per format, PDF honestly deferred) into its own audiobook workspace, where the original file is copied and never touched. A jewel-tone dashboard (emerald actions, sapphire progress, ruby warnings on charcoal) lists recent audiobooks; the narration workspace offers a focused editor over the narration copy with a chapter rail, marker quick-actions ([pause], [scene-break], [chapter-break] as timed silence, [exclude], and one-spot [say:KAY-lith]Kaelith[/say] pronunciation overrides), plus a pronunciation dictionary for this-audiobook and all-audiobooks rules. Manual save only, exactly like the writing app. Voice selection, generation, and export arrive in later stages.
+
 ### Changed
 
 ### Fixed
