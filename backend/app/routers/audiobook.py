@@ -20,7 +20,16 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.audiobook import import_service, pronunciation, recents_store, segmenter, workspace
+from app.audiobook import (
+    generation,
+    import_service,
+    locking,
+    pronunciation,
+    recents_store,
+    segmenter,
+    synthesis,
+    workspace,
+)
 
 router = APIRouter(prefix="/api/audiobook", tags=["audiobook"])
 
@@ -144,6 +153,91 @@ def get_segments(workspace_path: str):
             detail="No segments manifest yet. Save the narration once to build it.",
         )
     return manifest
+
+
+# ── Generation ────────────────────────────────────────────────────────────────
+# The single-run engine. Start queues pending/failed segments in selected
+# chapters; pause/cancel act between segments; status is poll-friendly and
+# self-heals interrupted runs to paused (restart recovery).
+
+class StartGenerationRequest(BaseModel):
+    workspace_path: str
+    provider: str = "local-kokoro"
+    voice_id: str
+
+
+@router.post("/generate")
+def start_generation(request: StartGenerationRequest):
+    _require_workspace(request.workspace_path)
+    try:
+        backend = synthesis.resolve_backend(request.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        return generation.start_run(request.workspace_path, backend, request.voice_id)
+    except RuntimeError as e:            # a run is already active
+        raise HTTPException(status_code=409, detail=str(e))
+    except locking.WorkspaceLockedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:              # nothing to generate / no segments
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/generation/status")
+def generation_status(workspace_path: str):
+    _require_workspace(workspace_path)
+    run = generation.status_with_recovery(workspace_path)
+    if run is None:
+        return {"run": None, "active": False}
+    return {
+        "run": run,
+        "active": generation.active_workspace() == workspace_path,
+    }
+
+
+class GenerationControlRequest(BaseModel):
+    workspace_path: str
+
+
+@router.post("/generation/pause")
+def pause_generation(request: GenerationControlRequest):
+    if generation.active_workspace() != request.workspace_path:
+        raise HTTPException(status_code=409, detail="No active generation run for that workspace.")
+    generation.request_pause()
+    return {"ok": True}
+
+
+@router.post("/generation/cancel")
+def cancel_generation(request: GenerationControlRequest):
+    if generation.active_workspace() != request.workspace_path:
+        raise HTTPException(status_code=409, detail="No active generation run for that workspace.")
+    generation.request_cancel()
+    return {"ok": True}
+
+
+@router.post("/generation/resume")
+def resume_generation(request: GenerationControlRequest):
+    """Resume = a fresh run over whatever is still pending/failed, reusing
+    the paused run's provider and voice. The per-segment persistence means
+    nothing already completed is ever redone (or re-billed)."""
+    _require_workspace(request.workspace_path)
+    run = generation.load_run(request.workspace_path)
+    if run is None:
+        raise HTTPException(status_code=400, detail="There is no run to resume. Start generation instead.")
+    if run.get("status") not in ("paused", "cancelled", "partially_completed"):
+        raise HTTPException(status_code=409, detail=f"The last run is {run.get('status')}, not resumable.")
+    try:
+        backend = synthesis.resolve_backend(run.get("provider", ""))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        return generation.start_run(request.workspace_path, backend, run.get("voice_id", ""))
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except locking.WorkspaceLockedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ── Pronunciation rules ───────────────────────────────────────────────────────
