@@ -147,7 +147,7 @@ export async function previewSelection(
   workspacePath: string,
   text: string,
   voiceId: string,
-): Promise<Blob> {
+): Promise<{ blob: Blob; warnings: string[] }> {
   const res = await fetch(`${API_BASE}/api/audiobook/preview-selection`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -161,7 +161,15 @@ export async function previewSelection(
     try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
     throw new Error(detail);
   }
-  return res.blob();
+  // Marker parse warnings ride a header (the body is raw audio). They
+  // matter: a selection that cuts into a pace span plays at normal pace,
+  // and without the warning that reads as "pace doesn't work".
+  let warnings: string[] = [];
+  const raw = res.headers.get("X-Preview-Warnings");
+  if (raw) {
+    try { warnings = JSON.parse(decodeURIComponent(raw)); } catch { /* none */ }
+  }
+  return { blob: await res.blob(), warnings };
 }
 
 export async function fetchMarkerDemo(kind: string): Promise<Blob> {

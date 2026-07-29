@@ -15,6 +15,7 @@
 #   GET  /api/audiobook/pronunciations     workspace + global rules
 #   PUT  /api/audiobook/pronunciations     replace workspace/global rules
 
+import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Response
@@ -247,12 +248,20 @@ def preview_selection(request: PreviewSelectionRequest):
     from app.audiobook import marker_demos
     rules = pronunciation.effective_rules(request.workspace_path)
     try:
-        audio = marker_demos.render_marked_text(text, backend, request.voice_id, rules)
+        audio, warnings = marker_demos.render_marked_text(
+            text, backend, request.voice_id, rules)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except synthesis.SynthesisError as e:
         raise HTTPException(status_code=502, detail=str(e))
-    return Response(content=audio, media_type="audio/wav")
+    headers = {}
+    if warnings:
+        # Headers must be latin-1; URI-encode so any message survives. The
+        # frontend decodes and shows these under the player -- a selection
+        # that cut into a pace span must never fail silently again.
+        from urllib.parse import quote
+        headers["X-Preview-Warnings"] = quote(json.dumps(warnings))
+    return Response(content=audio, media_type="audio/wav", headers=headers)
 
 
 class MarkerDemoRequest(BaseModel):

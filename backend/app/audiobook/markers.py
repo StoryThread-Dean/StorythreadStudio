@@ -196,12 +196,28 @@ def _parse_pace_value(raw: str, warnings: list[str], chapter_title: str) -> floa
 def _pace_regions(body: str, warnings: list[str], chapter_title: str) -> list[tuple[float, str]]:
     """Split a chapter body into (pace, chunk) runs, in reading order.
     Nested pace spans are not supported (warned, inner opener dropped);
-    an unclosed [pace:...] applies to the rest of the chapter (warned)."""
+    an unclosed [pace:...] applies to the rest of the chapter (warned);
+    a [/pace] with no opener is dropped WITH a warning -- the classic
+    cause is a preview selection that cut into a span, which would
+    otherwise silently play at normal pace."""
+
+    def _drop_stray_closers(chunk: str) -> str:
+        # Never let a stray closer reach the engine as narrated text.
+        if _PACE_CLOSE_RE.search(chunk):
+            warnings.append(
+                f"Chapter '{chapter_title}': a [/pace] has no opening [pace:...] "
+                "and was ignored. If this is a preview, make sure the selection "
+                "includes the [pace:...] tag -- otherwise the passage plays at "
+                "normal pace."
+            )
+            return _PACE_CLOSE_RE.sub("", chunk)
+        return chunk
+
     regions: list[tuple[float, str]] = []
     pos = 0
     for match in _PACE_RE.finditer(body):
         if match.start() > pos:
-            regions.append((1.0, body[pos:match.start()]))
+            regions.append((1.0, _drop_stray_closers(body[pos:match.start()])))
         pace = _parse_pace_value(match.group(1), warnings, chapter_title)
         inner = match.group(2)
         if _PACE_OPEN_RE.search(inner):
@@ -222,12 +238,11 @@ def _pace_regions(body: str, warnings: list[str], chapter_title: str) -> list[tu
         )
         before = tail[: leftover.start()]
         if before.strip():
-            regions.append((1.0, _PACE_CLOSE_RE.sub("", before)))
+            regions.append((1.0, _drop_stray_closers(before)))
         pace = _parse_pace_value(leftover.group(1), warnings, chapter_title)
-        regions.append((pace, _PACE_CLOSE_RE.sub("", tail[leftover.end():])))
+        regions.append((pace, _drop_stray_closers(tail[leftover.end():])))
     elif tail.strip():
-        # Stray closers with no opener are dropped silently -- harmless.
-        regions.append((1.0, _PACE_CLOSE_RE.sub("", tail)))
+        regions.append((1.0, _drop_stray_closers(tail)))
     return regions
 
 

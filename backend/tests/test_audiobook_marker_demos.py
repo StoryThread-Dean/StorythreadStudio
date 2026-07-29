@@ -150,21 +150,58 @@ def test_every_script_renders():
 def test_render_marked_text_applies_rules_and_silence():
     from app.audiobook.pronunciation import PronunciationRule
     backend = DemoBackend()
-    out = marker_demos.render_marked_text(
+    out, warnings = marker_demos.render_marked_text(
         "Lara waited.\n\n[pause:2.0]\n\nNobody came.",
         backend, DEMO_VOICE, rules=[PronunciationRule("Lara", "LAR-uh")],
     )
     # Two 1s speech clips + the 2s pause = 4s of audio.
     assert _duration(out) == pytest.approx(4.0, abs=0.01)
+    assert warnings == []
     # The dictionary rule reached the payload, fused.
     assert any("laruh" in t for t in backend.texts)
 
 
 def test_render_marked_text_drops_leading_silence():
     backend = DemoBackend()
-    out = marker_demos.render_marked_text(
+    out, _warnings = marker_demos.render_marked_text(
         "[pause:5.0]\n\nOnly this is spoken.", backend, DEMO_VOICE, rules=[])
     assert _duration(out) == pytest.approx(1.0, abs=0.01)
+
+
+def test_render_reports_a_cut_into_pace_span():
+    # THE live-testing mystery: a preview selection starting inside a pace
+    # span has no opener -- the stray closer must warn AND never be spoken.
+    backend = DemoBackend()
+    _out, warnings = marker_demos.render_marked_text(
+        "This part was inside the span.[/pace]\n\nAnd this was after it.",
+        backend, DEMO_VOICE, rules=[])
+    assert any("no opening [pace:...]" in w for w in warnings)
+    spoken = " ".join(backend.texts)
+    assert "[/pace]" not in spoken
+    assert "pace" not in spoken.lower()          # marker never narrated
+
+
+def test_multi_paragraph_pace_span_with_embedded_markers():
+    # Pace must hold across paragraphs AND across embedded pauses/breaks
+    # inside the span (the exact structure from live testing).
+    speeds: list[float] = []
+
+    class SpeedSpy(DemoBackend):
+        def synthesize(self, text: str, voice_id: str, speed: float = 1.0):
+            speeds.append(speed)
+            return super().synthesize(text, voice_id)
+
+    _out, warnings = marker_demos.render_marked_text(
+        "Normal intro paragraph.\n\n"
+        "[pace:0.8]Slow paragraph one.\n\n"
+        "Slow paragraph two.\n\n"
+        "[pause:0.5]\n\n"
+        "Slow paragraph three, after an embedded pause.[/pace]\n\n"
+        "Normal outro paragraph.",
+        SpeedSpy(), DEMO_VOICE, rules=[])
+    assert warnings == []
+    # Every piece inside the span is slow -- including after the pause.
+    assert speeds == [1.0, 0.8, 0.8, 1.0]
 
 
 def test_render_marked_text_refuses_marker_only_selections():

@@ -197,6 +197,39 @@ def test_preview_selection_renders_markers_and_rules(tmp_path, monkeypatch):
     assert sent == ["She ran.", "She stopped—cold."]
 
 
+def test_preview_selection_surfaces_parse_warnings_in_header(tmp_path, monkeypatch):
+    ws = _import_workspace(tmp_path)
+
+    class FakeBackend(KokoroBackend):
+        def __init__(self):
+            super().__init__("http://x", {})
+        def synthesize(self, text, voice_id, speed=1.0):
+            import io
+            import wave
+            buffer = io.BytesIO()
+            with wave.open(buffer, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(24000)
+                w.writeframes(b"\x01\x02" * 240)
+            return buffer.getvalue(), 0.01
+
+    from app.audiobook import synthesis
+    monkeypatch.setattr(synthesis, "resolve_backend", lambda provider: FakeBackend())
+
+    # A selection that cut INTO a pace span: stray closer, no opener.
+    response = client.post("/api/audiobook/preview-selection", json={
+        "workspace_path": str(ws),
+        "text": "Was inside the span.[/pace]\n\nAfter it.",
+        "voice_id": "af_heart",
+    })
+    assert response.status_code == 200
+    from urllib.parse import unquote
+    import json as jsonlib
+    warnings = jsonlib.loads(unquote(response.headers["X-Preview-Warnings"]))
+    assert any("no opening [pace:...]" in w for w in warnings)
+
+
 def test_preview_selection_caps_length(tmp_path, monkeypatch):
     ws = _import_workspace(tmp_path)
     response = client.post("/api/audiobook/preview-selection", json={

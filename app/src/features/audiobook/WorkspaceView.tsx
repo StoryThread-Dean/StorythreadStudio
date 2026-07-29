@@ -257,16 +257,19 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         ))}
         <span className="mx-1 h-4 w-px bg-zinc-800" />
         {/* Pace spans: wrap the selection; Normal pace = unmarked text. */}
+        {/* Preset values chosen by MEASUREMENT: 0.8x runs ~29% longer and
+            1.2x ~11% shorter -- clearly audible. 0.85/1.1 were real but so
+            subtle they read as broken in live testing. */}
         <button
-          onClick={() => wrapSelection("[pace:0.85]", "[/pace]")}
-          title="Slow the selected passage (0.85x) -- let a heavy moment breathe"
+          onClick={() => wrapSelection("[pace:0.8]", "[/pace]")}
+          title="Slow the selected passage (0.8x) -- let a heavy moment breathe"
           className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
           Slow
         </button>
         <button
-          onClick={() => wrapSelection("[pace:1.1]", "[/pace]")}
-          title="Quicken the selected passage (1.1x) -- carry an action beat"
+          onClick={() => wrapSelection("[pace:1.2]", "[/pace]")}
+          title="Quicken the selected passage (1.2x) -- carry an action beat"
           className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
           Fast

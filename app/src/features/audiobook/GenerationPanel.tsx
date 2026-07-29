@@ -43,6 +43,7 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
   // look like both were running (live-testing feedback).
   const [previewing, setPreviewing] = useState<null | "voice" | "selection">(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
 
   const [run, setRun] = useState<GenerationRun | null>(null);
   const [active, setActive] = useState(false);
@@ -128,10 +129,12 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
     }
     setPreviewing("selection");
     setError(null);
+    setPreviewWarnings([]);
     try {
-      const blob = await previewSelection(workspacePath, selected, voiceId);
+      const { blob, warnings } = await previewSelection(workspacePath, selected, voiceId);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewWarnings(warnings);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Selection preview failed.");
     } finally {
@@ -251,6 +254,11 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
             {previewUrl && (
               <audio controls autoPlay src={previewUrl} className="mt-2 w-full" />
             )}
+            {previewWarnings.map((warning, i) => (
+              <p key={i} className="mt-1.5 rounded border border-blue-800 bg-blue-950/40 px-2 py-1.5 text-[10px] leading-relaxed text-blue-300">
+                {warning}
+              </p>
+            ))}
           </div>
 
           {/* Start / resume -- the emerald path */}
