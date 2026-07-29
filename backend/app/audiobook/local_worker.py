@@ -42,13 +42,12 @@ WORKER_EXE_NAME = "kokoro-worker.exe"
 # latest.json lookup). sha256 and size are stamped by scripts/
 # build-worker.ps1 output when a worker version is published.
 WORKER_RELEASE = {
-    "version": "0.1.0",
+    "version": "0.1.1",
     "url": ("https://github.com/StoryThread-Dean/StorythreadStudio/releases/"
-            "download/kokoro-worker-v0.1.0/kokoro-worker-0.1.0-win64.zip"),
-    # SHA256 of the built kokoro-worker-0.1.0-win64.zip (2026-07-29).
-    # The download 404s until the prerelease is published with EXACTLY
-    # this file -- publish and pin travel together, always.
-    "sha256": "39f3d40d5fd25bb165e9687a38ef4287078933ef64dbf5438e634115a8678f0e",
+            "download/kokoro-worker-v0.1.1/kokoro-worker-0.1.1-win64.zip"),
+    # SHA256 of the built kokoro-worker-0.1.1-win64.zip (2026-07-29,
+    # adds the parent watchdog). Publish and pin travel together, always.
+    "sha256": "1bdda06ec104069288b37953d3b2cfe72cae95370b5b542af9cb4ace91a60a28",
     "size_mb": 372.1,
 }
 
@@ -65,6 +64,17 @@ _lock = threading.Lock()
 _process: subprocess.Popen | None = None
 _base_url: str | None = None
 _health: dict | None = None
+_log_file = None
+
+
+def _log_path() -> Path:
+    """The worker's log lives BESIDE the install dir, not inside it.
+    Lesson from a live install failure: a log inside the install dir
+    (with its handle leaked) made the directory undeletable, the cleanup
+    failure was swallowed, and the new engine landed in a nested
+    subfolder -- invisible to the exe check. The log now can never hold
+    the install hostage."""
+    return WORKER_INSTALL_DIR.parent / "kokoro-worker.log"
 
 
 class WorkerUnavailableError(Exception):
@@ -212,13 +222,30 @@ def _install_worker(source_zip: str | None) -> None:
         if not (extract_dir / WORKER_EXE_NAME).is_file():
             raise ValueError("The archive does not contain the narrator engine.")
 
-        # Swap in: stop any running worker, clear the old install, move
-        # the new one into place, stamp the version.
+        # Swap in: stop any running worker, then replace the install dir
+        # CONTENTS item by item. Never a whole-directory move: if the dir
+        # survives a failed cleanup (a file held open by some stale
+        # process -- the live failure mode), a directory move would nest
+        # the new engine one level down and silently break everything.
+        # Per-item replacement is immune to that, and a locked file that
+        # actually matters fails LOUDLY instead of installing garbage.
         shutdown()
-        if WORKER_INSTALL_DIR.exists():
-            shutil.rmtree(WORKER_INSTALL_DIR, ignore_errors=True)
-        WORKER_INSTALL_DIR.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(extract_dir), str(WORKER_INSTALL_DIR))
+        WORKER_INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+        for leftover in list(WORKER_INSTALL_DIR.iterdir()):
+            try:
+                if leftover.is_dir():
+                    shutil.rmtree(leftover)
+                else:
+                    leftover.unlink()
+            except OSError:
+                raise ValueError(
+                    f"Could not replace '{leftover.name}' in the install folder -- "
+                    "another Storythread window may be running. Close it and try again."
+                )
+        for item in list(extract_dir.iterdir()):
+            shutil.move(str(item), str(WORKER_INSTALL_DIR / item.name))
+        if not (WORKER_INSTALL_DIR / WORKER_EXE_NAME).is_file():
+            raise ValueError("Install finished but the engine is missing -- try again.")
         with open(WORKER_INSTALL_DIR / "installed.json", "w", encoding="utf-8") as f:
             json.dump({"version": WORKER_RELEASE["version"] if source_zip is None
                        else f"{WORKER_RELEASE['version']} (local zip)"}, f)
@@ -239,16 +266,20 @@ def remove_worker() -> None:
 
 
 def _spawn_command(port: int) -> tuple[list[str], str]:
-    """(argv, cwd) for whichever worker flavor exists. Packaged wins."""
+    """(argv, cwd) for whichever worker flavor exists. Packaged wins.
+    --parent-pid arms the worker's watchdog: it exits when THIS backend
+    dies, however it dies -- hard kills orphaned one loaded-model worker
+    per dev session before this existed (46 strays in one day, live)."""
+    parent = ["--parent-pid", str(os.getpid())]
     exe = WORKER_INSTALL_DIR / WORKER_EXE_NAME
     if exe.is_file():
         return ([str(exe), "--port", str(port),
-                 "--models-dir", str(WORKER_INSTALL_DIR / "models")],
+                 "--models-dir", str(WORKER_INSTALL_DIR / "models"), *parent],
                 str(WORKER_INSTALL_DIR))
     dev_dir = _dev_worker_dir()
     if dev_dir is not None:
         return (["uv", "run", "--project", str(dev_dir),
-                 "python", "main.py", "--port", str(port)],
+                 "python", "main.py", "--port", str(port), *parent],
                 str(dev_dir))
     raise WorkerUnavailableError(
         "The free local narrator is not installed. Install it from the "
@@ -268,12 +299,15 @@ def ensure_running() -> str:
         argv, cwd = _spawn_command(port)
         try:
             # No console window on Windows; stdout/stderr to a log file in
-            # the app data dir so a startup crash is diagnosable.
-            WORKER_INSTALL_DIR.mkdir(parents=True, exist_ok=True)
-            log_file = open(WORKER_INSTALL_DIR / "worker.log", "ab")
+            # the app data dir so a startup crash is diagnosable. The
+            # handle is tracked and closed in shutdown() -- never leaked.
+            global _log_file
+            _log_path().parent.mkdir(parents=True, exist_ok=True)
+            if _log_file is None or _log_file.closed:
+                _log_file = open(_log_path(), "ab")
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             _process = subprocess.Popen(
-                argv, cwd=cwd, stdout=log_file, stderr=log_file,
+                argv, cwd=cwd, stdout=_log_file, stderr=_log_file,
                 creationflags=creationflags,
             )
         except OSError as e:
@@ -287,7 +321,7 @@ def ensure_running() -> str:
                 _process = None
                 raise WorkerUnavailableError(
                     "The local narrator exited during startup. See "
-                    f"{WORKER_INSTALL_DIR / 'worker.log'} for details."
+                    f"{_log_path()} for details."
                 )
             try:
                 response = httpx.get(f"{base_url}/health", timeout=2.0)
@@ -309,7 +343,7 @@ def ensure_running() -> str:
 
 
 def shutdown() -> None:
-    global _process, _base_url, _health
+    global _process, _base_url, _health, _log_file
     with _lock:
         if _process is not None and _process.poll() is None:
             _process.terminate()
@@ -320,6 +354,12 @@ def shutdown() -> None:
         _process = None
         _base_url = None
         _health = None
+        if _log_file is not None and not _log_file.closed:
+            try:
+                _log_file.close()
+            except OSError:
+                pass
+        _log_file = None
 
 
 atexit.register(shutdown)

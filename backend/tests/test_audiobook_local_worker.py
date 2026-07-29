@@ -85,6 +85,11 @@ def test_spawn_command_prefers_packaged_over_dev(tmp_path, monkeypatch):
     assert argv[0].endswith("kokoro-worker.exe")
     assert "--port" in argv and "1234" in argv
     assert cwd == str(exe_dir)
+    # The watchdog must ALWAYS be armed: a worker without --parent-pid
+    # outlives hard backend kills (46 orphaned workers in one dev day).
+    import os as os_module
+    assert "--parent-pid" in argv
+    assert str(os_module.getpid()) in argv
 
 
 def test_spawn_command_without_any_worker_raises_honestly():
@@ -190,6 +195,57 @@ def test_install_from_local_zip_end_to_end(tmp_path):
     status = client.get("/api/audiobook/local-engine/status").json()
     assert status["mode"] == "none"
     assert not local_worker.WORKER_INSTALL_DIR.exists()
+
+
+def test_install_replaces_a_polluted_install_dir(tmp_path):
+    # THE live failure: the install dir already existed (a leaked
+    # worker.log plus a nested extract/ from a previously-broken install),
+    # cleanup failed silently, and the new engine nested one level down.
+    # Per-item replacement must leave a CLEAN, correct install.
+    junk = local_worker.WORKER_INSTALL_DIR
+    (junk / "extract").mkdir(parents=True)
+    (junk / "extract" / "kokoro-worker.exe").write_bytes(b"nested garbage")
+    (junk / "worker.log").write_bytes(b"old log lines")
+
+    zip_path = _make_worker_zip(tmp_path)
+    client.post("/api/audiobook/local-engine/install", json={"source_zip": zip_path})
+    local_worker.wait_for_install()
+
+    assert local_worker.install_status()["state"] == "done"
+    assert (junk / "kokoro-worker.exe").is_file()          # at the ROOT
+    assert not (junk / "extract").exists()                 # junk gone
+    assert not (junk / "worker.log").exists()              # stale log gone
+    assert local_worker.installed_state()["mode"] == "packaged"
+
+
+def test_install_fails_loudly_when_a_file_is_locked(tmp_path):
+    # A file held open inside the install dir (Windows locks it against
+    # deletion) must produce a clear error -- NEVER a silent nested
+    # install. This is the exact regression test for the live bug.
+    junk = local_worker.WORKER_INSTALL_DIR
+    junk.mkdir(parents=True)
+    locked_path = junk / "worker.log"
+    locked = open(locked_path, "ab")
+    try:
+        zip_path = _make_worker_zip(tmp_path)
+        client.post("/api/audiobook/local-engine/install", json={"source_zip": zip_path})
+        local_worker.wait_for_install()
+
+        status = local_worker.install_status()
+        assert status["state"] == "error"
+        assert "another Storythread window" in status["error"]
+        # Nothing nested, nothing half-installed.
+        assert not (junk / "extract").exists()
+        assert not (junk / "kokoro-worker.exe").exists()
+    finally:
+        locked.close()
+
+
+def test_worker_log_lives_beside_the_install_dir():
+    # The log inside the install dir is what held it hostage; it must
+    # never live there again.
+    assert local_worker._log_path().parent == local_worker.WORKER_INSTALL_DIR.parent
+    assert local_worker._log_path().name == "kokoro-worker.log"
 
 
 def test_install_refuses_when_download_not_published(monkeypatch):

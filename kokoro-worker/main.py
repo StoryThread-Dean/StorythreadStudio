@@ -19,7 +19,10 @@
 
 import argparse
 import io
+import os
 import sys
+import threading
+import time
 import wave
 
 import numpy as np
@@ -31,7 +34,12 @@ from pydantic import BaseModel
 # Bumped on every released worker build. Joins the generated-state hash
 # on the Storythread side (spec 24.1) -- a retrained model or tokenizer
 # change here must mark existing audio stale over there.
-WORKER_VERSION = "kokoro-worker 0.1.0"
+# 0.1.1: parent watchdog -- the worker exits when the backend that
+# spawned it dies. Without it, hard backend kills (uvicorn --reload in
+# dev, Tauri terminating the sidecar in production) orphaned a worker
+# per session, each pinning a loaded model in RAM (live finding: 46
+# stray processes after one day of development).
+WORKER_VERSION = "kokoro-worker 0.1.1"
 MODEL_ID = "kokoro-82m-v1.0"
 
 app = FastAPI(title="Storythread Kokoro Worker")
@@ -112,12 +120,47 @@ def synthesize(request: SynthesizeRequest):
     )
 
 
+def _watch_parent(parent_pid: int) -> None:
+    """
+    Exit the moment the spawning backend is gone. The backend cannot be
+    trusted to clean us up -- hard kills (dev reloads, the desktop shell
+    terminating its sidecar) skip its exit handlers entirely, and an
+    orphaned worker pins a loaded model in RAM forever.
+
+    Windows: wait on the parent's process handle -- zero polling, exact.
+    Elsewhere: poll liveness once a second.
+    """
+    def _wait() -> None:
+        try:
+            import ctypes
+            SYNCHRONIZE = 0x00100000
+            handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, parent_pid)
+            if handle:
+                ctypes.windll.kernel32.WaitForSingleObject(handle, 0xFFFFFFFF)
+                os._exit(0)
+        except AttributeError:
+            pass                        # not Windows -- fall through to polling
+        while True:
+            try:
+                os.kill(parent_pid, 0)
+            except OSError:
+                os._exit(0)
+            time.sleep(1.0)
+
+    threading.Thread(target=_wait, name="parent-watchdog", daemon=True).start()
+
+
 def main() -> None:
     global kokoro
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--models-dir", default="models")
+    parser.add_argument("--parent-pid", type=int, default=None,
+                        help="Exit when this process dies (the spawning backend).")
     args = parser.parse_args()
+
+    if args.parent_pid:
+        _watch_parent(args.parent_pid)
 
     try:
         kokoro = Kokoro(
