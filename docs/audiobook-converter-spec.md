@@ -887,7 +887,29 @@ User-facing framing:
 
 > Local generation runs on your CPU, faster than the audiobook plays. You may continue using Storythread while it runs.
 
-### 15.1 Future Note
+### 15.1 Engine Prosody and the Usable Pace Band (live-testing findings, 2026-07-29)
+
+Findings from extended listening tests, recorded so nobody re-litigates
+them by ear later:
+
+- **Engine prosody is out of scope.** Kokoro infers its own delivery
+  (pace, inflection, emphasis) within each synthesized piece from the
+  text's shape -- punctuation, sentence length, quoting. It sometimes
+  races or drags passages on its own judgment, most visibly in dialogue.
+  The pipeline's speeds were VERIFIED correct end to end (the preview
+  render trace shows the exact speed per piece); the remaining variation
+  lives inside the model and is not correctable from outside. Mitigations
+  that exist: book-level narrator/dialogue pace, [pace] spans, and a
+  [pause] before a racing stretch (segment boundaries reset prosody).
+  Deeper correction is PINNED -- revisit only if a future engine build
+  changes the behavior.
+- **The usable pace band is roughly 0.8 to 1.2.** Outside it, the voice
+  develops audibly robotic inflections (occasionally already at 0.85).
+  The Slow/Fast presets sit at the band edges deliberately. The full
+  0.5-2.0 range stays available for hand-tuning, with the band
+  documented in the UI as guidance.
+
+### 15.2 Future Note
 
 If GPU acceleration is ever revisited, `onnxruntime-directml` is the single Windows-native path covering NVIDIA, AMD, and Intel hardware together -- not three separate vendor runtimes. Keep the synthesis interface device-agnostic so that door stays open:
 

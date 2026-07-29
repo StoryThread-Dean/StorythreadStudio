@@ -345,9 +345,9 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
                 <div className="space-y-2 px-3 pb-3">
                   {([
                     ["narrator_pace", "Narrator pace", 0.5, 2.0, 0.05,
-                     "Base speed for all narration. 1.0 = the voice's natural pace."],
+                     "Base speed for all narration. 1.0 = the voice's natural pace. Sounds most natural between 0.8 and 1.2."],
                     ["dialogue_pace", "Dialogue pace", 0.5, 2.0, 0.05,
-                     "Speed for dialogue paragraphs -- where the engine's own pacing goes wildest. Try 0.9 if dialogue races."],
+                     "Speed for dialogue paragraphs -- where the engine's own pacing goes wildest. Try 0.9 if dialogue races. Sounds most natural between 0.8 and 1.2."],
                     ["scene_break_ms", "Scene break (ms)", 0, 15000, 250,
                      "Silence at every [scene-break]."],
                     ["chapter_break_ms", "Chapter break (ms)", 0, 15000, 250,
