@@ -87,14 +87,18 @@ def test_exclude_demo_never_speaks_the_excluded_text():
     assert "narrated normally" in spoken
 
 
-def test_say_demo_contrasts_a_genuinely_hard_word():
+def test_say_demo_covers_both_use_cases():
     backend = DemoBackend()
     build_demo("say", backend)
     spoken = " ".join(backend.texts)
-    # The raw form is narrated once (the "before")...
+    # Case 1 -- a word the engine cannot guess: raw form once, fixed form once.
     assert "Saoirse." in spoken
-    # ...and the say-marked occurrence arrives flattened (the "after").
     assert "ser sha" in spoken                     # speakable() applied
+    # Case 2 -- regional variants of the same name: the engine's default
+    # plus two forced pronunciations.
+    assert "says: Lara." in spoken
+    assert "lar ah" in spoken
+    assert "lair ah" in spoken
     assert "[say:" not in spoken                   # markup never narrated
 
 

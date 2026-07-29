@@ -38,14 +38,24 @@ DEMO_SCRIPTS: dict[str, str] = {
         "\n\n[chapter-break]\n\n"
         "After three seconds of quiet, the story carries on."
     ),
-    # The demo word must be one the engine genuinely mispronounces, or the
-    # before/after sounds identical (live finding: Kaelith came out right
-    # both times). Saoirse is reliably butchered by phonemizers and has a
-    # well-known correct form -- the contrast is unmistakable.
+    # Two demo words, two reasons to reach for [say] (user-shaped design):
+    #   Saoirse -- a word the engine cannot guess (live finding: modern
+    #   engines guess MOST words right, so pure-failure demos are a
+    #   shrinking target; Kaelith sounded correct both times).
+    #   Lara -- a name with several RIGHT answers (LOR-ah in America,
+    #   LAR-ah in Britain, LAIR-ah in Spanish); the engine picks one, the
+    #   STORY decides which one a given character uses. Forcing variants
+    #   guarantees an audible contrast no engine improvement can erase.
     "say": (
-        "Without help, the narrator reads the name Saoirse as written: Saoirse."
+        "Some names the narrator cannot guess. It reads Saoirse as written: Saoirse."
         "\n\n[pause:0.8]\n\n"
-        "Wrapped in a say marker, the same name becomes: [say:SER-sha]Saoirse[/say]."
+        "A say marker fixes it: [say:SER-sha]Saoirse[/say]."
+        "\n\n[pause:1.0]\n\n"
+        "Other names have more than one right answer. On its own, the narrator says: Lara."
+        "\n\n[pause:0.8]\n\n"
+        "Her English friends call her [say:LAR-ah]Lara[/say]."
+        "\n\n[pause:0.8]\n\n"
+        "In Madrid she introduces herself as [say:LAIR-ah]Lara[/say]."
     ),
     "exclude": (
         "This sentence is narrated normally."
