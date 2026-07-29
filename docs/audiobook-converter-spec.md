@@ -1049,6 +1049,36 @@ Hosted previews should require confirmation when they have a cost.
 
 Playback scope note: previews (and spot-checking generated chapters) require basic audio playback -- play, pause, seek -- inside the app. That is IN scope for the MVP. The deferred item in Section 3.2 is a full audiobook player with listening-position memory, not basic playback.
 
+### 18.3 The Audible Help Standard
+
+Established during Stage B live testing (2026-07-29) and now the rule for
+every feature that changes how audio SOUNDS: explain it with a "Hear it"
+demo, not just prose.
+
+- Demos are RENDERED LIVE through the real pipeline (parse -> synthesize
+  -> stitch), never shipped as recordings -- when defaults or the engine
+  change, the demos change with them.
+- Demos use the default reference voice so every writer hears the same
+  thing, run on the local engine, and carry a faded "local / free" hint
+  (writers trained by metered AI need to know sampling costs nothing).
+- Demo scripts NARRATE what the listener is experiencing ("that gap was a
+  pause marker set to one and a half seconds") so no reading is required.
+- Script respellings and examples are tuned BY LISTENING against the live
+  engine, never by what reads best on paper (live lesson: HEY-zeus read
+  as "Zeheus"; Hay-SOOS is correct). Demo words must produce a contrast
+  the engine cannot out-improve -- prefer names where several readings
+  are RIGHT and the story picks one (Jesus/Hay-SOOS, the regional Laras)
+  over words the engine merely fails today.
+- Demo playback is click-to-pause/resume; rendered demos are cached
+  backend-side per engine version so the first play is the only slow one.
+- Future candidates: voice-picker comparisons, mastering/loudness
+  settings, pause-default changes.
+
+Noted for later (not a redesign now): streaming demo/preview audio --
+begin playback while later pieces are still synthesizing. Requires
+chunked WAV streaming from the worker through the backend to the player;
+backend-side demo caching covers most of the pain meanwhile.
+
 ---
 
 ## 19. Step 7: Generation Review

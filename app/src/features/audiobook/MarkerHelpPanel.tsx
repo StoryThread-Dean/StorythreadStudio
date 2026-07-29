@@ -6,8 +6,8 @@
 // default reference voice (Heart), with real stitched silence. Hearing a
 // 1.5 second pause teaches more than any sentence about one.
 
-import { useCallback, useRef, useState } from "react";
-import { Loader2, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Loader2, Pause, Play, Volume2 } from "lucide-react";
 
 import { fetchMarkerDemo } from "./api";
 
@@ -55,17 +55,39 @@ const HELP_ITEMS: { kind: string; label: string; body: string }[] = [
 ];
 
 export function MarkerHelpPanel() {
-  const [playingKind, setPlayingKind] = useState<string | null>(null);
+  // One demo plays at a time. status distinguishes an actively speaking
+  // demo from one the writer paused mid-sentence -- clicking the same
+  // button toggles between the two (accidental clicks, "heard enough").
+  const [nowPlaying, setNowPlaying] =
+    useState<{ kind: string; status: "playing" | "paused" } | null>(null);
   const [loadingKind, setLoadingKind] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Demos are deterministic -- cache each blob URL after the first fetch
-  // so replays are instant and free of another synthesis round.
+  // so replays are instant and free of another synthesis round. (The
+  // backend caches the rendered WAV too, so even a remount only pays
+  // synthesis once per app session.)
   const cacheRef = useRef<Map<string, string>>(new Map());
+
+  // Leaving the panel mid-demo should silence it.
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
 
   const hearIt = useCallback(async (kind: string) => {
     if (loadingKind) return;
     setError(null);
+
+    // Same button while its demo is up: toggle pause/resume in place.
+    if (nowPlaying?.kind === kind && audioRef.current) {
+      if (nowPlaying.status === "playing") {
+        audioRef.current.pause();
+        setNowPlaying({ kind, status: "paused" });
+      } else {
+        void audioRef.current.play();
+        setNowPlaying({ kind, status: "playing" });
+      }
+      return;
+    }
+
     try {
       let url = cacheRef.current.get(kind);
       if (!url) {
@@ -74,18 +96,18 @@ export function MarkerHelpPanel() {
         url = URL.createObjectURL(blob);
         cacheRef.current.set(kind, url);
       }
-      audioRef.current?.pause();
+      audioRef.current?.pause();          // a different demo takes over
       const audio = new Audio(url);
       audioRef.current = audio;
-      setPlayingKind(kind);
-      audio.onended = () => setPlayingKind(null);
+      setNowPlaying({ kind, status: "playing" });
+      audio.onended = () => setNowPlaying(null);
       void audio.play();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not play the example.");
     } finally {
       setLoadingKind(null);
     }
-  }, [loadingKind]);
+  }, [loadingKind, nowPlaying]);
 
   return (
     <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/60 px-4 py-3">
@@ -110,13 +132,28 @@ export function MarkerHelpPanel() {
                 </span>
                 <button
                   onClick={() => void hearIt(item.kind)}
-                  disabled={loadingKind !== null}
-                  className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                  disabled={loadingKind !== null && loadingKind !== item.kind}
+                  title={nowPlaying?.kind === item.kind
+                    ? (nowPlaying.status === "playing" ? "Click to pause" : "Click to continue")
+                    : "Play the example"}
+                  className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] disabled:opacity-40 ${
+                    nowPlaying?.kind === item.kind
+                      ? "border-emerald-600 text-emerald-300"
+                      : "border-zinc-700 text-zinc-300 hover:border-emerald-600 hover:text-emerald-300"
+                  }`}
                 >
-                  {loadingKind === item.kind
-                    ? <Loader2 size={10} className="animate-spin" />
-                    : <Volume2 size={10} className={playingKind === item.kind ? "text-emerald-400" : ""} />}
-                  Hear it
+                  {loadingKind === item.kind ? (
+                    <Loader2 size={10} className="animate-spin" />
+                  ) : nowPlaying?.kind === item.kind && nowPlaying.status === "playing" ? (
+                    <Pause size={10} />
+                  ) : nowPlaying?.kind === item.kind ? (
+                    <Play size={10} />
+                  ) : (
+                    <Volume2 size={10} />
+                  )}
+                  {nowPlaying?.kind === item.kind
+                    ? (nowPlaying.status === "playing" ? "Pause" : "Resume")
+                    : "Hear it"}
                 </button>
               </span>
             </div>

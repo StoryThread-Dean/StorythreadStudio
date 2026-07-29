@@ -82,11 +82,23 @@ DEMO_SCRIPTS: dict[str, str] = {
 }
 
 
+# Rendered demos, cached for the life of the backend process. Demos are
+# deterministic per engine build, so the key is (kind, engine identity) --
+# the first Hear-it click pays the synthesis cost, every later one
+# (including after the frontend remounts) is instant.
+_demo_cache: dict[tuple[str, str, str], bytes] = {}
+
+
 def build_demo(kind: str, backend: SynthesisBackend) -> bytes:
     """
-    Render one marker demo to WAV bytes. Raises KeyError for unknown
-    kinds (the router turns that into a 400).
+    Render one marker demo to WAV bytes (cached per engine version).
+    Raises KeyError for unknown kinds (the router turns that into a 400).
     """
+    cache_key = (kind, backend.model_id, backend.engine_version)
+    cached = _demo_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     script = DEMO_SCRIPTS[kind]
     parsed = parse_narration(f"# Demo\n\n{script}")
 
@@ -105,4 +117,6 @@ def build_demo(kind: str, backend: SynthesisBackend) -> bytes:
             pieces.append(CHAPTER_BREAK_MS)
         # excluded elements: skipped -- which is exactly the demo's point.
 
-    return concat_wav(pieces)
+    audio = concat_wav(pieces)
+    _demo_cache[cache_key] = audio
+    return audio

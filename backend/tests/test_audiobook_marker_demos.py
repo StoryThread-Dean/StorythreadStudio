@@ -10,9 +10,19 @@ import wave
 
 import pytest
 
+from app.audiobook import marker_demos
 from app.audiobook.marker_demos import DEMO_SCRIPTS, DEMO_VOICE, build_demo
 from app.audiobook.synthesis import SynthesisBackend
 from app.audiobook.wav_assembly import WavMismatchError, concat_wav
+
+
+@pytest.fixture(autouse=True)
+def _fresh_demo_cache():
+    # The render cache is module-level state; tests that inspect WHICH
+    # texts were synthesized need a cold cache every time.
+    marker_demos._demo_cache.clear()
+    yield
+    marker_demos._demo_cache.clear()
 
 
 def _tone_wav(seconds: float, rate: int = 24000) -> bytes:
@@ -114,3 +124,19 @@ def test_say_demo_covers_both_use_cases():
 def test_every_script_renders():
     for kind in DEMO_SCRIPTS:
         assert len(build_demo(kind, DemoBackend())) > 44   # bigger than a WAV header
+
+
+def test_demos_are_cached_per_engine_version():
+    backend = DemoBackend()
+    first = build_demo("pause", backend)
+    calls_after_first = len(backend.texts)
+    second = build_demo("pause", backend)
+    assert second == first
+    assert len(backend.texts) == calls_after_first     # no new synthesis
+
+    # A NEW engine version misses the cache -- demos must never claim to
+    # represent an engine that didn't render them.
+    newer = DemoBackend()
+    newer.engine_version = "e2"
+    build_demo("pause", newer)
+    assert len(newer.texts) > 0
