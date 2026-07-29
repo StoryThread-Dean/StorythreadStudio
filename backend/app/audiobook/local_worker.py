@@ -265,6 +265,16 @@ def remove_worker() -> None:
         shutil.rmtree(WORKER_INSTALL_DIR, ignore_errors=True)
 
 
+def _installed_version() -> str | None:
+    """The bare version from installed.json ('0.1.1 (local zip)' -> '0.1.1')."""
+    try:
+        with open(WORKER_INSTALL_DIR / "installed.json", "r", encoding="utf-8") as f:
+            raw = str(json.load(f).get("version") or "")
+        return raw.split(" ")[0] or None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def _spawn_command(port: int) -> tuple[list[str], str]:
     """(argv, cwd) for whichever worker flavor exists. Packaged wins.
     --parent-pid arms the worker's watchdog: it exits when THIS backend
@@ -273,6 +283,19 @@ def _spawn_command(port: int) -> tuple[list[str], str]:
     parent = ["--parent-pid", str(os.getpid())]
     exe = WORKER_INSTALL_DIR / WORKER_EXE_NAME
     if exe.is_file():
+        # Version gate: an installed worker from a different release may
+        # not understand this backend's arguments (live failure: a 0.1.0
+        # engine rejected --parent-pid and crash-looped at startup).
+        # Refuse with an update message the UI turns into an Update
+        # button -- never spawn a worker we can't talk to.
+        installed = _installed_version()
+        if installed != WORKER_RELEASE["version"]:
+            raise WorkerUnavailableError(
+                "The local narrator needs an update "
+                f"(installed {installed or 'unknown'}, this version of "
+                f"Storythread needs {WORKER_RELEASE['version']}). "
+                "Update it from the narration panel."
+            )
         return ([str(exe), "--port", str(port),
                  "--models-dir", str(WORKER_INSTALL_DIR / "models"), *parent],
                 str(WORKER_INSTALL_DIR))

@@ -35,10 +35,13 @@ const PREVIEW_SAMPLE =
   "The road disappeared beneath the gathering snow, and somewhere behind " +
   "her, a second set of footsteps stopped.";
 
-/** The component-manager block shown when no engine exists: one Install
-    button, live progress while the ~400MB artifact downloads, and a
-    retry path into the voices flow once it lands. */
-function InstallEngineBlock({ onInstalled }: { onInstalled: () => void }) {
+/** The component-manager block shown when no usable engine exists --
+    either none is installed, or the installed one is from a different
+    release and must be updated (the backend refuses to spawn a worker it
+    cannot talk to). One button, live progress, and a retry path into the
+    voices flow once the engine lands. */
+function InstallEngineBlock({ message, onInstalled }: { message: string; onInstalled: () => void }) {
+  const isUpdate = message.includes("needs an update");
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installing, setInstalling] = useState(false);
@@ -85,9 +88,7 @@ function InstallEngineBlock({ onInstalled }: { onInstalled: () => void }) {
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
-      <p className="mb-2 text-xs text-zinc-300">
-        The free local narrator is not installed.
-      </p>
+      <p className="mb-2 text-xs text-zinc-300">{message}</p>
       {busy ? (
         <>
           <p className="mb-1 text-[11px] text-blue-300">
@@ -106,7 +107,7 @@ function InstallEngineBlock({ onInstalled }: { onInstalled: () => void }) {
           onClick={() => void handleInstall()}
           className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
         >
-          Install Free Local Narrator
+          {isUpdate ? "Update Free Local Narrator" : "Install Free Local Narrator"}
           {status?.download_size_mb && (
             <span className="font-normal opacity-75">(~{Math.round(status.download_size_mb)} MB)</span>
           )}
@@ -340,10 +341,14 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
         </p>
       )}
       {engineState === "unavailable" && (
-        engineError?.includes("not installed") ? (
-          // The engine simply isn't here yet -- offer the install, not an
-          // error wall. Success flows straight back into voice loading.
-          <InstallEngineBlock onInstalled={() => void loadVoices()} />
+        (engineError?.includes("not installed") || engineError?.includes("needs an update")) ? (
+          // The engine isn't here (or is an incompatible older release) --
+          // offer the install/update, not an error wall. Success flows
+          // straight back into voice loading.
+          <InstallEngineBlock
+            message={engineError}
+            onInstalled={() => void loadVoices()}
+          />
         ) : (
           <p className="rounded border border-rose-800 bg-rose-950/60 px-3 py-2 text-xs text-rose-300">
             {engineError}

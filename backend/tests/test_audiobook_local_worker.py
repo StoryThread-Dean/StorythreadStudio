@@ -77,10 +77,19 @@ def test_installed_state_reports_none_when_nothing_exists():
     assert state["running"] is False
 
 
-def test_spawn_command_prefers_packaged_over_dev(tmp_path, monkeypatch):
+def _fake_packaged_install(version: str | None = None):
+    import json as jsonlib
     exe_dir = local_worker.WORKER_INSTALL_DIR
-    exe_dir.mkdir(parents=True)
+    exe_dir.mkdir(parents=True, exist_ok=True)
     (exe_dir / local_worker.WORKER_EXE_NAME).write_bytes(b"fake exe")
+    if version is not None:
+        (exe_dir / "installed.json").write_text(
+            jsonlib.dumps({"version": version}), encoding="utf-8")
+    return exe_dir
+
+
+def test_spawn_command_prefers_packaged_over_dev(tmp_path, monkeypatch):
+    exe_dir = _fake_packaged_install(local_worker.WORKER_RELEASE["version"])
     argv, cwd = local_worker._spawn_command(1234)
     assert argv[0].endswith("kokoro-worker.exe")
     assert "--port" in argv and "1234" in argv
@@ -95,6 +104,30 @@ def test_spawn_command_prefers_packaged_over_dev(tmp_path, monkeypatch):
 def test_spawn_command_without_any_worker_raises_honestly():
     with pytest.raises(local_worker.WorkerUnavailableError, match="not installed"):
         local_worker._spawn_command(1234)
+
+
+def test_version_mismatched_worker_demands_update_instead_of_crashing():
+    # THE live failure: an installed 0.1.0 engine rejected the new
+    # backend's --parent-pid argument and crash-looped at startup. A
+    # mismatched (or unstamped) install must refuse with an update
+    # message -- never spawn a worker we cannot talk to.
+    _fake_packaged_install("0.0.9")
+    with pytest.raises(local_worker.WorkerUnavailableError, match="needs an update"):
+        local_worker._spawn_command(1234)
+
+
+def test_unstamped_worker_install_also_demands_update():
+    _fake_packaged_install(version=None)      # exe present, no installed.json
+    with pytest.raises(local_worker.WorkerUnavailableError, match="needs an update"):
+        local_worker._spawn_command(1234)
+
+
+def test_local_zip_stamp_passes_the_version_gate(tmp_path):
+    # Installing from a local zip stamps 'X.Y.Z (local zip)' -- the gate
+    # compares the bare version, so a local install spawns normally.
+    _fake_packaged_install(f"{local_worker.WORKER_RELEASE['version']} (local zip)")
+    argv, _cwd = local_worker._spawn_command(1234)
+    assert "--parent-pid" in argv
 
 
 # ── Endpoint surface (worker faked at the manager seam) ──────────────────────
