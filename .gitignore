@@ -55,7 +55,7 @@ Thumbs.db
 # The .storythread folder inside each writing project holds the SQLite database,
 # cache files, and logs. These are generated at runtime, not source code.
 **/.storythread/
-.claude/settings.local.json
+.claude/
 
 # ── Local developer reference material (not source) ──────────────────────────
 # .test-files/ holds local screenshots and scratch files used for planning
@@ -64,3 +64,10 @@ Thumbs.db
 # backend/app/ai/prompts.py as CHAPTER_SUMMARY_INSTRUCTIONS.
 .test-files/
 chapter_summary_ai_instructions.md
+.claude/settings.local.json
+
+# local/ holds private planning drafts (spec drafts, notes) that stay on this
+# machine. Finalized documents graduate into docs/ (e.g. the audiobook
+# converter spec). Note: the earlier */local pattern only matches one level
+# deep, so the repo-root local/ needs its own entry.
+local/

@@ -254,6 +254,14 @@ function App() {
   // The selection text last submitted, so we can nudge "start a new ask" when the
   // writer moves to a different passage after a result.
   const [lastSentSelection, setLastSentSelection] = useState("");
+  // The selection text that was SUCCESSFULLY sent and persisted into the chat
+  // history (as a hidden materials message). Different from lastSentSelection:
+  // that one is set optimistically before the request (for the "new ask" nudge),
+  // this one only after the backend confirms -- so a failed send never marks a
+  // selection as "already in the history". buildEditorChatPayload uses it to
+  // stop resending an unchanged highlight every turn, which used to stack a
+  // duplicate copy of the selection into the payload on each follow-up.
+  const [establishedSelection, setEstablishedSelection] = useState("");
 
   // Canon/Reference toggle (attachment popup): when ON (default), attached
   // profiles/outline/locations are treated as canon the AI must stay consistent
@@ -1604,6 +1612,7 @@ function App() {
       fullChapterText,
       includeChapter,
       chapterEstablished,
+      establishedSelection,
       contextChips,
       establishedChipKeys,
       suppressText: opts?.suppressText ?? false,
@@ -1627,17 +1636,21 @@ function App() {
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
     // --- Cancellation + timeout setup ---
-    // controller: can be aborted by the hard 180s timer OR by the user clicking [Cancel].
+    // controller: can be aborted by the hard 300s timer OR by the user clicking [Cancel].
     // cancelButtonTimer: reveals the [Cancel] button after 20s of waiting --
     //   long enough that quick responses don't show the button at all, short
     //   enough that impatient writers aren't stuck staring at "Thinking..."
-    // hardTimeoutTimer: safety net matching the backend REQUEST_TIMEOUT (180s).
+    // hardTimeoutTimer: safety net matching the backend REQUEST_TIMEOUT (300s).
+    //   300s (up from 180s) because follow-up turns now carry the persisted
+    //   materials in history: slow reasoning models that don't prompt-cache
+    //   (AionLabs Aion-3.0 in live testing) re-read the whole payload every
+    //   turn and legitimately need the headroom on drafting turns.
     const controller = new AbortController();
     chatAbortRef.current        = controller;
     chatManualCancelRef.current = false;
     setChatCanCancel(false);
     const cancelButtonTimer = setTimeout(() => setChatCanCancel(true), 20_000);
-    const hardTimeoutTimer  = setTimeout(() => controller.abort(), 180_000);
+    const hardTimeoutTimer  = setTimeout(() => controller.abort(), 300_000);
 
     try {
       const res = await fetch(`${API_BASE}/api/ai/editor-chat`, {
@@ -1710,6 +1723,14 @@ function App() {
       // These will show as muted in the UI and won't be resent on future turns.
       if (textContent) {
         setChapterEstablished(true);
+        // Record a persisted selection so an unchanged highlight isn't resent
+        // next turn. Gated on materials_content: only when the backend echoed
+        // the materials (and we just appended them to history above) is the
+        // selection genuinely in front of the model on future turns. Enhance
+        // echoes nothing by design, so it keeps resending -- correct for it.
+        if (data.materials_content && !payloadCore.is_full_chapter) {
+          setEstablishedSelection(textContent);
+        }
       }
       if (newChips.length > 0) {
         setEstablishedChipKeys(prev => {
@@ -1726,7 +1747,7 @@ function App() {
         if (chatManualCancelRef.current) {
           setChatError("Request cancelled. Rephrase your message and try again.");
         } else {
-          setChatError("Request timed out after 180 seconds. Try fewer attachments or a shorter selection.");
+          setChatError("Request timed out after 5 minutes. Try a faster model, fewer attachments, or a shorter selection.");
         }
       } else if (err instanceof TypeError && err.message.toLowerCase().includes("failed to fetch")) {
         setChatError("Could not reach the backend. Check that it is running on port 8000.");
@@ -1741,7 +1762,7 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning]);
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedSelection, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning]);
 
 
   // --- Start a new ask ---
@@ -1759,6 +1780,7 @@ function App() {
     setEstablishedChipKeys(new Set());
     setChapterEstablished(false);
     setLastSentSelection("");
+    setEstablishedSelection("");
     setChatError(null);
   }, [chatMessages.length]);
 
@@ -1816,6 +1838,7 @@ function App() {
     setChatInput("");
     setAskBoundaries([]);
     setLastSentSelection("");
+    setEstablishedSelection("");
   }, []);
 
 
@@ -2655,9 +2678,12 @@ function App() {
             // based scene summarization is conceptually a Writing Companion
             // action on the selected passage.
             <div className="flex items-center justify-between gap-2">
-              <p className={`min-w-0 flex-1 truncate text-xs ${enhanceMode ? "text-violet-400" : chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
+              <p className={`min-w-0 flex-1 truncate text-xs ${enhanceMode ? "text-violet-400" : (establishedSelection !== "" && selectedText.trim() === establishedSelection) || chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
                 {enhanceMode
                   ? "Passage to enhance"
+                  // Muted label when this exact selection is already in the
+                  // conversation -- it won't be resent (no duplicate copies).
+                  : establishedSelection !== "" && selectedText.trim() === establishedSelection ? "Selection (already sent)"
                   : chapterEstablished ? "Selection (new context)" : "Using selected text"} ({selectedText.length.toLocaleString()} chars)
               </p>
               <button

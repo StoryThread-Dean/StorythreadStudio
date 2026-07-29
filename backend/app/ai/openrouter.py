@@ -27,11 +27,16 @@ from app.ai.sanitizer import sanitize_dict, contains_em_dash
 # The live value used per request is provider.base_url.
 OPENROUTER_BASE = OPENROUTER.base_url
 
-# HTTP timeout for AI calls -- 180s gives heavy requests (multi-profile
-# consistency checks, outline-vs-profiles comparisons) room to finish on
-# slower or busier model providers. The frontend uses a matching 180s
-# abort timer, and shows a [Cancel] button after 20s for impatient users.
-REQUEST_TIMEOUT = 180.0
+# HTTP timeout for AI calls -- 300s gives heavy requests (multi-profile
+# consistency checks, drafting turns on slow reasoning models) room to
+# finish on slower or busier model providers. Raised from 180s after the
+# v1.0.10 context-persistence fix: follow-up turns now carry the attached
+# materials in history, and models that don't prompt-cache (AionLabs
+# Aion-3.0 in live testing) re-read the whole payload every turn, so
+# drafting turns legitimately run longer than before. The frontend uses a
+# matching 300s abort timer, and shows a [Cancel] button after 20s so
+# nobody is stuck waiting on a request they've given up on.
+REQUEST_TIMEOUT = 300.0
 
 # Logger for AI-call observability. Every call records prompt size and
 # elapsed time so timeouts can be correlated with payload bulk or specific

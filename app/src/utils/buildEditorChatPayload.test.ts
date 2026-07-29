@@ -73,6 +73,46 @@ describe("buildEditorChatPayload", () => {
     expect(out.context_chips).toHaveLength(1);
   });
 
+  it("does not resend an unchanged selection once established in history", () => {
+    // The regression this pins: a highlight that stays active across turns was
+    // rebuilt into a fresh materials block every turn, and each echo appended
+    // to history -- one duplicate copy of the selection per turn, until slow
+    // models hit the request timeout.
+    const out = buildEditorChatPayload({
+      ...base,
+      category: "draft",
+      selectedText: "  the same passage  ",
+      establishedSelection: "the same passage",
+    });
+    expect(out.text_content).toBe("");
+    expect(out.is_full_chapter).toBe(false);
+  });
+
+  it("resends when the selection changed since it was established", () => {
+    const out = buildEditorChatPayload({
+      ...base,
+      category: "draft",
+      selectedText: "a different passage",
+      establishedSelection: "the old passage",
+    });
+    expect(out.text_content).toBe("a different passage");
+  });
+
+  it("an established selection does not fall through to sending the chapter", () => {
+    // Selection skipped as already-in-history must mean NO text at all -- the
+    // full chapter sneaking in instead would be a worse payload, not a dedup.
+    const out = buildEditorChatPayload({
+      ...base,
+      category: "chat",
+      selectedText: "the same passage",
+      establishedSelection: "the same passage",
+      includeChapter: true,
+      chapterEstablished: false,
+    });
+    expect(out.text_content).toBe("");
+    expect(out.is_full_chapter).toBe(false);
+  });
+
   it("only sends chips that are not yet established", () => {
     const out = buildEditorChatPayload({
       ...base,
@@ -100,14 +140,17 @@ describe("buildEditorChatPayload (enhance mode)", () => {
     expect(out.enhance_level).toBe("expanded");
   });
 
-  it("resends the selection even when the chapter is already established", () => {
+  it("resends the selection even when it is already established", () => {
     // Follow-up turns ("now make it darker") must keep the exact target in front
     // of the model, unlike chat/draft which stop resending established context.
+    // Enhance's materials are never persisted into history (its echo is
+    // suppressed backend-side), so resending is the only way the model sees it.
     const out = buildEditorChatPayload({
       ...base,
       category: "enhance",
       selectedText: "the passage",
       chapterEstablished: true,
+      establishedSelection: "the passage",
       surroundingContext: "ctx",
     });
     expect(out.text_content).toBe("the passage");

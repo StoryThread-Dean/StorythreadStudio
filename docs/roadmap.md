@@ -10,7 +10,27 @@ For shipped releases see [`../CHANGELOG.md`](../CHANGELOG.md).
 
 Committed work for the near-term roadmap.
 
-*(Nothing currently scheduled -- v1.0.10 ships the NanoGPT provider, the prompt caching toggle, the Writing Companion context-persistence fix, and the character creation overhaul (spine dropdowns + Quick Build randomizer + Interview Me mode; see [`features.md`](features.md)). Next candidates live under Proposed; "Local model providers" remains the natural successor.)*
+### Audiobook Converter -- the v1.1.0 feature
+
+A standalone workspace inside Storythread Studio that converts a manuscript (DOCX / EPUB / Markdown / TXT, or an existing Storythread project) into chapter MP3s, a combined MP3, and an M4B audiobook. Full specification: [`audiobook-converter-spec.md`](audiobook-converter-spec.md) (reviewed and revised 2026-07-28).
+
+The headline workflow is **"draft locally, print premium"**: generate the whole book free with the local Kokoro narrator to listen, catch awkward prose, and fix pronunciations -- then, when the book is final, switch to a premium hosted voice (OpenRouter TTS or NanoGPT, which hosts the identical Kokoro voices plus ElevenLabs tiers) and regenerate once, cost-confirmed, as the "print" pass.
+
+This is the fundamental change the 1.1.0 version slot has been reserved for. Delivery is staged across multiple releases; the first release that includes a usable free local audiobook pipeline becomes **v1.1.0**, and later stages ship as 1.1.1, 1.1.2, and so on. Normal 1.0.x releases can continue in parallel while the converter is built on its own branch.
+
+Build stages (spec phases in parentheses; estimates in working sessions, the unit this project actually ships in):
+
+| Stage | Contents | Est. sessions | Release |
+|---|---|---|---|
+| A. Foundation + import (1-2) | Dashboard, workspace + manifest, recent-activity index, DOCX/EPUB/MD/TXT + Storythread-project import, chapter detection, narration editor with markers + pronunciation dictionary | 2-3 | dev branch |
+| B. Local narration (3) | kokoro-worker.exe companion artifact (build/sign/host/download/verify), worker lifecycle, CPU synthesis, voice previews, chapter queue, progress persistence, restart recovery, sleep inhibit | 3-4 | dev branch |
+| C. Audio assembly (4) | FFmpeg integration, silence-at-assembly, chapter MP3 / combined MP3 / M4B, metadata + cover art | 2 | **v1.1.0** |
+| D. Cloud providers + print pass (5) | OpenRouter TTS + NanoGPT speech providers, model discovery, cost estimator, the premium print flow | 1-2 | v1.1.1 |
+| E. Revision + recovery (6) | Segment hashing, stale-audio detection, regenerate-changed-sections, revision retention, cleanup, export-only state | 1-2 | v1.1.2 |
+| F. PDF import (7) | Text-based PDF extraction, scanned-PDF rejection, PDF artifact cleanup | 1 | 1.1.x |
+| G. Multi-character foundation (8) | Speaker management UI, speaker-to-voice mapping, AI annotation review framework | 2-3 | 1.1.x |
+
+Total: roughly 12 to 17 working sessions to complete all stages, with a usable v1.1.0 at the 7-to-9 session mark. Highest-risk items (watch these first): the kokoro-worker packaging pipeline, EPUB extraction variability, and M4B assembly.
 
 ---
 

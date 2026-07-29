@@ -27,6 +27,17 @@ export interface BuildEditorChatPayloadInput {
   includeChapter: boolean;
   /** Whether the full chapter was already sent earlier in this conversation. */
   chapterEstablished: boolean;
+  /**
+   * The selection text (trimmed) that was already sent AND persisted into the
+   * chat history in a prior turn ("" when none). When the current selection is
+   * byte-identical to this, we skip resending it -- it's genuinely in front of
+   * the model already via the hidden materials message. Without this check,
+   * a selection that stays highlighted across turns (highlights deliberately
+   * persist) would be rebuilt into a fresh materials block EVERY turn and each
+   * echo appended to history -- one full duplicate copy per turn, ballooning
+   * the payload until slow models hit the request timeout.
+   */
+  establishedSelection?: string;
   /** All chips the writer has attached. */
   contextChips: ContextChip[];
   /** Keys ("type:name") of chips already sent in a prior turn. */
@@ -73,6 +84,7 @@ export function buildEditorChatPayload(
     fullChapterText,
     includeChapter,
     chapterEstablished,
+    establishedSelection = "",
     contextChips,
     establishedChipKeys,
     suppressText = false,
@@ -95,16 +107,21 @@ export function buildEditorChatPayload(
       text_content = selected;
       is_full_chapter = false;
       surrounding_context = surroundingContext;
-    } else if (selected) {
-      // Writer highlighted a specific passage -- always new context.
+    } else if (selected && selected !== establishedSelection.trim()) {
+      // Writer highlighted a specific passage that hasn't been sent yet (or
+      // changed the highlight since) -- send it as new context. An UNCHANGED
+      // established selection is skipped entirely: it already lives in the
+      // history as a hidden materials message, so resending it would just
+      // stack duplicate copies (see establishedSelection above).
       text_content = selected;
       is_full_chapter = false;
-    } else if (includeChapter && !chapterEstablished && fullChapterText != null) {
+    } else if (!selected && includeChapter && !chapterEstablished && fullChapterText != null) {
       // No selection, toggle on, chapter not yet sent in this conversation.
       text_content = fullChapterText;
       is_full_chapter = true;
     }
-    // Otherwise leave text empty: toggle off, or chapter already established.
+    // Otherwise leave text empty: toggle off, chapter already established,
+    // or the current selection is unchanged from one already in the history.
   }
 
   // Only chips not already established (sent in a prior turn) go on the wire.
