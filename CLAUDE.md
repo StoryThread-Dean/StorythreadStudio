@@ -198,6 +198,10 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_quick_overview.py` -- side-character Generate Overview: prompt guardrails (grounding, subtext, vary-angle) + endpoint payload
   - `test_names_store.py` -- name-generator seed data contracts (counts, era honesty, no em dashes) + names.db seed/fallback/reseed
   - `test_names_routes.py` -- /api/names/cultures + /pool endpoints incl. fallback used_era and 400s
+  - `test_audiobook_extraction.py` -- audiobook import extractors (TXT/MD/DOCX/EPUB/Storythread-project) incl. real DOCX+EPUB round trips, chapter detection, PDF rejection
+  - `test_audiobook_markers.py` -- narration marker grammar ([pause]/[scene-break]/[chapter-break]/[exclude]), derived structure, warnings
+  - `test_audiobook_pronunciation.py` -- pronunciation rules, [say] inline overrides, TTS payload prep (`--` to em dash, payload only)
+  - `test_audiobook_workspace_routes.py` -- /api/audiobook import/project/narration/pronunciations/recents end to end
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -211,6 +215,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/data/traitPools.test.ts` -- trait randomizer: tier replacement semantics, archetype flavor bias, deterministic rolls
   - `src/data/names/fantasyNames.test.ts` -- fantasy name assembly: 12-race roster, deterministic rng, speakability fuzz, phonology disjointness
   - `src/components/profiles/NameGeneratorPanel.test.tsx` -- generator panel: optgroups, era hiding for races, 6+6 deals, partial accept, fallback note
+  - `src/features/audiobook/AudiobookDashboard.test.tsx` -- audiobook dashboard: recents render, empty state, open flow, remove-keeps-files endpoint
+  - `src/features/audiobook/WorkspaceView.test.tsx` -- narration editor: marker insertion, [say]/[exclude] selection wrap, manual save PUT + chapter re-derive, pronunciation dialog
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands

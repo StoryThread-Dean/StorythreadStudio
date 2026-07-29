@@ -167,6 +167,25 @@ The audiobook dashboard will not share recent activity with Storythread writing 
 
 ## 5. Audiobook Dashboard
 
+### 5.0 Visual Identity: Jewel Tones on Charcoal
+
+The Audiobook Converter uses its OWN color scheme, distinct from the
+writing app's Light and Dark modes, so the writer always knows which side
+of the app they are in.
+
+Dark (primary design target): deep jewel tones on dark charcoal
+backgrounds, with each jewel carrying a consistent meaning:
+
+- **Emerald green** -- primary actions, success, completed states
+- **Sapphire blue** -- information, progress, generation activity
+- **Ruby red** -- costs, warnings, destructive actions, failed states
+
+Implementation: a scoped theme class on the audiobook root element (for
+example `.audiobook-theme`) overriding the design tokens, so the writing
+app's palette is untouched and both themes coexist in one window. The
+light variant keeps the same jewel accent meanings on light surfaces; its
+exact values are decided when the dashboard UI is built.
+
 ### 5.1 Primary Actions
 
 - New Audiobook
@@ -365,6 +384,43 @@ The Hollow Road/
 
 Storythread's application-data directory should only maintain a lightweight recent-activity index and provider settings.
 
+### 8.1 Windows Filename and Path Hygiene
+
+Book titles become folder and file names, and titles like "The Hollow
+Road: Book 2?" contain characters Windows forbids. One sanitization rule,
+applied everywhere a title becomes a path component:
+
+- Strip the illegal characters `< > : " / \ | ? *` and control characters
+- Strip trailing dots and spaces (Windows silently rejects them)
+- Refuse reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) by
+  appending a suffix
+- Collapse runs of whitespace; cap the component at 60 characters
+- Never sanitize into an empty string -- fall back to "Untitled"
+
+Deep workspaces plus long titles can also brush against MAX_PATH:
+
+- Enable `longPathAware` in the application manifest at build time.
+- Keep generated inner paths short by construction -- stable short segment
+  IDs (Section 23.1) exist partly for this reason.
+- Warn at import time when the chosen workspace path is already longer
+  than 180 characters.
+
+### 8.2 Workspace Locking
+
+A workspace is a folder full of state that is expensive to regenerate;
+two writers (or two app instances, or one instance twice via a bug) must
+not mutate it concurrently. Cheap insurance: a lockfile.
+
+- `<workspace>/.storythread-audiobook.lock` containing PID, hostname, and
+  an ISO timestamp, refreshed periodically while held.
+- MANDATORY around generation runs: acquiring the lock is part of
+  starting or resuming a run; failure to acquire shows who holds it.
+- Advisory on plain open-for-editing: a second opener gets a clear
+  warning rather than a hard block.
+- Staleness: a lock whose PID no longer exists (same host) or whose
+  timestamp is old with no refresh is stale and may be broken with an
+  explicit user confirmation.
+
 ---
 
 ## 9. Step 2: Review and Edit
@@ -475,11 +531,19 @@ She looked toward the window.
 Suggested syntax:
 
 ```text
-[pause:0.8]            explicit duration in seconds
-[scene-break]          uses the configured scene-break duration
-[chapter-break]        uses the configured chapter-break duration
+[pause:0.8]                explicit duration in seconds
+[scene-break]              uses the configured scene-break duration
+[chapter-break]            uses the configured chapter-break duration
 [exclude] ... [/exclude]   text kept in the file but never narrated
+[say:KAY-lith]Kaelith[/say]   one-spot pronunciation override (see 11.1)
 ```
+
+Semantics locked (decided 2026-07-28):
+
+- **`[chapter-break]` is timed silence ONLY** -- a configurable pause
+  (default 3.0 seconds) for mid-file transitions. It never creates a new
+  chapter. Chapter STRUCTURE comes exclusively from `# ` headings in the
+  narration copy; the marker and the heading are independent tools.
 
 The structured form (`narration-structure.json`) is DERIVED by parsing the narration copy, never hand-maintained. This means a writer can repair a narration copy in any text editor and nothing breaks; the parser simply re-derives the structure. The editor renders the markers as friendly visual chips.
 
@@ -521,13 +585,28 @@ Spoken as: KAY-lith
 
 ### 11.1 Pronunciation Scopes
 
-- This occurrence
-- This audiobook
-- All audiobooks
+Two scopes live in dictionary files; the third is an inline marker:
+
+- **This audiobook** (`scope: "audiobook"`) -- the workspace dictionary file
+- **All audiobooks** (`scope: "all"`) -- the app-level dictionary file
+- **This occurrence** -- NOT a dictionary entry. A position-anchored rule
+  would break the moment the writer edits upstream text. Because text is
+  the source of truth, a one-spot override is an inline marker instead:
+
+  ```text
+  [say:KAY-lith]Kaelith[/say]
+  ```
+
+  The display always shows "Kaelith"; the provider payload gets
+  "KAY-lith". The marker travels with the text, survives editing in any
+  external editor, and participates in segment hashing naturally (editing
+  a [say] changes the audio, so the hash SHOULD change). Inline [say]
+  wins over dictionary rules for its span. (Decided 2026-07-28,
+  replacing the earlier position-anchored occurrence scope.)
 
 ### 11.2 Pronunciation Data
 
-Suggested structure:
+Suggested structure (dictionary files carry only the two file scopes):
 
 ```json
 {
@@ -548,6 +627,42 @@ The narration pipeline interacts with two established Storythread rules, in both
 - **Storythread-authored `--` is normalized in the provider payload only.** Manuscripts written inside Storythread use `--` per the house style. A speech engine may read `--` literally or pause oddly, so the same payload-preparation layer that applies pronunciation substitutions converts `--` to natural punctuation (em dash or comma) in the text sent to the provider. The displayed narration copy is never rewritten.
 
 Both transformations live in the same place: the provider payload preparation step, alongside pronunciation substitution. Displayed text is always the writer's text.
+
+### 11.4 Text Verbalization (Payload-Prep Pipeline)
+
+Numbers, dates, ordinals, roman numerals ("Chapter XII", "Henry VIII"),
+abbreviations ("Dr.", "St.", "etc."), and URLs are read differently by
+every engine -- Kokoro/misaki's normalization is limited and hosted models
+vary. Verbalization has a defined home: a step in the payload-prep
+pipeline, which runs in this fixed order for every piece of narration
+text sent to a provider:
+
+```text
+1. [say:...] inline overrides        (writer's explicit word wins)
+2. Pronunciation dictionary rules    (audiobook scope, then all scope)
+3. Verbalization                     (numbers, romans, abbreviations)
+4. Punctuation normalization         ('--' to em dash)
+```
+
+MVP scope is deliberately thin -- expand the constructs engines reliably
+get wrong, pass everything else through and LEARN from the draft passes
+while the stakes are low:
+
+- Roman numerals in headings and honorifics ("Chapter XII" -> "Chapter
+  Twelve", "Henry VIII" -> "Henry the Eighth")
+- Common abbreviations (Dr., Mr., Mrs., Ms., St., etc., vs., e.g., i.e.)
+- Simple integers and ordinals ("Chapter 3" -> "Chapter Three", "21st" ->
+  "twenty-first")
+- URLs read as words ("example.com" -> "example dot com")
+
+Rules:
+
+- Verbalization applies to the PAYLOAD only; displayed text never changes.
+- A `verbalizer_version` is part of the generated-state hash (Section
+  24.1) -- improving the verbalizer marks affected audio stale, which is
+  correct.
+- A [say] marker always beats the verbalizer for its span, so any wrong
+  expansion has an immediate writer-side escape hatch.
 
 ---
 
@@ -994,6 +1109,35 @@ Include a warning:
 
 Pricing should be retrieved from provider data when available.
 
+### 20.1 Retries and Billing Pessimism
+
+A hosted request that times out client-side may still have billed
+server-side. Rules:
+
+- Automatic retries are CAPPED: at most 2 automatic retries per segment
+  for timeouts and 5xx errors, with backoff. Content refusals get ZERO
+  automatic retries (Section 28.4). After the cap, the segment is Failed
+  and waits for a manual retry.
+- The cost tracker counts PESSIMISTICALLY: every attempt is assumed
+  billed until actual provider usage data proves otherwise. The
+  `attempts` counter on each segment record is the input.
+- The completion report shows attempts alongside cost so surprise
+  overruns are visible, not buried.
+
+### 20.2 Disk Preflight
+
+Estimating output storage is not enough -- check it. At Generate (and
+again at every Resume), verify free space on the workspace drive covers
+the estimated intermediates plus outputs plus a 20 percent margin. Block
+with a clear message when it does not:
+
+> This audiobook needs an estimated 3.4 GB free on drive D: and only
+> 1.1 GB is available. Free up space or choose a different workspace
+> drive before generating.
+
+Running out of disk mid-run remains a handled error (Section 29), but
+preflight makes it rare.
+
 ---
 
 ## 21. Background Generation
@@ -1123,13 +1267,41 @@ Segment sizing target: PARAGRAPH-LEVEL segments of roughly 800 to 1,500 characte
 
 Intermediate format note: segments may be stored as FLAC instead of WAV to halve disk usage losslessly (WAV at 24 kHz mono runs roughly 170 MB per audio hour).
 
-Each generated segment must have a stable ID.
+### 23.1 Segment Identity Survives Editing
+
+Segment IDs are STABLE RANDOM IDs, never positional. A positional scheme
+(segment-0012 = the twelfth segment) breaks the moment a writer inserts
+one paragraph mid-chapter: every downstream segment shifts, every
+downstream hash mismatches, and audio that did not change gets flagged --
+or worse, regenerated at cost. (Design decision 2026-07-28.)
+
+Rules:
+
+- `segment_id` is a short random ID assigned when a segment first exists
+  (e.g. `seg-4f2a9c1e`). Audio files are named BY ID:
+  `generated-segments/<chapter-id>/<segment_id>.flac`.
+- Reading order lives in the chapter's ordered segment list, not in the
+  ID or the filename.
+- **Re-segmentation matches by content, not position.** When the narration
+  text changes and the segmenter re-runs a chapter:
+  1. Compute content hashes for the new segment texts.
+  2. Match new segments to existing ones by longest common subsequence
+     over content hashes (order-preserving; duplicate hashes resolve in
+     order).
+  3. Matched segments KEEP their segment_id, their generated audio, and
+     their generated hash -- unchanged paragraphs stay current.
+  4. Unmatched new segments get fresh IDs (status: not generated).
+  5. Unmatched old segments are marked superseded; their audio is retained
+     until cleanup.
+
+Net effect: inserting one paragraph produces exactly ONE new segment to
+generate, not a cascade to the end of the chapter.
 
 Example:
 
 ```json
 {
-  "segment_id": "chapter-003-segment-0012",
+  "segment_id": "seg-4f2a9c1e",
   "chapter_id": "chapter-003",
   "speaker_id": "narrator",
   "text": "The road disappeared beneath the gathering snow.",
@@ -1137,11 +1309,12 @@ Example:
   "generated_hash": "sha256-generated",
   "provider": "local-kokoro",
   "model": "kokoro-82m",
+  "engine_version": "kokoro-worker 1.2",
   "voice_id": "af_heart",
   "status": "completed",
   "attempts": 1,
   "duration_seconds": 18.4,
-  "output_file": "generated-segments/chapter-003/segment-0012.wav"
+  "output_file": "generated-segments/chapter-003/seg-4f2a9c1e.flac"
 }
 ```
 
@@ -1162,6 +1335,12 @@ The generated-state hash should include:
 - Voice
 - Provider
 - Model
+- **Engine/worker version** (e.g. kokoro-worker 1.3) -- a retrained model
+  in a new worker build produces different audio from identical text, so
+  identical hashes must not claim identical audio. A worker upgrade
+  marking local audio stale is correct behavior.
+- **Verbalizer version** (Section 11.4) -- improved number/abbreviation
+  expansion changes the payload, therefore the audio.
 - Relevant speech settings, captured as the EFFECTIVE per-segment values at generation time
 
 Two deliberate exclusions:
@@ -1291,7 +1470,7 @@ Required operations:
 - Concatenate chapters
 - Insert chapter silence
 - Insert scene-break silence
-- Normalize compatible audio properties
+- Normalize to the mastering targets below
 - Create chapter MP3s
 - Create combined MP3
 - Create M4B
@@ -1300,6 +1479,84 @@ Required operations:
 - Add narrator metadata
 - Embed cover art
 - Re-export from retained segments
+
+### 26.1 Canonical Intermediate Format
+
+Mixed-provider audio inside one chapter is GUARANTEED, not an edge case:
+Section 28.4 explicitly routes refused hosted segments to local
+regeneration, so Kokoro 24 kHz mono output will legitimately sit next to
+44.1 kHz premium output. The fix is decided once, at ingest:
+
+Every generated segment -- regardless of provider -- is transcoded ON
+RECEIPT to one canonical intermediate:
+
+```text
+44,100 Hz  |  mono  |  16-bit  |  FLAC
+```
+
+Assembly therefore only ever concatenates identical formats. FLAC keeps
+the intermediate lossless at roughly half of WAV's disk cost; 44.1 kHz is
+the distribution rate (upsampling Kokoro's 24 kHz on receipt is harmless
+and done exactly once).
+
+### 26.2 Mastering Targets (ACX-Safe)
+
+Loudness normalization runs PER CHAPTER (two-pass FFmpeg loudnorm) so
+chapters match each other and segment-level joins do not pump:
+
+```text
+Integrated loudness:  -20 LUFS
+True peak ceiling:    -3.0 dBTP
+```
+
+These land inside ACX/Audible's requirements (-23 to -18 dB RMS, -3 dB
+peak), so output is distribution-safe from day one even though ACX
+submission is not itself an MVP feature.
+
+Output encodes:
+
+```text
+Chapter MP3 / combined MP3:  192 kbps CBR, 44.1 kHz (the ACX spec)
+M4B:                         AAC 128 kbps, 44.1 kHz, chapter markers
+```
+
+### 26.3 Segment Audio Validation
+
+`audio/validation.py` has defined behavior, not just a name. Kokoro is
+known to occasionally truncate long inputs SILENTLY -- a segment that
+"succeeded" but contains half the text must become a Failed segment at
+generation time, not a discovered-at-chapter-30 surprise.
+
+Checks on every generated segment, local and hosted:
+
+- Decodable at all; not zero bytes.
+- **Duration-per-character sanity check**: expected duration is estimated
+  from the payload character count at typical narration pace (roughly
+  1,000 characters per minute). If actual duration is under 60 percent of
+  expected (for segments whose expected duration exceeds 2 seconds), the
+  segment is marked Failed with reason "audio shorter than expected
+  (possible truncation)".
+- Failed-validation audio is kept on disk for inspection but never enters
+  assembly.
+
+### 26.4 Chapter File Naming and Tags
+
+Chapter MP3s follow one template -- unspecified naming means inconsistent
+naming:
+
+```text
+NN - Chapter Title.mp3       (NN zero-padded to the book's chapter count width, minimum 2)
+```
+
+Chapter titles pass through the Section 8.1 filename sanitizer. ID3v2
+tags on every chapter MP3:
+
+- Track number / total tracks
+- Title = chapter title
+- Album = book title
+- Artist = author
+- Composer = narrator (the common audiobook convention)
+- Cover art embedded when "Apply metadata to chapter MP3 files" is checked
 
 FFmpeg packaging and license compliance must be reviewed before release.
 
@@ -1505,6 +1762,9 @@ The system should handle:
 - Provider content refusal (explicit passages; segment-level skip-and-report, see 28.4)
 - Invalid model response
 - Empty audio response
+- Audio failed validation (truncation suspected -- see 26.3)
+- Automatic retry cap reached (see 20.1)
+- Workspace locked by another instance (see 8.2)
 - Local worker download failure or checksum mismatch
 - Local worker installation failure
 - Local worker startup or health-check failure
@@ -1601,8 +1861,8 @@ Logs may contain:
   "current_hash": "sha256-current",
   "generated_hash": "sha256-generated",
   "segments": [
-    "chapter-003-segment-0001",
-    "chapter-003-segment-0002"
+    "seg-4f2a9c1e",
+    "seg-b81d0e77"
   ]
 }
 ```
@@ -1611,7 +1871,7 @@ Logs may contain:
 
 ```json
 {
-  "segment_id": "chapter-003-segment-0001",
+  "segment_id": "seg-4f2a9c1e",
   "chapter_id": "chapter-003",
   "speaker_id": "narrator",
   "text": "The road disappeared beneath the gathering snow.",
@@ -1619,11 +1879,12 @@ Logs may contain:
   "generated_hash": "sha256-generated",
   "provider": "local-kokoro",
   "model": "kokoro-82m",
+  "engine_version": "kokoro-worker 1.2",
   "voice_id": "af_heart",
   "status": "completed",
   "attempts": 1,
   "duration_seconds": 18.4,
-  "output_file": "generated-segments/chapter-003/segment-0001.wav"
+  "output_file": "generated-segments/chapter-003/seg-4f2a9c1e.flac"
 }
 ```
 

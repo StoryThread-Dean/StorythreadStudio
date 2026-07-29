@@ -280,6 +280,46 @@ copy/paste block.
 
 ---
 
+## 10. Audiobook Converter -- import and narration editing (Stage A)
+
+**Touches:** the audiobook dashboard entry on Project Home, native file and
+folder pickers for the import flow, workspace creation on disk, the
+narration editor + marker toolbar, manual save, and the recents index.
+
+Steps:
+1. From Project Home (no project open), click **Audiobook Converter** under
+   the "tools" divider. Expect the jewel-tone charcoal dashboard -- clearly
+   NOT the writing app's palette -- with New Audiobook and Open Existing
+   Workspace.
+2. Click New Audiobook. Choose a small DOCX or TXT manuscript via the
+   native file picker (PDF should not be offered), choose a NEW empty
+   folder as the workspace, and Import. Expect to land in the workspace
+   view with a chapter rail matching the manuscript's chapters.
+3. Check the workspace folder on disk: `audiobook-project.json`,
+   `source/original-<name>`, `manuscript/extracted-original.md`,
+   `manuscript/narration-copy.md`, and `chapters/*.json` all exist, and
+   your ORIGINAL manuscript file outside the workspace is untouched.
+4. In the editor: click into a paragraph, press **Pause 0.8s** -- the
+   marker text appears at the caret and the unsaved dot lights. Select a
+   word, press **[say]** -- it wraps as `[say:]word[/say]` with the caret
+   after `say:`. Ctrl+S saves; the dot clears. Reopen the file in Notepad
+   and confirm the markers are plain readable text.
+5. Add a `# New Chapter` heading at the bottom, save, and confirm the
+   chapter rail gains it.
+6. Open **Pronunciations**, add a rule (Kaelith -> KAY-lith) under This
+   Audiobook, save, reopen the dialog -- the rule survived.
+7. Back on the dashboard: the audiobook is in Recent Activity. Remove it
+   from Recents, confirm the workspace folder on disk is fully intact,
+   then Open Existing Workspace on that folder -- it reappears in Recents.
+8. Import error honesty: try importing into the SAME (now non-empty)
+   folder -- expect the clear "not empty" error, and confirm nothing in
+   the folder was altered.
+
+Expected: no em dashes inserted by any toolbar action; the original
+manuscript is never modified; Remove from Recents never deletes files.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

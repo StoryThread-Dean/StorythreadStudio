@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers -- each router handles one area of the API.
 # As we build more features, we'll add more routers here.
-from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search, structure, names
+from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search, structure, names, audiobook
 from app.utils.names_store import seed_names_db
 
 
@@ -102,6 +102,7 @@ app.include_router(progress.router)
 app.include_router(search.router)
 app.include_router(structure.router)
 app.include_router(names.router)
+app.include_router(audiobook.router)
 
 
 # --- Seed the name-generator database ---
