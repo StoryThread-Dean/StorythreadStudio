@@ -89,7 +89,11 @@ export function MarkerHelpPanel() {
     <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/60 px-4 py-3">
       <p className="mb-2 text-[11px] text-zinc-500">
         Every example below is generated live by the free local narrator
-        (Heart voice), exactly the way your book will sound.
+        (Heart voice), exactly the way your book will sound. The narrator is
+        quite good at standard pronunciations on its own -- you don't need to
+        test every word. Save your markers for names and phrases that need a
+        SPECIFIC sound: regional variations, invented names, the way one
+        character says another's name.
       </p>
       <div className="grid gap-2 md:grid-cols-2">
         {HELP_ITEMS.map(item => (

@@ -46,10 +46,18 @@ DEMO_SCRIPTS: dict[str, str] = {
     #   losing race against engine quality. Names where BOTH readings are
     #   correct and the story picks one can never be out-improved.)
     #   Lara -- three regional readings of one name; same principle.
+    # The spoken respellings below are TUNED BY EAR against the live
+    # engine (HEY-Zoosus, not HEY-zeus: the obvious spelling came out
+    # "Zeheus"). When editing, always regenerate and LISTEN -- the right
+    # respelling is whatever the engine renders correctly, not whatever
+    # reads best on paper.
     "say": (
+        "The local narrator gets most pronunciations right on its own. Reach "
+        "for a say marker when a word needs a specific variation, like these."
+        "\n\n[pause:0.8]\n\n"
         "On its own, the narrator reads the name Jesus the English way: Jesus."
         "\n\n[pause:0.8]\n\n"
-        "A say marker gives a Spanish character his true name: [say:HEY-zeus]Jesus[/say]."
+        "A say marker gives a Spanish character his true name: [say:HEY-Zoosus]Jesus[/say]."
         "\n\n[pause:1.0]\n\n"
         "Other names have more than one right answer. On its own, the narrator says: Lara."
         "\n\n[pause:0.8]\n\n"
