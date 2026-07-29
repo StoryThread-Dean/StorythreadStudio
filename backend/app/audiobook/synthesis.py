@@ -38,7 +38,11 @@ class SynthesisBackend:
     engine_version: str = ""             # joins the generated-state hash (24.1)
     file_extension: str = "flac"         # canonical intermediate (26.1)
 
-    def synthesize(self, text: str, voice_id: str) -> tuple[bytes, float]:
+    def synthesize(self, text: str, voice_id: str,
+                   speed: float = 1.0) -> tuple[bytes, float]:
+        """speed carries [pace:...] spans: 1.0 = the voice's natural pace.
+        Engines without a native speed control time-stretch at assembly
+        instead -- the parameter is part of the universal contract."""
         raise NotImplementedError
 
 

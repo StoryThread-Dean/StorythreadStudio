@@ -34,6 +34,14 @@ const HELP_ITEMS: { kind: string; label: string; body: string }[] = [
         + "this is only the sound of one.",
   },
   {
+    kind: "pace",
+    label: "Pace -- slow down, speed up",
+    body: "Wrap a passage to change its narration speed: Slow (0.85x) lets "
+        + "a heavy moment breathe; Fast (1.1x) carries an action beat. "
+        + "Normal is simply unmarked text. The number is adjustable by "
+        + "hand, like [pace:0.7], between 0.5 and 2.0.",
+  },
+  {
     kind: "say",
     label: "[say] -- one-spot pronunciation",
     body: "Select a word, click [say], and type how it should sound "

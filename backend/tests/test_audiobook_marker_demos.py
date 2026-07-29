@@ -51,7 +51,7 @@ class DemoBackend(SynthesisBackend):
     def __init__(self):
         self.texts: list[str] = []
 
-    def synthesize(self, text: str, voice_id: str):
+    def synthesize(self, text: str, voice_id: str, speed: float = 1.0):
         assert voice_id == DEMO_VOICE          # demos always use the reference voice
         self.texts.append(text)
         return _tone_wav(1.0), 1.0
@@ -121,6 +121,18 @@ def test_say_demo_covers_both_use_cases():
     assert "[say:" not in spoken                   # markup never narrated
 
 
+def test_pace_demo_sends_three_speeds():
+    speeds: list[float] = []
+
+    class SpeedDemoBackend(DemoBackend):
+        def synthesize(self, text: str, voice_id: str, speed: float = 1.0):
+            speeds.append(speed)
+            return super().synthesize(text, voice_id)
+
+    build_demo("pace", SpeedDemoBackend())
+    assert speeds == [1.0, 0.8, 1.2]
+
+
 def test_every_script_renders():
     for kind in DEMO_SCRIPTS:
         assert len(build_demo(kind, DemoBackend())) > 44   # bigger than a WAV header
@@ -169,3 +181,4 @@ def test_demos_are_cached_per_engine_version():
     newer.engine_version = "e2"
     build_demo("pause", newer)
     assert len(newer.texts) > 0
+

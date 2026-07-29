@@ -118,17 +118,25 @@ def request_cancel() -> None:
 
 # ── Starting a run ────────────────────────────────────────────────────────────
 
-def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str) -> str:
+def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
+                  pace: float = 1.0) -> str:
     """
     The generated-state identity of a segment's AUDIO (spec 24.1): the
     prepared payload (so pronunciation rules and [say] edits count), the
-    voice, and the engine. A completed segment whose stored basis no
-    longer matches is stale and re-queues automatically -- changing a
-    pronunciation rule regenerates exactly the segments that contain the
-    word, and switching voice regenerates the whole book (the print pass).
+    voice, the engine, and any [pace:...] override. A completed segment
+    whose stored basis no longer matches is stale and re-queues
+    automatically -- changing a pronunciation rule regenerates exactly the
+    segments that contain the word, and switching voice regenerates the
+    whole book (the print pass).
+
+    Pace joins the basis only when it deviates from 1.0, so audio
+    generated before pace spans existed keeps its stored hash valid.
     """
-    raw = "|".join([payload_text, voice_id, backend.key, backend.model_id,
-                    backend.engine_version])
+    parts = [payload_text, voice_id, backend.key, backend.model_id,
+             backend.engine_version]
+    if pace != 1.0:
+        parts.append(f"pace={pace}")
+    raw = "|".join(parts)
     return "sha256-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
@@ -176,7 +184,7 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
                 # Completed audio: stale when its payload basis moved.
                 basis = payload_basis(
                     pronunciation.prepare_tts_text(item["text"], rules),
-                    backend, voice_id,
+                    backend, voice_id, item.get("pace", 1.0),
                 )
                 if item.get("payload_hash") != basis:
                     queue_ids.append(item["segment_id"])
@@ -289,6 +297,7 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
     """One segment through the payload-prep + synthesize + validate path.
     Mutates the segment record in place; the caller persists it."""
     payload = pronunciation.prepare_tts_text(segment["text"], rules)
+    pace = segment.get("pace", 1.0)
 
     audio: bytes | None = None
     duration = 0.0
@@ -299,7 +308,7 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
         # BEFORE the call, because a timeout after billing still billed.
         segment["attempts"] = segment.get("attempts", 0) + 1
         try:
-            audio, duration = backend.synthesize(payload, voice_id)
+            audio, duration = backend.synthesize(payload, voice_id, pace)
             failure_reason = None
             break
         except SynthesisError as e:
@@ -314,7 +323,8 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
 
     # Truncation sanity check (spec 26.3): a segment that "succeeded" with
     # half the audio is a Failed segment NOW, not a chapter-30 surprise.
-    expected_seconds = len(payload) / CHARS_PER_MINUTE * 60.0
+    # The pace scales the expectation -- 0.8x pace legitimately runs longer.
+    expected_seconds = len(payload) / CHARS_PER_MINUTE * 60.0 / pace
     if expected_seconds > TRUNCATION_MIN_EXPECTED_SECONDS and duration < TRUNCATION_RATIO * expected_seconds:
         segment["status"] = "failed"
         segment["failure_reason"] = (
@@ -329,7 +339,7 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
     segment.update({
         "status": "completed",
         "generated_hash": segment["content_hash"],
-        "payload_hash": payload_basis(payload, backend, voice_id),
+        "payload_hash": payload_basis(payload, backend, voice_id, pace),
         "provider": backend.key,
         "model": backend.model_id,
         "engine_version": backend.engine_version,

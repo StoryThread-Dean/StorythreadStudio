@@ -77,6 +77,33 @@ def test_markers_are_hard_cut_points_and_excludes_vanish():
     assert pause["duration_ms"] == 800
 
 
+def test_pace_changes_are_segment_boundaries():
+    text = ("# C1\n\nNormal prose here.\n\n"
+            "[pace:0.8]Slow passage.[/pace]\n\nNormal after.")
+    segments = _segments(_first_manifest(text))
+    assert [(s["text"], s.get("pace")) for s in segments] == [
+        ("Normal prose here.", None),
+        ("Slow passage.", 0.8),
+        ("Normal after.", None),
+    ]
+
+
+def test_pace_edit_keeps_identity_and_updates_the_record():
+    base = _first_manifest("# C1\n\nKeep me.\n\n[pause:0.4]\n\nSlow me down.")
+    _mark_all_completed(base)
+    target_id = next(s["segment_id"] for s in _segments(base) if s["text"] == "Slow me down.")
+
+    edited = resegment(parse_narration(
+        "# C1\n\nKeep me.\n\n[pause:0.4]\n\n[pace:0.8]Slow me down.[/pace]"),
+        previous=base)
+    target = next(s for s in _segments(edited) if s["text"] == "Slow me down.")
+    # Same text = same identity (no new segment ID, audio pointer kept);
+    # the pace rides the record so the payload basis will flag it stale.
+    assert target["segment_id"] == target_id
+    assert target["pace"] == 0.8
+    assert target["status"] == "completed"
+
+
 def test_every_segment_gets_a_stable_style_id_and_hash():
     segments = _segments(_first_manifest("# C1\n\nSome prose here."))
     assert segments[0]["segment_id"].startswith("seg-")

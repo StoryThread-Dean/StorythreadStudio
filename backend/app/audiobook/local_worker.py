@@ -183,11 +183,12 @@ class KokoroBackend(SynthesisBackend):
         self.model_id = health.get("model", "kokoro-82m")
         self.engine_version = health.get("worker_version", "kokoro-worker unknown")
 
-    def synthesize(self, text: str, voice_id: str) -> tuple[bytes, float]:
+    def synthesize(self, text: str, voice_id: str,
+                   speed: float = 1.0) -> tuple[bytes, float]:
         try:
             response = httpx.post(
                 f"{self.base_url}/synthesize",
-                json={"text": text, "voice": voice_id, "speed": 1.0},
+                json={"text": text, "voice": voice_id, "speed": speed},
                 timeout=SYNTHESIS_TIMEOUT_SECONDS,
             )
         except httpx.TimeoutException:

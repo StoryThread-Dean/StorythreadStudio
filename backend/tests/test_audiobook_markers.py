@@ -79,6 +79,49 @@ def test_unclosed_exclude_swallows_to_chapter_end_with_warning():
     assert any("no closing" in w for w in parsed.warnings)
 
 
+def test_pace_spans_tag_their_text_elements():
+    parsed = parse_narration(
+        "# C\n\nNormal speed.\n\n[pace:0.8]Slow and heavy.[/pace]\n\n"
+        "[pace:1.2]Quick and sharp.[/pace]\n\nNormal again."
+    )
+    elements = parsed.chapters[0].elements
+    assert [(e["content"], e.get("pace")) for e in elements] == [
+        ("Normal speed.", None),
+        ("Slow and heavy.", 0.8),
+        ("Quick and sharp.", 1.2),
+        ("Normal again.", None),
+    ]
+    assert parsed.warnings == []
+
+
+def test_pace_span_can_contain_pauses():
+    parsed = parse_narration("# C\n\n[pace:0.8]First beat.\n\n[pause:0.5]\n\nSecond beat.[/pace]")
+    elements = parsed.chapters[0].elements
+    assert [e["type"] for e in elements] == ["text", "pause", "text"]
+    assert elements[0]["pace"] == 0.8
+    assert elements[2]["pace"] == 0.8
+
+
+def test_invalid_pace_warns_and_uses_normal():
+    parsed = parse_narration("# C\n\n[pace:9]Too fast to be real.[/pace]")
+    assert parsed.chapters[0].elements[0].get("pace") is None
+    assert any("not a valid pace" in w for w in parsed.warnings)
+
+
+def test_unclosed_pace_applies_to_rest_of_chapter_with_warning():
+    parsed = parse_narration("# C\n\nNormal.\n\n[pace:0.7]Slow from here on.")
+    elements = parsed.chapters[0].elements
+    assert elements[0].get("pace") is None
+    assert elements[1]["pace"] == 0.7
+    assert any("no closing [/pace]" in w for w in parsed.warnings)
+
+
+def test_nested_pace_warns_and_ignores_inner():
+    parsed = parse_narration("# C\n\n[pace:0.8]Outer [pace:1.5] still outer.[/pace]")
+    assert parsed.chapters[0].elements[0]["pace"] == 0.8
+    assert any("cannot nest" in w for w in parsed.warnings)
+
+
 def test_structure_json_shape():
     structure = parse_narration("# One\n\nProse.\n\n[scene-break]").to_structure()
     assert structure["version"] == 1

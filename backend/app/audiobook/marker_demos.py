@@ -74,6 +74,15 @@ DEMO_SCRIPTS: dict[str, str] = {
         "Say is a powerful way to fine-tune your audiobook to just how you "
         "want it to sound."
     ),
+    "pace": (
+        "This sentence moves at the narrator's natural pace."
+        "\n\n[pause:0.5]\n\n"
+        "[pace:0.8]When a moment needs weight, slow the narration down, and "
+        "let the scene breathe around the listener.[/pace]"
+        "\n\n[pause:0.5]\n\n"
+        "[pace:1.2]And when the fight breaks out, the pace quickens, blow "
+        "after blow, carrying the listener through the action.[/pace]"
+    ),
     "exclude": (
         "This sentence is narrated normally."
         "\n\n[exclude]This author note sits in the text but is never spoken.[/exclude]\n\n"
@@ -108,7 +117,8 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
             etype = element["type"]
             if etype == "text":
                 payload = prepare_tts_text(element["content"], rules)
-                audio, _duration = backend.synthesize(payload, voice_id)
+                audio, _duration = backend.synthesize(
+                    payload, voice_id, element.get("pace", 1.0))
                 pieces.append(audio)
             elif etype == "pause":
                 pieces.append(int(element["duration_ms"]))

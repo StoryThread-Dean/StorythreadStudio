@@ -88,18 +88,27 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
     items: list[dict] = []
     pending_paragraphs: list[str] = []
     pending_len = 0
+    pending_pace = 1.0
 
     def flush() -> None:
         nonlocal pending_paragraphs, pending_len
         if pending_paragraphs:
-            items.append({"kind": "segment_text",
-                          "text": "\n\n".join(pending_paragraphs)})
+            item = {"kind": "segment_text",
+                    "text": "\n\n".join(pending_paragraphs)}
+            if pending_pace != 1.0:
+                item["pace"] = pending_pace
+            items.append(item)
             pending_paragraphs = []
             pending_len = 0
 
     for element in elements:
         etype = element.get("type")
         if etype == "text":
+            # A pace change is a hard boundary -- one segment, one speed.
+            pace = element.get("pace", 1.0)
+            if pace != pending_pace:
+                flush()
+                pending_pace = pace
             # Paragraphs group until the cap; oversize paragraphs split.
             for paragraph in element["content"].split("\n\n"):
                 paragraph = paragraph.strip()
@@ -193,6 +202,8 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
                     "content_hash": content_hash(raw["text"]),
                     "status": "pending",
                 }
+                if raw.get("pace"):
+                    segment["pace"] = raw["pace"]
                 items.append(segment)
                 new_segment_slots.append(segment)
             else:
@@ -211,9 +222,15 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
             old = old_segments[matches[new_index]]
             matched_old_indexes.add(matches[new_index])
             # Keep EVERYTHING from the old record (id, audio, generated
-            # hash, provider, attempts...) -- only its chapter home is
-            # refreshed, since chapters may have renumbered around it.
+            # hash, provider, attempts...) -- only the chapter home and the
+            # CURRENT pace are refreshed. Same text at a new pace keeps its
+            # identity; the payload basis catches the pace change and
+            # re-queues the audio (never a new segment ID).
             preserved = {**old, "chapter_id": slot["chapter_id"]}
+            if slot.get("pace"):
+                preserved["pace"] = slot["pace"]
+            else:
+                preserved.pop("pace", None)
             slot.clear()
             slot.update(preserved)
         else:

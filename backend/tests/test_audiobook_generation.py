@@ -42,7 +42,7 @@ class FakeBackend(SynthesisBackend):
     model_id = "fake-tts-1"
     engine_version = "fake-worker 1.0"
 
-    def synthesize(self, text: str, voice_id: str) -> tuple[bytes, float]:
+    def synthesize(self, text: str, voice_id: str, speed: float = 1.0) -> tuple[bytes, float]:
         return b"FAKEAUDIO:" + text[:16].encode(), len(text) / 1000 * 60.0
 
 
@@ -55,7 +55,7 @@ class BlockingBackend(FakeBackend):
         self.release = threading.Event()
         self._calls = 0
 
-    def synthesize(self, text: str, voice_id: str) -> tuple[bytes, float]:
+    def synthesize(self, text: str, voice_id: str, speed: float = 1.0) -> tuple[bytes, float]:
         self._calls += 1
         if self._calls == 1:
             self.first_started.set()
@@ -130,7 +130,7 @@ def test_payload_prep_applies_say_and_pronunciations(tmp_path):
     sent: list[str] = []
 
     class SpyBackend(FakeBackend):
-        def synthesize(self, text: str, voice_id: str):
+        def synthesize(self, text: str, voice_id: str, speed: float = 1.0):
             sent.append(text)
             return super().synthesize(text, voice_id)
 
@@ -150,7 +150,7 @@ def test_retry_cap_and_pessimistic_attempts(tmp_path):
     ws = _make_workspace(tmp_path, paragraphs=1)
 
     class AlwaysTimingOut(FakeBackend):
-        def synthesize(self, text, voice_id):
+        def synthesize(self, text, voice_id, speed=1.0):
             raise SynthesisError("Request timed out.", retryable=True)
 
     generation.start_run(str(ws), AlwaysTimingOut(), voice_id="v")
@@ -167,7 +167,7 @@ def test_non_retryable_errors_never_auto_retry(tmp_path):
     ws = _make_workspace(tmp_path, paragraphs=1)
 
     class Refusing(FakeBackend):
-        def synthesize(self, text, voice_id):
+        def synthesize(self, text, voice_id, speed=1.0):
             raise SynthesisError("The provider declined this content.", retryable=False)
 
     generation.start_run(str(ws), Refusing(), voice_id="v")
@@ -183,7 +183,7 @@ def test_truncated_audio_fails_validation_and_is_kept_for_inspection(tmp_path):
     ws = _make_workspace(tmp_path, paragraphs=1)
 
     class Truncating(FakeBackend):
-        def synthesize(self, text, voice_id):
+        def synthesize(self, text, voice_id, speed=1.0):
             return b"HALF", 0.2              # far below the pace expectation
 
     generation.start_run(str(ws), Truncating(), voice_id="v")
@@ -246,6 +246,41 @@ def test_force_regenerates_regardless(tmp_path):
     assert run["total_segments"] == 2
     generation.wait_for_idle()
     assert _run_record(ws)["status"] == "completed"
+
+
+def test_pace_flows_to_the_engine_and_pace_edits_requeue(tmp_path):
+    src = tmp_path / "b.md"
+    src.write_text(
+        "# Chapter 1\n\nNormal speed here.\n\n[pace:0.8]Slow and heavy passage.[/pace]\n",
+        encoding="utf-8",
+    )
+    ws = tmp_path / "ws"
+    client.post("/api/audiobook/import", json={
+        "source_path": str(src), "workspace_path": str(ws), "title": "T"})
+
+    speeds: list[float] = []
+
+    class SpeedSpy(FakeBackend):
+        def synthesize(self, text, voice_id, speed=1.0):
+            speeds.append(speed)
+            return super().synthesize(text, voice_id)
+
+    generation.start_run(str(ws), SpeedSpy(), voice_id="v")
+    generation.wait_for_idle()
+    assert speeds == [1.0, 0.8]
+
+    # Removing the pace span keeps the segment's identity but changes its
+    # payload basis -- exactly one segment re-queues.
+    content = client.get("/api/audiobook/narration",
+                         params={"workspace_path": str(ws)}).json()["content"]
+    client.put("/api/audiobook/narration", json={
+        "workspace_path": str(ws),
+        "content": content.replace("[pace:0.8]", "").replace("[/pace]", ""),
+    })
+    run = generation.start_run(str(ws), SpeedSpy(), voice_id="v")
+    assert run["total_segments"] == 1
+    generation.wait_for_idle()
+    assert speeds[-1] == 1.0
 
 
 # ── Control: pause, cancel, single-run, lock ─────────────────────────────────
@@ -374,3 +409,4 @@ def test_pause_endpoint_409_when_nothing_is_running(tmp_path):
     response = client.post("/api/audiobook/generation/pause",
                            json={"workspace_path": str(ws)})
     assert response.status_code == 409
+

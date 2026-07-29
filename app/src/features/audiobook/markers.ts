@@ -11,10 +11,11 @@ export function stripAudioMarkers(text: string): string {
     // Wrapping markers dissolve to their displayed inner text.
     .replace(/\[say:[^\]]*\]([\s\S]*?)\[\/say\]/gi, "$1")
     .replace(/\[exclude\]([\s\S]*?)\[\/exclude\]/gi, "$1")
+    .replace(/\[pace:[^\]]*\]([\s\S]*?)\[\/pace\]/gi, "$1")
     // Standalone markers vanish entirely.
     .replace(/\[(?:pause\s*:[^\]]*|scene-break|chapter-break)\]/gi, "")
     // Orphaned halves of wrapping markers (unclosed edits) vanish too.
-    .replace(/\[\/?(?:say(?::[^\]]*)?|exclude)\]/gi, "")
+    .replace(/\[\/?(?:say(?::[^\]]*)?|exclude|pace(?::[^\]]*)?)\]/gi, "")
     // Tidy the blank lines the removed markers leave behind.
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n");

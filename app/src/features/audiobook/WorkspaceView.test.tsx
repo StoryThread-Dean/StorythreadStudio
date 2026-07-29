@@ -143,6 +143,19 @@ describe("WorkspaceView", () => {
     expect(textarea.value).toContain("[exclude]Second prose.[/exclude]");
   });
 
+  it("Slow and Fast wrap the selection in pace spans", async () => {
+    const textarea = await renderLoaded();
+    const start = NARRATION.indexOf("First prose.");
+    textarea.setSelectionRange(start, start + "First prose.".length);
+    fireEvent.click(screen.getByText("Slow"));
+    expect(textarea.value).toContain("[pace:0.85]First prose.[/pace]");
+
+    const start2 = textarea.value.indexOf("Second prose.");
+    textarea.setSelectionRange(start2, start2 + "Second prose.".length);
+    fireEvent.click(screen.getByText("Fast"));
+    expect(textarea.value).toContain("[pace:1.1]Second prose.[/pace]");
+  });
+
   it("Remove strips markers from the selection, keeping the words", async () => {
     const textarea = await renderLoaded();
     const marked = "# Chapter 1\n\nKeep. [say:KAY-lith]Kaelith[/say] stays.\n\n[pause:1.5]\n\nEnd.";
@@ -170,7 +183,7 @@ describe("WorkspaceView", () => {
     await renderLoaded();
     fireEvent.click(screen.getByText("What's this?"));
     expect(screen.getByText(/generated live by the free local narrator/)).toBeTruthy();
-    expect(screen.getAllByText("Hear it")).toHaveLength(5);
+    expect(screen.getAllByText("Hear it")).toHaveLength(6);
   });
 
   it("save is manual: PUT sends the buffer, chapters and warnings update", async () => {

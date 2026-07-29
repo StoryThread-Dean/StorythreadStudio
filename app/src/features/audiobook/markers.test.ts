@@ -22,6 +22,11 @@ describe("stripAudioMarkers", () => {
       .toBe("A.\n\n### Act I\n\nB.");
   });
 
+  it("dissolves pace spans keeping the inner text", () => {
+    expect(stripAudioMarkers("Calm. [pace:0.8]Slow part.[/pace] Calm again."))
+      .toBe("Calm. Slow part. Calm again.");
+  });
+
   it("cleans up orphaned halves from hand-edits", () => {
     const out = stripAudioMarkers("Broken [say:x]word without close and [/exclude] tail.");
     expect(out).not.toContain("[say");

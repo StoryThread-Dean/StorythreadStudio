@@ -125,7 +125,7 @@ def test_preview_endpoint_returns_wav_with_payload_prep(tmp_path, monkeypatch):
     class FakeBackend(KokoroBackend):
         def __init__(self):
             super().__init__("http://x", {})
-        def synthesize(self, text, voice_id):
+        def synthesize(self, text, voice_id, speed=1.0):
             sent.append(text)
             return b"RIFFfake", 1.0
 
@@ -169,7 +169,7 @@ def test_preview_selection_renders_markers_and_rules(tmp_path, monkeypatch):
     class FakeBackend(KokoroBackend):
         def __init__(self):
             super().__init__("http://x", {})
-        def synthesize(self, text, voice_id):
+        def synthesize(self, text, voice_id, speed=1.0):
             sent.append(text)
             # A tiny real WAV so concat_wav can stitch it.
             import io
@@ -213,3 +213,4 @@ def test_preview_selection_requires_a_selection(tmp_path):
     })
     assert response.status_code == 400
     assert "Select a passage" in response.json()["detail"]
+

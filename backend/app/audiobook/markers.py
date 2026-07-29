@@ -34,6 +34,16 @@ _EXCLUDE_RE = re.compile(
 )
 _EXCLUDE_OPEN_RE = re.compile(r"\[exclude\]", re.IGNORECASE)
 
+# Pace spans: [pace:0.85]...[/pace] narrates its contents at a different
+# speed -- slower to let a scene breathe, faster to carry an action beat.
+# Universal by construction: the local engine takes speed natively, cloud
+# engines either do too or get time-stretched at assembly.
+_PACE_RE = re.compile(r"\[pace:([^\]]*)\](.*?)\[/pace\]", re.IGNORECASE | re.DOTALL)
+_PACE_OPEN_RE = re.compile(r"\[pace:([^\]]*)\]", re.IGNORECASE)
+_PACE_CLOSE_RE = re.compile(r"\[/pace\]", re.IGNORECASE)
+
+PACE_MIN, PACE_MAX = 0.5, 2.0
+
 
 @dataclass
 class ParsedChapter:
@@ -116,48 +126,109 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
             tail_excluded = {"type": "excluded", "content": tail_text}
         body_wo_excludes = body_wo_excludes[:cut]
 
-    # 2. Walk the remaining text, splitting at markers. The placeholder
-    #    marks where an excluded block sat; its element is emitted at that
-    #    spot so reading order is preserved.
-    pos = 0
+    # 2. Split into pace regions: text inside [pace:X]...[/pace] carries a
+    #    speed; everything else runs at 1.0. Regions are processed in
+    #    order, so the exclude placeholders' iterator stays in sync.
+    regions = _pace_regions(body_wo_excludes, warnings, chapter_title)
+
+    # 3. Walk each region's text, splitting at the remaining markers. The
+    #    placeholder marks where an excluded block sat; its element is
+    #    emitted at that spot so reading order is preserved.
     pending_excludes = iter(elements_holder)
 
-    def _flush_with_excludes(chunk: str) -> None:
+    def _flush_with_excludes(chunk: str, pace: float) -> None:
         pieces = chunk.split("\x00EXCL\x00")
         for i, piece in enumerate(pieces):
             text = piece.strip()
             if text:
-                elements.append({"type": "text", "content": text})
+                element = {"type": "text", "content": text}
+                if pace != 1.0:
+                    element["pace"] = pace
+                elements.append(element)
             if i < len(pieces) - 1:
                 try:
                     elements.append(next(pending_excludes))
                 except StopIteration:
                     pass
 
-    for match in _MARKER_RE.finditer(body_wo_excludes):
-        _flush_with_excludes(body_wo_excludes[pos : match.start()])
-        pos = match.end()
-        if match.group(1):                       # pause with duration
-            raw = (match.group(2) or "").strip()
-            try:
-                seconds = float(raw)
-                if not (0 < seconds <= 60):
-                    raise ValueError
-                elements.append({"type": "pause", "duration_ms": int(round(seconds * 1000))})
-            except ValueError:
-                warnings.append(
-                    f"Chapter '{chapter_title}': [pause:{raw}] is not a valid duration "
-                    "(use seconds, e.g. [pause:0.8]); the marker was ignored."
-                )
-        elif match.group(3):
-            elements.append({"type": "scene_break"})
-        else:
-            elements.append({"type": "chapter_break"})
+    for pace, region in regions:
+        pos = 0
+        for match in _MARKER_RE.finditer(region):
+            _flush_with_excludes(region[pos : match.start()], pace)
+            pos = match.end()
+            if match.group(1):                   # pause with duration
+                raw = (match.group(2) or "").strip()
+                try:
+                    seconds = float(raw)
+                    if not (0 < seconds <= 60):
+                        raise ValueError
+                    elements.append({"type": "pause", "duration_ms": int(round(seconds * 1000))})
+                except ValueError:
+                    warnings.append(
+                        f"Chapter '{chapter_title}': [pause:{raw}] is not a valid duration "
+                        "(use seconds, e.g. [pause:0.8]); the marker was ignored."
+                    )
+            elif match.group(3):
+                elements.append({"type": "scene_break"})
+            else:
+                elements.append({"type": "chapter_break"})
+        _flush_with_excludes(region[pos:], pace)
 
-    _flush_with_excludes(body_wo_excludes[pos:])
     if tail_excluded is not None:
         elements.append(tail_excluded)
     return elements
+
+
+def _parse_pace_value(raw: str, warnings: list[str], chapter_title: str) -> float:
+    try:
+        pace = float(raw.strip())
+        if not (PACE_MIN <= pace <= PACE_MAX):
+            raise ValueError
+        return pace
+    except ValueError:
+        warnings.append(
+            f"Chapter '{chapter_title}': [pace:{raw.strip()}] is not a valid pace "
+            f"(use {PACE_MIN} to {PACE_MAX}, e.g. [pace:0.85]); normal pace was used."
+        )
+        return 1.0
+
+
+def _pace_regions(body: str, warnings: list[str], chapter_title: str) -> list[tuple[float, str]]:
+    """Split a chapter body into (pace, chunk) runs, in reading order.
+    Nested pace spans are not supported (warned, inner opener dropped);
+    an unclosed [pace:...] applies to the rest of the chapter (warned)."""
+    regions: list[tuple[float, str]] = []
+    pos = 0
+    for match in _PACE_RE.finditer(body):
+        if match.start() > pos:
+            regions.append((1.0, body[pos:match.start()]))
+        pace = _parse_pace_value(match.group(1), warnings, chapter_title)
+        inner = match.group(2)
+        if _PACE_OPEN_RE.search(inner):
+            warnings.append(
+                f"Chapter '{chapter_title}': pace markers cannot nest; the inner "
+                "[pace:...] was ignored."
+            )
+            inner = _PACE_OPEN_RE.sub("", inner)
+        regions.append((pace, inner))
+        pos = match.end()
+
+    tail = body[pos:]
+    leftover = _PACE_OPEN_RE.search(tail)
+    if leftover:
+        warnings.append(
+            f"Chapter '{chapter_title}': a [pace:...] has no closing [/pace]; "
+            "it applies to the rest of the chapter."
+        )
+        before = tail[: leftover.start()]
+        if before.strip():
+            regions.append((1.0, _PACE_CLOSE_RE.sub("", before)))
+        pace = _parse_pace_value(leftover.group(1), warnings, chapter_title)
+        regions.append((pace, _PACE_CLOSE_RE.sub("", tail[leftover.end():])))
+    elif tail.strip():
+        # Stray closers with no opener are dropped silently -- harmless.
+        regions.append((1.0, _PACE_CLOSE_RE.sub("", tail)))
+    return regions
 
 
 def parse_narration(narration_text: str) -> ParsedNarration:
