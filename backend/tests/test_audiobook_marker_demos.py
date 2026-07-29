@@ -93,12 +93,12 @@ def test_say_demo_covers_both_use_cases():
     spoken = " ".join(backend.texts)
     # Case 1 -- a word the engine cannot guess: raw form once, fixed form once.
     assert "Saoirse." in spoken
-    assert "ser sha" in spoken                     # speakable() applied
+    assert "sersha" in spoken                      # flattened AND fused
     # Case 2 -- regional variants of the same name: the engine's default
-    # plus two forced pronunciations.
+    # plus two forced pronunciations, no hesitation gaps.
     assert "says: Lara." in spoken
-    assert "lar ah" in spoken
-    assert "lair ah" in spoken
+    assert "larah" in spoken
+    assert "lairah" in spoken
     assert "[say:" not in spoken                   # markup never narrated
 
 

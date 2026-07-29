@@ -139,7 +139,7 @@ def test_payload_prep_applies_say_and_pronunciations(tmp_path):
     # [say] resolved (spoken form flattened so the engine can't spell it
     # as an acronym), dictionary applied, ' -- ' became an em dash --
     # payload only; the narration file keeps the writer's text.
-    assert sent == ["kay lith met vair roth—again."]
+    assert sent == ["kaylith met vairroth—again."]
     narration = (ws / "manuscript" / "narration-copy.md").read_text(encoding="utf-8")
     assert "[say:KAY-lith]Kaelith[/say]" in narration
 

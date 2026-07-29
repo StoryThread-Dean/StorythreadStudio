@@ -95,16 +95,23 @@ export function MarkerHelpPanel() {
           <div key={item.kind} className="rounded border border-zinc-800 bg-zinc-950/60 p-2.5">
             <div className="mb-1 flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-zinc-200">{item.label}</p>
-              <button
-                onClick={() => void hearIt(item.kind)}
-                disabled={loadingKind !== null}
-                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
-              >
-                {loadingKind === item.kind
-                  ? <Loader2 size={10} className="animate-spin" />
-                  : <Volume2 size={10} className={playingKind === item.kind ? "text-emerald-400" : ""} />}
-                Hear it
-              </button>
+              <span className="flex shrink-0 items-center gap-1.5">
+                {/* Writers used to metered AI need to know this button is
+                    free -- it runs on their own machine, no tokens spent. */}
+                <span className="text-[9px] text-zinc-600" title="Generated on your computer -- no tokens or credits are spent">
+                  local &middot; free
+                </span>
+                <button
+                  onClick={() => void hearIt(item.kind)}
+                  disabled={loadingKind !== null}
+                  className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                >
+                  {loadingKind === item.kind
+                    ? <Loader2 size={10} className="animate-spin" />
+                    : <Volume2 size={10} className={playingKind === item.kind ? "text-emerald-400" : ""} />}
+                  Hear it
+                </button>
+              </span>
             </div>
             <p className="text-[11px] leading-relaxed text-zinc-500">{item.body}</p>
           </div>

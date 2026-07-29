@@ -134,23 +134,28 @@ def apply_pronunciations(text: str, rules: list[PronunciationRule]) -> str:
 # ── Making spoken forms actually speakable ────────────────────────────────────
 # Writers type phonetic respellings the standard way: caps for the
 # stressed syllable, hyphens between syllables ("LAR-uh", "KAY-lith").
-# The espeak-based phonemizer reads ALL-CAPS tokens as ACRONYMS and spells
-# them letter by letter -- "LAR-uh" came out "L, A, R, uh" in live testing.
-# So every spoken form is flattened on its way into the payload: caps
-# syllables lowercased, hyphens opened into spaces ("lar uh"). The
-# dictionary file and everything on screen keep the writer's spelling.
+# Two engine behaviors fight that convention (both live findings):
+#   1. ALL-CAPS tokens are read as ACRONYMS and spelled letter by letter
+#      ("LAR-uh" came out "L, A, R, uh") -- so caps syllables lowercase.
+#   2. A syllable boundary rendered as a space (or kept as a hyphen)
+#      becomes a word boundary -- an audible hesitation ("Lar... a") --
+#      so hyphenated syllables FUSE into one word: "LAR-ah" -> "larah".
+# Spaces the writer actually typed ("Doctor Vex") remain word breaks.
+# The dictionary file and everything on screen keep the writer's spelling.
 
 def speakable(spoken: str) -> str:
-    tokens = re.split(r"[-\s]+", spoken.strip())
-    out = []
-    for token in tokens:
-        # Only flatten tokens that LOOK like shouted syllables (letters,
-        # all caps, 2+ chars). Mixed case ("McRae") passes through.
-        if len(token) >= 2 and token.isalpha() and token.isupper():
-            out.append(token.lower())
-        else:
-            out.append(token)
-    return " ".join(t for t in out if t)
+    words_out = []
+    for word in spoken.strip().split():
+        syllables = []
+        for syllable in word.split("-"):
+            # Only flatten chunks that LOOK like shouted syllables
+            # (letters, all caps, 2+ chars). Mixed case ("McRae") passes.
+            if len(syllable) >= 2 and syllable.isalpha() and syllable.isupper():
+                syllables.append(syllable.lower())
+            else:
+                syllables.append(syllable)
+        words_out.append("".join(syllables))
+    return " ".join(w for w in words_out if w)
 
 
 # ── Inline [say] overrides ────────────────────────────────────────────────────
