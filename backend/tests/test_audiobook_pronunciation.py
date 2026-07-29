@@ -14,6 +14,8 @@ from app.audiobook.pronunciation import (
     apply_pronunciations,
     normalize_for_tts,
     prepare_tts_text,
+    resolve_say_markers,
+    strip_say_markers,
 )
 
 
@@ -66,16 +68,47 @@ def test_effective_rules_merges_workspace_then_global(tmp_path):
     (workspace / "manuscript").mkdir(parents=True)
     pronunciation.save_workspace_rules(str(workspace), [
         PronunciationRule("Kaelith", "KAY-lith", scope="audiobook"),
-        PronunciationRule("later", "ignored", scope="occurrence"),   # deferred scope
     ])
     pronunciation.save_global_rules([
         PronunciationRule("Reyes", "RAY-ess", scope="all"),
     ])
 
     rules = pronunciation.effective_rules(str(workspace))
-    names = [r.display_text for r in rules]
-    # Workspace first (wins ties), occurrence-scope excluded for now.
-    assert names == ["Kaelith", "Reyes"]
+    # Workspace first -- a per-book rule wins over a global one.
+    assert [r.display_text for r in rules] == ["Kaelith", "Reyes"]
+
+
+def test_legacy_occurrence_scope_loads_as_audiobook(tmp_path):
+    # Files written before the [say] design may carry scope "occurrence";
+    # they migrate to audiobook scope instead of being dropped.
+    workspace = tmp_path / "ws"
+    (workspace / "manuscript").mkdir(parents=True)
+    with open(pronunciation.workspace_rules_path(str(workspace)), "w", encoding="utf-8") as f:
+        json.dump([{"display_text": "Old", "spoken_text": "OLD", "scope": "occurrence"}], f)
+    rules = pronunciation.load_workspace_rules(str(workspace))
+    assert rules[0].scope == "audiobook"
+
+
+# ── Inline [say] overrides ────────────────────────────────────────────────────
+
+def test_say_marker_payload_and_display_sides():
+    text = "She met [say:KAY-lith]Kaelith[/say] at the gate."
+    assert resolve_say_markers(text) == "She met KAY-lith at the gate."
+    assert strip_say_markers(text) == "She met Kaelith at the gate."
+
+
+def test_say_marker_wins_over_dictionary_for_its_span():
+    rules = [PronunciationRule("Kaelith", "kuh-LEETH")]
+    text = "[say:KAY-lith]Kaelith[/say] smiled. Kaelith left."
+    out = prepare_tts_text(text, rules)
+    # The marked occurrence uses the writer's explicit form; the unmarked
+    # occurrence falls through to the dictionary rule.
+    assert out == "KAY-lith smiled. kuh-LEETH left."
+
+
+def test_say_marker_case_insensitive_and_multiline():
+    text = "[SAY:two words]something\nspanning lines[/say] end."
+    assert resolve_say_markers(text) == "two words end."
 
 
 def test_loader_skips_malformed_entries(tmp_path):

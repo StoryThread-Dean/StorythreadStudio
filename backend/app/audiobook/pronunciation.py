@@ -6,11 +6,14 @@
 # text sent to a speech provider. The narration copy on screen is never
 # rewritten -- same principle as the em dash rules below.
 #
-# Scopes (from the spec):
+# Scopes (from the spec, revised 2026-07-28):
 #   "audiobook"  -- applies throughout this audiobook (workspace file)
 #   "all"        -- applies in every audiobook (app-level file)
-#   "occurrence" -- one specific spot; STORED today, APPLIED in the
-#                   generation stage once segments exist to anchor to.
+#   One-spot overrides are NOT dictionary entries -- a position-anchored
+#   rule breaks as soon as the writer edits upstream text. They are inline
+#   [say:KAY-lith]Kaelith[/say] markers in the narration copy itself, which
+#   survive external editing and hash naturally with the text. Legacy
+#   "occurrence" entries in old files load as audiobook scope.
 #
 # House-rule interactions (spec section "Text Normalization"):
 #   - The sanitizer never touches narration text -- it is the writer's own
@@ -35,7 +38,7 @@ GLOBAL_RULES_PATH = Path.home() / ".storythread" / "audiobook-pronunciations.jso
 class PronunciationRule:
     display_text: str
     spoken_text: str
-    scope: str = "audiobook"            # audiobook | all | occurrence
+    scope: str = "audiobook"            # audiobook | all
     case_sensitive: bool = False
 
 
@@ -51,7 +54,9 @@ def _rules_from_raw(raw: object) -> list[PronunciationRule]:
         spoken = str(entry.get("spoken_text") or "").strip()
         if not display or not spoken:
             continue
-        scope = entry.get("scope") if entry.get("scope") in ("audiobook", "all", "occurrence") else "audiobook"
+        # Unknown scopes -- including legacy "occurrence" entries from
+        # before the [say] marker design -- fall back to audiobook scope.
+        scope = entry.get("scope") if entry.get("scope") in ("audiobook", "all") else "audiobook"
         rules.append(PronunciationRule(
             display_text=display,
             spoken_text=spoken,
@@ -97,13 +102,13 @@ def save_global_rules(rules: list[PronunciationRule]) -> None:
 
 def effective_rules(workspace_path: str) -> list[PronunciationRule]:
     """
-    Rules that apply to whole-text substitution right now: the workspace's
-    audiobook-scope rules plus the app-level "all" rules. Workspace rules
-    come FIRST so a per-book rule wins over a global one for the same word
-    (first substitution consumes the match). Occurrence-scope rules are
-    excluded until the generation stage can anchor them to segments.
+    Rules that apply to whole-text substitution: the workspace's rules plus
+    the app-level "all" rules. Workspace rules come FIRST so a per-book
+    rule wins over a global one for the same word (first substitution
+    consumes the match). One-spot overrides are inline [say] markers, not
+    rules -- they are resolved before any rule runs (see prepare_tts_text).
     """
-    ws = [r for r in load_workspace_rules(workspace_path) if r.scope in ("audiobook", "all")]
+    ws = list(load_workspace_rules(workspace_path))
     global_only = [r for r in load_global_rules() if r.scope == "all"]
     return ws + global_only
 
@@ -124,6 +129,23 @@ def apply_pronunciations(text: str, rules: list[PronunciationRule]) -> str:
     return out
 
 
+# ── Inline [say] overrides ────────────────────────────────────────────────────
+# [say:KAY-lith]Kaelith[/say] -- the writer's one-spot pronunciation
+# override, living IN the narration text (text is the source of truth).
+# The payload gets the spoken form; every display path shows the original.
+_SAY_RE = re.compile(r"\[say:([^\]]+)\](.*?)\[/say\]", re.IGNORECASE | re.DOTALL)
+
+
+def resolve_say_markers(text: str) -> str:
+    """Payload side: replace each [say] span with its spoken form."""
+    return _SAY_RE.sub(lambda m: m.group(1).strip(), text)
+
+
+def strip_say_markers(text: str) -> str:
+    """Display side: drop the markup, keep the original displayed word."""
+    return _SAY_RE.sub(lambda m: m.group(2), text)
+
+
 # ' -- ' (and bare '--') become a true em dash in the payload. A speech
 # engine treats an em dash as natural mid-sentence punctuation; '--' it may
 # read out loud. The narration file itself keeps whatever the writer wrote.
@@ -136,9 +158,15 @@ def normalize_for_tts(text: str) -> str:
 
 def prepare_tts_text(text: str, rules: list[PronunciationRule]) -> str:
     """
-    The full payload-preparation step for one piece of narration text:
-    pronunciation substitutions first (rules were written against what the
-    writer SEES), then punctuation normalization. Display text elsewhere is
-    never changed by design.
+    The payload-preparation pipeline for one piece of narration text, in
+    the spec's fixed order:
+
+      1. [say] inline overrides   (the writer's explicit word always wins)
+      2. pronunciation rules      (written against what the writer SEES)
+      3. verbalization            (numbers/romans/abbreviations -- arrives
+                                   with the generation stage; slot reserved)
+      4. punctuation normalization ('--' to em dash)
+
+    Display text elsewhere is never changed by design.
     """
-    return normalize_for_tts(apply_pronunciations(text, rules))
+    return normalize_for_tts(apply_pronunciations(resolve_say_markers(text), rules))

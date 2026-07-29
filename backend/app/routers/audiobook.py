@@ -132,7 +132,9 @@ def save_narration(request: SaveNarrationRequest):
 class PronunciationEntry(BaseModel):
     display_text: str
     spoken_text: str
-    scope: str = Field(default="audiobook", pattern="^(audiobook|all|occurrence)$")
+    # One-spot overrides are inline [say] markers in the narration text,
+    # not dictionary entries -- so only the two file scopes are valid here.
+    scope: str = Field(default="audiobook", pattern="^(audiobook|all)$")
     case_sensitive: bool = False
 
 
