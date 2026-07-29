@@ -17,12 +17,13 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.audiobook import (
     generation,
     import_service,
+    local_worker,
     locking,
     pronunciation,
     recents_store,
@@ -153,6 +154,58 @@ def get_segments(workspace_path: str):
             detail="No segments manifest yet. Save the narration once to build it.",
         )
     return manifest
+
+
+# ── Local narrator engine + voices + preview ─────────────────────────────────
+
+@router.get("/local-engine/status")
+def local_engine_status():
+    """Installed / running state for the component manager UI. Never
+    spawns the worker -- status checks must stay instant."""
+    return local_worker.installed_state()
+
+
+@router.get("/voices")
+def get_voices(provider: str = "local-kokoro"):
+    """The voice catalog. Spawns the local worker on first call (a few
+    seconds while the model loads), then serves from the live process."""
+    if provider != "local-kokoro":
+        raise HTTPException(status_code=400,
+                            detail="Only the local narrator has voices so far.")
+    try:
+        return {"voices": local_worker.list_voices()}
+    except local_worker.WorkerUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+class PreviewRequest(BaseModel):
+    text: str
+    voice_id: str
+    provider: str = "local-kokoro"
+    workspace_path: str | None = None    # when set, pronunciation rules apply
+
+
+@router.post("/preview")
+def preview_voice(request: PreviewRequest):
+    """A short voice preview. Local previews are free (spec 18); the text
+    is capped so a stray full-chapter paste can't stall the worker."""
+    text = request.text.strip()[:600]
+    if not text:
+        raise HTTPException(status_code=400, detail="Nothing to preview.")
+    try:
+        backend = synthesis.resolve_backend(request.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if request.workspace_path and workspace.is_workspace(request.workspace_path):
+        rules = pronunciation.effective_rules(request.workspace_path)
+        text = pronunciation.prepare_tts_text(text, rules)
+    else:
+        text = pronunciation.normalize_for_tts(pronunciation.resolve_say_markers(text))
+    try:
+        audio, _duration = backend.synthesize(text, request.voice_id)
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(content=audio, media_type="audio/wav")
 
 
 # ── Generation ────────────────────────────────────────────────────────────────

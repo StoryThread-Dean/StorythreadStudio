@@ -49,6 +49,15 @@ function mockFetch() {
     if (url.includes("/pronunciations")) {
       return { ok: true, json: async () => ({ workspace_rules: [], global_rules: [] }) };
     }
+    // The GenerationPanel rail loads voices + run status on mount.
+    if (url.includes("/voices")) {
+      return { ok: true, json: async () => ({ voices: [
+        { id: "af_heart", label: "Heart (American female)", language: "en-US", gender_presentation: "female" },
+      ] }) };
+    }
+    if (url.includes("/generation/status")) {
+      return { ok: true, json: async () => ({ run: null, active: false }) };
+    }
     throw new Error(`unexpected fetch ${url}`);
   });
 }
@@ -86,6 +95,19 @@ describe("WorkspaceView", () => {
     expect(textarea.value).toContain("First prose.\n\n[pause:0.8]\n\n");
     // Inserting marks the buffer dirty -- Save lights up.
     expect(screen.getByTitle("Unsaved changes")).toBeTruthy();
+  });
+
+  it("inserting a marker preserves the scroll position (no jump to bottom)", async () => {
+    const textarea = await renderLoaded();
+    const caret = NARRATION.indexOf("First prose.");
+    textarea.setSelectionRange(caret, caret);
+    // Simulate a scrolled editor -- the regression was the value swap
+    // resetting scrollTop, reading as a jump to the bottom on every click.
+    textarea.scrollTop = 500;
+
+    fireEvent.click(screen.getByText("Scene Break"));
+    expect(textarea.value).toContain("[scene-break]");
+    expect(textarea.scrollTop).toBe(500);
   });
 
   it("[say] wraps the selection and parks the caret for the spoken form", async () => {

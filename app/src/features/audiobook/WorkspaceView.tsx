@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { fetchNarration, saveNarration } from "./api";
+import { GenerationPanel } from "./GenerationPanel";
 import { PronunciationDialog } from "./PronunciationDialog";
 import type { AudiobookChapter, AudiobookProjectPayload } from "./types";
 
@@ -62,21 +63,27 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
 
   // ── Editing helpers ─────────────────────────────────────────────────────
 
-  // Caret restoration has to happen AFTER React re-renders the textarea
-  // with the new value -- a ref + effect pair is the reliable way (a
-  // requestAnimationFrame can fire before the commit and get clobbered).
-  const pendingCaretRef = useRef<number | null>(null);
+  // Caret AND scroll restoration have to happen AFTER React re-renders
+  // the textarea with the new value -- swapping a controlled textarea's
+  // value resets its scroll position, which read as "the page jumps to
+  // the bottom" every time a toolbar button was clicked. We remember both
+  // the caret and scrollTop at click time and put them back post-commit.
+  // focus({preventScroll}) keeps the focus call itself from scrolling.
+  const pendingRestoreRef = useRef<{ caret: number; scrollTop: number } | null>(null);
   useEffect(() => {
-    if (pendingCaretRef.current === null) return;
+    if (pendingRestoreRef.current === null) return;
+    const { caret, scrollTop } = pendingRestoreRef.current;
+    pendingRestoreRef.current = null;
     const ta = textareaRef.current;
     if (ta) {
-      ta.focus();
-      ta.setSelectionRange(pendingCaretRef.current, pendingCaretRef.current);
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(caret, caret);
+      ta.scrollTop = scrollTop;
     }
-    pendingCaretRef.current = null;
   }, [content]);
 
-  /** Type `snippet` at the caret (replacing any selection), keep focus. */
+  /** Type `snippet` at the caret (replacing any selection), keep focus,
+      keep the writer's scroll position exactly where it was. */
   const insertAtCursor = useCallback((snippet: string) => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -84,7 +91,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     const end = ta.selectionEnd ?? start;
     setContent(content.slice(0, start) + snippet + content.slice(end));
     setDirty(true);
-    pendingCaretRef.current = start + snippet.length;
+    pendingRestoreRef.current = { caret: start + snippet.length, scrollTop: ta.scrollTop };
   }, [content]);
 
   /** Wrap the current selection in before/after (Exclude, Say). */
@@ -98,9 +105,12 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     setDirty(true);
     // caretIntoBefore places the caret INSIDE the opening marker (used by
     // [say:|] so the writer types the spoken form immediately).
-    pendingCaretRef.current = caretIntoBefore !== undefined
-      ? start + caretIntoBefore
-      : start + before.length + selected.length + after.length;
+    pendingRestoreRef.current = {
+      caret: caretIntoBefore !== undefined
+        ? start + caretIntoBefore
+        : start + before.length + selected.length + after.length,
+      scrollTop: ta.scrollTop,
+    };
   }, [content]);
 
   const handleSay = useCallback(() => {
@@ -270,6 +280,9 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             />
           )}
         </div>
+
+        {/* Right rail: voice, preview, generate, run controls */}
+        <GenerationPanel workspacePath={workspacePath} />
       </div>
 
       {showPronunciations && (

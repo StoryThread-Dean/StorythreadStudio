@@ -7,6 +7,8 @@
 
 import type {
   AudiobookProjectPayload,
+  GenerationRun,
+  NarratorVoice,
   PronunciationEntry,
   RecentAudiobook,
 } from "./types";
@@ -93,6 +95,73 @@ export async function fetchPronunciations(workspacePath: string): Promise<{
   );
   return toJson(res);
 }
+
+// ── Voices, preview, generation ──────────────────────────────────────────────
+
+export async function fetchVoices(): Promise<NarratorVoice[]> {
+  // First call spawns the local worker and loads the model -- give it
+  // the time it needs instead of failing fast.
+  const res = await fetch(`${API_BASE}/api/audiobook/voices?provider=local-kokoro`);
+  const body = await toJson<{ voices: NarratorVoice[] }>(res);
+  return body.voices;
+}
+
+export async function previewVoice(
+  text: string,
+  voiceId: string,
+  workspacePath: string,
+): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/audiobook/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text, voice_id: voiceId, provider: "local-kokoro",
+      workspace_path: workspacePath,
+    }),
+  });
+  if (!res.ok) {
+    let detail = `Preview failed (${res.status}).`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+    throw new Error(detail);
+  }
+  return res.blob();
+}
+
+export async function startGeneration(
+  workspacePath: string,
+  voiceId: string,
+): Promise<GenerationRun> {
+  const res = await fetch(`${API_BASE}/api/audiobook/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspace_path: workspacePath, provider: "local-kokoro", voice_id: voiceId,
+    }),
+  });
+  return toJson<GenerationRun>(res);
+}
+
+export async function fetchGenerationStatus(
+  workspacePath: string,
+): Promise<{ run: GenerationRun | null; active: boolean }> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/generation/status?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson(res);
+}
+
+async function generationControl(action: "pause" | "cancel" | "resume", workspacePath: string) {
+  const res = await fetch(`${API_BASE}/api/audiobook/generation/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath }),
+  });
+  return toJson(res);
+}
+
+export const pauseGeneration = (ws: string) => generationControl("pause", ws);
+export const cancelGeneration = (ws: string) => generationControl("cancel", ws);
+export const resumeGeneration = (ws: string) => generationControl("resume", ws);
 
 export async function savePronunciations(
   workspacePath: string,

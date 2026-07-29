@@ -13,7 +13,7 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from app.audiobook import generation, locking, pronunciation, recents_store
+from app.audiobook import generation, local_worker, locking, pronunciation, recents_store
 from app.audiobook.synthesis import SynthesisBackend, SynthesisError
 from app.main import app
 
@@ -25,6 +25,11 @@ def _isolated_stores(tmp_path, monkeypatch):
     monkeypatch.setattr(recents_store, "AUDIOBOOKS_DB", tmp_path / "audiobooks.db")
     monkeypatch.setattr(pronunciation, "GLOBAL_RULES_PATH",
                         tmp_path / "global-pronunciations.json")
+    # Hermetic: resolve_backend("local-kokoro") must NEVER find the repo's
+    # dev worker (or a packaged one) from inside pytest -- a test that
+    # spawns the real 340MB model is a bug, not coverage.
+    monkeypatch.setattr(local_worker, "WORKER_INSTALL_DIR", tmp_path / "kokoro-worker")
+    monkeypatch.setattr(local_worker, "_dev_worker_dir", lambda: None)
     yield
     # A test must never leave a worker thread running into the next test.
     generation.request_cancel()
@@ -308,7 +313,7 @@ def test_generate_endpoint_is_honest_about_missing_engines(tmp_path):
         "workspace_path": str(ws), "provider": "local-kokoro", "voice_id": "af_heart",
     })
     assert response.status_code == 400
-    assert "not installed yet" in response.json()["detail"]
+    assert "not installed" in response.json()["detail"]
 
 
 def test_pause_endpoint_409_when_nothing_is_running(tmp_path):

@@ -45,15 +45,15 @@ class SynthesisBackend:
 def resolve_backend(provider: str) -> SynthesisBackend:
     """
     Look up the backend for a provider key, or raise ValueError with a
-    user-facing message. Honest state for Stage B: the run machinery is
-    ready, but no live engine ships until the kokoro-worker lands -- the
-    error says exactly that instead of pretending.
+    user-facing message. Local import avoids a cycle (local_worker imports
+    this module for the base class).
     """
     if provider == "local-kokoro":
-        raise ValueError(
-            "The free local narrator is not installed yet. The local engine "
-            "download arrives later in this release cycle."
-        )
+        from app.audiobook import local_worker
+        try:
+            return local_worker.make_backend()
+        except local_worker.WorkerUnavailableError as e:
+            raise ValueError(str(e))
     if provider in ("openrouter", "nanogpt"):
         raise ValueError(
             "Cloud narration providers arrive in a later stage. The free "
