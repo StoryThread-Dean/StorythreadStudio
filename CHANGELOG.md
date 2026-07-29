@@ -23,6 +23,22 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
+## [1.0.11] - 2026-07-28
+
+### Added
+
+- **Audiobook Converter: specification and staged plan.** The next major feature is now fully specified and scheduled: a standalone converter that turns a manuscript (DOCX / EPUB / Markdown / TXT, or an existing Storythread project) into chapter MP3s, a combined MP3, and an M4B audiobook -- draft the whole book free with the local Kokoro narrator, then "print" once with a premium hosted voice when the book is final. See `docs/audiobook-converter-spec.md` and the roadmap's Scheduled section for the stage-by-stage plan. This is the feature the reserved v1.1.0 version slot will ship under; no converter code is in this release.
+
+### Changed
+
+- **AI request timeout raised from 180 to 300 seconds** (backend and frontend together). Slow reasoning models now legitimately need the headroom on drafting turns, because attached profiles stay in the conversation (the v1.0.10 context fix) and non-caching models re-read everything every turn. The Cancel button still appears after 20 seconds, so nobody is stuck waiting.
+
+### Fixed
+
+- **Writing Companion follow-up turns no longer time out on slow reasoning models** (AionLabs Aion-3.0 and 3.0-mini in live testing -- every Draft-mode reply after the AI's clarifying questions hit the 180-second wall). Two causes fixed: a text selection that stayed highlighted was resent every turn AND re-saved into the conversation each time, growing the payload by a full duplicate copy of the selection per turn; and the old 180-second ceiling no longer fit a slow model doing its heaviest turn. An unchanged selection now rides along from history instead of being resent (the context line shows "Selection (already sent)"), a changed selection still sends, and Enhance mode is unaffected.
+
+---
+
 ## [1.0.10] - 2026-07-25
 
 ### Added
@@ -222,7 +238,8 @@ First public release.
 - Backend sidecar hung at startup in installed builds, causing "Failed to fetch" errors on first project open. The Tauri shell plugin pipes the child process's stdout and stderr through a Receiver that the setup hook was dropping; uvicorn's startup log lines filled the OS pipe buffer and blocked the backend from binding to port 8000. The setup hook now drains the receiver in a detached task so the backend can start cleanly.
 - API requests from the installed app were blocked by CORS even after the backend started, because the allowlist only included Tauri v1's `tauri://localhost` origin. Tauri v2 on Windows uses `http://tauri.localhost`; both Tauri v2 origins are now on the allowlist.
 
-[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.10...HEAD
+[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.11...HEAD
+[1.0.11]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.7...v1.0.8
