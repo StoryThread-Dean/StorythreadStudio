@@ -135,6 +135,65 @@ def test_assemble_all_formats_end_to_end(tmp_path):
     assert float(combined["format"]["duration"]) == pytest.approx(2.5, abs=0.35)
 
 
+def test_metadata_and_cover_ride_the_exports(tmp_path):
+    # Spec 17: the writer's metadata form drives the tags, the cover
+    # embeds as attached art, and use_chapter_names=False makes the
+    # chapter markers generic while filenames keep real titles.
+    from tests.test_audiobook_metadata import RED_PIXEL_PNG
+
+    ws = _make_generated_book(tmp_path, NARRATION, "Working Title")
+    manifest = workspace.load_manifest(ws)
+    manifest["metadata"] = {
+        "title": "The Hollow Road", "subtitle": "A Story",
+        "author": "Dean Peterson", "narrator": "Heart",
+        "series": "Hollow", "series_number": "2",
+        "description": "Two chapters of tone.", "genre": "Adventure",
+        "publication_year": "2026", "publisher": "Storythread",
+        "copyright": "(c) 2026", "language": "en-US",
+        "use_chapter_names": False, "embed_cover": True,
+        "apply_to_chapter_mp3s": True, "cover_file": "cover.png",
+    }
+    workspace.save_manifest(ws, manifest)
+    (Path(ws) / "cover.png").write_bytes(RED_PIXEL_PNG)
+
+    report = assemble_book(ws, ["chapter_mp3", "combined_mp3", "m4b"])
+    assert report["chapters"] == 2
+
+    # Chapter MP3: full tag set applied, generic marker title, real
+    # filename, and the cover as an attached picture stream.
+    mp3 = Path(ws) / "output" / "chapters" / "01 - The Door.mp3"
+    probe = _ffprobe_json(str(mp3), "-show_streams", "-show_entries",
+                          "format_tags=title,album,artist,publisher,date,genre")
+    tags = {k.lower(): v for k, v in probe.get("format", {}).get("tags", {}).items()}
+    assert tags["title"] == "Chapter 1"          # use_chapter_names off
+    assert tags["album"] == "The Hollow Road"    # the metadata title, not manifest
+    assert tags["artist"] == "Dean Peterson"
+    assert tags["publisher"] == "Storythread"
+    assert tags["date"] == "2026"
+    assert tags["genre"] == "Adventure"
+    kinds = [s["codec_type"] for s in probe["streams"]]
+    assert "video" in kinds                      # embedded cover art
+
+    # Combined MP3 + M4B are named after the METADATA title.
+    assert (Path(ws) / "output" / "The Hollow Road.mp3").is_file()
+    m4b = Path(ws) / "output" / "The Hollow Road.m4b"
+    assert m4b.is_file()
+
+    # M4B: generic chapter markers + cover stream + book tags. (The MP4
+    # container has a fixed atom vocabulary -- publisher/language don't
+    # survive it; copyright, date, and genre do.)
+    probe = _ffprobe_json(str(m4b), "-show_chapters", "-show_streams",
+                          "-show_entries", "format_tags=title,artist,copyright,date,genre")
+    assert [c["tags"]["title"] for c in probe["chapters"]] == ["Chapter 1", "Chapter 2"]
+    assert "video" in [s["codec_type"] for s in probe["streams"]]
+    tags = {k.lower(): v for k, v in probe["format"]["tags"].items()}
+    assert tags["title"] == "The Hollow Road"
+    assert tags["artist"] == "Dean Peterson"
+    assert tags["copyright"] == "(c) 2026"
+    assert tags["date"] == "2026"
+    assert tags["genre"] == "Adventure"
+
+
 def test_break_silence_comes_from_narration_settings(tmp_path):
     ws = _make_generated_book(
         tmp_path, "# One\n\nBefore the scene break.\n\n[scene-break]\n\nAfter it.",

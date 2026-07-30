@@ -238,9 +238,49 @@ def assemble_book(workspace_path: str, formats: list[str],
             + ". Generate the audiobook first."
         )
 
-    book_title = manifest.get("title") or "Untitled Audiobook"
-    author = manifest.get("author") or ""
-    narrator = manifest.get("selected_voice") or ""
+    # Book metadata (spec 17): the writer's form over manifest fallbacks.
+    meta = workspace.book_metadata(manifest)
+    book_title = meta["title"] or "Untitled Audiobook"
+    author = meta["author"]
+    narrator = meta["narrator"] or manifest.get("selected_voice") or ""
+    cover_path: Path | None = None
+    if meta["embed_cover"] and meta.get("cover_file"):
+        candidate = Path(workspace_path) / meta["cover_file"]
+        if candidate.is_file():
+            cover_path = candidate
+
+    def _shared_tags() -> list[str]:
+        """Book-level tag arguments every format shares. Empty fields are
+        skipped -- a blank publisher should not write an empty tag."""
+        pairs = [
+            ("album", book_title), ("artist", author), ("composer", narrator),
+            ("album_artist", author), ("genre", meta["genre"] or "Audiobook"),
+            ("date", meta["publication_year"]), ("publisher", meta["publisher"]),
+            ("copyright", meta["copyright"]), ("language", meta["language"]),
+            ("comment", meta["description"]),
+        ]
+        if meta["series"]:
+            number = f" #{meta['series_number']}" if meta["series_number"] else ""
+            pairs.append(("grouping", f"{meta['series']}{number}"))
+        if meta["subtitle"]:
+            pairs.append(("subtitle", meta["subtitle"]))
+        args: list[str] = []
+        for key, value in pairs:
+            if value:
+                args += ["-metadata", f"{key}={value}"]
+        return args
+
+    def _cover_args(input_count: int) -> list[str]:
+        """Extra ffmpeg arguments to embed the cover as attached art.
+        `input_count` = how many -i inputs precede the cover input."""
+        if cover_path is None:
+            return []
+        return ["-i", str(cover_path), "-map", "0:a",
+                "-map", f"{input_count}:v", "-c:v", "copy",
+                "-disposition:v:0", "attached_pic",
+                "-metadata:s:v", "title=Album cover",
+                "-metadata:s:v", "comment=Cover (front)"]
+
     output_dir = Path(workspace_path) / "output"
     chapters_dir = output_dir / "chapters"
     chapters_dir.mkdir(parents=True, exist_ok=True)
@@ -267,17 +307,21 @@ def assemble_book(workspace_path: str, formats: list[str],
             for index, (chapter, wav) in enumerate(mastered, start=1):
                 name = f"{str(index).zfill(width)} - {sanitize_component(chapter['title'])}.mp3"
                 target = chapters_dir / name
-                _run(
-                    [ffmpeg, "-hide_banner", "-y", "-i", str(wav),
-                     "-c:a", "libmp3lame", "-b:a", MP3_BITRATE,
-                     "-metadata", f"title={chapter['title']}",
-                     "-metadata", f"album={book_title}",
-                     "-metadata", f"artist={author}",
-                     "-metadata", f"composer={narrator}",
-                     "-metadata", f"track={index}/{len(mastered)}",
-                     "-id3v2_version", "3", str(target)],
-                    f"Chapter MP3 encode ({chapter['title']})",
-                )
+                chapter_title = (chapter["title"] if meta["use_chapter_names"]
+                                 else f"Chapter {index}")
+                command = [ffmpeg, "-hide_banner", "-y", "-i", str(wav)]
+                if meta["apply_to_chapter_mp3s"]:
+                    command += _cover_args(1)
+                command += ["-c:a", "libmp3lame", "-b:a", MP3_BITRATE,
+                            "-metadata", f"title={chapter_title}",
+                            "-metadata", f"track={index}/{len(mastered)}"]
+                if meta["apply_to_chapter_mp3s"]:
+                    command += _shared_tags()
+                else:
+                    command += ["-metadata", f"album={book_title}",
+                                "-metadata", f"artist={author}"]
+                command += ["-id3v2_version", "3", str(target)]
+                _run(command, f"Chapter MP3 encode ({chapter['title']})")
                 outputs.append(str(target.relative_to(workspace_path)))
 
         # 3. The concat list both remaining formats share.
@@ -296,11 +340,10 @@ def assemble_book(workspace_path: str, formats: list[str],
             _run(
                 [ffmpeg, "-hide_banner", "-y", "-f", "concat", "-safe", "0",
                  "-i", str(concat_list),
+                 *_cover_args(1),
                  "-c:a", "libmp3lame", "-b:a", MP3_BITRATE,
                  "-metadata", f"title={book_title}",
-                 "-metadata", f"album={book_title}",
-                 "-metadata", f"artist={author}",
-                 "-metadata", f"composer={narrator}",
+                 *_shared_tags(),
                  "-id3v2_version", "3", str(target)],
                 "Combined MP3 encode",
             )
@@ -312,17 +355,39 @@ def assemble_book(workspace_path: str, formats: list[str],
             if progress_cb:
                 progress_cb("encoding", 1, 1, "M4B audiobook")
             metadata_file = staging / "ffmetadata.txt"
-            lines = [";FFMETADATA1",
-                     f"title={book_title}", f"album={book_title}",
-                     f"artist={author}", f"composer={narrator}",
-                     "genre=Audiobook"]
+
+            def _ff_escape(value: str) -> str:
+                # FFMETADATA treats these as syntax; escape user text.
+                for ch in ("\\", "=", ";", "#", "\n"):
+                    value = value.replace(ch, f"\\{ch}")
+                return value
+
+            lines = [";FFMETADATA1", f"title={_ff_escape(book_title)}"]
+            for key, value in (
+                ("album", book_title), ("artist", author),
+                ("album_artist", author), ("composer", narrator),
+                ("genre", meta["genre"] or "Audiobook"),
+                ("date", meta["publication_year"]),
+                ("publisher", meta["publisher"]),
+                ("copyright", meta["copyright"]),
+                ("language", meta["language"]),
+                ("comment", meta["description"]),
+                ("grouping", (f"{meta['series']} #{meta['series_number']}"
+                              if meta["series"] and meta["series_number"]
+                              else meta["series"])),
+                ("subtitle", meta["subtitle"]),
+            ):
+                if value:
+                    lines.append(f"{key}={_ff_escape(value)}")
             position_ms = 0
-            for chapter, wav in mastered:
+            for index, (chapter, wav) in enumerate(mastered, start=1):
                 duration_ms = int(round(_duration_seconds(ffprobe, str(wav)) * 1000))
+                marker = (chapter["title"] if meta["use_chapter_names"]
+                          else f"Chapter {index}")
                 lines += ["", "[CHAPTER]", "TIMEBASE=1/1000",
                           f"START={position_ms}",
                           f"END={position_ms + duration_ms}",
-                          f"title={chapter['title']}"]
+                          f"title={_ff_escape(marker)}"]
                 position_ms += duration_ms
             metadata_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -330,6 +395,7 @@ def assemble_book(workspace_path: str, formats: list[str],
             _run(
                 [ffmpeg, "-hide_banner", "-y", "-f", "concat", "-safe", "0",
                  "-i", str(concat_list), "-i", str(metadata_file),
+                 *_cover_args(2),
                  "-map_metadata", "1", "-map_chapters", "1",
                  "-c:a", "aac", "-b:a", M4B_BITRATE,
                  "-movflags", "+faststart", str(target)],

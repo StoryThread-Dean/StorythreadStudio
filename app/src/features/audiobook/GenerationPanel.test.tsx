@@ -44,10 +44,19 @@ const EXPORT_IDLE = {
   outputs: [], workspace_path: null,
 };
 
-/** Handle the ExportPanel's mount fetches in any custom mock. */
+const METADATA_DEFAULTS = {
+  title: "The Hollow Road", subtitle: "", author: "Dean", narrator: "",
+  series: "", series_number: "", description: "", genre: "",
+  publication_year: "", publisher: "", copyright: "", language: "en-US",
+  use_chapter_names: true, embed_cover: true, apply_to_chapter_mp3s: true,
+  cover_file: null,
+};
+
+/** Handle the ExportPanel + BookDetailsPanel mount fetches in any custom mock. */
 function exportPanelRoutes(url: string) {
   if (url.includes("/ffmpeg/status")) return { ok: true, json: async () => FFMPEG_OK };
   if (url.includes("/assemble/status")) return { ok: true, json: async () => EXPORT_IDLE };
+  if (url.includes("/metadata")) return { ok: true, json: async () => METADATA_DEFAULTS };
   return null;
 }
 

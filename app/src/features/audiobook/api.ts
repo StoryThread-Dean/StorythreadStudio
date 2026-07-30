@@ -276,6 +276,79 @@ export async function saveNarrationSettings(
   return toJson<NarrationSettings>(res);
 }
 
+// ── Book metadata + cover (spec 17) ──────────────────────────────────────────
+
+export interface BookMetadata {
+  title: string;
+  subtitle: string;
+  author: string;
+  narrator: string;
+  series: string;
+  series_number: string;
+  description: string;
+  genre: string;
+  publication_year: string;
+  publisher: string;
+  copyright: string;
+  language: string;
+  use_chapter_names: boolean;
+  embed_cover: boolean;
+  apply_to_chapter_mp3s: boolean;
+  cover_file: string | null;
+}
+
+export async function fetchMetadata(workspacePath: string): Promise<BookMetadata> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/metadata?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<BookMetadata>(res);
+}
+
+export async function saveMetadata(
+  workspacePath: string,
+  metadata: Omit<BookMetadata, "cover_file">,
+): Promise<BookMetadata> {
+  const res = await fetch(`${API_BASE}/api/audiobook/metadata`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, ...metadata }),
+  });
+  return toJson<BookMetadata>(res);
+}
+
+export interface CoverInfo {
+  cover_file: string | null;
+  width?: number;
+  height?: number;
+  square?: boolean;
+}
+
+export async function setCover(
+  workspacePath: string,
+  sourcePath: string,
+): Promise<CoverInfo> {
+  const res = await fetch(`${API_BASE}/api/audiobook/metadata/cover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, source_path: sourcePath }),
+  });
+  return toJson<CoverInfo>(res);
+}
+
+export async function removeCover(workspacePath: string): Promise<void> {
+  await toJson(await fetch(
+    `${API_BASE}/api/audiobook/metadata/cover?workspace_path=${encodeURIComponent(workspacePath)}`,
+    { method: "DELETE" },
+  ));
+}
+
+/** The preview <img> URL for the stored cover; cache-busted so a
+ * replaced cover shows immediately. */
+export function coverImageUrl(workspacePath: string, bust: number): string {
+  return `${API_BASE}/api/audiobook/metadata/cover-image`
+    + `?workspace_path=${encodeURIComponent(workspacePath)}&v=${bust}`;
+}
+
 export async function fetchMarkerDemo(kind: string): Promise<Blob> {
   const res = await fetch(`${API_BASE}/api/audiobook/marker-demo`, {
     method: "POST",

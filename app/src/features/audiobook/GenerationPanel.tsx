@@ -21,6 +21,7 @@ import {
   startGeneration,
 } from "./api";
 import type { EngineStatus, NarrationSettings, PreviewTracePiece } from "./api";
+import { BookDetailsPanel } from "./BookDetailsPanel";
 import { ExportPanel } from "./ExportPanel";
 import type { GenerationRun, NarratorVoice } from "./types";
 
@@ -564,6 +565,9 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
           {error}
         </p>
       )}
+
+      {/* Book Details: tags + cover for the exported files (spec 17). */}
+      <BookDetailsPanel workspacePath={workspacePath} />
 
       {/* Export: only meaningful once a run has completed at least once,
           but harmless earlier -- the backend refuses honestly. */}
