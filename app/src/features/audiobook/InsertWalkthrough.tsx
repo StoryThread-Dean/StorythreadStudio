@@ -147,10 +147,12 @@ export function InsertWalkthrough({
   } : null;
 
   return (
-    <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/70 px-4 py-3">
+    // Same mild blue wash as the toolbar button: one look says "you are
+    // in the Formatting Walkthrough" (user-requested unification).
+    <div className="shrink-0 border-b border-blue-900/60 bg-blue-950/30 px-4 py-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-300">
-          <Wand2 size={12} /> Insert Walkthrough
+          <Wand2 size={12} /> Formatting Walkthrough
         </span>
         <span className="text-[11px] text-zinc-500">
           {visible.length === 0
@@ -185,10 +187,12 @@ export function InsertWalkthrough({
 
       {confirmingAuto && (
         <div className="mb-2 rounded border border-amber-800 bg-amber-950/50 px-3 py-2">
-          <p className="mb-1.5 text-[11px] font-medium text-amber-200">
+          {/* Warning sized just under the manuscript's text-sm -- this
+              is the one strip that must actually get READ. */}
+          <p className="mb-1.5 text-[13px] font-semibold text-amber-200">
             Apply {autoBeatCount} suggested beats without walking each one?
           </p>
-          <p className="mb-2 text-[10px] leading-relaxed text-amber-300/80">
+          <p className="mb-2 text-[13px] leading-relaxed text-amber-300/90">
             Unreviewed beats can produce unintended audio effects in some
             scenes -- a pause where a line should press forward, a beat
             inside a rhythm you built on purpose. Listen to the result

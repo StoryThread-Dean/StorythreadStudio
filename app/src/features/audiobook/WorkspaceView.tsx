@@ -368,9 +368,9 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             setWalkthroughStart(textareaRef.current?.selectionStart ?? 0);
           }}
           title="Walk the manuscript from the cursor: pauses at dialogue hand-offs, beats between short sentences, marker repairs. Apply or skip each stop."
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="inline-flex items-center gap-1 rounded border border-blue-800 bg-blue-950/50 px-2 py-1 text-[11px] text-blue-200 hover:border-blue-500 hover:text-blue-100"
         >
-          <Wand2 size={11} /> Walkthrough
+          <Wand2 size={11} /> Formatting Walkthrough
         </button>
         <button
           onClick={() => setShowMarkerHelp(v => !v)}
