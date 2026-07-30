@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Wand2, X } from "lucide-react";
 
-import { applyStop, scanForStops, STOP_KIND_LABELS } from "./insertScan";
+import { applyStop, bulkApplyDefaults, scanForStops, STOP_KIND_LABELS } from "./insertScan";
 import type { InsertOption, InsertStop, StopKind } from "./insertScan";
 
 interface InsertWalkthroughProps {
@@ -41,6 +41,7 @@ export function InsertWalkthrough({
   const [index, setIndex] = useState(0);
   const [muted, setMuted] = useState<Set<StopKind>>(new Set());
   const [applied, setApplied] = useState(0);
+  const [confirmingAuto, setConfirmingAuto] = useState(false);
   const expectedContent = useRef(content);
 
   useEffect(() => {
@@ -88,6 +89,22 @@ export function InsertWalkthrough({
     if (index < visible.length - 1) advance();
   }, [advance, index, visible.length]);
   const back = useCallback(() => setIndex(i => Math.max(0, i - 1)), []);
+
+  // Auto-apply: every remaining unmuted stop's default beat at once.
+  // Marker repairs stay manual (a broken pace has a direction choice
+  // only the writer can make).
+  const autoBeatCount = visible.filter(s => s.kind !== "broken-marker").length;
+  const autoApply = useCallback(() => {
+    const { next, applied: batch } = bulkApplyDefaults(content, visible);
+    expectedContent.current = next;
+    // Fresh scan of the new text: the inserted pauses suppress their own
+    // spots, so what remains is marker repairs plus any muted kinds.
+    setStops(scanForStops(next, startOffset));
+    setApplied(n => n + batch);
+    setIndex(0);
+    setConfirmingAuto(false);
+    onApplyEdit(next, startOffset);
+  }, [content, onApplyEdit, startOffset, visible]);
 
   // Global keys so the flow works while the editor keeps focus.
   useEffect(() => {
@@ -141,6 +158,15 @@ export function InsertWalkthrough({
             : `stop ${index + 1} of ${visible.length}${applied > 0 ? ` -- ${applied} applied` : ""}`}
         </span>
         <span className="ml-auto flex flex-wrap items-center gap-2">
+          {autoBeatCount > 0 && !confirmingAuto && (
+            <button
+              onClick={() => setConfirmingAuto(true)}
+              title="Apply every remaining suggested beat at its default length. Marker repairs stay manual."
+              className="rounded border border-amber-700 px-2 py-0.5 text-[10px] text-amber-300 hover:border-amber-500"
+            >
+              Auto-apply {autoBeatCount} beats
+            </button>
+          )}
           {ALL_KINDS.map(kind => (
             <label key={kind}
                    className="flex cursor-pointer items-center gap-1 text-[10px] text-zinc-500"
@@ -156,6 +182,37 @@ export function InsertWalkthrough({
           </button>
         </span>
       </div>
+
+      {confirmingAuto && (
+        <div className="mb-2 rounded border border-amber-800 bg-amber-950/50 px-3 py-2">
+          <p className="mb-1.5 text-[11px] font-medium text-amber-200">
+            Apply {autoBeatCount} suggested beats without walking each one?
+          </p>
+          <p className="mb-2 text-[10px] leading-relaxed text-amber-300/80">
+            Unreviewed beats can produce unintended audio effects in some
+            scenes -- a pause where a line should press forward, a beat
+            inside a rhythm you built on purpose. Listen to the result
+            with the free local preview BEFORE printing with paid AI
+            voices. Nothing is saved until you Save; leave without saving
+            to discard the whole batch. Marker repairs are not included
+            -- those need your call and stay in the walk.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={autoApply}
+              className="rounded bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-amber-500"
+            >
+              Yes, apply all {autoBeatCount}
+            </button>
+            <button
+              onClick={() => setConfirmingAuto(false)}
+              className="rounded border border-zinc-700 px-3 py-1 text-[11px] text-zinc-300 hover:border-zinc-500"
+            >
+              Keep walking instead
+            </button>
+          </div>
+        </div>
+      )}
 
       {current && context && (
         <>

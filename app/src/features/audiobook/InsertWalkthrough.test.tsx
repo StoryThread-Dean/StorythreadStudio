@@ -92,6 +92,31 @@ describe("InsertWalkthrough", () => {
     expect(props.onClose).toHaveBeenCalledOnce();
   });
 
+  it("Auto-apply requires a confirm, applies beats, leaves repairs manual", () => {
+    const props = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Auto-apply \d+ beats/ }));
+    // The warning strip appears; nothing applied yet.
+    expect(screen.getByText(/unintended audio effects/i)).toBeTruthy();
+    expect(props.onApplyEdit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Yes, apply all/ }));
+    expect(props.onApplyEdit).toHaveBeenCalledOnce();
+    const [next] = (props.onApplyEdit as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(next).toContain('She made a decision. [pause:0.4] "A cult."');
+    expect(next).toContain("[pace:=2]");           // repair NOT auto-fixed
+    // The walk continues with the repair as the remaining stop.
+    expect(screen.getByText(/Unreadable pace value/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Auto-apply/ })).toBeNull();
+  });
+
+  it("Keep walking cancels the auto-apply confirm", () => {
+    const props = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Auto-apply \d+ beats/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Keep walking instead/ }));
+    expect(props.onApplyEdit).not.toHaveBeenCalled();
+    expect(screen.queryByText(/unintended audio effects/i)).toBeNull();
+  });
+
   it("says so plainly when there is nothing to suggest", () => {
     renderPanel({ content: "# Heading\n\nOne long ordinary paragraph of prose without any dialogue at all in it." });
     expect(screen.getByText(/nothing to suggest/)).toBeTruthy();

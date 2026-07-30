@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { applyStop, scanForStops } from "./insertScan";
+import { applyStop, bulkApplyDefaults, scanForStops } from "./insertScan";
 import type { InsertStop } from "./insertScan";
 
 function kindsAt(text: string): Array<[string, number]> {
@@ -134,5 +134,30 @@ describe("applyStop", () => {
     const { delta } = applyStop(text, stop(2), {
       label: "Pause 0.4s", text: "[pause:0.4]" });
     expect(delta).toBe(" [pause:0.4]".length);
+  });
+});
+
+describe("bulkApplyDefaults", () => {
+  it("applies every default beat in one pass, offsets shifting correctly", () => {
+    const text = 'She decided. "A cult." Lexa nodded. Red door. Blue key.';
+    const stops = scanForStops(text);
+    const { next, applied, skippedRepairs } = bulkApplyDefaults(text, stops);
+    expect(applied).toBe(stops.length);
+    expect(skippedRepairs).toBe(0);
+    // Each insert landed at its own spot despite the text growing.
+    expect(next).toContain('She decided. [pause:0.4] "A cult."');
+    expect(next).toContain('"A cult." [pause:0.4] Lexa nodded.');
+    // The result parses clean: rescanning suggests nothing new (every
+    // spot now has its pause) except nothing at all.
+    expect(scanForStops(next).filter(s => s.kind !== "broken-marker")).toEqual([]);
+  });
+
+  it("never auto-fixes marker repairs -- those need the writer's call", () => {
+    const text = 'Wait. Go. [pace:=2]"Run!"[/pace]';
+    const stops = scanForStops(text);
+    const { next, skippedRepairs } = bulkApplyDefaults(text, stops);
+    expect(skippedRepairs).toBe(1);
+    expect(next).toContain("[pace:=2]");           // untouched
+    expect(next).toContain("Wait. [pause:0.4] Go.");
   });
 });

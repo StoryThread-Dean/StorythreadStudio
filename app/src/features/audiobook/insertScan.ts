@@ -278,6 +278,35 @@ export function scanForStops(text: string, from = 0): InsertStop[] {
   return deduped;
 }
 
+/**
+ * Auto-apply: every remaining stop's DEFAULT beat in one motion -- the
+ * brunt of the listening work, writer-reviewed afterward. Marker
+ * repairs are deliberately EXCLUDED: a broken [pace:=2] has a direction
+ * choice (+2 or -2) only the writer can make, so those stay manual
+ * stops. Returns the new text plus honest counts for the panel.
+ */
+export function bulkApplyDefaults(
+  text: string, stops: InsertStop[],
+): { next: string; applied: number; skippedRepairs: number } {
+  const ordered = [...stops].sort((a, b) => a.offset - b.offset);
+  let next = text;
+  let shift = 0;
+  let applied = 0;
+  let skippedRepairs = 0;
+  for (const stop of ordered) {
+    if (stop.kind === "broken-marker") {
+      skippedRepairs += 1;
+      continue;
+    }
+    const shifted = { ...stop, offset: stop.offset + shift };
+    const result = applyStop(next, shifted, stop.options[0]);
+    next = result.next;
+    shift += result.delta;
+    applied += 1;
+  }
+  return { next, applied, skippedRepairs };
+}
+
 /** Apply one option at a stop: spacing handled like the toolbar's inline
  * inserts (add a space only where one is missing; never inject blank
  * lines). Returns the new text, the caret after the edit, and how much
