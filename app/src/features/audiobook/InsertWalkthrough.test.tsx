@@ -112,7 +112,7 @@ describe("InsertWalkthrough", () => {
   it("Keep walking cancels the auto-apply confirm", () => {
     const props = renderPanel();
     fireEvent.click(screen.getByRole("button", { name: /Auto-apply \d+ beats/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Keep walking instead/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Keep walking through instead/ }));
     expect(props.onApplyEdit).not.toHaveBeenCalled();
     expect(screen.queryByText(/unintended audio effects/i)).toBeNull();
   });

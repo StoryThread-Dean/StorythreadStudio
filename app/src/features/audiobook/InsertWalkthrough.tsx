@@ -212,7 +212,7 @@ export function InsertWalkthrough({
               onClick={() => setConfirmingAuto(false)}
               className="rounded border border-zinc-700 px-3 py-1 text-[11px] text-zinc-300 hover:border-zinc-500"
             >
-              Keep walking instead
+              Keep walking through instead
             </button>
           </div>
         </div>
