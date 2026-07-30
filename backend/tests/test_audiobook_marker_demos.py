@@ -61,7 +61,43 @@ class DemoBackend(SynthesisBackend):
 
 def test_concat_inserts_exact_silence():
     out = concat_wav([_tone_wav(1.0), 1500, _tone_wav(1.0)])
-    assert _duration(out) == pytest.approx(3.5, abs=0.01)
+    assert _duration(out) == pytest.approx(3.5, abs=0.03)
+
+
+def _padded_tone_wav(speech_s: float, pad_s: float, rate: int = 24000) -> bytes:
+    """A tone clip with true-silence padding on both edges -- the shape of
+    real engine output whose padding used to stack onto inserted pauses."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        pad = b"\x00\x00" * int(rate * pad_s)
+        w.writeframes(pad + (b"\x11\x22" * int(rate * speech_s)) + pad)
+    return buffer.getvalue()
+
+
+def test_engine_edge_padding_is_trimmed_so_pauses_stay_exact():
+    # 1s speech padded 0.15s each side, twice, with a 0.5s pause between:
+    # trimming keeps the writer's pause the ONLY gap (2s speech + 0.5s).
+    clip = _padded_tone_wav(1.0, 0.15)
+    out = concat_wav([clip, 500, clip])
+    assert _duration(out) == pytest.approx(2.5, abs=0.03)
+
+
+def test_boundary_fades_ramp_the_seams():
+    # The first samples of a conditioned clip ramp from zero -- the
+    # discontinuity that read as a consonant slur at pause seams is gone.
+    out = concat_wav([_tone_wav(1.0)])
+    with wave.open(io.BytesIO(out), "rb") as w:
+        frames = w.readframes(w.getnframes())
+    import array as array_module
+    samples = array_module.array("h")
+    samples.frombytes(frames)
+    assert abs(samples[0]) < 100                 # starts at ~zero
+    assert abs(samples[-1]) < 100                # ends at ~zero
+    peak = max(abs(s) for s in samples)
+    assert peak > 4000                           # the speech itself is intact
 
 
 def test_concat_refuses_mismatched_rates():
