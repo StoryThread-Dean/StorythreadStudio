@@ -276,6 +276,49 @@ export async function saveNarrationSettings(
   return toJson<NarrationSettings>(res);
 }
 
+/** Remember the narrator voice PER BOOK -- restored next session. */
+export async function saveVoice(workspacePath: string, voiceId: string): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/voice`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, voice_id: voiceId }),
+  }));
+}
+
+// ── Adding chapters to an existing audiobook ─────────────────────────────────
+
+export interface AvailableChapter {
+  title: string;
+  characters: number;
+}
+
+export async function fetchAvailableChapters(workspacePath: string): Promise<{
+  available: AvailableChapter[];
+  source: string;
+  warnings: string[];
+}> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/chapters/available?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson(res);
+}
+
+export async function addChapters(
+  workspacePath: string,
+  titles: string[],
+): Promise<{
+  content: string;
+  chapters: AudiobookProjectPayload["chapters"];
+  warnings: string[];
+}> {
+  const res = await fetch(`${API_BASE}/api/audiobook/chapters/add`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, titles }),
+  });
+  return toJson(res);
+}
+
 // ── Book metadata + cover (spec 17) ──────────────────────────────────────────
 
 export interface BookMetadata {

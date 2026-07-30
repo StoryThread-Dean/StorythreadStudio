@@ -38,8 +38,25 @@ const SAVE_RESPONSE = {
   warnings: ["Chapter 'Chapter 3': an [exclude] has no closing [/exclude]; everything after it is excluded from narration."],
 };
 
+const ADDED_NARRATION = NARRATION + "\n# Chapter 3\n\nBrand new prose.\n";
+
 function mockFetch() {
   return vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.includes("/chapters/available")) {
+      return { ok: true, json: async () => ({
+        available: [{ title: "Chapter 3", characters: 1200 }],
+        source: "C:\\books\\b.txt", warnings: [],
+      }) };
+    }
+    if (url.includes("/chapters/add")) {
+      return { ok: true, json: async () => ({
+        content: ADDED_NARRATION,
+        chapters: SAVE_RESPONSE.chapters, warnings: [],
+      }) };
+    }
+    if (url.includes("/metadata")) {
+      return { ok: true, json: async () => ({ cover_file: null }) };
+    }
     if (url.includes("/narration") && init?.method === "PUT") {
       return { ok: true, json: async () => SAVE_RESPONSE };
     }
@@ -223,6 +240,50 @@ describe("WorkspaceView", () => {
     const body = JSON.parse(String((putCall?.[1] as RequestInit).body));
     expect(body.workspace_path).toBe(PAYLOAD.manifest.workspace_path);
     expect(body.content).toContain("# Chapter 3");
+  });
+
+  it("a chapter can be removed from the narration buffer (manual save owns it)", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const textarea = await renderLoaded();
+
+    fireEvent.click(screen.getByLabelText("Remove chapter Chapter 1"));
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    // Heading + body gone from the BUFFER; nothing saved yet.
+    expect(textarea.value).not.toContain("# Chapter 1");
+    expect(textarea.value).not.toContain("First prose.");
+    expect(textarea.value).toContain("# Chapter 2");
+    expect(screen.getByTitle("Unsaved changes")).toBeTruthy();
+  });
+
+  it("declining the remove confirm leaves the narration untouched", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const textarea = await renderLoaded();
+    fireEvent.click(screen.getByLabelText("Remove chapter Chapter 1"));
+    expect(textarea.value).toBe(NARRATION);
+  });
+
+  it("Add chapters pulls new source chapters in and refreshes everything", async () => {
+    const textarea = await renderLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: /Add chapters/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: /Chapter 3/ })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Chapter 3/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add 1 selected/ }));
+
+    // The backend saved and returned the grown narration -- editor and
+    // chapter rail refresh together, no dirty state.
+    await waitFor(() => expect(textarea.value).toBe(ADDED_NARRATION));
+    expect(screen.getByText("3. Chapter 3")).toBeTruthy();
+    expect(screen.queryByTitle("Unsaved changes")).toBeNull();
+  });
+
+  it("Add chapters is disabled while the narration has unsaved edits", async () => {
+    const textarea = await renderLoaded();
+    fireEvent.change(textarea, { target: { value: NARRATION + "edited" } });
+    const button = screen.getByRole("button", { name: /Add chapters/ }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
   });
 
   it("clicking a chapter moves the caret to its heading", async () => {

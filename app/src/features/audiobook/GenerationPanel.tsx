@@ -18,7 +18,7 @@ import {
   cancelGeneration, fetchEngineStatus, fetchGenerationStatus,
   fetchNarrationSettings, fetchVoices, installEngine, pauseGeneration,
   previewSelection, previewVoice, resumeGeneration, saveNarrationSettings,
-  startGeneration,
+  saveVoice, startGeneration,
 } from "./api";
 import type { EngineStatus, NarrationSettings, PreviewTracePiece } from "./api";
 import { BookDetailsPanel } from "./BookDetailsPanel";
@@ -31,7 +31,14 @@ interface GenerationPanelProps {
       nothing is selected. Provided by WorkspaceView so the Preview
       Selection button can rehearse exactly what the writer highlighted. */
   getSelectionText?: () => string;
+  /** The voice remembered for THIS book (manifest.selected_voice) --
+      restored when the workspace opens; different books use different
+      voices on purpose. */
+  initialVoiceId?: string | null;
 }
+
+// The out-of-the-box narrator when a book has no remembered voice yet.
+const DEFAULT_VOICE_ID = "am_michael";
 
 const PREVIEW_SAMPLE =
   "The road disappeared beneath the gathering snow, and somewhere behind " +
@@ -128,7 +135,7 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
   );
 }
 
-export function GenerationPanel({ workspacePath, getSelectionText }: GenerationPanelProps) {
+export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceId }: GenerationPanelProps) {
   const [voices, setVoices] = useState<NarratorVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
   const [engineState, setEngineState] = useState<"starting" | "ready" | "unavailable">("starting");
@@ -167,13 +174,22 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
     try {
       const list = await fetchVoices();
       setVoices(list);
-      setVoiceId(prev => prev || (list[0]?.id ?? ""));
+      // Restore this book's remembered voice; new books start on the
+      // default narrator (Michael); either way never an empty pick.
+      setVoiceId(prev => {
+        if (prev) return prev;
+        const remembered = initialVoiceId && list.some(v => v.id === initialVoiceId)
+          ? initialVoiceId : "";
+        const fallback = list.some(v => v.id === DEFAULT_VOICE_ID)
+          ? DEFAULT_VOICE_ID : (list[0]?.id ?? "");
+        return remembered || fallback;
+      });
       setEngineState("ready");
     } catch (e) {
       setEngineState("unavailable");
       setEngineError(e instanceof Error ? e.message : "Local narrator unavailable.");
     }
-  }, []);
+  }, [initialVoiceId]);
 
   useEffect(() => { void loadVoices(); }, [loadVoices]);
 
@@ -366,7 +382,11 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
             <select
               id="narrator-voice"
               value={voiceId}
-              onChange={e => setVoiceId(e.target.value)}
+              onChange={e => {
+                setVoiceId(e.target.value);
+                // Fire-and-forget: the book remembers its narrator.
+                void saveVoice(workspacePath, e.target.value).catch(() => {});
+              }}
               className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-emerald-500"
             >
               {voices.map(voice => (
@@ -567,7 +587,10 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
       )}
 
       {/* Book Details: tags + cover for the exported files (spec 17). */}
-      <BookDetailsPanel workspacePath={workspacePath} />
+      <BookDetailsPanel
+        workspacePath={workspacePath}
+        currentVoiceLabel={voices.find(v => v.id === voiceId)?.label ?? null}
+      />
 
       {/* Export: only meaningful once a run has completed at least once,
           but harmless earlier -- the backend refuses honestly. */}

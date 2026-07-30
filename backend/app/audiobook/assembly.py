@@ -238,8 +238,9 @@ def assemble_book(workspace_path: str, formats: list[str],
             + ". Generate the audiobook first."
         )
 
-    # Book metadata (spec 17): the writer's form over manifest fallbacks.
-    meta = workspace.book_metadata(manifest)
+    # Book metadata (spec 17): the writer's form over manifest fallbacks,
+    # including the source-project prefill (genre/description/series).
+    meta = workspace.book_metadata(manifest, workspace_path)
     book_title = meta["title"] or "Untitled Audiobook"
     author = meta["author"]
     narrator = meta["narrator"] or manifest.get("selected_voice") or ""

@@ -41,6 +41,62 @@ def _import_txt(tmp_path, name="book"):
     return src, ws, response.json()
 
 
+# ── Adding chapters to an existing audiobook ─────────────────────────────────
+# The writer keeps writing after the audiobook exists: new source
+# chapters can be pulled in without a destructive re-import. (Removing a
+# chapter is just deleting its heading+body in the narration editor.)
+
+def test_new_source_chapters_can_be_added_without_reimport(tmp_path):
+    src, ws, _payload = _import_txt(tmp_path)
+
+    # The book grew after import.
+    src.write_text(
+        "Chapter 1\n\nFirst prose.\n\nChapter 2\n\nSecond prose.\n\n"
+        "Chapter 3\n\nBrand new prose.\n\nChapter 4\n\nEven newer prose.\n",
+        encoding="utf-8",
+    )
+    available = client.get("/api/audiobook/chapters/available",
+                           params={"workspace_path": str(ws)})
+    assert available.status_code == 200
+    titles = [c["title"] for c in available.json()["available"]]
+    assert titles == ["Chapter 3", "Chapter 4"]
+
+    # The writer edited chapter 1 already -- adding must not touch it.
+    narration = client.get("/api/audiobook/narration",
+                           params={"workspace_path": str(ws)}).json()["content"]
+    edited = narration.replace("First prose.", "First prose, hand-polished.")
+    client.put("/api/audiobook/narration",
+               json={"workspace_path": str(ws), "content": edited})
+
+    added = client.post("/api/audiobook/chapters/add", json={
+        "workspace_path": str(ws), "titles": ["Chapter 3"]})
+    assert added.status_code == 200
+    body = added.json()
+    assert [c["title"] for c in body["chapters"]] == [
+        "Chapter 1", "Chapter 2", "Chapter 3"]
+    assert "Brand new prose." in body["content"]
+    assert "hand-polished" in body["content"]        # edits survived
+
+    # Chapter 4 (not picked) is still available; chapter 3 no longer is.
+    remaining = client.get("/api/audiobook/chapters/available",
+                           params={"workspace_path": str(ws)}).json()
+    assert [c["title"] for c in remaining["available"]] == ["Chapter 4"]
+
+
+def test_add_chapters_refuses_unknown_titles_and_a_missing_source(tmp_path):
+    src, ws, _payload = _import_txt(tmp_path)
+    response = client.post("/api/audiobook/chapters/add", json={
+        "workspace_path": str(ws), "titles": ["Chapter 99"]})
+    assert response.status_code == 400
+    assert "not found in the source" in response.json()["detail"]
+
+    src.unlink()                                     # the original moved away
+    response = client.get("/api/audiobook/chapters/available",
+                          params={"workspace_path": str(ws)})
+    assert response.status_code == 400
+    assert "could not be found" in response.json()["detail"]
+
+
 # ── Import ────────────────────────────────────────────────────────────────────
 
 def test_import_builds_the_full_workspace(tmp_path):

@@ -14,10 +14,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, BookMarked, EyeOff, HelpCircle, Loader2, MessageSquareQuote,
-  Save, Scissors,
+  Plus, Save, Scissors, X,
 } from "lucide-react";
 
-import { fetchNarration, saveNarration } from "./api";
+import { addChapters, fetchAvailableChapters, fetchNarration, saveNarration } from "./api";
+import type { AvailableChapter } from "./api";
 import { GenerationPanel } from "./GenerationPanel";
 import { MarkerHelpPanel } from "./MarkerHelpPanel";
 import { paragraphBoundsAt, stripAudioMarkers } from "./markers";
@@ -175,6 +176,66 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     ta.scrollTop = (idx / Math.max(content.length, 1)) * ta.scrollHeight;
   }, [content]);
 
+  // ── Chapter add / remove ────────────────────────────────────────────────
+
+  /** Cut a chapter (heading + body) out of the narration BUFFER -- a
+      normal edit: dirty until Save, undone by leaving without saving.
+      Located by heading text, nth occurrence for duplicate titles. */
+  const removeChapter = useCallback((chapter: AudiobookChapter) => {
+    if (!window.confirm(
+      `Remove "${chapter.title}" from this audiobook?\n\n` +
+      "Its narration text (including any markers you added) is cut from " +
+      "the narration copy -- nothing is final until you Save. The " +
+      "original book keeps the chapter.",
+    )) return;
+    const heading = `# ${chapter.title}`;
+    const nth = chapters.filter(
+      c => c.title === chapter.title && c.order < chapter.order).length;
+    const lines = content.split("\n");
+    const matches = lines
+      .map((line, i) => (line.trim() === heading ? i : -1))
+      .filter(i => i >= 0);
+    if (nth >= matches.length) return;             // renamed in unsaved edits
+    const start = matches[nth];
+    const nextHeading = lines.findIndex(
+      (line, i) => i > start && line.startsWith("# "));
+    const end = nextHeading === -1 ? lines.length : nextHeading;
+    setContent([...lines.slice(0, start), ...lines.slice(end)].join("\n"));
+    setDirty(true);
+  }, [chapters, content]);
+
+  const [addChaptersState, setAddChaptersState] = useState<{
+    open: boolean; loading: boolean; available: AvailableChapter[];
+    picked: string[]; error: string | null;
+  } | null>(null);
+
+  const openAddChapters = useCallback(async () => {
+    setAddChaptersState({ open: true, loading: true, available: [], picked: [], error: null });
+    try {
+      const result = await fetchAvailableChapters(workspacePath);
+      setAddChaptersState({ open: true, loading: false,
+                            available: result.available, picked: [], error: null });
+    } catch (e) {
+      setAddChaptersState({ open: true, loading: false, available: [], picked: [],
+                            error: e instanceof Error ? e.message : "Could not read the source." });
+    }
+  }, [workspacePath]);
+
+  const confirmAddChapters = useCallback(async () => {
+    if (!addChaptersState || addChaptersState.picked.length === 0) return;
+    try {
+      const result = await addChapters(workspacePath, addChaptersState.picked);
+      setContent(result.content);
+      setChapters(result.chapters);
+      setWarnings(result.warnings);
+      setDirty(false);                 // the backend saved the narration copy
+      setAddChaptersState(null);
+    } catch (e) {
+      setAddChaptersState(prev => prev && {
+        ...prev, error: e instanceof Error ? e.message : "Adding chapters failed." });
+    }
+  }, [addChaptersState, workspacePath]);
+
   // ── Saving (manual only) ────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
@@ -317,17 +378,35 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           </h3>
           <ul className="space-y-0.5">
             {chapters.map(chapter => (
-              <li key={chapter.chapter_id}>
+              <li key={chapter.chapter_id} className="group flex items-center">
                 <button
                   onClick={() => jumpToChapter(chapter)}
-                  className="w-full truncate rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+                  className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
                   title={chapter.title}
                 >
                   {chapter.order}. {chapter.title}
                 </button>
+                <button
+                  onClick={() => removeChapter(chapter)}
+                  title={`Remove "${chapter.title}" from this audiobook (the original book is untouched)`}
+                  aria-label={`Remove chapter ${chapter.title}`}
+                  className="invisible shrink-0 rounded px-1 py-1 text-zinc-600 hover:text-rose-400 group-hover:visible"
+                >
+                  <X size={11} />
+                </button>
               </li>
             ))}
           </ul>
+          <button
+            onClick={() => void openAddChapters()}
+            disabled={dirty}
+            title={dirty
+              ? "Save your narration changes first, then add chapters."
+              : "Pull in chapters the source book gained since this audiobook was made"}
+            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-400 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+          >
+            <Plus size={11} /> Add chapters
+          </button>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -362,6 +441,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             Selection always rehearses exactly what is highlighted. */}
         <GenerationPanel
           workspacePath={workspacePath}
+          initialVoiceId={payload.manifest.selected_voice}
           getSelectionText={() => {
             const ta = textareaRef.current;
             if (!ta) return "";
@@ -375,6 +455,72 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           workspacePath={workspacePath}
           onClose={() => setShowPronunciations(false)}
         />
+      )}
+
+      {addChaptersState?.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-96 max-w-[90vw] rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+            <h3 className="mb-2 text-sm font-semibold text-zinc-100">Add chapters</h3>
+            {addChaptersState.loading ? (
+              <p className="text-xs text-zinc-400">
+                <Loader2 size={12} className="mr-1 inline animate-spin" />
+                Reading the original source...
+              </p>
+            ) : addChaptersState.available.length === 0 && !addChaptersState.error ? (
+              <p className="text-xs text-zinc-400">
+                The source has no chapters this audiobook is missing. (A
+                renamed chapter counts as missing on the source side --
+                rename it back here if you meant to match it.)
+              </p>
+            ) : (
+              <ul className="mb-3 max-h-64 space-y-1 overflow-y-auto">
+                {addChaptersState.available.map(chapter => (
+                  <li key={chapter.title}>
+                    <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-300">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={addChaptersState.picked.includes(chapter.title)}
+                        onChange={e => setAddChaptersState(prev => prev && {
+                          ...prev,
+                          picked: e.target.checked
+                            ? [...prev.picked, chapter.title]
+                            : prev.picked.filter(t => t !== chapter.title),
+                        })}
+                      />
+                      <span>
+                        {chapter.title}
+                        <span className="ml-1 text-[10px] text-zinc-500">
+                          ({(chapter.characters / 1000).toFixed(1)}k characters)
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {addChaptersState.error && (
+              <p className="mb-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-[10px] text-rose-300">
+                {addChaptersState.error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setAddChaptersState(null)}
+                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => void confirmAddChapters()}
+                disabled={addChaptersState.picked.length === 0}
+                className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+              >
+                Add {addChaptersState.picked.length || ""} selected
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

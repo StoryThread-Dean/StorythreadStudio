@@ -103,9 +103,14 @@ COVER_MAX_BYTES = 10 * 1024 * 1024
 COVER_FILENAMES = {"jpg": "cover.jpg", "png": "cover.png"}
 
 
-def book_metadata(manifest: dict) -> dict:
+def book_metadata(manifest: dict, workspace_path: str | None = None) -> dict:
     """The manifest's metadata over the fallbacks: every text field (empty
-    string when unset), the option flags, and the stored cover file."""
+    string when unset), the option flags, and the stored cover file.
+
+    With a workspace_path, empty fields additionally fall back to the
+    SOURCE Storythread project's own details (genre, description, series
+    name) -- the writer already typed those once; the app should not ask
+    twice. Saved metadata always wins over every fallback."""
     stored = manifest.get("metadata")
     stored = stored if isinstance(stored, dict) else {}
     merged: dict = {}
@@ -118,10 +123,59 @@ def book_metadata(manifest: dict) -> dict:
         merged["author"] = manifest.get("author") or ""
     if not merged["language"]:
         merged["language"] = manifest.get("language") or ""
+    if workspace_path:
+        for field, value in project_prefill(workspace_path).items():
+            if not merged.get(field):
+                merged[field] = value
     for key, default in METADATA_OPTION_DEFAULTS.items():
         merged[key] = bool(stored.get(key, default))
     merged["cover_file"] = stored.get("cover_file") or None
     return merged
+
+
+def source_origin_path(workspace_path: str) -> str | None:
+    """Where this audiobook was imported FROM (recorded at import time in
+    source/source-metadata.json). None when the record is missing."""
+    try:
+        with open(os.path.join(workspace_path, "source", "source-metadata.json"),
+                  "r", encoding="utf-8") as f:
+            origin = json.load(f).get("origin_path")
+        return origin if isinstance(origin, str) and origin else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def project_prefill(workspace_path: str) -> dict:
+    """
+    Metadata fallbacks pulled from the source Storythread PROJECT, when
+    the audiobook was imported from one: genre and description from
+    project.json, the series name from series.json. (Storythread projects
+    do not record author or publication year -- nothing to pull there.)
+    Returns {} for file imports or when the project has moved.
+    """
+    origin = source_origin_path(workspace_path)
+    if not origin or not os.path.isdir(origin):
+        return {}
+    try:
+        with open(os.path.join(origin, "project.json"), "r", encoding="utf-8") as f:
+            project = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    prefill: dict = {}
+    if project.get("genre"):
+        prefill["genre"] = str(project["genre"])
+    if project.get("description"):
+        prefill["description"] = str(project["description"])
+    series_path = project.get("series_path")
+    if series_path and os.path.isdir(series_path):
+        try:
+            with open(os.path.join(series_path, "series.json"), "r", encoding="utf-8") as f:
+                series = json.load(f)
+            if series.get("name"):
+                prefill["series"] = str(series["name"])
+        except (OSError, json.JSONDecodeError):
+            pass
+    return prefill
 
 
 def validate_cover_bytes(data: bytes) -> tuple[str, int, int]:

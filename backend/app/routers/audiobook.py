@@ -271,6 +271,49 @@ def save_narration_settings(request: NarrationSettingsRequest):
     return workspace.narration_settings(manifest)
 
 
+class VoiceRequest(BaseModel):
+    workspace_path: str
+    voice_id: str
+
+
+@router.put("/voice")
+def save_voice(request: VoiceRequest):
+    """Remember the narrator voice PER BOOK: the dropdown restores it next
+    session (different books legitimately use different voices)."""
+    _require_workspace(request.workspace_path)
+    manifest = workspace.load_manifest(request.workspace_path)
+    manifest["selected_voice"] = request.voice_id
+    workspace.save_manifest(request.workspace_path, manifest)
+    return {"selected_voice": request.voice_id}
+
+
+@router.get("/chapters/available")
+def chapters_available(workspace_path: str):
+    """Chapters in the original source that the narration copy does not
+    have yet -- the writer kept writing after the audiobook was made."""
+    _require_workspace(workspace_path)
+    try:
+        return import_service.available_chapters(workspace_path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class AddChaptersRequest(BaseModel):
+    workspace_path: str
+    titles: list[str]
+
+
+@router.post("/chapters/add")
+def chapters_add(request: AddChaptersRequest):
+    """Append the picked source chapters to the narration copy and
+    re-derive structure -- a re-import that cannot destroy edits."""
+    _require_workspace(request.workspace_path)
+    try:
+        return import_service.add_chapters(request.workspace_path, request.titles)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 class MetadataRequest(BaseModel):
     workspace_path: str
     title: str = ""
@@ -294,7 +337,7 @@ class MetadataRequest(BaseModel):
 def get_metadata(workspace_path: str):
     _require_workspace(workspace_path)
     manifest = workspace.load_manifest(workspace_path)
-    return workspace.book_metadata(manifest)
+    return workspace.book_metadata(manifest, workspace_path)
 
 
 @router.put("/metadata")
@@ -314,7 +357,7 @@ def save_metadata(request: MetadataRequest):
         updated["cover_file"] = stored["cover_file"]
     manifest["metadata"] = updated
     workspace.save_manifest(request.workspace_path, manifest)
-    return workspace.book_metadata(manifest)
+    return workspace.book_metadata(manifest, request.workspace_path)
 
 
 class CoverRequest(BaseModel):

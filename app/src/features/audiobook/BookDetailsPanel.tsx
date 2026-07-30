@@ -39,7 +39,14 @@ const OPTIONS: Array<[keyof BookMetadata, string, string]> = [
    "Off = per-chapter files carry only title, track, album, and author"],
 ];
 
-export function BookDetailsPanel({ workspacePath }: { workspacePath: string }) {
+interface BookDetailsPanelProps {
+  workspacePath: string;
+  /** The narrator-voice label currently picked in the Voice section, so
+      [Use current voice] fills the Narrator field without retyping. */
+  currentVoiceLabel?: string | null;
+}
+
+export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetailsPanelProps) {
   const [open, setOpen] = useState(false);
   const [meta, setMeta] = useState<BookMetadata | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -143,10 +150,27 @@ export function BookDetailsPanel({ workspacePath }: { workspacePath: string }) {
 
           <div className="mb-3 grid grid-cols-2 gap-2">
             {TEXT_FIELDS.map(([key, label, wide]) => (
-              <label key={key} className={wide ? "col-span-2" : ""}>
-                <span className="mb-0.5 block text-[10px] text-zinc-400">{label}</span>
+              <div key={key} className={wide ? "col-span-2" : ""}>
+                <span className="mb-0.5 flex items-center justify-between text-[10px] text-zinc-400">
+                  <label htmlFor={`book-detail-${key}`}>{label}</label>
+                  {key === "narrator" && currentVoiceLabel && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // The voice label is "Michael (American male)" --
+                        // the tag wants the name, not the parenthetical.
+                        edit("narrator", currentVoiceLabel.replace(/\s*\(.*\)$/, ""));
+                      }}
+                      className="rounded border border-zinc-700 px-1.5 py-0.5 text-[9px] text-zinc-400 hover:border-blue-600 hover:text-blue-300"
+                      title={`Fill with the selected voice: ${currentVoiceLabel}`}
+                    >
+                      Use current voice
+                    </button>
+                  )}
+                </span>
                 {key === "description" ? (
                   <textarea
+                    id={`book-detail-${key}`}
                     value={meta[key] as string}
                     onChange={e => edit(key, e.target.value)}
                     rows={3}
@@ -154,13 +178,14 @@ export function BookDetailsPanel({ workspacePath }: { workspacePath: string }) {
                   />
                 ) : (
                   <input
+                    id={`book-detail-${key}`}
                     type="text"
                     value={meta[key] as string}
                     onChange={e => edit(key, e.target.value)}
                     className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-[11px] text-zinc-200 focus:border-blue-600 focus:outline-none"
                   />
                 )}
-              </label>
+              </div>
             ))}
           </div>
 

@@ -6,6 +6,7 @@
 # test_audiobook_assembly.py against real ffmpeg.
 
 import base64
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -171,3 +172,76 @@ def test_cover_upload_rejects_a_text_file(tmp_path):
         "workspace_path": ws, "source_path": str(fake)})
     assert response.status_code == 400
     assert "JPG or PNG" in response.json()["detail"]
+
+
+# ── Source-project prefill ────────────────────────────────────────────────────
+# The writer already typed genre/description/series into their
+# Storythread project -- the metadata form must not ask twice.
+
+def _project_sourced_workspace(tmp_path) -> str:
+    """A workspace whose recorded origin is a Storythread project inside
+    a series."""
+    series_dir = tmp_path / "series"
+    series_dir.mkdir()
+    (series_dir / "series.json").write_text(json.dumps({
+        "series_id": "s1", "name": "The Hollow Saga"}), encoding="utf-8")
+
+    project = tmp_path / "project"
+    (project / "manuscript").mkdir(parents=True)
+    (project / "project.json").write_text(json.dumps({
+        "project_id": "p1", "title": "The Hollow Road",
+        "genre": "Urban Fantasy", "description": "A librarian meets a legend.",
+        "series_path": str(series_dir),
+    }), encoding="utf-8")
+    (project / "manuscript" / "chapter-01.md").write_text(
+        "# The Door\n\nProse.\n", encoding="utf-8")
+
+    ws = tmp_path / "ws"
+    response = client.post("/api/audiobook/import", json={
+        "source_path": str(project), "workspace_path": str(ws),
+        "title": "The Hollow Road",
+    })
+    assert response.status_code == 200, response.text
+    return str(ws)
+
+
+def test_empty_fields_prefill_from_the_source_project(tmp_path):
+    ws = _project_sourced_workspace(tmp_path)
+    meta = client.get("/api/audiobook/metadata",
+                      params={"workspace_path": ws}).json()
+    assert meta["genre"] == "Urban Fantasy"
+    assert meta["description"] == "A librarian meets a legend."
+    assert meta["series"] == "The Hollow Saga"
+
+
+def test_saved_metadata_beats_the_project_prefill(tmp_path):
+    ws = _project_sourced_workspace(tmp_path)
+    client.put("/api/audiobook/metadata", json={
+        "workspace_path": ws, "title": "The Hollow Road",
+        "genre": "Adventure"})
+    meta = client.get("/api/audiobook/metadata",
+                      params={"workspace_path": ws}).json()
+    assert meta["genre"] == "Adventure"              # the writer's word wins
+    # Fields the writer left empty still prefill.
+    assert meta["series"] == "The Hollow Saga"
+
+
+def test_prefill_survives_a_moved_project(tmp_path):
+    import shutil
+    ws = _project_sourced_workspace(tmp_path)
+    shutil.rmtree(tmp_path / "project")
+    meta = client.get("/api/audiobook/metadata",
+                      params={"workspace_path": ws}).json()
+    assert meta["genre"] == ""                       # no crash, just no prefill
+
+
+# ── Per-book voice memory ─────────────────────────────────────────────────────
+
+def test_selected_voice_persists_per_book(tmp_path):
+    ws = _workspace(tmp_path)
+    put = client.put("/api/audiobook/voice", json={
+        "workspace_path": ws, "voice_id": "bf_emma"})
+    assert put.status_code == 200
+    project = client.get("/api/audiobook/project",
+                         params={"workspace_path": ws}).json()
+    assert project["manifest"]["selected_voice"] == "bf_emma"

@@ -109,6 +109,20 @@ describe("BookDetailsPanel", () => {
     expect(screen.getByText("Replace Cover")).toBeTruthy();
   });
 
+  it("Use current voice fills the narrator field from the picked voice", async () => {
+    vi.stubGlobal("fetch", mockFetch());
+    render(<BookDetailsPanel workspacePath={WS} currentVoiceLabel="Michael (American male)" />);
+    fireEvent.click(screen.getByText("Book Details"));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Title") as HTMLInputElement).value)
+        .toBe("The Hollow Road"));
+
+    fireEvent.click(screen.getByText("Use current voice"));
+    // The tag wants the name, not the parenthetical accent/gender note.
+    expect((screen.getByLabelText(/Narrator/) as HTMLInputElement).value).toBe("Michael");
+    expect(screen.getByTitle("Edited but not saved")).toBeTruthy();
+  });
+
   it("remove clears the stored cover", async () => {
     const fetchMock = mockFetch({ cover_file: "cover.jpg" });
     await renderOpen(fetchMock);
