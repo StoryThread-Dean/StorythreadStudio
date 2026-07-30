@@ -15,12 +15,23 @@
 #   GET  /api/audiobook/pronunciations     workspace + global rules
 #   PUT  /api/audiobook/pronunciations     replace workspace/global rules
 
+import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from app.audiobook import import_service, pronunciation, recents_store, workspace
+from app.audiobook import (
+    generation,
+    import_service,
+    local_worker,
+    locking,
+    pronunciation,
+    recents_store,
+    segmenter,
+    synthesis,
+    workspace,
+)
 
 router = APIRouter(prefix="/api/audiobook", tags=["audiobook"])
 
@@ -125,6 +136,305 @@ def save_narration(request: SaveNarrationRequest):
     # then reports the re-derived chapter list and any marker warnings.
     result = workspace.write_narration(request.workspace_path, request.content)
     return result
+
+
+# ── Segments ──────────────────────────────────────────────────────────────────
+
+@router.get("/segments")
+def get_segments(workspace_path: str):
+    """
+    The book-wide segments manifest: what the generation queue will work
+    through, chapter by chapter, plus superseded segments awaiting cleanup.
+    Derived data -- rebuilt on every narration save.
+    """
+    _require_workspace(workspace_path)
+    manifest = segmenter.load_segments(workspace_path)
+    if manifest is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No segments manifest yet. Save the narration once to build it.",
+        )
+    return manifest
+
+
+# ── Local narrator engine + voices + preview ─────────────────────────────────
+
+@router.get("/local-engine/status")
+def local_engine_status():
+    """Installed / running state for the component manager UI, including
+    live install progress. Never spawns the worker -- status checks must
+    stay instant."""
+    return local_worker.installed_state()
+
+
+class InstallEngineRequest(BaseModel):
+    # Local zip override: lets the install flow be exercised before the
+    # download is published (and in tests). Absent = published download.
+    source_zip: str | None = None
+
+
+@router.post("/local-engine/install")
+def install_local_engine(request: InstallEngineRequest):
+    """Download (or copy), SHA256-verify, and install the local narrator.
+    Runs in the background; poll /local-engine/status for progress."""
+    try:
+        local_worker.start_install(request.source_zip)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@router.post("/local-engine/remove")
+def remove_local_engine():
+    """Uninstall the packaged engine. Workspaces and generated audio are
+    never touched -- this only frees the engine's disk space."""
+    local_worker.remove_worker()
+    return {"ok": True}
+
+
+@router.get("/voices")
+def get_voices(provider: str = "local-kokoro"):
+    """The voice catalog. Spawns the local worker on first call (a few
+    seconds while the model loads), then serves from the live process."""
+    if provider != "local-kokoro":
+        raise HTTPException(status_code=400,
+                            detail="Only the local narrator has voices so far.")
+    try:
+        return {"voices": local_worker.list_voices()}
+    except local_worker.WorkerUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+class PreviewRequest(BaseModel):
+    text: str
+    voice_id: str
+    provider: str = "local-kokoro"
+    workspace_path: str | None = None    # when set, pronunciation rules apply
+
+
+@router.post("/preview")
+def preview_voice(request: PreviewRequest):
+    """A short voice preview. Local previews are free (spec 18); the text
+    is capped so a stray full-chapter paste can't stall the worker."""
+    text = request.text.strip()[:600]
+    if not text:
+        raise HTTPException(status_code=400, detail="Nothing to preview.")
+    try:
+        backend = synthesis.resolve_backend(request.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if request.workspace_path and workspace.is_workspace(request.workspace_path):
+        rules = pronunciation.effective_rules(request.workspace_path)
+        text = pronunciation.prepare_tts_text(text, rules)
+    else:
+        text = pronunciation.normalize_for_tts(pronunciation.resolve_say_markers(text))
+    try:
+        audio, _duration = backend.synthesize(text, request.voice_id)
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(content=audio, media_type="audio/wav")
+
+
+class NarrationSettingsRequest(BaseModel):
+    workspace_path: str
+    narrator_pace: float = Field(ge=0.5, le=2.0)
+    dialogue_pace: float = Field(ge=0.5, le=2.0)
+    scene_break_ms: int = Field(ge=0, le=15000)
+    chapter_break_ms: int = Field(ge=0, le=15000)
+
+
+@router.get("/narration-settings")
+def get_narration_settings(workspace_path: str):
+    _require_workspace(workspace_path)
+    manifest = workspace.load_manifest(workspace_path)
+    return workspace.narration_settings(manifest)
+
+
+@router.put("/narration-settings")
+def save_narration_settings(request: NarrationSettingsRequest):
+    """Book-level pacing: narrator/dialogue base speeds and break silence
+    lengths. Changing paces marks affected audio stale via the payload
+    basis -- the next Generate re-queues exactly what changed."""
+    _require_workspace(request.workspace_path)
+    manifest = workspace.load_manifest(request.workspace_path)
+    manifest["narration"] = {
+        "narrator_pace": request.narrator_pace,
+        "dialogue_pace": request.dialogue_pace,
+        "scene_break_ms": request.scene_break_ms,
+        "chapter_break_ms": request.chapter_break_ms,
+    }
+    workspace.save_manifest(request.workspace_path, manifest)
+    return workspace.narration_settings(manifest)
+
+
+class PreviewSelectionRequest(BaseModel):
+    workspace_path: str
+    text: str
+    voice_id: str
+    provider: str = "local-kokoro"
+
+
+# Enough for a long scene beat (~3 minutes of audio) while keeping the
+# wait tolerable on CPU; the writer previews passages, not chapters.
+PREVIEW_SELECTION_MAX_CHARS = 3000
+
+
+@router.post("/preview-selection")
+def preview_selection(request: PreviewSelectionRequest):
+    """Select text in the narration editor, hear EXACTLY how it will
+    sound: markers become real silence, pronunciation rules and [say]
+    overrides apply, excluded spans are skipped. Local and free -- this
+    is the pacing/pronunciation rehearsal tool (spec 18.1)."""
+    _require_workspace(request.workspace_path)
+    text = request.text.strip()
+    if not text:
+        raise HTTPException(status_code=400,
+                            detail="Select a passage in the editor first.")
+    if len(text) > PREVIEW_SELECTION_MAX_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"That selection is {len(text):,} characters "
+                   f"(max {PREVIEW_SELECTION_MAX_CHARS:,} for a preview). "
+                   "Select a shorter passage -- full chapters are what "
+                   "Generate is for.",
+        )
+    try:
+        backend = synthesis.resolve_backend(request.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    from app.audiobook import marker_demos
+    rules = pronunciation.effective_rules(request.workspace_path)
+    settings = workspace.narration_settings(workspace.load_manifest(request.workspace_path))
+    try:
+        audio, warnings, trace = marker_demos.render_marked_text(
+            text, backend, request.voice_id, rules, settings)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    # Headers must be latin-1; URI-encode so any message survives. The
+    # frontend decodes and shows these under the player. The trace turns
+    # "the pace reverted" into a checkable fact: exact speed per piece.
+    from urllib.parse import quote
+    headers = {"X-Preview-Trace": quote(json.dumps(trace))}
+    if warnings:
+        headers["X-Preview-Warnings"] = quote(json.dumps(warnings))
+    return Response(content=audio, media_type="audio/wav", headers=headers)
+
+
+class MarkerDemoRequest(BaseModel):
+    kind: str    # pause | scene-break | chapter-break | say | exclude
+
+
+@router.post("/marker-demo")
+def marker_demo(request: MarkerDemoRequest):
+    """An audible demo of one marker, rendered through the REAL pipeline
+    (synthesis + exact stitched silence) in the default reference voice.
+    Powers the narration toolbar's What's-this panel."""
+    from app.audiobook import marker_demos
+    if request.kind not in marker_demos.DEMO_SCRIPTS:
+        raise HTTPException(status_code=400, detail=f"Unknown marker demo '{request.kind}'.")
+    try:
+        backend = synthesis.resolve_backend("local-kokoro")
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    try:
+        audio = marker_demos.build_demo(request.kind, backend)
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(content=audio, media_type="audio/wav")
+
+
+# ── Generation ────────────────────────────────────────────────────────────────
+# The single-run engine. Start queues pending/failed segments in selected
+# chapters; pause/cancel act between segments; status is poll-friendly and
+# self-heals interrupted runs to paused (restart recovery).
+
+class StartGenerationRequest(BaseModel):
+    workspace_path: str
+    provider: str = "local-kokoro"
+    voice_id: str
+    # The explicit "regenerate everything regardless" escape hatch --
+    # normal starts already re-queue stale audio automatically.
+    force: bool = False
+
+
+@router.post("/generate")
+def start_generation(request: StartGenerationRequest):
+    _require_workspace(request.workspace_path)
+    try:
+        backend = synthesis.resolve_backend(request.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        return generation.start_run(request.workspace_path, backend,
+                                    request.voice_id, force=request.force)
+    except RuntimeError as e:            # a run is already active
+        raise HTTPException(status_code=409, detail=str(e))
+    except locking.WorkspaceLockedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:              # nothing to generate / no segments
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/generation/status")
+def generation_status(workspace_path: str):
+    _require_workspace(workspace_path)
+    run = generation.status_with_recovery(workspace_path)
+    if run is None:
+        return {"run": None, "active": False}
+    return {
+        "run": run,
+        "active": generation.active_workspace() == workspace_path,
+    }
+
+
+class GenerationControlRequest(BaseModel):
+    workspace_path: str
+
+
+@router.post("/generation/pause")
+def pause_generation(request: GenerationControlRequest):
+    if generation.active_workspace() != request.workspace_path:
+        raise HTTPException(status_code=409, detail="No active generation run for that workspace.")
+    generation.request_pause()
+    return {"ok": True}
+
+
+@router.post("/generation/cancel")
+def cancel_generation(request: GenerationControlRequest):
+    if generation.active_workspace() != request.workspace_path:
+        raise HTTPException(status_code=409, detail="No active generation run for that workspace.")
+    generation.request_cancel()
+    return {"ok": True}
+
+
+@router.post("/generation/resume")
+def resume_generation(request: GenerationControlRequest):
+    """Resume = a fresh run over whatever is still pending/failed, reusing
+    the paused run's provider and voice. The per-segment persistence means
+    nothing already completed is ever redone (or re-billed)."""
+    _require_workspace(request.workspace_path)
+    run = generation.load_run(request.workspace_path)
+    if run is None:
+        raise HTTPException(status_code=400, detail="There is no run to resume. Start generation instead.")
+    if run.get("status") not in ("paused", "cancelled", "partially_completed"):
+        raise HTTPException(status_code=409, detail=f"The last run is {run.get('status')}, not resumable.")
+    try:
+        backend = synthesis.resolve_backend(run.get("provider", ""))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        return generation.start_run(request.workspace_path, backend, run.get("voice_id", ""))
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except locking.WorkspaceLockedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ── Pronunciation rules ───────────────────────────────────────────────────────

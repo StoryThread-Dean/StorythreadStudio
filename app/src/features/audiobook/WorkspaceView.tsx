@@ -13,10 +13,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft, BookMarked, Loader2, MessageSquareQuote, Save, Scissors,
+  ArrowLeft, BookMarked, EyeOff, HelpCircle, Loader2, MessageSquareQuote,
+  Save, Scissors,
 } from "lucide-react";
 
 import { fetchNarration, saveNarration } from "./api";
+import { GenerationPanel } from "./GenerationPanel";
+import { MarkerHelpPanel } from "./MarkerHelpPanel";
+import { paragraphBoundsAt, stripAudioMarkers } from "./markers";
 import { PronunciationDialog } from "./PronunciationDialog";
 import type { AudiobookChapter, AudiobookProjectPayload } from "./types";
 
@@ -25,14 +29,18 @@ interface WorkspaceViewProps {
   onBack: () => void;
 }
 
-// The quick-action pause set (spec 10.1 defaults; configurability arrives
-// with Settings in a later slice).
-const PAUSE_ACTIONS: { label: string; snippet: string; title: string }[] = [
-  { label: "Pause 0.4s", snippet: "[pause:0.4]", title: "Short pause" },
-  { label: "Pause 0.8s", snippet: "[pause:0.8]", title: "Medium pause" },
-  { label: "Pause 1.5s", snippet: "[pause:1.5]", title: "Long pause" },
-  { label: "Scene Break", snippet: "[scene-break]", title: "Scene-break silence (2.0s default)" },
-  { label: "Chapter Break", snippet: "[chapter-break]", title: "Timed silence only (3.0s default) -- chapters themselves come from # headings" },
+// The quick-action marker set (spec 10.1 defaults; configurability
+// arrives with Settings in a later slice). Placement matters: a pause is
+// PUNCTUATION and inserts inline right where the cursor sits -- wrapping
+// it in blank lines would visually shred the writer's paragraph (an
+// early-testing complaint; the parser reads markers inline just fine).
+// Scene and chapter breaks are STRUCTURE and get their own line.
+const PAUSE_ACTIONS: { label: string; snippet: string; title: string; inline: boolean }[] = [
+  { label: "Pause 0.4s", snippet: "[pause:0.4]", title: "Short pause -- inserts right where your cursor is", inline: true },
+  { label: "Pause 0.8s", snippet: "[pause:0.8]", title: "Medium pause -- inserts right where your cursor is", inline: true },
+  { label: "Pause 1.5s", snippet: "[pause:1.5]", title: "Long pause -- inserts right where your cursor is", inline: true },
+  { label: "Scene Break", snippet: "[scene-break]", title: "Scene-break silence (2.0s default) -- gets its own line", inline: false },
+  { label: "Chapter Break", snippet: "[chapter-break]", title: "Timed silence only (3.0s default) -- chapters themselves come from # headings", inline: false },
 ];
 
 export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
@@ -47,6 +55,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [warnings, setWarnings] = useState<string[]>(payload.warnings ?? []);
   const [error, setError] = useState<string | null>(null);
   const [showPronunciations, setShowPronunciations] = useState(false);
+  const [showMarkerHelp, setShowMarkerHelp] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -62,29 +71,48 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
 
   // ── Editing helpers ─────────────────────────────────────────────────────
 
-  // Caret restoration has to happen AFTER React re-renders the textarea
-  // with the new value -- a ref + effect pair is the reliable way (a
-  // requestAnimationFrame can fire before the commit and get clobbered).
-  const pendingCaretRef = useRef<number | null>(null);
+  // Caret AND scroll restoration have to happen AFTER React re-renders
+  // the textarea with the new value -- swapping a controlled textarea's
+  // value resets its scroll position, which read as "the page jumps to
+  // the bottom" every time a toolbar button was clicked. We remember both
+  // the caret and scrollTop at click time and put them back post-commit.
+  // focus({preventScroll}) keeps the focus call itself from scrolling.
+  const pendingRestoreRef = useRef<{ caret: number; scrollTop: number } | null>(null);
   useEffect(() => {
-    if (pendingCaretRef.current === null) return;
+    if (pendingRestoreRef.current === null) return;
+    const { caret, scrollTop } = pendingRestoreRef.current;
+    pendingRestoreRef.current = null;
     const ta = textareaRef.current;
     if (ta) {
-      ta.focus();
-      ta.setSelectionRange(pendingCaretRef.current, pendingCaretRef.current);
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(caret, caret);
+      ta.scrollTop = scrollTop;
     }
-    pendingCaretRef.current = null;
   }, [content]);
 
-  /** Type `snippet` at the caret (replacing any selection), keep focus. */
-  const insertAtCursor = useCallback((snippet: string) => {
+  /** Type `snippet` at the caret (replacing any selection), keep focus,
+      keep the writer's scroll position exactly where it was.
+
+      inline=true adds a space on either side only where one is missing,
+      so "posture.[pause:0.4]Her" never happens -- but no blank lines are
+      ever injected and the paragraph stays one paragraph. */
+  const insertAtCursor = useCallback((snippet: string, inline = false) => {
     const ta = textareaRef.current;
     if (!ta) return;
     const start = ta.selectionStart ?? content.length;
     const end = ta.selectionEnd ?? start;
-    setContent(content.slice(0, start) + snippet + content.slice(end));
+    let insert = snippet;
+    if (inline) {
+      const before = content.slice(0, start);
+      const after = content.slice(end);
+      if (before && !/\s$/.test(before)) insert = " " + insert;
+      if (after && !/^\s/.test(after)) insert = insert + " ";
+    } else {
+      insert = `\n\n${snippet}\n\n`;
+    }
+    setContent(content.slice(0, start) + insert + content.slice(end));
     setDirty(true);
-    pendingCaretRef.current = start + snippet.length;
+    pendingRestoreRef.current = { caret: start + insert.length, scrollTop: ta.scrollTop };
   }, [content]);
 
   /** Wrap the current selection in before/after (Exclude, Say). */
@@ -98,9 +126,12 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     setDirty(true);
     // caretIntoBefore places the caret INSIDE the opening marker (used by
     // [say:|] so the writer types the spoken form immediately).
-    pendingCaretRef.current = caretIntoBefore !== undefined
-      ? start + caretIntoBefore
-      : start + before.length + selected.length + after.length;
+    pendingRestoreRef.current = {
+      caret: caretIntoBefore !== undefined
+        ? start + caretIntoBefore
+        : start + before.length + selected.length + after.length,
+      scrollTop: ta.scrollTop,
+    };
   }, [content]);
 
   const handleSay = useCallback(() => {
@@ -112,6 +143,24 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const handleExclude = useCallback(() => {
     wrapSelection("[exclude]", "[/exclude]");
   }, [wrapSelection]);
+
+  /** [Remove]: strip audio markers from the selection -- or, with no
+      selection, from the paragraph under the caret (the common case:
+      caret sitting on a [pause:1.5] line the writer regrets). */
+  const handleRemoveMarkers = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    let start = ta.selectionStart ?? 0;
+    let end = ta.selectionEnd ?? start;
+    if (start === end) {
+      ({ start, end } = paragraphBoundsAt(content, start));
+    }
+    const cleaned = stripAudioMarkers(content.slice(start, end));
+    if (cleaned === content.slice(start, end)) return;   // nothing to do
+    setContent(content.slice(0, start) + cleaned + content.slice(end));
+    setDirty(true);
+    pendingRestoreRef.current = { caret: start + cleaned.length, scrollTop: ta.scrollTop };
+  }, [content]);
 
   /** Jump the caret to a chapter's heading line. */
   const jumpToChapter = useCallback((chapter: AudiobookChapter) => {
@@ -199,13 +248,32 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         {PAUSE_ACTIONS.map(action => (
           <button
             key={action.snippet}
-            onClick={() => insertAtCursor(`\n\n${action.snippet}\n\n`)}
+            onClick={() => insertAtCursor(action.snippet, action.inline)}
             title={action.title}
             className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
           >
             {action.label}
           </button>
         ))}
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        {/* Pace spans: wrap the selection; Normal pace = unmarked text. */}
+        {/* Preset values chosen by MEASUREMENT: 0.8x runs ~29% longer and
+            1.2x ~11% shorter -- clearly audible. 0.85/1.1 were real but so
+            subtle they read as broken in live testing. */}
+        <button
+          onClick={() => wrapSelection("[pace:0.8]", "[/pace]")}
+          title="Slow the selected passage (0.8x) -- let a heavy moment breathe"
+          className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+        >
+          Slow
+        </button>
+        <button
+          onClick={() => wrapSelection("[pace:1.2]", "[/pace]")}
+          title="Quicken the selected passage (1.2x) -- carry an action beat"
+          className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+        >
+          Fast
+        </button>
         <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
           onClick={handleSay}
@@ -219,9 +287,25 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           title="Keep the selected text in the file but never narrate it"
           className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
-          <Scissors size={11} /> Exclude
+          <EyeOff size={11} /> Exclude
+        </button>
+        <button
+          onClick={handleRemoveMarkers}
+          title="Remove audio markers from the selection (or the paragraph under the cursor). Your words stay."
+          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-rose-600 hover:text-rose-300"
+        >
+          <Scissors size={11} /> Remove
+        </button>
+        <button
+          onClick={() => setShowMarkerHelp(v => !v)}
+          title="What do these buttons do? Includes audio examples."
+          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-zinc-500 hover:text-blue-300"
+        >
+          <HelpCircle size={11} /> {showMarkerHelp ? "Hide help" : "What's this?"}
         </button>
       </div>
+
+      {showMarkerHelp && <MarkerHelpPanel />}
 
       {/* Body: chapter rail + editor */}
       <div className="flex min-h-0 flex-1">
@@ -270,6 +354,18 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             />
           )}
         </div>
+
+        {/* Right rail: voice, preview, generate, run controls. The
+            selection getter reads live from the textarea so Preview
+            Selection always rehearses exactly what is highlighted. */}
+        <GenerationPanel
+          workspacePath={workspacePath}
+          getSelectionText={() => {
+            const ta = textareaRef.current;
+            if (!ta) return "";
+            return content.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0);
+          }}
+        />
       </div>
 
       {showPronunciations && (

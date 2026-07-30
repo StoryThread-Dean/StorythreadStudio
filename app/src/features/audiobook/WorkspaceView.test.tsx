@@ -49,6 +49,21 @@ function mockFetch() {
     if (url.includes("/pronunciations")) {
       return { ok: true, json: async () => ({ workspace_rules: [], global_rules: [] }) };
     }
+    // The GenerationPanel rail loads voices + run status on mount.
+    if (url.includes("/voices")) {
+      return { ok: true, json: async () => ({ voices: [
+        { id: "af_heart", label: "Heart (American female)", language: "en-US", gender_presentation: "female" },
+      ] }) };
+    }
+    if (url.includes("/generation/status")) {
+      return { ok: true, json: async () => ({ run: null, active: false }) };
+    }
+    if (url.includes("/narration-settings")) {
+      return { ok: true, json: async () => ({
+        narrator_pace: 1.0, dialogue_pace: 1.0,
+        scene_break_ms: 2000, chapter_break_ms: 3000,
+      }) };
+    }
     throw new Error(`unexpected fetch ${url}`);
   });
 }
@@ -77,15 +92,41 @@ describe("WorkspaceView", () => {
     expect(screen.getByText("2. Chapter 2")).toBeTruthy();
   });
 
-  it("marker buttons insert the marker text at the caret", async () => {
+  it("pauses insert INLINE without shredding the paragraph", async () => {
     const textarea = await renderLoaded();
+    // Caret mid-paragraph, right after a sentence's period.
     const caret = NARRATION.indexOf("First prose.") + "First prose.".length;
     textarea.setSelectionRange(caret, caret);
 
     fireEvent.click(screen.getByText("Pause 0.8s"));
-    expect(textarea.value).toContain("First prose.\n\n[pause:0.8]\n\n");
+    // A space is added where one is missing; NO blank lines are injected
+    // (the paragraph-shredding was a live-testing complaint).
+    expect(textarea.value).toContain("First prose. [pause:0.8]");
+    expect(textarea.value).not.toContain("First prose.\n\n[pause:0.8]");
     // Inserting marks the buffer dirty -- Save lights up.
     expect(screen.getByTitle("Unsaved changes")).toBeTruthy();
+  });
+
+  it("scene breaks still get their own line (structure, not punctuation)", async () => {
+    const textarea = await renderLoaded();
+    const caret = NARRATION.indexOf("First prose.") + "First prose.".length;
+    textarea.setSelectionRange(caret, caret);
+
+    fireEvent.click(screen.getByText("Scene Break"));
+    expect(textarea.value).toContain("First prose.\n\n[scene-break]\n\n");
+  });
+
+  it("inserting a marker preserves the scroll position (no jump to bottom)", async () => {
+    const textarea = await renderLoaded();
+    const caret = NARRATION.indexOf("First prose.");
+    textarea.setSelectionRange(caret, caret);
+    // Simulate a scrolled editor -- the regression was the value swap
+    // resetting scrollTop, reading as a jump to the bottom on every click.
+    textarea.scrollTop = 500;
+
+    fireEvent.click(screen.getByText("Scene Break"));
+    expect(textarea.value).toContain("[scene-break]");
+    expect(textarea.scrollTop).toBe(500);
   });
 
   it("[say] wraps the selection and parks the caret for the spoken form", async () => {
@@ -106,6 +147,49 @@ describe("WorkspaceView", () => {
 
     fireEvent.click(screen.getByText("Exclude"));
     expect(textarea.value).toContain("[exclude]Second prose.[/exclude]");
+  });
+
+  it("Slow and Fast wrap the selection in pace spans", async () => {
+    const textarea = await renderLoaded();
+    const start = NARRATION.indexOf("First prose.");
+    textarea.setSelectionRange(start, start + "First prose.".length);
+    fireEvent.click(screen.getByText("Slow"));
+    expect(textarea.value).toContain("[pace:0.8]First prose.[/pace]");
+
+    const start2 = textarea.value.indexOf("Second prose.");
+    textarea.setSelectionRange(start2, start2 + "Second prose.".length);
+    fireEvent.click(screen.getByText("Fast"));
+    expect(textarea.value).toContain("[pace:1.2]Second prose.[/pace]");
+  });
+
+  it("Remove strips markers from the selection, keeping the words", async () => {
+    const textarea = await renderLoaded();
+    const marked = "# Chapter 1\n\nKeep. [say:KAY-lith]Kaelith[/say] stays.\n\n[pause:1.5]\n\nEnd.";
+    fireEvent.change(textarea, { target: { value: marked } });
+    textarea.setSelectionRange(0, marked.length);
+
+    fireEvent.click(screen.getByText("Remove"));
+    expect(textarea.value).toBe("# Chapter 1\n\nKeep. Kaelith stays.\n\nEnd.");
+  });
+
+  it("Remove with no selection targets the paragraph under the caret", async () => {
+    const textarea = await renderLoaded();
+    const marked = "# Chapter 1\n\nFirst prose.\n\n[pause:1.5]\n\nSecond prose.";
+    fireEvent.change(textarea, { target: { value: marked } });
+    const caret = marked.indexOf("[pause") + 4;
+    textarea.setSelectionRange(caret, caret);
+
+    fireEvent.click(screen.getByText("Remove"));
+    expect(textarea.value).not.toContain("[pause");
+    expect(textarea.value).toContain("First prose.");
+    expect(textarea.value).toContain("Second prose.");
+  });
+
+  it("What's this opens the marker help with Hear it buttons", async () => {
+    await renderLoaded();
+    fireEvent.click(screen.getByText("What's this?"));
+    expect(screen.getByText(/generated live by the free local narrator/)).toBeTruthy();
+    expect(screen.getAllByText("Hear it")).toHaveLength(6);
   });
 
   it("save is manual: PUT sends the buffer, chapters and warnings update", async () => {

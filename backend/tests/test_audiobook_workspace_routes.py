@@ -182,6 +182,32 @@ def test_narration_save_preserves_selection_by_title(tmp_path):
     assert by_title["Chapter 3"]["selected_for_generation"] is True    # new default
 
 
+# ── Segments over HTTP ────────────────────────────────────────────────────────
+
+def test_import_builds_segments_and_the_endpoint_serves_them(tmp_path):
+    _, ws, _ = _import_txt(tmp_path)
+    response = client.get("/api/audiobook/segments", params={"workspace_path": str(ws)})
+    assert response.status_code == 200
+    manifest = response.json()
+    assert [c["title"] for c in manifest["chapters"]] == ["Chapter 1", "Chapter 2"]
+    segments = [i for c in manifest["chapters"] for i in c["items"] if i["kind"] == "segment"]
+    assert all(s["segment_id"].startswith("seg-") for s in segments)
+    assert all(s["status"] == "pending" for s in segments)
+    # The manifest file itself lives in the workspace, not app data.
+    assert (ws / "generated-segments" / "segments.json").is_file()
+
+
+def test_segments_404_before_any_narration_exists(tmp_path):
+    # A workspace whose manifest exists but segments were never derived
+    # (hand-built folder) gets the helpful 404, not a crash.
+    ws = tmp_path / "bare"
+    (ws / "manuscript").mkdir(parents=True)
+    (ws / "audiobook-project.json").write_text("{}", encoding="utf-8")
+    response = client.get("/api/audiobook/segments", params={"workspace_path": str(ws)})
+    assert response.status_code == 404
+    assert "Save the narration" in response.json()["detail"]
+
+
 # ── Pronunciations over HTTP ──────────────────────────────────────────────────
 
 def test_pronunciations_round_trip(tmp_path):

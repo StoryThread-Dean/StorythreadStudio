@@ -201,7 +201,11 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_audiobook_extraction.py` -- audiobook import extractors (TXT/MD/DOCX/EPUB/Storythread-project) incl. real DOCX+EPUB round trips, chapter detection, PDF rejection
   - `test_audiobook_markers.py` -- narration marker grammar ([pause]/[scene-break]/[chapter-break]/[exclude]), derived structure, warnings
   - `test_audiobook_pronunciation.py` -- pronunciation rules, [say] inline overrides, TTS payload prep (`--` to em dash, payload only)
-  - `test_audiobook_workspace_routes.py` -- /api/audiobook import/project/narration/pronunciations/recents end to end
+  - `test_audiobook_workspace_routes.py` -- /api/audiobook import/project/narration/pronunciations/recents/segments end to end
+  - `test_audiobook_segmenter.py` -- segment sizing (paragraph grouping, sentence fallback, marker cuts) + stable-ID identity across inserts/edits/chapter renumbering
+  - `test_audiobook_generation.py` -- generation engine: run lifecycle, per-segment persistence, pause/cancel between segments, retry cap + pessimistic attempts, truncation validation, restart recovery, workspace lockfile, narration-settings/dialogue/marker pace flow + staleness
+  - `test_audiobook_local_worker.py` -- kokoro-worker manager: KokoroBackend transport errors, spawn command + version gate, install flow (SHA256 integrity, polluted-dir replace, locked-file loud failure), voices/preview/preview-selection endpoints
+  - `test_audiobook_marker_demos.py` -- WAV stitcher (exact silence, format guards), audible marker demos (scripts render clean, speeds match narrated values), render_marked_text (rules, silence, pace spans, cut-into-span warnings, trace)
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -216,7 +220,9 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/data/names/fantasyNames.test.ts` -- fantasy name assembly: 12-race roster, deterministic rng, speakability fuzz, phonology disjointness
   - `src/components/profiles/NameGeneratorPanel.test.tsx` -- generator panel: optgroups, era hiding for races, 6+6 deals, partial accept, fallback note
   - `src/features/audiobook/AudiobookDashboard.test.tsx` -- audiobook dashboard: recents render, empty state, open flow, remove-keeps-files endpoint
-  - `src/features/audiobook/WorkspaceView.test.tsx` -- narration editor: marker insertion, [say]/[exclude] selection wrap, manual save PUT + chapter re-derive, pronunciation dialog
+  - `src/features/audiobook/WorkspaceView.test.tsx` -- narration editor: inline pause insertion (scroll preserved), [say]/[exclude]/pace wraps, Remove marker stripping, manual save PUT + chapter re-derive, marker help panel, pronunciation dialog
+  - `src/features/audiobook/GenerationPanel.test.tsx` -- narration rail: voices load, generate posts + live progress, paused-run resume, failed-segment surfacing, up-to-date force flow, engine-unavailable message
+  - `src/features/audiobook/markers.test.ts` -- stripAudioMarkers (wrappers dissolve, words never deleted) + paragraphBoundsAt
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands

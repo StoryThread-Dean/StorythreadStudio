@@ -141,7 +141,8 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
         <p className="mb-4 text-[11px] text-zinc-500">
           Rules change only what the narrator SAYS -- your text on screen never
           changes. For a single spot, select the word in the editor and use the
-          [say] toolbar button instead.
+          [say] toolbar button instead. Where both apply, [say] wins: the
+          dictionary sets the rule, [say] makes the exception.
         </p>
 
         {loading ? (

@@ -46,6 +46,37 @@ WORKSPACE_SUBDIRS = [
 
 MANIFEST_NAME = "audiobook-project.json"
 
+# Book-level narration settings (stored under manifest["narration"]).
+# These tame the engine's own pacing instincts globally so [pace] markers
+# stay reserved for specific moments: base narrator speed, a separate
+# speed for dialogue segments (where engine pace inference is wildest),
+# and the silence lengths for scene/chapter breaks.
+NARRATION_DEFAULTS = {
+    "narrator_pace": 1.0,
+    "dialogue_pace": 1.0,
+    "scene_break_ms": 2000,
+    "chapter_break_ms": 3000,
+}
+
+
+def narration_settings(manifest: dict) -> dict:
+    """The manifest's narration settings over the defaults, values coerced
+    and clamped so a hand-edited manifest can never produce chipmunk math."""
+    merged = dict(NARRATION_DEFAULTS)
+    stored = manifest.get("narration")
+    if isinstance(stored, dict):
+        for key in ("narrator_pace", "dialogue_pace"):
+            try:
+                merged[key] = min(2.0, max(0.5, float(stored.get(key, merged[key]))))
+            except (TypeError, ValueError):
+                pass
+        for key in ("scene_break_ms", "chapter_break_ms"):
+            try:
+                merged[key] = min(15000, max(0, int(stored.get(key, merged[key]))))
+            except (TypeError, ValueError):
+                pass
+    return merged
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -167,6 +198,14 @@ def write_narration(workspace_path: str, content: str) -> dict:
             "status": old.get("status", "ready"),
         })
     _write_chapter_files(workspace_path, chapter_records)
+
+    # Re-derive the generation segments, carrying identity forward: an
+    # unchanged paragraph keeps its segment ID and any audio already
+    # generated for it (spec 23.1). Local import avoids a module cycle
+    # (segmenter imports markers, workspace imports both).
+    from app.audiobook import segmenter
+    manifest = segmenter.resegment(parsed, segmenter.load_segments(workspace_path))
+    segmenter.save_segments(workspace_path, manifest)
 
     return {"chapters": chapter_records, "warnings": parsed.warnings}
 

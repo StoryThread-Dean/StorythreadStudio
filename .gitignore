@@ -14,6 +14,16 @@ app/dist/
 app/dist-ssr/
 */local
 
+# ── Kokoro worker (local narration engine) ───────────────────────────────────
+# The worker's venv is reproducible via uv sync. The model files (~340MB)
+# are downloaded from the kokoro-onnx releases -- never committed; the
+# packaged build ships them inside the kokoro-worker artifact instead.
+kokoro-worker/.venv/
+kokoro-worker/models/
+kokoro-worker/__pycache__/
+kokoro-worker/build/
+kokoro-worker/dist/
+
 # ── Tauri / Rust ──────────────────────────────────────────────────────────────
 # Rust build artifacts -- large and fully reproducible via cargo build.
 app/src-tauri/target/

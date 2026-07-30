@@ -887,7 +887,29 @@ User-facing framing:
 
 > Local generation runs on your CPU, faster than the audiobook plays. You may continue using Storythread while it runs.
 
-### 15.1 Future Note
+### 15.1 Engine Prosody and the Usable Pace Band (live-testing findings, 2026-07-29)
+
+Findings from extended listening tests, recorded so nobody re-litigates
+them by ear later:
+
+- **Engine prosody is out of scope.** Kokoro infers its own delivery
+  (pace, inflection, emphasis) within each synthesized piece from the
+  text's shape -- punctuation, sentence length, quoting. It sometimes
+  races or drags passages on its own judgment, most visibly in dialogue.
+  The pipeline's speeds were VERIFIED correct end to end (the preview
+  render trace shows the exact speed per piece); the remaining variation
+  lives inside the model and is not correctable from outside. Mitigations
+  that exist: book-level narrator/dialogue pace, [pace] spans, and a
+  [pause] before a racing stretch (segment boundaries reset prosody).
+  Deeper correction is PINNED -- revisit only if a future engine build
+  changes the behavior.
+- **The usable pace band is roughly 0.8 to 1.2.** Outside it, the voice
+  develops audibly robotic inflections (occasionally already at 0.85).
+  The Slow/Fast presets sit at the band edges deliberately. The full
+  0.5-2.0 range stays available for hand-tuning, with the band
+  documented in the UI as guidance.
+
+### 15.2 Future Note
 
 If GPU acceleration is ever revisited, `onnxruntime-directml` is the single Windows-native path covering NVIDIA, AMD, and Intel hardware together -- not three separate vendor runtimes. Keep the synthesis interface device-agnostic so that door stays open:
 
@@ -1048,6 +1070,36 @@ Local previews are free.
 Hosted previews should require confirmation when they have a cost.
 
 Playback scope note: previews (and spot-checking generated chapters) require basic audio playback -- play, pause, seek -- inside the app. That is IN scope for the MVP. The deferred item in Section 3.2 is a full audiobook player with listening-position memory, not basic playback.
+
+### 18.3 The Audible Help Standard
+
+Established during Stage B live testing (2026-07-29) and now the rule for
+every feature that changes how audio SOUNDS: explain it with a "Hear it"
+demo, not just prose.
+
+- Demos are RENDERED LIVE through the real pipeline (parse -> synthesize
+  -> stitch), never shipped as recordings -- when defaults or the engine
+  change, the demos change with them.
+- Demos use the default reference voice so every writer hears the same
+  thing, run on the local engine, and carry a faded "local / free" hint
+  (writers trained by metered AI need to know sampling costs nothing).
+- Demo scripts NARRATE what the listener is experiencing ("that gap was a
+  pause marker set to one and a half seconds") so no reading is required.
+- Script respellings and examples are tuned BY LISTENING against the live
+  engine, never by what reads best on paper (live lesson: HEY-zeus read
+  as "Zeheus"; Hay-SOOS is correct). Demo words must produce a contrast
+  the engine cannot out-improve -- prefer names where several readings
+  are RIGHT and the story picks one (Jesus/Hay-SOOS, the regional Laras)
+  over words the engine merely fails today.
+- Demo playback is click-to-pause/resume; rendered demos are cached
+  backend-side per engine version so the first play is the only slow one.
+- Future candidates: voice-picker comparisons, mastering/loudness
+  settings, pause-default changes.
+
+Noted for later (not a redesign now): streaming demo/preview audio --
+begin playback while later pieces are still synthesizing. Requires
+chunked WAV streaming from the worker through the backend to the player;
+backend-side demo caching covers most of the pain meanwhile.
 
 ---
 

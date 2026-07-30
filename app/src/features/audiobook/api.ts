@@ -7,6 +7,8 @@
 
 import type {
   AudiobookProjectPayload,
+  GenerationRun,
+  NarratorVoice,
   PronunciationEntry,
   RecentAudiobook,
 } from "./types";
@@ -93,6 +95,180 @@ export async function fetchPronunciations(workspacePath: string): Promise<{
   );
   return toJson(res);
 }
+
+// ── Voices, preview, generation ──────────────────────────────────────────────
+
+export async function fetchVoices(): Promise<NarratorVoice[]> {
+  // First call spawns the local worker and loads the model -- give it
+  // the time it needs instead of failing fast.
+  const res = await fetch(`${API_BASE}/api/audiobook/voices?provider=local-kokoro`);
+  const body = await toJson<{ voices: NarratorVoice[] }>(res);
+  return body.voices;
+}
+
+export async function previewVoice(
+  text: string,
+  voiceId: string,
+  workspacePath: string,
+): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/audiobook/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text, voice_id: voiceId, provider: "local-kokoro",
+      workspace_path: workspacePath,
+    }),
+  });
+  if (!res.ok) {
+    let detail = `Preview failed (${res.status}).`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+    throw new Error(detail);
+  }
+  return res.blob();
+}
+
+export async function startGeneration(
+  workspacePath: string,
+  voiceId: string,
+  force = false,
+): Promise<GenerationRun> {
+  const res = await fetch(`${API_BASE}/api/audiobook/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspace_path: workspacePath, provider: "local-kokoro", voice_id: voiceId,
+      force,
+    }),
+  });
+  return toJson<GenerationRun>(res);
+}
+
+export interface PreviewTracePiece {
+  speed: number;
+  dialogue: boolean;
+  marker_pace: number | null;
+  snippet: string;
+}
+
+export async function previewSelection(
+  workspacePath: string,
+  text: string,
+  voiceId: string,
+): Promise<{ blob: Blob; warnings: string[]; trace: PreviewTracePiece[] }> {
+  const res = await fetch(`${API_BASE}/api/audiobook/preview-selection`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspace_path: workspacePath, text, voice_id: voiceId,
+      provider: "local-kokoro",
+    }),
+  });
+  if (!res.ok) {
+    let detail = `Preview failed (${res.status}).`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+    throw new Error(detail);
+  }
+  // Marker parse warnings and the render trace ride headers (the body is
+  // raw audio). The trace is the ground truth of what was rendered --
+  // exact speed per piece -- so pacing questions get answered by facts.
+  let warnings: string[] = [];
+  const rawWarnings = res.headers.get("X-Preview-Warnings");
+  if (rawWarnings) {
+    try { warnings = JSON.parse(decodeURIComponent(rawWarnings)); } catch { /* none */ }
+  }
+  let trace: PreviewTracePiece[] = [];
+  const rawTrace = res.headers.get("X-Preview-Trace");
+  if (rawTrace) {
+    try { trace = JSON.parse(decodeURIComponent(rawTrace)); } catch { /* none */ }
+  }
+  return { blob: await res.blob(), warnings, trace };
+}
+
+export interface EngineStatus {
+  installed: boolean;
+  mode: "packaged" | "dev" | "none";
+  running: boolean;
+  installed_version: string | null;
+  available_version: string;
+  download_published: boolean;
+  download_size_mb: number | null;
+  install: { state: string; progress: number; error: string | null };
+}
+
+export async function fetchEngineStatus(): Promise<EngineStatus> {
+  const res = await fetch(`${API_BASE}/api/audiobook/local-engine/status`);
+  return toJson<EngineStatus>(res);
+}
+
+export async function installEngine(): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/local-engine/install`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  }));
+}
+
+export interface NarrationSettings {
+  narrator_pace: number;
+  dialogue_pace: number;
+  scene_break_ms: number;
+  chapter_break_ms: number;
+}
+
+export async function fetchNarrationSettings(workspacePath: string): Promise<NarrationSettings> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/narration-settings?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<NarrationSettings>(res);
+}
+
+export async function saveNarrationSettings(
+  workspacePath: string,
+  settings: NarrationSettings,
+): Promise<NarrationSettings> {
+  const res = await fetch(`${API_BASE}/api/audiobook/narration-settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, ...settings }),
+  });
+  return toJson<NarrationSettings>(res);
+}
+
+export async function fetchMarkerDemo(kind: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/audiobook/marker-demo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind }),
+  });
+  if (!res.ok) {
+    let detail = `Demo failed (${res.status}).`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+    throw new Error(detail);
+  }
+  return res.blob();
+}
+
+export async function fetchGenerationStatus(
+  workspacePath: string,
+): Promise<{ run: GenerationRun | null; active: boolean }> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/generation/status?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson(res);
+}
+
+async function generationControl(action: "pause" | "cancel" | "resume", workspacePath: string) {
+  const res = await fetch(`${API_BASE}/api/audiobook/generation/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath }),
+  });
+  return toJson(res);
+}
+
+export const pauseGeneration = (ws: string) => generationControl("pause", ws);
+export const cancelGeneration = (ws: string) => generationControl("cancel", ws);
+export const resumeGeneration = (ws: string) => generationControl("resume", ws);
 
 export async function savePronunciations(
   workspacePath: string,

@@ -59,6 +59,31 @@ export interface AudiobookProjectPayload {
   warnings?: string[];
 }
 
+/** One narrator voice from the engine's catalog. */
+export interface NarratorVoice {
+  id: string;
+  label: string;
+  language: string;
+  gender_presentation: string;
+}
+
+/** The generation-run.json record (spec section 31.4 + live counters). */
+export interface GenerationRun {
+  run_id: string;
+  status: string;
+  provider: string;
+  model: string;
+  engine_version: string;
+  voice_id: string;
+  started_at: string;
+  paused_at: string | null;
+  completed_at: string | null;
+  total_segments: number;
+  completed_segments: number;
+  failed_segments: number;
+  note: string | null;
+}
+
 /** Friendly labels for manifest/recents status values. */
 export const AUDIOBOOK_STATUS_LABELS: Record<string, string> = {
   needs_review: "Needs Review",
