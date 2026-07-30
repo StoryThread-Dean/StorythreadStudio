@@ -320,6 +320,55 @@ manuscript is never modified; Remove from Recents never deletes files.
 
 ---
 
+## 11. Audiobook Converter -- local narrator install and generation (Stage B)
+
+**Touches:** the kokoro-worker download/verify/install flow, worker
+spawn + version gate, voice previews, selection preview with render
+trace, marker audio demos, narration settings, and the generation run
+lifecycle (pause/resume/restart recovery).
+
+Dev-machine note: the repo's `kokoro-worker/` checkout acts as a built-in
+engine. To rehearse a real user's machine, start the backend with
+`$env:STORYTHREAD_DISABLE_DEV_WORKER = "1"` in that terminal, and delete
+`~/.storythread/kokoro-worker` for a truly fresh install.
+
+Steps:
+1. Fresh state (no engine): open an audiobook workspace. The Narration
+   rail offers **Install Free Local Narrator (~372 MB)**. Click it:
+   download percentage climbs, then verifying, then installing, then the
+   voice list loads BY ITSELF (54 voices). Files land in
+   `~/.storythread/kokoro-worker/`.
+2. **Preview voice** plays a sample sentence in the chosen voice.
+   **Preview selection** on a highlighted passage plays exactly what
+   generation would produce -- inserted [pause] markers audible as real
+   silence, pronunciation rules applied -- with a per-piece speed trace
+   under the player (dialogue lines tagged, [pace] spans shown).
+3. Open **What's this?** on the marker toolbar and play all six Hear-it
+   demos (each marked local/free; click again pauses, click resumes).
+   First play per demo renders live; replays are instant (cached).
+4. **Narration Settings**: set Dialogue pace to 0.9, Save (the amber
+   "unsaved" tag must clear). Generate: only dialogue segments re-queue
+   if the book was already generated.
+5. **Generate Audiobook**: progress bar counts segments. Pause mid-run --
+   it finishes the current segment, then stops with the lock released.
+   Resume completes only what remains. Kill the backend mid-run (Ctrl+C),
+   restart, reopen: the run shows as interrupted with a Resume that picks
+   up from the last completed segment.
+6. Segment WAVs exist under `generated-segments/<chapter>/` and play in
+   any audio player, in the selected voice.
+7. Close the app entirely, then check Task Manager: NO `kokoro-worker`
+   or stray worker `python` processes remain (the parent watchdog).
+8. Version gate (optional): edit `installed.json` in the install dir to
+   an older version, restart the backend, open the workspace -- expect a
+   clear "needs an update" message with an Update button, never a crash
+   loop.
+
+Expected: the SHA256 of a download is always verified before install; a
+failed install leaves NOTHING half-installed; pace values speak for
+themselves in the pace demo.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and
