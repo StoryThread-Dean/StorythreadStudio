@@ -238,7 +238,8 @@ def test_post_span_text_returns_to_the_book_base_not_to_one():
         '"Unmarked dialogue right after," she said, "at the dialogue base."',
         SpeedSpy(), DEMO_VOICE, rules=[], settings=settings)
     assert warnings == []
-    assert speeds == [0.85, pytest.approx(0.68), 0.85, 0.95]
+    # 0.85 * 0.8 = 0.68 raw, snapped to the engine's 0.05 grid -> 0.7.
+    assert speeds == [0.85, pytest.approx(0.7), 0.85, 0.95]
     # The trace reports the same truth the audio used.
     assert [t["speed"] for t in trace] == speeds
     assert [t["dialogue"] for t in trace] == [False, False, False, True]

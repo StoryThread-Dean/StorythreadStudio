@@ -349,7 +349,30 @@ def test_marker_pace_multiplies_the_base(tmp_path):
 
     generation.start_run(str(ws), SpeedSpy(), voice_id="v")
     generation.wait_for_idle()
-    assert speeds == [pytest.approx(0.72)]      # 0.9 base * 0.8 marker
+    # 0.9 base * 0.8 marker = 0.72, snapped to the 0.05 grid -> 0.7.
+    assert speeds == [pytest.approx(0.7)]
+
+
+def test_compound_pace_snaps_to_the_engine_grid():
+    """
+    Pinned from a listening test on the user's real chapter: dialogue
+    base 0.9 under a [pace:1.2] span produced 1.08x, and Kokoro renders
+    a sibilant slur at that off-grid speed while 0.05-step neighbors
+    are clean. Compound paces must land on the 0.05 grid.
+    """
+    settings = {"narrator_pace": 0.85, "dialogue_pace": 0.9,
+                "scene_break_ms": 2000, "chapter_break_ms": 3000}
+    # The lisp case: fast span inside dialogue -> 1.08 raw -> 1.1.
+    assert generation.effective_pace(
+        {"dialogue": True, "pace": 1.2}, settings) == pytest.approx(1.1)
+    # Slow span over narration: 0.85 * 0.8 = 0.68 -> 0.7.
+    assert generation.effective_pace(
+        {"dialogue": False, "pace": 0.8}, settings) == pytest.approx(0.7)
+    # On-grid values pass through untouched.
+    assert generation.effective_pace(
+        {"dialogue": True}, settings) == pytest.approx(0.9)
+    assert generation.effective_pace(
+        {"dialogue": False}, settings) == pytest.approx(0.85)
 
 
 # ── Control: pause, cancel, single-run, lock ─────────────────────────────────

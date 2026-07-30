@@ -146,9 +146,18 @@ def effective_pace(segment: dict, settings: dict) -> float:
     (dialogue segments use Dialogue Pace, everything else Narrator Pace)
     MULTIPLIED by any [pace:...] marker -- so "Slow" always means slow
     relative to the book's chosen baseline. Clamped to the engine range.
+
+    The product is SNAPPED to the nearest 0.05 step. Compound values
+    like 1.2 x 0.9 = 1.08 land between the speeds Kokoro renders
+    cleanly -- listening tests pinned a sibilant slur ("lisp") to
+    1.08x specifically, while the neighboring 0.05-grid speeds were
+    clean. Snapping keeps "faster/slower than base" semantics but only
+    ever asks the engine for speeds in its comfortable gears.
     """
     base = settings["dialogue_pace"] if segment.get("dialogue") else settings["narrator_pace"]
-    return max(0.5, min(2.0, round(base * segment.get("pace", 1.0), 3)))
+    raw = base * segment.get("pace", 1.0)
+    snapped = round(round(raw / 0.05) * 0.05, 2)
+    return max(0.5, min(2.0, snapped))
 
 
 def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
