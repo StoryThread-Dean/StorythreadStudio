@@ -161,7 +161,7 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
                         // the tag wants the name, not the parenthetical.
                         edit("narrator", currentVoiceLabel.replace(/\s*\(.*\)$/, ""));
                       }}
-                      className="rounded border border-zinc-700 px-1.5 py-0.5 text-[9px] text-zinc-400 hover:border-blue-600 hover:text-blue-300"
+                      className="cursor-pointer text-[10px] text-blue-400 hover:text-blue-300 hover:underline"
                       title={`Fill with the selected voice: ${currentVoiceLabel}`}
                     >
                       Use current voice

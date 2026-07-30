@@ -56,6 +56,18 @@ Long-planned. Storythread Studio is aimed at beginning writers, and editing your
 - Custom prompts are named, per-feature, and swappable at any time; picking DEFAULT always restores stock behavior.
 - Scope ideas for the Advanced side: `{{variable}}` placeholders, per-prompt sampling settings, and JSON import/export packs (see [`research-multi-provider.md`](research-multi-provider.md)).
 
+### Book Details: Author + Publication Year fields
+
+Requested during audiobook metadata testing (2026-07-30). The writing
+app's Book Details never asks for the author's name or a publication
+year, so the audiobook converter's "never ask twice" prefill has nothing
+to pull for those two fields (it already pulls genre, description, and
+series name from project.json / series.json). Add both to Book Details
+in `project.json` and the Book Details settings UI, include them in
+`_build_story_context()` where sensible, and extend the audiobook
+`project_prefill()` (`backend/app/audiobook/workspace.py`) to read them
+-- the prefill side is already built and one dict entry per field.
+
 ### Character creation follow-ups
 
 Polish on the v1.0.10 character overhaul, deferred deliberately:
