@@ -469,6 +469,21 @@ def _write_segment_audio(workspace_path: str, segment: dict,
     return rel.replace("\\", "/")
 
 
+def reset(workspace_path: str) -> None:
+    """
+    The writer's Cancel-and-start-over: forget the run record and force
+    the lock off, so Generate is available fresh no matter what state a
+    crash, reboot, or bug left behind. Completed segment audio is kept
+    (still valid, still skipped by the next run); the caller has already
+    verified no run is active in THIS process.
+    """
+    try:
+        os.remove(run_path(workspace_path))
+    except OSError:
+        pass
+    locking.force_release(workspace_path)
+
+
 # ── Status with restart recovery ─────────────────────────────────────────────
 
 def status_with_recovery(workspace_path: str) -> dict | None:

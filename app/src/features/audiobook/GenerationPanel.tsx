@@ -17,8 +17,8 @@ import { Ban, ChevronDown, ChevronRight, Loader2, Mic2, Pause, Play, Square } fr
 import {
   cancelGeneration, fetchEngineStatus, fetchGenerationStatus,
   fetchNarrationSettings, fetchVoices, installEngine, pauseGeneration,
-  previewSelection, previewVoice, resumeGeneration, saveNarrationSettings,
-  saveVoice, startGeneration,
+  previewSelection, previewVoice, resetGeneration, resumeGeneration,
+  saveNarrationSettings, saveVoice, startGeneration,
 } from "./api";
 import type { EngineStatus, NarrationSettings, PreviewTracePiece } from "./api";
 import { BookDetailsPanel } from "./BookDetailsPanel";
@@ -533,6 +533,32 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
               {busy && <Loader2 size={14} className="animate-spin" />}
               {resumable ? "Resume Generation"
                 : draftPass ? "Generate Draft (fast)" : "Generate Audiobook"}
+            </button>
+          )}
+          {/* The escape hatch under Resume: forget the interrupted run
+              (and any stale lock a crash or reboot left behind) so the
+              writer can start over without being blocked. */}
+          {resumable && (
+            <button
+              onClick={() => {
+                if (!window.confirm(
+                  "Cancel this generation run and start over?\n\n" +
+                  "Finished segments keep their audio and will not be " +
+                  "redone. The interrupted run (and any stuck workspace " +
+                  "lock) is cleared so Generate is available fresh.")) return;
+                void (async () => {
+                  setError(null);
+                  try {
+                    await resetGeneration(workspacePath);
+                    await pollOnce();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Reset failed.");
+                  }
+                })();
+              }}
+              className="self-center text-[10px] text-rose-400 hover:text-rose-300 hover:underline"
+            >
+              Cancel generation and start over
             </button>
           )}
           {/* A finished draft must say so where the writer will see it. */}

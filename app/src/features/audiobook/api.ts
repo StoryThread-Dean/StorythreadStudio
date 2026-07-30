@@ -416,6 +416,16 @@ export async function fetchGenerationStatus(
   return toJson(res);
 }
 
+/** The escape hatch: forget the interrupted run and force a stale lock
+ * off so generation can start over. Completed audio is kept. */
+export async function resetGeneration(workspacePath: string): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/generation/reset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath }),
+  }));
+}
+
 async function generationControl(action: "pause" | "cancel" | "resume", workspacePath: string) {
   const res = await fetch(`${API_BASE}/api/audiobook/generation/${action}`, {
     method: "POST",

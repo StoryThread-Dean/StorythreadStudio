@@ -8,6 +8,7 @@
 # kokoro-worker and cloud providers plug into later.
 
 import json
+import os
 import threading
 
 import pytest
@@ -485,7 +486,7 @@ def test_foreign_live_lock_blocks_a_run(tmp_path, monkeypatch):
         "pid": 999999, "hostname": __import__("socket").gethostname(),
         "acquired_at": "2026-07-29T00:00:00Z",
     }), encoding="utf-8")
-    monkeypatch.setattr(locking, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(locking, "_holder_alive", lambda pid, image: True)
     with pytest.raises(locking.WorkspaceLockedError):
         generation.start_run(str(ws), FakeBackend(), voice_id="v")
 
@@ -496,10 +497,28 @@ def test_stale_lock_is_broken_automatically(tmp_path, monkeypatch):
         "pid": 999999, "hostname": __import__("socket").gethostname(),
         "acquired_at": "2026-07-29T00:00:00Z",
     }), encoding="utf-8")
-    monkeypatch.setattr(locking, "_pid_alive", lambda pid: False)   # holder is gone
+    monkeypatch.setattr(locking, "_holder_alive", lambda pid, image: False)  # gone
     generation.start_run(str(ws), FakeBackend(), voice_id="v")
     generation.wait_for_idle()
     assert _run_record(ws)["status"] == "completed"
+
+
+def test_reused_pid_after_a_reboot_reads_as_stale():
+    # THE live bug: a reboot handed the lock's PID to a system process,
+    # and the old probe called that "alive" forever. The holder's image
+    # name settles it -- a live PID wearing the wrong executable is a
+    # reused PID, not our holder.
+    import socket
+    import sys
+    lock = {"pid": os.getpid(), "hostname": socket.gethostname(),
+            "image": "definitely-not-storythread.exe"}
+    assert locking.is_stale(lock) is True
+    lock["image"] = os.path.basename(sys.executable)
+    assert locking.is_stale(lock) is False
+    # Pre-image locks (written before this fix) fall back to pure
+    # liveness -- our own live PID counts as alive.
+    lock.pop("image")
+    assert locking.is_stale(lock) is False
 
 
 # ── Restart recovery + endpoint surface ──────────────────────────────────────

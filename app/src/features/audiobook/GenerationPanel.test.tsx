@@ -194,6 +194,37 @@ describe("GenerationPanel", () => {
     expect(screen.getByText("Generation was interrupted.")).toBeTruthy();
   });
 
+  it("the escape hatch resets a stuck run after a confirm", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let resetCalled = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      const ep = exportPanelRoutes(url); if (ep) return ep;
+      if (url.includes("/generation/reset")) {
+        resetCalled = true;
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      if (url.includes("/generation/status")) {
+        return { ok: true, json: async () => (resetCalled
+          ? { run: null, active: false }
+          : { run: makeRun({ status: "paused" }), active: false }) };
+      }
+      if (url.includes("/narration-settings")) return { ok: true, json: async () => DEFAULT_SETTINGS };
+      throw new Error(`unexpected fetch ${url} ${init?.method ?? "GET"}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<GenerationPanel workspacePath={WS} />);
+    await waitFor(() =>
+      expect(screen.getByText("Cancel generation and start over")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("Cancel generation and start over"));
+    expect(window.confirm).toHaveBeenCalledOnce();
+    // After the reset the run is gone: back to a fresh Generate.
+    await waitFor(() => expect(screen.getByText("Generate Audiobook")).toBeTruthy());
+    expect(resetCalled).toBe(true);
+    expect(screen.queryByText("Cancel generation and start over")).toBeNull();
+  });
+
   it("failed segments surface in ruby with the resume hint", async () => {
     vi.stubGlobal("fetch", mockFetch({
       run: makeRun({ status: "partially_completed", completed_segments: 8, failed_segments: 2 }),

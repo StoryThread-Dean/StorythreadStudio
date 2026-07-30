@@ -578,6 +578,21 @@ def cancel_generation(request: GenerationControlRequest):
     return {"ok": True}
 
 
+@router.post("/generation/reset")
+def reset_generation(request: GenerationControlRequest):
+    """The writer's escape hatch: forget the interrupted run and force
+    the workspace lock off (stale locks from crashes/reboots included),
+    so generation can start over from scratch. Refused while a run is
+    live in this app -- Pause or Cancel handle that case."""
+    _require_workspace(request.workspace_path)
+    if generation.active_workspace() == request.workspace_path:
+        raise HTTPException(
+            status_code=409,
+            detail="A run is active right now -- use Pause or Cancel instead.")
+    generation.reset(request.workspace_path)
+    return {"ok": True}
+
+
 @router.post("/generation/resume")
 def resume_generation(request: GenerationControlRequest):
     """Resume = a fresh run over whatever is still pending/failed, reusing
