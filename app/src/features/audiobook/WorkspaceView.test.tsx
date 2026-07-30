@@ -64,6 +64,18 @@ function mockFetch() {
         scene_break_ms: 2000, chapter_break_ms: 3000,
       }) };
     }
+    if (url.includes("/ffmpeg/status")) {
+      return { ok: true, json: async () => ({
+        installed: true, version: "n8.1.2", download_size_mb: 138.6,
+        install: { state: "idle", progress: 0, error: null },
+      }) };
+    }
+    if (url.includes("/assemble/status")) {
+      return { ok: true, json: async () => ({
+        state: "idle", message: null, progress: 0, error: null,
+        outputs: [], workspace_path: null,
+      }) };
+    }
     throw new Error(`unexpected fetch ${url}`);
   });
 }

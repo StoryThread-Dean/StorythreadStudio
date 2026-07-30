@@ -173,3 +173,68 @@ def test_refuses_before_any_generation(tmp_path):
     workspace.save_manifest(str(ws), workspace.new_manifest(str(ws), "T", "", ""))
     with pytest.raises(AssemblyError, match="generate the audiobook first"):
         assemble_book(str(ws), ["m4b"])
+
+
+# ── The export runner + HTTP surface ─────────────────────────────────────────
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.main import app  # noqa: E402
+
+client = TestClient(app)
+
+
+def test_export_endpoint_end_to_end(tmp_path):
+    ws = _make_generated_book(tmp_path, NARRATION, "Endpoint Book")
+
+    response = client.post("/api/audiobook/assemble", json={
+        "workspace_path": ws, "formats": ["chapter_mp3", "m4b"],
+    })
+    assert response.status_code == 200, response.text
+    assembly.wait_for_export()
+
+    status = client.get("/api/audiobook/assemble/status").json()
+    assert status["state"] == "done"
+    assert len(status["outputs"]) == 3          # 2 chapter MP3s + 1 M4B
+    for rel in status["outputs"]:
+        assert (Path(ws) / rel).is_file()
+
+
+def test_export_endpoint_fails_fast_on_empty_formats(tmp_path):
+    ws = _make_generated_book(tmp_path, NARRATION, "T")
+    response = client.post("/api/audiobook/assemble", json={
+        "workspace_path": ws, "formats": [],
+    })
+    assert response.status_code == 400
+    assert "at least one" in response.json()["detail"]
+
+
+def test_export_503_when_ffmpeg_missing(tmp_path, monkeypatch):
+    ws = _make_generated_book(tmp_path, NARRATION, "T")
+    monkeypatch.setattr(assembly, "FFMPEG_DIR", tmp_path / "no-ffmpeg")
+    monkeypatch.setattr(assembly.shutil, "which", lambda name: None)
+    response = client.post("/api/audiobook/assemble", json={
+        "workspace_path": ws, "formats": ["m4b"],
+    })
+    assert response.status_code == 503
+    assert "not installed" in response.json()["detail"]
+
+
+def test_export_fails_fast_on_disk_shortfall(tmp_path, monkeypatch):
+    ws = _make_generated_book(tmp_path, NARRATION, "T")
+
+    class TinyDisk:
+        free = 1024
+    monkeypatch.setattr(assembly.shutil, "disk_usage", lambda p: TinyDisk)
+    response = client.post("/api/audiobook/assemble", json={
+        "workspace_path": ws, "formats": ["m4b"],
+    })
+    assert response.status_code == 400
+    assert "Free up space" in response.json()["detail"]
+
+
+def test_ffmpeg_status_endpoint_shape():
+    body = client.get("/api/audiobook/ffmpeg/status").json()
+    assert body["installed"] is True            # this machine has the pin
+    assert body["version"] == assembly.FFMPEG_RELEASE["version"]
+    assert body["install"]["state"] in ("idle", "done")

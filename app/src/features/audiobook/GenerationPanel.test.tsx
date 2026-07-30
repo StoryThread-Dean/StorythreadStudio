@@ -1,4 +1,4 @@
-// GenerationPanel.test.tsx
+﻿// GenerationPanel.test.tsx
 // =========================
 // The narration rail's contract: voices load (spawning the engine behind
 // the scenes), Generate posts the right body and shows live progress,
@@ -34,9 +34,26 @@ const DEFAULT_SETTINGS = {
   scene_break_ms: 2000, chapter_break_ms: 3000,
 };
 
+const FFMPEG_OK = {
+  installed: true, version: "n8.1.2", download_size_mb: 138.6,
+  install: { state: "idle", progress: 0, error: null },
+};
+
+const EXPORT_IDLE = {
+  state: "idle", message: null, progress: 0, error: null,
+  outputs: [], workspace_path: null,
+};
+
+/** Handle the ExportPanel's mount fetches in any custom mock. */
+function exportPanelRoutes(url: string) {
+  if (url.includes("/ffmpeg/status")) return { ok: true, json: async () => FFMPEG_OK };
+  if (url.includes("/assemble/status")) return { ok: true, json: async () => EXPORT_IDLE };
+  return null;
+}
+
 function mockFetch(statusBody: { run: GenerationRun | null; active: boolean }) {
   return vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+    if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) }; const ep = exportPanelRoutes(url); if (ep) return ep;
     if (url.includes("/generation/status")) return { ok: true, json: async () => statusBody };
     if (url.includes("/narration-settings")) return { ok: true, json: async () => DEFAULT_SETTINGS };
     if (url.includes("/generate")) return { ok: true, json: async () => makeRun() };
@@ -65,7 +82,7 @@ describe("GenerationPanel", () => {
     // matching the real endpoint's behavior across the mount poll.
     let started = false;
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) }; const ep = exportPanelRoutes(url); if (ep) return ep;
       if (url.includes("/generation/status")) {
         return { ok: true, json: async () => (
           started ? { run: makeRun(), active: true } : { run: null, active: false }
@@ -118,7 +135,7 @@ describe("GenerationPanel", () => {
   it("offers Regenerate Everything when the backend says up to date", async () => {
     const calls: { force?: boolean }[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) }; const ep = exportPanelRoutes(url); if (ep) return ep;
       if (url.includes("/generation/status")) {
         return { ok: true, json: async () => ({ run: null, active: false }) };
       }
@@ -169,3 +186,4 @@ describe("GenerationPanel", () => {
       expect(screen.getByText(/not installed/)).toBeTruthy());
   });
 });
+

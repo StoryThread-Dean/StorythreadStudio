@@ -17,13 +17,18 @@
 # the app data dir first (installed by the component manager), then PATH
 # (dev convenience). LGPL build only -- see the pin below.
 
+import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import threading
+import zipfile
 from pathlib import Path
+
+import httpx
 
 from app.audiobook import segmenter, workspace
 from app.audiobook.wav_assembly import concat_wav
@@ -327,3 +332,208 @@ def assemble_book(workspace_path: str, formats: list[str],
 
     return {"outputs": [p.replace("\\", "/") for p in outputs],
             "chapters": len(chapters)}
+
+
+# ── Disk preflight (spec 20.2) ────────────────────────────────────────────────
+
+def preflight_disk(workspace_path: str) -> None:
+    """Check free space BEFORE exporting: mastered intermediates plus
+    outputs, with a 20 percent margin. Running out mid-export stays a
+    handled error; preflight makes it rare."""
+    segment_bytes = 0
+    seg_dir = Path(workspace_path) / "generated-segments"
+    if seg_dir.is_dir():
+        for path in seg_dir.rglob("*.wav"):
+            segment_bytes += path.stat().st_size
+    # Mastered WAVs re-sampled to 44.1k (~1.8x of 24k sources) + encoded
+    # outputs; a generous multiplier beats a precise wrong one.
+    estimate = int(segment_bytes * 2.5) + 50 * 1024 * 1024
+    free = shutil.disk_usage(workspace_path).free
+    if free < estimate * 1.2:
+        need_gb = estimate * 1.2 / (1 << 30)
+        free_gb = free / (1 << 30)
+        raise AssemblyError(
+            f"This export needs an estimated {need_gb:.1f} GB free on the "
+            f"workspace drive and only {free_gb:.1f} GB is available. Free up "
+            "space or move the workspace to a larger drive."
+        )
+
+
+# ── Background export runner (one at a time, poll-friendly) ──────────────────
+
+_export_lock = threading.Lock()
+_export_thread: threading.Thread | None = None
+_export_state = {"state": "idle", "message": None, "progress": 0.0,
+                 "error": None, "outputs": [], "workspace_path": None}
+
+
+def export_status() -> dict:
+    with _export_lock:
+        return dict(_export_state)
+
+
+def _set_export(state: str, message: str | None = None,
+                progress: float | None = None, error: str | None = None,
+                outputs: list | None = None) -> None:
+    with _export_lock:
+        _export_state["state"] = state
+        _export_state["message"] = message
+        if progress is not None:
+            _export_state["progress"] = round(progress, 3)
+        _export_state["error"] = error
+        if outputs is not None:
+            _export_state["outputs"] = outputs
+
+
+def start_export(workspace_path: str, formats: list[str]) -> None:
+    """Validate everything that can fail FAST (ffmpeg present, formats
+    sane, disk space), then assemble on a background thread. Progress is
+    polled via export_status()."""
+    global _export_thread
+    valid = [f for f in formats if f in ("chapter_mp3", "combined_mp3", "m4b")]
+    if not valid:
+        raise AssemblyError("Pick at least one export format.")
+    with _export_lock:
+        if _export_thread is not None and _export_thread.is_alive():
+            raise RuntimeError("An export is already running.")
+    resolve_ffmpeg()                        # FfmpegUnavailableError -> 503
+    preflight_disk(workspace_path)
+
+    _set_export("starting", "Preparing export...", 0.0)
+    with _export_lock:
+        _export_state["workspace_path"] = workspace_path
+
+    def _progress(stage: str, index: int, total: int, label: str) -> None:
+        if stage == "mastering":
+            # Mastering dominates the wall clock; save the last 15 percent
+            # for the encodes so the bar never sits at 100 while working.
+            _set_export("running",
+                        f"Mastering chapter {index} of {total}: {label}",
+                        0.85 * index / max(total, 1))
+        else:
+            _set_export("running", f"Encoding {label}...", 0.9)
+
+    def _worker() -> None:
+        try:
+            report = assemble_book(workspace_path, valid, progress_cb=_progress)
+            _set_export("done", f"Exported {len(report['outputs'])} file(s).",
+                        1.0, outputs=report["outputs"])
+        except AssemblyError as e:
+            _set_export("error", error=str(e))
+        except Exception as e:              # never leave the UI spinning
+            _set_export("error", error=f"Export failed unexpectedly: {e}")
+
+    _export_thread = threading.Thread(target=_worker, name="audiobook-export",
+                                      daemon=True)
+    _export_thread.start()
+
+
+def wait_for_export(timeout: float = 600.0) -> None:
+    """Tests and scripts only -- the UI polls export_status()."""
+    thread = _export_thread
+    if thread is not None:
+        thread.join(timeout)
+
+
+# ── FFmpeg component manager (same treatment as the kokoro-worker) ───────────
+
+_ffmpeg_install_lock = threading.Lock()
+_ffmpeg_install_thread: threading.Thread | None = None
+_ffmpeg_install_state = {"state": "idle", "progress": 0.0, "error": None}
+
+
+def ffmpeg_status() -> dict:
+    try:
+        resolve_ffmpeg()
+        installed = True
+    except FfmpegUnavailableError:
+        installed = False
+    with _ffmpeg_install_lock:
+        install = dict(_ffmpeg_install_state)
+    return {"installed": installed,
+            "version": FFMPEG_RELEASE["version"],
+            "download_size_mb": FFMPEG_RELEASE["size_mb"],
+            "install": install}
+
+
+def _set_ffmpeg_install(state: str, progress: float | None = None,
+                        error: str | None = None) -> None:
+    with _ffmpeg_install_lock:
+        _ffmpeg_install_state["state"] = state
+        if progress is not None:
+            _ffmpeg_install_state["progress"] = round(progress, 3)
+        _ffmpeg_install_state["error"] = error
+
+
+def start_ffmpeg_install(source_zip: str | None = None) -> None:
+    """Download (or copy) the pinned LGPL build, verify its SHA256, and
+    install ONLY ffmpeg.exe + ffprobe.exe (the zip carries ffplay and
+    docs nobody needs)."""
+    global _ffmpeg_install_thread
+    with _ffmpeg_install_lock:
+        if _ffmpeg_install_thread is not None and _ffmpeg_install_thread.is_alive():
+            raise RuntimeError("The assembler install is already in progress.")
+    _set_ffmpeg_install("starting", 0.0)
+    _ffmpeg_install_thread = threading.Thread(
+        target=_ffmpeg_install_worker, args=(source_zip,),
+        name="ffmpeg-install", daemon=True)
+    _ffmpeg_install_thread.start()
+
+
+def wait_for_ffmpeg_install(timeout: float = 600.0) -> None:
+    thread = _ffmpeg_install_thread
+    if thread is not None:
+        thread.join(timeout)
+
+
+def _ffmpeg_install_worker(source_zip: str | None) -> None:
+    staging = Path(tempfile.mkdtemp(prefix="stw-ffmpeg-install-"))
+    try:
+        zip_path = staging / "ffmpeg.zip"
+        if source_zip is not None:
+            _set_ffmpeg_install("verifying", 0.5)
+            shutil.copyfile(source_zip, zip_path)
+        else:
+            _set_ffmpeg_install("downloading", 0.0)
+            hasher = hashlib.sha256()
+            with httpx.stream("GET", FFMPEG_RELEASE["url"], timeout=60.0,
+                              follow_redirects=True) as response:
+                response.raise_for_status()
+                total = int(response.headers.get("Content-Length", 0)) or None
+                done = 0
+                with open(zip_path, "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=1 << 20):
+                        f.write(chunk)
+                        hasher.update(chunk)
+                        done += len(chunk)
+                        if total:
+                            _set_ffmpeg_install("downloading", done / total)
+            _set_ffmpeg_install("verifying", 1.0)
+            digest = hasher.hexdigest().lower()
+            if digest != FFMPEG_RELEASE["sha256"]:
+                raise AssemblyError(
+                    "The assembler download failed its integrity check. "
+                    "Nothing was installed -- try again."
+                )
+
+        _set_ffmpeg_install("extracting", 1.0)
+        wanted = {"ffmpeg.exe": None, "ffprobe.exe": None}
+        with zipfile.ZipFile(zip_path) as archive:
+            for member in archive.namelist():
+                base = member.rsplit("/", 1)[-1]
+                if base in wanted and "/bin/" in member:
+                    wanted[base] = member
+            missing = [n for n, m in wanted.items() if m is None]
+            if missing:
+                raise AssemblyError(
+                    f"The archive is missing {', '.join(missing)}; refusing to install.")
+            FFMPEG_DIR.mkdir(parents=True, exist_ok=True)
+            for base, member in wanted.items():
+                with archive.open(member) as src, \
+                     open(FFMPEG_DIR / base, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+        _set_ffmpeg_install("done", 1.0)
+    except Exception as e:
+        _set_ffmpeg_install("error", error=str(e))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)

@@ -21,6 +21,7 @@ import {
   startGeneration,
 } from "./api";
 import type { EngineStatus, NarrationSettings, PreviewTracePiece } from "./api";
+import { ExportPanel } from "./ExportPanel";
 import type { GenerationRun, NarratorVoice } from "./types";
 
 interface GenerationPanelProps {
@@ -563,6 +564,10 @@ export function GenerationPanel({ workspacePath, getSelectionText }: GenerationP
           {error}
         </p>
       )}
+
+      {/* Export: only meaningful once a run has completed at least once,
+          but harmless earlier -- the backend refuses honestly. */}
+      <ExportPanel workspacePath={workspacePath} />
 
       <p className="mt-auto text-[10px] leading-relaxed text-zinc-600">
         Generation runs while Storythread is open and pauses if you close

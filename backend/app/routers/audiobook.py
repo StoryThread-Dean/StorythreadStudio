@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.audiobook import (
+    assembly,
     generation,
     import_service,
     local_worker,
@@ -435,6 +436,56 @@ def resume_generation(request: GenerationControlRequest):
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Export (assembly) ─────────────────────────────────────────────────────────
+
+@router.get("/ffmpeg/status")
+def get_ffmpeg_status():
+    """Audio assembler (FFmpeg) install state for the export panel."""
+    return assembly.ffmpeg_status()
+
+
+class InstallFfmpegRequest(BaseModel):
+    source_zip: str | None = None    # local override for tests/pre-publish
+
+
+@router.post("/ffmpeg/install")
+def install_ffmpeg(request: InstallFfmpegRequest):
+    """Download the pinned LGPL FFmpeg build, verify, install ffmpeg +
+    ffprobe only. Poll /ffmpeg/status for progress."""
+    try:
+        assembly.start_ffmpeg_install(request.source_zip)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"ok": True}
+
+
+class StartExportRequest(BaseModel):
+    workspace_path: str
+    formats: list[str]
+
+
+@router.post("/assemble")
+def start_assemble(request: StartExportRequest):
+    """Export the generated audiobook to the chosen formats. Runs in the
+    background; poll /assemble/status. Fails fast (before the thread) on
+    missing ffmpeg, empty formats, or a disk-space shortfall."""
+    _require_workspace(request.workspace_path)
+    try:
+        assembly.start_export(request.workspace_path, request.formats)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except assembly.FfmpegUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except assembly.AssemblyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@router.get("/assemble/status")
+def assemble_status():
+    return assembly.export_status()
 
 
 # ── Pronunciation rules ───────────────────────────────────────────────────────

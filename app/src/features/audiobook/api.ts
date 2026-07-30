@@ -208,6 +208,48 @@ export async function installEngine(): Promise<void> {
   }));
 }
 
+// ── Export (assembly) ────────────────────────────────────────────────────────
+
+export interface FfmpegStatus {
+  installed: boolean;
+  version: string;
+  download_size_mb: number;
+  install: { state: string; progress: number; error: string | null };
+}
+
+export interface ExportStatus {
+  state: "idle" | "starting" | "running" | "done" | "error";
+  message: string | null;
+  progress: number;
+  error: string | null;
+  outputs: string[];
+  workspace_path: string | null;
+}
+
+export async function fetchFfmpegStatus(): Promise<FfmpegStatus> {
+  return toJson(await fetch(`${API_BASE}/api/audiobook/ffmpeg/status`));
+}
+
+export async function installFfmpeg(): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/ffmpeg/install`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  }));
+}
+
+export async function startExport(workspacePath: string, formats: string[]): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/assemble`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, formats }),
+  }));
+}
+
+export async function fetchExportStatus(): Promise<ExportStatus> {
+  return toJson(await fetch(`${API_BASE}/api/audiobook/assemble/status`));
+}
+
 export interface NarrationSettings {
   narrator_pace: number;
   dialogue_pace: number;
