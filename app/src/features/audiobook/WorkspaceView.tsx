@@ -14,11 +14,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, BookMarked, EyeOff, HelpCircle, Loader2, MessageSquareQuote,
-  Plus, Save, Scissors, X,
+  Plus, Save, Scissors, Wand2, X,
 } from "lucide-react";
 
 import { addChapters, fetchAvailableChapters, fetchNarration, saveNarration } from "./api";
 import type { AvailableChapter } from "./api";
+import { InsertWalkthrough } from "./InsertWalkthrough";
 import { GenerationPanel } from "./GenerationPanel";
 import { MarkerHelpPanel } from "./MarkerHelpPanel";
 import { paragraphBoundsAt, stripAudioMarkers } from "./markers";
@@ -57,6 +58,8 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [showPronunciations, setShowPronunciations] = useState(false);
   const [showMarkerHelp, setShowMarkerHelp] = useState(false);
+  // The Insert Walkthrough starts at the caret when opened (null = closed).
+  const [walkthroughStart, setWalkthroughStart] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -360,6 +363,16 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           <Scissors size={11} /> Remove
         </button>
         <button
+          onClick={() => {
+            if (walkthroughStart !== null) { setWalkthroughStart(null); return; }
+            setWalkthroughStart(textareaRef.current?.selectionStart ?? 0);
+          }}
+          title="Walk the manuscript from the cursor: pauses at dialogue hand-offs, beats between short sentences, marker repairs. Apply or skip each stop."
+          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+        >
+          <Wand2 size={11} /> Walkthrough
+        </button>
+        <button
           onClick={() => setShowMarkerHelp(v => !v)}
           title="What do these buttons do? Includes audio examples."
           className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-zinc-500 hover:text-blue-300"
@@ -369,6 +382,29 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       </div>
 
       {showMarkerHelp && <MarkerHelpPanel />}
+
+      {walkthroughStart !== null && (
+        <InsertWalkthrough
+          content={content}
+          startOffset={walkthroughStart}
+          onApplyEdit={(next, caret) => {
+            const ta = textareaRef.current;
+            pendingRestoreRef.current = {
+              caret, scrollTop: ta?.scrollTop ?? 0 };
+            setContent(next);
+            setDirty(true);
+          }}
+          onHighlight={(offset, length) => {
+            const ta = textareaRef.current;
+            if (!ta) return;
+            ta.focus({ preventScroll: true });
+            ta.setSelectionRange(offset, offset + Math.max(length, 1));
+            ta.scrollTop = (offset / Math.max(content.length, 1)) * ta.scrollHeight
+              - ta.clientHeight / 3;
+          }}
+          onClose={() => setWalkthroughStart(null)}
+        />
+      )}
 
       {/* Body: chapter rail + editor */}
       <div className="flex min-h-0 flex-1">

@@ -195,6 +195,47 @@ exact values are decided when the dashboard UI is built.
 - Configure Providers
 - Open Audiobook Settings
 
+### 5.1.1 Dashboard Redesign (user-designed 2026-07-30, scheduled with Stage D)
+
+The plain button dashboard educates nobody. The redesign makes the FIRST
+look at this screen teach what the tool is and how the workflow runs:
+
+- **Headline + one-line pitch**: "Audiobook Generator" with a plain-terms
+  subtitle in the spirit of "turns your written book into AI-narrated
+  audio" (final wording at build time; no em dashes).
+- **The five-step workflow strip**, each step hover-animated with a
+  short, plainly worded expansion:
+    1. Load your book
+    2. Set up your workspace
+    3. Prepare your manuscript
+    4. Generate the free local version
+    5. (Optional) Print a professional HQ version with premium AI voices
+  Step 5's expansion includes basic pricing honesty (hosted Kokoro
+  around half a dollar a book; premium tiers meaningfully more; real
+  numbers wired when Stage D lands providers).
+- **[Let's Get Started]** replaces [New Audiobook] as the single primary
+  action, clearly signaled as a guided walkthrough that creates the
+  workspace for you.
+- **[Open Existing Workspace] demoted**: tucked under a small pulldown /
+  secondary menu, never competing with the primary flow. Recents on the
+  right stays -- returning users just click their book.
+
+### 5.1.2 Default Workspace Locations (locked rule, with Stage D)
+
+The Get Started flow suggests the workspace location; the writer can
+override, but the default is ALWAYS:
+
+- **Storythread book source**: `<book folder>/audiobook/` inside the
+  book project itself (example:
+  `curse-of-the-tomb-raider/audiobook`). The audiobook lives with its
+  book.
+- **External manuscript** (DOCX/EPUB/TXT/MD from any other tool):
+  `Documents/Storythread Audiobooks/<Book Title>/` (title run through
+  the 8.1 filename sanitizer).
+- Collision handling: if the default folder exists and is not empty,
+  suggest `audiobook-2` / `<Book Title>-2` rather than erroring the
+  writer into folder-picking.
+
 ### 5.2 Recent Activity
 
 Example:
@@ -1131,7 +1172,19 @@ begin playback while later pieces are still synthesizing. Requires
 chunked WAV streaming from the worker through the backend to the player;
 backend-side demo caching covers most of the pain meanwhile.
 
-### 18.4 Guided Insert Walkthrough (planned, user-designed 2026-07-30)
+### 18.4 Guided Insert Walkthrough (user-designed 2026-07-30; first build shipped)
+
+Shipped in the first build (`insertScan.ts` + `InsertWalkthrough.tsx`):
+the [Walkthrough] toolbar button walks from the cursor with five trigger
+kinds -- narration-to-dialogue (inline and paragraph hand-offs),
+dialogue-to-narration, short-sentence beats, interjections, and
+malformed-marker repair (the [pace:=2] / unclosed-[pause linter) -- each
+kind muteable, Apply/Skip/Back with Ctrl+Enter / Ctrl+Right / Ctrl+Left /
+Esc, edits landing in the buffer like typing (manual save owns
+persistence), and stops suppressed wherever the writer already placed a
+pause. Remaining catalog below stays open for follow-up builds
+(paragraph endings, speaker alternation, scene-transition prose,
+emphasis candidates, per-stop audible demo links).
 
 An advanced find/insert overlay for the narration editor: the writer
 opens it at the cursor and it WALKS the manuscript downward, stopping at
