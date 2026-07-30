@@ -1,0 +1,329 @@
+# audiobook/assembly.py -- segments become an audiobook (spec 26).
+# =================================================================
+# The last mile: stitch each chapter's completed segments with real
+# silence (pauses, scene/chapter breaks from Narration Settings), master
+# it to the ACX-safe loudness targets, and encode the deliverables --
+# chapter MP3s, a combined MP3, and an M4B with chapter markers.
+#
+# Pipeline per chapter (spec 26.1/26.2):
+#   segments (WAV) --stdlib stitch--> chapter WAV
+#   --ffmpeg loudnorm pass 1 (measure)--> numbers
+#   --ffmpeg loudnorm pass 2 (apply, linear)--> mastered WAV @44.1kHz mono
+#   --libmp3lame 192k CBR + ID3 tags--> output/chapters/NN - Title.mp3
+# Then: combined MP3 = concat of mastered chapters; M4B = AAC 128k with
+# an FFMETADATA chapter map derived from the mastered durations.
+#
+# FFmpeg is an ON-DEMAND component like the kokoro-worker: resolved from
+# the app data dir first (installed by the component manager), then PATH
+# (dev convenience). LGPL build only -- see the pin below.
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+from app.audiobook import segmenter, workspace
+from app.audiobook.wav_assembly import concat_wav
+
+# Where the component manager installs ffmpeg (ffmpeg.exe + ffprobe.exe).
+FFMPEG_DIR = Path.home() / ".storythread" / "ffmpeg"
+
+# The pinned LGPL build (BtbN autobuild -- dated tags are immutable, so
+# URL + SHA256 stay honest forever). GPL "full" builds are off the table
+# per spec 26; this build carries libmp3lame (LGPL), native aac, loudnorm.
+FFMPEG_RELEASE = {
+    "version": "n8.1.2",
+    "url": ("https://github.com/BtbN/FFmpeg-Builds/releases/download/"
+            "autobuild-2026-07-29-13-36/"
+            "ffmpeg-n8.1.2-31-g8c9502e9b0-win64-lgpl-8.1.zip"),
+    "sha256": "dc1caf47ae4fbbf33dcd39d30e7c7af2c63d417e872f0e948b5d68ae5a106794",
+    "size_mb": 138.6,
+}
+
+# Mastering targets (spec 26.2): inside ACX's -23..-18 dB RMS / -3 dB
+# peak window. Applied PER CHAPTER so chapters match each other.
+LOUDNORM_I = -20.0
+LOUDNORM_TP = -3.0
+LOUDNORM_LRA = 11.0
+
+MP3_BITRATE = "192k"        # the ACX spec (26.2)
+M4B_BITRATE = "128k"
+OUTPUT_RATE = 44100          # distribution rate (26.1)
+
+
+class AssemblyError(Exception):
+    """Anything that stops an export, with a user-facing message."""
+
+
+class FfmpegUnavailableError(AssemblyError):
+    """FFmpeg is not installed yet."""
+
+
+def resolve_ffmpeg() -> tuple[str, str]:
+    """(ffmpeg, ffprobe) paths: app-data install first, PATH second."""
+    exe = FFMPEG_DIR / "ffmpeg.exe"
+    probe = FFMPEG_DIR / "ffprobe.exe"
+    if exe.is_file() and probe.is_file():
+        return str(exe), str(probe)
+    on_path = shutil.which("ffmpeg"), shutil.which("ffprobe")
+    if on_path[0] and on_path[1]:
+        return on_path[0], on_path[1]
+    raise FfmpegUnavailableError(
+        "The audio assembler (FFmpeg) is not installed. Install it from "
+        "the export panel."
+    )
+
+
+def _run(args: list[str], error_context: str) -> str:
+    """Run an ffmpeg/ffprobe command; return stderr text (ffmpeg's voice).
+    Failures raise AssemblyError with the tail of stderr -- enough to
+    diagnose without dumping walls of log at the writer."""
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    result = subprocess.run(args, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace",
+                            creationflags=creationflags)
+    if result.returncode != 0:
+        tail = (result.stderr or "").strip()[-600:]
+        raise AssemblyError(f"{error_context} failed:\n{tail}")
+    return result.stderr or ""
+
+
+# ── Windows-safe file names (spec 8.1) ───────────────────────────────────────
+
+_ILLEGAL_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_RESERVED = {"CON", "PRN", "AUX", "NUL",
+             *(f"COM{n}" for n in range(1, 10)),
+             *(f"LPT{n}" for n in range(1, 10))}
+
+
+def sanitize_component(name: str, max_len: int = 60) -> str:
+    """One title -> one legal Windows path component. Never empty."""
+    cleaned = _ILLEGAL_RE.sub("", name)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip().rstrip(". ")
+    if cleaned.upper() in _RESERVED:
+        cleaned = f"{cleaned} audio"
+    cleaned = cleaned[:max_len].rstrip(". ")
+    return cleaned or "Untitled"
+
+
+# ── Loudness mastering ────────────────────────────────────────────────────────
+
+def _loudnorm_two_pass(ffmpeg: str, source_wav: str, mastered_wav: str) -> None:
+    """EBU R128 two-pass: measure, then apply linearly. Output lands at
+    the distribution rate (loudnorm upsamples internally; -ar pins it)."""
+    base = f"loudnorm=I={LOUDNORM_I}:TP={LOUDNORM_TP}:LRA={LOUDNORM_LRA}"
+    stderr = _run(
+        [ffmpeg, "-hide_banner", "-i", source_wav,
+         "-af", f"{base}:print_format=json", "-f", "null", os.devnull],
+        "Loudness measurement",
+    )
+    # The measurement JSON is a {...} block somewhere on stderr; its
+    # position varies between builds, so find the block that actually
+    # carries the numbers instead of trusting the tail.
+    measured = None
+    for block in re.findall(r"\{[^{}]*\}", stderr):
+        if "input_i" in block:
+            measured = json.loads(block)
+    if measured is None:
+        raise AssemblyError("Loudness measurement produced no readable result.")
+
+    applied = (f"{base}"
+               f":measured_I={measured['input_i']}"
+               f":measured_TP={measured['input_tp']}"
+               f":measured_LRA={measured['input_lra']}"
+               f":measured_thresh={measured['input_thresh']}"
+               f":offset={measured['target_offset']}:linear=true")
+    _run(
+        [ffmpeg, "-hide_banner", "-y", "-i", source_wav,
+         "-af", applied, "-ar", str(OUTPUT_RATE), "-ac", "1",
+         mastered_wav],
+        "Loudness mastering",
+    )
+
+
+def _duration_seconds(ffprobe: str, path: str) -> float:
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    result = subprocess.run(
+        [ffprobe, "-v", "error", "-show_entries", "format=duration",
+         "-of", "csv=p=0", path],
+        capture_output=True, text=True, creationflags=creationflags)
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        raise AssemblyError(f"Could not read the duration of {Path(path).name}.")
+
+
+# ── Chapter stitching ─────────────────────────────────────────────────────────
+
+def _stitch_chapter_wav(workspace_path: str, chapter: dict,
+                        settings: dict, out_path: str) -> None:
+    """One chapter's items -> one WAV: segment audio in order, silence for
+    pauses and breaks (durations from Narration Settings, spec 10.3)."""
+    pieces: list[bytes | int] = []
+    for item in chapter["items"]:
+        kind = item.get("kind")
+        if kind == "segment":
+            audio_path = Path(workspace_path) / item["output_file"]
+            with open(audio_path, "rb") as f:
+                pieces.append(f.read())
+        elif kind == "pause":
+            pieces.append(int(item["duration_ms"]))
+        elif kind == "scene_break":
+            pieces.append(int(settings["scene_break_ms"]))
+        elif kind == "chapter_break":
+            pieces.append(int(settings["chapter_break_ms"]))
+    while pieces and isinstance(pieces[0], int):
+        pieces.pop(0)                       # leading silence has no anchor
+    with open(out_path, "wb") as f:
+        f.write(concat_wav(pieces))
+
+
+def _chapter_ready(chapter: dict) -> tuple[bool, int]:
+    """(all segments completed, segment count) for one chapter."""
+    segments = [i for i in chapter["items"] if i.get("kind") == "segment"]
+    done = all(s.get("status") == "completed" for s in segments)
+    return (done and len(segments) > 0, len(segments))
+
+
+# ── The public entry point ────────────────────────────────────────────────────
+
+def assemble_book(workspace_path: str, formats: list[str],
+                  progress_cb=None) -> dict:
+    """
+    Export the selected chapters to the requested formats
+    ("chapter_mp3", "combined_mp3", "m4b"). Returns
+    {"outputs": [relative paths], "chapters": N}.
+
+    Every selected chapter must be fully generated -- assembly never
+    invents audio, it only arranges what generation produced.
+    """
+    ffmpeg, ffprobe = resolve_ffmpeg()
+    manifest = workspace.load_manifest(workspace_path)
+    settings = workspace.narration_settings(manifest)
+    seg_manifest = segmenter.load_segments(workspace_path)
+    if seg_manifest is None:
+        raise AssemblyError("Nothing to export -- generate the audiobook first.")
+
+    selected = {c["chapter_id"] for c in workspace.list_chapters(workspace_path)
+                if c.get("selected_for_generation", True)}
+    chapters = [c for c in seg_manifest["chapters"]
+                if c["chapter_id"] in selected and
+                any(i.get("kind") == "segment" for i in c["items"])]
+    if not chapters:
+        raise AssemblyError("No selected chapters contain narration segments.")
+
+    not_ready = [c["title"] for c in chapters if not _chapter_ready(c)[0]]
+    if not_ready:
+        raise AssemblyError(
+            "These chapters are not fully generated yet: "
+            + ", ".join(not_ready[:5])
+            + (" ..." if len(not_ready) > 5 else "")
+            + ". Generate the audiobook first."
+        )
+
+    book_title = manifest.get("title") or "Untitled Audiobook"
+    author = manifest.get("author") or ""
+    narrator = manifest.get("selected_voice") or ""
+    output_dir = Path(workspace_path) / "output"
+    chapters_dir = output_dir / "chapters"
+    chapters_dir.mkdir(parents=True, exist_ok=True)
+
+    outputs: list[str] = []
+    width = max(2, len(str(len(chapters))))
+    staging = Path(tempfile.mkdtemp(prefix="stw-assembly-"))
+    try:
+        # 1. Stitch + master every chapter once; every format reuses the
+        #    mastered WAVs (re-exporting formats never re-masters).
+        mastered: list[tuple[dict, Path]] = []
+        for index, chapter in enumerate(chapters, start=1):
+            if progress_cb:
+                progress_cb("mastering", index, len(chapters), chapter["title"])
+            raw = staging / f"raw-{index:03d}.wav"
+            done = staging / f"mastered-{index:03d}.wav"
+            _stitch_chapter_wav(workspace_path, chapter, settings, str(raw))
+            _loudnorm_two_pass(ffmpeg, str(raw), str(done))
+            raw.unlink()                     # keep the staging footprint small
+            mastered.append((chapter, done))
+
+        # 2. Chapter MP3s: NN - Title.mp3 with ID3 tags (spec 26.4).
+        if "chapter_mp3" in formats:
+            for index, (chapter, wav) in enumerate(mastered, start=1):
+                name = f"{str(index).zfill(width)} - {sanitize_component(chapter['title'])}.mp3"
+                target = chapters_dir / name
+                _run(
+                    [ffmpeg, "-hide_banner", "-y", "-i", str(wav),
+                     "-c:a", "libmp3lame", "-b:a", MP3_BITRATE,
+                     "-metadata", f"title={chapter['title']}",
+                     "-metadata", f"album={book_title}",
+                     "-metadata", f"artist={author}",
+                     "-metadata", f"composer={narrator}",
+                     "-metadata", f"track={index}/{len(mastered)}",
+                     "-id3v2_version", "3", str(target)],
+                    f"Chapter MP3 encode ({chapter['title']})",
+                )
+                outputs.append(str(target.relative_to(workspace_path)))
+
+        # 3. The concat list both remaining formats share.
+        needs_concat = ("combined_mp3" in formats) or ("m4b" in formats)
+        if needs_concat:
+            concat_list = staging / "concat.txt"
+            with open(concat_list, "w", encoding="utf-8") as f:
+                for _, wav in mastered:
+                    escaped = str(wav).replace("'", "'\\''")
+                    f.write(f"file '{escaped}'\n")
+
+        if "combined_mp3" in formats:
+            if progress_cb:
+                progress_cb("encoding", 1, 1, "combined MP3")
+            target = output_dir / f"{sanitize_component(book_title)}.mp3"
+            _run(
+                [ffmpeg, "-hide_banner", "-y", "-f", "concat", "-safe", "0",
+                 "-i", str(concat_list),
+                 "-c:a", "libmp3lame", "-b:a", MP3_BITRATE,
+                 "-metadata", f"title={book_title}",
+                 "-metadata", f"album={book_title}",
+                 "-metadata", f"artist={author}",
+                 "-metadata", f"composer={narrator}",
+                 "-id3v2_version", "3", str(target)],
+                "Combined MP3 encode",
+            )
+            outputs.append(str(target.relative_to(workspace_path)))
+
+        # 4. M4B: AAC in an MP4 container with a chapter map built from
+        #    the mastered durations (FFMETADATA, milliseconds timebase).
+        if "m4b" in formats:
+            if progress_cb:
+                progress_cb("encoding", 1, 1, "M4B audiobook")
+            metadata_file = staging / "ffmetadata.txt"
+            lines = [";FFMETADATA1",
+                     f"title={book_title}", f"album={book_title}",
+                     f"artist={author}", f"composer={narrator}",
+                     "genre=Audiobook"]
+            position_ms = 0
+            for chapter, wav in mastered:
+                duration_ms = int(round(_duration_seconds(ffprobe, str(wav)) * 1000))
+                lines += ["", "[CHAPTER]", "TIMEBASE=1/1000",
+                          f"START={position_ms}",
+                          f"END={position_ms + duration_ms}",
+                          f"title={chapter['title']}"]
+                position_ms += duration_ms
+            metadata_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            target = output_dir / f"{sanitize_component(book_title)}.m4b"
+            _run(
+                [ffmpeg, "-hide_banner", "-y", "-f", "concat", "-safe", "0",
+                 "-i", str(concat_list), "-i", str(metadata_file),
+                 "-map_metadata", "1", "-map_chapters", "1",
+                 "-c:a", "aac", "-b:a", M4B_BITRATE,
+                 "-movflags", "+faststart", str(target)],
+                "M4B encode",
+            )
+            outputs.append(str(target.relative_to(workspace_path)))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+    return {"outputs": [p.replace("\\", "/") for p in outputs],
+            "chapters": len(chapters)}
