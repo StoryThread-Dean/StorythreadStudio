@@ -257,19 +257,21 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         ))}
         <span className="mx-1 h-4 w-px bg-zinc-800" />
         {/* Pace spans: wrap the selection; Normal pace = unmarked text. */}
-        {/* Preset values chosen by MEASUREMENT: 0.8x runs ~29% longer and
-            1.2x ~11% shorter -- clearly audible. 0.85/1.1 were real but so
-            subtle they read as broken in live testing. */}
+        {/* STEP form: each step is 0.05 off the book's base pace, so a
+            span always lands on a speed the engine renders cleanly (the
+            old multiplier form produced off-grid speeds like 1.08x, which
+            slurred). +-2 = a 0.10 swing; hand-edit to +-1 or +-3 for finer
+            or stronger moves. The backend caps results to 0.8-1.2. */}
         <button
-          onClick={() => wrapSelection("[pace:0.8]", "[/pace]")}
-          title="Slow the selected passage (0.8x) -- let a heavy moment breathe"
+          onClick={() => wrapSelection("[pace:-2]", "[/pace]")}
+          title="Slow the selected passage two steps below your base pace -- let a heavy moment breathe"
           className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
           Slow
         </button>
         <button
-          onClick={() => wrapSelection("[pace:1.2]", "[/pace]")}
-          title="Quicken the selected passage (1.2x) -- carry an action beat"
+          onClick={() => wrapSelection("[pace:+2]", "[/pace]")}
+          title="Quicken the selected passage two steps above your base pace -- carry an action beat"
           className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
           Fast

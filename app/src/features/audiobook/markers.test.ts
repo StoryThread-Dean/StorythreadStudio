@@ -25,6 +25,9 @@ describe("stripAudioMarkers", () => {
   it("dissolves pace spans keeping the inner text", () => {
     expect(stripAudioMarkers("Calm. [pace:0.8]Slow part.[/pace] Calm again."))
       .toBe("Calm. Slow part. Calm again.");
+    // Step form (what the toolbar inserts now) dissolves the same way.
+    expect(stripAudioMarkers("Calm. [pace:-2]Slow part.[/pace] [pace:+2]Quick part.[/pace]"))
+      .toBe("Calm. Slow part. Quick part.");
   });
 
   it("cleans up orphaned halves from hand-edits", () => {

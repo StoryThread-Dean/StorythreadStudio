@@ -905,9 +905,23 @@ them by ear later:
   changes the behavior.
 - **The usable pace band is roughly 0.8 to 1.2.** Outside it, the voice
   develops audibly robotic inflections (occasionally already at 0.85).
-  The Slow/Fast presets sit at the band edges deliberately. The full
-  0.5-2.0 range stays available for hand-tuning, with the band
-  documented in the UI as guidance.
+- **The engine wants 0.05-grid speeds.** A second round of listening
+  tests (2026-07-30) isolated a faint sibilant slur ("lisp") to pieces
+  synthesized at 1.08x -- the product of the old multiplier pace form
+  (dialogue base 0.9 times a [pace:1.2] span). The same words were
+  clean at 0.9, 1.0, 1.1, and 1.2. Every speed handed to the engine is
+  therefore snapped to the nearest 0.05.
+- **Pace markers use the STEP form: `[pace:+2]` / `[pace:-1]`.** Each
+  step is 0.05 up or down from the book's base pace (Narrator or
+  Dialogue pace, whichever applies to the segment), so a marked span
+  always lands on a confirmed-clean speed. Results are capped to the
+  0.8-1.2 band: a 1.2 base with `[pace:+5]` stays 1.2, and no stack of
+  steps can reach crawl or chipmunk territory. A base deliberately set
+  outside the band is respected but never exceeded by a marker. The
+  toolbar presets Slow/Fast insert -2/+2 (a 0.10 swing); writers
+  hand-edit to other step counts for finer or stronger moves. The
+  legacy multiplier form (`[pace:0.8]`) still parses, snapped to the
+  grid, so older narration files keep their meaning.
 
 ### 15.2 Future Note
 

@@ -142,20 +142,34 @@ def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
 
 def effective_pace(segment: dict, settings: dict) -> float:
     """
-    The speed a segment actually synthesizes at: the book-level base
-    (dialogue segments use Dialogue Pace, everything else Narrator Pace)
-    MULTIPLIED by any [pace:...] marker -- so "Slow" always means slow
-    relative to the book's chosen baseline. Clamped to the engine range.
+    The speed a segment actually synthesizes at, starting from the
+    book-level base (dialogue segments use Dialogue Pace, everything
+    else Narrator Pace) and adjusted by any [pace:...] marker.
 
-    The product is SNAPPED to the nearest 0.05 step. Compound values
-    like 1.2 x 0.9 = 1.08 land between the speeds Kokoro renders
-    cleanly -- listening tests pinned a sibilant slur ("lisp") to
-    1.08x specifically, while the neighboring 0.05-grid speeds were
-    clean. Snapping keeps "faster/slower than base" semantics but only
-    ever asks the engine for speeds in its comfortable gears.
+    Marker forms (see markers.py):
+      STEP form ('+2' / '-1', stored as a signed string): base plus
+        N steps of 0.05 -- so "faster" means the next confirmed-clean
+        speeds up from whatever base the writer chose. The result is
+        capped to the proven 0.8-1.2 band (spec 15.1): stacking +5 on
+        a 1.2 base stays 1.2, and -5 on 0.8 stays 0.8. A base the
+        writer deliberately set outside the band is respected, but a
+        marker can never push past it.
+      MULTIPLIER form (legacy float): base times the value, clamped
+        to the engine range.
+
+    Every result is SNAPPED to the nearest 0.05. Compound values like
+    1.2 x 0.9 = 1.08 land between the speeds Kokoro renders cleanly --
+    listening tests pinned a sibilant slur ("lisp") to 1.08x while the
+    neighboring 0.05-grid speeds were clean. The engine only ever gets
+    asked for speeds in its comfortable gears.
     """
     base = settings["dialogue_pace"] if segment.get("dialogue") else settings["narrator_pace"]
-    raw = base * segment.get("pace", 1.0)
+    marker = segment.get("pace", 1.0)
+    if isinstance(marker, str):
+        target = base + int(marker) * 0.05
+        snapped = round(round(target / 0.05) * 0.05, 2)
+        return max(min(0.8, base), min(max(1.2, base), snapped))
+    raw = base * marker
     snapped = round(round(raw / 0.05) * 0.05, 2)
     return max(0.5, min(2.0, snapped))
 

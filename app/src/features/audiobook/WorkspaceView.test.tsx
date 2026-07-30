@@ -161,17 +161,20 @@ describe("WorkspaceView", () => {
     expect(textarea.value).toContain("[exclude]Second prose.[/exclude]");
   });
 
-  it("Slow and Fast wrap the selection in pace spans", async () => {
+  it("Slow and Fast wrap the selection in step-form pace spans", async () => {
+    // Step form: +-2 steps of 0.05 off the book base, so every span lands
+    // on an engine-clean speed (the old multiplier form produced off-grid
+    // speeds like 1.08x, which audibly slurred).
     const textarea = await renderLoaded();
     const start = NARRATION.indexOf("First prose.");
     textarea.setSelectionRange(start, start + "First prose.".length);
     fireEvent.click(screen.getByText("Slow"));
-    expect(textarea.value).toContain("[pace:0.8]First prose.[/pace]");
+    expect(textarea.value).toContain("[pace:-2]First prose.[/pace]");
 
     const start2 = textarea.value.indexOf("Second prose.");
     textarea.setSelectionRange(start2, start2 + "Second prose.".length);
     fireEvent.click(screen.getByText("Fast"));
-    expect(textarea.value).toContain("[pace:1.2]Second prose.[/pace]");
+    expect(textarea.value).toContain("[pace:+2]Second prose.[/pace]");
   });
 
   it("Remove strips markers from the selection, keeping the words", async () => {

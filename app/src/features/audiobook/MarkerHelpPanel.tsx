@@ -36,12 +36,13 @@ const HELP_ITEMS: { kind: string; label: string; body: string }[] = [
   {
     kind: "pace",
     label: "Pace -- slow down, speed up",
-    body: "Wrap a passage to change its narration speed: Slow (0.8x) lets "
-        + "a heavy moment breathe; Fast (1.2x) carries an action beat. "
-        + "Normal is simply unmarked text. The number is adjustable by "
-        + "hand, like [pace:0.75], and multiplies the book's Narration "
-        + "Settings base pace. The voice sounds most natural between 0.8 "
-        + "and 1.2 -- beyond that it turns audibly robotic. When "
+    body: "Wrap a passage to change its narration speed in steps off your "
+        + "book's base pace: Slow ([pace:-2]) drops two steps to let a "
+        + "heavy moment breathe; Fast ([pace:+2]) rises two steps to carry "
+        + "an action beat. Normal is simply unmarked text. Each step is a "
+        + "small, safe increment -- adjust by hand like [pace:-1] or "
+        + "[pace:+3]. Steps stop at the tested limits (0.8 to 1.2), so no "
+        + "stack of steps can crawl or chipmunk the voice. When "
         + "previewing, select the WHOLE span including its [pace] tags -- "
         + "a selection that cuts into a span plays at normal pace (and "
         + "says so).",

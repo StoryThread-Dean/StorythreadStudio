@@ -157,7 +157,7 @@ def test_say_demo_covers_both_use_cases():
     assert "[say:" not in spoken                   # markup never narrated
 
 
-def test_pace_demo_sends_three_speeds_and_speaks_each_value():
+def test_pace_demo_speaks_each_step_while_the_listener_hears_it():
     speeds: list[float] = []
 
     class SpeedDemoBackend(DemoBackend):
@@ -167,13 +167,15 @@ def test_pace_demo_sends_three_speeds_and_speaks_each_value():
 
     backend = SpeedDemoBackend()
     build_demo("pace", backend)
-    assert speeds == [1.0, 0.8, 1.2]
-    # Each pace value is NARRATED while the listener experiences it, and
+    # Demos render at the default base (1.0), so the step markers land on
+    # 1.0 - 2*0.05 = 0.9 and 1.0 + 2*0.05 = 1.1.
+    assert speeds == [1.0, pytest.approx(0.9), pytest.approx(1.1), 1.0]
+    # Each step value is NARRATED while the listener experiences it, and
     # the spoken value matches the speed actually in effect for that piece.
     by_text = dict(zip(backend.texts, speeds))
-    assert by_text[next(t for t in backend.texts if "one point zero" in t)] == 1.0
-    assert by_text[next(t for t in backend.texts if "zero point eight" in t)] == 0.8
-    assert by_text[next(t for t in backend.texts if "one point two" in t)] == 1.2
+    assert by_text[next(t for t in backend.texts if "base pace" in t)] == 1.0
+    assert by_text[next(t for t in backend.texts if "pace minus two" in t)] == pytest.approx(0.9)
+    assert by_text[next(t for t in backend.texts if "pace plus two" in t)] == pytest.approx(1.1)
 
 
 def test_every_script_renders():
