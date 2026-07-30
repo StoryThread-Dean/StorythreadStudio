@@ -131,13 +131,14 @@ export async function startGeneration(
   workspacePath: string,
   voiceId: string,
   force = false,
+  draft = false,
 ): Promise<GenerationRun> {
   const res = await fetch(`${API_BASE}/api/audiobook/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       workspace_path: workspacePath, provider: "local-kokoro", voice_id: voiceId,
-      force,
+      force, draft,
     }),
   });
   return toJson<GenerationRun>(res);

@@ -143,7 +143,7 @@ def match_cut_points(group_audio: bytes,
 
 
 def synthesize_flow(backend, voice_id: str, speed: float,
-                    payloads: list[str]) -> tuple[bytes, list[int], bool]:
+                    payloads: list[str], draft: bool = False) -> tuple[bytes, list[int], bool]:
     """
     Synthesize a pause-split fragment run the flow way.
 
@@ -156,6 +156,12 @@ def synthesize_flow(backend, voice_id: str, speed: float,
 
     The isolated fragments are synthesized either way -- they are the
     calibration table, and they double as the fallback audio.
+
+    draft=True skips the continuous render and matching entirely and
+    returns the fragment concat directly -- roughly HALF the engine work
+    on pause-heavy text, at the pre-flow sound quality (the known seam
+    artifacts). The testing gear, never the final one: draft audio
+    carries its own payload basis, so a Standard run re-queues it.
     """
     fragment_clips: list[bytes] = []
     fragment_ms: list[int] = []
@@ -164,13 +170,14 @@ def synthesize_flow(backend, voice_id: str, speed: float,
         fragment_clips.append(audio)
         fragment_ms.append(speech_ms(audio))
 
-    group_audio, _duration = backend.synthesize(" ".join(payloads), voice_id, speed)
-    try:
-        cuts = match_cut_points(group_audio, fragment_ms)
-    except FlowError:
-        cuts = None
-    if cuts is not None:
-        return group_audio, cuts, True
+    if not draft:
+        group_audio, _duration = backend.synthesize(" ".join(payloads), voice_id, speed)
+        try:
+            cuts = match_cut_points(group_audio, fragment_ms)
+        except FlowError:
+            cuts = None
+        if cuts is not None:
+            return group_audio, cuts, True
 
     # Fallback: concatenate the isolated clips; every join is a cut, so
     # the stitcher inserts the writer's pauses in exactly today's places.

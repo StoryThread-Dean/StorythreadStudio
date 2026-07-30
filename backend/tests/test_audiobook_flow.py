@@ -134,6 +134,60 @@ def test_synthesize_flow_returns_the_continuous_render_with_cuts():
     assert backend.calls == [f1, f2, f"{f1} {f2}"]
 
 
+def test_draft_skips_the_continuous_render_but_keeps_the_cuts():
+    # The fast testing gear: fragments only (half the engine work), cuts
+    # at the joins so the writer's pauses still land.
+    f1, f2 = "First sentence here.", "Second sentence follows."
+    iso1 = make_wav([(800, 4000)])
+    iso2 = make_wav([(1100, 4000)])
+    backend = ScriptedWavBackend({f1: iso1, f2: iso2})
+
+    audio, cuts, flowed = flow.synthesize_flow(backend, "v", 1.0, [f1, f2],
+                                               draft=True)
+    assert flowed is False
+    assert cuts == [800]
+    assert abs(wav_ms(audio) - 1900) <= 5
+    # The joined group text was NEVER synthesized.
+    assert backend.calls == [f1, f2]
+
+
+def test_draft_runs_requeue_for_standard_and_vice_versa(tmp_path, monkeypatch):
+    from app.audiobook import (
+        generation, import_service, pronunciation, recents_store,
+    )
+
+    monkeypatch.setattr(recents_store, "AUDIOBOOKS_DB", tmp_path / "audiobooks.db")
+    monkeypatch.setattr(pronunciation, "GLOBAL_RULES_PATH", tmp_path / "gp.json")
+
+    src = tmp_path / "b.md"
+    src.write_text('# C1\n\n"Stay. [pause:0.4] Please stay."\n', encoding="utf-8")
+    ws = tmp_path / "ws"
+    import_service.import_source(str(src), str(ws))
+
+    iso = make_wav([(700, 4000), (100, 0)])
+    group = make_wav([(650, 4000), (110, 0), (600, 4000)])
+    backend = ScriptedWavBackend({
+        '"Stay.': iso, 'Please stay."': iso, '"Stay. Please stay."': group,
+    })
+
+    # Draft run completes without ever synthesizing the group text.
+    generation.start_run(str(ws), backend, voice_id="v", draft=True)
+    generation.wait_for_idle()
+    assert '"Stay. Please stay."' not in backend.calls
+    manifest = segmenter.load_segments(str(ws))
+    segment = next(i for c in manifest["chapters"] for i in c["items"]
+                   if i.get("kind") == "segment")
+    assert segment["status"] == "completed"
+    assert segment["flowed"] is False
+
+    # A Standard run sees the draft audio as stale, re-queues it, and
+    # THIS time renders the continuous group.
+    run = generation.start_run(str(ws), backend, voice_id="v")
+    assert run["total_segments"] == 1
+    generation.wait_for_idle()
+    assert '"Stay. Please stay."' in backend.calls
+
+
 def test_synthesize_flow_falls_back_to_concatenated_fragments():
     f1, f2 = "One.", "Two."
     iso1 = make_wav([(600, 4000)])

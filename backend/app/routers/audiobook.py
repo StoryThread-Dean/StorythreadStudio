@@ -521,6 +521,10 @@ class StartGenerationRequest(BaseModel):
     # The explicit "regenerate everything regardless" escape hatch --
     # normal starts already re-queue stale audio automatically.
     force: bool = False
+    # Draft pass: pauses preserved, continuous-flow rendering skipped --
+    # roughly twice as fast on pause-heavy chapters, pre-flow sound
+    # quality. Draft audio is stale to a Standard run and vice versa.
+    draft: bool = False
 
 
 @router.post("/generate")
@@ -532,7 +536,8 @@ def start_generation(request: StartGenerationRequest):
         raise HTTPException(status_code=400, detail=str(e))
     try:
         return generation.start_run(request.workspace_path, backend,
-                                    request.voice_id, force=request.force)
+                                    request.voice_id, force=request.force,
+                                    draft=request.draft)
     except RuntimeError as e:            # a run is already active
         raise HTTPException(status_code=409, detail=str(e))
     except locking.WorkspaceLockedError as e:
@@ -589,7 +594,9 @@ def resume_generation(request: GenerationControlRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
-        return generation.start_run(request.workspace_path, backend, run.get("voice_id", ""))
+        return generation.start_run(request.workspace_path, backend,
+                                    run.get("voice_id", ""),
+                                    draft=bool(run.get("draft")))
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except locking.WorkspaceLockedError as e:

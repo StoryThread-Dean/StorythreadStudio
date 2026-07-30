@@ -88,6 +88,37 @@ describe("GenerationPanel", () => {
     expect(screen.getByText("Generate Audiobook")).toBeTruthy();
   });
 
+  it("Draft pass posts draft:true and relabels the button", async () => {
+    let posted: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      const ep = exportPanelRoutes(url); if (ep) return ep;
+      if (url.includes("/generation/status")) {
+        return { ok: true, json: async () => (posted
+          ? { run: makeRun({ draft: true } as Partial<GenerationRun>), active: true }
+          : { run: null, active: false }) };
+      }
+      if (url.includes("/narration-settings")) return { ok: true, json: async () => DEFAULT_SETTINGS };
+      if (url.includes("/generate")) {
+        posted = JSON.parse(String(init?.body));
+        return { ok: true, json: async () => makeRun({ draft: true } as Partial<GenerationRun>) };
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<GenerationPanel workspacePath={WS} />);
+    await waitFor(() => expect(screen.getByText(/Draft pass/)).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Draft pass/ }));
+    expect(screen.getByText("Generate Draft (fast)")).toBeTruthy();
+    fireEvent.click(screen.getByText("Generate Draft (fast)"));
+    await waitFor(() => expect(posted).toBeTruthy());
+    expect(posted!.draft).toBe(true);
+    // The draft warning shows while the run is live.
+    await waitFor(() =>
+      expect(screen.getByText(/Regenerate\s+in Standard quality/)).toBeTruthy());
+  });
+
   it("restores the book's remembered voice over the default", async () => {
     vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
     render(<GenerationPanel workspacePath={WS} initialVoiceId="af_heart" />);
@@ -145,7 +176,8 @@ describe("GenerationPanel", () => {
     const generateCall = fetchMock.mock.calls.find(([u]) => String(u).includes("/generate"));
     expect(JSON.parse(String(generateCall?.[1]?.body))).toEqual({
       // am_michael: the default narrator when no voice is remembered.
-      workspace_path: WS, provider: "local-kokoro", voice_id: "am_michael", force: false,
+      workspace_path: WS, provider: "local-kokoro", voice_id: "am_michael",
+      force: false, draft: false,
     });
     // Active run shows the between-segments controls.
     expect(screen.getByText("Pause")).toBeTruthy();

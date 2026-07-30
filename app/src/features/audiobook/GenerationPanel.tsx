@@ -303,6 +303,9 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
   };
 
   const [offerForce, setOfferForce] = useState(false);
+  // Draft pass: the fast testing gear. Session-only; Standard is always
+  // the default so a fresh session can never accidentally draft.
+  const [draftPass, setDraftPass] = useState(false);
 
   const handleStart = useCallback(async (force = false) => {
     if (!voiceId || busy) return;
@@ -310,7 +313,7 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
     setError(null);
     setOfferForce(false);
     try {
-      await startGeneration(workspacePath, voiceId, force);
+      await startGeneration(workspacePath, voiceId, force, draftPass);
       await pollOnce();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not start generation.";
@@ -323,7 +326,7 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
     } finally {
       setBusy(false);
     }
-  }, [voiceId, busy, workspacePath, pollOnce]);
+  }, [voiceId, busy, workspacePath, pollOnce, draftPass]);
 
   const control = useCallback(async (fn: (ws: string) => Promise<unknown>) => {
     setBusy(true);
@@ -506,6 +509,20 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
             </div>
           )}
 
+          {/* Draft toggle: the fast testing gear. Flow synthesis is
+              skipped (pauses kept, pre-flow sound) -- about twice as
+              fast on pause-heavy chapters. Draft audio is stale to a
+              Standard run, so it can never ship by accident. */}
+          {!active && !resumable && (
+            <label className="flex cursor-pointer items-start gap-2 text-[11px] text-zinc-400"
+                   title="Skips the continuous-flow rendering: about twice as fast on pause-heavy chapters, with the known seam artifacts at pauses. For testing pacing and pronunciation -- regenerate in Standard quality before exporting.">
+              <input type="checkbox" checked={draftPass}
+                     onChange={e => setDraftPass(e.target.checked)}
+                     className="mt-0.5" />
+              Draft pass (faster, testing quality)
+            </label>
+          )}
+
           {/* Start / resume -- the emerald path */}
           {!active && (
             <button
@@ -514,8 +531,17 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
             >
               {busy && <Loader2 size={14} className="animate-spin" />}
-              {resumable ? "Resume Generation" : "Generate Audiobook"}
+              {resumable ? "Resume Generation"
+                : draftPass ? "Generate Draft (fast)" : "Generate Audiobook"}
             </button>
+          )}
+          {/* A finished draft must say so where the writer will see it. */}
+          {run?.draft && (
+            <p className="rounded border border-amber-800 bg-amber-950/50 px-2 py-1.5 text-[11px] text-amber-300">
+              Draft-quality audio{active ? " is generating" : ""}. Regenerate
+              in Standard quality before exporting -- a Standard run
+              re-queues all draft segments automatically.
+            </p>
           )}
           {/* The escape hatch when everything is "up to date" but the
               writer wants a fresh pass regardless. */}

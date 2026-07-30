@@ -119,7 +119,7 @@ def request_cancel() -> None:
 # ── Starting a run ────────────────────────────────────────────────────────────
 
 def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
-                  pace: float = 1.0, layout: str = "") -> str:
+                  pace: float = 1.0, layout: str = "", draft: bool = False) -> str:
     """
     The generated-state identity of a segment's AUDIO (spec 24.1): the
     prepared payload (so pronunciation rules and [say] edits count), the
@@ -142,6 +142,10 @@ def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
         parts.append(f"pace={pace}")
     if layout:
         parts.append(f"layout={layout}")
+    if draft:
+        # Draft audio is a different artifact: a Standard run must see it
+        # as stale (and vice versa) -- a draft can never ship by accident.
+        parts.append("draft=1")
     raw = "|".join(parts)
     return "sha256-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
@@ -191,7 +195,7 @@ def effective_pace(segment: dict, settings: dict) -> float:
 
 
 def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
-              force: bool = False) -> dict:
+              force: bool = False, draft: bool = False) -> dict:
     """
     Queue segments in the selected chapters and start the worker thread.
     Queued = pending/failed, plus completed segments whose payload basis
@@ -237,7 +241,7 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
                 basis = payload_basis(
                     pronunciation.prepare_tts_text(item["text"], rules),
                     backend, voice_id, effective_pace(item, settings),
-                    layout=segment_layout(item),
+                    layout=segment_layout(item), draft=draft,
                 )
                 if item.get("payload_hash") != basis:
                     queue_ids.append(item["segment_id"])
@@ -254,6 +258,7 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
         run = {
             "run_id": str(uuid.uuid4()),
             "status": "generating",
+            "draft": draft,
             "provider": backend.key,
             "model": backend.model_id,
             "engine_version": backend.engine_version,
@@ -273,7 +278,7 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
         _active_workspace = workspace_path
         _active_thread = threading.Thread(
             target=_worker,
-            args=(workspace_path, backend, voice_id, queue_ids, run),
+            args=(workspace_path, backend, voice_id, queue_ids, run, draft),
             name="audiobook-generation",
             daemon=True,
         )
@@ -284,7 +289,7 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
 # ── The worker loop ───────────────────────────────────────────────────────────
 
 def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
-            queue_ids: list[str], run: dict) -> None:
+            queue_ids: list[str], run: dict, draft: bool = False) -> None:
     _set_sleep_inhibit(True)
     try:
         rules = pronunciation.effective_rules(workspace_path)
@@ -303,7 +308,8 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             if segment is None:
                 continue                    # re-segmented away mid-run
 
-            _generate_one(workspace_path, backend, voice_id, rules, settings, segment)
+            _generate_one(workspace_path, backend, voice_id, rules, settings,
+                          segment, draft=draft)
 
             if segment["status"] == "completed":
                 run["completed_segments"] += 1
@@ -347,13 +353,16 @@ def _find_segment(manifest: dict | None, segment_id: str) -> dict | None:
 
 
 def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
-                  rules: list, settings: dict, segment: dict) -> None:
+                  rules: list, settings: dict, segment: dict,
+                  draft: bool = False) -> None:
     """One segment through the payload-prep + synthesize + validate path.
     Mutates the segment record in place; the caller persists it.
 
     Flow segments (mid-paragraph pauses, see flow.py) synthesize the
     whole fragment run CONTINUOUSLY and record the matched cut positions;
-    the stitcher inserts the writer's pauses into those cuts later."""
+    the stitcher inserts the writer's pauses into those cuts later.
+    draft=True keeps the pauses but skips the continuous render -- the
+    fast testing gear."""
     payload = pronunciation.prepare_tts_text(segment["text"], rules)
     pace = effective_pace(segment, settings)
     # Flow synthesis is WAV-only (it reads samples to find gaps); a
@@ -376,7 +385,7 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             if is_flow:
                 payloads = [pronunciation.prepare_tts_text(f, rules) for f in fragments]
                 audio, flow_cuts, flowed = flow.synthesize_flow(
-                    backend, voice_id, pace, payloads)
+                    backend, voice_id, pace, payloads, draft=draft)
                 duration = _wav_seconds(audio)
             else:
                 audio, duration = backend.synthesize(payload, voice_id, pace)
@@ -414,7 +423,7 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
         "status": "completed",
         "generated_hash": segment["content_hash"],
         "payload_hash": payload_basis(payload, backend, voice_id, pace,
-                                      layout=segment_layout(segment)),
+                                      layout=segment_layout(segment), draft=draft),
         "provider": backend.key,
         "model": backend.model_id,
         "engine_version": backend.engine_version,
