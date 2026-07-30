@@ -112,6 +112,21 @@ def test_dialogue_persists_across_pause_splits_inside_a_quote():
     ]
 
 
+def test_narration_after_a_leading_closing_quote_is_not_dialogue():
+    # From a real trace: '...That's a start.[/pace]" Lexa set the book
+    # aside.' -- the closing quote rides the FRONT of the narration
+    # fragment. That fragment is narration, not dialogue.
+    text = ('# C1\n\n"[pace:1.2]So this ritual was performed. '
+            '[pause:0.8] That\'s a start.[/pace]" Lexa set the book aside '
+            'and reached for another.')
+    segments = _segments(_first_manifest(text))
+    lexa = next(s for s in segments if "Lexa set the book" in s["text"])
+    assert not lexa.get("dialogue", False)
+    # The paced speech itself is still dialogue.
+    ritual = next(s for s in segments if "So this ritual" in s["text"])
+    assert ritual.get("dialogue") is True
+
+
 def test_quote_dominant_paragraph_counts_as_dialogue():
     from app.audiobook.segmenter import is_dialogue_paragraph
     assert is_dialogue_paragraph('"Run," she said.')

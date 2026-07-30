@@ -169,8 +169,17 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
                 if not paragraph:
                     continue
                 # Inside an unclosed quote, every fragment is dialogue
-                # regardless of its own quote marks.
-                dialogue = in_quote or is_dialogue_paragraph(paragraph)
+                # regardless of its own quote marks -- EXCEPT when the
+                # fragment BEGINS with the closing quote (a pace span
+                # ending right at the quote leaves '" Lexa set the book
+                # aside...'), in which case the quote char belongs to the
+                # PREVIOUS speech and the rest is judged on its own.
+                stripped = paragraph.lstrip()
+                if in_quote and stripped[:1] in ('"', "”"):
+                    rest = stripped[1:].lstrip()
+                    dialogue = bool(rest) and is_dialogue_paragraph(rest)
+                else:
+                    dialogue = in_quote or is_dialogue_paragraph(paragraph)
                 _update_quote_state(paragraph)
                 if dialogue != pending_dialogue:
                     flush()
