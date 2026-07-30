@@ -131,7 +131,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
 
     Raises ValueError when the text contains nothing narratable.
     """
-    from app.audiobook import segmenter
+    from app.audiobook import flow, segmenter
     from app.audiobook.generation import effective_pace
 
     settings = settings or dict(NARRATION_DEFAULTS)
@@ -143,8 +143,27 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
         for item in segmenter._segment_texts_from_elements(chapter.elements):
             kind = item["kind"]
             if kind == "segment_text":
-                payload = prepare_tts_text(item["text"], rules)
                 speed = effective_pace(item, settings)
+                fragments = item.get("fragments")
+                if fragments and len(fragments) >= 2:
+                    # Flow segment: mid-paragraph pauses. Synthesize the
+                    # run continuously and insert the pauses into the
+                    # matched gaps -- the preview IS the generation path.
+                    payloads = [prepare_tts_text(f, rules) for f in fragments]
+                    audio, cuts, flowed = flow.synthesize_flow(
+                        backend, voice_id, speed, payloads)
+                    pieces.extend(flow.split_flow_pieces(
+                        audio, cuts, item.get("internal_pauses", [])))
+                    for payload in payloads:
+                        trace.append({
+                            "speed": speed,
+                            "dialogue": bool(item.get("dialogue")),
+                            "marker_pace": item.get("pace"),
+                            "snippet": payload[:32],
+                            "flow": flowed,
+                        })
+                    continue
+                payload = prepare_tts_text(item["text"], rules)
                 audio, _duration = backend.synthesize(payload, voice_id, speed)
                 pieces.append(audio)
                 trace.append({

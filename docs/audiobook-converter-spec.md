@@ -911,6 +911,22 @@ them by ear later:
   (dialogue base 0.9 times a [pace:1.2] span). The same words were
   clean at 0.9, 1.0, 1.1, and 1.2. Every speed handed to the engine is
   therefore snapped to the nearest 0.05.
+- **Mid-paragraph pauses use FLOW synthesis (2026-07-30).** Cutting text
+  at a [pause] and synthesizing each fragment alone manufactures
+  utterance endings: cold onset, stretched delivery ("A cult." became
+  "Aahh Cuult"), and a breathy final release -- the audible pre-pause
+  slur. No post-processing can fix it; the artifact is performed, not
+  padded. The cure (verified by ear on real passages): a paragraph's
+  pause-split fragment run synthesizes as ONE continuous render, and
+  the writer's pauses are inserted INTO its natural sentence gaps at
+  stitch time. Boundaries are located by a duration-calibrated matcher
+  (each fragment's isolated duration bounds where its boundary can be;
+  longest gap in the band wins; any doubt = fall back to per-fragment
+  audio). Pause DURATIONS stay out of the audio and the payload hash,
+  so retiming a pause never regenerates speech. Paragraph-boundary
+  pauses still cut normally -- a real utterance ending is correct
+  there. Implementation: `flow.py`, flow segments carry `fragments` /
+  `internal_pauses` / `flow_cuts_ms`.
 - **Pace markers use the STEP form: `[pace:+2]` / `[pace:-1]`.** Each
   step is 0.05 up or down from the book's base pace (Narrator or
   Dialogue pace, whichever applies to the segment), so a marked span
@@ -1114,6 +1130,43 @@ Noted for later (not a redesign now): streaming demo/preview audio --
 begin playback while later pieces are still synthesizing. Requires
 chunked WAV streaming from the worker through the backend to the player;
 backend-side demo caching covers most of the pain meanwhile.
+
+### 18.4 Guided Insert Walkthrough (planned, user-designed 2026-07-30)
+
+An advanced find/insert overlay for the narration editor: the writer
+opens it at the cursor and it WALKS the manuscript downward, stopping at
+each spot where a marker insert could improve the narration. At every
+stop the writer picks an insert type, adjusts it, or skips. Rationale:
+Kokoro transitions instantly from scene narration into dialogue and
+misses the small intentional beats a human reader adds ("From Ruins to
+Relics. I read it. The Cambodia chapter. My god! That tomb door.").
+
+Trigger points (initial catalog; each individually toggleable):
+
+- Narration-to-dialogue transitions (a paragraph or sentence run ends
+  and a quoted speech begins) -- offer [pause] before the dialogue.
+- Dialogue-to-narration returns -- offer [pause] after the closing quote.
+- Short-sentence bursts (2+ consecutive sentences under ~25 characters)
+  -- offer small [pause] beats between them.
+- Paragraph endings without any trailing marker -- offer [pause].
+- Interjections and exclamations ("My god!", "No.") -- offer a beat
+  before, after, or both.
+- Speaker alternation in dialogue runs (quote paragraph following a
+  quote paragraph) -- offer a beat for the turn-taking rhythm.
+- Scene-transition prose (blank-line clusters, time-skip phrases like
+  "Later that night") -- offer [scene-break] instead of a plain pause.
+- Emphasis candidates inside dialogue (italics in the source, ALL CAPS
+  words) -- offer a [pace] step span or a [say] override.
+- Malformed-marker repair: anything the parser warns about ([pace:=2],
+  an unclosed [pause:0.4 ...) surfaces as a stop with a one-click fix --
+  the walkthrough doubles as the marker linter.
+
+UX contract: modeless overlay pinned above the editor; Next/Skip/Apply
+keyboard-first; each stop shows the sentence in context with the
+proposed insert rendered inline; Apply edits the narration copy exactly
+like typing (manual save still owns persistence); a per-session "don't
+suggest this trigger again" mute; progress indicator (stop N of M in
+this chapter). Every insert type links its audible demo (18.3).
 
 ---
 

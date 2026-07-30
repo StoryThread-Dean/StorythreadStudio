@@ -30,7 +30,7 @@ from pathlib import Path
 
 import httpx
 
-from app.audiobook import segmenter, workspace
+from app.audiobook import flow, segmenter, workspace
 from app.audiobook.wav_assembly import concat_wav
 
 # Where the component manager installs ffmpeg (ffmpeg.exe + ffprobe.exe).
@@ -173,7 +173,16 @@ def _stitch_chapter_wav(workspace_path: str, chapter: dict,
         if kind == "segment":
             audio_path = Path(workspace_path) / item["output_file"]
             with open(audio_path, "rb") as f:
-                pieces.append(f.read())
+                audio = f.read()
+            if item.get("flow_cuts_ms"):
+                # Flow segment (mid-paragraph pauses): the audio is one
+                # continuous render; split it at the recorded cuts and
+                # insert the CURRENT pause durations -- retiming a pause
+                # in the narration is honored here without regeneration.
+                pieces.extend(flow.split_flow_pieces(
+                    audio, item["flow_cuts_ms"], item.get("internal_pauses", [])))
+            else:
+                pieces.append(audio)
         elif kind == "pause":
             pieces.append(int(item["duration_ms"]))
         elif kind == "scene_break":

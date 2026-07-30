@@ -167,7 +167,8 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
     for pace, region in regions:
         pos = 0
         for match in _MARKER_RE.finditer(region):
-            _flush_with_excludes(region[pos : match.start()], pace)
+            before_chunk = region[pos : match.start()]
+            _flush_with_excludes(before_chunk, pace)
             pos = match.end()
             if match.group(1):                   # pause with duration
                 raw = (match.group(2) or "").strip()
@@ -175,7 +176,20 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
                     seconds = float(raw)
                     if not (0 < seconds <= 60):
                         raise ValueError
-                    elements.append({"type": "pause", "duration_ms": int(round(seconds * 1000))})
+                    pause: dict = {"type": "pause", "duration_ms": int(round(seconds * 1000))}
+                    # A pause with prose (not a paragraph break) on BOTH
+                    # sides sits mid-paragraph: it splits a sentence run,
+                    # not two paragraphs. The segmenter synthesizes such
+                    # runs continuously (flow groups) because isolated
+                    # fragment synthesis manufactures utterance endings
+                    # (see flow.py).
+                    after_probe = region[match.end() : match.end() + 24]
+                    if (before_chunk.strip()
+                            and not before_chunk.rstrip(" \t").endswith("\n")
+                            and after_probe.strip()
+                            and not after_probe.lstrip(" \t").startswith("\n")):
+                        pause["mid_paragraph"] = True
+                    elements.append(pause)
                 except ValueError:
                     warnings.append(
                         f"Chapter '{chapter_title}': [pause:{raw}] is not a valid duration "

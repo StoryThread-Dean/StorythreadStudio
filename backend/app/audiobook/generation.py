@@ -23,7 +23,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 
-from app.audiobook import locking, pronunciation, segmenter, workspace
+from app.audiobook import flow, locking, pronunciation, segmenter, workspace
 from app.audiobook.synthesis import SynthesisBackend, SynthesisError
 
 RUN_FILE = "generation-run.json"
@@ -119,7 +119,7 @@ def request_cancel() -> None:
 # ── Starting a run ────────────────────────────────────────────────────────────
 
 def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
-                  pace: float = 1.0) -> str:
+                  pace: float = 1.0, layout: str = "") -> str:
     """
     The generated-state identity of a segment's AUDIO (spec 24.1): the
     prepared payload (so pronunciation rules and [say] edits count), the
@@ -131,13 +131,29 @@ def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
 
     Pace joins the basis only when it deviates from 1.0, so audio
     generated before pace spans existed keeps its stored hash valid.
+    `layout` (flow segments only) fingerprints WHERE the mid-paragraph
+    pauses cut the fragment run -- moving a pause to a different sentence
+    boundary re-queues the segment so its stored cut positions get
+    re-matched. Pause DURATIONS stay out on purpose: retiming is free.
     """
     parts = [payload_text, voice_id, backend.key, backend.model_id,
              backend.engine_version]
     if pace != 1.0:
         parts.append(f"pace={pace}")
+    if layout:
+        parts.append(f"layout={layout}")
     raw = "|".join(parts)
     return "sha256-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def segment_layout(segment: dict) -> str:
+    """A flow segment's fragment layout as a basis fingerprint: the
+    fragment character lengths, which move whenever a mid-paragraph
+    pause is added, removed, or relocated. Empty for plain segments."""
+    fragments = segment.get("fragments")
+    if not fragments or len(fragments) < 2:
+        return ""
+    return ",".join(str(len(f)) for f in fragments)
 
 
 def effective_pace(segment: dict, settings: dict) -> float:
@@ -221,6 +237,7 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
                 basis = payload_basis(
                     pronunciation.prepare_tts_text(item["text"], rules),
                     backend, voice_id, effective_pace(item, settings),
+                    layout=segment_layout(item),
                 )
                 if item.get("payload_hash") != basis:
                     queue_ids.append(item["segment_id"])
@@ -332,12 +349,23 @@ def _find_segment(manifest: dict | None, segment_id: str) -> dict | None:
 def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
                   rules: list, settings: dict, segment: dict) -> None:
     """One segment through the payload-prep + synthesize + validate path.
-    Mutates the segment record in place; the caller persists it."""
+    Mutates the segment record in place; the caller persists it.
+
+    Flow segments (mid-paragraph pauses, see flow.py) synthesize the
+    whole fragment run CONTINUOUSLY and record the matched cut positions;
+    the stitcher inserts the writer's pauses into those cuts later."""
     payload = pronunciation.prepare_tts_text(segment["text"], rules)
     pace = effective_pace(segment, settings)
+    # Flow synthesis is WAV-only (it reads samples to find gaps); a
+    # provider that returns MP3 keeps the plain per-segment path.
+    fragments = segment.get("fragments")
+    is_flow = (bool(fragments) and len(fragments) >= 2
+               and backend.file_extension == "wav")
 
     audio: bytes | None = None
     duration = 0.0
+    flow_cuts: list[int] = []
+    flowed = False
     failure_reason: str | None = None
 
     for attempt in range(1 + MAX_AUTO_RETRIES):
@@ -345,13 +373,22 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
         # BEFORE the call, because a timeout after billing still billed.
         segment["attempts"] = segment.get("attempts", 0) + 1
         try:
-            audio, duration = backend.synthesize(payload, voice_id, pace)
+            if is_flow:
+                payloads = [pronunciation.prepare_tts_text(f, rules) for f in fragments]
+                audio, flow_cuts, flowed = flow.synthesize_flow(
+                    backend, voice_id, pace, payloads)
+                duration = _wav_seconds(audio)
+            else:
+                audio, duration = backend.synthesize(payload, voice_id, pace)
             failure_reason = None
             break
         except SynthesisError as e:
             failure_reason = str(e)
             if not e.retryable or attempt == MAX_AUTO_RETRIES:
                 break
+        except flow.FlowError as e:
+            failure_reason = str(e)    # malformed engine audio: not retryable
+            break
 
     if audio is None:
         segment["status"] = "failed"
@@ -376,7 +413,8 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
     segment.update({
         "status": "completed",
         "generated_hash": segment["content_hash"],
-        "payload_hash": payload_basis(payload, backend, voice_id, pace),
+        "payload_hash": payload_basis(payload, backend, voice_id, pace,
+                                      layout=segment_layout(segment)),
         "provider": backend.key,
         "model": backend.model_id,
         "engine_version": backend.engine_version,
@@ -384,7 +422,26 @@ def _generate_one(workspace_path: str, backend: SynthesisBackend, voice_id: str,
         "duration_seconds": round(duration, 2),
         "output_file": output_rel,
     })
+    if is_flow:
+        # Where the stitcher may cut this audio to insert the writer's
+        # pauses. flowed=False means matching fell back to concatenated
+        # isolated fragments -- same cut semantics, today's sound.
+        segment["flow_cuts_ms"] = flow_cuts
+        segment["flowed"] = flowed
+    else:
+        segment.pop("flow_cuts_ms", None)
+        segment.pop("flowed", None)
     segment.pop("failure_reason", None)
+
+
+def _wav_seconds(audio: bytes) -> float:
+    """Duration of a WAV blob -- flow synthesis composes its result, so
+    there is no single X-Duration header to trust."""
+    import io
+    import wave
+    with wave.open(io.BytesIO(audio), "rb") as w:
+        rate = w.getframerate()
+        return w.getnframes() / rate if rate else 0.0
 
 
 def _write_segment_audio(workspace_path: str, segment: dict,
