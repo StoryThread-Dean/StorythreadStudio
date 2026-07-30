@@ -121,15 +121,21 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
     def flush() -> None:
         nonlocal pending_paragraphs, pending_len
         if pending_paragraphs:
-            item = {"kind": "segment_text",
-                    "text": "\n\n".join(pending_paragraphs)}
+            text = "\n\n".join(pending_paragraphs)
+            pending_paragraphs = []
+            pending_len = 0
+            # Never synthesize a fragment with no words in it. A pace span
+            # opening just inside a quote leaves a lone '"' fragment, and
+            # the engine renders bare punctuation as a breath-like false
+            # start (live finding: an audible hiccup before dialogue).
+            if not re.search(r"[A-Za-z0-9]", text):
+                return
+            item = {"kind": "segment_text", "text": text}
             if pending_pace != 1.0:
                 item["pace"] = pending_pace
             if pending_dialogue:
                 item["dialogue"] = True
             items.append(item)
-            pending_paragraphs = []
-            pending_len = 0
 
     for element in elements:
         etype = element.get("type")

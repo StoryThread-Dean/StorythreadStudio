@@ -98,6 +98,22 @@ def test_quote_dominant_paragraph_counts_as_dialogue():
     assert not is_dialogue_paragraph("No quotes at all in this paragraph.")
 
 
+def test_punctuation_only_fragments_are_never_synthesized():
+    # THE live hiccup: a quote mark left OUTSIDE a pace span became its
+    # own fragment, and the engine rendered the bare punctuation as a
+    # breath-like false start. Word-less fragments never become segments.
+    text = ('# C1\n\nLara watched her for a moment.\n\n'
+            '"[pace:1.2]So this ritual was performed, you saw it.[/pace]" '
+            'Lexa set the book aside.')
+    segments = _segments(_first_manifest(text))
+    texts = [s["text"] for s in segments]
+    assert '"' not in texts                       # the lone quote is gone
+    assert all(any(ch.isalnum() for ch in t) for t in texts)
+    # The real speech all survives.
+    assert any("So this ritual" in t for t in texts)
+    assert any("Lexa set the book" in t for t in texts)
+
+
 def test_pace_changes_are_segment_boundaries():
     text = ("# C1\n\nNormal prose here.\n\n"
             "[pace:0.8]Slow passage.[/pace]\n\nNormal after.")

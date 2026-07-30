@@ -27,7 +27,11 @@ class WavMismatchError(Exception):
 
 _TRIM_THRESHOLD = 330          # ~-40 dBFS on 16-bit samples
 _TRIM_MAX_MS = 250             # never eat into actual speech
-_FADE_MS = 8
+_FADE_IN_MS = 8
+# The fade-OUT is longer: utterance-final sibilants (the s in
+# "strokes") decay as low-level noise, and a hard 8ms ramp read as a
+# slur into the following pause. 25ms lands the tail gently.
+_FADE_OUT_MS = 25
 
 
 def _condition_edges(frames: bytes, framerate: int) -> bytes:
@@ -51,10 +55,12 @@ def _condition_edges(frames: bytes, framerate: int) -> bytes:
         return frames                    # an all-quiet clip: leave it be
     samples = samples[start:end]
 
-    fade = min(int(framerate * _FADE_MS / 1000), len(samples) // 2)
-    for i in range(fade):
-        samples[i] = int(samples[i] * i / fade)
-        samples[-1 - i] = int(samples[-1 - i] * i / fade)
+    fade_in = min(int(framerate * _FADE_IN_MS / 1000), len(samples) // 2)
+    for i in range(fade_in):
+        samples[i] = int(samples[i] * i / fade_in)
+    fade_out = min(int(framerate * _FADE_OUT_MS / 1000), len(samples) // 2)
+    for i in range(fade_out):
+        samples[-1 - i] = int(samples[-1 - i] * i / fade_out)
     return samples.tobytes()
 
 
