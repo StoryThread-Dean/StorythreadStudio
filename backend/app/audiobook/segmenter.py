@@ -117,6 +117,22 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
     pending_len = 0
     pending_pace = 1.0
     pending_dialogue = False
+    # Quote state carries ACROSS fragments: a [pause] inside a speech
+    # splits it into pieces where only the first carries the opening
+    # quote mark. Without this, continuation fragments fell back to
+    # narrator pace -- one speech changing speed mid-flow (live finding:
+    # captured speeds [0.85, 0.9, 0.85, 0.85] for a single quotation).
+    in_quote = False
+
+    def _update_quote_state(paragraph: str) -> None:
+        nonlocal in_quote
+        for ch in paragraph:
+            if ch == '"':
+                in_quote = not in_quote
+            elif ch == "“":
+                in_quote = True
+            elif ch == "”":
+                in_quote = False
 
     def flush() -> None:
         nonlocal pending_paragraphs, pending_len
@@ -152,7 +168,10 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
                 paragraph = paragraph.strip()
                 if not paragraph:
                     continue
-                dialogue = is_dialogue_paragraph(paragraph)
+                # Inside an unclosed quote, every fragment is dialogue
+                # regardless of its own quote marks.
+                dialogue = in_quote or is_dialogue_paragraph(paragraph)
+                _update_quote_state(paragraph)
                 if dialogue != pending_dialogue:
                     flush()
                     pending_dialogue = dialogue

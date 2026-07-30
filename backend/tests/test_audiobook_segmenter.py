@@ -90,6 +90,28 @@ def test_dialogue_paragraphs_segment_separately():
     ]
 
 
+def test_dialogue_persists_across_pause_splits_inside_a_quote():
+    # THE live finding (captured speeds 0.85/0.9/0.85/0.85 for ONE
+    # speech): a [pause] inside a quotation splits it into fragments
+    # where only the first carries the quote mark. All fragments of an
+    # open quote are dialogue; the fragment AFTER the closing quote
+    # is narration again.
+    text = ('# C1\n\nLara watched her for a moment.\n\n'
+            '"I don\'t know what the ritual was called.\n\n[pause:0.4]\n\n'
+            'I don\'t even know if it had a name.\n\n[pause:0.4]\n\n'
+            'I just know what they did."\n\n[pause:0.8]\n\n'
+            'The silence stretched between them.')
+    segments = _segments(_first_manifest(text))
+    flags = [(s["text"][:20], s.get("dialogue", False)) for s in segments]
+    assert flags == [
+        ("Lara watched her for", False),
+        ('"I don\'t know what t', True),
+        ("I don't even know if", True),      # continuation: STILL dialogue
+        ("I just know what the", True),      # closes the quote
+        ("The silence stretche", False),     # narration resumes
+    ]
+
+
 def test_quote_dominant_paragraph_counts_as_dialogue():
     from app.audiobook.segmenter import is_dialogue_paragraph
     assert is_dialogue_paragraph('"Run," she said.')
