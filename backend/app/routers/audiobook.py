@@ -540,6 +540,8 @@ def marker_demo(request: MarkerDemoRequest):
 class StartGenerationRequest(BaseModel):
     workspace_path: str
     provider: str = "local-kokoro"
+    # Hosted providers need a model slug; the local narrator ignores it.
+    model: str = ""
     voice_id: str
     # The explicit "regenerate everything regardless" escape hatch --
     # normal starts already re-queue stale audio automatically.
@@ -550,11 +552,38 @@ class StartGenerationRequest(BaseModel):
     draft: bool = False
 
 
+@router.get("/tts-catalog")
+def tts_catalog():
+    """Hosted narration options with their real prices, plus whether a
+    key is already saved for each (spec 13/16). The local narrator is
+    not in here -- it is free and always available."""
+    from app import settings_store
+    from app.audiobook import tts_providers
+    settings = settings_store.load_settings()
+    entries = tts_providers.catalog()
+    for entry in entries:
+        entry["has_api_key"] = bool(
+            str(settings.get(entry["api_key_setting"]) or "").strip())
+    return {"providers": entries}
+
+
+@router.get("/print-estimate")
+def print_estimate(workspace_path: str, provider: str, model: str):
+    """What a print pass would cost BEFORE anything is spent (spec 19:
+    never auto-spend). Counted from the real payload text."""
+    _require_workspace(workspace_path)
+    from app.audiobook import tts_providers
+    try:
+        return tts_providers.estimate_print(workspace_path, provider, model)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/generate")
 def start_generation(request: StartGenerationRequest):
     _require_workspace(request.workspace_path)
     try:
-        backend = synthesis.resolve_backend(request.provider)
+        backend = synthesis.resolve_backend(request.provider, request.model)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
@@ -628,7 +657,8 @@ def resume_generation(request: GenerationControlRequest):
     if run.get("status") not in ("paused", "cancelled", "partially_completed"):
         raise HTTPException(status_code=409, detail=f"The last run is {run.get('status')}, not resumable.")
     try:
-        backend = synthesis.resolve_backend(run.get("provider", ""))
+        backend = synthesis.resolve_backend(run.get("provider", ""),
+                                            run.get("model", ""))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
