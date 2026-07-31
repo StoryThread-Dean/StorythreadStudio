@@ -206,7 +206,6 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
                 its style at random so the flourish never goes stale). */}
             <p className="mt-1 max-w-lg text-xs leading-relaxed text-zinc-400">
               <SpokenLine
-                pace={0.07}
                 text={"The book you wrote becomes a real audiobook, narrated "
                   + "on this computer, free and unlimited, and yours to keep. "
                   + "You stay the director: you choose the voice, the pacing, "
@@ -238,14 +237,17 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
               tabIndex={0}
             >
               <p className="flex items-center gap-2.5 text-sm font-medium text-zinc-100">
-                <span className={"flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold shadow-sm transition-transform duration-200 group-hover:scale-110 "
+                {/* The journey rides the gem circle: book, folder, mic,
+                    speaker, and a gem for the paid print. */}
+                <span className={"flex h-7 w-7 shrink-0 items-center justify-center rounded-full shadow-sm transition-transform duration-200 group-hover:scale-110 "
                   + step.badge}>
-                  {index + 1}
+                  <step.Icon size={14} aria-hidden />
                 </span>
                 {step.title}
-                {/* The journey in icons: book, folder, mic, speaker, gem. */}
-                <step.Icon size={14} aria-hidden
-                           className="ml-auto shrink-0 text-zinc-400 transition-colors group-hover:text-zinc-100" />
+                <span aria-hidden
+                      className="ml-auto shrink-0 text-lg font-bold leading-none text-zinc-500 transition-colors group-hover:text-zinc-200">
+                  {index + 1}
+                </span>
               </p>
               {/* The detail FLOATS out over what follows -- expanding a
                   step must never shove the rest of the page around

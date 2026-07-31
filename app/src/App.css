@@ -296,7 +296,9 @@
  */
 .stw-read {
   display: inline-block;          /* transforms need a box */
-  animation-duration: 0.9s;
+  /* Long enough to feel like a voice dwelling on the word, short
+     enough that only a word or two is lit at narration pace. */
+  animation-duration: 0.8s;
   animation-timing-function: ease-out;
   animation-fill-mode: both;
   animation-delay: var(--stw-delay, 0s);
