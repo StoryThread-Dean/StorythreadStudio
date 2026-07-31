@@ -1241,6 +1241,30 @@ like typing (manual save still owns persistence); a per-session "don't
 suggest this trigger again" mute; progress indicator (stop N of M in
 this chapter). Every insert type links its audible demo (18.3).
 
+### 18.5 Respelling Doctrine (ear-tested by the user, 2026-07-30)
+
+The vetted rules for [say] and Pronunciation spoken forms, established
+by live listening tests and encoded in the say popout's tips accordion
+(one section open at a time). Preview is always the final judge.
+
+- **Lowercase is the rule; a single capital is a dial.** One capital
+  changes a word's inflection (Hey-soos, hey-soos, and hey-Soos all
+  land differently). Runs of 2+ capitals are folded by the app -- the
+  engine reads caps runs as letters (bare-word measurement: LARah
+  0.92s beside the "L A R ah" letter baseline 0.98s vs larah 0.72s).
+- **Separation strength, strongest to softest:** SPACE (near two
+  words), HYPHEN (syllable-like units of one word; the app fuses them
+  so no hesitation gap), APOSTROPHE (the softest internal break --
+  Hey'soos lands gentler than Hey-soos; works on most voices, not all).
+- **The vowel-sound alphabet (silent h):** ah = father, eh = bed,
+  ih = sit, oh = go, uh = unstressed, oo = food. Three Laras from
+  three vowel choices: lah-rah / lah-ruh / lar-uh.
+- **Double vowels lengthen:** laa-rah, lee-ah, koo-per, ree-na.
+- **Characters to avoid:** underscores, asterisks, quotes, slashes,
+  parentheses (letters pronounce separately, symbols get spoken,
+  unnatural pauses, engine chunk-splits, markdown stripping
+  downstream). Accented characters: a few work, most do not.
+
 ---
 
 ## 19. Step 7: Generation Review

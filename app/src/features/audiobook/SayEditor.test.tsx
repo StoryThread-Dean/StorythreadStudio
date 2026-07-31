@@ -94,12 +94,28 @@ describe("SayEditor", () => {
     await waitFor(() => expect(play).toHaveBeenCalledOnce());
   });
 
-  it("shows the tips library on demand", () => {
+  it("tips are an accordion: opening one section closes the other", () => {
     renderEditor();
     expect(screen.queryByText(/Spell the sounds/)).toBeNull();
     fireEvent.click(screen.getByText(/Tips: ways writers use this/));
+
+    // All section TITLES visible, no bodies yet.
     expect(screen.getByText(/Spell the sounds/)).toBeTruthy();
-    expect(screen.getByText(/Words that change with meaning/)).toBeTruthy();
-    expect(screen.getByText(/Shift the stress \(experimental\)/)).toBeTruthy();
+    expect(screen.getByText(/Separation strength/)).toBeTruthy();
+    expect(screen.getByText(/Characters to AVOID/)).toBeTruthy();
+    expect(screen.queryByText(/silent h after a vowel/)).toBeNull();
+
+    // Open the vowel section -- its body appears.
+    fireEvent.click(screen.getByText(/The vowel sounds/));
+    expect(screen.getByText(/silent h after a vowel/)).toBeTruthy();
+
+    // Open another -- the first CLOSES (one at a time).
+    fireEvent.click(screen.getByText(/Separation strength/));
+    expect(screen.getByText(/softest internal break/)).toBeTruthy();
+    expect(screen.queryByText(/silent h after a vowel/)).toBeNull();
+
+    // Clicking the open section closes it.
+    fireEvent.click(screen.getByText(/Separation strength/));
+    expect(screen.queryByText(/softest internal break/)).toBeNull();
   });
 });

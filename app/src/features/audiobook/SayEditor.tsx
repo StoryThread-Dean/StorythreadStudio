@@ -31,31 +31,48 @@ interface SayEditorProps {
   onLocate?: (pos: number) => void;
 }
 
-// The tips library: every entry is a REAL technique, worded to spark
-// ideas beyond pronunciation fixes. Respellings here follow the
-// ear-tested house rules: hyphens glue syllables into one word, and
-// CAPS are fine to TYPE (the standard convention) -- the app folds them
-// before the engine, which would otherwise read caps runs as letters.
-// The Preview button is the judge, not the spelling.
+// The tips library: an ACCORDION of ear-tested techniques (one section
+// open at a time -- the writer studies one idea, not a wall). The
+// doctrine here comes from live listening tests on the real engine
+// (2026-07-30 round); the Preview button is always the final judge.
 const TIPS: Array<{ title: string; body: string }> = [
   { title: "Spell the sounds, not the word",
-    body: "Kaelith -> KAY-lith. Hyphens glue syllables into one spoken "
-      + "word; write what a stranger should SAY, not how it is written." },
+    body: "Kaelith -> kay-lith. Write what a stranger should SAY, not "
+      + "how it is written. Hyphens glue syllables into one spoken "
+      + "word. Lowercase is the safe default -- see the case and "
+      + "separation sections for the finer dials." },
+  { title: "The vowel sounds: ah, eh, ih, oh, uh, oo",
+    body: "A silent h after a vowel is the most useful English "
+      + "respelling technique: ah = the vowel in father, eh = bed, "
+      + "ih = sit, oh = go, uh = the unstressed vowel, oo = food. "
+      + "Compare: [say:lah-rah], [say:lah-ruh], [say:lar-uh] -- three "
+      + "different Laras from three vowel choices." },
+  { title: "Case changes the inflection",
+    body: "Lowercase is the rule; a single capital is a dial. Hey-soos, "
+      + "hey-soos, and hey-Soos each land differently -- one capital "
+      + "letter shifts the word's inflection. Keep it to ONE capital: "
+      + "a RUN of capitals gets folded by the app, because the engine "
+      + "would spell it out as letters." },
+  { title: "Separation strength: space, hyphen, apostrophe",
+    body: "Three break strengths, strongest to softest. SPACE treats "
+      + "the parts as a strong separation -- Hey soos almost reads as "
+      + "two words. HYPHEN joins them as syllable-like units of one "
+      + "word -- Hey-soos. APOSTROPHE is the softest internal break -- "
+      + "Hey'soos lands gentler than Hey-soos. (The apostrophe works "
+      + "on most voices, not all -- preview it.)" },
+  { title: "Longer vowels: double them",
+    body: "Repeated vowels encourage a longer, held vowel: laa-rah, "
+      + "lee-ah, koo-per, ree-na. Pair with the vowel-sound alphabet "
+      + "for fine control over how a name stretches." },
   { title: "Words that change with meaning",
     body: "I read it -> [say:red]read[/say]. Also: lead, live, bow, tear, "
       + "wind, wound -- the engine guesses from context and sometimes "
       + "guesses wrong. One say fixes one spot." },
   { title: "Regional readings of a name",
-    body: "Lara is LAR-ah in Britain, LAIR-ah in Madrid, LOR-uh in "
+    body: "Lara is lar-ah in Britain, lair-ah in Madrid, lor-uh in "
       + "America. Set the book-wide reading in Pronunciations, then let "
       + "a single character say it their way -- say wins where both "
-      + "apply. Jesus -> Hay-SOOS works the same trick." },
-  { title: "Shift the stress (experimental)",
-    body: "The engine decides stress from the sounds it reads, not from "
-      + "capitals (caps get folded -- the engine would spell them as "
-      + "letters). Nudge stress by respelling the vowels: record can "
-      + "land noun-ish or verb-ish as reh-kerd vs rih-kord. Ear-driven "
-      + "territory: preview every attempt, keep what sounds right." },
+      + "apply. Jesus -> hay-soos works the same trick." },
   { title: "Letters or a word?",
     body: "NASA can be nassa or en ay ess ay. Spell initialisms as "
       + "spaced letter sounds (F B I -> ef bee eye) when the engine "
@@ -68,6 +85,20 @@ const TIPS: Array<{ title: string; body: string }> = [
     body: "A drawl, a sneer, an accent at a single moment: well -> "
       + "way-ell, darling -> dahling. Small doses -- it is seasoning, "
       + "not the dish." },
+  { title: "Shift the stress (experimental)",
+    body: "The engine decides stress from the sounds it reads. Nudge it "
+      + "by respelling the vowels: record can land noun-ish or verb-ish "
+      + "as reh-kerd vs rih-kord. Combine with a single capital or a "
+      + "doubled vowel on the strong syllable. Ear-driven territory: "
+      + "preview every attempt, keep what sounds right." },
+  { title: "Characters to AVOID",
+    body: "Underscores (_lar_-ah), asterisks (*lar*-ah), quotes "
+      + "(\"lar\"-ah), slashes (/lar-ah/), and parentheses ((lar)-ah) "
+      + "all misbehave: letters get pronounced separately, symbols get "
+      + "spoken aloud, unnatural pauses appear, and the engine splits "
+      + "the word into chunks. Avoid accented characters too -- a few "
+      + "work, most do not. Stick to plain letters, hyphens, "
+      + "apostrophes, and spaces." },
 ];
 
 export function SayEditor({
@@ -79,6 +110,8 @@ export function SayEditor({
   const [searchFrom, setSearchFrom] = useState(start);
   const [spoken, setSpoken] = useState("");
   const [showTips, setShowTips] = useState(false);
+  // The accordion: one tip open at a time -- opening one closes the other.
+  const [openTip, setOpenTip] = useState<number | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState(0);
@@ -215,11 +248,24 @@ export function SayEditor({
             Tips: ways writers use this
           </button>
           {showTips && (
-            <ul className="mb-2 max-h-44 space-y-1.5 overflow-y-auto rounded border border-zinc-800 bg-zinc-950 p-2">
-              {TIPS.map(tip => (
-                <li key={tip.title} className="text-[11px] leading-relaxed">
-                  <span className="font-medium text-zinc-200">{tip.title}.</span>{" "}
-                  <span className="text-zinc-400">{tip.body}</span>
+            <ul className="mb-2 max-h-56 overflow-y-auto rounded border border-zinc-800 bg-zinc-950">
+              {TIPS.map((tip, index) => (
+                <li key={tip.title} className="border-b border-zinc-800/60 last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={() => setOpenTip(prev => (prev === index ? null : index))}
+                    className="flex w-full items-center gap-1 px-2 py-1.5 text-left text-[11px] font-medium text-zinc-200 hover:text-blue-200"
+                  >
+                    {openTip === index
+                      ? <ChevronDown size={10} className="shrink-0" />
+                      : <ChevronRight size={10} className="shrink-0" />}
+                    {tip.title}
+                  </button>
+                  {openTip === index && (
+                    <p className="px-3 pb-2 pl-6 text-[11px] leading-relaxed text-zinc-400">
+                      {tip.body}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
