@@ -23,7 +23,7 @@ import {
 import type { EngineStatus, PreviewTracePiece } from "./api";
 import { BookDetailsPanel } from "./BookDetailsPanel";
 import { ExportPanel } from "./ExportPanel";
-import { PrintPanel } from "./PrintPanel";
+import { PremiumNarrationPanel } from "./PremiumNarrationPanel";
 import { ToggleSwitch } from "./ToggleSwitch";
 import { WhatsThis } from "./WhatsThis";
 import type { GenerationRun, NarratorVoice } from "./types";
@@ -596,9 +596,9 @@ export function GenerationPanel({
 
       {/* The print pass: everything that can SPEND money, in violet, in
           one place, behind an estimate and a confirm (spec 13/19). */}
-      <PrintPanel
+      <PremiumNarrationPanel
         workspacePath={workspacePath}
-        localVoiceId={voiceId}
+        localVoices={voices}
         settingsVersion={settingsVersion}
         onOpenSettings={onOpenSettings}
         getSelectionText={getSelectionText}
