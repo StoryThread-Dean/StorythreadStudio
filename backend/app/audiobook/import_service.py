@@ -37,6 +37,67 @@ def _validate_target_folder(workspace_path: str) -> None:
         )
 
 
+# ── Where a new audiobook should live (spec 5.1.2) ───────────────────────────
+# The writer should not have to invent a folder. Two locked defaults:
+#   Storythread book  -> <book folder>/audiobook
+#   anything else     -> Documents/Storythread Audiobooks/<Book Title>
+# A taken folder suggests "-2" rather than erroring the writer into a
+# folder picker. The suggestion is only ever a DEFAULT; the Get Started
+# flow still lets them choose.
+
+EXTERNAL_ROOT_NAME = "Storythread Audiobooks"
+
+
+def is_storythread_project(source_path: str) -> bool:
+    """A folder carrying project.json is a Storythread book."""
+    return os.path.isdir(source_path) and \
+        os.path.isfile(os.path.join(source_path, "project.json"))
+
+
+def suggest_workspace(source_path: str, title: str = "") -> dict:
+    """
+    Suggest the workspace folder for a source. Returns
+    {"workspace_path", "source_kind", "reason", "collision"} -- reason is
+    writer-facing text explaining WHY that location was chosen.
+    """
+    from app.audiobook.assembly import sanitize_component
+
+    source = os.path.abspath(source_path) if source_path else ""
+    if source and is_storythread_project(source):
+        base = os.path.join(source, "audiobook")
+        source_kind = "storythread-project"
+        reason = "Storythread books keep their audiobook beside the book itself."
+    else:
+        # A file's stem (or a plain folder's name) is the best title guess
+        # until the writer types one.
+        stem = ""
+        if source:
+            leaf = os.path.basename(source.rstrip("\\/"))
+            stem = os.path.splitext(leaf)[0]
+        name = sanitize_component(title.strip() or stem or "Untitled Audiobook")
+        base = os.path.join(os.path.expanduser("~"), "Documents",
+                            EXTERNAL_ROOT_NAME, name)
+        source_kind = "external"
+        reason = ("Manuscripts from outside Storythread are collected in "
+                  f"Documents/{EXTERNAL_ROOT_NAME}.")
+
+    # Never propose a folder that already holds something -- suggest the
+    # next free sibling instead of handing back an error.
+    candidate = base
+    collision = False
+    counter = 2
+    while os.path.isdir(candidate) and os.listdir(candidate):
+        collision = True
+        candidate = f"{base}-{counter}"
+        counter += 1
+    return {
+        "workspace_path": candidate,
+        "source_kind": source_kind,
+        "reason": reason,
+        "collision": collision,
+    }
+
+
 def import_source(source_path: str, workspace_path: str,
                   title_override: str = "") -> dict:
     """

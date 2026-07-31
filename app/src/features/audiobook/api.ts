@@ -59,6 +59,27 @@ export async function importSource(
   return toJson<AudiobookProjectPayload>(res);
 }
 
+export interface WorkspaceSuggestion {
+  workspace_path: string;
+  source_kind: "storythread-project" | "external";
+  reason: string;
+  collision: boolean;
+}
+
+/** Where a new audiobook should live: beside a Storythread book, or
+ * under Documents/Storythread Audiobooks for outside manuscripts. */
+export async function suggestWorkspace(
+  sourcePath: string,
+  title = "",
+): Promise<WorkspaceSuggestion> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/suggest-workspace`
+    + `?source_path=${encodeURIComponent(sourcePath)}`
+    + `&title=${encodeURIComponent(title)}`,
+  );
+  return toJson<WorkspaceSuggestion>(res);
+}
+
 export async function fetchProject(workspacePath: string): Promise<AudiobookProjectPayload> {
   const res = await fetch(
     `${API_BASE}/api/audiobook/project?workspace_path=${encodeURIComponent(workspacePath)}`,

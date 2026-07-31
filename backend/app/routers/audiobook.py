@@ -287,6 +287,15 @@ def save_voice(request: VoiceRequest):
     return {"selected_voice": request.voice_id}
 
 
+@router.get("/suggest-workspace")
+def suggest_workspace(source_path: str, title: str = ""):
+    """Where a new audiobook should live (spec 5.1.2): beside a
+    Storythread book, or under Documents/Storythread Audiobooks for
+    outside manuscripts. A taken folder suggests the next free sibling
+    rather than erroring the writer into a folder picker."""
+    return import_service.suggest_workspace(source_path, title)
+
+
 @router.get("/chapters/available")
 def chapters_available(workspace_path: str):
     """Chapters in the original source that the narration copy does not
