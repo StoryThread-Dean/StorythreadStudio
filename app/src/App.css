@@ -312,11 +312,18 @@
 }
 .stw-read-underline { animation-name: stw-read-underline-kf; }
 
-/* 2. Each word thickens and brightens as the voice lands on it. */
+/* 2. Each word thickens and brightens as the voice lands on it.
+ *
+ * The thickening is FAUX bold (glyphs painted twice, a hair to each
+ * side) rather than font-weight. Animating real weight re-measures the
+ * word, which shoved every word after it and made the line hop as the
+ * light travelled (live finding). Text-shadow never touches layout.
+ */
 @keyframes stw-read-bold-kf {
-  0%       { font-weight: 500; color: inherit; }
-  30%, 60% { font-weight: 800; color: #ecfdf5; }
-  100%     { font-weight: 500; color: inherit; }
+  0%       { text-shadow: none; color: inherit; }
+  30%, 60% { text-shadow: 0.021em 0 0 currentColor, -0.021em 0 0 currentColor;
+             color: #ecfdf5; }
+  100%     { text-shadow: none; color: inherit; }
 }
 .stw-read-bold { animation-name: stw-read-bold-kf; }
 
