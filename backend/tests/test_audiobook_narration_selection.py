@@ -155,11 +155,12 @@ def test_premium_only_models_keep_their_own_cast():
 
 
 def test_grok_offers_only_the_voices_openrouter_documents():
-    # Live finding, twice over: sampling iris-en-US and then iris-en-GB
-    # through OpenRouter both returned "Provider returned 404". xAI's own
-    # roster is 26 voices x 3 dialects, but OpenRouter documents exactly
-    # five, named WITHOUT a suffix. Offering the other 73 was offering
-    # options that cannot play, so the list is trimmed to what works.
+    # Live finding, three 404s deep: iris-en-US, then iris-en-GB, then
+    # ara-en-GB -- and that last one is a DOCUMENTED voice, which proves
+    # it is the dialect suffix OpenRouter rejects, not just the wider
+    # roster. xAI's own registry is 26 voices x 3 dialects; OpenRouter
+    # takes five bare names. Offering the other 73 was offering options
+    # that cannot play, so the list is trimmed to what works.
     voices = tts_providers.voices_for("openrouter", "x-ai/grok-voice-tts-1.0")[0]
     assert [v["id"] for v in voices] == ["Ara", "Eve", "Leo", "Rex", "Sal"]
     # Feminine before masculine, the way every other roster here groups.
@@ -170,24 +171,18 @@ def test_grok_offers_only_the_voices_openrouter_documents():
     assert ara["label"] == "Ara (female) -- warm, natural, friendly"
 
 
-def test_grok_keeps_accent_as_its_own_axis():
-    # The two-dropdown shape stays: five voices, and the accent chosen
-    # separately. "Provider default" composes to the bare name (the proven
-    # form) and leads the list; the dialect options remain because xAI
-    # accepts them, each carrying the 404 warning rather than a promise.
+def test_grok_offers_no_accent_choice_because_suffixes_404():
+    # An accent dropdown was shipped here for exactly one commit, then
+    # ara-en-GB came back 404 and killed it: every option in it would have
+    # broken whatever voice the writer picked. A control that cannot work
+    # is worse than no control, so the model declares no axes and the
+    # five bare names stand alone.
     _provider, model = tts_providers.resolve_model(
         "openrouter", "x-ai/grok-voice-tts-1.0")
-    axes = model.voice_axes
-    assert axes is not None
-    assert [v["name"] for v in axes["voices"]] == ["Ara", "Eve", "Leo", "Rex", "Sal"]
-    assert [a["id"] for a in axes["accents"]] == ["", "en-US", "en-GB", "en-AU"]
-    assert axes["accents"][0]["label"] == "Provider default"
-    for accent in axes["accents"][1:]:
-        assert "404" in accent["note"]
-    # Each voice carries both id forms, so the UI can compose either the
-    # bare name or the suffixed dialect id from one pick.
-    ara = axes["voices"][0]
-    assert (ara["id"], ara["bare_id"]) == ("ara", "Ara")
+    assert model.voice_axes is None
+    # No id anywhere in the offered list carries a dialect suffix.
+    voices = tts_providers.voices_for("openrouter", "x-ai/grok-voice-tts-1.0")[0]
+    assert not any("-en-" in v["id"] for v in voices)
 
 
 def test_aura2_carries_its_published_registry():

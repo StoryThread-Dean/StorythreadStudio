@@ -149,9 +149,8 @@ def _translate(provider: TtsProviderConfig, status: int, body: str,
         # publishes, and it answers 404 for an id it has not picked up.
         return SynthesisError(
             f"{provider.label} rejected that voice or model as unknown"
-            f"{named}. Try one of the voices listed FIRST for this engine "
-            "-- those are the ones the provider documents -- or pick a "
-            f"different engine in Audiobook Settings.{tail}",
+            f"{named}. Try another voice from the list, or pick a different "
+            f"engine in Audiobook Settings.{tail}",
             retryable=False)
     if status == 429:
         return SynthesisError(

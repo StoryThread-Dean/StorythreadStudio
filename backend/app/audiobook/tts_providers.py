@@ -113,14 +113,19 @@ _KOKORO_FALLBACK_VOICES = (
 # xAI's Grok Voice roster: 26 voices, each able to speak three dialects
 # via the id suffix (-en-US / -en-GB / -en-AU).
 #
-# ONLY FIVE OF THESE ARE EXPOSED (see _GROK_DOCUMENTED below). Live
-# testing settled it: iris-en-US and iris-en-GB both came back "Provider
-# returned 404" through OpenRouter, and OpenRouter's own Grok page lists
-# exactly five voices -- Ara, Eve, Leo, Rex, Sal -- named without a
-# suffix. The wider roster appears to be a newer or not-yet-public xAI
-# build. The full table is kept here because it is real and hard-won: the
-# day OpenRouter catches up, or the day xAI is added as a direct provider,
-# widening the list is a one-line change to _GROK_DOCUMENTED.
+# ONLY FIVE BARE NAMES ARE EXPOSED (see _GROK_DOCUMENTED below), and no
+# dialect suffixes at all. Three live 404s settled it, in order:
+#   iris-en-US  -> 404   (undocumented voice)
+#   iris-en-GB  -> 404   (same voice, different accent)
+#   ara-en-GB   -> 404   (a DOCUMENTED voice -- so it is the SUFFIX)
+# OpenRouter's own Grok page lists exactly five voices, named without a
+# suffix, and that is precisely what its integration accepts. The wider
+# roster appears to be a newer or not-yet-public xAI build.
+#
+# The full table is kept here because it is real and hard-won. The day
+# OpenRouter catches up, or the day xAI is added as a direct provider,
+# widening the list is a one-line change to _GROK_DOCUMENTED -- and the
+# accent axis can come back with it (see the note further down).
 # (name, id stem, gender, character)
 _GROK_BASE: tuple[tuple[str, str, str, str], ...] = (
     ("Altair", "altair", "male", "elegant, refined, effortlessly premium"),
@@ -259,43 +264,13 @@ _GROK_VOICES = tuple(
     for name, _stem, gender, character in _GROK_EXPOSED
 )
 
-# The same five as two axes, so the accent stays its own choice rather than
-# multiplying the list. "Provider default" composes to the bare name -- the
-# form OpenRouter documents and the only one proven to work here. The
-# dialect options remain because xAI itself accepts them; they carry an
-# honest warning instead of a promise.
-_GROK_DIALECT_NOTE = (
-    "xAI accepts a dialect suffix (ara-en-GB), but OpenRouter has returned "
-    "404 for suffixed ids. If a sample fails, switch back to Provider "
-    "default."
-)
-
-_GROK_VOICE_AXES: dict = {
-    "compose": "voice+accent",
-    "voice_label": "Voice",
-    "accent_label": "Accent",
-    "voices": [
-        {
-            "id": stem,
-            "bare_id": name,
-            "name": name,
-            "label": f"{name} ({gender}) -- {character}",
-            "gender_presentation": gender,
-        }
-        for name, stem, gender, character in _GROK_EXPOSED
-    ],
-    "accents": [
-        {"id": "", "label": "Provider default", "language": "en-US",
-         "note": "The bare voice name -- the form OpenRouter documents, and "
-                 "the one known to work."},
-        {"id": "en-US", "label": "American", "language": "en-US",
-         "note": _GROK_DIALECT_NOTE},
-        {"id": "en-GB", "label": "British", "language": "en-GB",
-         "note": _GROK_DIALECT_NOTE},
-        {"id": "en-AU", "label": "Australian", "language": "en-AU",
-         "note": _GROK_DIALECT_NOTE},
-    ],
-}
+# NO ACCENT AXIS. It was offered here for one commit and testing killed
+# it: ara-en-GB -- a DOCUMENTED voice with a dialect suffix -- came back
+# 404 exactly like iris-en-GB did. So OpenRouter's Grok integration takes
+# bare names only, and an accent dropdown would have been a control that
+# breaks whatever you pick. The two-axis machinery lives on in
+# VoicePicker.tsx for the engines that will need it; this model simply
+# does not declare axes.
 
 # ElevenLabs' long-standing preset names. NanoGPT exposes 46 voices but
 # does not publish the list, so these are offered as a starting point and
@@ -349,14 +324,13 @@ OPENROUTER = TtsProviderConfig(
             price_per_1k_chars="0.015",
             price_per_million_chars="15",
             voices=_GROK_VOICES,
-            voice_axes=_GROK_VOICE_AXES,
             tier="standard",
             voices_verified=False,
-            notes="Five voices, with the accent chosen separately. xAI's own "
-                  "roster is wider (26 voices), but OpenRouter only answers "
-                  "to these five, so only these are offered -- tested, not "
-                  "guessed. If a sample ever fails, set the accent back to "
-                  "Provider default, which is the form OpenRouter documents.",
+            notes="Five voices, American only. xAI's own roster is wider (26 "
+                  "voices, each able to speak British or Australian too), but "
+                  "OpenRouter answers to these five bare names and nothing "
+                  "else -- both the extra voices and the accent suffixes come "
+                  "back 404. Tested, not guessed.",
         ),
         HostedModel(
             id="deepgram/aura-2",
