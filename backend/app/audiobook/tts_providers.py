@@ -1,25 +1,28 @@
 # audiobook/tts_providers.py -- the hosted narration catalog (spec 13/16).
 # =========================================================================
 # The local narrator is free and unlimited, and it is what every book gets
-# drafted with. This module is the OTHER side: hosted voices for the print
+# drafted with. This module is the OTHER side: hosted voices for the final
 # pass, and -- more importantly -- the honest PRICE of using them.
 #
-# Two shapes of provider, both OpenAI-compatible over POST /audio/speech:
+# EVERY price and model id here is a PUBLISHED figure checked on
+# 2026-07-31, not an estimate. Two things that research corrected, worth
+# remembering because both were wrong in the first draft of this file:
 #
-#   nanogpt   hosts the SAME Kokoro model and voices as the local engine
-#             (about a dollar per thousand thousand characters -- pennies
-#             for a novel), plus premium ElevenLabs voices.
-#   openrouter  a spread of premium voices from several labs.
+#   1. OpenRouter hosts KOKORO ITSELF (hexgrad/kokoro-82m) at $0.62 per
+#      MILLION characters with the same 54 preset voices as our local
+#      narrator. So the cheap hosted tier is not a compromise: it is the
+#      same engine and the same voice, rented, for about 35 cents a
+#      novel. Voice parity with the local narrator is REAL on that tier,
+#      and only the premium tiers have their own separate casts.
+#   2. The two providers do NOT share a transport. OpenRouter speaks the
+#      OpenAI-compatible /audio/speech; NanoGPT has its own /api/tts.
+#      See cloud_speech.py.
 #
-# The pricing here is what the writer is shown BEFORE anything is spent
-# (spec 19: never auto-spend). It is deliberately conservative: prices are
-# per 1,000 characters of PAYLOAD text, the same text the engine receives,
-# and an estimate always rounds UP to the next cent. A quote that comes in
-# a little high is a good surprise; the other direction is not.
-#
-# Prices are a published-rate SNAPSHOT (2026-07). They are shown as
-# estimates, never as invoices, and every provider is asked to confirm its
-# own charge at run time where its API reports one.
+# Prices are per 1,000 characters for the MATH (Decimal-safe strings) and
+# per million for DISPLAY, because per-million is how providers quote and
+# "$0.00062 per 1,000" reads like a rounding error. An estimate always
+# rounds UP to the next cent: a quote that comes in a little high is a
+# good surprise, the other direction is not.
 
 from dataclasses import dataclass, field
 from decimal import ROUND_CEILING, Decimal
@@ -40,18 +43,26 @@ class HostedVoice:
 class HostedModel:
     """One hosted narration model: what it costs and who can speak it."""
 
-    id: str                       # the provider's model slug
+    id: str                       # the provider's model slug, exactly
     label: str                    # user-facing name
-    price_per_1k_chars: str       # Decimal-safe string, USD
+    price_per_1k_chars: str       # Decimal-safe string, USD -- the MATH
+    price_per_million_chars: str  # the same price as providers quote it
     voices: tuple[HostedVoice, ...]
-    # Which shelf this sits on, so the picker can offer one honest
-    # choice per budget instead of a wall of slugs. The FREE tier is the
-    # local narrator itself and lives outside this catalog.
+    # Which shelf this sits on, so the picker can offer one honest choice
+    # per budget instead of a wall of slugs. The FREE tier is the local
+    # narrator itself and lives outside this catalog.
     tier: str = "standard"        # budget | standard | pro
-    # Kokoro hosted remotely is the same engine as the local narrator, so
-    # a draft made here sounds like the free draft. Flagged so the UI can
-    # say "same voices as your free narrator".
+    # PRICING/QUALITY copy: "the same engine as your free narrator, so it
+    # sounds identical". Kept separate from voices_same_as_local because a
+    # future hosted engine could match one without the other.
     same_as_local: bool = False
+    # ROSTER TRUTH: this model speaks the local narrator's own voices, so
+    # the picker should offer the live local list (54) instead of the
+    # fallback below. This is what makes voice parity real.
+    voices_same_as_local: bool = False
+    # False when the provider does not publish its voice list. The UI then
+    # offers a free-text voice field instead of inventing options.
+    voices_verified: bool = True
     # Whether the model honors a speed parameter. Everything else gets
     # time-stretched at assembly instead (the [pace] contract is universal).
     supports_speed: bool = True
@@ -66,16 +77,21 @@ class TtsProviderConfig:
     label: str
     base_url: str                 # no trailing slash
     speech_path: str              # appended for the synthesis call
+    transport: str                # "openai-speech" | "nanogpt-tts"
     api_key_setting: str          # settings_store key holding the API key
     key_hint: str                 # where to get a key / add funds
+    # Plain steps shown when no key is connected. Narration-specific on
+    # purpose: the writing side's provider copy talks about chat models.
+    signup_steps: tuple[str, ...] = ()
     models: tuple[HostedModel, ...] = ()
     extra_headers: dict[str, str] = field(default_factory=dict)
 
 
-# The 54 local Kokoro voices are the local engine's business; hosted
-# Kokoro exposes the same family, so the catalog here lists the handful
-# worth offering as narrators rather than all of them.
-_KOKORO_VOICES = (
+# Only the OFFLINE FALLBACK. Hosted Kokoro speaks the local narrator's
+# full roster (54 voices); this handful exists so a premium voice list
+# still renders when the local engine is not installed to report the real
+# one. Never treat this as the truth -- see voices_for().
+_KOKORO_FALLBACK_VOICES = (
     HostedVoice("af_heart", "Heart (American female)", "en-US", "female"),
     HostedVoice("af_bella", "Bella (American female)", "en-US", "female"),
     HostedVoice("am_michael", "Michael (American male)", "en-US", "male"),
@@ -84,52 +100,25 @@ _KOKORO_VOICES = (
     HostedVoice("bm_george", "George (British male)", "en-GB", "male"),
 )
 
+# Grok Voice publishes exactly five built-in voices.
+_GROK_VOICES = (
+    HostedVoice("Eve", "Eve", "en-US", "female"),
+    HostedVoice("Ara", "Ara", "en-US", "female"),
+    HostedVoice("Rex", "Rex", "en-US", "male"),
+    HostedVoice("Sal", "Sal", "en-US", "male"),
+    HostedVoice("Leo", "Leo", "en-US", "male"),
+)
+
+# ElevenLabs' long-standing preset names. NanoGPT exposes 46 voices but
+# does not publish the list, so these are offered as a starting point and
+# the UI also accepts a typed voice name (voices_verified=False).
 _ELEVEN_VOICES = (
-    HostedVoice("rachel", "Rachel (warm, narrative)", "en-US", "female"),
-    HostedVoice("adam", "Adam (deep, narrative)", "en-US", "male"),
-    HostedVoice("antoni", "Antoni (well-rounded)", "en-US", "male"),
-    HostedVoice("bella", "Bella (soft, young)", "en-US", "female"),
-)
-
-_OPENAI_TTS_VOICES = (
-    HostedVoice("alloy", "Alloy (neutral)", "en-US", "other"),
-    HostedVoice("echo", "Echo (measured male)", "en-US", "male"),
-    HostedVoice("fable", "Fable (expressive, British)", "en-GB", "other"),
-    HostedVoice("onyx", "Onyx (deep male)", "en-US", "male"),
-    HostedVoice("nova", "Nova (bright female)", "en-US", "female"),
-    HostedVoice("shimmer", "Shimmer (gentle female)", "en-US", "female"),
-)
-
-NANOGPT = TtsProviderConfig(
-    key="nanogpt",
-    label="NanoGPT",
-    base_url="https://nano-gpt.com/api/v1",
-    speech_path="/audio/speech",
-    api_key_setting="nanogpt_api_key",
-    key_hint="nano-gpt.com",
-    models=(
-        HostedModel(
-            id="kokoro-82m",
-            label="Kokoro 82M (hosted)",
-            price_per_1k_chars="0.001",
-            voices=_KOKORO_VOICES,
-            tier="budget",
-            same_as_local=True,
-            notes="The same engine and voices as your free local narrator, "
-                  "rented by the character. Useful for drafting on a "
-                  "machine that cannot install the local narrator.",
-        ),
-        HostedModel(
-            id="elevenlabs-turbo",
-            label="ElevenLabs Turbo",
-            price_per_1k_chars="0.06",
-            voices=_ELEVEN_VOICES,
-            tier="pro",
-            supports_speed=False,
-            notes="Premium narration performance -- the print-pass voice "
-                  "when the book is final.",
-        ),
-    ),
+    HostedVoice("Rachel", "Rachel (warm, narrative)", "en-US", "female"),
+    HostedVoice("Adam", "Adam (deep, narrative)", "en-US", "male"),
+    HostedVoice("Antoni", "Antoni (well-rounded)", "en-US", "male"),
+    HostedVoice("Bella", "Bella (soft, young)", "en-US", "female"),
+    HostedVoice("Josh", "Josh (young male)", "en-US", "male"),
+    HostedVoice("Elli", "Elli (emotional)", "en-US", "female"),
 )
 
 OPENROUTER = TtsProviderConfig(
@@ -137,29 +126,113 @@ OPENROUTER = TtsProviderConfig(
     label="OpenRouter",
     base_url="https://openrouter.ai/api/v1",
     speech_path="/audio/speech",
+    transport="openai-speech",
     api_key_setting="openrouter_api_key",
     key_hint="openrouter.ai",
+    signup_steps=(
+        "Create an account at openrouter.ai and add credit (pay per use, "
+        "no subscription).",
+        "Open Keys in your OpenRouter account and create an API key.",
+        "Paste it below. Narration and writing can share one key or use "
+        "separate ones.",
+    ),
     extra_headers={
         "HTTP-Referer": "http://localhost:1420",
         "X-Title": "Storythread Studio",
     },
     models=(
         HostedModel(
-            id="openai/gpt-4o-mini-tts",
-            label="GPT-4o Mini TTS",
+            id="hexgrad/kokoro-82m",
+            label="Kokoro 82M (hosted)",
+            price_per_1k_chars="0.00062",
+            price_per_million_chars="0.62",
+            voices=_KOKORO_FALLBACK_VOICES,
+            tier="budget",
+            same_as_local=True,
+            voices_same_as_local=True,
+            notes="The same engine and the same 54 voices as your free "
+                  "local narrator, rented by the character -- roughly 35 "
+                  "cents for a whole novel. The one hosted tier that keeps "
+                  "the voice you drafted with.",
+        ),
+        HostedModel(
+            id="x-ai/grok-voice-tts-1.0",
+            label="Grok Voice TTS",
             price_per_1k_chars="0.015",
-            voices=_OPENAI_TTS_VOICES,
+            price_per_million_chars="15",
+            voices=_GROK_VOICES,
             tier="standard",
-            notes="Natural, steady narration at a moderate price -- the "
-                  "middle shelf between hosted Kokoro and premium voices.",
+            notes="Five expressive built-in voices. A step up in delivery "
+                  "for a few dollars a book.",
+        ),
+        HostedModel(
+            id="deepgram/aura-2",
+            label="Deepgram Aura-2",
+            price_per_1k_chars="0.030",
+            price_per_million_chars="30",
+            voices=(),
+            tier="pro",
+            voices_verified=False,
+            notes="Studio-grade narration. Deepgram does not publish its "
+                  "voice list here, so leave the voice blank for the "
+                  "model's default or type a Deepgram voice name.",
         ),
     ),
 )
 
+NANOGPT = TtsProviderConfig(
+    key="nanogpt",
+    label="NanoGPT",
+    base_url="https://nano-gpt.com",
+    speech_path="/api/tts",
+    transport="nanogpt-tts",
+    api_key_setting="nanogpt_api_key",
+    key_hint="nano-gpt.com",
+    signup_steps=(
+        "Create an account at nano-gpt.com and add funds (pay per "
+        "character, no subscription).",
+        "Copy your API key from the account page.",
+        "Paste it below. NanoGPT carries both hosted Kokoro and the "
+        "ElevenLabs premium voices.",
+    ),
+    models=(
+        HostedModel(
+            id="Kokoro-82m",
+            label="Kokoro 82M (hosted)",
+            price_per_1k_chars="0.001",
+            price_per_million_chars="1",
+            voices=_KOKORO_FALLBACK_VOICES,
+            tier="budget",
+            same_as_local=True,
+            voices_same_as_local=True,
+            notes="The same engine as your free local narrator, with 44 of "
+                  "its voices, rented by the character.",
+        ),
+        HostedModel(
+            id="Elevenlabs-Turbo-V2.5",
+            label="ElevenLabs Turbo v2.5",
+            price_per_1k_chars="0.06",
+            price_per_million_chars="60",
+            voices=_ELEVEN_VOICES,
+            tier="pro",
+            voices_verified=False,
+            supports_speed=False,
+            notes="Premium narration performance with 46 voices and style "
+                  "controls -- the final-pass voice when the book is done.",
+        ),
+    ),
+)
+
+PROVIDERS: dict[str, TtsProviderConfig] = {
+    NANOGPT.key: NANOGPT,
+    OPENROUTER.key: OPENROUTER,
+}
+
 # The recommended shelf: one honest pick per budget, FREE first. The free
-# entry is the local narrator, which is not a hosted model at all -- the
-# picker shows it as the default so the paid tiers read as a deliberate
-# upgrade rather than the normal path.
+# entry is the local narrator, which is not a hosted model at all -- it
+# leads the list in the SETTINGS engine chooser so the paid tiers read as
+# a deliberate upgrade. (The rail's Premium Narration section never shows
+# this shelf, so "free" never appears as an option inside "premium".)
 TIER_ORDER = ("free", "budget", "standard", "pro")
 
 TIER_LABELS = {
@@ -171,9 +244,9 @@ TIER_LABELS = {
 
 TIER_BLURBS = {
     "free":     "Runs on your computer. Unlimited, private, costs nothing.",
-    "budget":   "Pennies for a whole book. The same engine as free, rented.",
-    "standard": "A step up in naturalness for a few dollars a book.",
-    "pro":      "Studio-grade narration performance. The print-pass voice.",
+    "budget":   "Pennies for a whole book, in the same voices as free.",
+    "standard": "A step up in delivery for a few dollars a book.",
+    "pro":      "Studio-grade narration performance. The final-pass voice.",
 }
 
 LOCAL_TIER_ENTRY = {
@@ -185,13 +258,18 @@ LOCAL_TIER_ENTRY = {
     "model": "",
     "model_label": "Kokoro 82M (on this computer)",
     "price_per_1k_chars": "0.000",
+    "price_per_million_chars": "0",
     "same_as_local": True,
+    "voices_same_as_local": True,
+    "voices_verified": True,
     "requires_key": False,
+    "signup_steps": [],
+    "notes": "",
 }
 
 
 def recommended_tiers() -> list[dict]:
-    """The 4-5 model picker: free, budget, standard, pro, in that order."""
+    """The engine shelf: free, budget, standard, pro, in that order."""
     entries: list[dict] = [dict(LOCAL_TIER_ENTRY)]
     for provider in PROVIDERS.values():
         for model in provider.models:
@@ -204,18 +282,17 @@ def recommended_tiers() -> list[dict]:
                 "model": model.id,
                 "model_label": model.label,
                 "price_per_1k_chars": model.price_per_1k_chars,
+                "price_per_million_chars": model.price_per_million_chars,
                 "same_as_local": model.same_as_local,
+                "voices_same_as_local": model.voices_same_as_local,
+                "voices_verified": model.voices_verified,
                 "requires_key": True,
+                "signup_steps": list(provider.signup_steps),
                 "notes": model.notes,
             })
     entries.sort(key=lambda e: TIER_ORDER.index(e["tier"])
                  if e["tier"] in TIER_ORDER else len(TIER_ORDER))
     return entries
-
-PROVIDERS: dict[str, TtsProviderConfig] = {
-    NANOGPT.key: NANOGPT,
-    OPENROUTER.key: OPENROUTER,
-}
 
 
 def narration_api_key(settings: dict, provider: TtsProviderConfig) -> str:
@@ -249,6 +326,166 @@ def resolve_model(provider_key: str, model_id: str) -> tuple[TtsProviderConfig, 
     )
 
 
+def voices_for(provider_key: str, model_id: str) -> tuple[list[dict], bool]:
+    """
+    (voices, is_fallback) for a hosted model.
+
+    When the model speaks the local narrator's roster, ask the LOCAL
+    ENGINE for the real list -- that is the whole voice-parity promise.
+    A missing or unreachable local engine must never break a hosted voice
+    list, so it falls back to the curated handful and says so; the premium
+    path cannot be made to depend on the free path being installed.
+    """
+    _provider, model = resolve_model(provider_key, model_id)
+    curated = [
+        {"id": v.id, "label": v.label, "language": v.language,
+         "gender_presentation": v.gender_presentation}
+        for v in model.voices
+    ]
+    if not model.voices_same_as_local:
+        return curated, False
+    try:
+        from app.audiobook import local_worker
+        live = local_worker.list_voices()
+        if live:
+            return live, False
+    except Exception:
+        # Worker not installed, not running, or unreachable -- expected,
+        # not exceptional. The curated list keeps the UI honest instead.
+        pass
+    return curated, True
+
+
+def resolve_narration_selection(settings: dict, manifest: dict | None = None) -> dict:
+    """
+    WHICH engine narrates, is it any good, and can it actually spend?
+
+    One function owns this because three surfaces ask it (the settings
+    chooser, the rail's premium panel, and generation itself), and
+    duplicating the precedence in TypeScript would let them disagree
+    about money. Precedence:
+
+        1. this book's own override (manifest)
+        2. the audiobook narration setting
+        3. the WRITING side's provider + default model
+
+    Level 3 exists because a writer who never opens narration settings
+    still deserves an honest answer rather than a blank. That answer is
+    normally "this is a chat model, it will not narrate" -- which is
+    exactly what is_recommended=False and fallback_note say out loud.
+    """
+    from app.ai.providers import active_provider
+
+    manifest = manifest or {}
+    source = "none"
+    provider_key = ""
+    model_id = ""
+
+    book_provider = str(manifest.get("selected_provider") or "")
+    book_model = str(manifest.get("selected_model") or "")
+    setting_provider = str(settings.get("audiobook_tts_provider") or "")
+    setting_model = str(settings.get("audiobook_tts_model") or "")
+
+    if book_provider and book_model:
+        source, provider_key, model_id = "book", book_provider, book_model
+    elif setting_provider and setting_model:
+        source, provider_key, model_id = "settings", setting_provider, setting_model
+
+    result: dict = {
+        "source": source,
+        "provider": provider_key,
+        "model": model_id,
+        "provider_label": "",
+        "model_label": "",
+        "tier": "",
+        "tier_label": "",
+        "price_per_1k_chars": None,
+        "price_per_million_chars": None,
+        "is_recommended": False,
+        "requires_key": True,
+        "has_api_key": False,
+        "using_writing_keys": bool(settings.get("audiobook_use_writing_keys", True)),
+        "key_setting": "",
+        "key_hint": "",
+        "signup_steps": [],
+        "voices_same_as_local": False,
+        "voices": [],
+        "voices_are_fallback": False,
+        "voices_verified": True,
+        "supports_speed": True,
+        "default_voice": str(settings.get("audiobook_tts_voice") or ""),
+        "book_voice": manifest.get("selected_premium_voice") or None,
+        "can_spend": False,
+        "warning": None,
+        "fallback_note": None,
+    }
+
+    if source in ("book", "settings"):
+        try:
+            provider, model = resolve_model(provider_key, model_id)
+        except ValueError as e:
+            # A stored choice that no longer resolves (a renamed slug, a
+            # hand-edited manifest) must not read as usable.
+            result["fallback_note"] = str(e)
+            return result
+        voices, is_fallback = voices_for(provider.key, model.id)
+        api_key = narration_api_key(settings, provider)
+        result.update({
+            "provider_label": provider.label,
+            "model_label": model.label,
+            "tier": model.tier,
+            "tier_label": TIER_LABELS.get(model.tier, model.tier.title()),
+            "price_per_1k_chars": model.price_per_1k_chars,
+            "price_per_million_chars": model.price_per_million_chars,
+            "is_recommended": True,
+            "has_api_key": bool(api_key.strip()),
+            "key_setting": provider.api_key_setting,
+            "key_hint": provider.key_hint,
+            "signup_steps": list(provider.signup_steps),
+            "voices_same_as_local": model.voices_same_as_local,
+            "voices": voices,
+            "voices_are_fallback": is_fallback,
+            "voices_verified": model.voices_verified,
+            "supports_speed": model.supports_speed,
+        })
+        if not result["has_api_key"]:
+            borrowed = ("Narration is set to borrow your writing key."
+                        if result["using_writing_keys"]
+                        else "Narration is set to use its own key.")
+            result["warning"] = (
+                f"No {provider.label} API key is connected, so this engine "
+                f"cannot narrate yet. {borrowed}"
+            )
+        result["can_spend"] = bool(result["has_api_key"])
+        return result
+
+    # Level 3: whatever the writing side is pointed at.
+    writing = active_provider(settings)
+    writing_model = str(settings.get("default_model") or "") or (writing.fallback_model or "")
+    if not writing_model:
+        return result
+    result.update({
+        "source": "writing-fallback",
+        "provider": writing.key,
+        "model": writing_model,
+        "provider_label": writing.label,
+        "model_label": writing_model,
+        "key_setting": writing.api_key_setting,
+        "key_hint": writing.key_hint,
+        "has_api_key": bool(str(settings.get(writing.api_key_setting) or "").strip()),
+        "fallback_note": (
+            f"{writing_model} is your writing model, not one of the "
+            "recommended narration models. It will most likely refuse to "
+            "narrate. Pick a narration engine in Audiobook Settings."
+        ),
+    })
+    if writing.key in PROVIDERS:
+        result["signup_steps"] = list(PROVIDERS[writing.key].signup_steps)
+    # can_spend stays False: an unrecommended model would 400 at the
+    # estimate anyway, so the UI must not offer to spend on it.
+    return result
+
+
 def catalog() -> list[dict]:
     """The whole hosted catalog as plain data for the UI, prices included."""
     return [
@@ -257,12 +494,17 @@ def catalog() -> list[dict]:
             "provider_label": provider.label,
             "key_hint": provider.key_hint,
             "api_key_setting": provider.api_key_setting,
+            "signup_steps": list(provider.signup_steps),
             "models": [
                 {
                     "id": model.id,
                     "label": model.label,
                     "price_per_1k_chars": model.price_per_1k_chars,
+                    "price_per_million_chars": model.price_per_million_chars,
+                    "tier": model.tier,
                     "same_as_local": model.same_as_local,
+                    "voices_same_as_local": model.voices_same_as_local,
+                    "voices_verified": model.voices_verified,
                     "supports_speed": model.supports_speed,
                     "notes": model.notes,
                     "voices": [
@@ -280,12 +522,12 @@ def catalog() -> list[dict]:
 
 def estimate_print(workspace_path: str, provider_key: str, model_id: str) -> dict:
     """
-    What a print pass over this workspace would cost, counted from the
+    What a final pass over this workspace would cost, counted from the
     REAL payload text (pronunciation rules and [say] overrides applied,
     excluded spans already gone) of every segment in the selected
     chapters.
 
-    A print pass is a full rerender by definition -- the voice and engine
+    A final pass is a full rerender by definition -- the voice and engine
     both change, which marks every segment stale -- so this counts
     everything rather than guessing at what is current.
     """
@@ -298,9 +540,11 @@ def estimate_print(workspace_path: str, provider_key: str, model_id: str) -> dic
             "provider": provider.key, "provider_label": provider.label,
             "model": model.id, "model_label": model.label,
             "characters": 0, "segments": 0, "chapters": 0,
+            "flow_segments": 0,
             "price_per_1k_chars": model.price_per_1k_chars,
+            "price_per_million_chars": model.price_per_million_chars,
             "estimate_usd": "0.00",
-            "note": "Nothing to print yet -- save the narration once first.",
+            "note": "Nothing to narrate yet -- save the narration once first.",
         }
 
     selected = {c["chapter_id"] for c in workspace_mod.list_chapters(workspace_path)
@@ -347,6 +591,7 @@ def estimate_print(workspace_path: str, provider_key: str, model_id: str) -> dic
         "characters": characters, "segments": segments, "chapters": chapters,
         "flow_segments": flow_segments,
         "price_per_1k_chars": model.price_per_1k_chars,
+        "price_per_million_chars": model.price_per_million_chars,
         "estimate_usd": estimate_cost_usd(characters, provider_key, model_id),
         "note": note,
     }
@@ -354,7 +599,7 @@ def estimate_print(workspace_path: str, provider_key: str, model_id: str) -> dic
 
 def estimate_cost_usd(characters: int, provider_key: str, model_id: str) -> str:
     """
-    What printing `characters` of payload text would cost, as a decimal
+    What narrating `characters` of payload text would cost, as a decimal
     string of dollars, ALWAYS rounded up to the next cent. Free is "0.00"
     only when there is genuinely nothing to charge for.
     """

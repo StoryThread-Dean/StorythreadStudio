@@ -211,16 +211,26 @@ def remove_local_engine():
 
 
 @router.get("/voices")
-def get_voices(provider: str = "local-kokoro"):
-    """The voice catalog. Spawns the local worker on first call (a few
-    seconds while the model loads), then serves from the live process."""
-    if provider != "local-kokoro":
-        raise HTTPException(status_code=400,
-                            detail="Only the local narrator has voices so far.")
+def get_voices(provider: str = "local-kokoro", model: str = ""):
+    """
+    The voice catalog. For the local narrator this spawns the worker on
+    first call (a few seconds while the model loads) and serves from the
+    live process. For a hosted model it serves that model's roster --
+    which, for hosted Kokoro, IS the local roster, because it is the same
+    engine (that is the voice-parity promise).
+    """
+    if provider == "local-kokoro":
+        try:
+            return {"voices": local_worker.list_voices(), "voices_are_fallback": False}
+        except local_worker.WorkerUnavailableError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+
+    from app.audiobook import tts_providers
     try:
-        return {"voices": local_worker.list_voices()}
-    except local_worker.WorkerUnavailableError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        voices, is_fallback = tts_providers.voices_for(provider, model)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"voices": voices, "voices_are_fallback": is_fallback}
 
 
 class PreviewRequest(BaseModel):
@@ -552,6 +562,151 @@ class StartGenerationRequest(BaseModel):
     draft: bool = False
 
 
+# ── Audiobook-only settings (narration engine + its own API keys) ────────────
+# Separate from /api/settings on purpose: those fields are the writing
+# side's, all required, and shown in a different screen. Storage is still
+# the one settings.json -- only the route surface is separate.
+
+class AudiobookSettingsUpdate(BaseModel):
+    # Every field optional: None means "leave this alone" (the writing
+    # side's partial-update rule). For the key fields, "" means CLEAR.
+    use_writing_keys: bool | None = None
+    openrouter_api_key: str | None = None
+    nanogpt_api_key: str | None = None
+    narration_provider: str | None = None
+    narration_model: str | None = None
+    premium_voice: str | None = None
+
+
+def _audiobook_settings_payload(settings: dict) -> dict:
+    """The audiobook settings as the frontend may see them: audiobook keys
+    MASKED, writing keys reduced to booleans (they belong to the other
+    screen), everything else plain."""
+    from app.ai.providers import PROVIDERS as WRITING_PROVIDERS
+    from app.settings_store import mask_key
+
+    audiobook_or = str(settings.get("audiobook_openrouter_api_key") or "")
+    audiobook_ng = str(settings.get("audiobook_nanogpt_api_key") or "")
+    return {
+        "use_writing_keys": bool(settings.get("audiobook_use_writing_keys", True)),
+        "openrouter_api_key": mask_key(audiobook_or),
+        "openrouter_api_key_set": bool(audiobook_or),
+        "nanogpt_api_key": mask_key(audiobook_ng),
+        "nanogpt_api_key_set": bool(audiobook_ng),
+        # So the UI can promise that borrowing will actually work.
+        "writing_openrouter_key_set": bool(settings.get("openrouter_api_key")),
+        "writing_nanogpt_key_set": bool(settings.get("nanogpt_api_key")),
+        "writing_provider": str(settings.get("ai_provider") or ""),
+        "writing_provider_label": WRITING_PROVIDERS[settings["ai_provider"]].label
+        if settings.get("ai_provider") in WRITING_PROVIDERS else "",
+        "narration_provider": str(settings.get("audiobook_tts_provider") or ""),
+        "narration_model": str(settings.get("audiobook_tts_model") or ""),
+        "premium_voice": str(settings.get("audiobook_tts_voice") or ""),
+    }
+
+
+@router.get("/settings")
+def get_audiobook_settings():
+    from app import settings_store
+    return _audiobook_settings_payload(settings_store.load_settings())
+
+
+@router.put("/settings")
+def save_audiobook_settings(request: AudiobookSettingsUpdate):
+    """Partial update. A provided key REPLACES, an empty string CLEARS,
+    and an omitted field is left untouched -- so the writer can save the
+    engine choice without retyping a key. The response re-masks."""
+    from app import settings_store
+    from app.audiobook import tts_providers
+    settings = settings_store.load_settings()
+
+    if request.use_writing_keys is not None:
+        settings["audiobook_use_writing_keys"] = bool(request.use_writing_keys)
+    if request.openrouter_api_key is not None:
+        settings["audiobook_openrouter_api_key"] = request.openrouter_api_key.strip()
+    if request.nanogpt_api_key is not None:
+        settings["audiobook_nanogpt_api_key"] = request.nanogpt_api_key.strip()
+    if request.premium_voice is not None:
+        settings["audiobook_tts_voice"] = request.premium_voice.strip()
+
+    # The engine pair is validated together: a stored choice that cannot
+    # resolve would silently read as "no engine", so refuse it out loud
+    # instead of pretending it saved.
+    provider = (request.narration_provider
+                if request.narration_provider is not None
+                else settings.get("audiobook_tts_provider", ""))
+    model = (request.narration_model
+             if request.narration_model is not None
+             else settings.get("audiobook_tts_model", ""))
+    provider = (provider or "").strip()
+    model = (model or "").strip()
+    if request.narration_provider is not None or request.narration_model is not None:
+        if provider and model:
+            try:
+                tts_providers.resolve_model(provider, model)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        settings["audiobook_tts_provider"] = provider
+        settings["audiobook_tts_model"] = model
+
+    settings_store.save_settings(settings)
+    return _audiobook_settings_payload(settings_store.load_settings())
+
+
+@router.get("/narration-selection")
+def narration_selection(workspace_path: str = ""):
+    """WHICH engine narrates: this book's override, the global choice, or
+    the writing side's model with an honest warning attached. One backend
+    answer so the settings screen and the rail can never disagree."""
+    from app import settings_store
+    from app.audiobook import tts_providers
+    manifest = None
+    if workspace_path:
+        _require_workspace(workspace_path)
+        manifest = workspace.load_manifest(workspace_path)
+    return tts_providers.resolve_narration_selection(
+        settings_store.load_settings(), manifest)
+
+
+class NarrationChoiceRequest(BaseModel):
+    workspace_path: str
+    provider: str | None = None
+    model: str | None = None
+    premium_voice: str | None = None
+
+
+@router.put("/narration-choice")
+def save_narration_choice(request: NarrationChoiceRequest):
+    """This BOOK's narration override, written to its manifest. Kept apart
+    from PUT /voice, which remembers the LOCAL narrator's voice -- mixing
+    them would break per-book local voice restore."""
+    _require_workspace(request.workspace_path)
+    from app import settings_store
+    from app.audiobook import tts_providers
+    manifest = workspace.load_manifest(request.workspace_path)
+
+    if request.provider is not None or request.model is not None:
+        provider = (request.provider if request.provider is not None
+                    else manifest.get("selected_provider") or "")
+        model = (request.model if request.model is not None
+                 else manifest.get("selected_model") or "")
+        provider = (provider or "").strip()
+        model = (model or "").strip()
+        if provider and model:
+            try:
+                tts_providers.resolve_model(provider, model)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        manifest["selected_provider"] = provider or None
+        manifest["selected_model"] = model or None
+    if request.premium_voice is not None:
+        manifest["selected_premium_voice"] = request.premium_voice.strip() or None
+
+    workspace.save_manifest(request.workspace_path, manifest)
+    return tts_providers.resolve_narration_selection(
+        settings_store.load_settings(), manifest)
+
+
 @router.get("/tts-catalog")
 def tts_catalog():
     """Hosted narration options with their real prices, the recommended
@@ -576,6 +731,7 @@ def tts_catalog():
     return {
         "providers": entries,
         "recommended": tiers,
+        "selection": tts_providers.resolve_narration_selection(settings),
         "using_writing_keys": bool(settings.get("audiobook_use_writing_keys", True)),
     }
 

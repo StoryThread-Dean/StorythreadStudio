@@ -275,9 +275,17 @@ def new_manifest(workspace_path: str, title: str, author: str, source_file: str)
         "status": "needs_review",            # fresh imports start at review
         "created_at": now,
         "updated_at": now,
-        "selected_provider": None,           # chosen in the Voice step (Stage B+)
+        # Per-book narration choice. selected_voice is the LOCAL narrator's
+        # remembered voice; selected_provider/selected_model/
+        # selected_premium_voice are this book's optional override of the
+        # global hosted-narration choice (see
+        # tts_providers.resolve_narration_selection). Every reader must use
+        # .get() -- load_manifest has no migration layer, so older files
+        # simply lack the newer keys.
+        "selected_provider": None,
         "selected_model": None,
         "selected_voice": None,
+        "selected_premium_voice": None,
         "output_formats": ["chapter_mp3", "combined_mp3", "m4b"],
         "retain_intermediate_audio": True,
     }

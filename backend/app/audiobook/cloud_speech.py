@@ -31,6 +31,32 @@ from app.audiobook.tts_providers import HostedModel, TtsProviderConfig, resolve_
 _TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 
 
+def _wrap_pcm(raw: bytes, sample_rate: int) -> bytes:
+    """
+    Raw 16-bit little-endian mono PCM -> a real WAV file.
+
+    OpenRouter answers /audio/speech with `mp3` or `pcm` ONLY -- there is
+    no wav option (checked 2026-07-31). Asking for mp3 would drag ffmpeg
+    into every segment just to get samples back, so we take pcm and put
+    the 44-byte header on ourselves. PCM at this layer is already the
+    shape the rest of the pipeline wants: 16-bit mono, which is what flow
+    synthesis and the stdlib stitcher require.
+    """
+    if not raw:
+        raise SynthesisError(
+            "The narration service returned no audio for this passage.",
+            retryable=True)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(sample_rate)
+        # An odd byte count would mean a truncated sample; drop the stray
+        # byte rather than writing a malformed frame.
+        out.writeframes(raw[: len(raw) - (len(raw) % 2)])
+    return buffer.getvalue()
+
+
 def _fold_to_mono_16bit(audio: bytes) -> bytes:
     """
     Return 16-bit mono WAV bytes, folding stereo down if needed.
@@ -146,19 +172,72 @@ class CloudSpeechBackend(SynthesisBackend):
         # exactly right -- the print pass IS a deliberate full rerender.
         self.engine_version = f"{provider.key}:{model.id}"
 
-    def synthesize(self, text: str, voice_id: str,
-                   speed: float = 1.0) -> tuple[bytes, float]:
-        payload: dict = {
+    def _body(self, text: str, voice_id: str, speed: float) -> dict:
+        """The request body for this provider's transport. The two hosted
+        services do NOT share one: OpenRouter speaks the OpenAI-compatible
+        /audio/speech, NanoGPT has its own /api/tts."""
+        if self.provider.transport == "nanogpt-tts":
+            body: dict = {"model": self.model.id, "text": text}
+            if voice_id:
+                body["voice"] = voice_id
+            if self.model.supports_speed and speed != 1.0:
+                body["speed"] = round(speed, 3)
+            return body
+
+        body = {
             "model": self.model.id,
-            "voice": voice_id,
             "input": text,
-            "response_format": "wav",
+            # pcm, not wav: OpenRouter offers only mp3 and pcm, and mp3
+            # would need a decoder. We add the WAV header ourselves.
+            "response_format": "pcm",
         }
+        if voice_id:
+            body["voice"] = voice_id
         # Models without a speed control get time-stretched at assembly
         # instead; sending the field anyway risks a 400 (spec 15).
         if self.model.supports_speed and speed != 1.0:
-            payload["speed"] = round(speed, 3)
+            body["speed"] = round(speed, 3)
+        return body
 
+    def _read_audio(self, response: httpx.Response) -> bytes:
+        """Provider answer -> 16-bit mono WAV bytes."""
+        content_type = (response.headers.get("content-type") or "").lower()
+
+        # NanoGPT may answer with JSON carrying a URL to the audio rather
+        # than the bytes themselves.
+        if "application/json" in content_type:
+            try:
+                payload = response.json()
+            except ValueError:
+                raise SynthesisError(
+                    f"{self.provider.label} returned an unreadable response.",
+                    retryable=True)
+            url = (payload.get("audio_url") or payload.get("url")
+                   or payload.get("audio"))
+            if not isinstance(url, str) or not url.startswith("http"):
+                raise SynthesisError(
+                    f"{self.provider.label} returned no audio for this "
+                    f"passage: {str(payload)[:200]}",
+                    retryable=False)
+            try:
+                with httpx.Client(timeout=_TIMEOUT) as client:
+                    fetched = client.get(url)
+            except httpx.RequestError as e:
+                raise SynthesisError(
+                    f"Could not download the narrated audio: {e}", retryable=True)
+            if fetched.status_code != 200:
+                raise _translate(self.provider, fetched.status_code, fetched.text)
+            return _fold_to_mono_16bit(fetched.content)
+
+        if "audio/l16" in content_type or "audio/pcm" in content_type \
+                or self.provider.transport == "openai-speech":
+            # Raw samples: 24 kHz is the OpenAI-compatible default and what
+            # Kokoro itself produces.
+            return _wrap_pcm(response.content, 24000)
+        return _fold_to_mono_16bit(response.content)
+
+    def synthesize(self, text: str, voice_id: str,
+                   speed: float = 1.0) -> tuple[bytes, float]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -167,7 +246,8 @@ class CloudSpeechBackend(SynthesisBackend):
         url = f"{self.provider.base_url}{self.provider.speech_path}"
         try:
             with httpx.Client(timeout=_TIMEOUT) as client:
-                response = client.post(url, json=payload, headers=headers)
+                response = client.post(
+                    url, json=self._body(text, voice_id, speed), headers=headers)
         except httpx.TimeoutException:
             raise SynthesisError(
                 f"{self.provider.label} timed out on this segment. Retrying.",
@@ -179,7 +259,7 @@ class CloudSpeechBackend(SynthesisBackend):
         if response.status_code != 200:
             raise _translate(self.provider, response.status_code, response.text)
 
-        audio = _fold_to_mono_16bit(response.content)
+        audio = self._read_audio(response)
         return audio, _wav_seconds(audio)
 
 

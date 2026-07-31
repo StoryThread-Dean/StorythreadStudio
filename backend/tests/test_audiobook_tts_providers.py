@@ -50,14 +50,14 @@ def test_catalog_exposes_models_prices_and_voices():
     entries = {e["provider"]: e for e in tts_providers.catalog()}
     assert set(entries) == {"nanogpt", "openrouter"}
 
-    kokoro = next(m for m in entries["nanogpt"]["models"] if m["id"] == "kokoro-82m")
+    kokoro = next(m for m in entries["nanogpt"]["models"] if m["id"] == "Kokoro-82m")
     # Hosted Kokoro is the SAME engine as the free local narrator, and
     # the UI needs to be able to say so.
     assert kokoro["same_as_local"] is True
     assert kokoro["price_per_1k_chars"] == "0.001"
     assert any(v["id"] == "af_heart" for v in kokoro["voices"])
 
-    eleven = next(m for m in entries["nanogpt"]["models"] if m["id"] == "elevenlabs-turbo")
+    eleven = next(m for m in entries["nanogpt"]["models"] if m["id"] == "Elevenlabs-Turbo-V2.5")
     assert eleven["same_as_local"] is False
     assert eleven["supports_speed"] is False        # time-stretched instead
 
@@ -72,12 +72,12 @@ def test_unknown_provider_or_model_says_what_exists():
 def test_estimates_round_UP_to_the_next_cent():
     # A whole novel through hosted Kokoro is pennies: 500k chars at
     # $0.001/1k = $0.50.
-    assert tts_providers.estimate_cost_usd(500_000, "nanogpt", "kokoro-82m") == "0.50"
+    assert tts_providers.estimate_cost_usd(500_000, "nanogpt", "Kokoro-82m") == "0.50"
     # Premium is the meaningfully-more tier: 500k at $0.06/1k = $30.
-    assert tts_providers.estimate_cost_usd(500_000, "nanogpt", "elevenlabs-turbo") == "30.00"
+    assert tts_providers.estimate_cost_usd(500_000, "nanogpt", "Elevenlabs-Turbo-V2.5") == "30.00"
     # Never quote under the real charge: 1 char still costs a cent.
-    assert tts_providers.estimate_cost_usd(1, "nanogpt", "kokoro-82m") == "0.01"
-    assert tts_providers.estimate_cost_usd(0, "nanogpt", "kokoro-82m") == "0.00"
+    assert tts_providers.estimate_cost_usd(1, "nanogpt", "Kokoro-82m") == "0.01"
+    assert tts_providers.estimate_cost_usd(0, "nanogpt", "Kokoro-82m") == "0.00"
 
 
 # ── The estimator over a real workspace ──────────────────────────────────────
@@ -99,7 +99,7 @@ def _workspace(tmp_path) -> str:
 def test_print_estimate_counts_the_real_payload_text(tmp_path):
     ws = _workspace(tmp_path)
     body = client.get("/api/audiobook/print-estimate", params={
-        "workspace_path": ws, "provider": "nanogpt", "model": "kokoro-82m"}).json()
+        "workspace_path": ws, "provider": "nanogpt", "model": "Kokoro-82m"}).json()
 
     assert body["segments"] == 2
     assert body["chapters"] == 2
@@ -121,7 +121,7 @@ def test_estimate_counts_flow_passages_twice_because_they_bill_twice(tmp_path):
 
     body = client.get("/api/audiobook/print-estimate", params={
         "workspace_path": str(ws), "provider": "nanogpt",
-        "model": "kokoro-82m"}).json()
+        "model": "Kokoro-82m"}).json()
 
     fragments = ['"Stay.', 'Please stay."']
     doubled = sum(len(f) for f in fragments) + len(" ".join(fragments))
@@ -136,10 +136,10 @@ def test_print_estimate_before_any_narration_is_saved_says_so(tmp_path):
     workspace_mod.create_workspace_dirs(str(ws))
     workspace_mod.save_manifest(str(ws), workspace_mod.new_manifest(str(ws), "T", "", ""))
     body = client.get("/api/audiobook/print-estimate", params={
-        "workspace_path": str(ws), "provider": "nanogpt", "model": "kokoro-82m"}).json()
+        "workspace_path": str(ws), "provider": "nanogpt", "model": "Kokoro-82m"}).json()
     assert body["characters"] == 0
     assert body["estimate_usd"] == "0.00"
-    assert "Nothing to print yet" in body["note"]
+    assert "Nothing to narrate yet" in body["note"]
 
 
 def test_catalog_endpoint_reports_whether_a_key_is_saved(tmp_path):
@@ -157,9 +157,24 @@ def test_catalog_endpoint_reports_whether_a_key_is_saved(tmp_path):
 
 # ── The recommended shelf and separate narration keys ────────────────────────
 
-def test_recommended_shelf_is_one_pick_per_budget_free_first():
+def test_recommended_shelf_is_grouped_by_budget_free_first():
     shelf = tts_providers.recommended_tiers()
-    assert [e["tier"] for e in shelf] == ["free", "budget", "standard", "pro"]
+    tiers = [e["tier"] for e in shelf]
+    # Free leads, then the paid shelves in ascending order. There can be
+    # more than one option per shelf (both providers host Kokoro, at
+    # different prices), so the contract is the ORDER, not the count.
+    assert tiers[0] == "free"
+    assert set(tiers) == {"free", "budget", "standard", "pro"}
+    order = [tts_providers.TIER_ORDER.index(t) for t in tiers]
+    assert order == sorted(order)
+    # Both hosted Kokoro options are on the budget shelf, and OpenRouter's
+    # is the cheaper of the two (verified pricing, 2026-07).
+    budget = [e for e in shelf if e["tier"] == "budget"]
+    assert {e["provider"] for e in budget} == {"openrouter", "nanogpt"}
+    cheapest = min(budget, key=lambda e: float(e["price_per_1k_chars"]))
+    assert cheapest["provider"] == "openrouter"
+    # Every hosted Kokoro keeps the local voices -- the parity promise.
+    assert all(e["voices_same_as_local"] for e in budget)
 
     free = shelf[0]
     # The free tier IS the local narrator: no key, no provider account.
@@ -201,17 +216,22 @@ def test_missing_separate_key_says_which_key_to_add(tmp_path):
     settings["audiobook_use_writing_keys"] = False
     settings_store.save_settings(settings)
     with pytest.raises(ValueError, match="audiobook NanoGPT API key"):
-        synthesis.resolve_backend("nanogpt", "kokoro-82m")
+        synthesis.resolve_backend("nanogpt", "Kokoro-82m")
 
 
 def test_catalog_endpoint_reports_the_shelf_and_key_mode():
     body = client.get("/api/audiobook/tts-catalog").json()
-    assert [e["tier"] for e in body["recommended"]] == \
-        ["free", "budget", "standard", "pro"]
+    tiers = [e["tier"] for e in body["recommended"]]
+    assert tiers[0] == "free"
+    assert set(tiers) == {"free", "budget", "standard", "pro"}
     assert body["using_writing_keys"] is True
     # The free tier is always usable; paid tiers report their key state.
     assert body["recommended"][0]["has_api_key"] is True
-    assert body["recommended"][3]["has_api_key"] is False
+    assert all(e["has_api_key"] is False
+               for e in body["recommended"] if e["requires_key"])
+    # The catalog also carries WHICH engine is in effect, so the settings
+    # screen and the rail cannot disagree about it.
+    assert body["selection"]["source"] in ("none", "writing-fallback")
 
 
 # ── The cloud backend behind the seam ────────────────────────────────────────
@@ -236,7 +256,7 @@ def _route_httpx(handler) -> None:
 
 
 def _backend(handler, provider_key: str = "nanogpt",
-             model_id: str = "kokoro-82m") -> cloud_speech.CloudSpeechBackend:
+             model_id: str = "Kokoro-82m") -> cloud_speech.CloudSpeechBackend:
     """A hosted backend whose HTTP layer is a local handler."""
     provider, model = tts_providers.resolve_model(provider_key, model_id)
     _route_httpx(handler)
@@ -261,18 +281,19 @@ def test_synthesize_sends_the_payload_and_returns_audio(restore_httpx):
     backend = _backend(handler)
     audio, duration = backend.synthesize("Hello there.", "af_heart", 0.9)
 
-    assert seen["url"] == "https://nano-gpt.com/api/v1/audio/speech"
+    # NanoGPT has its OWN endpoint and body shape -- it does not speak the
+    # OpenAI-compatible /audio/speech (verified 2026-07-31).
+    assert seen["url"] == "https://nano-gpt.com/api/tts"
     assert seen["auth"] == "Bearer sk-test"
-    assert seen["body"]["model"] == "kokoro-82m"
+    assert seen["body"]["model"] == "Kokoro-82m"
     assert seen["body"]["voice"] == "af_heart"
-    assert seen["body"]["input"] == "Hello there."
+    assert seen["body"]["text"] == "Hello there."
     assert seen["body"]["speed"] == 0.9          # Kokoro honors speed
-    assert seen["body"]["response_format"] == "wav"
     assert duration == pytest.approx(1.5, abs=0.01)
     assert audio[:4] == b"RIFF"
     # The engine identity carries the provider AND model, so switching to
     # a hosted voice marks every segment stale (the print pass).
-    assert backend.engine_version == "nanogpt:kokoro-82m"
+    assert backend.engine_version == "nanogpt:Kokoro-82m"
 
 
 def test_speed_is_withheld_from_models_that_lack_it(restore_httpx):
@@ -282,7 +303,7 @@ def test_speed_is_withheld_from_models_that_lack_it(restore_httpx):
         seen["body"] = json.loads(request.content)
         return httpx.Response(200, content=_wav(1.0))
 
-    backend = _backend(handler, "nanogpt", "elevenlabs-turbo")
+    backend = _backend(handler, "nanogpt", "Elevenlabs-Turbo-V2.5")
     backend.synthesize("Hello.", "rachel", 0.8)
     assert "speed" not in seen["body"]           # would 400 on this model
 
@@ -348,7 +369,7 @@ def test_timeouts_and_network_errors_retry(restore_httpx):
 def test_hosted_backend_refuses_without_a_saved_key():
     from app.audiobook import synthesis
     with pytest.raises(ValueError, match="No NanoGPT API key saved"):
-        synthesis.resolve_backend("nanogpt", "kokoro-82m")
+        synthesis.resolve_backend("nanogpt", "Kokoro-82m")
 
 
 def test_hosted_backend_needs_a_model_choice():
@@ -376,12 +397,13 @@ def test_print_preview_renders_a_passage_and_reports_what_it_cost(
     sent: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(json.loads(request.content)["input"])
+        body = json.loads(request.content)
+        sent.append(body.get("text") or body["input"])
         return httpx.Response(200, content=_wav(1.0))
 
     _route_httpx(handler)
     response = client.post("/api/audiobook/print-preview", json={
-        "workspace_path": ws, "provider": "nanogpt", "model": "elevenlabs-turbo",
+        "workspace_path": ws, "provider": "nanogpt", "model": "Elevenlabs-Turbo-V2.5",
         "voice_id": "rachel", "text": "She waited. [pause:0.5] Nothing came.",
     })
     assert response.status_code == 200, response.text
@@ -404,19 +426,20 @@ def test_print_preview_falls_back_to_a_sample_and_caps_length(
     sent: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(json.loads(request.content)["input"])
+        body = json.loads(request.content)
+        sent.append(body.get("text") or body["input"])
         return httpx.Response(200, content=_wav(1.0))
 
     _route_httpx(handler)
     blank = client.post("/api/audiobook/print-preview", json={
-        "workspace_path": ws, "provider": "nanogpt", "model": "kokoro-82m",
+        "workspace_path": ws, "provider": "nanogpt", "model": "Kokoro-82m",
         "voice_id": "af_heart", "text": "",
     })
     assert blank.status_code == 200
     assert "gathering snow" in sent[0]         # the built-in sample
 
     too_long = client.post("/api/audiobook/print-preview", json={
-        "workspace_path": ws, "provider": "nanogpt", "model": "kokoro-82m",
+        "workspace_path": ws, "provider": "nanogpt", "model": "Kokoro-82m",
         "voice_id": "af_heart", "text": "x" * 5000,
     })
     assert too_long.status_code == 400
@@ -426,7 +449,7 @@ def test_print_preview_falls_back_to_a_sample_and_caps_length(
 def test_print_preview_without_a_key_refuses_before_spending(tmp_path):
     ws = _workspace(tmp_path)
     response = client.post("/api/audiobook/print-preview", json={
-        "workspace_path": ws, "provider": "nanogpt", "model": "kokoro-82m",
+        "workspace_path": ws, "provider": "nanogpt", "model": "Kokoro-82m",
         "voice_id": "af_heart", "text": "Hello.",
     })
     assert response.status_code == 400
