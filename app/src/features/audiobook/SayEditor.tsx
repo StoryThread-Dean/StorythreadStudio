@@ -32,42 +32,48 @@ interface SayEditorProps {
 }
 
 // The tips library: an ACCORDION of ear-tested techniques (one section
-// open at a time -- the writer studies one idea, not a wall). The
-// doctrine here comes from live listening tests on the real engine
-// (2026-07-30 round); the Preview button is always the final judge.
-const TIPS: Array<{ title: string; body: string }> = [
-  { title: "Spell the sounds, not the word",
+// open at a time -- the writer studies one idea, not a wall). The five
+// IMPORTANT ones lead, with titles that teach at a glance (user-worded,
+// including the inFlection capital -- the title demonstrates itself).
+// Doctrine from live listening tests (2026-07-30); Preview is the judge.
+const TIPS: Array<{ title: string; body: string; important?: boolean }> = [
+  { title: "Spell out the sounds: Kay-lith",
+    important: true,
     body: "Kaelith -> kay-lith. Write what a stranger should SAY, not "
       + "how it is written. Hyphens glue syllables into one spoken "
       + "word. Lowercase is the safe default -- see the case and "
       + "separation sections for the finer dials." },
-  { title: "The vowel sounds: ah, eh, ih, oh, uh, oo",
+  { title: "Sounding out the Vowels: A to Ahh",
+    important: true,
     body: "A silent h after a vowel is the most useful English "
       + "respelling technique: ah = the vowel in father, eh = bed, "
       + "ih = sit, oh = go, uh = the unstressed vowel, oo = food. "
       + "Compare: [say:lah-rah], [say:lah-ruh], [say:lar-uh] -- three "
       + "different Laras from three vowel choices." },
-  { title: "Case changes the inflection",
+  { title: "Case changes the inFlection",
+    important: true,
     body: "Lowercase is the rule; a single capital is a dial. Hey-soos, "
       + "hey-soos, and hey-Soos each land differently -- one capital "
       + "letter shifts the word's inflection. Keep it to ONE capital: "
       + "a RUN of capitals gets folded by the app, because the engine "
       + "would spell it out as letters." },
-  { title: "Separation strength: space, hyphen, apostrophe",
+  { title: "Space vs Hyphen vs Apostrophe: [ , - , ' ]",
+    important: true,
     body: "Three break strengths, strongest to softest. SPACE treats "
       + "the parts as a strong separation -- Hey soos almost reads as "
       + "two words. HYPHEN joins them as syllable-like units of one "
       + "word -- Hey-soos. APOSTROPHE is the softest internal break -- "
       + "Hey'soos lands gentler than Hey-soos. (The apostrophe works "
       + "on most voices, not all -- preview it.)" },
+  { title: "Words with multiple Pronunciations: Read/Live/Bow",
+    important: true,
+    body: "I read it -> [say:red]read[/say]. Also: lead, live, bow, tear, "
+      + "wind, wound -- the engine guesses from context and sometimes "
+      + "guesses wrong. One say fixes one spot." },
   { title: "Longer vowels: double them",
     body: "Repeated vowels encourage a longer, held vowel: laa-rah, "
       + "lee-ah, koo-per, ree-na. Pair with the vowel-sound alphabet "
       + "for fine control over how a name stretches." },
-  { title: "Words that change with meaning",
-    body: "I read it -> [say:red]read[/say]. Also: lead, live, bow, tear, "
-      + "wind, wound -- the engine guesses from context and sometimes "
-      + "guesses wrong. One say fixes one spot." },
   { title: "Regional readings of a name",
     body: "Lara is lar-ah in Britain, lair-ah in Madrid, lor-uh in "
       + "America. Set the book-wide reading in Pronunciations, then let "
@@ -254,7 +260,10 @@ export function SayEditor({
                   <button
                     type="button"
                     onClick={() => setOpenTip(prev => (prev === index ? null : index))}
-                    className="flex w-full items-center gap-1 px-2 py-1.5 text-left text-[11px] font-medium text-zinc-200 hover:text-blue-200"
+                    className={"flex w-full items-center gap-1 px-2 py-1.5 text-left text-[11px] font-medium "
+                      + (tip.important
+                        ? "text-blue-300 hover:text-blue-100"   // the essential five
+                        : "text-zinc-300 hover:text-blue-200")}
                   >
                     {openTip === index
                       ? <ChevronDown size={10} className="shrink-0" />

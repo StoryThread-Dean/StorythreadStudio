@@ -96,26 +96,32 @@ describe("SayEditor", () => {
 
   it("tips are an accordion: opening one section closes the other", () => {
     renderEditor();
-    expect(screen.queryByText(/Spell the sounds/)).toBeNull();
+    expect(screen.queryByText(/Spell out the sounds/)).toBeNull();
     fireEvent.click(screen.getByText(/Tips: ways writers use this/));
 
-    // All section TITLES visible, no bodies yet.
-    expect(screen.getByText(/Spell the sounds/)).toBeTruthy();
-    expect(screen.getByText(/Separation strength/)).toBeTruthy();
-    expect(screen.getByText(/Characters to AVOID/)).toBeTruthy();
+    // All section TITLES visible, no bodies yet. The essential five
+    // lead, in the user's order, with the highlight color.
+    const titles = screen.getAllByRole("button").map(b => b.textContent ?? "");
+    const firstFive = titles.filter(t =>
+      /Spell out the sounds|Sounding out the Vowels|inFlection|Space vs Hyphen|multiple Pronunciations/.test(t));
+    expect(firstFive.length).toBe(5);
+    expect(screen.getByText(/Case changes the inFlection/).className)
+      .toContain("text-blue-300");
+    expect(screen.getByText(/Characters to AVOID/).className)
+      .not.toContain("text-blue-300");
     expect(screen.queryByText(/silent h after a vowel/)).toBeNull();
 
     // Open the vowel section -- its body appears.
-    fireEvent.click(screen.getByText(/The vowel sounds/));
+    fireEvent.click(screen.getByText(/Sounding out the Vowels/));
     expect(screen.getByText(/silent h after a vowel/)).toBeTruthy();
 
     // Open another -- the first CLOSES (one at a time).
-    fireEvent.click(screen.getByText(/Separation strength/));
+    fireEvent.click(screen.getByText(/Space vs Hyphen vs Apostrophe/));
     expect(screen.getByText(/softest internal break/)).toBeTruthy();
     expect(screen.queryByText(/silent h after a vowel/)).toBeNull();
 
     // Clicking the open section closes it.
-    fireEvent.click(screen.getByText(/Separation strength/));
+    fireEvent.click(screen.getByText(/Space vs Hyphen vs Apostrophe/));
     expect(screen.queryByText(/softest internal break/)).toBeNull();
   });
 });
