@@ -56,7 +56,21 @@ def _require_workspace(workspace_path: str) -> None:
 
 @router.get("/recents")
 def get_recents():
-    return {"audiobooks": recents_store.list_recents()}
+    """The dashboard list, each row carrying how far its generation got
+    (read live from the workspace's run record, so the dashboard can
+    SHOW progress instead of just naming a status). A missing or
+    unreadable run record simply means no progress yet."""
+    rows = recents_store.list_recents()
+    for row in rows:
+        progress = None
+        run = generation.load_run(row["workspace_path"])
+        if run:
+            total = run.get("total_segments") or 0
+            done = (run.get("completed_segments") or 0) + (run.get("failed_segments") or 0)
+            if total > 0:
+                progress = round(min(1.0, done / total), 3)
+        row["progress"] = progress
+    return {"audiobooks": rows}
 
 
 class RemoveRecentRequest(BaseModel):

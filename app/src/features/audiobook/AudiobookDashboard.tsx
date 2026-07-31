@@ -16,10 +16,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
-  BookHeadphones, ChevronDown, FolderOpen, RefreshCw, Sparkles, X,
+  BookHeadphones, BookOpen, ChevronDown, FolderOpen, Gem, Mic, RefreshCw,
+  Sparkles, Volume2, X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { fetchProject, fetchRecents, removeRecent } from "./api";
+import { SpokenLine } from "./SpokenLine";
 import type { AudiobookProjectPayload, RecentAudiobook } from "./types";
 import { AUDIOBOOK_STATUS_LABELS } from "./types";
 
@@ -35,36 +38,38 @@ import { AUDIOBOOK_STATUS_LABELS } from "./types";
 // palette's meanings, blended into one gradient.
 const CHARCOAL = "#1a1a1a";
 
+// The icon per step traces the journey itself: a book becomes a folder
+// of work, a microphone directs it, a speaker plays it, a gem prints it.
 const WORKFLOW_STEPS: Array<{
-  title: string; detail: string; gem: string; badge: string;
+  title: string; detail: string; gem: string; badge: string; Icon: LucideIcon;
 }> = [
-  { gem: "#1e3a8a", badge: "bg-blue-500 text-white",
+  { gem: "#1e3a8a", badge: "bg-blue-500 text-white", Icon: BookOpen,
     title: "Load your book",
     detail: "Start from one of your Storythread books, or bring in a "
       + "manuscript from anywhere: DOCX, EPUB, Markdown, plain text. "
       + "Storythread copies it in and never touches your original, so "
       + "the words you wrote are never at risk." },
-  { gem: "#312e81", badge: "bg-indigo-500 text-white",
+  { gem: "#312e81", badge: "bg-indigo-500 text-white", Icon: FolderOpen,
     title: "Set up your workspace",
     detail: "Every audiobook gets a home of its own, suggested for "
       + "you: a folder beside the book it came from. Narration text, "
       + "generated audio, and finished files all live there together, "
       + "yours on your own drive." },
-  { gem: "#4c1d95", badge: "bg-violet-500 text-white",
+  { gem: "#4c1d95", badge: "bg-violet-500 text-white", Icon: Mic,
     title: "Direct the narration",
     detail: "Here a reading becomes a performance. Put a pause where a "
       + "reader would breathe, slow a heavy moment, quicken a fight, "
       + "and teach the narrator how your invented names are meant to "
       + "sound. Every marker comes with an audible example, and a "
       + "guided walkthrough will find the beats with you." },
-  { gem: "#701a45", badge: "bg-pink-500 text-white",
+  { gem: "#701a45", badge: "bg-pink-500 text-white", Icon: Volume2,
     title: "Hear it read aloud, free",
     detail: "The built-in narrator reads your whole book on this "
       + "computer. No account, no meter, no limit. Listen to your own "
       + "chapters spoken back to you, adjust, and regenerate as often "
       + "as you like, then export chapter MP3s or a proper M4B "
       + "audiobook." },
-  { gem: "#7f1d1d", badge: "bg-red-500 text-white",
+  { gem: "#7f1d1d", badge: "bg-red-500 text-white", Icon: Gem,
     title: "(Optional) Print a studio-quality version",
     detail: "When the draft sounds the way you hear it in your head, "
       + "print the final with a premium AI voice. Honest numbers: "
@@ -79,6 +84,30 @@ interface AudiobookDashboardProps {
   onNewAudiobook: () => void;
   /** A workspace was opened (from Recents or the folder picker). */
   onOpenWorkspace: (payload: AudiobookProjectPayload) => void;
+}
+
+// A book's progress drawn as sound: the bars ARE the audiobook, and the
+// part that exists is lit. Heights come from a fixed pseudo-random
+// pattern so every row reads as a waveform without any of them
+// pretending to be a real reading of that book's audio.
+const WAVE_HEIGHTS = [4, 8, 5, 11, 7, 13, 6, 10, 4, 9, 14, 6, 8, 5, 10,
+                      7, 12, 5, 9, 6, 11, 4, 8, 10, 6];
+
+function ProgressWave({ progress, status }: { progress: number; status: string }) {
+  const lit = status === "completed" || status === "failed"
+    ? "bg-emerald-400" : "bg-sky-400";
+  return (
+    <span aria-hidden className="flex h-4 items-end gap-[2px]">
+      {WAVE_HEIGHTS.map((height, i) => (
+        <span
+          key={i}
+          style={{ height: `${height}px` }}
+          className={"w-[3px] rounded-full transition-colors "
+            + (i / WAVE_HEIGHTS.length < progress ? lit : "bg-zinc-700")}
+        />
+      ))}
+    </span>
+  );
 }
 
 /** Status pill color by meaning: emerald done, sapphire active, ruby bad. */
@@ -172,11 +201,17 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
                 ))}
               </span>
             </p>
+            {/* The page reads this paragraph aloud as it opens, word by
+                word, in a different voice every visit (SpokenLine rolls
+                its style at random so the flourish never goes stale). */}
             <p className="mt-1 max-w-lg text-xs leading-relaxed text-zinc-400">
-              The book you wrote becomes a real audiobook, narrated on
-              this computer, free and unlimited, and yours to keep. You
-              stay the director: you choose the voice, the pacing, and
-              every breath the narrator takes.
+              <SpokenLine
+                pace={0.07}
+                text={"The book you wrote becomes a real audiobook, narrated "
+                  + "on this computer, free and unlimited, and yours to keep. "
+                  + "You stay the director: you choose the voice, the pacing, "
+                  + "and every breath the narrator takes."}
+              />
             </p>
           </div>
         </div>
@@ -208,6 +243,9 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
                   {index + 1}
                 </span>
                 {step.title}
+                {/* The journey in icons: book, folder, mic, speaker, gem. */}
+                <step.Icon size={14} aria-hidden
+                           className="ml-auto shrink-0 text-zinc-400 transition-colors group-hover:text-zinc-100" />
               </p>
               {/* The detail FLOATS out over what follows -- expanding a
                   step must never shove the rest of the page around
@@ -320,6 +358,14 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
                   <p className="truncate text-xs text-zinc-400">
                     {r.author ? `${r.author} · ` : ""}{r.workspace_path}
                   </p>
+                  {typeof r.progress === "number" && (
+                    <span className="mt-1.5 flex items-center gap-2">
+                      <ProgressWave progress={r.progress} status={r.status} />
+                      <span className="text-[10px] text-zinc-500">
+                        {Math.round(r.progress * 100)}% narrated
+                      </span>
+                    </span>
+                  )}
                 </button>
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusClasses(r.status)}`}>
                   {AUDIOBOOK_STATUS_LABELS[r.status] ?? r.status}

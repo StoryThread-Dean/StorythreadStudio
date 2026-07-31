@@ -13,8 +13,9 @@ import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/re
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 
 import { AudiobookDashboard } from "./AudiobookDashboard";
+import type { RecentAudiobook } from "./types";
 
-const RECENTS = [
+const RECENTS: RecentAudiobook[] = [
   {
     workspace_path: "C:\\Audiobooks\\The Hollow Road",
     title: "The Hollow Road", author: "Dean", source_file: "source/original-book.txt",
@@ -24,6 +25,7 @@ const RECENTS = [
     workspace_path: "C:\\Audiobooks\\Ashes",
     title: "Ashes of Morning", author: "", source_file: "s.docx",
     status: "completed", imported_at: "2026-07-26T12:00:00Z", last_opened: "2026-07-26T12:00:00Z",
+    progress: 1,
   },
 ];
 
@@ -94,6 +96,34 @@ describe("AudiobookDashboard", () => {
     expect(screen.queryByText("Open Existing Workspace")).toBeNull();
     fireEvent.click(screen.getByText("More"));
     expect(screen.getByText("Open Existing Workspace")).toBeTruthy();
+  });
+
+  it("draws generation progress as a waveform on the rows that have it", async () => {
+    const partly = [
+      { ...RECENTS[0], status: "paused", progress: 0.4 },
+      RECENTS[1],                                   // progress 1 (completed)
+    ];
+    vi.stubGlobal("fetch", mockFetch(partly));
+    const { container } = render(
+      <AudiobookDashboard onNewAudiobook={vi.fn()} onOpenWorkspace={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("40% narrated")).toBeTruthy());
+    expect(screen.getByText("100% narrated")).toBeTruthy();
+    // The finished book's bars are all lit; the paused one's are not.
+    const waves = container.querySelectorAll(".flex.h-4.items-end");
+    expect(waves.length).toBe(2);
+    const dimInPaused = waves[0].querySelectorAll(".bg-zinc-700").length;
+    const dimInDone = waves[1].querySelectorAll(".bg-zinc-700").length;
+    expect(dimInPaused).toBeGreaterThan(0);
+    expect(dimInDone).toBe(0);
+  });
+
+  it("a row with no run yet shows no progress claim", async () => {
+    vi.stubGlobal("fetch", mockFetch([{ ...RECENTS[0], progress: null }]));
+    render(<AudiobookDashboard onNewAudiobook={vi.fn()} onOpenWorkspace={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("The Hollow Road")).toBeTruthy());
+    // (The pitch paragraph contains the word "narrated" too, so match
+    // the percentage form specifically.)
+    expect(screen.queryByText(/\d+% narrated/)).toBeNull();
   });
 
   it("opening a recent fetches the project and hands the payload up", async () => {

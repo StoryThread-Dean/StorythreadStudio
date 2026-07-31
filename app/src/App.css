@@ -285,3 +285,67 @@
     transform: scaleY(0.7);
   }
 }
+
+/*
+ * "Read aloud" line styles (SpokenLine.tsx)
+ * =========================================
+ * One of these is chosen at random each time the audiobook dashboard
+ * opens, so the headline is spoken by the page in a different voice
+ * every visit. Every style runs ONCE and settles back to plain text --
+ * the words stay legible from the first frame to the last.
+ */
+.stw-read {
+  display: inline-block;          /* transforms need a box */
+  animation-duration: 0.9s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  animation-delay: var(--stw-delay, 0s);
+}
+
+/* 1. An underline travels the line, word by word. */
+@keyframes stw-read-underline-kf {
+  0%       { box-shadow: inset 0 -0.08em 0 rgba(52, 211, 153, 0); }
+  25%, 65% { box-shadow: inset 0 -0.08em 0 rgba(52, 211, 153, 0.95); }
+  100%     { box-shadow: inset 0 -0.08em 0 rgba(52, 211, 153, 0); }
+}
+.stw-read-underline { animation-name: stw-read-underline-kf; }
+
+/* 2. Each word thickens and brightens as the voice lands on it. */
+@keyframes stw-read-bold-kf {
+  0%       { font-weight: 500; color: inherit; }
+  30%, 60% { font-weight: 800; color: #ecfdf5; }
+  100%     { font-weight: 500; color: inherit; }
+}
+.stw-read-bold { animation-name: stw-read-bold-kf; }
+
+/* 3. A vivid emerald sweeps along and fades back. */
+@keyframes stw-read-color-kf {
+  0%       { color: inherit; }
+  30%, 60% { color: #6ee7b7; text-shadow: 0 0 10px rgba(110, 231, 183, 0.55); }
+  100%     { color: inherit; text-shadow: none; }
+}
+.stw-read-color { animation-name: stw-read-color-kf; }
+
+/* 4. A soft shimmer passes over each word. */
+@keyframes stw-read-sparkle-kf {
+  0%   { filter: none; }
+  40%  { filter: brightness(1.9) saturate(1.4)
+                 drop-shadow(0 0 6px rgba(165, 243, 252, 0.9)); }
+  70%  { filter: brightness(1.25) drop-shadow(0 0 3px rgba(165, 243, 252, 0.4)); }
+  100% { filter: none; }
+}
+.stw-read-sparkle { animation-name: stw-read-sparkle-kf; }
+
+/* 5. Words lift as they are spoken, then settle. */
+@keyframes stw-read-rise-kf {
+  0%   { transform: translateY(0); }
+  35%  { transform: translateY(-0.22em); color: #a7f3d0; }
+  100% { transform: translateY(0); }
+}
+.stw-read-rise { animation-name: stw-read-rise-kf; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stw-read {
+    animation: none;
+  }
+}

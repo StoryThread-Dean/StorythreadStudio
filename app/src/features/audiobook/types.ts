@@ -42,6 +42,9 @@ export interface RecentAudiobook {
   status: string;
   imported_at: string;
   last_opened: string;
+  /** How far the last generation run got (0..1), read live from the
+      workspace's run record. Null when nothing has been generated. */
+  progress?: number | null;
 }
 
 /** One pronunciation dictionary entry (spec section 11.2). */
