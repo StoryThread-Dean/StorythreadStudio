@@ -100,14 +100,56 @@ _KOKORO_FALLBACK_VOICES = (
     HostedVoice("bm_george", "George (British male)", "en-GB", "male"),
 )
 
-# Grok Voice publishes exactly five built-in voices.
-_GROK_VOICES = (
-    HostedVoice("Eve", "Eve", "en-US", "female"),
-    HostedVoice("Ara", "Ara", "en-US", "female"),
-    HostedVoice("Rex", "Rex", "en-US", "male"),
-    HostedVoice("Sal", "Sal", "en-US", "male"),
-    HostedVoice("Leo", "Leo", "en-US", "male"),
+# Grok Voice's published roster. Each voice is ONE voice that can speak
+# three dialects, selected by the id suffix (-en-US / -en-GB / -en-AU), so
+# the rows below are the 26 voices and the variants are generated rather
+# than typed out 78 times.
+_ACCENT_VARIANTS: tuple[tuple[str, str, str], ...] = (
+    ("en-US", "en-US", "American"),
+    ("en-GB", "en-GB", "British"),
+    ("en-AU", "en-AU", "Australian"),
 )
+
+# (name, id stem, gender, character)
+_GROK_BASE: tuple[tuple[str, str, str, str], ...] = (
+    ("Altair", "altair", "male", "elegant, refined, effortlessly premium"),
+    ("Ara", "ara", "female", "warm, natural, friendly"),
+    ("Atlas", "atlas", "male", "confident, commanding, reassuring"),
+    ("Carina", "carina", "female", "soft, empathetic, soothing"),
+    ("Castor", "castor", "male", "charismatic, down-to-earth, easygoing"),
+    ("Celeste", "celeste", "female", "compassionate, confident, reassuring"),
+    ("Cosmo", "cosmo", "male", "bright, curious, easy to follow"),
+    ("Eve", "eve", "female", "energetic, upbeat, dynamic"),
+    ("Helios", "helios", "male", "upbeat, energetic, endlessly versatile"),
+    ("Helix", "helix", "male", "bold, dynamic, adrenaline-fueled"),
+    ("Iris", "iris", "female", "friendly, upbeat, naturally charming"),
+    ("Kepler", "kepler", "male", "inventive, forward-thinking, charismatic"),
+    ("Leo", "leo", "male", "authoritative, strong, impactful"),
+    ("Lumen", "lumen", "female", "warm, articulate, engaging"),
+    ("Luna", "luna", "female", "gentle, patient, deeply nurturing"),
+    ("Lux", "lux", "male", "grounded, calm, quietly wise"),
+    ("Naksh", "naksh", "male", "warm, thoughtful, wise"),
+    ("Orion", "orion", "male", "rich, cinematic, resonant"),
+    ("Perseus", "perseus", "male", "strong, confident, trustworthy"),
+    ("Rex", "rex", "male", "confident, clear, direct"),
+    ("Rigel", "rigel", "male", "precise, professional, calmly confident"),
+    ("Sal", "sal", "male", "smooth, balanced, neutral"),
+    ("Sirius", "sirius", "male", "quick-witted, clever, playful"),
+    ("Ursa", "ursa", "female", "friendly, warm, steadfast"),
+    ("Zagan", "zagan", "male", "powerful, dramatic, unmistakable"),
+    ("Zenith", "zenith", "male", "sharp, focused, driven"),
+)
+
+
+def _accent_variant_rows(
+    base: tuple[tuple[str, str, str, str], ...],
+) -> list[tuple[str, str, str, str, str, str]]:
+    """One row per (voice, accent) pair, in the shared row shape."""
+    return [
+        (name, f"{stem}-{suffix}", gender, language, accent, character)
+        for name, stem, gender, character in base
+        for suffix, language, accent in _ACCENT_VARIANTS
+    ]
 
 # Deepgram's published Aura-2 English registry. Rows are
 # (name, voice id, gender, language, accent label, character) -- the
@@ -154,19 +196,20 @@ _AURA2_ROWS: tuple[tuple[str, str, str, str, str, str], ...] = (
     ("Zeus", "aura-2-zeus-en", "male", "en-US", "American", "deep, trustworthy, smooth"),
 )
 
-# The rows above stay alphabetical so they can be audited against
-# Deepgram's page line by line. The ORDER WRITERS SEE is expressed here
+# Source rows stay alphabetical so they can be audited against a
+# provider's page line by line. The ORDER WRITERS SEE is expressed here
 # instead: accent group first (American, then British, then Australian),
 # feminine before masculine inside each group, alphabetical within that.
-# A dropdown of 38 is only usable if it is grouped the way a person
-# actually narrows one down.
+# A dropdown of dozens of voices is only usable if it is grouped the way
+# a person actually narrows one down.
 _ACCENT_ORDER = ("American", "British", "Australian")
 _GENDER_ORDER = ("female", "male")
 
 
-def _aura2_sort_key(row: tuple[str, str, str, str, str, str]) -> tuple[int, int, str]:
+def _voice_sort_key(row: tuple[str, str, str, str, str, str]) -> tuple[int, int, str]:
     name, _voice_id, gender, _language, accent, _character = row
-    # "American Southern" sorts with the Americans, by prefix.
+    # "American Southern" sorts with the Americans, by prefix, rather than
+    # becoming an orphan group of one.
     accent_rank = next(
         (i for i, group in enumerate(_ACCENT_ORDER) if accent.startswith(group)),
         len(_ACCENT_ORDER))
@@ -175,12 +218,26 @@ def _aura2_sort_key(row: tuple[str, str, str, str, str, str]) -> tuple[int, int,
     return (accent_rank, gender_rank, name)
 
 
-_AURA2_VOICES = tuple(
-    HostedVoice(voice_id, f"{name} ({accent} {gender}) -- {character}",
-                language, gender)
-    for name, voice_id, gender, language, accent, character
-    in sorted(_AURA2_ROWS, key=_aura2_sort_key)
-)
+def _build_voices(
+    rows: "list[tuple[str, str, str, str, str, str]] | tuple[tuple[str, str, str, str, str, str], ...]",
+) -> tuple[HostedVoice, ...]:
+    """
+    Rows of (name, voice id, gender, language, accent, character) -> the
+    grouped, labelled catalog. The character words are the provider's own
+    and they are the useful part when casting a narrator, so they ride in
+    the label rather than being dropped on the floor.
+    """
+    return tuple(
+        HostedVoice(voice_id, f"{name} ({accent} {gender}) -- {character}",
+                    language, gender)
+        for name, voice_id, gender, language, accent, character
+        in sorted(rows, key=_voice_sort_key)
+    )
+
+
+_AURA2_VOICES = _build_voices(_AURA2_ROWS)
+# 26 voices x 3 dialects = 78 entries, grouped the same way.
+_GROK_VOICES = _build_voices(_accent_variant_rows(_GROK_BASE))
 
 # ElevenLabs' long-standing preset names. NanoGPT exposes 46 voices but
 # does not publish the list, so these are offered as a starting point and
@@ -235,8 +292,10 @@ OPENROUTER = TtsProviderConfig(
             price_per_million_chars="15",
             voices=_GROK_VOICES,
             tier="standard",
-            notes="Five expressive built-in voices. A step up in delivery "
-                  "for a few dollars a book.",
+            notes="26 expressive voices, each able to speak American, "
+                  "British, or Australian -- the dialect is part of the "
+                  "voice id, so the same narrator can be re-cast for a "
+                  "different setting without changing character.",
         ),
         HostedModel(
             id="deepgram/aura-2",
