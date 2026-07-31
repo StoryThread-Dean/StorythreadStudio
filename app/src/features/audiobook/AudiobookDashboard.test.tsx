@@ -67,12 +67,30 @@ describe("AudiobookDashboard", () => {
       expect(screen.getByText(/No audiobooks yet/)).toBeTruthy());
   });
 
-  it("New Audiobook fires the wizard callback", async () => {
+  it("Let's Get Started fires the wizard callback", async () => {
     const onNew = vi.fn();
     render(<AudiobookDashboard onNewAudiobook={onNew} onOpenWorkspace={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("The Hollow Road")).toBeTruthy());
-    fireEvent.click(screen.getByText("New Audiobook"));
+    fireEvent.click(screen.getByText("Let's Get Started"));
     expect(onNew).toHaveBeenCalledOnce();
+  });
+
+  it("teaches the five-step workflow and demotes Open Existing to More", async () => {
+    render(<AudiobookDashboard onNewAudiobook={vi.fn()} onOpenWorkspace={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("The Hollow Road")).toBeTruthy());
+
+    // The educational strip: all five steps named, pricing honesty in 5.
+    expect(screen.getByText("Load your book")).toBeTruthy();
+    expect(screen.getByText("Set up your workspace")).toBeTruthy();
+    expect(screen.getByText("Prepare your manuscript")).toBeTruthy();
+    expect(screen.getByText("Generate the free local version")).toBeTruthy();
+    expect(screen.getByText(/Print a professional HQ version/)).toBeTruthy();
+    expect(screen.getByText(/half a dollar/)).toBeTruthy();
+
+    // Open Existing is NOT a primary button -- it hides under More.
+    expect(screen.queryByText("Open Existing Workspace")).toBeNull();
+    fireEvent.click(screen.getByText("More"));
+    expect(screen.getByText("Open Existing Workspace")).toBeTruthy();
   });
 
   it("opening a recent fetches the project and hands the payload up", async () => {
