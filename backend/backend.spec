@@ -72,6 +72,13 @@ a = Analysis(
         # certifi bundles the TLS root certs httpx needs for OpenRouter
         # calls. Without it, the frozen exe sometimes fails SSL verification.
         'certifi',
+        # mp3 decoding for hosted narration engines that answer only in
+        # mp3. Imported lazily inside cloud_speech._decode_mp3 and guarded
+        # by try/except ImportError -- which means a miss here would not
+        # crash the build, it would quietly ship a backend that refuses
+        # those engines at narration time. Named explicitly for that
+        # reason. It is a compiled extension, so its .pyd travels too.
+        'miniaudio',
         # Export format libraries (DOCX and EPUB generation, Markdown->HTML)
         'docx',
         'docx.opc',

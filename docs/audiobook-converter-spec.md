@@ -789,6 +789,17 @@ The general lesson, worth applying to every future premium engine: **expressiven
 
 - **Voxtral Mini TTS (`mistralai/voxtral-mini-tts-2603`, OpenRouter, $16/M) -- the Standard replacement.** Chosen for one structural reason: **the mood is part of the voice id, not a parameter.** Three English narrators ship as one id per emotion (`gb_oliver_neutral`, `en_paul_confident`, `gb_jane_curious`...), so every segment is told "be Oliver, neutral" rather than being asked to interpret the text afresh. That is directly the latitude Grok used to drift. 24 English ids in all -- Paul (American male, 8 moods), Jane (British female, 9), Oliver (British male, 7) -- plus six French not offered. Deliberately NOT modelled as speaker x emotion axes: the mood sets differ per speaker, so two dropdowns would offer combinations that do not exist. Unproven by ear at time of writing; the full-chapter audition above applies to it too.
 
+##### Audio format is per MODEL, not per provider (live 400)
+
+A Voxtral audition came back `400 -- Mistral TTS only supports response_format="mp3". Got "pcm"`. The OpenAI-speech transport had `pcm` hard-coded, on the reasonable-sounding assumption that a format is a property of the endpoint. It is not: OpenRouter forwards to whatever the upstream vendor supports, and that varies model by model within one provider.
+
+`response_format` now lives on `HostedModel` (default `pcm`). mp3 answers are **decoded**, never header-wrapped -- wrapping mp3 bytes in a WAV header produces a file that plays as noise, costs a full book's spend, and fails no automated check. Decoding uses **miniaudio**: a single 268 KB wheel with no transitive dependencies, chosen over `soundfile` because soundfile drags numpy in and the whole backend is frozen into a PyInstaller sidecar. Byte-identical output to soundfile was verified before adopting it. It is named explicitly in `backend.spec` hiddenimports, because the import is inside a `try/except ImportError` -- a miss there would not fail the build, it would quietly ship a backend that refuses mp3 engines at narration time.
+
+Two rules that fell out of it, both about money:
+
+- **Sniff the bytes, not the content-type.** mp3 is detected from an ID3 tag or an MPEG frame sync, so a mislabelled answer still reaches the decoder. This also covers audio fetched from a JSON URL (NanoGPT's async shape), which was the one branch a compressed answer could have slipped through.
+- **A decode failure is NOT retryable.** Bytes that will not decode are a format incompatibility, not a hiccup, and each retry bills again for the identical failure. An EMPTY answer stays retryable -- that one is a hiccup.
+
 ##### The seed question (open)
 
 OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.

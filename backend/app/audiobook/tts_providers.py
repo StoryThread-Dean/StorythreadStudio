@@ -66,6 +66,16 @@ class HostedModel:
     # Whether the model honors a speed parameter. Everything else gets
     # time-stretched at assembly instead (the [pace] contract is universal).
     supports_speed: bool = True
+    # What to ask the speech endpoint for. "pcm" is the house default:
+    # raw samples we can put a WAV header on with the stdlib, in exactly
+    # the 16-bit mono shape flow synthesis and the stitcher want.
+    #
+    # It is per MODEL, not per provider, because it varies WITHIN a
+    # provider -- OpenRouter forwards to whatever the upstream vendor
+    # supports, and Mistral's TTS answers only mp3 (live 400, proven when
+    # a Voxtral audition was rejected outright). Anything other than pcm
+    # needs a decoder before the audio can be stitched; see cloud_speech.
+    response_format: str = "pcm"
     notes: str = ""
     # Whether this engine belongs on the recommended shelf. False does NOT
     # mean broken -- it means we listened to it and would not steer a
@@ -375,6 +385,9 @@ OPENROUTER = TtsProviderConfig(
             price_per_million_chars="16",
             voices=_VOXTRAL_VOICES,
             tier="standard",
+            # Mistral's TTS refuses pcm outright (live 400). mp3 needs a
+            # decoder before the clip can be stitched -- see cloud_speech.
+            response_format="mp3",
             notes="Three English narrators -- Paul (American), Jane and "
                   "Oliver (British) -- each offered once per mood, with the "
                   "mood fixed in the voice itself. Pick a narrator and read "

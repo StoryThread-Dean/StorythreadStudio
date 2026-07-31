@@ -320,12 +320,25 @@ def test_stereo_answers_are_folded_to_mono(restore_httpx):
 
 
 def test_non_wav_and_odd_bit_depth_fail_loudly(restore_httpx):
-    def mp3(_request: httpx.Request) -> httpx.Response:
+    # mp3 is a SUPPORTED format now (some engines answer only in it), so
+    # ID3-tagged bytes take the decoder path. Garbage behind the tag still
+    # fails loudly and still must not retry: bytes that will not decode
+    # are an incompatibility, and retrying one bills again for the same
+    # failure.
+    def broken_mp3(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"ID3\x04junk")
 
-    with pytest.raises(SynthesisError, match="unexpected format") as caught:
-        _backend(mp3).synthesize("Hi.", "af_heart")
+    with pytest.raises(SynthesisError, match="could not decode") as caught:
+        _backend(broken_mp3).synthesize("Hi.", "af_heart")
     assert caught.value.retryable is False
+
+    # Something that is neither WAV nor mp3 keeps the original complaint.
+    def gibberish(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"\x01\x02\x03\x04" * 8)
+
+    with pytest.raises(SynthesisError, match="unexpected format"):
+        _backend(gibberish, "nanogpt", "Elevenlabs-Turbo-V2.5").synthesize(
+            "Hi.", "rachel")
 
     def eight_bit(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=_wav(0.5, width=1))

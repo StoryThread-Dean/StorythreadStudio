@@ -31,6 +31,88 @@ from app.audiobook.tts_providers import HostedModel, TtsProviderConfig, resolve_
 _TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 
 
+def _looks_like_mp3(raw: bytes) -> bool:
+    """
+    Sniff mp3 without trusting the content-type header.
+
+    Two signatures cover everything in practice: an ID3 tag at the front,
+    or an MPEG frame sync (11 set bits -- 0xFF then the top three bits of
+    the next byte). Cheap, and it catches a provider that answers mp3
+    while labelling it something else.
+    """
+    if len(raw) < 3:
+        return False
+    if raw[:3] == b"ID3":
+        return True
+    return raw[0] == 0xFF and (raw[1] & 0xE0) == 0xE0
+
+
+def _decode_mp3(raw: bytes, provider_label: str) -> bytes:
+    """
+    mp3 -> 16-bit mono WAV, if this build can do it.
+
+    The stdlib cannot decode mp3, so this needs a real audio library.
+    miniaudio ships with the app for the job -- a single 268 KB wheel with
+    nothing behind it, chosen over soundfile precisely because soundfile
+    drags numpy along and this whole backend gets frozen into a sidecar.
+    soundfile is still tried second: a developer who happens to have it
+    should not be blocked if miniaudio ever fails to load on some machine.
+
+    Decoding straight to 24 kHz MONO is deliberate. That is the shape the
+    rest of the pipeline assumes -- flow synthesis measures durations on
+    it and the stitcher concatenates frames of it -- so the conversion
+    happens once, here, rather than being discovered later as a mismatch.
+    """
+    if not raw:
+        raise SynthesisError(
+            "The narration service returned no audio for this passage.",
+            retryable=True)
+
+    try:
+        import miniaudio  # type: ignore[import-not-found]
+
+        decoded = miniaudio.decode(raw, nchannels=1, sample_rate=24000)
+        return _wrap_pcm(decoded.samples.tobytes(), decoded.sample_rate)
+    except ImportError:
+        pass
+    except Exception as e:
+        # NOT retryable. Bytes that will not decode are a format
+        # incompatibility, not a hiccup, and every retry on a paid engine
+        # spends real money to fail the same way.
+        raise SynthesisError(
+            f"{provider_label} returned audio in a format this build could "
+            f"not decode: {e}",
+            retryable=False)
+
+    # libsndfile decodes mp3 from 1.1 onward; soundfile bundles it.
+    try:
+        import io as _io
+
+        import soundfile  # type: ignore[import-not-found]
+
+        samples, rate = soundfile.read(_io.BytesIO(raw), dtype="int16",
+                                       always_2d=True)
+        mono = samples[:, 0] if samples.shape[1] > 1 else samples.reshape(-1)
+        return _wrap_pcm(mono.tobytes(), int(rate))
+    except ImportError:
+        pass
+    except Exception as e:
+        # NOT retryable. Bytes that will not decode are a format
+        # incompatibility, not a hiccup, and every retry on a paid engine
+        # spends real money to fail the same way.
+        raise SynthesisError(
+            f"{provider_label} returned audio in a format this build could "
+            f"not decode: {e}",
+            retryable=False)
+
+    raise SynthesisError(
+        f"{provider_label} answered with mp3 and no mp3 decoder could be "
+        "loaded, so the audio cannot be stitched into a chapter. This "
+        "should not happen in a normal install -- please report it. In "
+        "the meantime, every other engine on the shelf speaks PCM.",
+        retryable=False)
+
+
 def _wrap_pcm(raw: bytes, sample_rate: int) -> bytes:
     """
     Raw 16-bit little-endian mono PCM -> a real WAV file.
@@ -197,9 +279,11 @@ class CloudSpeechBackend(SynthesisBackend):
         body = {
             "model": self.model.id,
             "input": text,
-            # pcm, not wav: OpenRouter offers only mp3 and pcm, and mp3
-            # would need a decoder. We add the WAV header ourselves.
-            "response_format": "pcm",
+            # Per MODEL, not a constant. OpenRouter offers mp3 and pcm and
+            # no wav, and which of the two a model accepts depends on the
+            # vendor behind it -- Mistral rejects pcm outright with a 400.
+            # pcm is the house default because we can header it ourselves.
+            "response_format": self.model.response_format,
         }
         if voice_id:
             body["voice"] = voice_id
@@ -237,7 +321,21 @@ class CloudSpeechBackend(SynthesisBackend):
                     f"Could not download the narrated audio: {e}", retryable=True)
             if fetched.status_code != 200:
                 raise _translate(self.provider, fetched.status_code, fetched.text)
+            # A hosted file behind a URL is very often mp3 -- that is what
+            # the format is FOR. Sniff it here too, or this branch would
+            # be the one place a compressed answer slipped through.
+            if _looks_like_mp3(fetched.content):
+                return _decode_mp3(fetched.content, self.provider.label)
             return _fold_to_mono_16bit(fetched.content)
+
+        # Compressed answers must be decoded before anything downstream can
+        # touch them: flow synthesis measures durations and cuts on sample
+        # boundaries, and the stitcher concatenates raw frames. Wrapping
+        # mp3 bytes in a WAV header would produce a file that "plays" as
+        # noise, so this is checked BEFORE the pcm path.
+        if _looks_like_mp3(response.content) or "audio/mpeg" in content_type \
+                or self.model.response_format == "mp3":
+            return _decode_mp3(response.content, self.provider.label)
 
         if "audio/l16" in content_type or "audio/pcm" in content_type \
                 or self.provider.transport == "openai-speech":
