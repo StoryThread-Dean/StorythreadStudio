@@ -33,6 +33,7 @@ import {
 } from "./api";
 import type { NarrationSelection, PrintEstimate } from "./api";
 import type { NarratorVoice } from "./types";
+import { VoicePicker } from "./VoicePicker";
 
 interface PremiumNarrationPanelProps {
   workspacePath: string;
@@ -295,28 +296,15 @@ export function PremiumNarrationPanel({
                     <span className="mb-1 block text-[10px] text-violet-300">
                       Voice for this book
                     </span>
-                    {voiceOptions.length > 0 ? (
-                      <select
-                        value={voiceId}
-                        onChange={e => changeVoice(e.target.value)}
-                        aria-label="Premium narrator voice"
-                        className="w-full rounded border border-violet-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-violet-500"
-                      >
-                        <option value="">The model's default voice</option>
-                        {voiceOptions.map(voice => (
-                          <option key={voice.id} value={voice.id}>{voice.label}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={voiceId}
-                        onChange={e => changeVoice(e.target.value)}
-                        aria-label="Premium narrator voice"
-                        placeholder="Leave blank for the model's default voice"
-                        className="w-full rounded border border-violet-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-violet-500"
-                      />
-                    )}
+                    <VoicePicker
+                      axes={selection.voice_axes}
+                      voices={voiceOptions}
+                      value={voiceId}
+                      onChange={changeVoice}
+                      ariaLabel="Premium narrator voice"
+                      verified={selection.voices_verified}
+                      tone="violet"
+                    />
                     <p className="mt-1 text-[10px] text-zinc-500">
                       The default comes from Settings; this book can differ.
                       {selection.voices_are_fallback

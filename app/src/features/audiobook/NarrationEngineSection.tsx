@@ -14,6 +14,7 @@
 import { AlertTriangle, Check } from "lucide-react";
 
 import { WhatsThis } from "./WhatsThis";
+import { VoicePicker } from "./VoicePicker";
 import type { NarrationTier, TtsCatalog } from "./api";
 import type { NarratorVoice } from "./types";
 
@@ -143,28 +144,15 @@ export function NarrationEngineSection({
               Default voice for {chosen.model_label}
             </span>
           </span>
-          {voiceOptions.length > 0 ? (
-            <select
-              value={premiumVoice}
-              onChange={e => onPremiumVoiceChange(e.target.value)}
-              aria-label="Default premium voice"
-              className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-blue-500"
-            >
-              <option value="">The model's default voice</option>
-              {voiceOptions.map(voice => (
-                <option key={voice.id} value={voice.id}>{voice.label}</option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              value={premiumVoice}
-              onChange={e => onPremiumVoiceChange(e.target.value)}
-              aria-label="Default premium voice"
-              placeholder="Leave blank for the model's default voice"
-              className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-blue-500"
-            />
-          )}
+          <VoicePicker
+            axes={catalogModel?.voice_axes ?? null}
+            voices={voiceOptions}
+            value={premiumVoice}
+            onChange={onPremiumVoiceChange}
+            ariaLabel="Default premium voice"
+            verified={catalogModel?.voices_verified ?? true}
+            tone="blue"
+          />
           <div className="mt-1">
             <WhatsThis label="Which voices survive?">
               Hosted Kokoro is the same engine as your free narrator, so

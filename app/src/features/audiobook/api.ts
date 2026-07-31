@@ -367,6 +367,8 @@ export interface NarrationTier {
   notes?: string;
 }
 
+import type { VoiceAxes } from "./VoicePicker";
+
 /** WHICH engine narrates -- resolved once by the backend so the settings
  * screen and the narration rail can never disagree about money. */
 export interface NarrationSelection {
@@ -388,6 +390,9 @@ export interface NarrationSelection {
   signup_steps: string[];
   voices_same_as_local: boolean;
   voices: Array<{ id: string; label: string; language: string }>;
+  /** Present when the engine separates voice from accent -- the picker
+      then offers one dropdown per axis instead of their cross product. */
+  voice_axes: VoiceAxes | null;
   voices_are_fallback: boolean;
   voices_verified: boolean;
   supports_speed: boolean;
@@ -480,9 +485,14 @@ export interface TtsCatalog {
       id: string;
       label: string;
       price_per_1k_chars: string;
+      price_per_million_chars: string;
+      tier: string;
       same_as_local: boolean;
+      voices_same_as_local: boolean;
+      voices_verified: boolean;
       supports_speed: boolean;
       notes: string;
+      voice_axes: VoiceAxes | null;
       voices: Array<{ id: string; label: string; language: string }>;
     }>;
   }>;

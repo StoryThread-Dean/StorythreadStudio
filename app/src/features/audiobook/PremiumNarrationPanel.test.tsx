@@ -25,6 +25,7 @@ const USABLE: NarrationSelection = {
   key_hint: "nano-gpt.com", signup_steps: [],
   voices_same_as_local: false,
   voices: [{ id: "Rachel", label: "Rachel (warm)", language: "en-US" }],
+  voice_axes: null,
   voices_are_fallback: false, voices_verified: false, supports_speed: false,
   default_voice: "", book_voice: null,
   can_spend: true, warning: null, fallback_note: null,

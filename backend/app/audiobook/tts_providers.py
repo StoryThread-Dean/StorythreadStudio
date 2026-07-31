@@ -67,6 +67,16 @@ class HostedModel:
     # time-stretched at assembly instead (the [pace] contract is universal).
     supports_speed: bool = True
     notes: str = ""
+    # OPTIONAL: when a model's voice id is composed from independent axes
+    # (a voice, and separately an accent), declaring them here lets the UI
+    # offer one short dropdown per axis instead of their cross product --
+    # 26 voices and 3 accents rather than 78 rows. The STORED value stays
+    # a single composed id, so nothing downstream changes.
+    #
+    # This is the shape to reach for as engines adopt universal voices with
+    # accent/dialect as its own option; a model without axes keeps the
+    # single flat list, so both kinds coexist.
+    voice_axes: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -264,6 +274,39 @@ _GROK_XAI_REGISTRY = _build_voices(_accent_variant_rows(_GROK_BASE))
 
 _GROK_VOICES = _GROK_OPENROUTER_DOCUMENTED + _GROK_XAI_REGISTRY
 
+# The same roster as two independent axes: 26 voices, and separately the
+# accent. The writer picks a character, then picks where they are from --
+# which is how xAI models it, and how universal-voice engines are heading.
+# "Provider default" composes to the bare name (the form OpenRouter
+# documents); the dialects compose to stem-suffix.
+_GROK_VOICE_AXES: dict = {
+    "compose": "voice+accent",
+    "voice_label": "Voice",
+    "accent_label": "Accent",
+    "voices": [
+        {
+            "id": stem,
+            "bare_id": name,
+            "name": name,
+            "label": f"{name} ({gender}) -- {character}",
+            "gender_presentation": gender,
+        }
+        for name, stem, gender, character in sorted(
+            _GROK_BASE,
+            key=lambda row: (_GENDER_ORDER.index(row[2])
+                             if row[2] in _GENDER_ORDER else len(_GENDER_ORDER),
+                             row[0]))
+    ],
+    "accents": [
+        {"id": "", "label": "Provider default", "language": "en-US",
+         "note": "The bare voice name, which is the form OpenRouter "
+                 "documents. Try this first if a dialect is rejected."},
+        {"id": "en-US", "label": "American", "language": "en-US", "note": ""},
+        {"id": "en-GB", "label": "British", "language": "en-GB", "note": ""},
+        {"id": "en-AU", "label": "Australian", "language": "en-AU", "note": ""},
+    ],
+}
+
 # ElevenLabs' long-standing preset names. NanoGPT exposes 46 voices but
 # does not publish the list, so these are offered as a starting point and
 # the UI also accepts a typed voice name (voices_verified=False).
@@ -316,6 +359,7 @@ OPENROUTER = TtsProviderConfig(
             price_per_1k_chars="0.015",
             price_per_million_chars="15",
             voices=_GROK_VOICES,
+            voice_axes=_GROK_VOICE_AXES,
             tier="standard",
             voices_verified=False,
             notes="xAI publishes 26 voices, each able to speak American, "
@@ -572,6 +616,7 @@ def resolve_narration_selection(settings: dict, manifest: dict | None = None) ->
         "signup_steps": [],
         "voices_same_as_local": False,
         "voices": [],
+        "voice_axes": None,
         "voices_are_fallback": False,
         "voices_verified": True,
         "supports_speed": True,
@@ -606,6 +651,7 @@ def resolve_narration_selection(settings: dict, manifest: dict | None = None) ->
             "signup_steps": list(provider.signup_steps),
             "voices_same_as_local": model.voices_same_as_local,
             "voices": voices,
+            "voice_axes": model.voice_axes,
             "voices_are_fallback": is_fallback,
             "voices_verified": model.voices_verified,
             "supports_speed": model.supports_speed,
@@ -668,6 +714,7 @@ def catalog() -> list[dict]:
                     "voices_same_as_local": model.voices_same_as_local,
                     "voices_verified": model.voices_verified,
                     "supports_speed": model.supports_speed,
+                    "voice_axes": model.voice_axes,
                     "notes": model.notes,
                     "voices": [
                         {"id": v.id, "label": v.label, "language": v.language,
