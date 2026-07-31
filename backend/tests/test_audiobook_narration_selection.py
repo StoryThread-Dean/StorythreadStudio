@@ -151,50 +151,43 @@ def test_premium_only_models_keep_their_own_cast():
     # None of the local Kokoro ids appear here -- a different engine, a
     # different cast.
     assert "af_heart" not in ids
-    assert "ara-en-US" in ids
+    assert "Ara" in ids
 
 
-def test_grok_lists_the_provider_documented_voices_first():
-    # Live finding: sampling iris-en-US through OpenRouter returned
-    # "Provider returned 404" -- OpenRouter documents only five Grok
-    # voices, and without xAI's dialect suffix. The five it documents must
-    # therefore come FIRST, so the default pick is one that works.
+def test_grok_offers_only_the_voices_openrouter_documents():
+    # Live finding, twice over: sampling iris-en-US and then iris-en-GB
+    # through OpenRouter both returned "Provider returned 404". xAI's own
+    # roster is 26 voices x 3 dialects, but OpenRouter documents exactly
+    # five, named WITHOUT a suffix. Offering the other 73 was offering
+    # options that cannot play, so the list is trimmed to what works.
     voices = tts_providers.voices_for("openrouter", "x-ai/grok-voice-tts-1.0")[0]
-    first_five = [v["id"] for v in voices[:5]]
-    assert first_five == ["Ara", "Eve", "Leo", "Rex", "Sal"]
-    assert all("OpenRouter default accent" in v["label"] for v in voices[:5])
-    # The full xAI registry still follows, for when OpenRouter catches up.
-    assert len(voices) == 5 + 78
+    assert [v["id"] for v in voices] == ["Ara", "Eve", "Leo", "Rex", "Sal"]
+    # Feminine before masculine, the way every other roster here groups.
+    assert [v["gender_presentation"] for v in voices] == (
+        ["female", "female", "male", "male", "male"])
+    # The character words survive the trim -- they are how a writer casts.
+    ara = voices[0]
+    assert ara["label"] == "Ara (female) -- warm, natural, friendly"
 
 
-def test_grok_voices_are_one_cast_across_three_dialects():
-    # Each Grok voice is ONE voice that speaks three dialects, chosen by
-    # the id suffix -- so the roster is generated (26 x 3), not typed out
-    # 78 times, and re-casting a narrator for a British setting keeps the
-    # same character.
-    voices = tts_providers.voices_for("openrouter", "x-ai/grok-voice-tts-1.0")[0]
-    by_id = {v["id"]: v for v in voices}
-    for suffix, language in (("en-US", "en-US"), ("en-GB", "en-GB"), ("en-AU", "en-AU")):
-        voice = by_id[f"ara-{suffix}"]
-        assert voice["language"] == language
-        assert voice["gender_presentation"] == "female"
-        # Same character words in every dialect: it is the same voice.
-        assert "warm, natural, friendly" in voice["label"]
-
-    # The registry portion: 7 feminine and 19 masculine voices in all
-    # three dialects, grouped like every other roster (accents together,
-    # women first) after the five provider-documented entries.
-    registry = voices[5:]
-    assert sum(1 for v in registry if v["gender_presentation"] == "female") == 21
-    assert sum(1 for v in registry if v["gender_presentation"] == "male") == 57
-    # The roster's own count, pinned: 7 + 19 = 26 voices.
-    base_names = {v["label"].split(" (")[0] for v in registry}
-    assert len(base_names) == 26
-    ranks = [({"en-US": 0, "en-GB": 1, "en-AU": 2}[v["language"]],
-              0 if v["gender_presentation"] == "female" else 1) for v in registry]
-    assert ranks == sorted(ranks)
-    assert registry[0]["id"] == "ara-en-US"          # first American woman
-    assert registry[-1]["id"] == "zenith-en-AU"      # last Australian man
+def test_grok_keeps_accent_as_its_own_axis():
+    # The two-dropdown shape stays: five voices, and the accent chosen
+    # separately. "Provider default" composes to the bare name (the proven
+    # form) and leads the list; the dialect options remain because xAI
+    # accepts them, each carrying the 404 warning rather than a promise.
+    _provider, model = tts_providers.resolve_model(
+        "openrouter", "x-ai/grok-voice-tts-1.0")
+    axes = model.voice_axes
+    assert axes is not None
+    assert [v["name"] for v in axes["voices"]] == ["Ara", "Eve", "Leo", "Rex", "Sal"]
+    assert [a["id"] for a in axes["accents"]] == ["", "en-US", "en-GB", "en-AU"]
+    assert axes["accents"][0]["label"] == "Provider default"
+    for accent in axes["accents"][1:]:
+        assert "404" in accent["note"]
+    # Each voice carries both id forms, so the UI can compose either the
+    # bare name or the suffixed dialect id from one pick.
+    ara = axes["voices"][0]
+    assert (ara["id"], ara["bare_id"]) == ("ara", "Ara")
 
 
 def test_aura2_carries_its_published_registry():

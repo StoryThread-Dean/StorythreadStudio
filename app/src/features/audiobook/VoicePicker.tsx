@@ -5,9 +5,9 @@
 //
 // Most engines publish a flat list of voices, so this renders one
 // dropdown. Some publish a voice AND an accent as independent axes -- xAI
-// does: 26 voices, each able to speak American, British, or Australian,
-// with the dialect encoded in the id (iris-en-GB). Their cross product is
-// 78 rows, which is a wall; as two dropdowns it is 26 + 4.
+// does: each voice can speak American, British, or Australian, with the
+// dialect encoded in the id (ara-en-GB). Multiplying the two out makes a
+// wall of rows; as two dropdowns it is voices + 4.
 //
 // The VALUE is always the single composed id the provider wants, so
 // nothing downstream (settings, the manifest, generation, the estimate)

@@ -19,9 +19,9 @@ const AXES: VoiceAxes = {
   voices: [
     { id: "ara", bare_id: "Ara", name: "Ara", label: "Ara (female) -- warm",
       gender_presentation: "female" },
-    { id: "iris", bare_id: "Iris", name: "Iris", label: "Iris (female) -- friendly",
+    { id: "eve", bare_id: "Eve", name: "Eve", label: "Eve (female) -- energetic",
       gender_presentation: "female" },
-    { id: "orion", bare_id: "Orion", name: "Orion", label: "Orion (male) -- cinematic",
+    { id: "leo", bare_id: "Leo", name: "Leo", label: "Leo (male) -- authoritative",
       gender_presentation: "male" },
   ],
   accents: [
@@ -36,19 +36,19 @@ afterEach(cleanup);
 
 describe("composeVoiceId / decomposeVoiceId", () => {
   it("composes a dialect id from the two axes", () => {
-    expect(composeVoiceId(AXES, "iris", "en-GB")).toBe("iris-en-GB");
+    expect(composeVoiceId(AXES, "eve", "en-GB")).toBe("eve-en-GB");
     // The bare form uses the provider's documented capitalisation.
-    expect(composeVoiceId(AXES, "iris", "")).toBe("Iris");
+    expect(composeVoiceId(AXES, "eve", "")).toBe("Eve");
   });
 
   it("splits a stored id back into its axes", () => {
-    expect(decomposeVoiceId(AXES, "iris-en-AU"))
-      .toEqual({ voiceStem: "iris", accentId: "en-AU" });
+    expect(decomposeVoiceId(AXES, "eve-en-AU"))
+      .toEqual({ voiceStem: "eve", accentId: "en-AU" });
     expect(decomposeVoiceId(AXES, "Ara"))
       .toEqual({ voiceStem: "ara", accentId: "" });
     // Case-insensitive, because providers are inconsistent about it.
-    expect(decomposeVoiceId(AXES, "orion"))
-      .toEqual({ voiceStem: "orion", accentId: "" });
+    expect(decomposeVoiceId(AXES, "leo"))
+      .toEqual({ voiceStem: "leo", accentId: "" });
   });
 
   it("falls back to the first voice instead of showing a blank picker", () => {
@@ -72,12 +72,12 @@ describe("composeVoiceId / decomposeVoiceId", () => {
 describe("VoicePicker", () => {
   it("offers two dropdowns when the engine separates voice from accent", () => {
     const onChange = vi.fn();
-    render(<VoicePicker axes={AXES} voices={[]} value="iris-en-GB"
+    render(<VoicePicker axes={AXES} voices={[]} value="eve-en-GB"
                         onChange={onChange} ariaLabel="Narrator voice" />);
     const voice = screen.getByLabelText("Narrator voice") as HTMLSelectElement;
     const accent = screen.getByLabelText("Narrator voice accent") as HTMLSelectElement;
     // Opens on what is stored, not on a default.
-    expect(voice.value).toBe("iris");
+    expect(voice.value).toBe("eve");
     expect(accent.value).toBe("en-GB");
     // 3 voices, not 3 x 4 rows.
     expect(voice.querySelectorAll("option")).toHaveLength(3);
@@ -88,15 +88,15 @@ describe("VoicePicker", () => {
 
   it("changing either axis reports one composed id", () => {
     const onChange = vi.fn();
-    render(<VoicePicker axes={AXES} voices={[]} value="iris-en-GB"
+    render(<VoicePicker axes={AXES} voices={[]} value="eve-en-GB"
                         onChange={onChange} ariaLabel="Narrator voice" />);
     fireEvent.change(screen.getByLabelText("Narrator voice"),
-                     { target: { value: "orion" } });
-    expect(onChange).toHaveBeenLastCalledWith("orion-en-GB");
+                     { target: { value: "leo" } });
+    expect(onChange).toHaveBeenLastCalledWith("leo-en-GB");
 
     fireEvent.change(screen.getByLabelText("Narrator voice accent"),
                      { target: { value: "" } });
-    expect(onChange).toHaveBeenLastCalledWith("Iris");   // bare form
+    expect(onChange).toHaveBeenLastCalledWith("Eve");   // bare form
   });
 
   it("shows the accent note, which is where the 404 advice lives", () => {
