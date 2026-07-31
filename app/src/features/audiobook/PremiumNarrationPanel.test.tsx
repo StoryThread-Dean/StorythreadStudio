@@ -220,13 +220,30 @@ describe("PremiumNarrationPanel", () => {
     await waitFor(() => expect(screen.getByText("Sample This Voice")).toBeTruthy());
 
     fireEvent.click(screen.getByText("Sample This Voice"));
+    // It must say WHICH words it read, not just the price. This button
+    // falls back to a demo sentence with nothing highlighted, and hearing
+    // an unexpected sentence after paying reads as a bug.
     await waitFor(() =>
-      expect(screen.getByText(/sample cost about \$0\.02/)).toBeTruthy());
+      expect(screen.getByText(/Read your highlighted passage/)).toBeTruthy());
+    expect(screen.getByText(/cost about \$0\.02/)).toBeTruthy();
     const call = fetchMock.mock.calls.find(([u]) =>
       String(u).includes("/print-preview"));
     const body = JSON.parse(String((call![1] as RequestInit).body));
     expect(body.text).toBe("A chosen line.");
     expect(body.model).toBe("Elevenlabs-Turbo-V2.5");
+  });
+
+  it("says plainly when it fell back to the demo sentence", async () => {
+    // Nothing highlighted: the fallback is fine, staying quiet about it
+    // is not.
+    await open(mockFetch(USABLE), { getSelectionText: () => "   " });
+    await waitFor(() => expect(screen.getByText("Sample This Voice")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("Sample This Voice"));
+    await waitFor(() =>
+      expect(screen.getByText(/Read the demo sentence/)).toBeTruthy());
+    expect(screen.getByText(/highlight a passage to hear your own words/))
+      .toBeTruthy();
   });
 
   it("hosted Kokoro offers the LOCAL voice roster (the parity fix)", async () => {

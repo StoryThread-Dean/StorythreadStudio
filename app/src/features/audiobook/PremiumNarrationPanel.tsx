@@ -80,6 +80,8 @@ export function PremiumNarrationPanel({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState<"estimate" | "preview" | "narrate" | null>(null);
   const [lastPreviewCost, setLastPreviewCost] = useState<string | null>(null);
+  const [lastPreviewSource, setLastPreviewSource] =
+    useState<"selection" | "sample">("sample");
   const [futureOpen, setFutureOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -163,6 +165,7 @@ export function PremiumNarrationPanel({
       audioRef.current = audio;
       void audio.play();
       setLastPreviewCost(costUsd);
+      setLastPreviewSource(selected ? "selection" : "sample");
     } catch (e) {
       setError(e instanceof Error ? e.message : "The sample failed.");
     } finally {
@@ -335,7 +338,14 @@ export function PremiumNarrationPanel({
                   </button>
                   {lastPreviewCost && (
                     <p className="mt-1 text-[10px] text-zinc-400">
-                      That sample cost about ${lastPreviewCost}.
+                      {/* Say WHICH words were read. This button falls back
+                          to a demo sentence when nothing is highlighted,
+                          and hearing an unexpected sentence after paying
+                          for it reads as a bug rather than a fallback. */}
+                      {lastPreviewSource === "selection"
+                        ? "Read your highlighted passage"
+                        : "Read the demo sentence -- highlight a passage to hear your own words"}
+                      {" -- cost about $"}{lastPreviewCost}.
                     </p>
                   )}
 

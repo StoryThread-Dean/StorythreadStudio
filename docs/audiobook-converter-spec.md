@@ -800,6 +800,25 @@ Two rules that fell out of it, both about money:
 - **Sniff the bytes, not the content-type.** mp3 is detected from an ID3 tag or an MPEG frame sync, so a mislabelled answer still reaches the decoder. This also covers audio fetched from a JSON URL (NanoGPT's async shape), which was the one branch a compressed answer could have slipped through.
 - **A decode failure is NOT retryable.** Bytes that will not decode are a format incompatibility, not a hiccup, and each retry bills again for the identical failure. An EMPTY answer stays retryable -- that one is a hiccup.
 
+##### Loudness matching (live finding, fixed)
+
+A two-paragraph Voxtral preview came back with the second paragraph noticeably louder than the first, and it stayed loud for the rest of the clip. Two paragraphs are two requests, and an expressive hosted model picks its own **level** per request just as it picks its own pitch. Kokoro never did this.
+
+Unlike pitch, loudness is fixable from our side. `wav_assembly.match_level()` normalizes to **-20 dBFS RMS** -- the middle of Audible's ACX window (-23 to -18 dB RMS) -- with a -1 dBFS peak ceiling, a hard +/-8 dB clamp so room tone is never amplified into the foreground, and a deadband so a clip already on target is returned byte-identical rather than silently rewritten.
+
+Two decisions inside it matter more than the numbers:
+
+- **The unit is one SYNTHESIS CALL, never one clip.** Flow synthesis renders a run of sentences as one continuous clip and splits it afterwards. Those splits must share a single gain -- level them against each other and the natural rise and fall inside a sentence flattens into mush, destroying precisely what flow synthesis exists to protect. Both callers therefore normalize the whole clip and split second. A test pins a 3:1 dynamic surviving the round trip.
+- **It runs at ASSEMBLY, not at synthesis.** Stored segment `.wav` files stay exactly as the engine made them, so this costs nobody a re-render on a paid engine, and a book generated before the feature existed comes out even on its next assembly.
+
+Residual, and honest: this fixes level jumps. It does NOT fix pitch or timbre drift between segments, which remains an engine property (see Grok above). Voxtral's pitch/tone did shift between paragraphs in the same test, and no amount of gain fixes that.
+
+##### The paid preview must never quietly change what it reads
+
+Same session, second finding: previewing a selection worked, then clicking Sample again played the canned demo sentence instead. A textarea's selection does not reliably survive a round trip through a button in the rail, and `[Sample This Voice]` falls back to a demo sentence when nothing is highlighted -- so it billed for words the writer did not ask to hear.
+
+Two fixes, because either alone leaves a hole: the workspace now remembers the last real highlight **as text** (not offsets, which later edits invalidate) and prefers a live selection over it; and the panel states which was used -- "Read your highlighted passage" or "Read the demo sentence -- highlight a passage to hear your own words". The fallback was never wrong; being silent about it was.
+
 ##### The seed question (open)
 
 OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.

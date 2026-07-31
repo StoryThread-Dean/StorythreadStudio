@@ -50,6 +50,9 @@ const PAUSE_ACTIONS: { label: string; snippet: string; title: string; inline: bo
 export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const workspacePath = payload.manifest.workspace_path;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // The last passage the writer actually highlighted, kept as TEXT rather
+  // than offsets so later edits cannot make it slice the wrong words.
+  const lastSelectionRef = useRef("");
 
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -565,6 +568,16 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               aria-label="Narration text"
               value={content}
               onChange={e => { setContent(e.target.value); setDirty(true); }}
+              onSelect={e => {
+                // Remember the last real highlight. A textarea's selection
+                // does not reliably survive clicking a button in the rail
+                // and coming back, and losing it silently turned a second
+                // [Sample selection] click into a canned demo sentence --
+                // paid, and not what the writer asked to hear.
+                const ta = e.currentTarget;
+                const picked = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+                if (picked.trim()) lastSelectionRef.current = picked;
+              }}
               spellCheck={false}
               className="min-h-0 flex-1 resize-none bg-zinc-950 p-5 font-mono text-sm leading-relaxed text-zinc-200 outline-none"
             />
@@ -572,8 +585,11 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         </div>
 
         {/* Right rail: voice, preview, generate, run controls. The
-            selection getter reads live from the textarea so Preview
-            Selection always rehearses exactly what is highlighted. */}
+            selection getter prefers what is highlighted RIGHT NOW and
+            falls back to the last real highlight -- clicking a button in
+            the rail can collapse the textarea's selection, and a silent
+            fall-through to the canned sample sentence spends money
+            rehearsing the wrong words. */}
         <GenerationPanel
           workspacePath={workspacePath}
           initialVoiceId={payload.manifest.selected_voice}
@@ -581,8 +597,10 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           onOpenSettings={() => setSettingsOpen(true)}
           getSelectionText={() => {
             const ta = textareaRef.current;
-            if (!ta) return "";
-            return content.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0);
+            const live = ta
+              ? content.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0)
+              : "";
+            return live.trim() ? live : lastSelectionRef.current;
           }}
         />
       </div>

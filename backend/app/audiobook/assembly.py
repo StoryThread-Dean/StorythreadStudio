@@ -31,7 +31,7 @@ from pathlib import Path
 import httpx
 
 from app.audiobook import flow, segmenter, workspace
-from app.audiobook.wav_assembly import concat_wav
+from app.audiobook.wav_assembly import concat_wav, match_level
 
 # Where the component manager installs ffmpeg (ffmpeg.exe + ffprobe.exe).
 FFMPEG_DIR = Path.home() / ".storythread" / "ffmpeg"
@@ -174,6 +174,13 @@ def _stitch_chapter_wav(workspace_path: str, chapter: dict,
             audio_path = Path(workspace_path) / item["output_file"]
             with open(audio_path, "rb") as f:
                 audio = f.read()
+            # Level-match the WHOLE segment before any splitting, so a
+            # flow run keeps one gain across its pieces. Done at assembly
+            # rather than at synthesis on purpose: the stored .wav files
+            # stay exactly as the engine made them, so this costs nobody a
+            # re-render, and a book generated before this existed comes
+            # out even on its next assembly.
+            audio = match_level(audio)
             if item.get("flow_cuts_ms"):
                 # Flow segment (mid-paragraph pauses): the audio is one
                 # continuous render; split it at the recorded cuts and
