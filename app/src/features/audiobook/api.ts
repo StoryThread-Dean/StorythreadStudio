@@ -355,14 +355,121 @@ export interface NarrationTier {
   model: string;
   model_label: string;
   price_per_1k_chars: string;
+  /** The unit providers actually quote -- "$0.62 per million" reads, where
+   * "$0.00062 per 1,000" looks like a typo. */
+  price_per_million_chars: string;
   same_as_local: boolean;
+  voices_same_as_local: boolean;
+  voices_verified: boolean;
   requires_key: boolean;
   has_api_key: boolean;
+  signup_steps: string[];
   notes?: string;
+}
+
+/** WHICH engine narrates -- resolved once by the backend so the settings
+ * screen and the narration rail can never disagree about money. */
+export interface NarrationSelection {
+  source: "none" | "settings" | "book" | "writing-fallback";
+  provider: string;
+  model: string;
+  provider_label: string;
+  model_label: string;
+  tier: string;
+  tier_label: string;
+  price_per_1k_chars: string | null;
+  price_per_million_chars: string | null;
+  is_recommended: boolean;
+  requires_key: boolean;
+  has_api_key: boolean;
+  using_writing_keys: boolean;
+  key_setting: string;
+  key_hint: string;
+  signup_steps: string[];
+  voices_same_as_local: boolean;
+  voices: Array<{ id: string; label: string; language: string }>;
+  voices_are_fallback: boolean;
+  voices_verified: boolean;
+  supports_speed: boolean;
+  default_voice: string;
+  book_voice: string | null;
+  /** The one gate the UI uses to decide whether spending controls exist. */
+  can_spend: boolean;
+  /** Amber: a recommended engine with no key connected. */
+  warning: string | null;
+  /** Red: not a recommended narration model at all. */
+  fallback_note: string | null;
+}
+
+/** The audiobook's own settings: narration engine + its own API keys.
+ * Keys arrive MASKED and must never be sent back as-is. */
+export interface AudiobookSettings {
+  use_writing_keys: boolean;
+  openrouter_api_key: string;
+  openrouter_api_key_set: boolean;
+  nanogpt_api_key: string;
+  nanogpt_api_key_set: boolean;
+  writing_openrouter_key_set: boolean;
+  writing_nanogpt_key_set: boolean;
+  writing_provider: string;
+  writing_provider_label: string;
+  narration_provider: string;
+  narration_model: string;
+  premium_voice: string;
+}
+
+export async function fetchAudiobookSettings(): Promise<AudiobookSettings> {
+  return toJson<AudiobookSettings>(
+    await fetch(`${API_BASE}/api/audiobook/settings`));
+}
+
+/** Partial save: omit a key field to leave it alone, send "" to clear it.
+ * NEVER send a masked value back -- it would be stored verbatim. */
+export async function saveAudiobookSettings(
+  patch: Partial<{
+    use_writing_keys: boolean;
+    openrouter_api_key: string;
+    nanogpt_api_key: string;
+    narration_provider: string;
+    narration_model: string;
+    premium_voice: string;
+  }>,
+): Promise<AudiobookSettings> {
+  const res = await fetch(`${API_BASE}/api/audiobook/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  return toJson<AudiobookSettings>(res);
+}
+
+export async function fetchNarrationSelection(
+  workspacePath: string,
+): Promise<NarrationSelection> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/narration-selection`
+    + `?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<NarrationSelection>(res);
+}
+
+/** This BOOK's narration override (kept apart from the local narrator's
+ * remembered voice). */
+export async function saveNarrationChoice(
+  workspacePath: string,
+  choice: { provider?: string; model?: string; premium_voice?: string },
+): Promise<NarrationSelection> {
+  const res = await fetch(`${API_BASE}/api/audiobook/narration-choice`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, ...choice }),
+  });
+  return toJson<NarrationSelection>(res);
 }
 
 export interface TtsCatalog {
   recommended: NarrationTier[];
+  selection: NarrationSelection;
   using_writing_keys: boolean;
   providers: Array<{
     provider: string;

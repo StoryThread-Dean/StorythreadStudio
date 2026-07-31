@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, BookMarked, EyeOff, HelpCircle, Loader2, MessageSquareQuote,
-  Plus, Save, Scissors, Wand2, X,
+  Plus, Save, Scissors, Settings as SettingsIcon, Wand2, X,
 } from "lucide-react";
 
 import { addChapters, fetchAvailableChapters, fetchNarration, saveNarration } from "./api";
@@ -23,6 +23,7 @@ import { InsertWalkthrough } from "./InsertWalkthrough";
 import { GenerationPanel } from "./GenerationPanel";
 import { MarkerHelpPanel } from "./MarkerHelpPanel";
 import { paragraphBoundsAt, stripAudioMarkers } from "./markers";
+import { AudiobookSettingsDialog } from "./AudiobookSettingsDialog";
 import { PronunciationDialog } from "./PronunciationDialog";
 import { SayEditor } from "./SayEditor";
 import type { AudiobookChapter, AudiobookProjectPayload } from "./types";
@@ -59,6 +60,10 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [showPronunciations, setShowPronunciations] = useState(false);
   const [showMarkerHelp, setShowMarkerHelp] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Bumped whenever audiobook settings are saved, so the narration rail
+  // refetches what depends on them (the narration engine, above all).
+  const [settingsVersion, setSettingsVersion] = useState(0);
   // The Insert Walkthrough starts at the caret when opened (null = closed).
   const [walkthroughStart, setWalkthroughStart] = useState<number | null>(null);
 
@@ -469,7 +474,11 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
 
       {/* Body: chapter rail + editor */}
       <div className="flex min-h-0 flex-1">
-        <aside className="w-56 shrink-0 overflow-y-auto border-r border-zinc-800 p-3">
+        {/* Left rail: chapters scroll, the settings gear stays pinned at
+            the bottom (so it is always one click away, and never floats
+            in the middle of a long chapter list). */}
+        <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-300">
             <BookMarked size={12} /> Chapters ({chapters.length})
           </h3>
@@ -504,6 +513,16 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           >
             <Plus size={11} /> Add chapters
           </button>
+        </div>
+          <div className="shrink-0 border-t border-zinc-800 p-2">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="Narration engine, API keys, and this book's pacing"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-blue-600 hover:text-blue-300"
+            >
+              <SettingsIcon size={12} /> Audiobook Settings
+            </button>
+          </div>
         </aside>
 
         <div className="relative flex min-w-0 flex-1 flex-col">
@@ -558,6 +577,8 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <GenerationPanel
           workspacePath={workspacePath}
           initialVoiceId={payload.manifest.selected_voice}
+          settingsVersion={settingsVersion}
+          onOpenSettings={() => setSettingsOpen(true)}
           getSelectionText={() => {
             const ta = textareaRef.current;
             if (!ta) return "";
@@ -570,6 +591,14 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <PronunciationDialog
           workspacePath={workspacePath}
           onClose={() => setShowPronunciations(false)}
+        />
+      )}
+
+      {settingsOpen && (
+        <AudiobookSettingsDialog
+          workspacePath={workspacePath}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={() => setSettingsVersion(v => v + 1)}
         />
       )}
 

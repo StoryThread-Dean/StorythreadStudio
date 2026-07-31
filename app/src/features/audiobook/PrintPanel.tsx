@@ -16,7 +16,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ChevronDown, ChevronRight, Crown, Loader2, Lock, Play, Sparkles,
+  ChevronDown, ChevronRight, Crown, Loader2, Lock, Play,
+  Settings as SettingsIcon, Sparkles,
 } from "lucide-react";
 
 import { fetchPrintEstimate, fetchTtsCatalog, printPreview, startGeneration } from "./api";
@@ -24,6 +25,11 @@ import type { NarrationTier, PrintEstimate, TtsCatalog } from "./api";
 
 interface PrintPanelProps {
   workspacePath: string;
+  /** Bumped when Audiobook Settings are saved -- reload the catalog so a
+      newly connected key or a changed engine shows up here. */
+  settingsVersion?: number;
+  /** Open Audiobook Settings (where the engine is chosen). */
+  onOpenSettings?: () => void;
   /** The voice picked in the free narration section, offered as the
       starting point when a hosted tier shares Kokoro's voice names. */
   localVoiceId: string;
@@ -55,6 +61,7 @@ const FUTURE_CONTROLS: Array<{ label: string; detail: string }> = [
 
 export function PrintPanel({
   workspacePath, localVoiceId, getSelectionText, onRunStarted,
+  settingsVersion = 0, onOpenSettings,
 }: PrintPanelProps) {
   const [open, setOpen] = useState(false);
   const [catalog, setCatalog] = useState<TtsCatalog | null>(null);
@@ -69,14 +76,27 @@ export function PrintPanel({
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    if (!open || catalog) return;
+    if (!open) return;
     void (async () => {
       try { setCatalog(await fetchTtsCatalog()); }
       catch (e) {
         setError(e instanceof Error ? e.message : "Could not load narration options.");
       }
     })();
-  }, [open, catalog]);
+    // settingsVersion in the deps: a key added or an engine changed in
+    // Audiobook Settings must show up here without reopening the panel.
+  }, [open, settingsVersion]);
+
+  // THE money guard: a stale estimate must never sit under a live confirm
+  // button. If the chosen engine changes (in Settings or here), the old
+  // number and any pending confirmation are dropped -- otherwise a $31
+  // ElevenLabs quote could survive a switch to hosted Kokoro and the
+  // writer would confirm a price that no longer applies.
+  useEffect(() => {
+    setEstimate(null);
+    setConfirming(false);
+    setLastPreviewCost(null);
+  }, [tier?.provider, tier?.model, settingsVersion]);
 
   useEffect(() => () => audioRef.current?.pause(), []);
 
@@ -159,12 +179,20 @@ export function PrintPanel({
 
       {open && (
         <div className="mt-3">
-          <p className="mb-3 text-[11px] leading-relaxed text-zinc-400">
+          <p className="mb-2 text-[11px] leading-relaxed text-zinc-400">
             Drafting on the local narrator is free and unlimited. When the
-            book sounds the way you hear it, print the final with a hosted
-            voice. You always see the price first, and nothing is spent
-            until you confirm it.
+            book sounds the way you hear it, narrate the final with a
+            hosted voice. You always see the price first, and nothing is
+            spent until you confirm it.
           </p>
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="mb-3 inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-200 hover:underline"
+            >
+              <SettingsIcon size={11} /> Engine and keys live in Audiobook Settings
+            </button>
+          )}
 
           {/* The shelf: one honest pick per budget, free first. */}
           <div className="mb-3 space-y-1">
