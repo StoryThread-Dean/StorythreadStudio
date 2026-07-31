@@ -24,6 +24,7 @@ import { GenerationPanel } from "./GenerationPanel";
 import { MarkerHelpPanel } from "./MarkerHelpPanel";
 import { paragraphBoundsAt, stripAudioMarkers } from "./markers";
 import { PronunciationDialog } from "./PronunciationDialog";
+import { SayEditor } from "./SayEditor";
 import type { AudiobookChapter, AudiobookProjectPayload } from "./types";
 
 interface WorkspaceViewProps {
@@ -138,11 +139,67 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     };
   }, [content]);
 
+  // ── The [say] popout (user-designed) ────────────────────────────────────
+  // Instead of typing into raw brackets, [say] opens a structured card
+  // over the word: only the spoken form is typeable, with Preview and
+  // occurrence hopping. See SayEditor.tsx.
+  const [sayEditor, setSayEditor] = useState<{
+    start: number; end: number;
+    anchor: { top: number; left: number } | null;
+  } | null>(null);
+
+  /** Approximate pixel position of a text offset inside the textarea,
+      via the classic hidden-mirror measurement. Best effort -- a null
+      just docks the popout at the editor's top-left. */
+  const measureAnchor = useCallback((index: number) => {
+    const ta = textareaRef.current;
+    if (!ta) return null;
+    try {
+      const style = window.getComputedStyle(ta);
+      const mirror = document.createElement("div");
+      mirror.style.position = "absolute";
+      mirror.style.visibility = "hidden";
+      mirror.style.whiteSpace = "pre-wrap";
+      mirror.style.overflowWrap = "break-word";
+      mirror.style.width = `${ta.clientWidth}px`;
+      for (const prop of ["fontFamily", "fontSize", "fontWeight",
+                          "lineHeight", "letterSpacing", "padding"] as const) {
+        mirror.style[prop] = style[prop];
+      }
+      mirror.textContent = ta.value.slice(0, index);
+      const marker = document.createElement("span");
+      marker.textContent = ta.value.slice(index, index + 1) || ".";
+      mirror.appendChild(marker);
+      document.body.appendChild(mirror);
+      // Just under the word's line, clamped into view.
+      const top = ta.offsetTop + marker.offsetTop - ta.scrollTop + 26;
+      const left = marker.offsetLeft - ta.scrollLeft;
+      mirror.remove();
+      return {
+        top: Math.max(8, top),
+        left: Math.max(8, Math.min(left, Math.max(8, ta.clientWidth - 440))),
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
   const handleSay = useCallback(() => {
-    // [say:]word[/say] with the caret right after 'say:' -- the writer
-    // types the spoken form in place. Works with or without a selection.
-    wrapSelection("[say:]", "[/say]", "[say:".length);
-  }, [wrapSelection]);
+    const ta = textareaRef.current;
+    if (!ta) return;
+    let start = ta.selectionStart ?? 0;
+    let end = ta.selectionEnd ?? 0;
+    const wordChar = /[A-Za-z0-9'’-]/;
+    if (start === end) {
+      // No selection: the word under the caret is the obvious target.
+      while (start > 0 && wordChar.test(content[start - 1])) start -= 1;
+      while (end < content.length && wordChar.test(content[end])) end += 1;
+    }
+    while (start < end && /\s/.test(content[start])) start += 1;
+    while (end > start && /\s/.test(content[end - 1])) end -= 1;
+    if (start === end) return;                 // nothing to pronounce
+    setSayEditor({ start, end, anchor: measureAnchor(start) });
+  }, [content, measureAnchor]);
 
   const handleExclude = useCallback(() => {
     wrapSelection("[exclude]", "[/exclude]");
@@ -445,7 +502,26 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           </button>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          {sayEditor && (
+            <SayEditor
+              content={content}
+              start={sayEditor.start}
+              end={sayEditor.end}
+              workspacePath={workspacePath}
+              voiceId={payload.manifest.selected_voice ?? "am_michael"}
+              anchor={sayEditor.anchor}
+              onApply={next => { setContent(next); setDirty(true); }}
+              onLocate={pos => {
+                const ta = textareaRef.current;
+                if (!ta) return;
+                ta.scrollTop = (pos / Math.max(content.length, 1)) * ta.scrollHeight
+                  - ta.clientHeight / 3;
+                setSayEditor(prev => prev && { ...prev, anchor: measureAnchor(pos) });
+              }}
+              onClose={() => setSayEditor(null)}
+            />
+          )}
           {warnings.length > 0 && (
             <div className="shrink-0 border-b border-zinc-800 bg-blue-950/40 px-4 py-2">
               {warnings.map((warning, i) => (

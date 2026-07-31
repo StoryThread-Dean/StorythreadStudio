@@ -158,15 +158,31 @@ describe("WorkspaceView", () => {
     expect(textarea.scrollTop).toBe(500);
   });
 
-  it("[say] wraps the selection and parks the caret for the spoken form", async () => {
+  it("[say] opens the structured popout; Accept wraps the word", async () => {
     const textarea = await renderLoaded();
     const start = NARRATION.indexOf("First");
     textarea.setSelectionRange(start, start + "First".length);
 
     fireEvent.click(screen.getByText("[say]"));
-    expect(textarea.value).toContain("[say:]First[/say] prose.");
-    // Caret sits right after 'say:' so the writer types the spoken form.
-    expect(textarea.selectionStart).toBe(start + "[say:".length);
+    // The popout: brackets are chrome, only the spoken form is typeable.
+    const input = await screen.findByLabelText("Spoken form");
+    fireEvent.change(input, { target: { value: "FURST" } });
+    fireEvent.click(screen.getByText("Accept"));
+
+    expect(textarea.value).toContain("[say:FURST]First[/say] prose.");
+    expect(screen.getByTitle("Unsaved changes")).toBeTruthy();
+  });
+
+  it("[say] with no selection targets the word under the caret", async () => {
+    const textarea = await renderLoaded();
+    const caret = NARRATION.indexOf("Second") + 3;   // mid-word
+    textarea.setSelectionRange(caret, caret);
+
+    fireEvent.click(screen.getByText("[say]"));
+    const input = await screen.findByLabelText("Spoken form");
+    fireEvent.change(input, { target: { value: "SEK-und" } });
+    fireEvent.click(screen.getByText("Accept"));
+    expect(textarea.value).toContain("[say:SEK-und]Second[/say] prose.");
   });
 
   it("Exclude wraps the selection in exclude tags", async () => {
