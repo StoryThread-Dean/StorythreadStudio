@@ -154,14 +154,25 @@ def test_premium_only_models_keep_their_own_cast():
     assert "ara-en-US" in ids
 
 
+def test_grok_lists_the_provider_documented_voices_first():
+    # Live finding: sampling iris-en-US through OpenRouter returned
+    # "Provider returned 404" -- OpenRouter documents only five Grok
+    # voices, and without xAI's dialect suffix. The five it documents must
+    # therefore come FIRST, so the default pick is one that works.
+    voices = tts_providers.voices_for("openrouter", "x-ai/grok-voice-tts-1.0")[0]
+    first_five = [v["id"] for v in voices[:5]]
+    assert first_five == ["Ara", "Eve", "Leo", "Rex", "Sal"]
+    assert all("OpenRouter default accent" in v["label"] for v in voices[:5])
+    # The full xAI registry still follows, for when OpenRouter catches up.
+    assert len(voices) == 5 + 78
+
+
 def test_grok_voices_are_one_cast_across_three_dialects():
     # Each Grok voice is ONE voice that speaks three dialects, chosen by
     # the id suffix -- so the roster is generated (26 x 3), not typed out
     # 78 times, and re-casting a narrator for a British setting keeps the
     # same character.
     voices = tts_providers.voices_for("openrouter", "x-ai/grok-voice-tts-1.0")[0]
-    assert len(voices) == 78
-
     by_id = {v["id"]: v for v in voices}
     for suffix, language in (("en-US", "en-US"), ("en-GB", "en-GB"), ("en-AU", "en-AU")):
         voice = by_id[f"ara-{suffix}"]
@@ -170,16 +181,17 @@ def test_grok_voices_are_one_cast_across_three_dialects():
         # Same character words in every dialect: it is the same voice.
         assert "warm, natural, friendly" in voice["label"]
 
-    # 8 feminine and 18 masculine voices, in all three dialects.
-    assert sum(1 for v in voices if v["gender_presentation"] == "female") == 24
-    assert sum(1 for v in voices if v["gender_presentation"] == "male") == 54
-
-    # Grouped like every other roster: accents together, women first.
+    # The registry portion: 8 feminine and 18 masculine voices in all
+    # three dialects, grouped like every other roster (accents together,
+    # women first) after the five provider-documented entries.
+    registry = voices[5:]
+    assert sum(1 for v in registry if v["gender_presentation"] == "female") == 24
+    assert sum(1 for v in registry if v["gender_presentation"] == "male") == 54
     ranks = [({"en-US": 0, "en-GB": 1, "en-AU": 2}[v["language"]],
-              0 if v["gender_presentation"] == "female" else 1) for v in voices]
+              0 if v["gender_presentation"] == "female" else 1) for v in registry]
     assert ranks == sorted(ranks)
-    assert voices[0]["id"] == "ara-en-US"          # first American woman
-    assert voices[-1]["id"] == "zenith-en-AU"      # last Australian man
+    assert registry[0]["id"] == "ara-en-US"          # first American woman
+    assert registry[-1]["id"] == "zenith-en-AU"      # last Australian man
 
 
 def test_aura2_carries_its_published_registry():

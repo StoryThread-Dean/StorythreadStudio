@@ -338,7 +338,7 @@ def test_non_wav_and_odd_bit_depth_fail_loudly(restore_httpx):
     (401, False, "rejected the API key"),
     (402, False, "insufficient credits"),
     (403, False, "content policy"),
-    (404, False, "does not know that model"),
+    (404, False, "rejected that voice or model as unknown"),
     (429, True, "rate limit"),
     (500, True, "server error"),
     (400, False, "rejected the request"),

@@ -236,8 +236,31 @@ def _build_voices(
 
 
 _AURA2_VOICES = _build_voices(_AURA2_ROWS)
-# 26 voices x 3 dialects = 78 entries, grouped the same way.
-_GROK_VOICES = _build_voices(_accent_variant_rows(_GROK_BASE))
+
+# THE GROK VOICE SPLIT (live finding, 2026-07-31)
+# ----------------------------------------------
+# xAI publishes 26 voices, each speaking three dialects via the id suffix
+# (iris-en-US, iris-en-GB, iris-en-AU). OpenRouter's own Grok page,
+# however, documents only five voices and names them WITHOUT a suffix:
+# Eve, Ara, Rex, Sal, Leo. Sampling iris-en-US through OpenRouter came
+# back "Provider returned 404" -- xAI rejecting the id that OpenRouter
+# forwarded.
+#
+# So the dropdown offers both, in the order most likely to work: the five
+# OpenRouter documents first, then the full xAI registry. The model is
+# marked voices_verified=False, which also lets the writer type an id, and
+# its note explains the split rather than pretending the list is settled.
+_GROK_OPENROUTER_DOCUMENTED = tuple(
+    HostedVoice(name, f"{name} (OpenRouter default accent) -- {character}",
+                "en-US", gender)
+    for name, _stem, gender, character in _GROK_BASE
+    if name in ("Ara", "Eve", "Leo", "Rex", "Sal")
+)
+
+# 26 voices x 3 dialects = 78 entries, grouped the same way as Aura-2.
+_GROK_XAI_REGISTRY = _build_voices(_accent_variant_rows(_GROK_BASE))
+
+_GROK_VOICES = _GROK_OPENROUTER_DOCUMENTED + _GROK_XAI_REGISTRY
 
 # ElevenLabs' long-standing preset names. NanoGPT exposes 46 voices but
 # does not publish the list, so these are offered as a starting point and
@@ -292,10 +315,14 @@ OPENROUTER = TtsProviderConfig(
             price_per_million_chars="15",
             voices=_GROK_VOICES,
             tier="standard",
-            notes="26 expressive voices, each able to speak American, "
-                  "British, or Australian -- the dialect is part of the "
-                  "voice id, so the same narrator can be re-cast for a "
-                  "different setting without changing character.",
+            voices_verified=False,
+            notes="xAI publishes 26 voices, each able to speak American, "
+                  "British, or Australian (the dialect is part of the voice "
+                  "id). OpenRouter documents only five of them and without "
+                  "the dialect suffix, so those five are listed first as "
+                  "the ones known to work here -- the rest are offered "
+                  "after, and a 404 on one means OpenRouter has not picked "
+                  "it up yet.",
         ),
         HostedModel(
             id="deepgram/aura-2",

@@ -118,10 +118,16 @@ def _wav_seconds(audio: bytes) -> float:
         return clip.getnframes() / rate if rate else 0.0
 
 
-def _translate(provider: TtsProviderConfig, status: int, body: str) -> SynthesisError:
+def _translate(provider: TtsProviderConfig, status: int, body: str,
+               model_id: str = "", voice_id: str = "") -> SynthesisError:
     """One place where every hosted failure becomes a writer-facing
     sentence with the right retry verdict."""
     tail = f" The service said: {body.strip()[:200]}" if body.strip() else ""
+    named = ""
+    if model_id or voice_id:
+        parts = [p for p in (model_id and f"model {model_id}",
+                             voice_id and f"voice {voice_id}") if p]
+        named = f" (asked for {' with '.join(parts)})"
     if status == 401:
         return SynthesisError(
             f"{provider.label} rejected the API key. Check it in Settings.{tail}",
@@ -138,9 +144,14 @@ def _translate(provider: TtsProviderConfig, status: int, body: str) -> Synthesis
             f"narrator.{tail}",
             retryable=False)
     if status == 404:
+        # Nearly always the VOICE rather than the model: a provider's
+        # integration can lag behind the voice roster its own engine
+        # publishes, and it answers 404 for an id it has not picked up.
         return SynthesisError(
-            f"{provider.label} does not know that model or voice any more. "
-            f"Pick another in the narration settings.{tail}",
+            f"{provider.label} rejected that voice or model as unknown"
+            f"{named}. Try one of the voices listed FIRST for this engine "
+            "-- those are the ones the provider documents -- or pick a "
+            f"different engine in Audiobook Settings.{tail}",
             retryable=False)
     if status == 429:
         return SynthesisError(
@@ -257,7 +268,8 @@ class CloudSpeechBackend(SynthesisBackend):
                 f"Could not reach {self.provider.label}: {e}", retryable=True)
 
         if response.status_code != 200:
-            raise _translate(self.provider, response.status_code, response.text)
+            raise _translate(self.provider, response.status_code, response.text,
+                             self.model.id, voice_id)
 
         audio = self._read_audio(response)
         return audio, _wav_seconds(audio)
