@@ -242,3 +242,46 @@
     overflow: hidden;
   }
 }
+
+/*
+ * Audiobook flare -- the sound of the page
+ * ========================================
+ * The Audiobook dashboard is about hearing your words spoken, so the
+ * screen carries two quiet motifs of sound itself:
+ *
+ *   .stw-eq-bar    a live equalizer bar (staggered via --stw-delay)
+ *   .stw-pulse     a slow breathing glow, like a voice holding a note
+ *
+ * Both are decorative only. Anyone who asks their system to reduce
+ * motion gets a still, readable page instead (the animations stop at
+ * a sensible resting size, never collapsed).
+ */
+@keyframes stw-equalize {
+  0%,
+  100% { transform: scaleY(0.35); }
+  50%  { transform: scaleY(1); }
+}
+
+@keyframes stw-breathe {
+  0%,
+  100% { opacity: 0.35; }
+  50%  { opacity: 0.75; }
+}
+
+.stw-eq-bar {
+  transform-origin: bottom;
+  animation: stw-equalize 1.4s ease-in-out infinite;
+  animation-delay: var(--stw-delay, 0s);
+}
+
+.stw-pulse {
+  animation: stw-breathe 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stw-eq-bar,
+  .stw-pulse {
+    animation: none;
+    transform: scaleY(0.7);
+  }
+}
