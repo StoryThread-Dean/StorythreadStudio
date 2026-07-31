@@ -787,6 +787,31 @@ A catalog entry is a recommendation, so an engine earns its place on the shelf b
 
 The general lesson, worth applying to every future premium engine: **expressiveness and consistency trade against each other under per-segment synthesis.** The flatter model (Kokoro) stitches invisibly; the performer does not. Any engine considered for the Standard or Pro tier must be auditioned across at least a full chapter, not a sample sentence, because a single sentence is exactly the length at which this defect is inaudible.
 
+- **Voxtral Mini TTS (`mistralai/voxtral-mini-tts-2603`, OpenRouter, $16/M) -- the Standard replacement.** Chosen for one structural reason: **the mood is part of the voice id, not a parameter.** Three English narrators ship as one id per emotion (`gb_oliver_neutral`, `en_paul_confident`, `gb_jane_curious`...), so every segment is told "be Oliver, neutral" rather than being asked to interpret the text afresh. That is directly the latitude Grok used to drift. 24 English ids in all -- Paul (American male, 8 moods), Jane (British female, 9), Oliver (British male, 7) -- plus six French not offered. Deliberately NOT modelled as speaker x emotion axes: the mood sets differ per speaker, so two dropdowns would offer combinations that do not exist. Unproven by ear at time of writing; the full-chapter audition above applies to it too.
+
+##### The seed question (open)
+
+OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.
+
+It is unverified and was not built. Two reasons for caution: `supported_parameters` describes a model's chat-completions surface, and the OpenAI speech schema this endpoint imitates has no `seed` field at all -- so the gateway may drop it silently, or 400 on it mid-book. The test is cheap (one audition) and worth doing before anyone concludes a performer model cannot narrate long-form. If it works, it likely rehabilitates Grok and hardens Voxtral at the same time.
+
+##### Verified OpenRouter TTS catalog (July 2026, per million characters)
+
+| Slug | $/M | Notes |
+|---|---|---|
+| `hexgrad/kokoro-82m` | 0.62 | 54 voices; identical to the local narrator. Budget tier. |
+| `x-ai/grok-voice-tts-1.0` | 15 | 5 bare-name voices. Demoted -- prosody drift. |
+| `microsoft/mai-voice-2-flash` | 15 | Microsoft's latency variant; positioned for IVR, not narration. |
+| `qwen/qwen-audio-3.0-tts-flash` | 15 | Only 2 voices exposed by the gateway. The narration-grade "Plus" variant is not on OpenRouter. |
+| `mistralai/voxtral-mini-tts-2603` | 16 | 30 voices, mood baked into the id. **Standard tier.** |
+| `microsoft/mai-voice-2` | 22 | Advertises long-form speaker consistency, but the gateway exposes only ONE English voice (`en-US-Harper`) and no seed. Runner-up. |
+| `deepgram/aura-2` | 30 | 86 voices, no tunable parameters at all. Pro tier. |
+| `minimax/speech-2.8-turbo` | 60 | Not evaluated. |
+| `minimax/speech-2.8-hd` | 100 | Not evaluated. |
+| `google/gemini-3.1-flash-tts-preview` | $1/M in + $20/M out **tokens** | Priced per token, not per character, so the estimator (Section 20) cannot quote it exactly. Excluded on that basis alone. |
+
+MAI-Voice-2 deserves a note as the near-miss: Microsoft explicitly markets "stable, high-fidelity output that preserves speaker consistency across audiobooks", which is precisely the property Grok lacks. It lost on roster. One English voice means every book narrated on this app's Standard tier would sound like the same person, and the Grok episode established that the vendor's wider published roster (Acacia, Elm, Birch, Grove) is not what the gateway accepts.
+
 The provider abstraction must allow future providers without rewriting job logic.
 
 ### 13.2 Voice Selection Requirements

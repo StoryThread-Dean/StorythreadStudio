@@ -171,6 +171,38 @@ def test_grok_offers_only_the_voices_openrouter_documents():
     assert ara["label"] == "Ara (female) -- warm, natural, friendly"
 
 
+def test_voxtral_fills_the_standard_tier_with_one_voice_per_mood():
+    # Grok's replacement. The roster comes from OpenRouter's own model
+    # metadata, which is the source that turned out to be right about Grok
+    # when the vendor's page was not.
+    voices = tts_providers.voices_for(
+        "openrouter", "mistralai/voxtral-mini-tts-2603")[0]
+    ids = [v["id"] for v in voices]
+    assert len(ids) == 24                       # 8 Paul + 9 Jane + 7 Oliver
+    # Neutral leads each speaker: it is what a narrator reads in.
+    assert ids[0] == "en_paul_neutral"
+    assert ids.index("gb_jane_neutral") < ids.index("gb_jane_sarcasm")
+    # Grouped American then British, feminine before masculine inside that.
+    ranks = [({"en-US": 0, "en-GB": 1}[v["language"]],
+              0 if v["gender_presentation"] == "female" else 1) for v in voices]
+    assert ranks == sorted(ranks)
+    # French exists upstream and is deliberately not offered.
+    assert not any(i.startswith("fr_") for i in ids)
+
+
+def test_voxtral_is_recommended_and_bakes_mood_into_the_voice_not_an_axis():
+    # NOT modelled as speaker x emotion axes: the emotion sets differ per
+    # speaker, so two dropdowns would offer combinations that do not
+    # exist -- the exact trap removed from Grok.
+    _provider, model = tts_providers.resolve_model(
+        "openrouter", "mistralai/voxtral-mini-tts-2603")
+    assert model.voice_axes is None
+    assert model.recommended is True
+    assert model.caveat == ""
+    assert model.tier == "standard"
+    assert model.price_per_million_chars == "16"
+
+
 def test_grok_is_demoted_off_the_recommended_shelf_with_its_reason():
     # It narrates, and it sounds good for a sentence. But pitch and tone
     # reset between sentences -- each segment is its own request and the

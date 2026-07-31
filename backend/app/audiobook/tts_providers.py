@@ -285,6 +285,46 @@ _GROK_VOICES = tuple(
 # ElevenLabs' long-standing preset names. NanoGPT exposes 46 voices but
 # does not publish the list, so these are offered as a starting point and
 # the UI also accepts a typed voice name (voices_verified=False).
+# Mistral's Voxtral Mini TTS, taken from OPENROUTER'S OWN model metadata
+# rather than Mistral's marketing page -- that is the whole Grok lesson:
+# the gateway's list is what the gateway will actually accept.
+#
+# The unusual part: the mood is baked into the VOICE ID rather than passed
+# as a parameter. Three English speakers ship as one id per emotion. That
+# reads like a quirk and is actually the feature we want here -- a model
+# told "be Oliver, neutral" on every single segment has far less latitude
+# to re-improvise its delivery than one asked to interpret the text
+# afresh, which is exactly how Grok fell apart across a chapter.
+#
+# Deliberately NOT modelled as voice axes (speaker x emotion). The emotion
+# sets differ per speaker -- Paul has happy, Oliver does not; Jane alone
+# has sarcasm and jealousy -- so two independent dropdowns would offer
+# combinations that do not exist. That is the trap we just removed from
+# Grok, and it is not coming back through a side door.
+#
+# Ordered American -> British and feminine before masculine inside that,
+# matching every other roster, with neutral first per speaker because
+# neutral is what a narrator reads in.
+_VOXTRAL_SPEAKERS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], ...] = (
+    ("en_paul", "Paul", "American", "en-US", "male",
+     ("neutral", "confident", "cheerful", "happy", "excited",
+      "frustrated", "sad", "angry")),
+    ("gb_jane", "Jane", "British", "en-GB", "female",
+     ("neutral", "confident", "curious", "confused", "frustrated",
+      "jealousy", "sarcasm", "shameful", "sad")),
+    ("gb_oliver", "Oliver", "British", "en-GB", "male",
+     ("neutral", "confident", "cheerful", "curious", "excited",
+      "sad", "angry")),
+)
+
+_VOXTRAL_VOICES = tuple(
+    HostedVoice(f"{prefix}_{emotion}",
+                f"{name} -- {emotion} ({accent} {gender})",
+                language, gender)
+    for prefix, name, accent, language, gender, emotions in _VOXTRAL_SPEAKERS
+    for emotion in emotions
+)
+
 _ELEVEN_VOICES = (
     HostedVoice("Rachel", "Rachel (warm, narrative)", "en-US", "female"),
     HostedVoice("Adam", "Adam (deep, narrative)", "en-US", "male"),
@@ -329,6 +369,22 @@ OPENROUTER = TtsProviderConfig(
                   "the voice you drafted with.",
         ),
         HostedModel(
+            id="mistralai/voxtral-mini-tts-2603",
+            label="Voxtral Mini TTS",
+            price_per_1k_chars="0.016",
+            price_per_million_chars="16",
+            voices=_VOXTRAL_VOICES,
+            tier="standard",
+            notes="Three English narrators -- Paul (American), Jane and "
+                  "Oliver (British) -- each offered once per mood, with the "
+                  "mood fixed in the voice itself. Pick a narrator and read "
+                  "the whole book in that register. Six French voices exist "
+                  "too and are not listed here. Audition before you commit: "
+                  "a sample runs the same code path as a full pass, so "
+                  "anything this engine refuses shows up for a fraction of "
+                  "a cent instead of mid-book.",
+        ),
+        HostedModel(
             id="x-ai/grok-voice-tts-1.0",
             label="Grok Voice TTS",
             price_per_1k_chars="0.015",
@@ -339,16 +395,17 @@ OPENROUTER = TtsProviderConfig(
             recommended=False,
             caveat="Sounds professional sentence by sentence, but the pitch "
                    "and tone reset between them -- a chapter comes out like "
-                   "several narrators spliced together. Storythread sends "
-                   "each segment as its own request, and this model "
-                   "re-improvises its delivery every time, so nothing on our "
-                   "side can steady it. Fine for a short passage; wearing "
-                   "over a book.",
+                   "several narrators spliced together. Each segment is its "
+                   "own request and this model re-improvises delivery every "
+                   "time. Fine for a short passage; wearing over a book.",
             notes="Five voices, American only. xAI's own roster is wider (26 "
                   "voices, each able to speak British or Australian too), but "
                   "OpenRouter answers to these five bare names and nothing "
                   "else -- both the extra voices and the accent suffixes come "
-                  "back 404. Tested, not guessed.",
+                  "back 404. Tested, not guessed. One untried lever remains: "
+                  "OpenRouter lists a seed parameter for this model, and a "
+                  "seed held constant across segments might pin down the "
+                  "drift. Unverified -- the speech endpoint may ignore it.",
         ),
         HostedModel(
             id="deepgram/aura-2",
