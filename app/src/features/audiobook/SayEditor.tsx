@@ -254,30 +254,45 @@ export function SayEditor({
             Tips: ways writers use this
           </button>
           {showTips && (
-            <ul className="mb-2 max-h-56 overflow-y-auto rounded border border-zinc-800 bg-zinc-950">
-              {TIPS.map((tip, index) => (
-                <li key={tip.title} className="border-b border-zinc-800/60 last:border-b-0">
-                  <button
-                    type="button"
-                    onClick={() => setOpenTip(prev => (prev === index ? null : index))}
-                    className={"flex w-full items-center gap-1 px-2 py-1.5 text-left text-[11px] font-medium "
-                      + (tip.important
-                        ? "text-blue-300 hover:text-blue-100"   // the essential five
-                        : "text-zinc-300 hover:text-blue-200")}
-                  >
-                    {openTip === index
-                      ? <ChevronDown size={10} className="shrink-0" />
-                      : <ChevronRight size={10} className="shrink-0" />}
-                    {tip.title}
-                  </button>
-                  {openTip === index && (
-                    <p className="px-3 pb-2 pl-6 text-[11px] leading-relaxed text-zinc-400">
-                      {tip.body}
-                    </p>
-                  )}
-                </li>
+            <div className="mb-2 max-h-56 overflow-y-auto rounded border border-zinc-800 bg-zinc-950">
+              {[
+                { heading: "Most Useful", tips: TIPS.filter(t => t.important) },
+                { heading: "Additional useful information", tips: TIPS.filter(t => !t.important) },
+              ].map(section => (
+                <div key={section.heading}>
+                  <p className="border-b border-zinc-800/60 bg-zinc-900/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    {section.heading}
+                  </p>
+                  <ul>
+                    {section.tips.map(tip => {
+                      const index = TIPS.indexOf(tip);
+                      return (
+                        <li key={tip.title} className="border-b border-zinc-800/60 last:border-b-0">
+                          <button
+                            type="button"
+                            onClick={() => setOpenTip(prev => (prev === index ? null : index))}
+                            className={"flex w-full items-center gap-1 px-2 py-1.5 text-left text-[11px] font-medium "
+                              + (tip.important
+                                ? "text-blue-300 hover:text-blue-100"   // the essential five
+                                : "text-zinc-300 hover:text-blue-200")}
+                          >
+                            {openTip === index
+                              ? <ChevronDown size={10} className="shrink-0" />
+                              : <ChevronRight size={10} className="shrink-0" />}
+                            {tip.title}
+                          </button>
+                          {openTip === index && (
+                            <p className="px-3 pb-2 pl-6 text-[11px] leading-relaxed text-zinc-400">
+                              {tip.body}
+                            </p>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
 
           <div className="flex items-center gap-1.5">

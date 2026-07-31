@@ -99,8 +99,10 @@ describe("SayEditor", () => {
     expect(screen.queryByText(/Spell out the sounds/)).toBeNull();
     fireEvent.click(screen.getByText(/Tips: ways writers use this/));
 
-    // All section TITLES visible, no bodies yet. The essential five
-    // lead, in the user's order, with the highlight color.
+    // Two labeled groups: the essential five under Most Useful, the
+    // rest under Additional useful information, highlight color intact.
+    expect(screen.getByText("Most Useful")).toBeTruthy();
+    expect(screen.getByText("Additional useful information")).toBeTruthy();
     const titles = screen.getAllByRole("button").map(b => b.textContent ?? "");
     const firstFive = titles.filter(t =>
       /Spell out the sounds|Sounding out the Vowels|inFlection|Space vs Hyphen|multiple Pronunciations/.test(t));
