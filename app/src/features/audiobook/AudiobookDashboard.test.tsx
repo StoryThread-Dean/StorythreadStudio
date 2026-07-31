@@ -64,7 +64,7 @@ describe("AudiobookDashboard", () => {
     vi.stubGlobal("fetch", mockFetch([]));
     render(<AudiobookDashboard onNewAudiobook={vi.fn()} onOpenWorkspace={vi.fn()} />);
     await waitFor(() =>
-      expect(screen.getByText(/No audiobooks yet/)).toBeTruthy());
+      expect(screen.getByText(/Your first audiobook starts here/)).toBeTruthy());
   });
 
   it("Let's Get Started fires the wizard callback", async () => {
@@ -79,13 +79,16 @@ describe("AudiobookDashboard", () => {
     render(<AudiobookDashboard onNewAudiobook={vi.fn()} onOpenWorkspace={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("The Hollow Road")).toBeTruthy());
 
+    // The pitch carries the wonder, not just the function.
+    expect(screen.getByText(/Hear your own words read aloud/)).toBeTruthy();
+    expect(screen.getByText(/Five steps from page to playback/)).toBeTruthy();
     // The educational strip: all five steps named, pricing honesty in 5.
     expect(screen.getByText("Load your book")).toBeTruthy();
     expect(screen.getByText("Set up your workspace")).toBeTruthy();
-    expect(screen.getByText("Prepare your manuscript")).toBeTruthy();
-    expect(screen.getByText("Generate the free local version")).toBeTruthy();
-    expect(screen.getByText(/Print a professional HQ version/)).toBeTruthy();
-    expect(screen.getByText(/half a dollar/)).toBeTruthy();
+    expect(screen.getByText("Direct the narration")).toBeTruthy();
+    expect(screen.getByText("Hear it read aloud, free")).toBeTruthy();
+    expect(screen.getByText(/Print a studio-quality version/)).toBeTruthy();
+    expect(screen.getByText(/fifty cents/)).toBeTruthy();
 
     // Open Existing is NOT a primary button -- it hides under More.
     expect(screen.queryByText("Open Existing Workspace")).toBeNull();

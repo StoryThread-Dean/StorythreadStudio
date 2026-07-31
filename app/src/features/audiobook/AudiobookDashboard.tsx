@@ -24,31 +24,40 @@ import type { AudiobookProjectPayload, RecentAudiobook } from "./types";
 import { AUDIOBOOK_STATUS_LABELS } from "./types";
 
 // The five-step workflow strip: each step names itself; hovering (or
-// focusing) expands the plain-terms detail. Wording kept simple on
-// purpose -- this is the new writer's first thirty seconds.
+// focusing) expands the detail. The copy has three jobs at once -- say
+// what this part of the app IS, teach the workflow, and carry the
+// wonder of hearing your own words spoken. This is the new writer's
+// first thirty seconds; it should read like an invitation, not a form.
 const WORKFLOW_STEPS: Array<{ title: string; detail: string }> = [
   { title: "Load your book",
-    detail: "Pick one of your Storythread books, or import a manuscript "
-      + "from anywhere (DOCX, EPUB, Markdown, TXT). Your original file "
-      + "is copied in and never modified." },
+    detail: "Start from one of your Storythread books, or bring in a "
+      + "manuscript from anywhere: DOCX, EPUB, Markdown, plain text. "
+      + "Storythread copies it in and never touches your original, so "
+      + "the words you wrote are never at risk." },
   { title: "Set up your workspace",
-    detail: "The audiobook gets its own folder -- suggested "
-      + "automatically, right next to a Storythread book. Text, audio, "
-      + "and exports all live there." },
-  { title: "Prepare your manuscript",
-    detail: "A narration copy opens in the editor: add pauses and "
-      + "pacing, fix pronunciations, let the Formatting Walkthrough "
-      + "find the beats. Audible examples teach every marker." },
-  { title: "Generate the free local version",
-    detail: "The built-in narrator reads the whole book on your own "
-      + "computer. Free, private, and unlimited -- draft until it "
-      + "sounds right, then export MP3s and an M4B audiobook." },
-  { title: "(Optional) Print a professional HQ version",
-    detail: "When the draft is right, print the final audiobook with "
-      + "premium AI voices. Honest pricing: hosted draft voices run "
-      + "about half a dollar for a whole book; top-tier voices cost "
-      + "meaningfully more. Arriving in the premium update -- you "
-      + "will always see the price before anything is spent." },
+    detail: "Every audiobook gets a home of its own, suggested for "
+      + "you: a folder beside the book it came from. Narration text, "
+      + "generated audio, and finished files all live there together, "
+      + "yours on your own drive." },
+  { title: "Direct the narration",
+    detail: "Here a reading becomes a performance. Put a pause where a "
+      + "reader would breathe, slow a heavy moment, quicken a fight, "
+      + "and teach the narrator how your invented names are meant to "
+      + "sound. Every marker comes with an audible example, and a "
+      + "guided walkthrough will find the beats with you." },
+  { title: "Hear it read aloud, free",
+    detail: "The built-in narrator reads your whole book on this "
+      + "computer. No account, no meter, no limit. Listen to your own "
+      + "chapters spoken back to you, adjust, and regenerate as often "
+      + "as you like, then export chapter MP3s or a proper M4B "
+      + "audiobook." },
+  { title: "(Optional) Print a studio-quality version",
+    detail: "When the draft sounds the way you hear it in your head, "
+      + "print the final with a premium AI voice. Honest numbers: "
+      + "hosted draft voices run about fifty cents for a whole book, "
+      + "top-tier narration costs meaningfully more, and you will "
+      + "always see the price before a cent is spent. Arriving in the "
+      + "premium update." },
 ];
 
 interface AudiobookDashboardProps {
@@ -121,17 +130,26 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
     <div className="mx-auto flex w-full max-w-5xl flex-wrap gap-10 px-8 py-10">
       {/* Left: what this is, how it works, and the one way in. */}
       <div className="min-w-[20rem] flex-1">
-        <div className="mb-6 flex items-center gap-3">
-          <BookHeadphones size={28} className="text-emerald-400" />
+        <div className="mb-5 flex items-start gap-3">
+          <BookHeadphones size={28} className="mt-1 shrink-0 text-emerald-400" />
           <div>
             <h1 className="text-xl font-semibold text-zinc-100">Audiobook Generator</h1>
-            <p className="text-xs text-zinc-500">
-              Turns your written book into AI-narrated audio.
+            <p className="mt-1 text-sm text-zinc-300">
+              Hear your own words read aloud.
+            </p>
+            <p className="mt-1 max-w-lg text-xs leading-relaxed text-zinc-500">
+              The book you wrote becomes a real audiobook, narrated on
+              this computer, free and unlimited, and yours to keep. You
+              stay the director: you choose the voice, the pacing, and
+              every breath the narrator takes.
             </p>
           </div>
         </div>
 
         {/* The five-step workflow strip: hover a step to expand it. */}
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-blue-300">
+          Five steps from page to playback
+        </p>
         <ol className="mb-6 space-y-1">
           {WORKFLOW_STEPS.map((step, index) => (
             <li key={step.title} className="group rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 transition-colors hover:border-blue-800 hover:bg-blue-950/20">
@@ -161,7 +179,7 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
               <Sparkles size={16} /> Let's Get Started
             </button>
             <p className="mt-1.5 text-[11px] text-zinc-500">
-              A guided walkthrough -- it builds the workspace for you.
+              A guided walkthrough that sets everything up for you.
             </p>
           </div>
           <div className="relative">
@@ -210,8 +228,8 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
           <p className="text-sm text-zinc-500">Loading...</p>
         ) : recents.length === 0 ? (
           <p className="rounded-lg border border-dashed border-zinc-800 px-4 py-6 text-center text-sm text-zinc-500">
-            No audiobooks yet. Let's Get Started walks you through your
-            first one.
+            Your first audiobook starts here. Let's Get Started walks
+            you all the way through it.
           </p>
         ) : (
           <ul className="divide-y divide-zinc-800 rounded-lg border border-zinc-800 bg-zinc-900/60">
