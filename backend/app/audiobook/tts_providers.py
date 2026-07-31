@@ -44,6 +44,10 @@ class HostedModel:
     label: str                    # user-facing name
     price_per_1k_chars: str       # Decimal-safe string, USD
     voices: tuple[HostedVoice, ...]
+    # Which shelf this sits on, so the picker can offer one honest
+    # choice per budget instead of a wall of slugs. The FREE tier is the
+    # local narrator itself and lives outside this catalog.
+    tier: str = "standard"        # budget | standard | pro
     # Kokoro hosted remotely is the same engine as the local narrator, so
     # a draft made here sounds like the free draft. Flagged so the UI can
     # say "same voices as your free narrator".
@@ -109,6 +113,7 @@ NANOGPT = TtsProviderConfig(
             label="Kokoro 82M (hosted)",
             price_per_1k_chars="0.001",
             voices=_KOKORO_VOICES,
+            tier="budget",
             same_as_local=True,
             notes="The same engine and voices as your free local narrator, "
                   "rented by the character. Useful for drafting on a "
@@ -119,8 +124,10 @@ NANOGPT = TtsProviderConfig(
             label="ElevenLabs Turbo",
             price_per_1k_chars="0.06",
             voices=_ELEVEN_VOICES,
+            tier="pro",
             supports_speed=False,
-            notes="Premium narration performance. The print-pass voice.",
+            notes="Premium narration performance -- the print-pass voice "
+                  "when the book is final.",
         ),
     ),
 )
@@ -142,15 +149,89 @@ OPENROUTER = TtsProviderConfig(
             label="GPT-4o Mini TTS",
             price_per_1k_chars="0.015",
             voices=_OPENAI_TTS_VOICES,
-            notes="Natural, steady narration at a moderate price.",
+            tier="standard",
+            notes="Natural, steady narration at a moderate price -- the "
+                  "middle shelf between hosted Kokoro and premium voices.",
         ),
     ),
 )
+
+# The recommended shelf: one honest pick per budget, FREE first. The free
+# entry is the local narrator, which is not a hosted model at all -- the
+# picker shows it as the default so the paid tiers read as a deliberate
+# upgrade rather than the normal path.
+TIER_ORDER = ("free", "budget", "standard", "pro")
+
+TIER_LABELS = {
+    "free":     "Free",
+    "budget":   "Budget",
+    "standard": "Standard",
+    "pro":      "Pro",
+}
+
+TIER_BLURBS = {
+    "free":     "Runs on your computer. Unlimited, private, costs nothing.",
+    "budget":   "Pennies for a whole book. The same engine as free, rented.",
+    "standard": "A step up in naturalness for a few dollars a book.",
+    "pro":      "Studio-grade narration performance. The print-pass voice.",
+}
+
+LOCAL_TIER_ENTRY = {
+    "tier": "free",
+    "tier_label": TIER_LABELS["free"],
+    "blurb": TIER_BLURBS["free"],
+    "provider": "local-kokoro",
+    "provider_label": "Local narrator",
+    "model": "",
+    "model_label": "Kokoro 82M (on this computer)",
+    "price_per_1k_chars": "0.000",
+    "same_as_local": True,
+    "requires_key": False,
+}
+
+
+def recommended_tiers() -> list[dict]:
+    """The 4-5 model picker: free, budget, standard, pro, in that order."""
+    entries: list[dict] = [dict(LOCAL_TIER_ENTRY)]
+    for provider in PROVIDERS.values():
+        for model in provider.models:
+            entries.append({
+                "tier": model.tier,
+                "tier_label": TIER_LABELS.get(model.tier, model.tier.title()),
+                "blurb": TIER_BLURBS.get(model.tier, ""),
+                "provider": provider.key,
+                "provider_label": provider.label,
+                "model": model.id,
+                "model_label": model.label,
+                "price_per_1k_chars": model.price_per_1k_chars,
+                "same_as_local": model.same_as_local,
+                "requires_key": True,
+                "notes": model.notes,
+            })
+    entries.sort(key=lambda e: TIER_ORDER.index(e["tier"])
+                 if e["tier"] in TIER_ORDER else len(TIER_ORDER))
+    return entries
 
 PROVIDERS: dict[str, TtsProviderConfig] = {
     NANOGPT.key: NANOGPT,
     OPENROUTER.key: OPENROUTER,
 }
+
+
+def narration_api_key(settings: dict, provider: TtsProviderConfig) -> str:
+    """
+    The key narration should use for this provider.
+
+    Narration BORROWS the writing side's key by default (one key, nothing
+    extra to set up -- and usually the same account anyway). A writer who
+    wants them separate -- a premium drafting model on one account, cheap
+    narration on another -- turns that off and fills the audiobook key,
+    and then the writing key is deliberately NOT consulted: a silent
+    fallback would spend on the wrong account.
+    """
+    if settings.get("audiobook_use_writing_keys", True):
+        return str(settings.get(provider.api_key_setting) or "")
+    return str(settings.get(f"audiobook_{provider.api_key_setting}") or "")
 
 
 def resolve_model(provider_key: str, model_id: str) -> tuple[TtsProviderConfig, HostedModel]:
@@ -228,6 +309,7 @@ def estimate_print(workspace_path: str, provider_key: str, model_id: str) -> dic
     characters = 0
     segments = 0
     chapters = 0
+    flow_segments = 0
     for chapter in manifest["chapters"]:
         if chapter["chapter_id"] not in selected:
             continue
@@ -235,19 +317,38 @@ def estimate_print(workspace_path: str, provider_key: str, model_id: str) -> dic
         for item in chapter["items"]:
             if item.get("kind") != "segment":
                 continue
-            characters += len(pronunciation.prepare_tts_text(item["text"], rules))
+            fragments = item.get("fragments")
+            if fragments and len(fragments) >= 2:
+                # A FLOW segment is billed twice over: every fragment is
+                # synthesized (the calibration table) AND so is the
+                # continuous render they are matched against (flow.py).
+                # Counting it once would quote under the real charge on
+                # any pause-heavy book -- exactly the direction a quote
+                # must never miss in.
+                payloads = [pronunciation.prepare_tts_text(f, rules) for f in fragments]
+                characters += sum(len(p) for p in payloads)
+                characters += len(" ".join(payloads))
+                flow_segments += 1
+            else:
+                characters += len(pronunciation.prepare_tts_text(item["text"], rules))
             segments += 1
             counted_here = True
         if counted_here:
             chapters += 1
 
+    note = ""
+    if flow_segments:
+        note = (f"{flow_segments} passage(s) carry mid-sentence pauses. Those "
+                "are rendered continuously and matched, which bills their "
+                "text twice -- already included above.")
     return {
         "provider": provider.key, "provider_label": provider.label,
         "model": model.id, "model_label": model.label,
         "characters": characters, "segments": segments, "chapters": chapters,
+        "flow_segments": flow_segments,
         "price_per_1k_chars": model.price_per_1k_chars,
         "estimate_usd": estimate_cost_usd(characters, provider_key, model_id),
-        "note": "",
+        "note": note,
     }
 
 

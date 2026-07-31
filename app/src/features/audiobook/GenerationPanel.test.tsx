@@ -176,8 +176,9 @@ describe("GenerationPanel", () => {
     const generateCall = fetchMock.mock.calls.find(([u]) => String(u).includes("/generate"));
     expect(JSON.parse(String(generateCall?.[1]?.body))).toEqual({
       // am_michael: the default narrator when no voice is remembered.
-      workspace_path: WS, provider: "local-kokoro", voice_id: "am_michael",
-      force: false, draft: false,
+      // Free path: the local provider and no hosted model.
+      workspace_path: WS, provider: "local-kokoro", model: "",
+      voice_id: "am_michael", force: false, draft: false,
     });
     // Active run shows the between-segments controls.
     expect(screen.getByText("Pause")).toBeTruthy();

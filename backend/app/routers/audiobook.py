@@ -554,17 +554,99 @@ class StartGenerationRequest(BaseModel):
 
 @router.get("/tts-catalog")
 def tts_catalog():
-    """Hosted narration options with their real prices, plus whether a
-    key is already saved for each (spec 13/16). The local narrator is
-    not in here -- it is free and always available."""
+    """Hosted narration options with their real prices, the recommended
+    one-per-budget shelf, and whether a key is already saved for each
+    (spec 13/16). The local narrator leads the shelf -- it is free."""
     from app import settings_store
     from app.audiobook import tts_providers
     settings = settings_store.load_settings()
     entries = tts_providers.catalog()
     for entry in entries:
+        config = tts_providers.PROVIDERS[entry["provider"]]
         entry["has_api_key"] = bool(
-            str(settings.get(entry["api_key_setting"]) or "").strip())
-    return {"providers": entries}
+            tts_providers.narration_api_key(settings, config).strip())
+    tiers = tts_providers.recommended_tiers()
+    for tier in tiers:
+        if tier["requires_key"]:
+            config = tts_providers.PROVIDERS[tier["provider"]]
+            tier["has_api_key"] = bool(
+                tts_providers.narration_api_key(settings, config).strip())
+        else:
+            tier["has_api_key"] = True
+    return {
+        "providers": entries,
+        "recommended": tiers,
+        "using_writing_keys": bool(settings.get("audiobook_use_writing_keys", True)),
+    }
+
+
+class PrintPreviewRequest(BaseModel):
+    workspace_path: str
+    provider: str
+    model: str
+    voice_id: str
+    # A passage to rehearse; blank falls back to a short sample so the
+    # writer can audition a paid voice for a fraction of a cent.
+    text: str = ""
+
+
+PRINT_PREVIEW_MAX_CHARS = 1200
+_PRINT_PREVIEW_SAMPLE = (
+    "The road disappeared beneath the gathering snow, and somewhere "
+    "behind her, a second set of footsteps stopped."
+)
+
+
+@router.post("/print-preview")
+def print_preview(request: PrintPreviewRequest):
+    """
+    Audition a PAID voice on one passage before committing a whole book
+    (spec 19: never auto-spend). Costs a fraction of a cent, and the
+    charge for this preview is reported in the response headers so the
+    writer sees the number, not a guess.
+    """
+    _require_workspace(request.workspace_path)
+    from app.audiobook import marker_demos, tts_providers
+    text = (request.text or _PRINT_PREVIEW_SAMPLE).strip()
+    if len(text) > PRINT_PREVIEW_MAX_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"That selection is {len(text):,} characters (max "
+                   f"{PRINT_PREVIEW_MAX_CHARS:,} for a paid preview). "
+                   "Select a shorter passage -- previews are for auditioning "
+                   "a voice, not proofing a chapter.",
+        )
+    try:
+        backend = synthesis.resolve_backend(request.provider, request.model)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    rules = pronunciation.effective_rules(request.workspace_path)
+    settings = workspace.narration_settings(
+        workspace.load_manifest(request.workspace_path))
+    try:
+        audio, warnings, trace = marker_demos.render_marked_text(
+            text, backend, request.voice_id, rules, settings)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    # What this audition actually cost, on the same rounding rule as the
+    # full estimate (up, to the next cent).
+    charged = 0
+    for piece in trace:
+        charged += len(piece.get("snippet") or "")
+    spent = tts_providers.estimate_cost_usd(
+        max(charged, len(text)), request.provider, request.model)
+    from urllib.parse import quote
+    headers = {
+        "X-Preview-Trace": quote(json.dumps(trace)),
+        "X-Preview-Cost-Usd": spent,
+    }
+    if warnings:
+        headers["X-Preview-Warnings"] = quote(json.dumps(warnings))
+    return Response(content=audio, media_type="audio/wav", headers=headers)
 
 
 @router.get("/print-estimate")

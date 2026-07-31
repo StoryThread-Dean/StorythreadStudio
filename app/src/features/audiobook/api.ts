@@ -153,12 +153,15 @@ export async function startGeneration(
   voiceId: string,
   force = false,
   draft = false,
+  /** Hosted print pass; defaults to the free local narrator. */
+  provider = "local-kokoro",
+  model = "",
 ): Promise<GenerationRun> {
   const res = await fetch(`${API_BASE}/api/audiobook/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      workspace_path: workspacePath, provider: "local-kokoro", voice_id: voiceId,
+      workspace_path: workspacePath, provider, model, voice_id: voiceId,
       force, draft,
     }),
   });
@@ -339,6 +342,102 @@ export async function addChapters(
     body: JSON.stringify({ workspace_path: workspacePath, titles }),
   });
   return toJson(res);
+}
+
+// ── Hosted narration: the print pass (spec 13/19) ────────────────────────────
+
+export interface NarrationTier {
+  tier: "free" | "budget" | "standard" | "pro";
+  tier_label: string;
+  blurb: string;
+  provider: string;
+  provider_label: string;
+  model: string;
+  model_label: string;
+  price_per_1k_chars: string;
+  same_as_local: boolean;
+  requires_key: boolean;
+  has_api_key: boolean;
+  notes?: string;
+}
+
+export interface TtsCatalog {
+  recommended: NarrationTier[];
+  using_writing_keys: boolean;
+  providers: Array<{
+    provider: string;
+    provider_label: string;
+    key_hint: string;
+    has_api_key: boolean;
+    models: Array<{
+      id: string;
+      label: string;
+      price_per_1k_chars: string;
+      same_as_local: boolean;
+      supports_speed: boolean;
+      notes: string;
+      voices: Array<{ id: string; label: string; language: string }>;
+    }>;
+  }>;
+}
+
+export async function fetchTtsCatalog(): Promise<TtsCatalog> {
+  return toJson<TtsCatalog>(await fetch(`${API_BASE}/api/audiobook/tts-catalog`));
+}
+
+export interface PrintEstimate {
+  provider: string;
+  provider_label: string;
+  model: string;
+  model_label: string;
+  characters: number;
+  segments: number;
+  chapters: number;
+  flow_segments: number;
+  price_per_1k_chars: string;
+  estimate_usd: string;
+  note: string;
+}
+
+export async function fetchPrintEstimate(
+  workspacePath: string,
+  provider: string,
+  model: string,
+): Promise<PrintEstimate> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/print-estimate`
+    + `?workspace_path=${encodeURIComponent(workspacePath)}`
+    + `&provider=${encodeURIComponent(provider)}`
+    + `&model=${encodeURIComponent(model)}`,
+  );
+  return toJson<PrintEstimate>(res);
+}
+
+/** Audition a PAID voice on one passage. Returns the audio plus what
+ * the audition itself cost. */
+export async function printPreview(
+  workspacePath: string,
+  provider: string,
+  model: string,
+  voiceId: string,
+  text = "",
+): Promise<{ blob: Blob; costUsd: string }> {
+  const res = await fetch(`${API_BASE}/api/audiobook/print-preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspace_path: workspacePath, provider, model, voice_id: voiceId, text,
+    }),
+  });
+  if (!res.ok) {
+    let detail = `Preview failed (${res.status}).`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+    throw new Error(detail);
+  }
+  return {
+    blob: await res.blob(),
+    costUsd: res.headers.get("X-Preview-Cost-Usd") ?? "0.00",
+  };
 }
 
 // ── Book metadata + cover (spec 17) ──────────────────────────────────────────

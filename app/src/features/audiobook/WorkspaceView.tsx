@@ -366,6 +366,19 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
 
       {/* Marker toolbar -- sapphire accents: informational tooling */}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-zinc-800 px-4 py-2">
+        {/* The walkthrough leads: it is the guided way to place
+            everything the rest of this toolbar inserts by hand. */}
+        <button
+          onClick={() => {
+            if (walkthroughStart !== null) { setWalkthroughStart(null); return; }
+            setWalkthroughStart(textareaRef.current?.selectionStart ?? 0);
+          }}
+          title="Walk the manuscript from the cursor: pauses at dialogue hand-offs, beats between short sentences, marker repairs. Apply or skip each stop."
+          className="inline-flex items-center gap-1 rounded border border-blue-800 bg-blue-950/50 px-2 py-1 text-[11px] text-blue-200 hover:border-blue-500 hover:text-blue-100"
+        >
+          <Wand2 size={11} /> Formatting Walkthrough
+        </button>
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
         {PAUSE_ACTIONS.map(action => (
           <button
             key={action.snippet}
@@ -412,22 +425,13 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         >
           <EyeOff size={11} /> Exclude
         </button>
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
           onClick={handleRemoveMarkers}
           title="Remove audio markers from the selection (or the paragraph under the cursor). Your words stay."
           className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-rose-600 hover:text-rose-300"
         >
           <Scissors size={11} /> Remove
-        </button>
-        <button
-          onClick={() => {
-            if (walkthroughStart !== null) { setWalkthroughStart(null); return; }
-            setWalkthroughStart(textareaRef.current?.selectionStart ?? 0);
-          }}
-          title="Walk the manuscript from the cursor: pauses at dialogue hand-offs, beats between short sentences, marker repairs. Apply or skip each stop."
-          className="inline-flex items-center gap-1 rounded border border-blue-800 bg-blue-950/50 px-2 py-1 text-[11px] text-blue-200 hover:border-blue-500 hover:text-blue-100"
-        >
-          <Wand2 size={11} /> Formatting Walkthrough
         </button>
         <button
           onClick={() => setShowMarkerHelp(v => !v)}

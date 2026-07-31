@@ -71,7 +71,13 @@ def resolve_backend(provider: str, model_id: str = "") -> SynthesisBackend:
                 f"Choose a {config.label} narration model before printing.")
         from app import settings_store
         settings = settings_store.load_settings()
-        api_key = str(settings.get(config.api_key_setting) or "")
+        api_key = tts_providers.narration_api_key(settings, config)
+        if not api_key.strip() and not settings.get("audiobook_use_writing_keys", True):
+            raise ValueError(
+                f"No audiobook {config.label} API key saved. Add one in "
+                "Settings under the audiobook narration keys, or switch "
+                "narration back to using your writing key."
+            )
         return cloud_speech.make_backend(provider, model_id, api_key)
 
     raise ValueError(f"Unknown narration provider '{provider}'.")

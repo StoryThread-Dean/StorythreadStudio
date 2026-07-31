@@ -109,6 +109,27 @@ def test_print_estimate_counts_the_real_payload_text(tmp_path):
     assert body["model_label"] == "Kokoro 82M (hosted)"
 
 
+def test_estimate_counts_flow_passages_twice_because_they_bill_twice(tmp_path):
+    # A mid-sentence pause makes a flow segment: its fragments AND the
+    # continuous render are both synthesized (flow.py), so a quote that
+    # counted the text once would come in UNDER the real charge.
+    src = tmp_path / "b.md"
+    src.write_text('# One\n\n"Stay. [pause:0.4] Please stay."\n', encoding="utf-8")
+    ws = tmp_path / "flow-ws"
+    client.post("/api/audiobook/import", json={
+        "source_path": str(src), "workspace_path": str(ws), "title": "T"})
+
+    body = client.get("/api/audiobook/print-estimate", params={
+        "workspace_path": str(ws), "provider": "nanogpt",
+        "model": "kokoro-82m"}).json()
+
+    fragments = ['"Stay.', 'Please stay."']
+    doubled = sum(len(f) for f in fragments) + len(" ".join(fragments))
+    assert body["flow_segments"] == 1
+    assert body["characters"] == doubled
+    assert "bills their text twice" in body["note"]
+
+
 def test_print_estimate_before_any_narration_is_saved_says_so(tmp_path):
     from app.audiobook import workspace as workspace_mod
     ws = tmp_path / "empty"
@@ -132,6 +153,65 @@ def test_catalog_endpoint_reports_whether_a_key_is_saved(tmp_path):
     saved = {e["provider"]: e for e in
              client.get("/api/audiobook/tts-catalog").json()["providers"]}
     assert saved["nanogpt"]["has_api_key"] is True
+
+
+# ── The recommended shelf and separate narration keys ────────────────────────
+
+def test_recommended_shelf_is_one_pick_per_budget_free_first():
+    shelf = tts_providers.recommended_tiers()
+    assert [e["tier"] for e in shelf] == ["free", "budget", "standard", "pro"]
+
+    free = shelf[0]
+    # The free tier IS the local narrator: no key, no provider account.
+    assert free["provider"] == "local-kokoro"
+    assert free["requires_key"] is False
+    assert free["price_per_1k_chars"] == "0.000"
+    # Every paid tier names its price and needs a key.
+    for entry in shelf[1:]:
+        assert entry["requires_key"] is True
+        assert float(entry["price_per_1k_chars"]) > 0
+        assert entry["blurb"]
+
+
+def test_narration_borrows_the_writing_key_by_default():
+    provider = tts_providers.PROVIDERS["nanogpt"]
+    settings = {"nanogpt_api_key": "writing-key",
+                "audiobook_nanogpt_api_key": "narration-key",
+                "audiobook_use_writing_keys": True}
+    assert tts_providers.narration_api_key(settings, provider) == "writing-key"
+
+
+def test_separate_narration_keys_never_fall_back_to_the_writing_key():
+    # The whole point of separating them is spending on the RIGHT
+    # account: a silent fallback would bill the writing account.
+    provider = tts_providers.PROVIDERS["nanogpt"]
+    settings = {"nanogpt_api_key": "writing-key",
+                "audiobook_nanogpt_api_key": "narration-key",
+                "audiobook_use_writing_keys": False}
+    assert tts_providers.narration_api_key(settings, provider) == "narration-key"
+
+    settings["audiobook_nanogpt_api_key"] = ""
+    assert tts_providers.narration_api_key(settings, provider) == ""
+
+
+def test_missing_separate_key_says_which_key_to_add(tmp_path):
+    from app.audiobook import synthesis
+    settings = settings_store.load_settings()
+    settings["nanogpt_api_key"] = "writing-key"
+    settings["audiobook_use_writing_keys"] = False
+    settings_store.save_settings(settings)
+    with pytest.raises(ValueError, match="audiobook NanoGPT API key"):
+        synthesis.resolve_backend("nanogpt", "kokoro-82m")
+
+
+def test_catalog_endpoint_reports_the_shelf_and_key_mode():
+    body = client.get("/api/audiobook/tts-catalog").json()
+    assert [e["tier"] for e in body["recommended"]] == \
+        ["free", "budget", "standard", "pro"]
+    assert body["using_writing_keys"] is True
+    # The free tier is always usable; paid tiers report their key state.
+    assert body["recommended"][0]["has_api_key"] is True
+    assert body["recommended"][3]["has_api_key"] is False
 
 
 # ── The cloud backend behind the seam ────────────────────────────────────────
@@ -282,3 +362,72 @@ def test_local_narrator_still_resolves_by_its_own_key(monkeypatch):
     monkeypatch.setattr(local_worker, "make_backend",
                         lambda: "the-local-one")
     assert synthesis.resolve_backend("local-kokoro") == "the-local-one"
+
+
+# ── Auditioning a paid voice before printing a book ──────────────────────────
+
+def test_print_preview_renders_a_passage_and_reports_what_it_cost(
+        tmp_path, restore_httpx):
+    ws = _workspace(tmp_path)
+    settings = settings_store.load_settings()
+    settings["nanogpt_api_key"] = "sk-test"
+    settings_store.save_settings(settings)
+
+    sent: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content)["input"])
+        return httpx.Response(200, content=_wav(1.0))
+
+    _route_httpx(handler)
+    response = client.post("/api/audiobook/print-preview", json={
+        "workspace_path": ws, "provider": "nanogpt", "model": "elevenlabs-turbo",
+        "voice_id": "rachel", "text": "She waited. [pause:0.5] Nothing came.",
+    })
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "audio/wav"
+    # The audition went through the REAL pipeline: a mid-sentence pause
+    # makes this a flow segment, so both fragments AND the continuous
+    # render they are matched against were synthesized.
+    assert sent == ["She waited.", "Nothing came.", "She waited. Nothing came."]
+    # And its cost is reported, rounded up like every other quote.
+    assert response.headers["X-Preview-Cost-Usd"] == "0.01"
+
+
+def test_print_preview_falls_back_to_a_sample_and_caps_length(
+        tmp_path, restore_httpx):
+    ws = _workspace(tmp_path)
+    settings = settings_store.load_settings()
+    settings["nanogpt_api_key"] = "sk-test"
+    settings_store.save_settings(settings)
+
+    sent: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content)["input"])
+        return httpx.Response(200, content=_wav(1.0))
+
+    _route_httpx(handler)
+    blank = client.post("/api/audiobook/print-preview", json={
+        "workspace_path": ws, "provider": "nanogpt", "model": "kokoro-82m",
+        "voice_id": "af_heart", "text": "",
+    })
+    assert blank.status_code == 200
+    assert "gathering snow" in sent[0]         # the built-in sample
+
+    too_long = client.post("/api/audiobook/print-preview", json={
+        "workspace_path": ws, "provider": "nanogpt", "model": "kokoro-82m",
+        "voice_id": "af_heart", "text": "x" * 5000,
+    })
+    assert too_long.status_code == 400
+    assert "auditioning a voice" in too_long.json()["detail"]
+
+
+def test_print_preview_without_a_key_refuses_before_spending(tmp_path):
+    ws = _workspace(tmp_path)
+    response = client.post("/api/audiobook/print-preview", json={
+        "workspace_path": ws, "provider": "nanogpt", "model": "kokoro-82m",
+        "voice_id": "af_heart", "text": "Hello.",
+    })
+    assert response.status_code == 400
+    assert "API key" in response.json()["detail"]

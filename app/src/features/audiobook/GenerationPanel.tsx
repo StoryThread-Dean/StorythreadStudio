@@ -23,6 +23,7 @@ import {
 import type { EngineStatus, NarrationSettings, PreviewTracePiece } from "./api";
 import { BookDetailsPanel } from "./BookDetailsPanel";
 import { ExportPanel } from "./ExportPanel";
+import { PrintPanel } from "./PrintPanel";
 import type { GenerationRun, NarratorVoice } from "./types";
 
 interface GenerationPanelProps {
@@ -637,6 +638,15 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
           {error}
         </p>
       )}
+
+      {/* The print pass: everything that can SPEND money, in violet, in
+          one place, behind an estimate and a confirm (spec 13/19). */}
+      <PrintPanel
+        workspacePath={workspacePath}
+        localVoiceId={voiceId}
+        getSelectionText={getSelectionText}
+        onRunStarted={() => { void pollOnce(); }}
+      />
 
       {/* Book Details: tags + cover for the exported files (spec 17). */}
       <BookDetailsPanel

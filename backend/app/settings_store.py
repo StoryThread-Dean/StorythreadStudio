@@ -55,6 +55,14 @@ DEFAULT_SETTINGS: dict = {
     # nanogpt_api_key: NanoGPT's key, stored separately from OpenRouter's.
     # Same handling rules: never sent to the frontend unmasked, empty = unset.
     "nanogpt_api_key":    "",
+    # Audiobook narration keys. The writing side and the narration side
+    # are different jobs with different budgets: a writer may want a
+    # top-tier drafting model AND a cheap narration account, or the
+    # reverse. By default narration BORROWS the keys above (one key,
+    # nothing to set up); turning that off reveals its own key fields.
+    "audiobook_use_writing_keys": True,
+    "audiobook_openrouter_api_key": "",
+    "audiobook_nanogpt_api_key":    "",
     "default_model":      "openai/gpt-4o-mini",
     # prompt_caching: when True (default), OpenRouter requests mark the
     # system prompt as cacheable so supported models (Anthropic-family)
