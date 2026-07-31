@@ -66,7 +66,7 @@ describe("SayEditor", () => {
     expect(props.onLocate).toHaveBeenLastCalledWith(CONTENT.indexOf("Then Lara") + 5);
   });
 
-  it("Preview sends the sentence with the override applied", async () => {
+  it("Preview sends the word alone with the override applied", async () => {
     const posted: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
       posted.push(String(init?.body));
@@ -86,8 +86,9 @@ describe("SayEditor", () => {
     fireEvent.click(screen.getByText("Preview"));
     await waitFor(() => expect(posted.length).toBe(1));
     const body = JSON.parse(posted[0]);
-    // The word's own sentence, wrapped -- context, not the whole book.
-    expect(body.text).toBe("[say:LOR-uh]Lara[/say] smiled.");
+    // The word ALONE -- sentence-context previews tripped over the "."
+    // inside nearby [pause:0.8] markers (live finding).
+    expect(body.text).toBe("[say:LOR-uh]Lara[/say]");
     expect(body.voice_id).toBe("af_heart");
     await waitFor(() => expect(play).toHaveBeenCalledOnce());
   });

@@ -33,9 +33,9 @@ interface SayEditorProps {
 
 // The tips library: every entry is a REAL technique, worded to spark
 // ideas beyond pronunciation fixes. Respellings here follow the
-// ear-tested house rules: hyphens glue syllables into one word, and the
-// engine evens out capitals -- the Preview button is the judge, not the
-// spelling.
+// ear-tested house rules: hyphens glue syllables into one word, and
+// CAPITALS genuinely add weight to a syllable (measured ~20% more dwell)
+// -- the Preview button is the judge, not the spelling.
 const TIPS: Array<{ title: string; body: string }> = [
   { title: "Spell the sounds, not the word",
     body: "Kaelith -> KAY-lith. Hyphens glue syllables into one spoken "
@@ -51,9 +51,10 @@ const TIPS: Array<{ title: string; body: string }> = [
       + "apply. Jesus -> Hay-SOOS works the same trick." },
   { title: "Shift the stress for emphasis",
     body: "REC-ord is a noun, re-CORD is a verb -- respelling moves the "
-      + "stressed syllable. For weight on a word, exaggerate its strong "
-      + "syllable: absolutely -> ab-so-LOOT-lee. Subtle -- always "
-      + "preview; the right respelling is whatever SOUNDS right." },
+      + "stressed syllable. CAPITALS make the engine lean into a "
+      + "syllable, so for weight on a word, cap its strong syllable: "
+      + "absolutely -> ab-so-LOOT-lee. Always preview; the right "
+      + "respelling is whatever SOUNDS right." },
   { title: "Letters or a word?",
     body: "NASA can be nassa or en ay ess ay. Spell initialisms as "
       + "spaced letter sounds (F B I -> ef bee eye) when the engine "
@@ -133,25 +134,14 @@ export function SayEditor({
     setPreviewing(true);
     setError(null);
     try {
-      // The word inside its SENTENCE, override applied -- pronunciation
-      // is judged in context, not in isolation.
-      const sentenceStart = Math.max(
-        content.lastIndexOf(".", currentPos - 1),
-        content.lastIndexOf("!", currentPos - 1),
-        content.lastIndexOf("?", currentPos - 1),
-        content.lastIndexOf("\n", currentPos - 1),
-      ) + 1;
-      let sentenceEnd = content.length;
-      for (const stop of [".", "!", "?", "\n"]) {
-        const at = content.indexOf(stop, currentPos + word.length);
-        if (at !== -1 && at + 1 < sentenceEnd) sentenceEnd = at + 1;
-      }
+      // The WORD alone -- sentence context sounded nicer but its
+      // boundary hunt tripped over the "." inside a nearby [pause:0.8]
+      // and previewed marker shrapnel (live finding). Isolation is
+      // predictable, and pronunciation is what is being judged.
       const wrapped = spoken.trim()
-        ? content.slice(sentenceStart, currentPos)
-          + `[say:${spoken.trim()}]${word}[/say]`
-          + content.slice(currentPos + word.length, sentenceEnd)
-        : content.slice(sentenceStart, sentenceEnd);
-      const { blob } = await previewSelection(workspacePath, wrapped.trim(), voiceId);
+        ? `[say:${spoken.trim()}]${word}[/say]`
+        : word;
+      const { blob } = await previewSelection(workspacePath, wrapped, voiceId);
       audioRef.current?.pause();
       const audio = new Audio(URL.createObjectURL(blob));
       audioRef.current = audio;
@@ -202,8 +192,8 @@ export function SayEditor({
               onClick={() => void handlePreview()}
               disabled={previewing}
               title={spoken.trim()
-                ? "Hear this sentence with your spoken form applied"
-                : "Hear the engine's current reading of this sentence"}
+                ? "Hear the word with your spoken form applied"
+                : "Hear the engine's current reading of the word"}
               className="ml-auto inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
             >
               {previewing ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}

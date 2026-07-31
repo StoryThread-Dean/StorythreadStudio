@@ -143,13 +143,13 @@ def test_say_demo_covers_both_use_cases():
     # Case 1 -- one "Jesus" doubles as the English default; the forced
     # Spanish form arrives fused and ear-tuned.
     assert "the name Jesus the English way" in spoken
-    assert "Haysoos" in spoken                     # tuned by listening, not spelling
+    assert "HaySOOS" in spoken                     # tuned by listening, not spelling
     # Case 2 -- regional variants: engine-default Lara plus three forced
     # readings, no hesitation gaps, closing on the user's tagline.
     assert "Lara, for example" in spoken
-    assert "larah" in spoken
-    assert "lairah" in spoken
-    assert "leerah" in spoken
+    assert "LARah" in spoken
+    assert "LAIRah" in spoken
+    assert "LEERah" in spoken
     # The closing act teaches the dictionary/say relationship out loud:
     # dictionary = whole book, say = one spot, say wins.
     assert "when both apply, say wins" in spoken
@@ -196,7 +196,7 @@ def test_render_marked_text_applies_rules_and_silence():
     assert _duration(out) == pytest.approx(4.0, abs=0.01)
     assert warnings == []
     # The dictionary rule reached the payload, fused.
-    assert any("laruh" in t for t in backend.texts)
+    assert any("LARuh" in t for t in backend.texts)
 
 
 def test_render_marked_text_drops_leading_silence():

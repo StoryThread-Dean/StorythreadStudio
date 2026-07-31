@@ -134,27 +134,25 @@ def apply_pronunciations(text: str, rules: list[PronunciationRule]) -> str:
 # ── Making spoken forms actually speakable ────────────────────────────────────
 # Writers type phonetic respellings the standard way: caps for the
 # stressed syllable, hyphens between syllables ("LAR-uh", "KAY-lith").
-# Two engine behaviors fight that convention (both live findings):
-#   1. ALL-CAPS tokens are read as ACRONYMS and spelled letter by letter
-#      ("LAR-uh" came out "L, A, R, uh") -- so caps syllables lowercase.
-#   2. A syllable boundary rendered as a space (or kept as a hyphen)
-#      becomes a word boundary -- an audible hesitation ("Lar... a") --
-#      so hyphenated syllables FUSE into one word: "LAR-ah" -> "larah".
-# Spaces the writer actually typed ("Doctor Vex") remain word breaks.
+# One engine behavior fights that convention (live finding): a syllable
+# boundary rendered as a space (or kept as a hyphen) becomes a word
+# boundary -- an audible hesitation ("Lar... a") -- so hyphenated
+# syllables FUSE into one word: "LAR-ah" -> "LARah". Spaces the writer
+# actually typed ("Doctor Vex") remain word breaks.
+#
+# CAPS are PRESERVED deliberately (2026-07-30 backtrack): an earlier fix
+# also lowercased caps syllables to stop all-caps tokens being spelled
+# as acronyms, but fusion alone prevents that ("LARah" is mixed case),
+# and measurement showed capitals genuinely shape delivery -- the engine
+# dwells ~20% longer on a capitalized syllable ("absoLOOTlee" 1.94s vs
+# "absolootlee" 1.62s). Caps are the writer's stress dial; the [say]
+# Preview button is the judge.
 # The dictionary file and everything on screen keep the writer's spelling.
 
 def speakable(spoken: str) -> str:
     words_out = []
     for word in spoken.strip().split():
-        syllables = []
-        for syllable in word.split("-"):
-            # Only flatten chunks that LOOK like shouted syllables
-            # (letters, all caps, 2+ chars). Mixed case ("McRae") passes.
-            if len(syllable) >= 2 and syllable.isalpha() and syllable.isupper():
-                syllables.append(syllable.lower())
-            else:
-                syllables.append(syllable)
-        words_out.append("".join(syllables))
+        words_out.append("".join(word.split("-")))
     return " ".join(w for w in words_out if w)
 
 

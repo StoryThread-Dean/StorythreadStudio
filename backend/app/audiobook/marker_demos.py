@@ -49,7 +49,8 @@ DEMO_SCRIPTS: dict[str, str] = {
     # reads best on paper.
     # Script wording is the user's (2026-07-29 testing round). The first
     # "Jesus" doubles as the English-default demonstration -- one mention
-    # is all that's needed. Hay-SOOS fuses to "Haysoos", ear-verified.
+    # is all that's needed. Hay-SOOS fuses to "HaySOOS" (caps preserved
+    # since the 2026-07-30 backtrack -- capitals add dwell on purpose).
     "say": (
         "The local narrator gets most pronunciations right on its own. Reach "
         "for a say marker when a word needs a specific variation."
