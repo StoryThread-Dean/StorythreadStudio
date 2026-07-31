@@ -28,30 +28,44 @@ import { AUDIOBOOK_STATUS_LABELS } from "./types";
 // what this part of the app IS, teach the workflow, and carry the
 // wonder of hearing your own words spoken. This is the new writer's
 // first thirty seconds; it should read like an invitation, not a form.
-const WORKFLOW_STEPS: Array<{ title: string; detail: string }> = [
-  { title: "Load your book",
+// Each tile washes a faded gem color on the LEFT into charcoal on the
+// right, and the gem shifts as the staircase descends: sapphire at the
+// top, through violet at the midpoint, to ruby at the paid final step.
+// Blue reads as "free and yours", ruby as "this one costs" -- the house
+// palette's meanings, blended into one gradient.
+const CHARCOAL = "#1a1a1a";
+
+const WORKFLOW_STEPS: Array<{
+  title: string; detail: string; gem: string; badge: string;
+}> = [
+  { gem: "#1e3a8a", badge: "bg-blue-500 text-white",
+    title: "Load your book",
     detail: "Start from one of your Storythread books, or bring in a "
       + "manuscript from anywhere: DOCX, EPUB, Markdown, plain text. "
       + "Storythread copies it in and never touches your original, so "
       + "the words you wrote are never at risk." },
-  { title: "Set up your workspace",
+  { gem: "#312e81", badge: "bg-indigo-500 text-white",
+    title: "Set up your workspace",
     detail: "Every audiobook gets a home of its own, suggested for "
       + "you: a folder beside the book it came from. Narration text, "
       + "generated audio, and finished files all live there together, "
       + "yours on your own drive." },
-  { title: "Direct the narration",
+  { gem: "#4c1d95", badge: "bg-violet-500 text-white",
+    title: "Direct the narration",
     detail: "Here a reading becomes a performance. Put a pause where a "
       + "reader would breathe, slow a heavy moment, quicken a fight, "
       + "and teach the narrator how your invented names are meant to "
       + "sound. Every marker comes with an audible example, and a "
       + "guided walkthrough will find the beats with you." },
-  { title: "Hear it read aloud, free",
+  { gem: "#701a45", badge: "bg-pink-500 text-white",
+    title: "Hear it read aloud, free",
     detail: "The built-in narrator reads your whole book on this "
       + "computer. No account, no meter, no limit. Listen to your own "
       + "chapters spoken back to you, adjust, and regenerate as often "
       + "as you like, then export chapter MP3s or a proper M4B "
       + "audiobook." },
-  { title: "(Optional) Print a studio-quality version",
+  { gem: "#7f1d1d", badge: "bg-red-500 text-white",
+    title: "(Optional) Print a studio-quality version",
     detail: "When the draft sounds the way you hear it in your head, "
       + "print the final with a premium AI voice. Honest numbers: "
       + "hosted draft voices run about fifty cents for a whole book, "
@@ -69,10 +83,10 @@ interface AudiobookDashboardProps {
 
 /** Status pill color by meaning: emerald done, sapphire active, ruby bad. */
 function statusClasses(status: string): string {
-  if (status === "completed") return "border-emerald-700 bg-emerald-950/60 text-emerald-300";
-  if (status === "failed" || status === "export_only") return "border-rose-800 bg-rose-950/60 text-rose-300";
-  if (status === "generating" || status === "paused") return "border-blue-800 bg-blue-950/60 text-blue-300";
-  return "border-zinc-700 bg-zinc-900 text-zinc-400";
+  if (status === "completed") return "border-emerald-500/70 bg-emerald-950/70 text-emerald-300";
+  if (status === "failed" || status === "export_only") return "border-rose-500/70 bg-rose-950/70 text-rose-300";
+  if (status === "generating" || status === "paused") return "border-sky-500/70 bg-sky-950/70 text-sky-300";
+  return "border-zinc-600 bg-zinc-800 text-zinc-300";
 }
 
 export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: AudiobookDashboardProps) {
@@ -131,13 +145,13 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
       {/* Left: what this is, how it works, and the one way in. */}
       <div className="min-w-[20rem] flex-1">
         <div className="mb-5 flex items-start gap-3">
-          <BookHeadphones size={28} className="mt-1 shrink-0 text-emerald-400" />
+          <BookHeadphones size={28} className="mt-1 shrink-0 text-emerald-300" />
           <div>
-            <h1 className="text-xl font-semibold text-zinc-100">Audiobook Generator</h1>
-            <p className="mt-1 text-sm text-zinc-300">
+            <h1 className="text-xl font-semibold text-zinc-50">Audiobook Generator</h1>
+            <p className="mt-1 text-sm font-medium text-emerald-200">
               Hear your own words read aloud.
             </p>
-            <p className="mt-1 max-w-lg text-xs leading-relaxed text-zinc-500">
+            <p className="mt-1 max-w-lg text-xs leading-relaxed text-zinc-400">
               The book you wrote becomes a real audiobook, narrated on
               this computer, free and unlimited, and yours to keep. You
               stay the director: you choose the voice, the pacing, and
@@ -146,21 +160,35 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
           </div>
         </div>
 
-        {/* The five-step workflow strip: hover a step to expand it. */}
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-blue-300">
+        {/* The five-step staircase: each step steps further in, so the
+            eye walks down the workflow and lands on the button. */}
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-sky-300">
           Five steps from page to playback
         </p>
-        <ol className="mb-6 space-y-1">
+        <ol className="mb-5 space-y-1.5">
           {WORKFLOW_STEPS.map((step, index) => (
-            <li key={step.title} className="group rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 transition-colors hover:border-blue-800 hover:bg-blue-950/20">
-              <p className="flex items-center gap-2 text-sm text-zinc-200">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-[11px] font-semibold text-blue-300 transition-colors group-hover:bg-blue-900 group-hover:text-blue-100">
+            <li
+              key={step.title}
+              style={{
+                marginLeft: `${index * 1.4}rem`,
+                // Faded gem on the left, washing into charcoal by the
+                // right edge -- the color walks blue to ruby as the
+                // staircase descends.
+                backgroundImage:
+                  `linear-gradient(to right, ${step.gem} 0%, ${CHARCOAL} 70%)`,
+                borderColor: `${step.gem}`,
+              }}
+              className="group rounded-lg border px-3 py-2 transition-all duration-200 hover:brightness-125"
+            >
+              <p className="flex items-center gap-2.5 text-sm font-medium text-zinc-100">
+                <span className={"flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold shadow-sm transition-transform duration-200 group-hover:scale-110 "
+                  + step.badge}>
                   {index + 1}
                 </span>
                 {step.title}
               </p>
-              <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:max-h-28 group-hover:opacity-100 group-focus-within:max-h-28 group-focus-within:opacity-100">
-                <p className="pb-1 pl-7 pt-1.5 text-xs leading-relaxed text-zinc-400">
+              <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:max-h-32 group-hover:opacity-100 group-focus-within:max-h-32 group-focus-within:opacity-100">
+                <p className="pb-1 pl-[2.1rem] pt-1.5 text-xs leading-relaxed text-zinc-300">
                   {step.detail}
                 </p>
               </div>
@@ -170,30 +198,32 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
 
         {/* One primary action: the guided walkthrough that builds the
             workspace. Open Existing lives under the quiet More menu. */}
-        <div className="flex items-start gap-3">
+        {/* The staircase lands here: the action sits one step further
+            in than step 5, where the eye already is. */}
+        <div className="flex items-start gap-3" style={{ marginLeft: "7rem" }}>
           <div>
             <button
               onClick={onNewAudiobook}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-950/50 transition-all duration-200 hover:bg-emerald-400 hover:shadow-emerald-900/50"
             >
               <Sparkles size={16} /> Let's Get Started
             </button>
-            <p className="mt-1.5 text-[11px] text-zinc-500">
+            <p className="mt-1.5 text-[11px] text-zinc-400">
               A guided walkthrough that sets everything up for you.
             </p>
           </div>
           <div className="relative">
             <button
               onClick={() => setMoreOpen(v => !v)}
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 px-3 py-3 text-xs text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-300"
+              className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-3 text-xs text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-100"
             >
               More <ChevronDown size={12} />
             </button>
             {moreOpen && (
-              <div className="absolute left-0 top-full z-10 mt-1 w-56 rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl shadow-black/50">
+              <div className="absolute left-0 top-full z-10 mt-1 w-56 rounded-lg border border-zinc-600 bg-zinc-800 py-1 shadow-xl shadow-black/50">
                 <button
                   onClick={() => { setMoreOpen(false); void handleOpenExisting(); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-800 hover:text-emerald-300"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 hover:bg-zinc-700 hover:text-emerald-300"
                 >
                   <FolderOpen size={13} /> Open Existing Workspace
                 </button>
@@ -206,13 +236,13 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
       {/* Right: Recent Activity -- returning writers click their book. */}
       <div className="w-80 shrink-0">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-blue-300">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-sky-300">
             Recent Activity
           </h2>
           <button
             onClick={() => void loadRecents()}
             title="Refresh the list"
-            className="rounded p-1 text-zinc-500 transition-colors hover:text-blue-300"
+            className="rounded p-1 text-zinc-400 transition-colors hover:text-sky-300"
           >
             <RefreshCw size={14} />
           </button>
@@ -232,19 +262,19 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
             you all the way through it.
           </p>
         ) : (
-          <ul className="divide-y divide-zinc-800 rounded-lg border border-zinc-800 bg-zinc-900/60">
+          <ul className="divide-y divide-zinc-700/70 rounded-lg border border-zinc-700/80 bg-zinc-800/40">
             {recents.map(r => (
-              <li key={r.workspace_path} className="flex items-center gap-3 px-4 py-3">
+              <li key={r.workspace_path} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-zinc-800/70">
                 <button
                   onClick={() => void openWorkspacePath(r.workspace_path)}
                   disabled={busyPath !== null}
                   className="min-w-0 flex-1 text-left disabled:opacity-50"
                   title={r.workspace_path}
                 >
-                  <p className="truncate text-sm font-medium text-zinc-100 hover:text-emerald-300">
+                  <p className="truncate text-sm font-medium text-zinc-50 hover:text-emerald-300">
                     {r.title || "Untitled Audiobook"}
                   </p>
-                  <p className="truncate text-xs text-zinc-500">
+                  <p className="truncate text-xs text-zinc-400">
                     {r.author ? `${r.author} · ` : ""}{r.workspace_path}
                   </p>
                 </button>
