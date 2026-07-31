@@ -28,7 +28,7 @@ const USABLE: NarrationSelection = {
   voice_axes: null,
   voices_are_fallback: false, voices_verified: false, supports_speed: false,
   default_voice: "", book_voice: null,
-  can_spend: true, warning: null, fallback_note: null,
+  can_spend: true, warning: null, fallback_note: null, caveat: "",
 };
 
 const ESTIMATE = {

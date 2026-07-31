@@ -48,6 +48,15 @@ const CATALOG = {
       price_per_1k_chars: "0.00062", price_per_million_chars: "0.62",
       same_as_local: true, voices_same_as_local: true, voices_verified: true,
       requires_key: true, has_api_key: true, signup_steps: ["Step one."] },
+    // Tested by ear and demoted: works, but not one to steer anyone to.
+    { tier: "standard", tier_label: "Standard", blurb: "Expressive.",
+      provider: "openrouter", provider_label: "OpenRouter",
+      model: "x-ai/grok-voice-tts-1.0", model_label: "Grok Voice TTS",
+      price_per_1k_chars: "0.015", price_per_million_chars: "15",
+      same_as_local: false, voices_same_as_local: false, voices_verified: false,
+      requires_key: true, has_api_key: true, signup_steps: [],
+      recommended: false,
+      caveat: "Pitch and tone reset between sentences." },
     { tier: "pro", tier_label: "Pro", blurb: "Studio-grade.",
       provider: "nanogpt", provider_label: "NanoGPT",
       model: "Elevenlabs-Turbo-V2.5", model_label: "ElevenLabs Turbo v2.5",
@@ -135,6 +144,27 @@ describe("AudiobookSettingsDialog", () => {
     await waitFor(() =>
       expect(screen.getByText(/No NanoGPT API key is connected/)).toBeTruthy());
     expect(screen.getByText("Create an account at nano-gpt.com.")).toBeTruthy();
+  });
+
+  it("keeps a demoted engine off the shelf but one click away, with its reason", async () => {
+    // Demoted, not hidden. Deleting an engine we dislike would strand any
+    // book already pointed at it and teach the writer nothing; burying the
+    // reason in a tooltip would let someone pay before reading it.
+    await open(mockFetch());
+    expect(screen.queryByText("Grok Voice TTS")).toBeNull();
+
+    fireEvent.click(screen.getByText(/Other engines we tested but do not recommend/));
+    expect(screen.getByText("Grok Voice TTS")).toBeTruthy();
+    expect(screen.getByText("Pitch and tone reset between sentences.")).toBeTruthy();
+  });
+
+  it("opens the demoted shelf when the chosen engine lives in it", async () => {
+    // A selection you cannot see is worse than one you did not want.
+    await open(mockFetch({
+      settings: { narration_provider: "openrouter",
+                  narration_model: "x-ai/grok-voice-tts-1.0" },
+    }));
+    await waitFor(() => expect(screen.getByText("Grok Voice TTS")).toBeTruthy());
   });
 
   it("never sends a masked key back, and omits an untouched key", async () => {

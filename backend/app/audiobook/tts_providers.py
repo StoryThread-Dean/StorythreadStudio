@@ -67,6 +67,16 @@ class HostedModel:
     # time-stretched at assembly instead (the [pace] contract is universal).
     supports_speed: bool = True
     notes: str = ""
+    # Whether this engine belongs on the recommended shelf. False does NOT
+    # mean broken -- it means we listened to it and would not steer a
+    # writer here. Such a model stays fully selectable behind a disclosure,
+    # because a shelf that hides an engine entirely is just a shorter lie,
+    # and a book already pointed at one must keep working.
+    recommended: bool = True
+    # The reason, in the writer's terms, shown wherever the engine appears.
+    # Required in spirit whenever recommended is False: demoting something
+    # without saying why teaches nobody anything.
+    caveat: str = ""
     # OPTIONAL: when a model's voice id is composed from independent axes
     # (a voice, and separately an accent), declaring them here lets the UI
     # offer one short dropdown per axis instead of their cross product --
@@ -326,6 +336,14 @@ OPENROUTER = TtsProviderConfig(
             voices=_GROK_VOICES,
             tier="standard",
             voices_verified=False,
+            recommended=False,
+            caveat="Sounds professional sentence by sentence, but the pitch "
+                   "and tone reset between them -- a chapter comes out like "
+                   "several narrators spliced together. Storythread sends "
+                   "each segment as its own request, and this model "
+                   "re-improvises its delivery every time, so nothing on our "
+                   "side can steady it. Fine for a short passage; wearing "
+                   "over a book.",
             notes="Five voices, American only. xAI's own roster is wider (26 "
                   "voices, each able to speak British or Australian too), but "
                   "OpenRouter answers to these five bare names and nothing "
@@ -433,6 +451,8 @@ LOCAL_TIER_ENTRY = {
     "requires_key": False,
     "signup_steps": [],
     "notes": "",
+    "recommended": True,
+    "caveat": "",
 }
 
 
@@ -457,6 +477,8 @@ def recommended_tiers() -> list[dict]:
                 "requires_key": True,
                 "signup_steps": list(provider.signup_steps),
                 "notes": model.notes,
+                "recommended": model.recommended,
+                "caveat": model.caveat,
             })
     entries.sort(key=lambda e: TIER_ORDER.index(e["tier"])
                  if e["tier"] in TIER_ORDER else len(TIER_ORDER))
@@ -540,7 +562,13 @@ def resolve_narration_selection(settings: dict, manifest: dict | None = None) ->
     Level 3 exists because a writer who never opens narration settings
     still deserves an honest answer rather than a blank. That answer is
     normally "this is a chat model, it will not narrate" -- which is
-    exactly what is_recommended=False and fallback_note say out loud.
+    exactly what fallback_note and can_spend=False say out loud.
+
+    Two different kinds of "not ideal" travel back separately, because
+    they need different answers:
+      - fallback_note  = not a narration model at all. Cannot spend.
+      - caveat         = a real engine with a flaw we heard. Can spend,
+                         and the writer decides whether the flaw matters.
     """
     from app.ai.providers import active_provider
 
@@ -570,6 +598,7 @@ def resolve_narration_selection(settings: dict, manifest: dict | None = None) ->
         "price_per_1k_chars": None,
         "price_per_million_chars": None,
         "is_recommended": False,
+        "caveat": "",
         "requires_key": True,
         "has_api_key": False,
         "using_writing_keys": bool(settings.get("audiobook_use_writing_keys", True)),
@@ -606,7 +635,8 @@ def resolve_narration_selection(settings: dict, manifest: dict | None = None) ->
             "tier_label": TIER_LABELS.get(model.tier, model.tier.title()),
             "price_per_1k_chars": model.price_per_1k_chars,
             "price_per_million_chars": model.price_per_million_chars,
-            "is_recommended": True,
+            "is_recommended": model.recommended,
+            "caveat": model.caveat,
             "has_api_key": bool(api_key.strip()),
             "key_setting": provider.api_key_setting,
             "key_hint": provider.key_hint,
@@ -678,6 +708,8 @@ def catalog() -> list[dict]:
                     "supports_speed": model.supports_speed,
                     "voice_axes": model.voice_axes,
                     "notes": model.notes,
+                    "recommended": model.recommended,
+                    "caveat": model.caveat,
                     "voices": [
                         {"id": v.id, "label": v.label, "language": v.language,
                          "gender_presentation": v.gender_presentation}

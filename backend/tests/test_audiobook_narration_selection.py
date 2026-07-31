@@ -171,6 +171,41 @@ def test_grok_offers_only_the_voices_openrouter_documents():
     assert ara["label"] == "Ara (female) -- warm, natural, friendly"
 
 
+def test_grok_is_demoted_off_the_recommended_shelf_with_its_reason():
+    # It narrates, and it sounds good for a sentence. But pitch and tone
+    # reset between sentences -- each segment is its own request and the
+    # model re-improvises delivery every time, so a chapter arrives
+    # sounding spliced. Nothing on our side can steady that, so it comes
+    # off the shelf. It stays SELECTABLE: a working engine somebody may
+    # want for a short piece, and a book already pointed at it must not
+    # break.
+    tiers = {(t["provider"], t["model"]): t
+             for t in tts_providers.recommended_tiers()}
+    grok = tiers[("openrouter", "x-ai/grok-voice-tts-1.0")]
+    assert grok["recommended"] is False
+    assert "reset between them" in grok["caveat"]
+
+    # Everything else stays on the shelf -- demotion is a judgment we make
+    # once, by ear, not a mood.
+    assert all(t["recommended"] for key, t in tiers.items()
+               if key != ("openrouter", "x-ai/grok-voice-tts-1.0"))
+
+
+def test_a_demoted_engine_can_still_be_chosen_and_still_spends():
+    # The caveat rides along with the selection so the panel that spends
+    # money can repeat it, and can_spend stays True: this is a warning the
+    # writer overrules, not a block. The red fallback_note path -- a chat
+    # model that cannot narrate at all -- is the one that stops spending.
+    selection = resolve(_settings(
+        audiobook_tts_provider="openrouter",
+        audiobook_tts_model="x-ai/grok-voice-tts-1.0",
+        openrouter_api_key="sk-test"))
+    assert selection["is_recommended"] is False
+    assert "reset between them" in selection["caveat"]
+    assert selection["can_spend"] is True
+    assert selection["fallback_note"] is None
+
+
 def test_grok_offers_no_accent_choice_because_suffixes_404():
     # An accent dropdown was shipped here for exactly one commit, then
     # ara-en-GB came back 404 and killed it: every option in it would have

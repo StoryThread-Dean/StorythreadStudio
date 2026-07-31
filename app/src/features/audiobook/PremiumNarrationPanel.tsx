@@ -270,6 +270,16 @@ export function PremiumNarrationPanel({
                   </span>
                   {settingsLink("Change")}
                 </p>
+                {/* An engine we tested and demoted. It works and it can
+                    spend, so this is a warning rather than a block -- but
+                    it belongs HERE, beside the price, not only back in
+                    Settings where it was chosen days ago. */}
+                {selection.caveat && (
+                  <p className="mt-1.5 flex items-start gap-1.5 border-t border-zinc-800 pt-1.5 text-[10px] leading-relaxed text-amber-300/80">
+                    <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                    <span>{selection.caveat}</span>
+                  </p>
+                )}
               </div>
 
               {/* No key: instructions, never buttons. */}

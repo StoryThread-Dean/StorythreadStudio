@@ -365,6 +365,11 @@ export interface NarrationTier {
   has_api_key: boolean;
   signup_steps: string[];
   notes?: string;
+  /** False = we listened to it and would not steer a writer here. Still
+   * fully selectable, just not on the main shelf. */
+  recommended?: boolean;
+  /** Why it was demoted, in the writer's terms. */
+  caveat?: string;
 }
 
 import type { VoiceAxes } from "./VoicePicker";
@@ -404,6 +409,9 @@ export interface NarrationSelection {
   warning: string | null;
   /** Red: not a recommended narration model at all. */
   fallback_note: string | null;
+  /** Zinc: a real engine with a flaw we heard for ourselves. Spending is
+      still allowed -- the writer decides whether the flaw matters. */
+  caveat: string;
 }
 
 /** The audiobook's own settings: narration engine + its own API keys.
@@ -492,6 +500,8 @@ export interface TtsCatalog {
       voices_verified: boolean;
       supports_speed: boolean;
       notes: string;
+      recommended: boolean;
+      caveat: string;
       voice_axes: VoiceAxes | null;
       voices: Array<{ id: string; label: string; language: string }>;
     }>;

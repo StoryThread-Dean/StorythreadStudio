@@ -776,6 +776,17 @@ Provider landscape facts (verified July 2026):
 
 The speech models are NOT the chat models: same provider accounts and API keys, separate model catalog reached through a separate audio endpoint. This is the "Writing Models vs Audio Models" split in Section 16.
 
+#### 13.1.1 Engines tested by ear (findings, not plans)
+
+A catalog entry is a recommendation, so an engine earns its place on the shelf by being listened to. What that produced:
+
+- **Grok Voice TTS (`x-ai/grok-voice-tts-1.0`, OpenRouter, $15/M) -- DEMOTED.** Two separate problems, both found live.
+  - *Roster:* xAI publishes 26 voices, each able to speak American, British, or Australian via an id suffix (`ara-en-GB`). OpenRouter answers to five bare names only -- `Ara`, `Eve`, `Leo`, `Rex`, `Sal`. Three 404s established this: `iris-en-US`, `iris-en-GB`, and then `ara-en-GB`, that last one a documented voice, which proves it is the SUFFIX being rejected and not just the wider roster. An accent dropdown was built and removed within two commits as a result.
+  - *Prosody drift:* it narrates well sentence by sentence, but pitch and tone reset between sentences, so a chapter arrives sounding like several narrators spliced together. The cause is structural: Storythread sends each segment as its own request and this model re-improvises delivery every time. Nothing on our side can steady it -- flow synthesis (Section 15) fixes seams WITHIN a segment, not identity drift across them. An expressive model without a seed or continuation parameter cannot hold a book together.
+  - Kept selectable behind a "tested but not recommended" disclosure, carrying its reason. Demoting is the honest move; deleting would strand any book already pointed at it and teach nobody anything.
+
+The general lesson, worth applying to every future premium engine: **expressiveness and consistency trade against each other under per-segment synthesis.** The flatter model (Kokoro) stitches invisibly; the performer does not. Any engine considered for the Standard or Pro tier must be auditioned across at least a full chapter, not a sample sentence, because a single sentence is exactly the length at which this defect is inaudible.
+
 The provider abstraction must allow future providers without rewriting job logic.
 
 ### 13.2 Voice Selection Requirements
