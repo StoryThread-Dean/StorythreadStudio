@@ -980,6 +980,26 @@ them by ear later:
   legacy multiplier form (`[pace:0.8]`) still parses, snapped to the
   grid, so older narration files keep their meaning.
 
+### 15.1.1 Worker 0.2 Candidate: Word-Level Timestamps (researched 2026-07-30)
+
+Kokoro-FastAPI (remsky) demonstrates that the PYTORCH Kokoro pipeline
+exposes per-word timestamps (its /dev/captioned_speech endpoint); the
+ONNX build our worker wraps does not. Assessment against our needs:
+
+- Its acclaimed "pause fixes" are silence-between-chunks plus
+  aggressive whitespace stripping -- we already do both, and our flow
+  synthesis goes further (it still cuts text at pause tags and
+  synthesizes chunks in isolation, the exact manufactured-utterance-
+  ending defect flow synthesis eliminates). Not worth adopting as a
+  server; it would replace our worker with a heavier one we control
+  less.
+- The timestamps ARE valuable: they would replace flow synthesis's
+  duration-band gap matcher with EXACT word boundaries, and make
+  short-utterance previews cuttable out of carrier phrases precisely.
+- Cost: switching the worker from kokoro-onnx to PyTorch kokoro
+  roughly doubles-to-triples the installed artifact (torch CPU). A
+  worker 0.2 decision to weigh alongside Stage D, not before.
+
 ### 15.2 Future Note
 
 If GPU acceleration is ever revisited, `onnxruntime-directml` is the single Windows-native path covering NVIDIA, AMD, and Intel hardware together -- not three separate vendor runtimes. Keep the synthesis interface device-agnostic so that door stays open:

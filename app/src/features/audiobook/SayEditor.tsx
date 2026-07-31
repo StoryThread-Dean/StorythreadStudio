@@ -135,14 +135,18 @@ export function SayEditor({
     setPreviewing(true);
     setError(null);
     try {
-      // The WORD alone -- sentence context sounded nicer but its
-      // boundary hunt tripped over the "." inside a nearby [pause:0.8]
-      // and previewed marker shrapnel (live finding). Isolation is
-      // predictable, and pronunciation is what is being judged.
+      // A FIXED carrier phrase around the word. A bare single word is
+      // the engine's worst case -- cold onset plus a manufactured
+      // ending with nothing between, heard as garble at the word's
+      // edges (live finding). Extracting the writer's own sentence was
+      // worse (its boundary hunt tripped over the "." in [pause:0.8]),
+      // so the lead-in is constant text with the word MID-sentence:
+      // natural onset, natural exit, no markers, fully predictable.
       const wrapped = spoken.trim()
         ? `[say:${spoken.trim()}]${word}[/say]`
         : word;
-      const { blob } = await previewSelection(workspacePath, wrapped, voiceId);
+      const carrier = `You will hear ${wrapped} in the narration.`;
+      const { blob } = await previewSelection(workspacePath, carrier, voiceId);
       audioRef.current?.pause();
       const audio = new Audio(URL.createObjectURL(blob));
       audioRef.current = audio;
