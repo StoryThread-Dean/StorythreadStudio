@@ -151,12 +151,36 @@ def test_premium_only_models_keep_their_own_cast():
         ["Eve", "Ara", "Rex", "Sal", "Leo"]
 
 
-def test_a_model_with_no_published_voices_is_flagged_unverified():
+def test_aura2_carries_its_published_registry():
     selection = resolve(_settings(
         audiobook_tts_provider="openrouter", audiobook_tts_model="deepgram/aura-2",
         openrouter_api_key="sk-test"))
+    assert selection["voices_verified"] is True
+    assert len(selection["voices"]) == 38
+    ids = {v["id"] for v in selection["voices"]}
+    assert "aura-2-zeus-en" in ids
+    # The character words are the useful part when casting a narrator, so
+    # they travel in the label rather than being dropped on the floor.
+    zeus = next(v for v in selection["voices"] if v["id"] == "aura-2-zeus-en")
+    assert zeus["label"] == "Zeus (American male) -- deep, trustworthy, smooth"
+    assert zeus["gender_presentation"] == "male"
+    # Non-American accents keep their own language tag.
+    pandora = next(v for v in selection["voices"] if v["id"] == "aura-2-pandora-en")
+    assert pandora["language"] == "en-GB"
+    theia = next(v for v in selection["voices"] if v["id"] == "aura-2-theia-en")
+    assert theia["language"] == "en-AU"
+
+
+def test_a_model_whose_voice_list_is_unpublished_is_flagged_unverified():
+    # NanoGPT's ElevenLabs tier has 46 voices it does not publish: the
+    # known preset names are offered as a starting point, and the flag
+    # tells the UI to also accept a typed voice name.
+    selection = resolve(_settings(
+        audiobook_tts_provider="nanogpt",
+        audiobook_tts_model="Elevenlabs-Turbo-V2.5",
+        nanogpt_api_key="sk-test"))
     assert selection["voices_verified"] is False
-    assert selection["voices"] == []
+    assert any(v["id"] == "Rachel" for v in selection["voices"])
 
 
 # ── Voice choice ──────────────────────────────────────────────────────────────

@@ -109,6 +109,57 @@ _GROK_VOICES = (
     HostedVoice("Leo", "Leo", "en-US", "male"),
 )
 
+# Deepgram's published Aura-2 English registry. Rows are
+# (name, voice id, gender, language, accent label, character) -- the
+# character words are Deepgram's own and they are the useful part when
+# casting a narrator, so they ride in the label rather than being dropped.
+_AURA2_ROWS: tuple[tuple[str, str, str, str, str, str], ...] = (
+    ("Andromeda", "aura-2-andromeda-en", "male", "en-US", "American", "casual, expressive, comfortable"),
+    ("Apollo", "aura-2-apollo-en", "male", "en-US", "American", "confident, comfortable, casual"),
+    ("Arcas", "aura-2-arcas-en", "male", "en-US", "American", "natural, smooth, clear"),
+    ("Aries", "aura-2-aries-en", "male", "en-US", "American", "warm, energetic, caring"),
+    ("Asteria", "aura-2-asteria-en", "female", "en-US", "American", "clear, confident, knowledgeable"),
+    ("Athena", "aura-2-athena-en", "female", "en-US", "American", "calm, smooth, professional"),
+    ("Atlas", "aura-2-atlas-en", "male", "en-US", "American", "enthusiastic, confident, approachable"),
+    ("Aurora", "aura-2-aurora-en", "female", "en-US", "American", "cheerful, expressive, energetic"),
+    ("Callista", "aura-2-callista-en", "female", "en-US", "American", "clear, energetic, professional"),
+    ("Cora", "aura-2-cora-en", "female", "en-US", "American", "smooth, melodic, caring"),
+    ("Cordelia", "aura-2-cordelia-en", "female", "en-US", "American", "approachable, warm, polite"),
+    ("Delia", "aura-2-delia-en", "female", "en-US", "American", "casual, friendly, cheerful, breathy"),
+    ("Draco", "aura-2-draco-en", "male", "en-GB", "British", "warm, approachable, trustworthy, baritone"),
+    ("Electra", "aura-2-electra-en", "female", "en-US", "American", "professional, engaging, knowledgeable"),
+    ("Harmonia", "aura-2-harmonia-en", "female", "en-US", "American", "empathetic, clear, calm, confident"),
+    ("Helena", "aura-2-helena-en", "female", "en-US", "American", "caring, natural, positive, raspy"),
+    ("Hera", "aura-2-hera-en", "female", "en-US", "American", "smooth, warm, professional"),
+    ("Hermes", "aura-2-hermes-en", "male", "en-US", "American", "expressive, engaging, professional"),
+    ("Hyperion", "aura-2-hyperion-en", "male", "en-AU", "Australian", "caring, warm, empathetic"),
+    ("Iris", "aura-2-iris-en", "female", "en-US", "American", "cheerful, positive, approachable"),
+    ("Janus", "aura-2-janus-en", "male", "en-US", "American Southern", "smooth, trustworthy"),
+    ("Juno", "aura-2-juno-en", "female", "en-US", "American", "natural, engaging, melodic, breathy"),
+    ("Jupiter", "aura-2-jupiter-en", "male", "en-US", "American", "expressive, knowledgeable, baritone"),
+    ("Luna", "aura-2-luna-en", "female", "en-US", "American", "friendly, natural, engaging"),
+    ("Mars", "aura-2-mars-en", "male", "en-US", "American", "smooth, patient, trustworthy, baritone"),
+    ("Minerva", "aura-2-minerva-en", "female", "en-US", "American", "positive, friendly, natural"),
+    ("Neptune", "aura-2-neptune-en", "male", "en-US", "American", "professional, patient, polite"),
+    ("Odysseus", "aura-2-odysseus-en", "male", "en-US", "American", "calm, smooth, comfortable, professional"),
+    ("Ophelia", "aura-2-ophelia-en", "female", "en-US", "American", "expressive, enthusiastic, cheerful"),
+    ("Orion", "aura-2-orion-en", "male", "en-US", "American", "approachable, comfortable, calm, polite"),
+    ("Orpheus", "aura-2-orpheus-en", "male", "en-US", "American", "professional, clear, confident, trustworthy"),
+    ("Pandora", "aura-2-pandora-en", "female", "en-GB", "British", "smooth, calm, melodic, breathy"),
+    ("Phoebe", "aura-2-phoebe-en", "female", "en-US", "American", "energetic, warm, casual"),
+    ("Pluto", "aura-2-pluto-en", "male", "en-US", "American", "smooth, calm, empathetic, baritone"),
+    ("Saturn", "aura-2-saturn-en", "male", "en-US", "American", "knowledgeable, confident, baritone"),
+    ("Thalia", "aura-2-thalia-en", "female", "en-US", "American", "clear, confident, energetic"),
+    ("Theia", "aura-2-theia-en", "female", "en-AU", "Australian", "expressive, polite"),
+    ("Zeus", "aura-2-zeus-en", "male", "en-US", "American", "deep, trustworthy, smooth"),
+)
+
+_AURA2_VOICES = tuple(
+    HostedVoice(voice_id, f"{name} ({accent} {gender}) -- {character}",
+                language, gender)
+    for name, voice_id, gender, language, accent, character in _AURA2_ROWS
+)
+
 # ElevenLabs' long-standing preset names. NanoGPT exposes 46 voices but
 # does not publish the list, so these are offered as a starting point and
 # the UI also accepts a typed voice name (voices_verified=False).
@@ -170,12 +221,13 @@ OPENROUTER = TtsProviderConfig(
             label="Deepgram Aura-2",
             price_per_1k_chars="0.030",
             price_per_million_chars="30",
-            voices=(),
+            voices=_AURA2_VOICES,
             tier="pro",
-            voices_verified=False,
-            notes="Studio-grade narration. Deepgram does not publish its "
-                  "voice list here, so leave the voice blank for the "
-                  "model's default or type a Deepgram voice name.",
+            notes="Studio-grade narration with 38 English voices, each "
+                  "with its own character -- American, British, "
+                  "Australian, and one American Southern. Deepgram's own "
+                  "descriptions ride in the voice names, so a narrator "
+                  "can be cast by temperament rather than guessed at.",
         ),
     ),
 )
