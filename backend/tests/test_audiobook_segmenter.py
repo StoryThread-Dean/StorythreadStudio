@@ -29,11 +29,42 @@ def _first_manifest(text: str) -> dict:
 
 # ── Sizing ────────────────────────────────────────────────────────────────────
 
-def test_small_paragraphs_group_into_one_segment():
+def test_each_paragraph_gets_its_own_segment():
+    # Paragraphs USED to group up to the character cap and travel as one
+    # request joined by a blank line. Live testing killed that: an engine
+    # is free to ignore a blank line, and Voxtral does -- paragraph two
+    # began milliseconds after paragraph one with no beat between them,
+    # forcing writers to hand-place a [pause] after every paragraph.
+    #
+    # A boundary the pipeline cannot SEE is a boundary it cannot TIME. So
+    # each paragraph is its own segment, and assembly puts the gap in.
+    # Per-character pricing means the extra requests cost nothing.
     text = "# C1\n\nPara one.\n\nPara two.\n\nPara three."
     segments = _segments(_first_manifest(text))
-    assert len(segments) == 1
-    assert segments[0]["text"] == "Para one.\n\nPara two.\n\nPara three."
+    assert [s["text"] for s in segments] == ["Para one.", "Para two.", "Para three."]
+    # Every one of them opens a paragraph, so every join gets a beat.
+    assert all(s.get("paragraph_start") for s in segments)
+
+
+def test_an_oversize_paragraph_splits_without_faking_paragraph_breaks():
+    # The continuation pieces of ONE long paragraph must not be marked as
+    # paragraph starts -- inserting a beat inside a paragraph would be a
+    # worse artifact than the one this feature fixes.
+    para = ("All the light we cannot see fell across the road in ribbons. " * 40).strip()
+    assert len(para) > SEGMENT_MAX_CHARS
+    segments = _segments(_first_manifest(f"# C1\n\n{para}"))
+    assert len(segments) > 1
+    assert segments[0].get("paragraph_start") is True
+    assert all(s.get("paragraph_start") is None for s in segments[1:])
+
+
+def test_the_paragraph_flag_is_layout_and_stays_out_of_the_content_hash():
+    # Audio identity must depend on WORDS. If the layout flag joined the
+    # hash, re-flowing paragraphs would force a paid re-render of speech
+    # that sounds identical.
+    from app.audiobook.segmenter import content_hash
+    segments = _segments(_first_manifest("# C1\n\nPara one.\n\nPara two."))
+    assert segments[0]["content_hash"] == content_hash("Para one.")
 
 
 def test_grouping_respects_the_cap():
@@ -85,7 +116,9 @@ def test_dialogue_paragraphs_segment_separately():
     segments = _segments(_first_manifest(text))
     assert [(s["text"].startswith('"'), s.get("dialogue", False)) for s in segments] == [
         (False, False),      # narration
-        (True, True),        # both dialogue paragraphs group together
+        (True, True),        # first speech
+        (True, True),        # second speech -- its own segment now, so the
+                             # beat between two speakers is real silence
         (False, False),      # narration resumes
     ]
 

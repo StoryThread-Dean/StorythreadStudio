@@ -388,14 +388,24 @@ OPENROUTER = TtsProviderConfig(
             # Mistral's TTS refuses pcm outright (live 400). mp3 needs a
             # decoder before the clip can be stitched -- see cloud_speech.
             response_format="mp3",
+            recommended=False,
+            caveat="Clean and professional inside a paragraph -- no slurs, "
+                   "no mangled words. What sinks it is the cast: every "
+                   "voice carries a fixed mood (curious, confident, "
+                   "sarcastic), the mood never varies because the same "
+                   "voice id reads the whole book, and about twenty "
+                   "seconds in it turns monotonous. Neutral is the closest "
+                   "thing to a plain reading voice and it is average at "
+                   "best. Worth a try if one of the moods happens to suit "
+                   "your book.",
             notes="Three English narrators -- Paul (American), Jane and "
                   "Oliver (British) -- each offered once per mood, with the "
-                  "mood fixed in the voice itself. Pick a narrator and read "
-                  "the whole book in that register. Six French voices exist "
-                  "too and are not listed here. Audition before you commit: "
-                  "a sample runs the same code path as a full pass, so "
-                  "anything this engine refuses shows up for a fraction of "
-                  "a cent instead of mid-book.",
+                  "mood fixed in the voice itself. There is no mood-free "
+                  "variant; neutral is as plain as it gets. Six French "
+                  "voices exist too and are not listed here. Audition "
+                  "before you commit: a sample runs the same code path as a "
+                  "full pass, so anything this engine refuses shows up for "
+                  "a fraction of a cent instead of mid-book.",
         ),
         HostedModel(
             id="x-ai/grok-voice-tts-1.0",

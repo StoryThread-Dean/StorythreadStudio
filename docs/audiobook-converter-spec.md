@@ -787,7 +787,11 @@ A catalog entry is a recommendation, so an engine earns its place on the shelf b
 
 The general lesson, worth applying to every future premium engine: **expressiveness and consistency trade against each other under per-segment synthesis.** The flatter model (Kokoro) stitches invisibly; the performer does not. Any engine considered for the Standard or Pro tier must be auditioned across at least a full chapter, not a sample sentence, because a single sentence is exactly the length at which this defect is inaudible.
 
-- **Voxtral Mini TTS (`mistralai/voxtral-mini-tts-2603`, OpenRouter, $16/M) -- the Standard replacement.** Chosen for one structural reason: **the mood is part of the voice id, not a parameter.** Three English narrators ship as one id per emotion (`gb_oliver_neutral`, `en_paul_confident`, `gb_jane_curious`...), so every segment is told "be Oliver, neutral" rather than being asked to interpret the text afresh. That is directly the latitude Grok used to drift. 24 English ids in all -- Paul (American male, 8 moods), Jane (British female, 9), Oliver (British male, 7) -- plus six French not offered. Deliberately NOT modelled as speaker x emotion axes: the mood sets differ per speaker, so two dropdowns would offer combinations that do not exist. Unproven by ear at time of writing; the full-chapter audition above applies to it too.
+- **Voxtral Mini TTS (`mistralai/voxtral-mini-tts-2603`, OpenRouter, $16/M) -- DEMOTED after four tests.** Inside a paragraph it is genuinely good: even, professional, zero slurs or mangled words -- better than Grok on every count that broke Grok. It came off the shelf for the cast. Every voice has a **mood welded into the id**, the same id reads the entire book, and it turns monotonous in roughly twenty seconds; four moods were tried by ear (curious, neutral, sarcastic, confident) and none felt right for narration. There is no mood-free variant -- `neutral` is the plainest available, and it is average. Its other complaint, paragraphs running together, turned out to be **our bug**, not the engine's, and is fixed above. Kept selectable: if one of the moods happens to suit a particular book, it works.
+
+  The general lesson to carry forward: **a fixed emotion is not a narration voice.** It solved the drift problem exactly as predicted -- telling the model "be Oliver, neutral" every time does stop it re-improvising -- and then failed on the thing that prediction did not cover. A narrator varies; a model pinned to one mood cannot.
+
+  Original rationale, kept because the reasoning was sound even though the verdict went against it: Chosen for one structural reason: **the mood is part of the voice id, not a parameter.** Three English narrators ship as one id per emotion (`gb_oliver_neutral`, `en_paul_confident`, `gb_jane_curious`...), so every segment is told "be Oliver, neutral" rather than being asked to interpret the text afresh. That is directly the latitude Grok used to drift. 24 English ids in all -- Paul (American male, 8 moods), Jane (British female, 9), Oliver (British male, 7) -- plus six French not offered. Deliberately NOT modelled as speaker x emotion axes: the mood sets differ per speaker, so two dropdowns would offer combinations that do not exist. Unproven by ear at time of writing; the full-chapter audition above applies to it too.
 
 ##### Audio format is per MODEL, not per provider (live 400)
 
@@ -799,6 +803,22 @@ Two rules that fell out of it, both about money:
 
 - **Sniff the bytes, not the content-type.** mp3 is detected from an ID3 tag or an MPEG frame sync, so a mislabelled answer still reaches the decoder. This also covers audio fetched from a JSON URL (NanoGPT's async shape), which was the one branch a compressed answer could have slipped through.
 - **A decode failure is NOT retryable.** Bytes that will not decode are a format incompatibility, not a hiccup, and each retry bills again for the identical failure. An EMPTY answer stays retryable -- that one is a hiccup.
+
+##### The paragraph beat (live finding, fixed -- and it was ours)
+
+Four structured tests on Voxtral isolated it cleanly: two selections **without** a trailing `[pause]` both ran the next paragraph in milliseconds later; the same selection **with** `[pause:0.8]` was flawless; a fourth test full of short sentences and pauses was flawless too. So the engine was never the problem. Two of our own decisions were:
+
+1. **Paragraphs grouped into one segment**, joined by a blank line, and the engine decided what that blank line meant. Some ignore it entirely. A boundary the pipeline cannot see is a boundary it cannot time.
+2. **Separate segments were butted together with zero silence** -- and `_condition_edges` had already trimmed away up to 250 ms of the engine's own trailing breath, deliberately, so that writer-placed pauses would not stack. Correct in isolation, wrong in combination.
+
+Fixed by making a paragraph a first-class unit: **one paragraph, one segment** (`SEGMENTS_VERSION` bumped to 2), each stamped `paragraph_start`, with `paragraph_gap_ms` (default **550**) inserted at assembly between two spoken pieces. Four details worth keeping:
+
+- The flag is **layout, not content**: it stays out of `content_hash`, so re-flowing paragraphs never forces a paid re-render of identical speech. Retiming the beat costs nothing either -- it is applied at assembly, not baked into audio.
+- **A writer's own `[pause]` wins.** The automatic beat only lands between two spoken pieces, never stacked on a pause, scene break, or chapter break.
+- **Continuation pieces of an oversize paragraph are not paragraph starts.** Inserting a beat mid-paragraph would be a worse artifact than the one being fixed.
+- **Flow groups still span mid-paragraph pauses.** A paragraph at index 0 with work already open is a continuation, not a new paragraph -- flushing there would break the continuous-render trick that exists to stop consonant slurs.
+
+Cost is unchanged: hosted engines bill per character, not per request.
 
 ##### Loudness matching (live finding, fixed)
 

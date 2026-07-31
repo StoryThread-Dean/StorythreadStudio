@@ -168,8 +168,23 @@ def _stitch_chapter_wav(workspace_path: str, chapter: dict,
     """One chapter's items -> one WAV: segment audio in order, silence for
     pauses and breaks (durations from Narration Settings, spec 10.3)."""
     pieces: list[bytes | int] = []
+    gap_ms = int(settings.get("paragraph_gap_ms", 0) or 0)
+
+    def _open_paragraph() -> None:
+        """Put the inter-paragraph beat in, unless something already has.
+
+        Only between two SPOKEN pieces: a scene break, chapter break, or
+        the writer's own [pause] already supplies a gap, and stacking ours
+        on top would read as a hesitation. Continuation pieces of one
+        oversize paragraph are not paragraph starts and never land here.
+        """
+        if gap_ms and pieces and isinstance(pieces[-1], bytes):
+            pieces.append(gap_ms)
+
     for item in chapter["items"]:
         kind = item.get("kind")
+        if kind == "segment" and item.get("paragraph_start"):
+            _open_paragraph()
         if kind == "segment":
             audio_path = Path(workspace_path) / item["output_file"]
             with open(audio_path, "rb") as f:

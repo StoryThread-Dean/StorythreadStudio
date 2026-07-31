@@ -29,6 +29,12 @@ const FIELDS: [keyof NarrationSettings, string, number, number, number, string][
    "Base speed for all narration. 1.0 = the voice's natural pace. Sounds most natural between 0.8 and 1.2."],
   ["dialogue_pace", "Dialogue pace", 0.5, 2.0, 0.05,
    "Speed for dialogue paragraphs -- where the engine's own pacing goes wildest. Try 0.9 if dialogue races. Sounds most natural between 0.8 and 1.2."],
+  ["paragraph_gap_ms", "Paragraph beat (ms)", 0, 5000, 50,
+   "Silence at every paragraph break, inserted automatically. No engine "
+   + "can be relied on to pause between paragraphs on its own -- without "
+   + "this, the next paragraph starts milliseconds later and the reading "
+   + "sounds rushed. 550 is a natural breath; set 0 for the old tight "
+   + "join. A [pause] you write yourself always wins over this."],
   ["scene_break_ms", "Scene break (ms)", 0, 15000, 250,
    "Silence at every [scene-break]."],
   ["chapter_break_ms", "Chapter break (ms)", 0, 15000, 250,

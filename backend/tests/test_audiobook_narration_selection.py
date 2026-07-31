@@ -190,17 +190,36 @@ def test_voxtral_fills_the_standard_tier_with_one_voice_per_mood():
     assert not any(i.startswith("fr_") for i in ids)
 
 
-def test_voxtral_is_recommended_and_bakes_mood_into_the_voice_not_an_axis():
+def test_voxtral_bakes_mood_into_the_voice_not_an_axis():
     # NOT modelled as speaker x emotion axes: the emotion sets differ per
     # speaker, so two dropdowns would offer combinations that do not
     # exist -- the exact trap removed from Grok.
     _provider, model = tts_providers.resolve_model(
         "openrouter", "mistralai/voxtral-mini-tts-2603")
     assert model.voice_axes is None
-    assert model.recommended is True
-    assert model.caveat == ""
     assert model.tier == "standard"
     assert model.price_per_million_chars == "16"
+
+
+def test_voxtral_is_demoted_for_its_fixed_moods():
+    # Four voices tried by ear (curious, neutral, sarcastic, confident).
+    # The verdict was not about defects -- inside a paragraph it is clean,
+    # no slurs, no mangled words -- but about the CAST. Every voice has a
+    # mood welded on, the same id reads the whole book, and it turns
+    # monotonous in about twenty seconds. There is no mood-free variant to
+    # fall back to; neutral is the plainest there is.
+    _provider, model = tts_providers.resolve_model(
+        "openrouter", "mistralai/voxtral-mini-tts-2603")
+    assert model.recommended is False
+    assert "monotonous" in model.caveat
+    # Still selectable, and still able to spend -- a demotion is a
+    # warning the writer can overrule, not a block.
+    selection = resolve(_settings(
+        audiobook_tts_provider="openrouter",
+        audiobook_tts_model="mistralai/voxtral-mini-tts-2603",
+        openrouter_api_key="sk-test"))
+    assert selection["can_spend"] is True
+    assert "monotonous" in selection["caveat"]
 
 
 def test_grok_is_demoted_off_the_recommended_shelf_with_its_reason():
@@ -217,10 +236,15 @@ def test_grok_is_demoted_off_the_recommended_shelf_with_its_reason():
     assert grok["recommended"] is False
     assert "reset between them" in grok["caveat"]
 
-    # Everything else stays on the shelf -- demotion is a judgment we make
-    # once, by ear, not a mood.
-    assert all(t["recommended"] for key, t in tiers.items()
-               if key != ("openrouter", "x-ai/grok-voice-tts-1.0"))
+    # The shelf is now the free local narrator, hosted Kokoro, and the Pro
+    # engines. Both Standard-tier candidates were auditioned and both came
+    # off it -- which is the honest state, not a gap to paper over.
+    demoted = {key for key, t in tiers.items() if not t["recommended"]}
+    assert demoted == {
+        ("openrouter", "x-ai/grok-voice-tts-1.0"),
+        ("openrouter", "mistralai/voxtral-mini-tts-2603"),
+    }
+    assert all(t["caveat"] for key, t in tiers.items() if key in demoted)
 
 
 def test_a_demoted_engine_can_still_be_chosen_and_still_spends():

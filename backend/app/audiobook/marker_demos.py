@@ -141,9 +141,17 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
 
     pieces: list[bytes | int] = []
     trace: list[dict] = []
+    gap_ms = int(settings.get("paragraph_gap_ms", 0) or 0)
     for chapter in parsed.chapters:
         for item in segmenter._segment_texts_from_elements(chapter.elements):
             kind = item["kind"]
+            # The inter-paragraph beat, on the same rule assembly uses:
+            # only between two spoken pieces, never stacked on top of a
+            # break or the writer's own pause. A preview that skipped this
+            # would misrepresent the finished book.
+            if (kind == "segment_text" and item.get("paragraph_start")
+                    and gap_ms and pieces and isinstance(pieces[-1], bytes)):
+                pieces.append(gap_ms)
             if kind == "segment_text":
                 speed = effective_pace(item, settings)
                 fragments = item.get("fragments")

@@ -278,6 +278,9 @@ export async function fetchExportStatus(): Promise<ExportStatus> {
 export interface NarrationSettings {
   narrator_pace: number;
   dialogue_pace: number;
+  /** Automatic silence at every paragraph break. No engine reliably
+   * pauses between paragraphs on its own. */
+  paragraph_gap_ms: number;
   scene_break_ms: number;
   chapter_break_ms: number;
 }
