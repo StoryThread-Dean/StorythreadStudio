@@ -31,14 +31,16 @@ interface SpokenLineProps {
   text: string;
   /** Pin the style (tests, or a deliberate choice); random otherwise. */
   style?: ReadingStyle;
-  /** Seconds between words. The default is NARRATION pace: audiobook
-      narrators read at roughly 150-175 words a minute, so the light
-      moves the way a voice actually would. */
+  /** Seconds between words. The default is silent-READING pace (~250
+      words a minute), not narration pace: an eye moves faster than a
+      voice, and at true narration speed the light lagged behind the
+      reader (live finding -- 0.35s/word felt slow). At 0.24s a
+      35-word paragraph lights up in about nine seconds. */
   pace?: number;
   className?: string;
 }
 
-export function SpokenLine({ text, style, pace = 0.35, className = "" }: SpokenLineProps) {
+export function SpokenLine({ text, style, pace = 0.24, className = "" }: SpokenLineProps) {
   // Chosen once per mount: the flourish should not re-roll on every
   // re-render, only when the screen is opened again.
   const chosen = useMemo<ReadingStyle>(
