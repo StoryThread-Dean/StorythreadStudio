@@ -154,10 +154,32 @@ _AURA2_ROWS: tuple[tuple[str, str, str, str, str, str], ...] = (
     ("Zeus", "aura-2-zeus-en", "male", "en-US", "American", "deep, trustworthy, smooth"),
 )
 
+# The rows above stay alphabetical so they can be audited against
+# Deepgram's page line by line. The ORDER WRITERS SEE is expressed here
+# instead: accent group first (American, then British, then Australian),
+# feminine before masculine inside each group, alphabetical within that.
+# A dropdown of 38 is only usable if it is grouped the way a person
+# actually narrows one down.
+_ACCENT_ORDER = ("American", "British", "Australian")
+_GENDER_ORDER = ("female", "male")
+
+
+def _aura2_sort_key(row: tuple[str, str, str, str, str, str]) -> tuple[int, int, str]:
+    name, _voice_id, gender, _language, accent, _character = row
+    # "American Southern" sorts with the Americans, by prefix.
+    accent_rank = next(
+        (i for i, group in enumerate(_ACCENT_ORDER) if accent.startswith(group)),
+        len(_ACCENT_ORDER))
+    gender_rank = (_GENDER_ORDER.index(gender) if gender in _GENDER_ORDER
+                   else len(_GENDER_ORDER))
+    return (accent_rank, gender_rank, name)
+
+
 _AURA2_VOICES = tuple(
     HostedVoice(voice_id, f"{name} ({accent} {gender}) -- {character}",
                 language, gender)
-    for name, voice_id, gender, language, accent, character in _AURA2_ROWS
+    for name, voice_id, gender, language, accent, character
+    in sorted(_AURA2_ROWS, key=_aura2_sort_key)
 )
 
 # ElevenLabs' long-standing preset names. NanoGPT exposes 46 voices but

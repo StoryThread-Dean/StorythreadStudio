@@ -171,6 +171,28 @@ def test_aura2_carries_its_published_registry():
     assert theia["language"] == "en-AU"
 
 
+def test_aura2_voices_are_grouped_the_way_a_writer_narrows_them_down():
+    # 38 voices in one dropdown are only usable if they are grouped:
+    # accent first (American, British, Australian), feminine before
+    # masculine inside each group, alphabetical within that.
+    voices = tts_providers.voices_for("openrouter", "deepgram/aura-2")[0]
+
+    def group(voice) -> tuple[int, int]:
+        language_rank = {"en-US": 0, "en-GB": 1, "en-AU": 2}[voice["language"]]
+        gender_rank = 0 if voice["gender_presentation"] == "female" else 1
+        return (language_rank, gender_rank)
+
+    ranks = [group(v) for v in voices]
+    assert ranks == sorted(ranks)                       # never interleaved
+    assert voices[0]["id"] == "aura-2-asteria-en"        # first American woman
+    assert voices[-1]["id"] == "aura-2-hyperion-en"      # last Australian man
+    # The American Southern voice sorts with the Americans, not into its
+    # own orphan group.
+    janus = next(i for i, v in enumerate(voices) if v["id"] == "aura-2-janus-en")
+    first_british = next(i for i, v in enumerate(voices) if v["language"] == "en-GB")
+    assert janus < first_british
+
+
 def test_a_model_whose_voice_list_is_unpublished_is_flagged_unverified():
     # NanoGPT's ElevenLabs tier has 46 voices it does not publish: the
     # known preset names are offered as a starting point, and the flag
