@@ -125,7 +125,9 @@ _GROK_BASE: tuple[tuple[str, str, str, str], ...] = (
     ("Iris", "iris", "female", "friendly, upbeat, naturally charming"),
     ("Kepler", "kepler", "male", "inventive, forward-thinking, charismatic"),
     ("Leo", "leo", "male", "authoritative, strong, impactful"),
-    ("Lumen", "lumen", "female", "warm, articulate, engaging"),
+    # Masculine per the roster count (7 feminine, 19 masculine) -- an
+    # earlier transcription had this one as feminine.
+    ("Lumen", "lumen", "male", "warm, articulate, engaging"),
     ("Luna", "luna", "female", "gentle, patient, deeply nurturing"),
     ("Lux", "lux", "male", "grounded, calm, quietly wise"),
     ("Naksh", "naksh", "male", "warm, thoughtful, wise"),

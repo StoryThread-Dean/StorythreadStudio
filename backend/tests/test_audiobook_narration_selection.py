@@ -181,12 +181,15 @@ def test_grok_voices_are_one_cast_across_three_dialects():
         # Same character words in every dialect: it is the same voice.
         assert "warm, natural, friendly" in voice["label"]
 
-    # The registry portion: 8 feminine and 18 masculine voices in all
+    # The registry portion: 7 feminine and 19 masculine voices in all
     # three dialects, grouped like every other roster (accents together,
     # women first) after the five provider-documented entries.
     registry = voices[5:]
-    assert sum(1 for v in registry if v["gender_presentation"] == "female") == 24
-    assert sum(1 for v in registry if v["gender_presentation"] == "male") == 54
+    assert sum(1 for v in registry if v["gender_presentation"] == "female") == 21
+    assert sum(1 for v in registry if v["gender_presentation"] == "male") == 57
+    # The roster's own count, pinned: 7 + 19 = 26 voices.
+    base_names = {v["label"].split(" (")[0] for v in registry}
+    assert len(base_names) == 26
     ranks = [({"en-US": 0, "en-GB": 1, "en-AU": 2}[v["language"]],
               0 if v["gender_presentation"] == "female" else 1) for v in registry]
     assert ranks == sorted(ranks)
