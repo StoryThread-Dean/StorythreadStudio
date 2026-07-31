@@ -419,6 +419,47 @@ em dashes anywhere in tags or filenames.
 
 ---
 
+## 13. Audiobook Converter -- walkthrough, say popout, draft pass (post-C)
+
+**Touches:** the Formatting Walkthrough (scan, apply/skip, auto-apply),
+the [say] popout (structured input, carrier preview, tips accordion),
+the Draft pass, the generation reset escape hatch, and Open Output
+Folder.
+
+Steps:
+1. **Formatting Walkthrough**: click into a chapter, press the blue
+   [Formatting Walkthrough] button. The strip (same blue wash) walks
+   stop by stop -- Apply inserts with smart spacing and the unsaved dot
+   lights; Skip moves on; Ctrl+Enter / Ctrl+Right work while typing in
+   the editor stays normal. Plant a broken marker ([pace:=2] and an
+   unclosed [pause:0.4 ) -- the walkthrough offers one-click fixes.
+2. **Auto-apply**: reopen the walkthrough, press [Auto-apply N beats].
+   The warning strip is readable (13px); confirming inserts every
+   default beat but leaves marker repairs in the walk. Leave WITHOUT
+   saving -- reload the workspace and confirm the batch is gone.
+3. **[say] popout**: select a word, click [say]. Only the spoken form
+   is typeable. Preview speaks "You will hear <word> in the narration"
+   with no garble at the word's edges. Type a caps respelling
+   (LAR-ah) -- preview says the NAME, never letters. Accept hops to the
+   next occurrence with the counter; occurrences already wrapped are
+   skipped. Tips: two groups (Most Useful blue, Additional gray), one
+   section open at a time.
+4. **Draft pass**: check "Draft pass", Generate Draft (fast) -- roughly
+   half the time on pause-heavy chapters; the amber regenerate-before-
+   export notice shows. Uncheck and Generate: every draft segment
+   re-queues automatically.
+5. **Reset hatch**: pause a run, then click "Cancel generation and
+   start over" under Resume -- after the confirm, Generate is available
+   fresh and completed segments are NOT redone.
+6. **Open Output Folder** (after an export): Explorer opens directly in
+   the workspace's output folder.
+
+Expected: walkthrough/say edits are buffer-only until Save; a draft can
+never ship silently (staleness re-queues it); the reset hatch never
+deletes audio.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and
