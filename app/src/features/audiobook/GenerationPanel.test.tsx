@@ -88,7 +88,7 @@ describe("GenerationPanel", () => {
     expect(screen.getByText("Generate Audiobook")).toBeTruthy();
   });
 
-  it("Draft pass posts draft:true and relabels the button", async () => {
+  it("the Draft/Testing toggle posts draft:true and relabels the button", async () => {
     let posted: Record<string, unknown> | null = null;
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
@@ -107,9 +107,9 @@ describe("GenerationPanel", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<GenerationPanel workspacePath={WS} />);
-    await waitFor(() => expect(screen.getByText(/Draft pass/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Draft\/Testing pass/)).toBeTruthy());
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /Draft pass/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /Draft\/Testing pass/ }));
     expect(screen.getByText("Generate Draft (fast)")).toBeTruthy();
     fireEvent.click(screen.getByText("Generate Draft (fast)"));
     await waitFor(() => expect(posted).toBeTruthy());

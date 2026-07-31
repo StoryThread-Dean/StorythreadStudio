@@ -24,6 +24,8 @@ import type { EngineStatus, PreviewTracePiece } from "./api";
 import { BookDetailsPanel } from "./BookDetailsPanel";
 import { ExportPanel } from "./ExportPanel";
 import { PrintPanel } from "./PrintPanel";
+import { ToggleSwitch } from "./ToggleSwitch";
+import { WhatsThis } from "./WhatsThis";
 import type { GenerationRun, NarratorVoice } from "./types";
 
 interface GenerationPanelProps {
@@ -352,41 +354,56 @@ export function GenerationPanel({
             <label className="mb-1 block text-[11px] text-zinc-500" htmlFor="narrator-voice">
               Narrator voice ({voices.length} available, free and local)
             </label>
-            <select
-              id="narrator-voice"
-              value={voiceId}
-              onChange={e => {
-                setVoiceId(e.target.value);
-                // Fire-and-forget: the book remembers its narrator.
-                void saveVoice(workspacePath, e.target.value).catch(() => {});
-              }}
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-emerald-500"
-            >
-              {voices.map(voice => (
-                <option key={voice.id} value={voice.id}>{voice.label}</option>
-              ))}
-            </select>
+            {/* Voice and its sample share one line: the dropdown sizes to
+                its widest option instead of stretching the rail. */}
+            <div className="flex items-center gap-2">
+              <select
+                id="narrator-voice"
+                value={voiceId}
+                onChange={e => {
+                  setVoiceId(e.target.value);
+                  // Fire-and-forget: the book remembers its narrator.
+                  void saveVoice(workspacePath, e.target.value).catch(() => {});
+                }}
+                className="w-auto min-w-0 max-w-[11rem] flex-1 truncate rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-emerald-500"
+              >
+                {voices.map(voice => (
+                  <option key={voice.id} value={voice.id}>{voice.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => void handlePreview()}
+                disabled={previewing !== null || !voiceId}
+                title={previewing === "selection" ? "Waiting for the selection sample to finish" : "Play a short sample sentence in this voice"}
+                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+              >
+                {previewIcon("voice")}
+                Sample
+              </button>
+            </div>
+            <div className="mt-1">
+              <WhatsThis label="Which voices work with premium?">
+                Every voice here is also available on the Budget hosted
+                Kokoro tier -- it is the same engine, so the voice you
+                draft with carries straight through to the paid narration.
+                The Standard and Pro engines are different models with
+                their own casts, so a voice from this list cannot follow
+                you there; you would pick from theirs instead. Worth
+                knowing before you fall for one particular narrator.
+              </WhatsThis>
+            </div>
           </div>
 
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => void handlePreview()}
-                disabled={previewing !== null || !voiceId}
-                title={previewing === "selection" ? "Waiting for the selection preview to finish" : "Play a short sample sentence in this voice"}
-                className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
-              >
-                {previewIcon("voice")}
-                Preview voice
-              </button>
-              <button
                 onClick={() => void handlePreviewSelection()}
                 disabled={previewing !== null || !voiceId}
-                title={previewing === "voice" ? "Waiting for the voice preview to finish" : "Highlight a passage in the editor, then hear exactly how it will sound -- pauses, pronunciations, and all. Local and free."}
+                title={previewing === "voice" ? "Waiting for the voice sample to finish" : "Highlight a passage in the editor, then hear exactly how it will sound -- pauses, pronunciations, and all. Local and free."}
                 className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
               >
                 {previewIcon("selection")}
-                Preview selection
+                Sample selection
               </button>
             </div>
             <p className="mt-1 text-[9px] text-zinc-600">local &middot; free &middot; up to 3,000 characters</p>
@@ -426,13 +443,40 @@ export function GenerationPanel({
               fast on pause-heavy chapters. Draft audio is stale to a
               Standard run, so it can never ship by accident. */}
           {!active && !resumable && (
-            <label className="flex cursor-pointer items-start gap-2 text-[11px] text-zinc-400"
-                   title="Skips the continuous-flow rendering: about twice as fast on pause-heavy chapters, with the known seam artifacts at pauses. For testing pacing and pronunciation -- regenerate in Standard quality before exporting.">
-              <input type="checkbox" checked={draftPass}
-                     onChange={e => setDraftPass(e.target.checked)}
-                     className="mt-0.5" />
-              Draft pass (faster, testing quality)
-            </label>
+            <div>
+              <ToggleSwitch
+                checked={draftPass}
+                onChange={setDraftPass}
+                tone="amber"
+                label="Draft/Testing pass"
+                hint={draftPass
+                  ? "About twice as fast, with seam artifacts at pauses."
+                  : "Off: full quality. Turn on to test pacing quickly."}
+              />
+              <div className="mt-1">
+                <WhatsThis label="What's the difference?">
+                  <span className="block">
+                    <strong className="text-zinc-200">Off (full quality):</strong>{" "}
+                    a paragraph with mid-sentence pauses is rendered as ONE
+                    continuous read, then your pauses are placed into its
+                    natural sentence gaps. No seams, but the engine does
+                    roughly twice the work on those paragraphs.
+                  </span>
+                  <span className="mt-1.5 block">
+                    <strong className="text-amber-200">On (draft):</strong>{" "}
+                    each fragment is rendered on its own and the pauses sit
+                    at the cuts. About half the time, at the cost of the
+                    slur and cold-start artifacts you hear at pause edges.
+                    Good for checking pacing, beats, and pronunciations.
+                  </span>
+                  <span className="mt-1.5 block">
+                    Draft audio counts as out of date, so a full-quality run
+                    re-does every draft segment automatically. Nothing you
+                    export can be accidentally draft-quality.
+                  </span>
+                </WhatsThis>
+              </div>
+            </div>
           )}
 
           {/* Start / resume -- the emerald path */}
