@@ -99,6 +99,6 @@ describe("SayEditor", () => {
     fireEvent.click(screen.getByText(/Tips: ways writers use this/));
     expect(screen.getByText(/Spell the sounds/)).toBeTruthy();
     expect(screen.getByText(/Words that change with meaning/)).toBeTruthy();
-    expect(screen.getByText(/Shift the stress for emphasis/)).toBeTruthy();
+    expect(screen.getByText(/Shift the stress \(experimental\)/)).toBeTruthy();
   });
 });

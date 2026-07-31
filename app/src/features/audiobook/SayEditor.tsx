@@ -34,8 +34,9 @@ interface SayEditorProps {
 // The tips library: every entry is a REAL technique, worded to spark
 // ideas beyond pronunciation fixes. Respellings here follow the
 // ear-tested house rules: hyphens glue syllables into one word, and
-// CAPITALS genuinely add weight to a syllable (measured ~20% more dwell)
-// -- the Preview button is the judge, not the spelling.
+// CAPS are fine to TYPE (the standard convention) -- the app folds them
+// before the engine, which would otherwise read caps runs as letters.
+// The Preview button is the judge, not the spelling.
 const TIPS: Array<{ title: string; body: string }> = [
   { title: "Spell the sounds, not the word",
     body: "Kaelith -> KAY-lith. Hyphens glue syllables into one spoken "
@@ -49,12 +50,12 @@ const TIPS: Array<{ title: string; body: string }> = [
       + "America. Set the book-wide reading in Pronunciations, then let "
       + "a single character say it their way -- say wins where both "
       + "apply. Jesus -> Hay-SOOS works the same trick." },
-  { title: "Shift the stress for emphasis",
-    body: "REC-ord is a noun, re-CORD is a verb -- respelling moves the "
-      + "stressed syllable. CAPITALS make the engine lean into a "
-      + "syllable, so for weight on a word, cap its strong syllable: "
-      + "absolutely -> ab-so-LOOT-lee. Always preview; the right "
-      + "respelling is whatever SOUNDS right." },
+  { title: "Shift the stress (experimental)",
+    body: "The engine decides stress from the sounds it reads, not from "
+      + "capitals (caps get folded -- the engine would spell them as "
+      + "letters). Nudge stress by respelling the vowels: record can "
+      + "land noun-ish or verb-ish as reh-kerd vs rih-kord. Ear-driven "
+      + "territory: preview every attempt, keep what sounds right." },
   { title: "Letters or a word?",
     body: "NASA can be nassa or en ay ess ay. Spell initialisms as "
       + "spaced letter sounds (F B I -> ef bee eye) when the engine "
