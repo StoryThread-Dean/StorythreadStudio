@@ -839,6 +839,20 @@ Same session, second finding: previewing a selection worked, then clicking Sampl
 
 Two fixes, because either alone leaves a hole: the workspace now remembers the last real highlight **as text** (not offsets, which later edits invalidate) and prefers a live selection over it; and the panel states which was used -- "Read your highlighted passage" or "Read the demo sentence -- highlight a passage to hear your own words". The fallback was never wrong; being silent about it was.
 
+##### Voice ids: there is no authoritative source but a live call
+
+Three engines, three different disagreements between the gateway's metadata and the vendor's own documentation:
+
+| Engine | Gateway metadata | Vendor page | Truth |
+|---|---|---|---|
+| Grok | 5 bare names | 26 voices x 3 dialect suffixes | Gateway. The vendor's extra voices and every suffix 404'd. |
+| Voxtral | 30 ids | -- | Gateway, complete and correct. |
+| MAI-Voice-2 | 4 ids, English stem `en-US-Harper` | 45+ ids, English ShortName `en-US-Harper:MAI-Voice-2` | **Vendor.** The gateway's list was both partial (7 English voices, not 1) and truncated -- an Azure ShortName carries the MODEL as a suffix, and the bare stem looks like a finished id but is not. |
+
+So the earlier rule ("trust the gateway, not the vendor page") was overfitted to Grok. The real rule: **cross-read both, ship the best-documented form, and keep the typed-voice box** -- the only ground truth is a live call.
+
+The failure mode is worth noting too, because it cost two auditions. Sending a bad voice id produced an **opaque** `Provider returned 400`. Sending NO voice produced the useful one: `An explicit voice is required for this TTS provider.` Deliberately removing a parameter to make an error legible is a debugging move worth remembering -- the blank-voice box exists partly for that.
+
 ##### The seed question (open)
 
 OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.

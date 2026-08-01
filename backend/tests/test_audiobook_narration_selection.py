@@ -358,3 +358,38 @@ def test_a_stored_choice_that_no_longer_resolves_reads_as_unusable():
     assert selection["is_recommended"] is False
     assert selection["can_spend"] is False
     assert "Available:" in selection["fallback_note"]
+
+
+def test_mai_voice_ids_carry_the_model_suffix_azure_requires():
+    # Two live 400s to learn this. An Azure voice ShortName includes the
+    # MODEL: "en-US-Harper:MAI-Voice-2". OpenRouter's metadata lists the
+    # bare stem, which looks like a finished id and is not -- sending it
+    # got an opaque 400, and sending no voice at all finally produced the
+    # useful complaint, "An explicit voice is required".
+    voices = tts_providers.voices_for("openrouter", "microsoft/mai-voice-2")[0]
+    assert all(v["id"].endswith(":MAI-Voice-2") for v in voices)
+    assert "en-US-Harper:MAI-Voice-2" in {v["id"] for v in voices}
+
+
+def test_mai_has_a_real_english_cast_not_one_voice():
+    # The earlier "one English voice" came from the gateway's partial
+    # list. Microsoft publishes seven, which is what makes this engine
+    # worth auditioning at all -- a single voice cannot cast two books.
+    voices = tts_providers.voices_for("openrouter", "microsoft/mai-voice-2")[0]
+    assert len(voices) == 7
+    assert sum(1 for v in voices if v["gender_presentation"] == "female") == 4
+    assert sum(1 for v in voices if v["gender_presentation"] == "male") == 3
+    # Grouped like every other roster: American first, feminine first.
+    ranks = [({"en-US": 0, "en-AU": 2}[v["language"]],
+              0 if v["gender_presentation"] == "female" else 1) for v in voices]
+    assert ranks == sorted(ranks)
+
+
+def test_mai_sends_no_response_format_and_stays_typeable():
+    # It rejected the field's presence, and a voice id we cannot fully
+    # verify means the writer keeps a way to type one.
+    _provider, model = tts_providers.resolve_model(
+        "openrouter", "microsoft/mai-voice-2")
+    assert model.response_format is None
+    assert model.voices_verified is False
+    assert model.tier == "standard"

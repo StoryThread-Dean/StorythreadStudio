@@ -340,18 +340,43 @@ _VOXTRAL_VOICES = tuple(
     for emotion in emotions
 )
 
-# Microsoft's MAI-Voice-2 cast, from OpenRouter's model metadata. Note
-# the split with Microsoft's own page, which names four voices as Acacia,
-# Elm, Birch and Grove: the gateway answers to locale-prefixed ids
-# instead. The Grok episode settled which source to trust.
+# Microsoft's MAI-Voice-2 English cast, from Microsoft Learn's prebuilt
+# voice table -- the authoritative source, found only after two live 400s.
 #
-# Only the English one is offered. The other three (es-MX-Valeria,
-# fr-FR-Soleil, de-DE-Klaus) are real but this app narrates English books.
+# THE ID FORMAT IS THE WHOLE LESSON. An Azure voice ShortName carries the
+# MODEL as a suffix: "en-US-Harper:MAI-Voice-2", not "en-US-Harper".
+# OpenRouter's model metadata lists the bare stems, which look like
+# complete ids and are not, so the first audition failed with an opaque
+# 400 and the second -- sent with no voice at all -- got the useful
+# answer: "An explicit voice is required for this TTS provider."
 #
-# No gender is asserted. Microsoft does not publish one for Harper, and
-# inventing a label for a synthetic voice helps nobody choose.
+# That also corrects the earlier note that this engine had ONE English
+# voice. It has seven. The gateway's list was partial, not wrong, which
+# is a third distinct way these two sources have disagreed:
+#   Grok    -- gateway right, vendor page listed voices it would not take
+#   Voxtral -- gateway right, and complete
+#   MAI     -- gateway incomplete AND its ids truncated
+# There is no source of truth here except a live call. Ship the
+# best-documented form, keep the typed-voice box, believe the audio.
+#
+# Ordered the way every roster here is: accent group, then feminine
+# before masculine, alphabetical within. Non-English locales exist (15
+# languages) and are not offered -- this app narrates English books.
 _MAI_VOICES = (
-    HostedVoice("en-US-Harper", "Harper (American English)", "en-US", ""),
+    HostedVoice("en-US-Harper:MAI-Voice-2", "Harper (American female)",
+                "en-US", "female"),
+    HostedVoice("en-US-Iris:MAI-Voice-2", "Iris (American female)",
+                "en-US", "female"),
+    HostedVoice("en-US-Olivia:MAI-Voice-2", "Olivia (American female)",
+                "en-US", "female"),
+    HostedVoice("en-US-Ethan:MAI-Voice-2", "Ethan (American male)",
+                "en-US", "male"),
+    HostedVoice("en-US-Grant:MAI-Voice-2", "Grant (American male)",
+                "en-US", "male"),
+    HostedVoice("en-US-Jasper:MAI-Voice-2", "Jasper (American male)",
+                "en-US", "male"),
+    HostedVoice("en-AU-Lisa:MAI-Voice-2", "Lisa (Australian female)",
+                "en-AU", "female"),
 )
 
 _ELEVEN_VOICES = (
@@ -417,14 +442,14 @@ OPENROUTER = TtsProviderConfig(
             voices_verified=False,
             notes="Microsoft's FIDELITY variant -- the one they point at "
                   "audiobooks, as against MAI-Voice-2-Flash which is tuned "
-                  "for call-centre latency we do not care about. It is the "
-                  "only engine in this price band that advertises stable "
-                  "speaker identity across long-form, which is precisely "
-                  "what Grok and Voxtral each failed at. One English voice, "
-                  "though: Harper. NOT YET JUDGED BY EAR -- audition a full "
-                  "chapter before committing a book to it, because one "
-                  "paragraph is the length at which this class of problem "
-                  "stays inaudible.",
+                  "for call-centre latency we do not care about. Seven "
+                  "English voices, and the only engine in this price band "
+                  "that advertises stable speaker identity across long-form "
+                  "-- precisely what Grok and Voxtral each failed at, in "
+                  "different ways. NOT YET JUDGED BY EAR: audition a full "
+                  "chapter before committing a book, because one paragraph "
+                  "is the length at which this class of problem stays "
+                  "inaudible.",
         ),
         HostedModel(
             id="mistralai/voxtral-mini-tts-2603",
