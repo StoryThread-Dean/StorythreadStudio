@@ -875,7 +875,10 @@ That is a genuinely different failure from the other two, and it names the third
 
 All three Standard candidates are now demoted, so that tier is **empty on the recommended shelf**. The settings screen says so in as many words rather than leaving a silent gap between Budget and Pro -- an unexplained hole reads as a failed load, and papering over it with a reluctant pick would be worse than admitting the shortfall.
 
-##### The seed question (open)
+##### The seed question (PINNED 2026-08-01)
+
+**Pinned by user direction at the close of Stage D.** The Standard tier ships empty and the hunt stops here -- everything below is the note to pick up from, not work in flight. Reopen it when there is a reason to (a new engine, a cheaper Pro option, or a writer asking for the tier); do not spend more auditions on it in passing.
+
 
 OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.
 

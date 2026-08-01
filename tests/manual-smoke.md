@@ -460,6 +460,65 @@ deletes audio.
 
 ---
 
+## 14. Audiobook Converter -- premium narration, the print pass (Stage D)
+
+**Touches:** Audiobook Settings (engine shelf, narration keys, narration
+settings), the Premium Narration panel, hosted auditions, and the
+cost-confirmed print pass. **This scenario spends real money** -- a few
+cents if you follow it as written. Budget-tier auditions cost about a
+hundredth of a cent; do the expensive checks by DECLINING the confirm.
+
+Requires: an OpenRouter key with credit.
+
+Steps:
+1. **Settings, engine shelf**: gear at the bottom of the chapter rail
+   opens Audiobook Settings. The shelf reads Free, Budget, Pro -- and a
+   line saying no Standard engine has earned a recommendation, with
+   "Other engines we tested but do not recommend (3)" below it. Open it:
+   Grok, Voxtral and MAI-Voice-2 each show their reason in amber, and
+   MAI additionally says its pace is re-scaled.
+2. **Missing key is amber, never silent**: pick the Pro tier with no
+   NanoGPT key connected. The card turns amber with numbered sign-up
+   steps. Nothing later in the flow should ever fail cryptically because
+   of a missing key.
+3. **Keys stay masked**: turn off "Use my writing API keys". The key
+   field is BLANK with "Current key: sk-o...abcd" beside it. Save without
+   typing -- reopen and confirm the stored key survived (a masked value
+   must never be echoed back as the new key).
+4. **Budget audition = voice parity**: choose Budget (hosted Kokoro),
+   pick the same voice you drafted with, and [Sample]. It should sound
+   like your local narrator, because it is the same engine. Cost: about
+   a hundredth of a cent.
+5. **Per-book override**: in Premium Narration, change the voice for
+   this book only. It shows the engine as read-only ("chosen in Audiobook
+   Settings") with a button back to the dialog. Reopen the workspace --
+   the override persisted; the global default in Settings did not change.
+6. **Sample selection keeps its selection**: select two paragraphs in the
+   editor, click [Sample selection], then click it AGAIN without
+   re-selecting. The second sample must use the same text, not the
+   default demo passage.
+7. **Level holds across paragraphs**: in that two-paragraph sample, the
+   second paragraph must not jump louder than the first, and a beat of
+   silence must separate them even with no [pause] typed.
+8. **The estimate, then decline**: press the print button. The estimate
+   names a dollar figure BEFORE anything is spent, and the confirm
+   repeats the number. **Decline it.** Nothing is spent and nothing is
+   queued.
+9. **A demoted engine still spends**: select Grok or MAI in Settings,
+   return to Premium Narration -- its caveat is repeated beside the
+   price, and the print flow is still available. A demotion is a warning
+   the writer overrules, not a block.
+10. **A chat model is a block**: with no narration engine chosen at all,
+    Premium Narration names the writing-side fallback in a different
+    color with a red note that it is not a narration model. Spending is
+    refused here -- this is the one case that stops rather than warns.
+
+Expected: no cryptic provider errors (every refusal names the provider
+and what it said); no spend without a quoted number first; the voice you
+drafted with survives into the Budget tier and only there.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

@@ -206,6 +206,14 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_audiobook_generation.py` -- generation engine: run lifecycle, per-segment persistence, pause/cancel between segments, retry cap + pessimistic attempts, truncation validation, restart recovery, workspace lockfile, narration-settings/dialogue/marker pace flow + staleness
   - `test_audiobook_local_worker.py` -- kokoro-worker manager: KokoroBackend transport errors, spawn command + version gate, install flow (SHA256 integrity, polluted-dir replace, locked-file loud failure), voices/preview/preview-selection endpoints
   - `test_audiobook_marker_demos.py` -- WAV stitcher (exact silence, format guards), audible marker demos (scripts render clean, speeds match narrated values), render_marked_text (rules, silence, pace spans, cut-into-span warnings, trace)
+  - `test_audiobook_flow.py` -- flow synthesis: mid-paragraph pauses cut the AUDIO of a continuous render (never the text), gap located by the duration-calibrated matcher -- pins the pre-pause slur fix
+  - `test_audiobook_assembly.py` -- the assembler against REAL ffmpeg: stitch -> loudnorm -> encode, ffprobe verifies durations, ID3 tags, M4B chapter markers (a missing ffmpeg fails loudly, never skips)
+  - `test_audiobook_metadata.py` -- book metadata + cover art (spec 17): manifest store, HTTP surface, cover validators
+  - `test_audiobook_tts_providers.py` -- hosted catalog + prices, the print-pass estimator, cloud synthesis behind the local seam, and error classification (a retryable verdict on a billing error would charge twice)
+  - `test_audiobook_settings_routes.py` -- the audiobook settings surface: key masking (never echoed back, omitted = leave alone, "" = clear) and engine-pair validation refused out loud
+  - `test_audiobook_narration_selection.py` -- three-level engine resolution (book -> settings -> writing fallback), `can_spend` vs `fallback_note` vs `caveat`, and each demoted engine's recorded reason
+  - `test_audiobook_mp3_transport.py` -- per-model `response_format`, mp3 byte sniffing + decode, and the self-healing 400 retry (provider names a format, or the field is dropped)
+  - `test_audiobook_level_matching.py` -- loudness matching at assembly (-20 dBFS RMS, -1 dBFS ceiling, clamped gain), including that flow dynamics survive it
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -223,6 +231,16 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/audiobook/WorkspaceView.test.tsx` -- narration editor: inline pause insertion (scroll preserved), [say]/[exclude]/pace wraps, Remove marker stripping, manual save PUT + chapter re-derive, marker help panel, pronunciation dialog
   - `src/features/audiobook/GenerationPanel.test.tsx` -- narration rail: voices load, generate posts + live progress, paused-run resume, failed-segment surfacing, up-to-date force flow, engine-unavailable message
   - `src/features/audiobook/markers.test.ts` -- stripAudioMarkers (wrappers dissolve, words never deleted) + paragraphBoundsAt
+  - `src/features/audiobook/ImportPanel.test.tsx` -- Get Started flow (spec 5.1.2): workspace location auto-chosen and explained, override sticks, Create posts source + workspace + title
+  - `src/features/audiobook/BookDetailsPanel.test.tsx` -- metadata form: loads on mount, dirty tracking (manual save), full-field PUT, cover pick/validate/preview/remove
+  - `src/features/audiobook/SayEditor.test.tsx` -- the [say] popout: brackets are chrome, Accept wraps and hops, already-overridden occurrences skipped, Preview sends the word's sentence
+  - `src/features/audiobook/insertScan.test.ts` -- walkthrough scanner contract, pinned with the user's real manuscript examples incl. broken-marker repairs
+  - `src/features/audiobook/InsertWalkthrough.test.tsx` -- walkthrough panel: stops walk in order, Apply is a buffer edit (never a save), Skip advances, per-kind muting, Ctrl+Enter fast path
+  - `src/features/audiobook/AudiobookSettingsDialog.test.tsx` -- settings surface: a masked key is never sent back, engine shelf + demoted drawer with reasons, empty-tier admission, pace re-scale notice
+  - `src/features/audiobook/PremiumNarrationPanel.test.tsx` -- the money gate: engine reported not chosen, unusable engine offers no buttons, estimate precedes any confirm, a stale estimate cannot survive an engine change
+  - `src/features/audiobook/VoicePicker.test.tsx` -- one picker, three shapes (two dropdowns / one / free text), value stays a single composed id in all of them
+  - `src/features/audiobook/ToggleSwitch.test.tsx` -- a switch, not a checkbox: its look carries the state
+  - `src/features/audiobook/SpokenLine.test.tsx` -- the read-aloud flourish never costs readability (every word present as text, spaces survive, staggered delays)
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands
