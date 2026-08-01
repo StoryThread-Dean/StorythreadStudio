@@ -853,6 +853,18 @@ So the earlier rule ("trust the gateway, not the vendor page") was overfitted to
 
 The failure mode is worth noting too, because it cost two auditions. Sending a bad voice id produced an **opaque** `Provider returned 400`. Sending NO voice produced the useful one: `An explicit voice is required for this TTS provider.` Deliberately removing a parameter to make an error legible is a debugging move worth remembering -- the blank-voice box exists partly for that.
 
+##### Pace is engine-relative (live finding, fixed)
+
+Narrator Pace 0.85 / Dialogue Pace 0.9, tuned by ear on the local narrator and sounding normal there, came out **dramatically slower** on MAI-Voice-2 -- and slurred, because every engine garbles when pushed well below its natural rate. The second symptom was a consequence of the first, not a separate defect.
+
+The cause is a category error in the original design: `speed` was treated as an absolute the way `scene_break_ms` is. It is not. Narration Settings are per BOOK, so switching engines silently changed what 0.85 *meant*, and MAI-Voice-2 at 1.0 already reads about where Kokoro sits at 0.85 -- the two slowdowns compounded.
+
+`HostedModel.pace_baseline` now records how fast an engine is at `speed=1.0` on the reference scale (Kokoro, which every pace number in this app was tuned against). The backend divides by it, so each engine is asked for the same PERCEIVED rate, still snapped to the 0.05 grid that avoids the 1.08x lisp. MAI-Voice-2 is 0.85; everything else is 1.0 and passes through untouched, which is what keeps this from quietly retiming the engines that were already right.
+
+The writer's pace setting is an **intent**. Turning that intent into a number a particular engine understands is the engine's job, not the writer's.
+
+It is an ear estimate, not a measurement -- one float, easy to retune. And the re-scaling is stated on the engine card, because a silent change to speech rate is exactly the kind of invisible transform that reads as a bug when someone hears it.
+
 ##### The seed question (open)
 
 OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.

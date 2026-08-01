@@ -371,18 +371,49 @@ def test_mai_voice_ids_carry_the_model_suffix_azure_requires():
     assert "en-US-Harper:MAI-Voice-2" in {v["id"] for v in voices}
 
 
-def test_mai_has_a_real_english_cast_not_one_voice():
-    # The earlier "one English voice" came from the gateway's partial
-    # list. Microsoft publishes seven, which is what makes this engine
-    # worth auditioning at all -- a single voice cannot cast two books.
+def test_mai_offers_only_the_voices_that_actually_played():
+    # Microsoft documents seven English voices. Live auditions found that
+    # Harper and Olivia speak, Iris and Lisa are refused, and the three
+    # men are untried. Listing all seven would be the Grok mistake --
+    # offering options that cannot play -- so the dropdown holds the two
+    # confirmed ones and the notes name the rest for the typed-voice box.
     voices = tts_providers.voices_for("openrouter", "microsoft/mai-voice-2")[0]
-    assert len(voices) == 7
-    assert sum(1 for v in voices if v["gender_presentation"] == "female") == 4
-    assert sum(1 for v in voices if v["gender_presentation"] == "male") == 3
-    # Grouped like every other roster: American first, feminine first.
-    ranks = [({"en-US": 0, "en-AU": 2}[v["language"]],
-              0 if v["gender_presentation"] == "female" else 1) for v in voices]
-    assert ranks == sorted(ranks)
+    assert [v["id"] for v in voices] == [
+        "en-US-Harper:MAI-Voice-2", "en-US-Olivia:MAI-Voice-2"]
+
+    _provider, model = tts_providers.resolve_model(
+        "openrouter", "microsoft/mai-voice-2")
+    for unlisted in ("en-US-Ethan", "en-US-Grant", "en-US-Jasper",
+                     "en-US-Iris", "en-AU-Lisa"):
+        assert unlisted in model.notes
+
+
+def test_pace_is_translated_into_each_engines_own_scale():
+    # Narration Settings are per BOOK and were tuned by ear on the local
+    # narrator, but engines do not share a speed scale. MAI-Voice-2 at 1.0
+    # already reads about as slowly as Kokoro at 0.85, so passing 0.85
+    # straight through compounded the two -- dramatically slower, and
+    # slurring with it (live finding).
+    from app.audiobook.cloud_speech import CloudSpeechBackend
+
+    provider, mai = tts_providers.resolve_model(
+        "openrouter", "microsoft/mai-voice-2")
+    backend = CloudSpeechBackend(provider, mai, "sk-test")
+    # The writer's 0.85 becomes this engine's natural rate...
+    assert backend._engine_speed(0.85) == 1.0
+    # ...and asking for Kokoro-normal now correctly means "faster here".
+    assert backend._engine_speed(1.0) == pytest.approx(1.2, abs=0.01)
+    # Still on the 0.05 grid: landing between an engine's clean gears is
+    # what caused the original 1.08x lisp.
+    assert backend._engine_speed(0.9) == round(backend._engine_speed(0.9) / 0.05) * 0.05
+
+    # An engine on the reference scale is passed through untouched, so
+    # this can never quietly retime the engines that were already right.
+    _p, kokoro = tts_providers.resolve_model("openrouter", "hexgrad/kokoro-82m")
+    assert kokoro.pace_baseline == 1.0
+    passthrough = CloudSpeechBackend(provider, kokoro, "sk-test")
+    assert passthrough._engine_speed(0.85) == 0.85
+    assert "speed" not in passthrough._body("hi", "af_heart", 1.0)
 
 
 def test_mai_sends_no_response_format_and_stays_typeable():

@@ -373,6 +373,10 @@ export interface NarrationTier {
   recommended?: boolean;
   /** Why it was demoted, in the writer's terms. */
   caveat?: string;
+  /** How fast this engine is at speed 1.0, on the free narrator's scale.
+   * Below 1 means it reads slowly by nature and the book's pace settings
+   * are re-scaled so they sound the same here. */
+  pace_baseline?: number;
 }
 
 import type { VoiceAxes } from "./VoicePicker";

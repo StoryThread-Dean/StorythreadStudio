@@ -113,6 +113,18 @@ export function NarrationEngineSection({
                 leave it blank for the model's own default.
               </span>
             )}
+            {/* Pace is engine-relative and this one is being re-scaled.
+                Say so: a silent change to speech RATE is exactly the kind
+                of invisible transform that reads as a bug when the writer
+                notices it in the audio. */}
+            {tier.requires_key && tier.pace_baseline !== undefined
+              && tier.pace_baseline !== 1 && (
+              <span className="block text-[10px] text-sky-300/80">
+                Reads {tier.pace_baseline < 1 ? "slower" : "faster"} than the
+                free narrator by nature, so your pace settings are re-scaled
+                to sound the same here.
+              </span>
+            )}
             {/* The reason it was demoted, always on the card -- not buried
                 in a tooltip a writer finds after paying. */}
             {tier.caveat && (

@@ -66,6 +66,21 @@ class HostedModel:
     # Whether the model honors a speed parameter. Everything else gets
     # time-stretched at assembly instead (the [pace] contract is universal).
     supports_speed: bool = True
+    # HOW FAST THIS ENGINE IS AT speed=1.0, expressed on the reference
+    # engine's scale (Kokoro, which every pace number in this app was
+    # tuned against). 0.85 means "this engine's natural rate already
+    # sounds like Kokoro slowed to 0.85".
+    #
+    # Narration Settings are per BOOK, not per engine, so without this a
+    # writer who tuned Narrator Pace 0.85 by ear on the local narrator got
+    # something dramatically slower the moment they switched -- the two
+    # slowdowns compounding -- and slurring with it, because every engine
+    # garbles when pushed far below its natural rate. The pace the writer
+    # chose is an INTENT; turning that intent into a number this
+    # particular engine understands is the engine's job.
+    #
+    # An ear estimate, not a measurement. Easy to retune: it is one float.
+    pace_baseline: float = 1.0
     # What to ask the speech endpoint for. "pcm" is the house default:
     # raw samples we can put a WAV header on with the stdlib, in exactly
     # the 16-bit mono shape flow synthesis and the stitcher want.
@@ -362,21 +377,17 @@ _VOXTRAL_VOICES = tuple(
 # Ordered the way every roster here is: accent group, then feminine
 # before masculine, alphabetical within. Non-English locales exist (15
 # languages) and are not offered -- this app narrates English books.
+# PROVEN BY EAR, not by documentation. Microsoft publishes seven English
+# voices; live auditions found that Harper and Olivia play and that Iris
+# and Lisa are refused, with Ethan, Grant and Jasper untried. Offering a
+# voice that cannot speak is the Grok mistake, so only the two confirmed
+# ones are in the dropdown -- the rest are named in the notes, where a
+# writer can paste one into the typed-voice box and find out.
 _MAI_VOICES = (
     HostedVoice("en-US-Harper:MAI-Voice-2", "Harper (American female)",
                 "en-US", "female"),
-    HostedVoice("en-US-Iris:MAI-Voice-2", "Iris (American female)",
-                "en-US", "female"),
     HostedVoice("en-US-Olivia:MAI-Voice-2", "Olivia (American female)",
                 "en-US", "female"),
-    HostedVoice("en-US-Ethan:MAI-Voice-2", "Ethan (American male)",
-                "en-US", "male"),
-    HostedVoice("en-US-Grant:MAI-Voice-2", "Grant (American male)",
-                "en-US", "male"),
-    HostedVoice("en-US-Jasper:MAI-Voice-2", "Jasper (American male)",
-                "en-US", "male"),
-    HostedVoice("en-AU-Lisa:MAI-Voice-2", "Lisa (Australian female)",
-                "en-AU", "female"),
 )
 
 _ELEVEN_VOICES = (
@@ -440,16 +451,23 @@ OPENROUTER = TtsProviderConfig(
             # either. False keeps the typed-voice box available so a blank
             # (model default) can be tried without a code change.
             voices_verified=False,
+            # This engine reads slowly by nature -- about where Kokoro
+            # sits at 0.85. Without the calibration, a book tuned to 0.85
+            # on the local narrator arrived dramatically slower here and
+            # slurred with it.
+            pace_baseline=0.85,
             notes="Microsoft's FIDELITY variant -- the one they point at "
                   "audiobooks, as against MAI-Voice-2-Flash which is tuned "
-                  "for call-centre latency we do not care about. Seven "
-                  "English voices, and the only engine in this price band "
-                  "that advertises stable speaker identity across long-form "
-                  "-- precisely what Grok and Voxtral each failed at, in "
-                  "different ways. NOT YET JUDGED BY EAR: audition a full "
-                  "chapter before committing a book, because one paragraph "
-                  "is the length at which this class of problem stays "
-                  "inaudible.",
+                  "for call-centre latency we do not care about. It reads "
+                  "SLOWLY by nature, so your pace settings are re-scaled to "
+                  "match what they sound like on the free narrator. "
+                  "Microsoft documents five more English voices "
+                  "(en-US-Ethan, en-US-Grant, en-US-Jasper, en-US-Iris, "
+                  "en-AU-Lisa, each ending :MAI-Voice-2) -- Iris and Lisa "
+                  "were refused here and the three men are untried, so they "
+                  "are not in the list. Paste one into the voice box to try "
+                  "it. NOT YET JUDGED BY EAR over a full chapter, which is "
+                  "the only length at which drift becomes audible.",
         ),
         HostedModel(
             id="mistralai/voxtral-mini-tts-2603",
@@ -606,6 +624,7 @@ LOCAL_TIER_ENTRY = {
     "notes": "",
     "recommended": True,
     "caveat": "",
+    "pace_baseline": 1.0,
 }
 
 
@@ -632,6 +651,7 @@ def recommended_tiers() -> list[dict]:
                 "notes": model.notes,
                 "recommended": model.recommended,
                 "caveat": model.caveat,
+                "pace_baseline": model.pace_baseline,
             })
     entries.sort(key=lambda e: TIER_ORDER.index(e["tier"])
                  if e["tier"] in TIER_ORDER else len(TIER_ORDER))
@@ -863,6 +883,7 @@ def catalog() -> list[dict]:
                     "notes": model.notes,
                     "recommended": model.recommended,
                     "caveat": model.caveat,
+                    "pace_baseline": model.pace_baseline,
                     "voices": [
                         {"id": v.id, "label": v.label, "language": v.language,
                          "gender_presentation": v.gender_presentation}

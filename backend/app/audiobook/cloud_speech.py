@@ -323,9 +323,30 @@ class CloudSpeechBackend(SynthesisBackend):
             body["voice"] = voice_id
         # Models without a speed control get time-stretched at assembly
         # instead; sending the field anyway risks a 400 (spec 15).
-        if self.model.supports_speed and speed != 1.0:
-            body["speed"] = round(speed, 3)
+        if self.model.supports_speed:
+            sent = self._engine_speed(speed)
+            if sent != 1.0:
+                body["speed"] = sent
         return body
+
+    def _engine_speed(self, speed: float) -> float:
+        """
+        The writer's intended pace, in THIS engine's units.
+
+        Pace settings live on the book and were tuned by ear against the
+        local narrator, but engines do not share a scale: MAI-Voice-2 at
+        1.0 already reads about as slowly as Kokoro at 0.85, so passing
+        0.85 straight through compounded the two and slurred (live
+        finding). Dividing by the engine's baseline asks each engine for
+        the same PERCEIVED rate.
+
+        Snapped to the same 0.05 grid as everything else -- compound
+        values landing between an engine's clean gears is the original
+        cause of the 1.08x lisp.
+        """
+        baseline = self.model.pace_baseline or 1.0
+        translated = round(round((speed / baseline) / 0.05) * 0.05, 2)
+        return max(0.5, min(2.0, translated))
 
     def _read_audio(self, response: httpx.Response) -> bytes:
         """Provider answer -> 16-bit mono WAV bytes."""

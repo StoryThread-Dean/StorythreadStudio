@@ -57,6 +57,14 @@ const CATALOG = {
       requires_key: true, has_api_key: true, signup_steps: [],
       recommended: false,
       caveat: "Pitch and tone reset between sentences." },
+    // Reads slowly by nature -- its pace is re-scaled, and says so.
+    { tier: "standard", tier_label: "Standard", blurb: "Long-form.",
+      provider: "openrouter", provider_label: "OpenRouter",
+      model: "microsoft/mai-voice-2", model_label: "MAI-Voice-2",
+      price_per_1k_chars: "0.022", price_per_million_chars: "22",
+      same_as_local: false, voices_same_as_local: false, voices_verified: false,
+      requires_key: true, has_api_key: true, signup_steps: [],
+      pace_baseline: 0.85 },
     { tier: "pro", tier_label: "Pro", blurb: "Studio-grade.",
       provider: "nanogpt", provider_label: "NanoGPT",
       model: "Elevenlabs-Turbo-V2.5", model_label: "ElevenLabs Turbo v2.5",
@@ -144,6 +152,18 @@ describe("AudiobookSettingsDialog", () => {
     await waitFor(() =>
       expect(screen.getByText(/No NanoGPT API key is connected/)).toBeTruthy());
     expect(screen.getByText("Create an account at nano-gpt.com.")).toBeTruthy();
+  });
+
+  it("says when an engine's pace is being re-scaled", async () => {
+    // Live finding: Narrator Pace 0.85, tuned by ear on the free
+    // narrator, came out dramatically slower on MAI-Voice-2 because that
+    // engine is already slow at 1.0. The app now translates -- and must
+    // SAY it does, because a silent change to speech rate reads as a bug.
+    await open(mockFetch());
+    expect(screen.getByText(/Reads slower than the free narrator by nature/))
+      .toBeTruthy();
+    // Engines on the reference scale say nothing at all.
+    expect(screen.queryByText(/Reads faster than the free narrator/)).toBeNull();
   });
 
   it("keeps a demoted engine off the shelf but one click away, with its reason", async () => {
