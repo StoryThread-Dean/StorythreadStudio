@@ -109,8 +109,8 @@ export function NarrationEngineSection({
             )}
             {tier.requires_key && !tier.voices_verified && (
               <span className="block text-[10px] text-zinc-500">
-                This provider does not publish its voice list -- leave
-                the voice blank for the model's default.
+                Voice ids for this engine are unconfirmed -- type one, or
+                leave it blank for the model's own default.
               </span>
             )}
             {/* The reason it was demoted, always on the card -- not buried

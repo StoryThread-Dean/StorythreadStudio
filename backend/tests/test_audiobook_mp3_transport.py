@@ -148,12 +148,15 @@ def test_a_format_400_is_retried_once_in_the_format_the_provider_named():
         assert f.getnchannels() == 1
 
 
-def test_a_400_that_names_no_usable_format_is_reported_not_retried():
-    # An engine demanding opus is a real gap. Retrying into a format we
-    # cannot decode would just burn a second paid request to fail again.
+def test_a_400_naming_an_undecodable_format_asks_once_more_then_reports():
+    # An engine demanding opus is a real gap. We must NOT retry INTO opus
+    # -- we cannot decode it, so that request would be bought and thrown
+    # away. Dropping the field is still worth one try, because the model's
+    # own default may be something we can read. If that fails too, report
+    # and stop: two requests is the whole budget.
     import httpx
 
-    attempts: list[str] = []
+    attempts: list = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         import json as _json
@@ -167,7 +170,7 @@ def test_a_400_that_names_no_usable_format_is_reported_not_retried():
         assert e.retryable is False
     else:
         raise AssertionError("an unusable format demand must raise")
-    assert attempts == ["pcm"]               # exactly one request
+    assert attempts == ["pcm", None]         # never ["pcm", "opus"]
 
 
 def test_the_wanted_format_wins_over_the_rejected_one_in_the_message():
@@ -196,3 +199,62 @@ def _synthesize_through(handler, model_id: str) -> bytes:
         return audio
     finally:
         httpx.Client = real_client  # type: ignore[misc]
+
+
+def test_an_opaque_400_drops_the_format_field_and_tries_again():
+    # MAI-Voice-2's first audition: {"error":{"message":"Provider returned
+    # 400"}} -- no detail to act on. Its published parameter list is the
+    # only one on the shelf omitting response_format, so the field's mere
+    # PRESENCE is the prime suspect. Ask again with the smallest legal
+    # body rather than sending the writer back to a dead end.
+    import httpx
+
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _json
+        body = _json.loads(request.content)
+        bodies.append(body)
+        if "response_format" in body:
+            return httpx.Response(400, text=_json.dumps(
+                {"error": {"message": "Provider returned 400", "code": 400}}))
+        return httpx.Response(200, content=FIXTURE.read_bytes(),
+                              headers={"content-type": "audio/mpeg"})
+
+    audio = _synthesize_through(handler, "hexgrad/kokoro-82m")
+    assert len(bodies) == 2
+    assert "response_format" in bodies[0]
+    assert "response_format" not in bodies[1]     # dropped, not guessed at
+    with wave.open(io.BytesIO(audio), "rb") as f:
+        assert f.getnchannels() == 1
+
+
+def test_a_model_that_declines_the_format_field_never_sends_it():
+    # MAI-Voice-2 is configured to omit it outright, so the retry above is
+    # a safety net rather than a per-call tax.
+    body = _backend("microsoft/mai-voice-2")._body("hello", "en-US-Harper", 1.0)
+    assert "response_format" not in body
+    assert body["voice"] == "en-US-Harper"
+
+
+def test_an_answer_that_is_already_a_wav_is_not_double_headered():
+    # With no format requested, an engine may answer WAV. Wrapping a
+    # RIFF file in a second header puts a burst of noise at the top of
+    # every clip -- audible, and it would survive every other check.
+    import httpx
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(24000)
+            w.writeframes(b"\x11\x22" * 12000)
+        return httpx.Response(200, content=buffer.getvalue(),
+                              headers={"content-type": "audio/wav"})
+
+    audio = _synthesize_through(handler, "microsoft/mai-voice-2")
+    assert audio[:4] == b"RIFF"
+    with wave.open(io.BytesIO(audio), "rb") as f:
+        assert f.getframerate() == 24000
+        assert f.getnframes() == 12000        # not 12000 + 22 header frames

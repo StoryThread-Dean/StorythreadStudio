@@ -310,12 +310,15 @@ class CloudSpeechBackend(SynthesisBackend):
         body = {
             "model": self.model.id,
             "input": text,
-            # Per MODEL, not a constant. OpenRouter offers mp3 and pcm and
-            # no wav, and which of the two a model accepts depends on the
-            # vendor behind it -- Mistral rejects pcm outright with a 400.
-            # pcm is the house default because we can header it ourselves.
-            "response_format": self.model.response_format,
         }
+        # Per MODEL, not a constant. OpenRouter offers mp3 and pcm and no
+        # wav, and which a model accepts depends on the vendor behind it:
+        # Mistral rejects pcm outright, and an engine that does not
+        # implement the parameter at all can reject its mere presence. pcm
+        # is the house default because we can header it ourselves; None
+        # omits the field and lets the reader sniff whatever comes back.
+        if self.model.response_format:
+            body["response_format"] = self.model.response_format
         if voice_id:
             body["voice"] = voice_id
         # Models without a speed control get time-stretched at assembly
@@ -406,17 +409,27 @@ class CloudSpeechBackend(SynthesisBackend):
         body = self._body(text, voice_id, speed)
         response = post(body)
 
-        # SELF-HEALING FORMAT. Audio format is a per-model property and the
-        # only way to learn it is to be told -- Mistral answered a first
-        # audition with 400 "only supports response_format mp3". Rather
-        # than hard-code another table entry every time an engine is
-        # added, take the provider at its word and retry once with the
-        # format it named. Costs one wasted request on first contact and
-        # makes auditioning a new engine free of code changes.
-        if response.status_code == 400 and "response_format" in (response.text or ""):
+        # SELF-HEALING FORMAT, in two steps, because engines refuse in two
+        # different ways.
+        #
+        #   1. The provider NAMES a format ("only supports mp3"). Take it
+        #      at its word -- that is Mistral's Voxtral.
+        #   2. The provider just says 400 with nothing useful. MAI-Voice-2
+        #      does this, and its OpenRouter metadata does not list
+        #      response_format among the parameters it implements, so the
+        #      likeliest cause is the field's mere presence. Drop it and
+        #      ask again with the smallest legal body.
+        #
+        # Bounded at ONE extra request either way. Safe because the reader
+        # sniffs the answer's bytes rather than trusting what was asked
+        # for, so a reply in any decodable format still lands correctly.
+        if response.status_code == 400 and "response_format" in body:
             named = _format_demanded(response.text)
-            if named and named != body.get("response_format"):
+            if named and named != body["response_format"]:
                 body = {**body, "response_format": named}
+                response = post(body)
+            elif not named:
+                body = {k: v for k, v in body.items() if k != "response_format"}
                 response = post(body)
 
         if response.status_code != 200:

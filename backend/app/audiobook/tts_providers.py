@@ -75,7 +75,12 @@ class HostedModel:
     # supports, and Mistral's TTS answers only mp3 (live 400, proven when
     # a Voxtral audition was rejected outright). Anything other than pcm
     # needs a decoder before the audio can be stitched; see cloud_speech.
-    response_format: str = "pcm"
+    #
+    # None means DO NOT SEND THE FIELD AT ALL and take whatever the model
+    # returns -- some engines reject parameters they do not implement.
+    # Safe because the reader sniffs the answer's bytes rather than
+    # trusting what we asked for.
+    response_format: str | None = "pcm"
     notes: str = ""
     # Whether this engine belongs on the recommended shelf. False does NOT
     # mean broken -- it means we listened to it and would not steer a
@@ -399,6 +404,17 @@ OPENROUTER = TtsProviderConfig(
             price_per_million_chars="22",
             voices=_MAI_VOICES,
             tier="standard",
+            # Send no response_format at all. A first audition came back
+            # an opaque "Provider returned 400", and this model's
+            # published parameter list is the only one on the shelf that
+            # omits response_format -- so the field's presence is the
+            # prime suspect. Whatever it answers gets sniffed.
+            response_format=None,
+            # The roster is published but now unproven: a 400 on the very
+            # first call means "en-US-Harper" cannot be assumed good
+            # either. False keeps the typed-voice box available so a blank
+            # (model default) can be tried without a code change.
+            voices_verified=False,
             notes="Microsoft's FIDELITY variant -- the one they point at "
                   "audiobooks, as against MAI-Voice-2-Flash which is tuned "
                   "for call-centre latency we do not care about. It is the "
