@@ -13,12 +13,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft, BookMarked, EyeOff, HelpCircle, Loader2, MessageSquareQuote,
-  Plus, Save, Scissors, Settings as SettingsIcon, Wand2, X,
+  ArrowLeft, BookMarked, EyeOff, HardDrive, HelpCircle, Loader2,
+  MessageSquareQuote, Plus, Save, Scissors, Settings as SettingsIcon, Wand2, X,
 } from "lucide-react";
 
-import { addChapters, fetchAvailableChapters, fetchNarration, saveNarration } from "./api";
-import type { AvailableChapter } from "./api";
+import {
+  addChapters, fetchAudioStatus, fetchAvailableChapters, fetchNarration, saveNarration,
+} from "./api";
+import type { AudioStatus, AvailableChapter, ChapterAudioStatus } from "./api";
+import { StorageDialog } from "./StorageDialog";
 import { InsertWalkthrough } from "./InsertWalkthrough";
 import { GenerationPanel } from "./GenerationPanel";
 import { MarkerHelpPanel } from "./MarkerHelpPanel";
@@ -69,6 +72,19 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [settingsVersion, setSettingsVersion] = useState(0);
   // The Insert Walkthrough starts at the caret when opened (null = closed).
   const [walkthroughStart, setWalkthroughStart] = useState<number | null>(null);
+  const [storageOpen, setStorageOpen] = useState(false);
+  // Which chapters still match their narration (spec 24.2). Read-only and
+  // engine-free, so it can be refreshed after every save without cost.
+  const [audioStatus, setAudioStatus] = useState<AudioStatus | null>(null);
+
+  const refreshAudioStatus = useCallback(async () => {
+    try {
+      setAudioStatus(await fetchAudioStatus(workspacePath));
+    } catch {
+      // A missing status is a missing BADGE, never a broken editor.
+      setAudioStatus(null);
+    }
+  }, [workspacePath]);
 
   useEffect(() => {
     (async () => {
@@ -81,6 +97,10 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       }
     })();
   }, [workspacePath]);
+
+  // Freshness badges load once on open; every later refresh is triggered
+  // by something that could have changed them (a save, a generation run).
+  useEffect(() => { void refreshAudioStatus(); }, [refreshAudioStatus]);
 
   // ── Editing helpers ─────────────────────────────────────────────────────
 
@@ -315,12 +335,15 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       setChapters(result.chapters);
       setWarnings(result.warnings);
       setDirty(false);
+      // A save re-derives the segments, so the freshness badges are
+      // stale the instant it returns.
+      void refreshAudioStatus();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed.");
     } finally {
       setSaving(false);
     }
-  }, [workspacePath, content, saving]);
+  }, [workspacePath, content, saving, refreshAudioStatus]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -488,6 +511,10 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           <ul className="space-y-0.5">
             {chapters.map(chapter => (
               <li key={chapter.chapter_id} className="group flex items-center">
+                <AudioDot
+                  status={audioStatus?.chapters
+                    .find(c => c.chapter_id === chapter.chapter_id)?.status}
+                />
                 <button
                   onClick={() => jumpToChapter(chapter)}
                   className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
@@ -517,13 +544,20 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             <Plus size={11} /> Add chapters
           </button>
         </div>
-          <div className="shrink-0 border-t border-zinc-800 p-2">
+          <div className="shrink-0 space-y-1 border-t border-zinc-800 p-2">
             <button
               onClick={() => setSettingsOpen(true)}
               title="Narration engine, API keys, and this book's pacing"
               className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-blue-600 hover:text-blue-300"
             >
               <SettingsIcon size={12} /> Audiobook Settings
+            </button>
+            <button
+              onClick={() => setStorageOpen(true)}
+              title="How much space this audiobook is using, and what you can safely delete"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300"
+            >
+              <HardDrive size={12} /> Storage
             </button>
           </div>
         </aside>
@@ -595,6 +629,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           initialVoiceId={payload.manifest.selected_voice}
           settingsVersion={settingsVersion}
           onOpenSettings={() => setSettingsOpen(true)}
+          audioStatus={audioStatus}
           getSelectionText={() => {
             const ta = textareaRef.current;
             const live = ta
@@ -616,7 +651,21 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <AudiobookSettingsDialog
           workspacePath={workspacePath}
           onClose={() => setSettingsOpen(false)}
-          onSaved={() => setSettingsVersion(v => v + 1)}
+          onSaved={() => {
+            setSettingsVersion(v => v + 1);
+            // Pacing and voice both feed the freshness basis, so a
+            // settings save can outdate chapters on its own.
+            void refreshAudioStatus();
+          }}
+        />
+      )}
+
+      {storageOpen && (
+        <StorageDialog
+          workspacePath={workspacePath}
+          title={payload.manifest?.title}
+          onClose={() => setStorageOpen(false)}
+          onChanged={() => void refreshAudioStatus()}
         />
       )}
 
@@ -686,5 +735,40 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Chapter freshness badge (spec 24.2) ──────────────────────────────────────
+// One dot per chapter, because the rail is 224px wide and a word per row
+// would crowd out the titles. Colour carries the state and the tooltip
+// carries the sentence -- the same pattern the writing app's unsaved dot
+// uses. No dot at all until the status has loaded, so a slow backend
+// never paints every chapter as "not generated".
+
+const AUDIO_DOT: Record<ChapterAudioStatus, { className: string; title: string }> = {
+  current: { className: "bg-emerald-500",
+             title: "Audio matches this chapter's narration." },
+  partial: { className: "bg-amber-400",
+             title: "Partly outdated -- some sections have been edited since "
+                  + "they were narrated." },
+  outdated: { className: "bg-rose-500",
+              title: "Audio outdated -- this chapter has changed since it was "
+                   + "narrated." },
+  not_generated: { className: "border border-zinc-600",
+                   title: "No audio generated yet." },
+  empty: { className: "border border-zinc-800", title: "Nothing to narrate here." },
+};
+
+function AudioDot({ status }: { status?: ChapterAudioStatus }) {
+  if (!status) return <span className="w-3 shrink-0" aria-hidden />;
+  const dot = AUDIO_DOT[status];
+  return (
+    <span
+      className="flex w-3 shrink-0 items-center justify-center"
+      title={dot.title}
+      aria-label={dot.title}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${dot.className}`} />
+    </span>
   );
 }

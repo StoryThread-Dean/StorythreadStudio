@@ -11,9 +11,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FolderOpen, Loader2, Package } from "lucide-react";
 
 import {
-  fetchExportStatus, fetchFfmpegStatus, installFfmpeg, startExport,
+  fetchExportStatus, fetchFfmpegStatus, fetchStorage, formatBytes, installFfmpeg,
+  runCleanup, startExport,
 } from "./api";
-import type { ExportStatus, FfmpegStatus } from "./api";
+import type { ExportStatus, FfmpegStatus, StorageReport } from "./api";
+import { StorageDialog } from "./StorageDialog";
+
+// What "delete the intermediate audio" means in practice: the narrated
+// segments plus the disposable leftovers. Never the source snapshot, and
+// obviously never the exports that just succeeded.
+const INTERMEDIATE = ["current_segments", "superseded", "previews", "failed_attempts"];
 
 const FORMATS: { key: string; label: string; hint: string }[] = [
   { key: "chapter_mp3", label: "Chapter MP3s",
@@ -32,6 +39,13 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollTimer = useRef<number | null>(null);
+  // The completion prompt (spec 25.2). Only ever set for a book whose
+  // retention is "ask", and cleared the moment the writer answers.
+  const [prompt, setPrompt] = useState<StorageReport | null>(null);
+  const [reclaimed, setReclaimed] = useState<string | null>(null);
+  const [storageOpen, setStorageOpen] = useState(false);
+  // One prompt per finished export, not one per poll tick.
+  const promptedFor = useRef<string>("");
 
   const refreshFfmpeg = useCallback(async () => {
     try { setFfmpeg(await fetchFfmpegStatus()); } catch { /* banner covers it */ }
@@ -77,6 +91,37 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
       pollTimer.current = null;
     };
   }, [exportActive]);
+
+  // ── After a successful export (spec 25.1-25.2) ─────────────────────────
+  // Retention is the writer's standing answer to "do I still need the
+  // segment files?". Keep = say nothing. Delete = act, then REPORT it,
+  // because silently reclaiming gigabytes is indistinguishable from a bug.
+  // Ask = show the size and let them decide with the number in front of
+  // them.
+  const deleteIntermediate = useCallback(async () => {
+    setPrompt(null);
+    try {
+      const result = await runCleanup(workspacePath, INTERMEDIATE);
+      setReclaimed(`Segment files deleted -- ${formatBytes(result.freed_bytes)} reclaimed. `
+        + `The exported audiobook is untouched.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete the segment files.");
+    }
+  }, [workspacePath]);
+
+  useEffect(() => {
+    if (exportState?.state !== "done") return;
+    const stamp = exportState.outputs.join("|");
+    if (promptedFor.current === stamp) return;
+    promptedFor.current = stamp;
+    void (async () => {
+      try {
+        const report = await fetchStorage(workspacePath);
+        if (report.retention === "ask_after_export") setPrompt(report);
+        else if (report.retention === "delete_after_export") await deleteIntermediate();
+      } catch { /* the export itself succeeded; this is a follow-up */ }
+    })();
+  }, [exportState, workspacePath, deleteIntermediate]);
 
   const handleInstall = useCallback(async () => {
     setError(null);
@@ -230,10 +275,62 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
         </>
       )}
 
+      {/* Spec 25.2: the completion prompt, shown only when the writer
+          asked to be asked. The size leads, because that is the whole
+          reason anyone considers deleting. */}
+      {prompt && (
+        <div className="mt-2 rounded border border-sky-800 bg-sky-950/40 px-2.5 py-2">
+          <p className="text-[11px] font-medium text-sky-200">
+            Export complete.
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-sky-100/80">
+            Intermediate generation files use{" "}
+            {formatBytes(prompt.categories
+              .filter(c => INTERMEDIATE.includes(c.key))
+              .reduce((sum, c) => sum + c.bytes, 0))}
+            . Keeping them lets you fix one paragraph, or re-export in
+            another format, without narrating the book again.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setPrompt(null)}
+              className="rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500"
+            >
+              Keep Files
+            </button>
+            <button
+              onClick={() => void deleteIntermediate()}
+              className="rounded border border-zinc-600 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-rose-500 hover:text-rose-300"
+            >
+              Delete Segment Files
+            </button>
+            <button
+              onClick={() => { setPrompt(null); setStorageOpen(true); }}
+              className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-sky-500 hover:text-sky-300"
+            >
+              Review Storage
+            </button>
+          </div>
+        </div>
+      )}
+
+      {reclaimed && (
+        <p className="mt-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[10px] leading-relaxed text-zinc-300">
+          {reclaimed}
+        </p>
+      )}
+
       {error && (
         <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-[10px] text-rose-300">
           {error}
         </p>
+      )}
+
+      {storageOpen && (
+        <StorageDialog
+          workspacePath={workspacePath}
+          onClose={() => setStorageOpen(false)}
+        />
       )}
     </div>
   );

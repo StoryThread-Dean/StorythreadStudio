@@ -39,6 +39,17 @@ function mockFetch(recents = RECENTS) {
     if (url.includes("/recents/remove")) return { ok: true, json: async () => ({ ok: true }) };
     if (url.includes("/recents")) return { ok: true, json: async () => ({ audiobooks: recents }) };
     if (url.includes("/project")) return { ok: true, json: async () => PROJECT_PAYLOAD };
+    if (url.includes("/storage")) {
+      return { ok: true, json: async () => ({
+        categories: [{
+          key: "previews", label: "Preview files", description: "Rebuilt free.",
+          consequence: "", default_selected: true, protected: false,
+          files: 2, bytes: 3 * 1024 * 1024,
+        }],
+        total_bytes: 3 * 1024 * 1024, export_only: false, export_only_note: "",
+        has_exports: false, retention: "keep",
+      }) };
+    }
     throw new Error(`unexpected fetch ${url} ${init?.method ?? "GET"}`);
   });
 }
@@ -153,5 +164,22 @@ describe("AudiobookDashboard", () => {
         workspace_path: RECENTS[0].workspace_path,
       });
     });
+  });
+  it("keeps 'forget the row' and 'delete the files' visibly apart (spec 5.4)", async () => {
+    // Two very different destructive-looking buttons sit side by side.
+    // Remove from Recents touches no files; Delete Working Files opens
+    // the cleanup dialog. Confusing them is unrecoverable, so they are
+    // labelled apart rather than hidden behind one menu.
+    const fetchMock = mockFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AudiobookDashboard onNewAudiobook={vi.fn()} onOpenWorkspace={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("The Hollow Road")).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText("Delete working files for The Hollow Road"));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "Audiobook storage" })).toBeTruthy());
+    // Opening the dialog must not have removed anything from recents.
+    expect(fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes("/recents/remove"))).toEqual([]);
   });
 });

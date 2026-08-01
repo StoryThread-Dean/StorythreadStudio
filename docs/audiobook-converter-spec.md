@@ -1726,6 +1726,16 @@ Segment-level markers:
 ○ No audio generated
 ```
 
+#### Build note (Stage E): reading freshness without an engine
+
+The rail needs to say "Chapter 2 is outdated" on every workspace open, which rules out spawning the local worker or contacting a paid engine to compute it. The way out: a completed segment already records the engine that made it (`provider`, `model`, `engine_version`, `voice_id`), so its own basis can be recomputed from what is stored. That answers the question the writer actually asks -- *has anything changed since this was narrated?* -- with no engine present at all.
+
+Two consequences worth knowing:
+- A **voice change is checked first and separately**, because it is the print pass. Every segment is outdated at once, and "the voice changed" explains a whole-book requeue far better than "the text moved". The chapter rollup carries that reason up.
+- **Draft audio is current for a draft and stale for a real pass.** The basis is recomputed both ways; matching the draft form reports `current` with a draft marker rather than a bare `current`, so a draft can be seen without being mistaken for finished.
+
+Audio generated before `payload_hash` existed has nothing to compare against and is treated as current -- nagging a writer to re-narrate a book that is probably fine is the worse error.
+
 ### 24.3 User Reminder
 
 > Chapter 2 contains 4 edited sections that are not reflected in the current audio.
@@ -1793,6 +1803,18 @@ Keeping them allows fast repairs and re-exporting without generating speech agai
 [Delete Segment Files]
 [Review Storage]
 ```
+
+#### Build notes (Stage E, 2026-08-01)
+
+Three decisions the implementation settled that the section above leaves open.
+
+**Superseded audio is found by LEFTOVER, not by the superseded list.** Any audio file under `generated-segments/` that no live segment claims and that is not a `.rejected` take is treated as superseded. Classifying by the manifest's list alone would make files orphaned by an older build -- or by a manifest that lost a record -- invisible forever and therefore unreclaimable.
+
+**Deleting current segments resets those records to not-generated.** Otherwise `segments.json` keeps claiming `status: completed` for audio that no longer exists, and the app offers an export it cannot produce. Only the generated-state fields are cleared; `segment_id`, the text, and every formatting field survive, so identity (and the writer's markers) are untouched.
+
+**`segments.json` is never a deletion candidate under any category.** Losing segment audio costs a re-render. Losing that file costs the writer their formatting -- a categorically different loss, and the reason the file is excluded from the walk rather than merely left unchecked.
+
+Defaults follow from the asymmetry that deleting is instant and permanent while regenerating costs time and, on a hosted engine, money: only previews and failed attempts are pre-checked. The exports and the manuscript snapshot are additionally marked `protected`, which the UI renders in a stronger colour and which can never be pre-checked.
 
 ### 25.3 Cleanup Categories
 

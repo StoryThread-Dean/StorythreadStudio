@@ -600,3 +600,119 @@ def test_pause_endpoint_409_when_nothing_is_running(tmp_path):
                            json={"workspace_path": str(ws)})
     assert response.status_code == 409
 
+
+
+# ── Reading audio state without generating (spec 24.2) ───────────────────────
+
+def test_audio_status_says_not_generated_before_any_run(tmp_path):
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    status = generation.audio_status(str(ws))
+    assert status["book"] == "not_generated"
+    assert status["chapters"][0]["status"] == "not_generated"
+    assert status["chapters"][0]["missing"] == 2
+    assert status["outdated_segments"] == 0
+
+
+def test_audio_status_is_current_right_after_a_run(tmp_path):
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    generation.start_run(str(ws), FakeBackend(), voice_id="af_heart")
+    generation.wait_for_idle()
+    status = generation.audio_status(str(ws))
+    assert status["book"] == "current"
+    assert status["outdated_segments"] == 0
+
+
+def test_editing_one_paragraph_makes_the_chapter_partially_outdated(tmp_path):
+    # The whole point of stable segment IDs: one edit is one stale
+    # segment, not a chapter-wide re-narration.
+    ws = _make_workspace(tmp_path, paragraphs=3)
+    generation.start_run(str(ws), FakeBackend(), voice_id="af_heart")
+    generation.wait_for_idle()
+
+    text = (ws / "manuscript" / "narration-copy.md").read_text(encoding="utf-8")
+    edited = text.replace("Paragraph number 2 with a little prose in it.",
+                          "Paragraph number 2 rewritten entirely by hand.")
+    saved = client.put("/api/audiobook/narration", json={
+        "workspace_path": str(ws), "content": edited})
+    assert saved.status_code == 200, saved.text
+
+    status = generation.audio_status(str(ws))
+    chapter = status["chapters"][0]
+    assert chapter["status"] == "partial"
+    assert chapter["current"] == 2
+    # The rewritten paragraph is a NEW segment (never generated), which is
+    # "missing" rather than "outdated" -- both are things to narrate, and
+    # the rail counts them separately so the reminder can be exact.
+    assert chapter["missing"] == 1
+    assert status["book"] == "partial"
+
+
+def test_changing_a_pronunciation_rule_marks_only_that_segment_outdated(tmp_path):
+    # An edit that leaves the TEXT alone but changes what will be spoken.
+    # This is the case a naive text-hash comparison misses entirely.
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    generation.start_run(str(ws), FakeBackend(), voice_id="af_heart")
+    generation.wait_for_idle()
+    assert generation.audio_status(str(ws))["book"] == "current"
+
+    client.put("/api/audiobook/pronunciations", json={
+        "workspace_path": str(ws),
+        "workspace_rules": [{"display_text": "Paragraph", "spoken_text": "Pear-a-graf",
+                             "scope": "audiobook", "case_sensitive": False}],
+    })
+
+    status = generation.audio_status(str(ws))
+    assert status["book"] == "outdated"
+    assert status["outdated_segments"] == 2
+    assert status["outdated_reason"] == "text"
+
+
+def test_switching_voice_marks_the_book_outdated_and_says_why(tmp_path):
+    # The print pass. "The voice changed" explains a whole-book requeue
+    # far better than "edited since generation".
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    generation.start_run(str(ws), FakeBackend(), voice_id="af_heart")
+    generation.wait_for_idle()
+
+    client.put("/api/audiobook/voice", json={
+        "workspace_path": str(ws), "voice_id": "bf_lily"})
+
+    status = generation.audio_status(str(ws))
+    assert status["book"] == "outdated"
+    assert status["outdated_reason"] == "voice"
+
+
+def test_draft_audio_reads_as_current_for_a_draft_and_is_counted(tmp_path):
+    # A draft is a different artifact: it must not silently pass as a
+    # finished pass, but nor should the rail call it outdated when the
+    # writer deliberately drafted it.
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    generation.start_run(str(ws), FakeBackend(), voice_id="af_heart", draft=True)
+    generation.wait_for_idle()
+
+    status = generation.audio_status(str(ws))
+    assert status["book"] == "current"
+    assert status["draft_segments"] == 2
+
+
+def test_audio_status_never_needs_an_engine(tmp_path, monkeypatch):
+    # It runs on every workspace open, so it must not spawn the local
+    # worker or reach a paid engine. The fixture already blocks the dev
+    # worker; this pins the contract loudly.
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    generation.start_run(str(ws), FakeBackend(), voice_id="af_heart")
+    generation.wait_for_idle()
+
+    def explode(*args, **kwargs):
+        raise AssertionError("audio_status must not resolve a synthesis backend")
+
+    monkeypatch.setattr("app.audiobook.synthesis.resolve_backend", explode)
+    assert generation.audio_status(str(ws))["book"] == "current"
+
+
+def test_audio_status_endpoint_matches_the_module(tmp_path):
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    response = client.get("/api/audiobook/audio-status",
+                          params={"workspace_path": str(ws)})
+    assert response.status_code == 200, response.text
+    assert response.json() == generation.audio_status(str(ws))

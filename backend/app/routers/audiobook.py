@@ -968,6 +968,16 @@ def assemble_status():
     return assembly.export_status()
 
 
+@router.get("/audio-status")
+def get_audio_status(workspace_path: str):
+    """Per-chapter audio freshness (spec 24.2): Current / Partially
+    Outdated / Audio Outdated / Not Generated. Read-only by design --
+    it never spawns the local worker and never touches a paid engine, so
+    the rail can ask for it as often as it likes."""
+    _require_workspace(workspace_path)
+    return generation.audio_status(workspace_path)
+
+
 # ── Storage and cleanup (spec 25) ─────────────────────────────────────────────
 
 @router.get("/storage")
