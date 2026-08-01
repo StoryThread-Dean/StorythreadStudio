@@ -456,6 +456,17 @@ OPENROUTER = TtsProviderConfig(
             # on the local narrator arrived dramatically slower here and
             # slurred with it.
             pace_baseline=0.85,
+            recommended=False,
+            caveat="Narrates well on its own terms, and it is the only "
+                   "Standard engine with no defect in the voice itself. What "
+                   "it will not do is take direction: it builds speech "
+                   "differently from the free narrator, so your inserted "
+                   "pauses, breaks and pace marks land differently here than "
+                   "what you heard while formatting. Use it at the DEFAULT "
+                   "narration settings with no markers inserted and it is a "
+                   "real option; use it on a book you have hand-formatted "
+                   "and you are hearing someone else's reading of your "
+                   "marks.",
             notes="Microsoft's FIDELITY variant -- the one they point at "
                   "audiobooks, as against MAI-Voice-2-Flash which is tuned "
                   "for call-centre latency we do not care about. It reads "
@@ -466,8 +477,7 @@ OPENROUTER = TtsProviderConfig(
                   "en-AU-Lisa, each ending :MAI-Voice-2) -- Iris and Lisa "
                   "were refused here and the three men are untried, so they "
                   "are not in the list. Paste one into the voice box to try "
-                  "it. NOT YET JUDGED BY EAR over a full chapter, which is "
-                  "the only length at which drift becomes audible.",
+                  "it.",
         ),
         HostedModel(
             id="mistralai/voxtral-mini-tts-2603",

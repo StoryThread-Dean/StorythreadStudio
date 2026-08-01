@@ -865,6 +865,16 @@ The writer's pace setting is an **intent**. Turning that intent into a number a 
 
 It is an ear estimate, not a measurement -- one float, easy to retune. And the re-scaling is stated on the engine card, because a silent change to speech rate is exactly the kind of invisible transform that reads as a bug when someone hears it.
 
+##### MAI-Voice-2: demoted for not taking direction (live verdict)
+
+Re-auditioned with the pace calibration in place, and the slurs went with it -- confirming they were a symptom of the pace bug rather than a defect. This is the one Standard candidate with **nothing wrong with the voice**. It came off the shelf for a different reason.
+
+The verdict: MAI builds speech on its own engine and voice structure, so every `[pause]`, scene break and pace mark renders differently here than it did on the free narrator the writer formatted against. The markers are not ignored -- they are re-interpreted. Which is worse in a specific way: the writer hand-tuned those beats by ear on Kokoro, and MAI silently gives them a different reading. **Viable at the default narration settings with no inserts; misleading on a hand-formatted book.**
+
+That is a genuinely different failure from the other two, and it names the third property a narration engine needs. The full list is now: **varying** delivery (Voxtral's welded mood went monotonous), **identity held across separate requests** (Grok re-improvises per segment), and **obedience to the writer's markup** (MAI re-interprets it). Only the third is invisible in a short audition, which is why it took a full chapter to surface.
+
+All three Standard candidates are now demoted, so that tier is **empty on the recommended shelf**. The settings screen says so in as many words rather than leaving a silent gap between Budget and Pro -- an unexplained hole reads as a failed load, and papering over it with a reluctant pick would be worse than admitting the shortfall.
+
 ##### The seed question (open)
 
 OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.
@@ -873,9 +883,9 @@ It is unverified and was not built. Two reasons for caution: `supported_paramete
 
 ##### The Standard shortlist (researched July 2026, mostly unauditioned)
 
-Two Standard candidates have now been auditioned and both came off the shelf, so the remaining field is worth writing down rather than rediscovering. **NanoGPT has nothing in this band at all** -- its TTS catalog is Kokoro at $1/M and ElevenLabs Turbo at $60/M, so every candidate below is OpenRouter.
+Three Standard candidates have now been auditioned and all three came off the shelf, so the remaining field is worth writing down rather than rediscovering. **NanoGPT has nothing in this band at all** -- its TTS catalog is Kokoro at $1/M and ElevenLabs Turbo at $60/M, so every candidate below is OpenRouter.
 
-Ranked by what the two failures taught us: an engine needs a **varying** delivery (Voxtral's welded mood went monotonous) that nonetheless **holds identity across separate requests** (Grok's did not), and enough voices to cast more than one book.
+Ranked by what the three failures taught us: an engine needs a **varying** delivery (Voxtral's welded mood went monotonous) that nonetheless **holds identity across separate requests** (Grok's did not) and **reads the writer's markup the way the free narrator does** (MAI re-interprets it), plus enough voices to cast more than one book.
 
 | Slug | $/M | Voices | Seed | Why it might work |
 |---|---|---|---|---|
@@ -904,7 +914,7 @@ Note how many of these expose `seed` -- Grok, Qwen, Zonos, Orpheus, Sesame, Koko
 | `minimax/speech-2.8-hd` | 100 | Not evaluated. |
 | `google/gemini-3.1-flash-tts-preview` | $1/M in + $20/M out **tokens** | Priced per token, not per character, so the estimator (Section 20) cannot quote it exactly. Excluded on that basis alone. |
 
-MAI-Voice-2 deserves a note as the near-miss: Microsoft explicitly markets "stable, high-fidelity output that preserves speaker consistency across audiobooks", which is precisely the property Grok lacks. It lost on roster. One English voice means every book narrated on this app's Standard tier would sound like the same person, and the Grok episode established that the vendor's wider published roster (Acacia, Elm, Birch, Grove) is not what the gateway accepts.
+MAI-Voice-2 was written up here as the near-miss and has since been auditioned -- see the verdict above. Microsoft's claim of "stable, high-fidelity output that preserves speaker consistency across audiobooks" held up; it is the one candidate that does not fall apart between requests. It lost on markup fidelity instead, which no datasheet would have predicted. Two working voices (Harper, Olivia), both American female, is also thin for casting -- the concern this paragraph originally raised, just smaller than feared.
 
 The provider abstraction must allow future providers without rewriting job logic.
 

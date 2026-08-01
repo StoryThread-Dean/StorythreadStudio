@@ -58,13 +58,15 @@ const CATALOG = {
       recommended: false,
       caveat: "Pitch and tone reset between sentences." },
     // Reads slowly by nature -- its pace is re-scaled, and says so.
+    // Also demoted, which is why the Standard tier is empty on the shelf.
     { tier: "standard", tier_label: "Standard", blurb: "Long-form.",
       provider: "openrouter", provider_label: "OpenRouter",
       model: "microsoft/mai-voice-2", model_label: "MAI-Voice-2",
       price_per_1k_chars: "0.022", price_per_million_chars: "22",
       same_as_local: false, voices_same_as_local: false, voices_verified: false,
       requires_key: true, has_api_key: true, signup_steps: [],
-      pace_baseline: 0.85 },
+      pace_baseline: 0.85, recommended: false,
+      caveat: "Renders your inserted pauses differently." },
     { tier: "pro", tier_label: "Pro", blurb: "Studio-grade.",
       provider: "nanogpt", provider_label: "NanoGPT",
       model: "Elevenlabs-Turbo-V2.5", model_label: "ElevenLabs Turbo v2.5",
@@ -160,10 +162,21 @@ describe("AudiobookSettingsDialog", () => {
     // engine is already slow at 1.0. The app now translates -- and must
     // SAY it does, because a silent change to speech rate reads as a bug.
     await open(mockFetch());
+    // MAI lives in the demoted drawer now, so open it to read its card.
+    fireEvent.click(screen.getByText(/Other engines we tested but do not recommend/));
     expect(screen.getByText(/Reads slower than the free narrator by nature/))
       .toBeTruthy();
     // Engines on the reference scale say nothing at all.
     expect(screen.queryByText(/Reads faster than the free narrator/)).toBeNull();
+  });
+
+  it("admits when a whole price tier has nothing worth recommending", async () => {
+    // Every Standard engine we auditioned came off the shelf. The gap
+    // between Budget and Pro is real, and a writer scanning the list must
+    // not be left wondering whether it failed to load.
+    await open(mockFetch());
+    expect(screen.getByText(/No Standard engine has earned a recommendation/))
+      .toBeTruthy();
   });
 
   it("keeps a demoted engine off the shelf but one click away, with its reason", async () => {

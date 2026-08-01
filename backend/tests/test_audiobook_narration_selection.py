@@ -237,14 +237,44 @@ def test_grok_is_demoted_off_the_recommended_shelf_with_its_reason():
     assert "reset between them" in grok["caveat"]
 
     # The shelf is now the free local narrator, hosted Kokoro, and the Pro
-    # engines. Both Standard-tier candidates were auditioned and both came
-    # off it -- which is the honest state, not a gap to paper over.
+    # engines. All three Standard-tier candidates were auditioned and all
+    # three came off it -- which is the honest state, not a gap to paper
+    # over. The Standard tier is EMPTY on the recommended shelf, and that
+    # is allowed to be visible.
     demoted = {key for key, t in tiers.items() if not t["recommended"]}
     assert demoted == {
         ("openrouter", "x-ai/grok-voice-tts-1.0"),
         ("openrouter", "mistralai/voxtral-mini-tts-2603"),
+        ("openrouter", "microsoft/mai-voice-2"),
     }
     assert all(t["caveat"] for key, t in tiers.items() if key in demoted)
+    assert not [t for t in tiers.values()
+                if t["tier"] == "standard" and t["recommended"]]
+
+
+def test_mai_is_demoted_for_ignoring_the_writers_formatting():
+    # The one Standard engine with no fault in the VOICE. It was judged
+    # over a full chapter after the pace calibration landed, and the
+    # verdict was about obedience, not quality: MAI builds speech on its
+    # own engine and voice structure, so every [pause], break and pace
+    # mark the writer inserted renders differently than it did on the free
+    # narrator they formatted against. That makes it viable at defaults
+    # with no markers, and misleading on a hand-formatted book -- which is
+    # exactly a demotion, not a removal.
+    _provider, model = tts_providers.resolve_model(
+        "openrouter", "microsoft/mai-voice-2")
+    assert model.recommended is False
+    assert "default" in model.caveat.lower()
+    # And it keeps the pace calibration that made it listenable at all.
+    assert model.pace_baseline == 0.85
+
+    selection = resolve(_settings(
+        audiobook_tts_provider="openrouter",
+        audiobook_tts_model="microsoft/mai-voice-2",
+        openrouter_api_key="sk-test"))
+    assert selection["can_spend"] is True
+    assert selection["is_recommended"] is False
+    assert "default" in selection["caveat"].lower()
 
 
 def test_a_demoted_engine_can_still_be_chosen_and_still_spends():

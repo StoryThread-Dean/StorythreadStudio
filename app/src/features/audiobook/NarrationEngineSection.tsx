@@ -57,6 +57,13 @@ export function NarrationEngineSection({
   // a selection you cannot see is worse than one you did not want.
   const othersOpen = showOthers || chosenIsDemoted;
 
+  // A whole price tier can end up empty -- every Standard engine we
+  // auditioned came off the shelf. Say so rather than leaving a silent
+  // gap between Budget and Pro that reads like a failed load.
+  const emptyTiers = Array.from(new Set(
+    demoted.filter(d => !shelf.some(s => s.tier === d.tier))
+      .map(d => d.tier_label)));
+
   const chosen = tiers.find(
     t => t.provider === chosenProvider && t.model === chosenModel);
   // Nothing chosen = the free local narrator, which is the honest default.
@@ -175,6 +182,15 @@ export function NarrationEngineSection({
           <p className="text-[11px] text-zinc-500">Loading engines...</p>
         )}
       </div>
+
+      {/* An empty price tier, named out loud. */}
+      {emptyTiers.length > 0 && (
+        <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+          No {emptyTiers.join(" or ")} engine has earned a recommendation
+          yet -- the ones we auditioned are below, each with what it does
+          wrong. Any of them still narrates if you want it.
+        </p>
+      )}
 
       {/* Demoted engines: real, selectable, and honest about why they are
           down here rather than up there. */}
