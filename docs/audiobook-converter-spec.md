@@ -845,6 +845,24 @@ OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and
 
 It is unverified and was not built. Two reasons for caution: `supported_parameters` describes a model's chat-completions surface, and the OpenAI speech schema this endpoint imitates has no `seed` field at all -- so the gateway may drop it silently, or 400 on it mid-book. The test is cheap (one audition) and worth doing before anyone concludes a performer model cannot narrate long-form. If it works, it likely rehabilitates Grok and hardens Voxtral at the same time.
 
+##### The Standard shortlist (researched July 2026, mostly unauditioned)
+
+Two Standard candidates have now been auditioned and both came off the shelf, so the remaining field is worth writing down rather than rediscovering. **NanoGPT has nothing in this band at all** -- its TTS catalog is Kokoro at $1/M and ElevenLabs Turbo at $60/M, so every candidate below is OpenRouter.
+
+Ranked by what the two failures taught us: an engine needs a **varying** delivery (Voxtral's welded mood went monotonous) that nonetheless **holds identity across separate requests** (Grok's did not), and enough voices to cast more than one book.
+
+| Slug | $/M | Voices | Seed | Why it might work |
+|---|---|---|---|---|
+| `microsoft/mai-voice-2` | 22 | 4 (**1 English**) | no | **Being tested.** The only engine advertising stable speaker identity across long-form, and the fidelity variant rather than the latency one. |
+| `qwen/qwen-audio-3.0-tts-plus` | 20 | 2 | yes | The vendor's stated narration-grade tier ("naturalness and timbre fidelity"), as against the Flash variant built for real-time agents. |
+| `fish-audio/s2.1-pro` | 15 | not published | no | Well-regarded voice-cloning house; roster would need discovery. A free `:free` tier exists for zero-cost auditioning. |
+| `sesame/csm-1b` | 7 | 7 | yes | A third of the price. Built for natural conversational speech, which may or may not survive as narration. |
+| `canopylabs/orpheus-3b-0.1-ft` | 7 | 7 | yes | Same band, expressive-speech focus. |
+| `zyphra/zonos-v0.1-hybrid` | 7 | 5 | yes | Same band; the hybrid is the more natural of the two Zonos builds. |
+| `google/gemini-3.1-flash-tts-preview` | $1/M in + **$20/M out tokens** | 30 | yes | 30 voices and inline audio tags, but priced per TOKEN, so the estimator (Section 20) cannot quote a book exactly -- the one hard blocker, since quoting before spending is a locked rule. |
+
+Note how many of these expose `seed` -- Grok, Qwen, Zonos, Orpheus, Sesame, Kokoro, Voxtral -- and how few do not (MAI-Voice-2, Aura-2). That makes the open seed question below worth settling: it would apply to most of this table at once.
+
 ##### Verified OpenRouter TTS catalog (July 2026, per million characters)
 
 | Slug | $/M | Notes |

@@ -117,3 +117,82 @@ def test_empty_audio_is_a_retryable_failure_not_a_zero_length_file():
         assert e.retryable is True
     else:
         raise AssertionError("empty mp3 should raise")
+
+
+def test_a_format_400_is_retried_once_in_the_format_the_provider_named():
+    # Mistral's first audition answered:
+    #   400 -- Mistral TTS only supports response_format="mp3". Got "pcm".
+    # Audio format is a per-model property discoverable only by being
+    # told, so rather than hard-code a table row per engine, take the
+    # provider at its word and retry. One wasted request on first contact
+    # buys auditioning a new engine with no code change at all.
+    import httpx
+
+    attempts: list[str] = []
+    mp3_bytes = FIXTURE.read_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _json
+        fmt = _json.loads(request.content).get("response_format")
+        attempts.append(fmt)
+        if fmt != "mp3":
+            return httpx.Response(400, text=_json.dumps({"error": {
+                "message": 'Mistral TTS only supports response_format="mp3". '
+                           f'Got "{fmt}".', "code": 400}}))
+        return httpx.Response(200, content=mp3_bytes,
+                              headers={"content-type": "audio/mpeg"})
+
+    audio = _synthesize_through(handler, "hexgrad/kokoro-82m")
+    assert attempts == ["pcm", "mp3"]        # asked, told, complied
+    with wave.open(io.BytesIO(audio), "rb") as f:
+        assert f.getnchannels() == 1
+
+
+def test_a_400_that_names_no_usable_format_is_reported_not_retried():
+    # An engine demanding opus is a real gap. Retrying into a format we
+    # cannot decode would just burn a second paid request to fail again.
+    import httpx
+
+    attempts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _json
+        attempts.append(_json.loads(request.content).get("response_format"))
+        return httpx.Response(400, text=_json.dumps({"error": {
+            "message": 'response_format must be "opus".', "code": 400}}))
+
+    try:
+        _synthesize_through(handler, "hexgrad/kokoro-82m")
+    except cloud_speech.SynthesisError as e:
+        assert e.retryable is False
+    else:
+        raise AssertionError("an unusable format demand must raise")
+    assert attempts == ["pcm"]               # exactly one request
+
+
+def test_the_wanted_format_wins_over_the_rejected_one_in_the_message():
+    # "only supports mp3. Got pcm." names BOTH. Picking the wrong one
+    # would retry with the format just refused.
+    assert cloud_speech._format_demanded(
+        'only supports response_format="mp3". Got "pcm".') == "mp3"
+    assert cloud_speech._format_demanded("no format named here") is None
+
+
+def _synthesize_through(handler, model_id: str) -> bytes:
+    """Run one synthesize call against a mock transport."""
+    import httpx
+
+    transport = httpx.MockTransport(handler)
+    real_client = httpx.Client
+
+    class Patched(real_client):  # type: ignore[misc,valid-type]
+        def __init__(self, *a, **kw):
+            kw["transport"] = transport
+            super().__init__(*a, **kw)
+
+    httpx.Client = Patched  # type: ignore[misc]
+    try:
+        audio, _duration = _backend(model_id).synthesize("Hi.", "af_heart")
+        return audio
+    finally:
+        httpx.Client = real_client  # type: ignore[misc]

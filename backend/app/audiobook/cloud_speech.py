@@ -31,6 +31,37 @@ from app.audiobook.tts_providers import HostedModel, TtsProviderConfig, resolve_
 _TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 
 
+# Formats this pipeline can actually turn into 16-bit mono frames. An
+# engine demanding anything else (opus, aac) is a real gap, not something
+# to silently retry into.
+_DECODABLE_FORMATS = ("pcm", "wav", "mp3")
+
+
+def _format_demanded(body: str) -> str | None:
+    """
+    The format a 400 is asking for, if it named one we can handle.
+
+    Providers phrase this differently -- Mistral says: only supports
+    response_format="mp3". Got "pcm". -- so this looks for any decodable
+    format name in the message rather than parsing one vendor's grammar.
+    Returns None when the complaint names nothing usable, which correctly
+    leaves the original error to be reported.
+    """
+    lowered = (body or "").lower()
+    # "Got \"pcm\"" names the REJECTED format too, so the wanted one is
+    # whichever appears first -- providers state the requirement before
+    # the complaint.
+    found = [(lowered.find(f'"{fmt}"'), fmt) for fmt in _DECODABLE_FORMATS
+             if f'"{fmt}"' in lowered]
+    if not found:
+        found = [(lowered.find(fmt), fmt) for fmt in _DECODABLE_FORMATS
+                 if fmt in lowered]
+    if not found:
+        return None
+    found.sort()
+    return found[0][1]
+
+
 def _looks_like_mp3(raw: bytes) -> bool:
     """
     Sniff mp3 without trusting the content-type header.
@@ -337,6 +368,13 @@ class CloudSpeechBackend(SynthesisBackend):
                 or self.model.response_format == "mp3":
             return _decode_mp3(response.content, self.provider.label)
 
+        # A real WAV must be recognised before the raw-samples branch. The
+        # format retry can come back in a format we did not ask for, and
+        # putting a second header on an already-headered file would turn
+        # the RIFF bytes into a burst of noise at the top of the clip.
+        if response.content[:4] == b"RIFF":
+            return _fold_to_mono_16bit(response.content)
+
         if "audio/l16" in content_type or "audio/pcm" in content_type \
                 or self.provider.transport == "openai-speech":
             # Raw samples: 24 kHz is the OpenAI-compatible default and what
@@ -352,17 +390,34 @@ class CloudSpeechBackend(SynthesisBackend):
             **self.provider.extra_headers,
         }
         url = f"{self.provider.base_url}{self.provider.speech_path}"
-        try:
-            with httpx.Client(timeout=_TIMEOUT) as client:
-                response = client.post(
-                    url, json=self._body(text, voice_id, speed), headers=headers)
-        except httpx.TimeoutException:
-            raise SynthesisError(
-                f"{self.provider.label} timed out on this segment. Retrying.",
-                retryable=True)
-        except httpx.RequestError as e:
-            raise SynthesisError(
-                f"Could not reach {self.provider.label}: {e}", retryable=True)
+
+        def post(body: dict) -> httpx.Response:
+            try:
+                with httpx.Client(timeout=_TIMEOUT) as client:
+                    return client.post(url, json=body, headers=headers)
+            except httpx.TimeoutException:
+                raise SynthesisError(
+                    f"{self.provider.label} timed out on this segment. Retrying.",
+                    retryable=True)
+            except httpx.RequestError as e:
+                raise SynthesisError(
+                    f"Could not reach {self.provider.label}: {e}", retryable=True)
+
+        body = self._body(text, voice_id, speed)
+        response = post(body)
+
+        # SELF-HEALING FORMAT. Audio format is a per-model property and the
+        # only way to learn it is to be told -- Mistral answered a first
+        # audition with 400 "only supports response_format mp3". Rather
+        # than hard-code another table entry every time an engine is
+        # added, take the provider at its word and retry once with the
+        # format it named. Costs one wasted request on first contact and
+        # makes auditioning a new engine free of code changes.
+        if response.status_code == 400 and "response_format" in (response.text or ""):
+            named = _format_demanded(response.text)
+            if named and named != body.get("response_format"):
+                body = {**body, "response_format": named}
+                response = post(body)
 
         if response.status_code != 200:
             raise _translate(self.provider, response.status_code, response.text,
