@@ -14,7 +14,14 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from app.audiobook import generation, local_worker, locking, pronunciation, recents_store
+from app.audiobook import (
+    generation,
+    local_worker,
+    locking,
+    pronunciation,
+    recents_store,
+    workspace,
+)
 from app.audiobook.synthesis import SynthesisBackend, SynthesisError
 from app.main import app
 
@@ -324,6 +331,42 @@ def test_narration_settings_drive_dialogue_and_narrator_pace(tmp_path):
     assert run["total_segments"] == 1
     generation.wait_for_idle()
     assert speeds[-1] == 0.9
+
+
+def test_saving_pacing_keeps_the_paragraph_beat(tmp_path):
+    # Regression: the PUT model listed four fields and rewrote the whole
+    # narration block, so the paragraph beat could never be saved -- and
+    # a stored value was silently reset every time any other pacing
+    # setting was touched. The control existed in the UI and did nothing.
+    src = tmp_path / "b.md"
+    src.write_text("# Chapter 1\n\nFirst.\n\nSecond.\n", encoding="utf-8")
+    ws = tmp_path / "ws"
+    client.post("/api/audiobook/import", json={
+        "source_path": str(src), "workspace_path": str(ws), "title": "T"})
+
+    put = client.put("/api/audiobook/narration-settings", json={
+        "workspace_path": str(ws),
+        "narrator_pace": 1.0, "dialogue_pace": 1.0,
+        "paragraph_gap_ms": 900,
+        "scene_break_ms": 2000, "chapter_break_ms": 3000,
+    })
+    assert put.status_code == 200
+    assert put.json()["paragraph_gap_ms"] == 900
+
+    got = client.get("/api/audiobook/narration-settings",
+                     params={"workspace_path": str(ws)})
+    assert got.json()["paragraph_gap_ms"] == 900
+
+    # An older client that omits the field still saves, landing on the
+    # same default narration_settings() would have used.
+    legacy = client.put("/api/audiobook/narration-settings", json={
+        "workspace_path": str(ws),
+        "narrator_pace": 1.0, "dialogue_pace": 1.0,
+        "scene_break_ms": 2000, "chapter_break_ms": 3000,
+    })
+    assert legacy.status_code == 200
+    assert legacy.json()["paragraph_gap_ms"] == \
+        workspace.NARRATION_DEFAULTS["paragraph_gap_ms"]
 
 
 def test_marker_pace_multiplies_the_base(tmp_path):
