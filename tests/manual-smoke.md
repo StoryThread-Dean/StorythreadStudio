@@ -570,6 +570,44 @@ export it cannot make.
 
 ---
 
+## 16. Audiobook Converter -- PDF import (Stage F)
+
+**Touches:** PDF extraction, scanned-PDF rejection, and the artifact
+cleanup. Needs two real PDFs of your own: one exported from Word or
+similar (**text-based**), and one scanned or photographed (**image
+only**). A PDF from a phone scanner app works for the second.
+
+Steps:
+1. **A real PDF imports**: Let's Get Started, Choose Manuscript File.
+   PDF now appears in the file-type filter. Pick the text-based PDF and
+   create the workspace.
+2. **Read the warnings band** at the top of the narration editor. It
+   should name what was removed (running headers, page numbers,
+   rejoined hyphens) and always end with the note that paragraph breaks
+   are a best guess.
+3. **Check the reconstruction** -- this is the step that matters, and no
+   automated test can do it for you. Scroll the narration copy:
+   - Paragraphs are paragraphs, not one line per printed line.
+   - The running header / book title is not repeated through the text.
+   - Page numbers are gone, but numbers that were part of the prose
+     (a year, an address, a list) are still there.
+   - No sentence is missing its first or last word where a page broke.
+4. **Chapters**: the chapter rail matches the book's real chapters. If
+   the PDF used a heading style the detector missed, everything lands as
+   one chapter and the warning says so -- that is the honest fallback,
+   not a bug.
+5. **A scanned PDF is refused**: import the image-only PDF. It fails
+   with the scanned-pages message naming the workaround, and **no
+   workspace folder is left behind**.
+6. **A damaged file is refused cleanly**: rename any .txt to .pdf and
+   import it. Clear message, no stack trace, no half-built workspace.
+
+Expected: no PDF import ever loses a word of prose; anything the app
+reconstructed is stated in the warnings band; and the two failure cases
+(scanned, damaged) both stop before scaffolding anything.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

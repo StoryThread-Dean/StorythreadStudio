@@ -4,8 +4,8 @@
 # returns an ExtractionResult -- a best-guess title/author plus an ordered
 # list of chapters, where each chapter is just (title, text). Everything
 # downstream (workspace layers, chapter manifests, narration editing) only
-# ever sees that shape, so adding a new format later (PDF is deliberately
-# deferred) means writing one new extractor and adding one dispatch line.
+# ever sees that shape, so adding a new format means writing one new
+# extractor and adding one dispatch line (PDF arrived exactly that way).
 #
 # House rule reminder: extracted text is the WRITER'S text. No sanitizing,
 # no em dash replacement, no rewriting -- extraction only normalizes
@@ -31,9 +31,10 @@ class ExtractionResult:
     warnings: list[str] = field(default_factory=list)
 
 
-# Formats the import endpoint accepts today. PDF is deferred by design --
-# see the spec's Deferred Format Behavior section.
-SUPPORTED_EXTENSIONS = {".txt", ".md", ".markdown", ".docx", ".epub"}
+# Formats the import endpoint accepts. PDF landed in Stage F and is
+# text-based only -- a scanned PDF is refused rather than OCR'd, because
+# a bad OCR pass would put invented words into a narration copy.
+SUPPORTED_EXTENSIONS = {".txt", ".md", ".markdown", ".docx", ".epub", ".pdf"}
 
 
 def normalize_text(raw: str) -> str:
@@ -78,18 +79,11 @@ def extract_source(source_path: str) -> ExtractionResult:
         )
 
     ext = os.path.splitext(source_path)[1].lower()
-    if ext == ".pdf":
-        # Deliberate, honest rejection -- see the spec. Do not soften this
-        # into a generic unsupported-format message; PDF users need to know
-        # the workaround.
-        raise ValueError(
-            "PDF import is not supported yet. Export the manuscript as "
-            "DOCX, EPUB, Markdown, or TXT and try again."
-        )
     if ext not in SUPPORTED_EXTENSIONS:
         raise ValueError(
             f"Unsupported manuscript format '{ext or '(none)'}'. Supported: "
-            "DOCX, EPUB, Markdown (.md), TXT, or a Storythread project folder."
+            "PDF, DOCX, EPUB, Markdown (.md), TXT, or a Storythread project "
+            "folder."
         )
 
     if ext in (".txt",):
@@ -101,6 +95,9 @@ def extract_source(source_path: str) -> ExtractionResult:
     if ext == ".docx":
         from app.audiobook.extraction.docx_extractor import extract_docx
         return extract_docx(source_path)
+    if ext == ".pdf":
+        from app.audiobook.extraction.pdf_extractor import extract_pdf
+        return extract_pdf(source_path)
     # Only .epub remains.
     from app.audiobook.extraction.epub_extractor import extract_epub
     return extract_epub(source_path)

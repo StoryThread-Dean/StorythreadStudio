@@ -234,7 +234,11 @@ def test_import_refuses_a_non_empty_folder(tmp_path):
     assert not (target / "audiobook-project.json").exists()
 
 
-def test_import_pdf_rejected_cleanly_no_half_workspace(tmp_path):
+def test_import_unreadable_pdf_rejected_cleanly_no_half_workspace(tmp_path):
+    # PDFs import for real since Stage F, so this now covers a file that
+    # claims to be one and is not. The point of the test is unchanged and
+    # is the important part: extraction fails BEFORE anything is
+    # scaffolded, so a bad import never leaves a broken workspace behind.
     pdf = tmp_path / "book.pdf"
     pdf.write_bytes(b"%PDF fake")
     ws = tmp_path / "ws"
@@ -242,8 +246,7 @@ def test_import_pdf_rejected_cleanly_no_half_workspace(tmp_path):
         "source_path": str(pdf), "workspace_path": str(ws),
     })
     assert response.status_code == 400
-    assert "PDF import is not supported yet" in response.json()["detail"]
-    assert not ws.exists()          # extraction failed BEFORE scaffolding
+    assert not ws.exists()
 
 
 def test_import_missing_source_400(tmp_path):
