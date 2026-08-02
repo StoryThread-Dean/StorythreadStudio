@@ -246,7 +246,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/audiobook/ToggleSwitch.test.tsx` -- a switch, not a checkbox: its look carries the state
   - `src/features/audiobook/SpokenLine.test.tsx` -- the read-aloud flourish never costs readability (every word present as text, spaces survive, staggered delays)
   - `src/features/audiobook/CastPanel.test.tsx` -- the cast screen: manuscript names offered as one-click adds, duplicate names block the save, one-book-one-engine explained
-  - `src/features/audiobook/SpeakerReview.test.tsx` -- the AI proposal walk: confidence shown honestly, Accept passes the corrected name, Keep narrator applies nothing, a moved passage cannot be wrapped
+  - `src/features/audiobook/speakerScan.test.ts` -- local dialogue detection: quotes found without a network call, tags read both ways, pronouns rejected, a tag never leaks across a paragraph break, AI guesses never override the writer's own tag
+  - `src/features/audiobook/SpeakerWalkthrough.test.tsx` -- the cast walk: opens with no fetch at all, one-click cast assignment, Keep narrator for one-off speakers, the AI pass is cancellable and never sends the whole book
   - `src/features/audiobook/StorageDialog.test.tsx` -- the delete screen: only free-to-rebuild categories pre-checked, losses stated on the row, the confirm repeats categories + size, cancelling deletes nothing, locked files surfaced
   - `src/features/audiobook/ExportPanel.test.tsx` -- retention after export: keep says nothing, ask shows the size, auto-delete acts and reports it, and only intermediate audio is ever removed
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.

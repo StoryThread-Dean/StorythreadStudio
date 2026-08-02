@@ -723,6 +723,33 @@ export async function saveCast(
   return toJson<CastReport>(res);
 }
 
+/** Every voice the app knows, grouped by engine, each group saying
+ *  whether THIS book can actually use it. */
+export interface VoiceGroup {
+  key: string;
+  label: string;
+  tier: string;
+  provider: string;
+  model: string;
+  is_current: boolean;
+  /** Castable right now. False = real voices, not reachable from here. */
+  usable: boolean;
+  /** Auditioning costs nothing (the local narrator). */
+  free_preview: boolean;
+  /** Why it is not usable, in the writer's terms. "" when it is. */
+  note: string;
+  voices: { id: string; label: string }[];
+}
+
+export async function fetchVoiceOptions(
+  workspacePath: string,
+): Promise<{ groups: VoiceGroup[]; current_label: string; current_provider: string }> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/voice-options?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson(res);
+}
+
 /** One AI proposal about who speaks a passage. `start`/`end` index into
  *  the text that was analysed, so the editor wraps the REAL words. */
 export interface SpeakerProposal {
@@ -735,14 +762,19 @@ export interface SpeakerProposal {
   in_cast: boolean;
 }
 
+/** Optional AI attribution. Takes an AbortSignal because this is the one
+ *  audiobook call that waits on a language model, and a writer who is
+ *  tired of waiting must be able to take their walk back. */
 export async function analyzeSpeakers(
   workspacePath: string,
   text: string,
+  signal?: AbortSignal,
 ): Promise<{ proposals: SpeakerProposal[]; dropped: number; model_used: string }> {
   const res = await fetch(`${API_BASE}/api/audiobook/analyze-speakers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workspace_path: workspacePath, text }),
+    signal,
   });
   return toJson(res);
 }

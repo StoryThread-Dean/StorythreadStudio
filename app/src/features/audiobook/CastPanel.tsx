@@ -16,19 +16,15 @@
 //   "Elena" here -- those names are offered as one-click adds. Making
 //   someone re-enter what the app just read is the app forgetting.
 
-import { useCallback, useEffect, useState } from "react";
-import { Loader2, Plus, Users, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertTriangle, Loader2, Play, Plus, Users, X } from "lucide-react";
 
-import { fetchCast, saveCast } from "./api";
-import type { CastReport } from "./api";
+import { fetchCast, fetchVoiceOptions, previewVoice, saveCast } from "./api";
+import type { CastReport, VoiceGroup } from "./api";
 import { WhatsThis } from "./WhatsThis";
-import type { NarratorVoice } from "./types";
 
 interface CastPanelProps {
   workspacePath: string;
-  /** The engine's voice roster. Empty while it loads -- the panel still
-   *  works, it just shows ids until the labels arrive. */
-  voices: NarratorVoice[];
   onClose: () => void;
   /** Saved: whoever is behind this needs to re-read the cast (the rail's
    *  freshness badges above all -- recasting outdates a character's
@@ -41,13 +37,20 @@ interface Row {
   voice_id: string;
 }
 
-export function CastPanel({ workspacePath, voices, onClose, onSaved }: CastPanelProps) {
+const SAMPLE_LINE =
+  "The road disappeared beneath the gathering snow, and somewhere behind her, "
+  + "a second set of footsteps stopped.";
+
+export function CastPanel({ workspacePath, onClose, onSaved }: CastPanelProps) {
   const [report, setReport] = useState<CastReport | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [narratorVoice, setNarratorVoice] = useState("");
   const [snapshot, setSnapshot] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [groups, setGroups] = useState<VoiceGroup[]>([]);
+  const [sampling, setSampling] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -70,6 +73,45 @@ export function CastPanel({ workspacePath, voices, onClose, onSaved }: CastPanel
   }
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        setGroups((await fetchVoiceOptions(workspacePath)).groups);
+      } catch {
+        // No roster is a thinner panel, never a broken one -- stored
+        // ids still show and still save.
+      }
+    })();
+  }, [workspacePath]);
+
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
+
+  /** Where a voice id lives, so the row can say what it is and whether
+      it can be auditioned for free. */
+  function groupOf(voiceId: string): VoiceGroup | undefined {
+    return groups.find(g => g.voices.some(v => v.id === voiceId));
+  }
+
+  const localGroup = groups.find(g => g.provider === "local-kokoro");
+  const currentGroup = groups.find(g => g.is_current) ?? localGroup;
+
+  async function sample(voiceId: string, key: string) {
+    if (!voiceId || sampling) return;
+    setSampling(key);
+    setError(null);
+    try {
+      const blob = await previewVoice(SAMPLE_LINE, voiceId, workspacePath);
+      audioRef.current?.pause();
+      const audio = new Audio(URL.createObjectURL(blob));
+      audioRef.current = audio;
+      await audio.play();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not play that voice.");
+    } finally {
+      setSampling(null);
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") attemptClose(); };
@@ -114,22 +156,55 @@ export function CastPanel({ workspacePath, voices, onClose, onSaved }: CastPanel
     rows.map(r => r.display_name.trim().toLowerCase())
       .filter((name, index, all) => name && all.indexOf(name) !== index));
 
-  function voiceSelect(value: string, onChange: (v: string) => void, label: string) {
+  /** The voice picker: every engine's roster, grouped and labelled, with
+      the ones this book cannot use disabled rather than hidden. Hiding
+      them would make the app look like it has four voices; offering them
+      silently would let someone cast against voices that cannot speak. */
+  function voiceRow(value: string, onChange: (v: string) => void,
+                    label: string, sampleKey: string) {
+    const owner = groupOf(value);
+    const canSample = !!value && !!owner?.free_preview;
     return (
-      <select
-        aria-label={label}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
-      >
-        <option value="">Same as the narrator</option>
-        {voices.map(voice => (
-          <option key={voice.id} value={voice.id}>{voice.label}</option>
-        ))}
-        {value && !voices.some(v => v.id === value) && (
-          <option value={value}>{value}</option>
-        )}
-      </select>
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <select
+          aria-label={label}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
+        >
+          <option value="">Same as the narrator</option>
+          {groups.map(group => (
+            <optgroup
+              key={group.key}
+              label={group.usable ? group.label : `${group.label} -- unavailable`}
+            >
+              {group.voices.map(voice => (
+                <option key={`${group.key}:${voice.id}`} value={voice.id}
+                        disabled={!group.usable}>
+                  {voice.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+          {value && !owner && <option value={value}>{value}</option>}
+        </select>
+        <button
+          onClick={() => void sample(value, sampleKey)}
+          disabled={!canSample || sampling !== null}
+          title={canSample
+            ? "Hear this voice -- free, runs on your computer"
+            : value
+              ? "Hosted voices are auditioned in the Premium Narration panel, where the cost is quoted first"
+              : "Pick a voice first"}
+          aria-label={`Sample ${label}`}
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-1.5 py-1 text-[10px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+        >
+          {sampling === sampleKey
+            ? <Loader2 size={10} className="animate-spin" />
+            : <Play size={10} />}
+          Sample
+        </button>
+      </span>
     );
   }
 
@@ -161,14 +236,78 @@ export function CastPanel({ workspacePath, voices, onClose, onSaved }: CastPanel
             </p>
           ) : (
             <div className="space-y-5">
-              <p className="text-[11px] leading-relaxed text-zinc-400">
-                Mark a character's lines with{" "}
-                <code className="rounded bg-zinc-800 px-1 text-[10px] text-violet-300">
-                  [voice:Elena]...[/voice]
-                </code>{" "}
-                in the narration editor, and they will be read in that
-                character's voice. Everything else is the narrator.
-              </p>
+              {/* What this does and what it costs, BEFORE anybody
+                  invests an afternoon in casting a novel. The first
+                  question a writer asks here is "can I even do this on
+                  the free narrator?" -- so that is the first sentence. */}
+              <div className="rounded border border-zinc-700 bg-zinc-900/60 px-3 py-2.5">
+                <p className="text-[11px] leading-relaxed text-zinc-300">
+                  <span className="font-semibold text-emerald-300">
+                    Yes -- this works on the free local narrator.
+                  </span>{" "}
+                  All {localGroup?.voices.length || 54} of its voices, unlimited,
+                  no key, nothing to pay. Mark a character's lines with{" "}
+                  <code className="rounded bg-zinc-800 px-1 text-[10px] text-violet-300">
+                    [voice:Elena]...[/voice]
+                  </code>{" "}
+                  and they are read in that voice; everything else stays with
+                  the narrator.
+                </p>
+                <p className="mt-2 text-[11px] font-medium text-zinc-400">
+                  Before you cast a whole novel, the limits:
+                </p>
+                <ul className="mt-1 space-y-1 text-[10px] leading-relaxed text-zinc-400">
+                  <li>
+                    <span className="text-zinc-300">One book, one engine.</span>{" "}
+                    Every voice comes from{" "}
+                    {currentGroup?.label.split(" -- ").slice(-1)[0] ?? "your narration engine"},
+                    chosen in Audiobook Settings. Characters cannot each use a
+                    different service.
+                  </li>
+                  <li>
+                    <span className="text-zinc-300">Switching engines keeps the
+                    cast but not the voices.</span> Rosters differ, so you
+                    re-pick a voice per character -- and that re-narrates their
+                    lines.
+                  </li>
+                  <li>
+                    <span className="text-zinc-300">These are voices, not
+                    performances.</span> A character's voice is consistent, but
+                    the engine does not act: no shouting, whispering, or
+                    emotion per line. Pace markers are the only performance
+                    control.
+                  </li>
+                  <li>
+                    <span className="text-zinc-300">Every marked line costs a
+                    separate render.</span> Free locally. On a paid engine you
+                    are billed by the character either way, so casting does not
+                    cost extra -- but re-casting one character does re-render
+                    all of her lines.
+                  </li>
+                  <li>
+                    <span className="text-zinc-300">A name the cast does not
+                    know reads as the narrator.</span> The editor warns you on
+                    save rather than surprising you in the audio.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Engines that exist but cannot narrate this book, each
+                  saying which of the two reasons applies. A writer who
+                  scrolls the voice list and finds half of it greyed out
+                  needs the reason ON SCREEN, not in a tooltip. */}
+              {groups.filter(g => !g.usable && g.note).map(group => (
+                <div key={group.key}
+                     className="rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2">
+                  <p className="flex items-start gap-1.5 text-[11px] font-medium text-amber-300">
+                    <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                    {group.label}
+                  </p>
+                  <p className="mt-1 text-[10px] leading-relaxed text-amber-200/90">
+                    {group.note}
+                  </p>
+                </div>
+              ))}
 
               <section>
                 <h3 className="mb-2 border-b border-zinc-800 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -178,7 +317,7 @@ export function CastPanel({ workspacePath, voices, onClose, onSaved }: CastPanel
                   <span className="w-32 shrink-0 text-[11px] text-zinc-200">
                     Narrator
                   </span>
-                  {voiceSelect(narratorVoice, setNarratorVoice, "Narrator voice")}
+                  {voiceRow(narratorVoice, setNarratorVoice, "Narrator voice", "narrator")}
                 </div>
                 <p className="mt-1 text-[10px] text-zinc-500">
                   Reads everything that is not inside a voice marker. This is
@@ -233,11 +372,12 @@ export function CastPanel({ workspacePath, voices, onClose, onSaved }: CastPanel
                           className={"w-32 shrink-0 rounded border bg-zinc-900 px-2 py-1 text-[11px] text-zinc-100 "
                             + (clash ? "border-rose-600" : "border-zinc-700")}
                         />
-                        {voiceSelect(
+                        {voiceRow(
                           row.voice_id,
                           value => setRows(prev => prev.map((r, i) =>
                             i === index ? { ...r, voice_id: value } : r)),
-                          `Voice for character ${index + 1}`)}
+                          `Voice for character ${index + 1}`,
+                          `row-${index}`)}
                         <button
                           onClick={() => setRows(prev => prev.filter((_r, i) => i !== index))}
                           aria-label={`Remove ${row.display_name || "character"}`}

@@ -318,3 +318,64 @@ def test_markers_module_names_the_narrator_once(tmp_path):
     # One spelling of the fallback name, shared by the parser and the
     # cast, so "Narrator" can never mean two different things.
     assert markers.NARRATOR == workspace.NARRATOR_NAME
+
+
+# ── The voice roster the Cast panel reads (live-testing feedback) ─────────────
+
+def test_voice_options_group_by_engine_and_say_what_is_reachable(tmp_path, monkeypatch):
+    # Live feedback: the cast screen offered a flat list with no
+    # indication of which voices were free, which belonged to a paid
+    # engine, and which needed an API key the writer had not connected.
+    # Three states, told apart at a glance.
+    from app.audiobook import local_worker
+
+    monkeypatch.setattr(local_worker, "list_voices", lambda: [
+        {"id": "af_heart", "label": "Heart (American female)"},
+        {"id": "bf_emma", "label": "Emma (British female)"},
+    ])
+    # Hermetic settings. Without this the test reads the DEVELOPER'S real
+    # settings file, so it passes or fails depending on which narration
+    # engine happens to be selected on this machine -- which is exactly
+    # how it failed the first time it ran.
+    monkeypatch.setattr("app.settings_store.load_settings", lambda: {})
+    ws = _workspace(tmp_path)
+    response = client.get("/api/audiobook/voice-options",
+                          params={"workspace_path": ws})
+    assert response.status_code == 200, response.text
+    groups = response.json()["groups"]
+
+    # The free local narrator leads: it is the default and costs nothing.
+    assert groups[0]["provider"] == "local-kokoro"
+    assert groups[0]["tier"] == "free"
+    assert groups[0]["usable"] is True
+    assert groups[0]["free_preview"] is True
+    assert len(groups[0]["voices"]) == 2
+
+    # Paid engines are LISTED, never hidden -- hiding them would make the
+    # app look like it has two voices -- but they are not usable, and
+    # each says which of the two reasons applies.
+    hosted = [g for g in groups if g["provider"] != "local-kokoro"]
+    assert hosted, "hosted engines must still appear"
+    assert all(g["usable"] is False for g in hosted)
+    assert all(g["note"] for g in hosted)
+    assert any("API key" in g["note"] for g in hosted)
+    # Tier is named in the label, so budget/standard/pro is visible.
+    assert any(g["label"].startswith("Pro -- ") for g in hosted)
+
+
+def test_voice_options_admit_when_the_local_engine_is_not_installed(tmp_path, monkeypatch):
+    # An empty dropdown with no explanation reads as a broken feature.
+    from app.audiobook import local_worker
+
+    def explode():
+        raise RuntimeError("not installed")
+
+    monkeypatch.setattr(local_worker, "list_voices", explode)
+    monkeypatch.setattr("app.settings_store.load_settings", lambda: {})
+    ws = _workspace(tmp_path)
+    body = client.get("/api/audiobook/voice-options",
+                      params={"workspace_path": ws}).json()
+    local = body["groups"][0]
+    assert local["voices"] == []
+    assert local["usable"] is False
+    assert "not installed yet" in local["note"]

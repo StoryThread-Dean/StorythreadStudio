@@ -32,8 +32,11 @@ entry while working on a feature, append it under Unreleased.
 
 ### Changed
 
+- **The audiobook cast tools now say what they are for before you use them.** The Cast panel opens with the answer to the first question anyone asks -- yes, multiple voices work on the free local narrator, with all of its voices, unlimited -- followed by the limits worth knowing before casting a whole novel: one book uses one engine, switching engines keeps the cast but not the voices, the engine gives each character a consistent voice rather than a performance, and a name your cast does not know reads as the narrator. Voices are grouped by engine and labelled Free / Budget / Standard / Pro, with a **[> Sample]** button beside every voice; voices belonging to an engine you are not using, or one with no API key connected, are shown but disabled with the reason on screen instead of quietly missing. Cast, Voice and the walkthrough now sit together as one group on the toolbar, and the last two stay hidden until you have actually cast somebody -- a single-narrator book never sees a control it has no use for.
+
 ### Fixed
 
+- **Find speakers could hang indefinitely.** The first build asked an AI where the dialogue was before it could show anything, sent the entire book when no text was selected, and offered no way to stop -- one chapter could sit on "working out who speaks" for fifteen minutes. Finding dialogue is now local, instant, and free (it is quotation marks), and most lines are attributed from the writer's own dialogue tags. The AI is an optional pass over one window of text, with a Cancel button, a 90-second client timeout, and a matching server-side ceiling. If it never answers, the walkthrough still works.
 - **The Paragraph beat setting could never be saved.** The narration-settings save rewrote the whole pacing block from four fields, so the paragraph-gap control in Audiobook Settings did nothing -- and any value already stored was silently reset whenever another pacing setting was touched.
 
 ---

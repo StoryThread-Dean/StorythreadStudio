@@ -19,16 +19,14 @@ import {
 } from "lucide-react";
 
 import {
-  addChapters, analyzeSpeakers, fetchAudioStatus, fetchAvailableChapters,
-  fetchNarration, fetchVoices, saveNarration,
+  addChapters, fetchAudioStatus, fetchAvailableChapters, fetchCast,
+  fetchNarration, saveCast, saveNarration,
 } from "./api";
-import type {
-  AudioStatus, AvailableChapter, ChapterAudioStatus, SpeakerProposal,
-} from "./api";
+import type { AudioStatus, AvailableChapter, ChapterAudioStatus } from "./api";
+import type { SpeakerStop } from "./speakerScan";
 import { CastPanel } from "./CastPanel";
-import { SpeakerReview } from "./SpeakerReview";
+import { SpeakerWalkthrough } from "./SpeakerWalkthrough";
 import { StorageDialog } from "./StorageDialog";
-import type { NarratorVoice } from "./types";
 import { InsertWalkthrough } from "./InsertWalkthrough";
 import { GenerationPanel } from "./GenerationPanel";
 import { MarkerHelpPanel } from "./MarkerHelpPanel";
@@ -81,10 +79,6 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [walkthroughStart, setWalkthroughStart] = useState<number | null>(null);
   const [storageOpen, setStorageOpen] = useState(false);
   const [castOpen, setCastOpen] = useState(false);
-  // The engine's voice roster, fetched only when the Cast panel opens --
-  // asking for it spins up the local narrator, which is far too much to
-  // do just because someone opened a workspace.
-  const [castVoices, setCastVoices] = useState<NarratorVoice[]>([]);
   // Which chapters still match their narration (spec 24.2). Read-only and
   // engine-free, so it can be refreshed after every save without cost.
   const [audioStatus, setAudioStatus] = useState<AudioStatus | null>(null);
@@ -179,73 +173,65 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     };
   }, [content]);
 
-  // ── The AI speaker pass (spec 27.3) ─────────────────────────────────────
-  // Ask who speaks each line, then walk the proposals. The AI proposes;
-  // accepting edits the BUFFER, never the file -- same contract as the
-  // Formatting Walkthrough.
-  const [speakerPass, setSpeakerPass] = useState<{
-    busy: boolean;
-    text: string;
-    proposals: SpeakerProposal[];
-    dropped: number;
-  } | null>(null);
+  // ── The cast tools ──────────────────────────────────────────────────────
+  // Voice markers and the walkthrough only make sense once somebody has
+  // been cast, so the toolbar hides them until then: a single-narrator
+  // book never sees a control it has no use for.
+  const [castNames, setCastNames] = useState<string[]>([]);
+  const [castWalk, setCastWalk] = useState(false);
 
-  const runSpeakerPass = useCallback(async () => {
-    // Analyse the SELECTION when there is one, otherwise the whole
-    // buffer. A writer who highlighted a scene means that scene.
-    const ta = textareaRef.current;
-    const selected = ta
-      ? content.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0)
-      : "";
-    const text = selected.trim() ? selected : content;
-    setSpeakerPass({ busy: true, text, proposals: [], dropped: 0 });
+  const refreshCast = useCallback(async () => {
     try {
-      const result = await analyzeSpeakers(workspacePath, text);
-      setSpeakerPass({
-        busy: false, text,
-        proposals: result.proposals, dropped: result.dropped,
-      });
-    } catch (e) {
-      setSpeakerPass(null);
-      setError(e instanceof Error ? e.message : "The speaker pass failed.");
+      const cast = await fetchCast(workspacePath);
+      setCastNames(cast.speakers
+        .filter(s => s.role === "character")
+        .map(s => s.display_name));
+    } catch {
+      // No cast is not an error -- it is the normal state of most books.
+      setCastNames([]);
     }
-  }, [content, workspacePath]);
+  }, [workspacePath]);
 
-  /** Wrap one proposal's exact words in a voice span, in the buffer. */
-  const acceptSpeaker = useCallback((proposal: SpeakerProposal, speaker: string) => {
-    setSpeakerPass(prev => {
-      if (!prev) return prev;
-      // The offsets index the ANALYSED text, which may be a selection
-      // rather than the whole buffer -- so locate that passage in the
-      // buffer first. If it has moved, do nothing rather than wrap the
-      // wrong words.
-      const base = content.indexOf(prev.text);
-      if (base < 0) return prev;
-      const from = base + proposal.start;
-      const to = base + proposal.end;
-      if (content.slice(from, to) !== proposal.quote) return prev;
-      const open = `[voice:${speaker}]`;
-      const close = "[/voice]";
-      setContent(
-        content.slice(0, from) + open + proposal.quote + close + content.slice(to),
-      );
-      setDirty(true);
-      // Later proposals index the ORIGINAL passage, so keep both the
-      // analysed text and the remaining offsets in step with what was
-      // just inserted. The shift is measured, never arithmetic on the
-      // marker's shape -- that is how off-by-one wraps happen.
-      const delta = open.length + close.length;
-      return {
-        ...prev,
-        text: prev.text.slice(0, proposal.start) + open + proposal.quote + close
-              + prev.text.slice(proposal.end),
-        proposals: prev.proposals.map(p => (
-          p.start > proposal.start
-            ? { ...p, start: p.start + delta, end: p.end + delta }
-            : p
-        )),
-      };
+  useEffect(() => { void refreshCast(); }, [refreshCast]);
+
+  const openCast = useCallback(() => setCastOpen(true), []);
+
+  /** Wrap one walkthrough stop's exact words in a voice span. */
+  const assignSpeaker = useCallback((stop: SpeakerStop, speaker: string) => {
+    setContent(prev => {
+      // Re-check before wrapping: offsets came from a scan, and a scan
+      // is only true of the text it read.
+      if (prev.slice(stop.start, stop.end) !== stop.quote) return prev;
+      return prev.slice(0, stop.start)
+        + `[voice:${speaker}]` + stop.quote + "[/voice]"
+        + prev.slice(stop.end);
     });
+    setDirty(true);
+  }, []);
+
+  /** A name used in the walk that is not cast yet. Added with no voice,
+      so it reads as the narrator until the writer picks one -- audible
+      continuity beats a silent gap. */
+  const addToCast = useCallback(async (name: string) => {
+    try {
+      const cast = await fetchCast(workspacePath);
+      const characters = cast.speakers
+        .filter(s => s.role === "character")
+        .map(s => ({ display_name: s.display_name, voice_id: s.voice_id }));
+      if (characters.some(c => c.display_name.toLowerCase() === name.toLowerCase())) return;
+      await saveCast(workspacePath, [...characters, { display_name: name, voice_id: "" }]);
+      void refreshCast();
+    } catch { /* the marker still stands; the cast panel can fix it */ }
+  }, [workspacePath, refreshCast]);
+
+  /** Select and scroll to a stop, so the walk points at real words. */
+  const highlightRange = useCallback((start: number, length: number) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(start, start + length);
+    ta.scrollTop = (start / Math.max(content.length, 1)) * ta.scrollHeight
+      - ta.clientHeight / 3;
   }, [content]);
 
   // ── The [say] popout (user-designed) ────────────────────────────────────
@@ -537,25 +523,38 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         >
           <EyeOff size={11} /> Exclude
         </button>
+        {/* ── The cast cluster ───────────────────────────────────────
+            Cast, Voice and the walkthrough are one feature and sit
+            together in violet. Voice and Walkthrough appear only once
+            somebody has actually been cast: a book with a single
+            narrator has no use for either, and two mystery buttons on
+            the toolbar are worse than none. */}
         <span className="mx-1 h-4 w-px bg-zinc-800" />
-        {/* Voice spans: the third universal marker. The button types the
-            wrapper with the caret sitting where the name goes, so the
-            writer never has to remember the syntax. */}
         <button
-          onClick={() => wrapSelection("[voice:]", "[/voice]", "[voice:".length)}
-          title="Read the selected passage as a character. Type the name, then give it a voice in the Cast panel."
+          onClick={openCast}
+          title="Give characters their own voices. Works with the free local narrator."
           className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-violet-600 hover:text-violet-300"
         >
-          <Users size={11} /> Voice
+          <Users size={11} /> Cast{castNames.length > 0 && ` (${castNames.length})`}
         </button>
-        <button
-          onClick={() => void runSpeakerPass()}
-          disabled={speakerPass?.busy}
-          title="Ask the AI who speaks each line in the selection (or the whole chapter). It proposes; you decide, and nothing is saved until you press Save."
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-violet-600 hover:text-violet-300 disabled:opacity-40"
-        >
-          <Sparkles size={11} /> Find speakers
-        </button>
+        {castNames.length > 0 && (
+          <>
+            <button
+              onClick={() => wrapSelection("[voice:]", "[/voice]", "[voice:".length)}
+              title="Read the selected passage as one of your cast. Type the name between the brackets."
+              className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-violet-600 hover:text-violet-300"
+            >
+              Voice
+            </button>
+            <button
+              onClick={() => setCastWalk(v => !v)}
+              title="Walk the dialogue line by line and say who speaks each one. Finds the lines instantly; the AI is optional."
+              className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-violet-600 hover:text-violet-300"
+            >
+              <Sparkles size={11} /> {castWalk ? "Hide walkthrough" : "Cast Walkthrough"}
+            </button>
+          </>
+        )}
         <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
           onClick={handleRemoveMarkers}
@@ -653,19 +652,6 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               <SettingsIcon size={12} /> Audiobook Settings
             </button>
             <button
-              onClick={() => {
-                setCastOpen(true);
-                // Lazy: asking for voices spins up the local narrator.
-                if (castVoices.length === 0) {
-                  void fetchVoices().then(setCastVoices).catch(() => { /* ids still work */ });
-                }
-              }}
-              title="Who narrates, and which characters have voices of their own"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-violet-600 hover:text-violet-300"
-            >
-              <Users size={12} /> Cast
-            </button>
-            <button
               onClick={() => setStorageOpen(true)}
               title="How much space this audiobook is using, and what you can safely delete"
               className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300"
@@ -695,14 +681,15 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               onClose={() => setSayEditor(null)}
             />
           )}
-          {speakerPass && (
-            <SpeakerReview
-              proposals={speakerPass.proposals}
-              dropped={speakerPass.dropped}
-              analyzedText={speakerPass.text}
-              busy={speakerPass.busy}
-              onAccept={acceptSpeaker}
-              onClose={() => setSpeakerPass(null)}
+          {castWalk && (
+            <SpeakerWalkthrough
+              content={content}
+              workspacePath={workspacePath}
+              castNames={castNames}
+              onAssign={assignSpeaker}
+              onHighlight={highlightRange}
+              onAddToCast={name => void addToCast(name)}
+              onClose={() => setCastWalk(false)}
             />
           )}
           {warnings.length > 0 && (
@@ -786,12 +773,12 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       {castOpen && (
         <CastPanel
           workspacePath={workspacePath}
-          voices={castVoices}
           onClose={() => setCastOpen(false)}
           onSaved={() => {
             // Recasting outdates that character's lines, and nothing
             // else -- the badges should say so immediately.
             void refreshAudioStatus();
+            void refreshCast();
           }}
         />
       )}

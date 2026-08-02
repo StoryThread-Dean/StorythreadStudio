@@ -997,6 +997,104 @@ def get_speakers(workspace_path: str):
     }
 
 
+@router.get("/voice-options")
+def get_voice_options(workspace_path: str):
+    """
+    Every voice this app knows, grouped by engine and tier, each group
+    saying plainly whether this book can actually use it.
+
+    Three states a writer needs to tell apart at a glance, and could not
+    before: the free local roster (usable now, unlimited), a paid
+    engine's roster this book is not using (real, but switching engines
+    is a deliberate act), and a paid engine with no API key connected
+    (not an option until they connect one). Hiding the last two would
+    make the cast look impoverished; offering them silently would let
+    someone cast a book against voices that cannot speak.
+    """
+    _require_workspace(workspace_path)
+    from app.audiobook import tts_providers
+    from app.settings_store import load_settings
+
+    manifest = workspace.load_manifest(workspace_path)
+    settings = load_settings()
+    selection = tts_providers.resolve_narration_selection(settings, manifest)
+    # No DELIBERATE hosted choice means the book is on the free local
+    # narrator -- the default and the common case. The resolver's level-3
+    # fallback names the writing side's chat model, which is a report
+    # about settings, not an engine this book narrates with.
+    chose_hosted = selection.get("source") in ("book", "settings")
+    current_provider = (selection.get("provider") or "") if chose_hosted else "local-kokoro"
+    current_model = (selection.get("model") or "") if chose_hosted else ""
+
+    groups: list[dict] = []
+
+    # The free local narrator always leads -- it is the default engine
+    # and the only one that costs nothing.
+    local_voices: list[dict] = []
+    try:
+        local_voices = [
+            {"id": v["id"], "label": v["label"]} for v in local_worker.list_voices()
+        ]
+    except Exception:
+        # Engine not installed yet. Say so rather than showing an empty
+        # list that looks like a bug.
+        local_voices = []
+    local_current = current_provider == "local-kokoro"
+    groups.append({
+        "key": "local-kokoro:",
+        "label": "Free -- your local narrator",
+        "tier": "free",
+        "provider": "local-kokoro",
+        "model": "",
+        "is_current": local_current,
+        "usable": local_current and bool(local_voices),
+        "free_preview": True,
+        "note": ("" if local_voices else
+                 "The free narrator is not installed yet. Install it in the "
+                 "narration panel to see its voices."),
+        "voices": local_voices,
+    })
+
+    for provider in tts_providers.catalog():
+        config = tts_providers.PROVIDERS[provider["provider"]]
+        has_key = bool(tts_providers.narration_api_key(settings, config).strip())
+        for model in provider["models"]:
+            is_current = (provider["provider"] == current_provider
+                          and model["id"] == current_model)
+            if has_key:
+                note = "" if is_current else (
+                    "This book narrates with "
+                    f"{selection.get('model_label') if chose_hosted else 'the free local narrator'}. "
+                    "Switch engines in Audiobook Settings to cast from these."
+                )
+            else:
+                note = (f"No {provider['provider_label']} API key is connected, "
+                        "so these voices cannot narrate yet. Add one in "
+                        "Audiobook Settings.")
+            groups.append({
+                "key": f"{provider['provider']}:{model['id']}",
+                "label": f"{tts_providers.TIER_LABELS.get(model['tier'], model['tier'])}"
+                         f" -- {model['label']} ({provider['provider_label']})",
+                "tier": model["tier"],
+                "provider": provider["provider"],
+                "model": model["id"],
+                "is_current": is_current,
+                "usable": is_current and has_key,
+                # Hosted auditions cost money and live behind the
+                # cost-quoted flow in the Premium Narration panel.
+                "free_preview": False,
+                "note": note,
+                "voices": [{"id": v["id"], "label": v["label"]} for v in model["voices"]],
+            })
+
+    return {
+        "groups": groups,
+        "current_label": (selection.get("model_label") if chose_hosted
+                          else "your local narrator"),
+        "current_provider": current_provider,
+    }
+
+
 class SpeakerEntry(BaseModel):
     display_name: str = Field(min_length=1, max_length=60)
     voice_id: str = ""
@@ -1025,6 +1123,13 @@ def save_speakers(request: SaveSpeakersRequest):
     ]
     workspace.save_manifest(request.workspace_path, manifest)
     return get_speakers(request.workspace_path)
+
+
+# How long the optional speaker pass may take before it is called a
+# failure. Deliberately far below the shared 300s AI timeout: this is a
+# structured read, the walkthrough works without it, and a spinner
+# nobody can cancel is worse than an answer nobody gets.
+SPEAKER_PASS_TIMEOUT = 90.0
 
 
 class AnalyzeSpeakersRequest(BaseModel):
@@ -1069,16 +1174,35 @@ async def analyze_speakers(request: AnalyzeSpeakersRequest):
     known = [s["display_name"] for s in workspace.speakers(manifest)
              if s["speaker_id"] != workspace.NARRATOR_ID]
 
+    import asyncio
+
     import httpx
     try:
-        result = await run_completion(
-            provider=provider, api_key=api_key, model_id=model_id,
-            cache_prompts=_prompt_cache_enabled(provider),
-            system_prompt=speaker_analysis.SPEAKER_ANALYSIS_PROMPT,
-            user_message=speaker_analysis.build_user_message(text, known),
-            # Reading, not writing: the coolest setting we have, because
-            # invention is the failure mode here.
-            temperature=TEMPERATURE_DEFAULTS["critique"],
+        # A hard ceiling of our own. The shared AI timeout is 300s,
+        # which is right for a model DRAFTING prose and far too long
+        # for a structured read of one chapter -- five minutes of
+        # spinner is indistinguishable from a hang, and this pass is
+        # optional help rather than the feature itself.
+        result = await asyncio.wait_for(
+            run_completion(
+                provider=provider, api_key=api_key, model_id=model_id,
+                cache_prompts=_prompt_cache_enabled(provider),
+                system_prompt=speaker_analysis.SPEAKER_ANALYSIS_PROMPT,
+                user_message=speaker_analysis.build_user_message(text, known),
+                # Reading, not writing: the coolest setting we have,
+                # because invention is the failure mode here.
+                temperature=TEMPERATURE_DEFAULTS["critique"],
+            ),
+            timeout=SPEAKER_PASS_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=f"{model_id} did not answer within "
+                   f"{int(SPEAKER_PASS_TIMEOUT)} seconds. Try a shorter "
+                   "passage, or a faster model in Settings -- reasoning "
+                   "models are slow at this. You can assign speakers "
+                   "yourself in the walkthrough either way.",
         )
     except httpx.HTTPStatusError as e:
         raise _provider_exc(e, provider)

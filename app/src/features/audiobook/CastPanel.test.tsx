@@ -18,10 +18,27 @@ import { CastPanel } from "./CastPanel";
 
 const WS = "C:/books/hollow-road-audio";
 
-const VOICES = [
-  { id: "af_heart", label: "Heart (American female)", language: "en-US", gender_presentation: "female" },
-  { id: "bf_emma", label: "Emma (British female)", language: "en-GB", gender_presentation: "female" },
-];
+// The voice roster as the panel now reads it: grouped by engine, each
+// group saying whether THIS book can use it.
+const VOICE_OPTIONS = {
+  current_label: "your local narrator",
+  current_provider: "local-kokoro",
+  groups: [
+    { key: "local-kokoro:", label: "Free -- your local narrator", tier: "free",
+      provider: "local-kokoro", model: "", is_current: true, usable: true,
+      free_preview: true, note: "",
+      voices: [
+        { id: "af_heart", label: "Heart (American female)" },
+        { id: "bf_emma", label: "Emma (British female)" },
+      ] },
+    { key: "openrouter:deepgram/aura-2", label: "Pro -- Deepgram Aura-2 (OpenRouter)",
+      tier: "pro", provider: "openrouter", model: "deepgram/aura-2",
+      is_current: false, usable: false, free_preview: false,
+      note: "No OpenRouter API key is connected, so these voices cannot "
+          + "narrate yet. Add one in Audiobook Settings.",
+      voices: [{ id: "thalia", label: "Thalia (American female)" }] },
+  ],
+};
 
 function report(over: Partial<Record<string, unknown>> = {}) {
   return {
@@ -52,6 +69,8 @@ function mockFetch(initial = report()) {
       }) };
     }
     if (url.includes("/speakers")) return { ok: true, json: async () => initial };
+    if (url.includes("/voice-options")) return { ok: true, json: async () => VOICE_OPTIONS };
+    if (url.includes("/preview")) return { ok: true, blob: async () => new Blob(["wav"]) };
     throw new Error(`unexpected fetch ${url}`);
   });
 }
@@ -59,8 +78,7 @@ function mockFetch(initial = report()) {
 async function open(fetchMock: ReturnType<typeof mockFetch>) {
   vi.stubGlobal("fetch", fetchMock);
   const onSaved = vi.fn();
-  render(<CastPanel workspacePath={WS} voices={VOICES}
-                    onClose={vi.fn()} onSaved={onSaved} />);
+  render(<CastPanel workspacePath={WS} onClose={vi.fn()} onSaved={onSaved} />);
   await waitFor(() =>
     expect(screen.getByLabelText("Narrator voice")).toBeTruthy());
   return { onSaved };
@@ -139,5 +157,60 @@ describe("CastPanel", () => {
     const select = screen.getByLabelText("Voice for character 1") as HTMLSelectElement;
     expect(select.value).toBe("");
     expect(screen.getAllByText("Same as the narrator").length).toBeGreaterThan(0);
+  });
+  it("answers the first question a writer has: does this work for free?", async () => {
+    // The panel used to open with a cast list and no context, so the
+    // writer's own first reaction was "wait, can I even do this on
+    // local generation?" -- after which they might invest an afternoon
+    // before finding out.
+    await open(mockFetch());
+    expect(screen.getByText(/works on the free local narrator/)).toBeTruthy();
+    expect(screen.getByText(/Before you cast a whole novel, the limits/))
+      .toBeTruthy();
+    expect(screen.getByText(/One book, one engine\./)).toBeTruthy();
+    expect(screen.getByText(/not\s+performances\./)).toBeTruthy();
+  });
+
+  it("groups voices by engine and disables the ones this book cannot use", async () => {
+    await open(mockFetch());
+    const select = screen.getByLabelText("Narrator voice") as HTMLSelectElement;
+    const groups = Array.from(select.querySelectorAll("optgroup"));
+    expect(groups.map(g => g.label)).toEqual([
+      "Free -- your local narrator",
+      "Pro -- Deepgram Aura-2 (OpenRouter) -- unavailable",
+    ]);
+    const hosted = select.querySelector('option[value="thalia"]') as HTMLOptionElement;
+    expect(hosted.disabled).toBe(true);
+  });
+
+  it("says WHY an engine's voices are unavailable, on screen", async () => {
+    // Greyed-out options with no reason read as a bug.
+    await open(mockFetch());
+    expect(screen.getByText(/No OpenRouter API key is connected/)).toBeTruthy();
+    expect(screen.getByText(/Add one in Audiobook Settings/)).toBeTruthy();
+  });
+
+  it("samples a local voice for free", async () => {
+    const fetchMock = mockFetch();
+    await open(fetchMock);
+    window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+    window.URL.createObjectURL = vi.fn(() => "blob:sample");
+
+    fireEvent.change(screen.getByLabelText("Narrator voice"),
+                     { target: { value: "bf_emma" } });
+    fireEvent.click(screen.getByLabelText("Sample Narrator voice"));
+    await waitFor(() => expect(fetchMock.mock.calls.some(
+      ([url]) => String(url).includes("/preview"))).toBe(true));
+  });
+
+  it("cannot sample a hosted voice from here, and says where to", async () => {
+    // Hosted auditions cost money and belong behind the cost-quoted
+    // flow in the Premium Narration panel.
+    await open(mockFetch());
+    fireEvent.change(screen.getByLabelText("Narrator voice"),
+                     { target: { value: "thalia" } });
+    const button = screen.getByLabelText("Sample Narrator voice") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.title).toMatch(/Premium Narration panel/);
   });
 });
