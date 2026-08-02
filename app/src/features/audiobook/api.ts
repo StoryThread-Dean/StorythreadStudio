@@ -764,6 +764,27 @@ export interface SpeakerProposal {
   in_cast: boolean;
 }
 
+export interface SpeakerPassEstimate {
+  model_id: string;
+  provider_label?: string;
+  price_known: boolean;
+  cost_usd: number | null;
+  note: string;
+}
+
+/** What one AI pass over this much text would cost, before it runs. */
+export async function fetchSpeakerPassEstimate(
+  workspacePath: string,
+  characters: number,
+): Promise<SpeakerPassEstimate> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/speaker-pass-estimate`
+    + `?workspace_path=${encodeURIComponent(workspacePath)}`
+    + `&characters=${characters}`,
+  );
+  return toJson<SpeakerPassEstimate>(res);
+}
+
 /** Optional AI attribution. Takes an AbortSignal because this is the one
  *  audiobook call that waits on a language model, and a writer who is
  *  tired of waiting must be able to take their walk back. */

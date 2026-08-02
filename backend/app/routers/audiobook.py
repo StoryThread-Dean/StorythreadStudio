@@ -1126,6 +1126,60 @@ def save_speakers(request: SaveSpeakersRequest):
 SPEAKER_PASS_TIMEOUT = 90.0
 
 
+@router.get("/speaker-pass-estimate")
+async def speaker_pass_estimate(workspace_path: str, characters: int = 0):
+    """
+    What one AI speaker pass over this much text would cost, in money.
+
+    Shown BEFORE the writer presses Start, because "it's probably cheap"
+    is not something anyone should have to take on faith. The honest
+    answer is usually a few cents, and saying so removes the reason
+    people avoid a feature that would save them an hour.
+
+    Pricing comes from the provider's own model list. When it cannot be
+    had -- NanoGPT publishes none, and a network hiccup is always
+    possible -- the answer is "unknown", never a guessed number.
+    """
+    _require_workspace(workspace_path)
+    from app.routers.ai import _resolve_model_and_key
+
+    try:
+        provider, api_key, model_id = _resolve_model_and_key(None)
+    except HTTPException:
+        # No key or no model yet: the estimate is not the place to nag.
+        return {"model_id": "", "price_known": False, "cost_usd": None,
+                "note": "Pick an AI model in Settings to use the AI passes."}
+
+    # Roughly four characters to a token for English prose, plus the
+    # prompt itself. Output is one short JSON line per line of dialogue.
+    input_tokens = int(max(0, characters) / 4) + 700
+    output_tokens = int(max(0, characters) / 40) + 100
+
+    cost = None
+    try:
+        from app.ai.openrouter import list_models
+        models = await list_models(api_key, provider)
+        row = next((m for m in models if m.get("id") == model_id), None)
+        if row and (row.get("cost_input_per_million") or row.get("cost_output_per_million")):
+            cost = (input_tokens / 1_000_000 * float(row["cost_input_per_million"])
+                    + output_tokens / 1_000_000 * float(row["cost_output_per_million"]))
+    except Exception:
+        cost = None                      # unknown beats invented
+
+    return {
+        "model_id": model_id,
+        "provider_label": provider.label,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "price_known": cost is not None,
+        "cost_usd": round(cost, 4) if cost is not None else None,
+        "note": "" if cost is not None else
+                f"{provider.label} does not publish prices for this model, so "
+                "the cost cannot be quoted. Passes like this are normally a "
+                "few cents.",
+    }
+
+
 class AnalyzeSpeakersRequest(BaseModel):
     workspace_path: str
     # The editor's CURRENT text, so a writer can analyse work they have

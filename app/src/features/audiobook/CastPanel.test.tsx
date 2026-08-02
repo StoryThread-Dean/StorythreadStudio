@@ -61,8 +61,16 @@ const WITH_PRINT = {
   },
 };
 
-function mockFetch(initial = report(), options: unknown = DRAFT_ONLY) {
+function mockFetch(initial = report(), options: unknown = DRAFT_ONLY,
+                   proposals: unknown[] = []) {
   return vi.fn(async (url: string) => {
+    if (url.includes("/speaker-pass-estimate")) {
+      return { ok: true, json: async () => ({
+        model_id: "some/model", price_known: true, cost_usd: 0.03, note: "" }) };
+    }
+    if (url.includes("/analyze-speakers")) {
+      return { ok: true, json: async () => ({ proposals, dropped: 0 }) };
+    }
     if (url.includes("/speakers")) return { ok: true, json: async () => initial };
     if (url.includes("/voice-options")) return { ok: true, json: async () => options };
     if (url.includes("/preview")) return { ok: true, blob: async () => new Blob(["wav"]) };
@@ -82,6 +90,10 @@ async function open(fetchMock: ReturnType<typeof mockFetch>, content = BOOK) {
   await waitFor(() =>
     expect(screen.getByRole("button", { name: /Is this needed\?/ })).toBeTruthy());
   return { onContentChange, onSaved };
+}
+
+function pick(mode: string) {
+  fireEvent.change(screen.getByLabelText("Marking mode"), { target: { value: mode } });
 }
 
 afterEach(() => {
@@ -240,5 +252,147 @@ describe("CastPanel workbench", () => {
     fireEvent.click(screen.getByLabelText("Remove Lara"));
     expect(onContentChange).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Lara" })).toBeTruthy();
+  });
+  it("nothing runs until Start is pressed", async () => {
+    // A stray click on a dropdown must never spend money.
+    const fetchMock = mockFetch(CAST_WITH_TWO);
+    const { onContentChange } = await open(fetchMock);
+    pick("free-ai");
+    expect(onContentChange).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(
+      ([url]) => String(url).includes("/analyze-speakers"))).toBe(false);
+  });
+
+  it("quotes the cost of an AI mode before it is started", async () => {
+    await open(mockFetch(CAST_WITH_TWO));
+    pick("free-ai");
+    await waitFor(() =>
+      expect(screen.getByText(/About \$0\.03 for this chapter/)).toBeTruthy());
+  });
+
+  it("opens on the free rung and prices nothing until an AI mode is picked", async () => {
+    // A panel that opens already pointed at a paid action presumes.
+    const fetchMock = mockFetch(CAST_WITH_TWO);
+    await open(fetchMock);
+    expect(screen.getByText(/No AI, no cost, instant/)).toBeTruthy();
+    expect(fetchMock.mock.calls.some(
+      ([url]) => String(url).includes("estimate"))).toBe(false);
+
+    pick("free-ai");
+    await waitFor(() => expect(fetchMock.mock.calls.some(
+      ([url]) => String(url).includes("estimate"))).toBe(true));
+  });
+
+  it("the free pass marks what the prose already names, and asks for nothing", async () => {
+    // The rung that sits above every paid one: a tag the writer wrote is
+    // not a guess.
+    const fetchMock = mockFetch(CAST_WITH_TWO);
+    const { onContentChange } = await open(fetchMock);
+    pick("free");
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    await waitFor(() => expect(onContentChange).toHaveBeenCalled());
+    const next = onContentChange.mock.calls[0][0] as string;
+    expect(next).toContain('[voice:Lara]"This cannot continue,"[/voice]');
+    expect(next).toContain('[voice:Alexandra]"I heard a noise,"[/voice]');
+    expect(fetchMock.mock.calls.some(
+      ([url]) => String(url).includes("/analyze-speakers"))).toBe(false);
+    expect(screen.getByText(/Marked 2 lines from your own dialogue tags/)).toBeTruthy();
+  });
+
+  it("names anybody the prose speaks for who is not cast yet", async () => {
+    // Otherwise those lines silently stay with the narrator and the
+    // writer never learns why.
+    const soloCast = report({
+      speakers: [
+        { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
+          voice_id: "af_heart", premium_voice_id: "" },
+        { speaker_id: "character-lara", display_name: "Lara", role: "character",
+          voice_id: "bf_emma", premium_voice_id: "" },
+      ],
+    });
+    await open(mockFetch(soloCast));
+    pick("free");
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() =>
+      expect(screen.getByText(/Not cast yet: Alexandra/)).toBeTruthy());
+  });
+
+  it("Automatic + AI applies confident guesses and leaves the rest", async () => {
+    const book = '# Chapter One\n\n"Enough."\n\n"Or what?"\n';
+    const { onContentChange } = await open(
+      mockFetch(CAST_WITH_TWO, DRAFT_ONLY, [
+        { quote: '"Enough."', speaker: "Lara", confidence: 0.95 },
+        { quote: '"Or what?"', speaker: "Alexandra", confidence: 0.4 },
+      ]), book);
+    pick("free-ai");
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    await waitFor(() => expect(onContentChange).toHaveBeenCalled());
+    const next = onContentChange.mock.calls[0][0] as string;
+    expect(next).toContain('[voice:Lara]"Enough."[/voice]');
+    expect(next).not.toContain("[voice:Alexandra]");   // 0.4 is not confident
+  });
+
+  it("Fully automatic marks the unsure ones too, and offers to review them", async () => {
+    const book = '# Chapter One\n\n"Enough."\n\n"Or what?"\n';
+    const { onContentChange } = await open(
+      mockFetch(CAST_WITH_TWO, DRAFT_ONLY, [
+        { quote: '"Enough."', speaker: "Lara", confidence: 0.95 },
+        { quote: '"Or what?"', speaker: "Alexandra", confidence: 0.4 },
+      ]), book);
+    pick("auto");
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    await waitFor(() => expect(onContentChange).toHaveBeenCalled());
+    const next = onContentChange.mock.calls[0][0] as string;
+    expect(next).toContain('[voice:Lara]"Enough."[/voice]');
+    expect(next).toContain('[voice:Alexandra]"Or what?"[/voice]');
+    expect(screen.getByText(/Use Review AI choices to check its work/)).toBeTruthy();
+  });
+
+  it("an AI pass that fails leaves the manual walk working", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/analyze-speakers")) {
+        return { ok: false, status: 504,
+                 json: async () => ({ detail: "The model did not answer in time." }) };
+      }
+      if (url.includes("/speaker-pass-estimate")) {
+        return { ok: true, json: async () => ({
+          model_id: "m", price_known: false, cost_usd: null, note: "unknown" }) };
+      }
+      if (url.includes("/speakers")) return { ok: true, json: async () => CAST_WITH_TWO };
+      if (url.includes("/voice-options")) return { ok: true, json: async () => DRAFT_ONLY };
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    await open(fetchMock as never);
+    pick("free-ai");
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/did not answer in time/)).toBeTruthy());
+    expect(screen.getByText(/manual walk below still work/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Lara" })).toBeTruthy();
+  });
+
+  it("a pass never overrules a line the writer already decided", async () => {
+    // The writer outranks both their tags and the model.
+    const assigned = BOOK.replace('"This cannot continue,"',
+                                  '[voice:Alexandra]"This cannot continue,"[/voice]');
+    const { onContentChange } = await open(mockFetch(CAST_WITH_TWO), assigned);
+    pick("free");
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    await waitFor(() => expect(onContentChange).toHaveBeenCalled());
+    const next = onContentChange.mock.calls[0][0] as string;
+    // Still Alexandra, even though the prose says "Lara said".
+    expect(next).toContain('[voice:Alexandra]"This cannot continue,"[/voice]');
+    expect(next).not.toContain('[voice:Lara]"This cannot continue,"');
+  });
+
+  it("Start is refused until somebody is cast", async () => {
+    await open(mockFetch());
+    expect((screen.getByRole("button", { name: "Start" }) as HTMLButtonElement)
+      .disabled).toBe(true);
   });
 });

@@ -27,15 +27,18 @@ import {
   AlertTriangle, ChevronDown, ChevronRight, Loader2, Play, Plus, Users, X,
 } from "lucide-react";
 
-import { fetchCast, fetchVoiceOptions, previewVoice, saveCast } from "./api";
-import type { CastReport, VoiceRoster } from "./api";
+import {
+  analyzeSpeakers, fetchCast, fetchSpeakerPassEstimate, fetchVoiceOptions,
+  previewVoice, saveCast,
+} from "./api";
+import type { CastReport, SpeakerPassEstimate, VoiceRoster } from "./api";
 import { castColor, castTextColor } from "./castColors";
 import { DialogueWindow } from "./DialogueWindow";
 import {
-  chapterCast, chapterRanges, countCharacterUsage, removeCharacterMarkers,
-  scanDialogue, setStopVoice,
+  chapterCast, chapterRanges, countCharacterUsage, mergeAiGuesses,
+  removeCharacterMarkers, scanDialogue, setStopVoice,
 } from "./speakerScan";
-import type { ChapterRange } from "./speakerScan";
+import type { ChapterRange, DialogueStop } from "./speakerScan";
 
 interface CastPanelProps {
   workspacePath: string;
@@ -59,6 +62,32 @@ const SAMPLE_LINE =
 
 const NARRATOR = "Narrator";
 
+// How the chapter gets marked. The ladder is ordered by how much is done
+// FOR the writer, and the free rung sits above every paid one on purpose:
+// the prose usually names its own speakers ("...," Lara said), and a tag
+// the writer wrote is not a guess. The AI is only ever asked about what
+// is left over, which is both cheaper and the part it is good at.
+type PassMode = "manual" | "free" | "free-ai" | "auto";
+
+const MODES: { value: PassMode; label: string; blurb: string; usesAi: boolean }[] = [
+  { value: "manual", label: "Manual -- I'll do every line", usesAi: false,
+    blurb: "Nothing is decided for you. Walk the chapter and click who speaks." },
+  { value: "free", label: "Automatic (free) -- use my dialogue tags", usesAi: false,
+    blurb: "Marks every line your prose already names, and stops on the rest. "
+         + "No AI, no cost, instant." },
+  { value: "free-ai", label: "Automatic + AI -- recommended", usesAi: true,
+    blurb: "Your tags first, then the AI names the lines it is confident "
+         + "about. Stops on anything it is unsure of." },
+  { value: "auto", label: "Fully automatic (AI) -- expect mistakes", usesAi: true,
+    blurb: "Marks every line, including the ones the AI is unsure about. "
+         + "Fastest, and the one that needs reviewing afterwards." },
+];
+
+// Above this, an AI guess is confident enough to apply without asking.
+// A model's own number is not calibrated -- it is a ranking, not a
+// probability -- so this is a tuned threshold, not a promise.
+const CONFIDENT = 0.8;
+
 export function CastPanel({
   workspacePath, content, onContentChange, onClose, onSaved,
 }: CastPanelProps) {
@@ -77,6 +106,19 @@ export function CastPanel({
   const [chapterIndex, setChapterIndex] = useState(0);
   const [stopIndex, setStopIndex] = useState(0);
   const [showOthers, setShowOthers] = useState(false);
+  // Opens on the free rung, not the recommended one. A panel that opens
+  // already pointed at a paid action presumes; the recommendation is
+  // labelled in the list where the writer can choose it deliberately.
+  const [mode, setMode] = useState<PassMode>("free");
+  const [passState, setPassState] = useState<"idle" | "running">("idle");
+  const [passNote, setPassNote] = useState<string | null>(null);
+  const [estimate, setEstimate] = useState<SpeakerPassEstimate | null>(null);
+  // Provenance, session-only: which lines the AI decided rather than the
+  // writer or their own tags. Keyed by the line's first quoted words,
+  // which survive the offsets shifting underneath. This is what makes
+  // the fastest mode safe -- the review is scoped instead of a hunt.
+  const [aiMarked, setAiMarked] = useState<Set<string>>(new Set());
+  const [reviewOnly, setReviewOnly] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // ── The cast ────────────────────────────────────────────────────────
@@ -201,9 +243,17 @@ export function CastPanel({
 
   const chapters = useMemo<ChapterRange[]>(() => chapterRanges(content), [content]);
   const chapter = chapters[Math.min(chapterIndex, chapters.length - 1)];
-  const stops = useMemo(
+  const allStops = useMemo(
     () => (chapter ? scanDialogue(content, chapter) : []),
     [content, chapter]);
+  // "Review AI choices" narrows the walk to the lines the model decided,
+  // which is what makes the fastest mode safe to use: checking twenty
+  // guesses is work, hunting for them in a hundred lines is not.
+  const stops = useMemo(
+    () => (reviewOnly
+      ? allStops.filter(s => aiMarked.has(s.quotes[0]?.text ?? ""))
+      : allStops),
+    [allStops, reviewOnly, aiMarked]);
   const stop = stops[stopIndex] ?? null;
 
   const castNames = useMemo(
@@ -220,8 +270,10 @@ export function CastPanel({
   }, [content, chapter, castNames]);
   const others = castNames.filter(n => !present.includes(n));
 
-  const assignedCount = stops.filter(s => s.assigned).length;
-  const remaining = stops.length - assignedCount;
+  const assignedCount = allStops.filter(s => s.assigned).length;
+  const remaining = allStops.length - assignedCount;
+  const aiCount = allStops.filter(
+    s => s.assigned && aiMarked.has(s.quotes[0]?.text ?? "")).length;
 
   // Start on the first undecided line -- the writer opened this to work,
   // not to scroll past what they already did.
@@ -230,6 +282,103 @@ export function CastPanel({
     setStopIndex(first < 0 ? 0 : first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapterIndex]);
+
+  // ── Running a pass ──────────────────────────────────────────────────
+
+  const chapterChars = chapter ? chapter.end - chapter.start : 0;
+  const activeMode = MODES.find(m => m.value === mode)!;
+
+  // Only fetched when a paid mode is picked, and only for this chapter.
+  useEffect(() => {
+    if (!activeMode.usesAi || !chapterChars) { setEstimate(null); return; }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const fresh = await fetchSpeakerPassEstimate(workspacePath, chapterChars);
+        if (!cancelled) setEstimate(fresh);
+      } catch { if (!cancelled) setEstimate(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [activeMode.usesAi, chapterChars, workspacePath]);
+
+  /** Apply a batch of decisions in one pass over the buffer.
+   *
+   *  Right to left, so each splice leaves the earlier offsets valid --
+   *  and never over a line the writer already decided: their answer
+   *  outranks both their tags and the model.
+   */
+  function applyBatch(decided: Array<{ stop: DialogueStop; name: string }>,
+                      fromAi: Set<string>) {
+    let next = content;
+    for (const { stop, name } of [...decided].reverse()) {
+      next = setStopVoice(next, stop, name);
+    }
+    if (next !== content) onContentChange(next);
+    if (fromAi.size) {
+      setAiMarked(prev => new Set([...prev, ...fromAi]));
+    }
+  }
+
+  async function runPass() {
+    if (!chapter || passState === "running") return;
+    setPassNote(null);
+    const inCast = (name: string) =>
+      rows.some(r => r.display_name.trim().toLowerCase() === name.trim().toLowerCase());
+
+    // The free rung, always: every line the writer's own prose names.
+    const open = stops.filter(s => !s.assigned);
+    const tagged = open.filter(s => s.guessSource === "tag" && inCast(s.guess));
+    const uncast = [...new Set(open
+      .filter(s => s.guess && !inCast(s.guess))
+      .map(s => s.guess))];
+
+    if (mode === "manual") {
+      setPassNote("Manual: nothing was decided for you. Walk the lines below.");
+      return;
+    }
+
+    if (mode === "free") {
+      applyBatch(tagged.map(s => ({ stop: s, name: s.guess })), new Set());
+      setPassNote(
+        `Marked ${tagged.length} line${tagged.length === 1 ? "" : "s"} from your `
+        + `own dialogue tags. ${open.length - tagged.length} left to decide.`
+        + (uncast.length ? ` Not cast yet: ${uncast.join(", ")}.` : ""));
+      return;
+    }
+
+    // The AI rungs. The free pass runs FIRST, so the model is only ever
+    // asked about what the prose did not already answer.
+    setPassState("running");
+    try {
+      const body = content.slice(chapter.start, chapter.end);
+      const result = await analyzeSpeakers(workspacePath, body.slice(0, 24000));
+      const merged = mergeAiGuesses(stops, result.proposals);
+      const decided: Array<{ stop: DialogueStop; name: string }> = [];
+      const fromAi = new Set<string>();
+      for (const stop of merged) {
+        if (stop.assigned || !stop.guess || !inCast(stop.guess)) continue;
+        const sure = stop.guessSource === "tag"
+          || (stop.confidence ?? 0) >= CONFIDENT;
+        if (mode === "auto" || sure) {
+          decided.push({ stop, name: stop.guess });
+          if (stop.guessSource === "ai") fromAi.add(stop.quotes[0].text);
+        }
+      }
+      applyBatch(decided, fromAi);
+      const left = open.length - decided.length;
+      setPassNote(
+        `Marked ${decided.length} line${decided.length === 1 ? "" : "s"} `
+        + `(${tagged.length} from your tags, ${fromAi.size} by AI). `
+        + `${left} left to decide.`
+        + (fromAi.size ? " Use Review AI choices to check its work." : "")
+        + (uncast.length ? ` Not cast yet: ${uncast.join(", ")}.` : ""));
+    } catch (e) {
+      setPassNote((e instanceof Error ? e.message : "The AI pass failed.")
+        + " Your tags and the manual walk below still work.");
+    } finally {
+      setPassState("idle");
+    }
+  }
 
   const assign = useCallback((name: string | null) => {
     if (!stop) return;
@@ -585,6 +734,55 @@ export function CastPanel({
                   </span>
                 </div>
 
+                {/* The ladder. Nothing runs until Start, so a stray
+                    click can never spend money, and the cost of the
+                    chosen mode is on screen before it is pressed. */}
+                <div className="mb-2 rounded border border-zinc-800 bg-zinc-950/40 px-2.5 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      aria-label="Marking mode"
+                      value={mode}
+                      onChange={e => { setMode(e.target.value as PassMode);
+                                       setPassNote(null); }}
+                      className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
+                    >
+                      {MODES.map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => void runPass()}
+                      disabled={passState === "running" || rows.length === 0}
+                      title={rows.length === 0
+                        ? "Add a character first -- there is nobody to mark lines as."
+                        : "Run this mode over the chapter"}
+                      className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    >
+                      {passState === "running"
+                        && <Loader2 size={11} className="animate-spin" />}
+                      Start
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+                    {activeMode.blurb}
+                    {activeMode.usesAi && (
+                      <span className="ml-1 text-zinc-400">
+                        {estimate === null ? "Working out the cost..."
+                          : estimate.price_known
+                            ? `About ${estimate.cost_usd !== null && estimate.cost_usd < 0.01
+                                ? "a cent" : `$${(estimate.cost_usd ?? 0).toFixed(2)}`}`
+                              + ` for this chapter on ${estimate.model_id}.`
+                            : estimate.note}
+                      </span>
+                    )}
+                  </p>
+                  {passNote && (
+                    <p className="mt-1 text-[10px] leading-relaxed text-violet-300">
+                      {passNote}
+                    </p>
+                  )}
+                </div>
+
                 {/* Who is in this chapter -- one click each. */}
                 <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                   {present.map(name => {
@@ -679,9 +877,20 @@ export function CastPanel({
                   )}
                 </div>
 
-                <p className="mt-2 flex flex-wrap gap-x-3 text-[10px] text-zinc-500">
+                <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-500">
                   <span>{remaining} line{remaining === 1 ? "" : "s"} left</span>
                   <span>{assignedCount} assigned</span>
+                  {aiCount > 0 && (
+                    <button
+                      onClick={() => { setReviewOnly(v => !v); setStopIndex(0); }}
+                      className={"rounded border px-1.5 py-0.5 text-[10px] "
+                        + (reviewOnly
+                          ? "border-violet-500 text-violet-200"
+                          : "border-zinc-700 text-zinc-400 hover:border-violet-600")}
+                    >
+                      {reviewOnly ? "Reviewing AI choices" : `Review ${aiCount} AI choice${aiCount === 1 ? "" : "s"}`}
+                    </button>
+                  )}
                   <span>{present.length - 1} character{present.length - 1 === 1 ? "" : "s"} in this chapter</span>
                   <span className="text-zinc-600">
                     Markers go to the editor only -- press Save there to keep them.
