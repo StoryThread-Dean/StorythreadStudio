@@ -18,26 +18,31 @@ import { CastPanel } from "./CastPanel";
 
 const WS = "C:/books/hollow-road-audio";
 
-// The voice roster as the panel now reads it: grouped by engine, each
-// group saying whether THIS book can use it.
-const VOICE_OPTIONS = {
-  current_label: "your local narrator",
-  current_provider: "local-kokoro",
-  groups: [
-    { key: "local-kokoro:", label: "Free -- your local narrator", tier: "free",
-      provider: "local-kokoro", model: "", is_current: true, usable: true,
-      free_preview: true, note: "",
-      voices: [
-        { id: "af_heart", label: "Heart (American female)" },
-        { id: "bf_emma", label: "Emma (British female)" },
-      ] },
-    { key: "openrouter:deepgram/aura-2", label: "Pro -- Deepgram Aura-2 (OpenRouter)",
-      tier: "pro", provider: "openrouter", model: "deepgram/aura-2",
-      is_current: false, usable: false, free_preview: false,
-      note: "No OpenRouter API key is connected, so these voices cannot "
-          + "narrate yet. Add one in Audiobook Settings.",
-      voices: [{ id: "thalia", label: "Thalia (American female)" }] },
-  ],
+// Two rosters, because the app has two narration passes at once. The
+// local one is always offered; the print one only when an engine is
+// chosen AND its key is connected.
+const DRAFT_ONLY = {
+  draft: {
+    label: "Free -- your local narrator", installed: true, note: "",
+    voices: [
+      { id: "af_heart", label: "Heart (American female)" },
+      { id: "bf_emma", label: "Emma (British female)" },
+    ],
+  },
+  print: {
+    configured: false, has_api_key: false, voices: [], label: "",
+    note: "No print engine is chosen, so this book prints with whatever you "
+        + "pick in Audiobook Settings.",
+  },
+};
+
+const WITH_PRINT = {
+  draft: DRAFT_ONLY.draft,
+  print: {
+    configured: true, has_api_key: true, label: "Deepgram Aura-2 (OpenRouter)",
+    tier_label: "Pro", note: "",
+    voices: [{ id: "thalia", label: "Thalia (American female)" }],
+  },
 };
 
 function report(over: Partial<Record<string, unknown>> = {}) {
@@ -52,7 +57,7 @@ function report(over: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function mockFetch(initial = report()) {
+function mockFetch(initial = report(), options: unknown = DRAFT_ONLY) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     if (url.includes("/speakers") && (init?.method ?? "GET") === "PUT") {
       const body = JSON.parse(String(init?.body));
@@ -69,7 +74,7 @@ function mockFetch(initial = report()) {
       }) };
     }
     if (url.includes("/speakers")) return { ok: true, json: async () => initial };
-    if (url.includes("/voice-options")) return { ok: true, json: async () => VOICE_OPTIONS };
+    if (url.includes("/voice-options")) return { ok: true, json: async () => options };
     if (url.includes("/preview")) return { ok: true, blob: async () => new Blob(["wav"]) };
     throw new Error(`unexpected fetch ${url}`);
   });
@@ -99,7 +104,7 @@ afterEach(() => {
 describe("CastPanel", () => {
   it("offers the names the manuscript already uses", async () => {
     await open(mockFetch());
-    expect(screen.getByText(/not in the cast yet/)).toBeTruthy();
+    expect(screen.getByText(/Already in your narration/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Elena" }));
     expect((screen.getByLabelText("Character 1 name") as HTMLInputElement).value)
@@ -121,7 +126,9 @@ describe("CastPanel", () => {
 
     await waitFor(() => expect(putBodies(fetchMock).length).toBe(1));
     const body = putBodies(fetchMock)[0];
-    expect(body.speakers).toEqual([{ display_name: "Elena", voice_id: "bf_emma" }]);
+    expect(body.speakers).toEqual([
+      { display_name: "Elena", voice_id: "bf_emma", premium_voice_id: "" },
+    ]);
     expect(body.narrator_voice).toBe("af_heart");
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
@@ -143,12 +150,15 @@ describe("CastPanel", () => {
     expect(putBodies(fetchMock)).toEqual([]);
   });
 
-  it("says that one book means one engine", async () => {
-    // The rule that stops a cast from mixing the free narrator with a
-    // paid engine -- which would price and fail line by line.
+  it("explains the cost question where a writer will ask it", async () => {
+    // "Does casting cost more?" is the question that stops people
+    // trying the feature at all. The answer is no, and it belongs one
+    // click away rather than in a paragraph nobody reads.
     await open(mockFetch());
-    fireEvent.click(screen.getByText(/Can characters use different engines\?/));
-    expect(screen.getByText(/one book, one engine/)).toBeTruthy();
+    fireEvent.click(screen.getByText(/Does casting cost more\?/));
+    expect(screen.getByText(/free and unlimited/)).toBeTruthy();
+    expect(screen.getByText(/billed by the character whether one voice/))
+      .toBeTruthy();
   });
 
   it("a character with no voice reads as the narrator, and says so", async () => {
@@ -158,36 +168,54 @@ describe("CastPanel", () => {
     expect(select.value).toBe("");
     expect(screen.getAllByText("Same as the narrator").length).toBeGreaterThan(0);
   });
-  it("answers the first question a writer has: does this work for free?", async () => {
-    // The panel used to open with a cast list and no context, so the
-    // writer's own first reaction was "wait, can I even do this on
-    // local generation?" -- after which they might invest an afternoon
-    // before finding out.
+  it("says in one line that this is free, and shows the marker", async () => {
+    // The writer's own first reaction was "wait, can I even do this on
+    // local generation?". The answer is the first thing on screen, and
+    // it fits on one line -- the wall of text it replaced is now behind
+    // What's this.
     await open(mockFetch());
-    expect(screen.getByText(/works on the free local narrator/)).toBeTruthy();
-    expect(screen.getByText(/Before you cast a whole novel, the limits/))
-      .toBeTruthy();
-    expect(screen.getByText(/One book, one engine\./)).toBeTruthy();
-    expect(screen.getByText(/not\s+performances\./)).toBeTruthy();
+    expect(screen.getByText(/Free on your local narrator/)).toBeTruthy();
+    expect(screen.getByText("[voice:Elena]")).toBeTruthy();
   });
 
-  it("groups voices by engine and disables the ones this book cannot use", async () => {
-    await open(mockFetch());
-    const select = screen.getByLabelText("Narrator voice") as HTMLSelectElement;
-    const groups = Array.from(select.querySelectorAll("optgroup"));
-    expect(groups.map(g => g.label)).toEqual([
-      "Free -- your local narrator",
-      "Pro -- Deepgram Aura-2 (OpenRouter) -- unavailable",
-    ]);
-    const hosted = select.querySelector('option[value="thalia"]') as HTMLOptionElement;
-    expect(hosted.disabled).toBe(true);
+  it("always offers the local roster, print engine or not", async () => {
+    // Live finding: choosing a hosted print engine greyed out EVERY
+    // local voice -- the ones the writer had been drafting with all
+    // along. Availability is not "is this the current engine".
+    await open(mockFetch(report(), WITH_PRINT));
+    const draft = screen.getByLabelText("Narrator voice") as HTMLSelectElement;
+    const enabled = Array.from(draft.querySelectorAll("option"))
+      .filter(o => !o.disabled).map(o => o.value);
+    expect(enabled).toContain("af_heart");
+    expect(enabled).toContain("bf_emma");
   });
 
-  it("says WHY an engine's voices are unavailable, on screen", async () => {
-    // Greyed-out options with no reason read as a bug.
+  it("offers a print voice only when a print engine is connected", async () => {
     await open(mockFetch());
-    expect(screen.getByText(/No OpenRouter API key is connected/)).toBeTruthy();
-    expect(screen.getByText(/Add one in Audiobook Settings/)).toBeTruthy();
+    expect(screen.queryByLabelText("Narrator print voice")).toBeNull();
+
+    cleanup();
+    await open(mockFetch(report(), WITH_PRINT));
+    const print = screen.getByLabelText("Narrator print voice") as HTMLSelectElement;
+    expect(Array.from(print.querySelectorAll("option")).map(o => o.value))
+      .toContain("thalia");
+  });
+
+  it("does not warn about engines nobody chose", async () => {
+    // Live finding: the panel opened with five alert tiles for engines
+    // the writer had never selected.
+    await open(mockFetch());
+    expect(screen.queryByText(/API key is connected/)).toBeNull();
+    expect(screen.queryByText(/Switch engines/)).toBeNull();
+  });
+
+  it("warns once when the chosen print engine has no key", async () => {
+    await open(mockFetch(report(), {
+      draft: DRAFT_ONLY.draft,
+      print: { configured: true, has_api_key: false, label: "Deepgram Aura-2",
+               voices: [], note: "No OpenRouter API key is connected." },
+    }));
+    expect(screen.getAllByText(/No OpenRouter API key is connected/)).toHaveLength(1);
   });
 
   it("samples a local voice for free", async () => {
@@ -203,14 +231,24 @@ describe("CastPanel", () => {
       ([url]) => String(url).includes("/preview"))).toBe(true));
   });
 
-  it("cannot sample a hosted voice from here, and says where to", async () => {
-    // Hosted auditions cost money and belong behind the cost-quoted
-    // flow in the Premium Narration panel.
+  it("keeps the deep explanation behind What's this, not on the page", async () => {
+    // The panel used to open with a wall of text nobody would read. One
+    // line and an example up front; depth on request.
     await open(mockFetch());
-    fireEvent.change(screen.getByLabelText("Narrator voice"),
-                     { target: { value: "thalia" } });
-    const button = screen.getByLabelText("Sample Narrator voice") as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(button.title).toMatch(/Premium Narration panel/);
+    expect(screen.queryByText(/A voice is not a performance/)).toBeNull();
+    fireEvent.click(screen.getByText(/What are the limits\?/));
+    expect(screen.getByText(/A voice is not a performance/)).toBeTruthy();
+  });
+
+  it("offers the marking tools here, and only once somebody is cast", async () => {
+    // They exist ONLY for a writer who chose to use a cast, so they do
+    // not belong on the main toolbar.
+    await open(mockFetch());
+    expect((screen.getByRole("button", { name: /Cast Walkthrough/ }) as HTMLButtonElement)
+      .disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Elena" }));
+    expect((screen.getByRole("button", { name: /Mark selection/ }) as HTMLButtonElement)
+      .disabled).toBe(false);
   });
 });

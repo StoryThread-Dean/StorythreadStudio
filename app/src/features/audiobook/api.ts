@@ -689,7 +689,10 @@ export interface Speaker {
   speaker_id: string;
   display_name: string;
   role: "narrator" | "character";
+  /** Local voice, used when drafting. */
   voice_id: string;
+  /** Hosted voice, used on a print pass. */
+  premium_voice_id: string;
 }
 
 export interface CastReport {
@@ -708,42 +711,41 @@ export async function fetchCast(workspacePath: string): Promise<CastReport> {
 
 export async function saveCast(
   workspacePath: string,
-  speakers: { display_name: string; voice_id: string }[],
+  speakers: { display_name: string; voice_id: string; premium_voice_id?: string }[],
   narratorVoice?: string,
+  narratorPremiumVoice?: string,
 ): Promise<CastReport> {
   const res = await fetch(`${API_BASE}/api/audiobook/speakers`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       workspace_path: workspacePath,
-      speakers,
+      speakers: speakers.map(s => ({ premium_voice_id: "", ...s })),
       narrator_voice: narratorVoice ?? null,
+      narrator_premium_voice: narratorPremiumVoice ?? null,
     }),
   });
   return toJson<CastReport>(res);
 }
 
-/** Every voice the app knows, grouped by engine, each group saying
- *  whether THIS book can actually use it. */
-export interface VoiceGroup {
-  key: string;
-  label: string;
-  tier: string;
-  provider: string;
-  model: string;
-  is_current: boolean;
-  /** Castable right now. False = real voices, not reachable from here. */
-  usable: boolean;
-  /** Auditioning costs nothing (the local narrator). */
-  free_preview: boolean;
-  /** Why it is not usable, in the writer's terms. "" when it is. */
-  note: string;
+/** The two rosters a cast needs, because the app has two narration
+ *  passes at once: the free local narrator a book is drafted with, and
+ *  the hosted engine it may be printed with. Voice ids do not carry
+ *  between them. */
+export interface VoiceRoster {
+  label?: string;
+  installed?: boolean;
+  configured?: boolean;
+  tier_label?: string;
+  has_api_key?: boolean;
   voices: { id: string; label: string }[];
+  /** Why it is empty or unusable, in the writer's terms. "" when fine. */
+  note: string;
 }
 
 export async function fetchVoiceOptions(
   workspacePath: string,
-): Promise<{ groups: VoiceGroup[]; current_label: string; current_provider: string }> {
+): Promise<{ draft: VoiceRoster; print: VoiceRoster }> {
   const res = await fetch(
     `${API_BASE}/api/audiobook/voice-options?workspace_path=${encodeURIComponent(workspacePath)}`,
   );

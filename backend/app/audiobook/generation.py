@@ -150,6 +150,23 @@ def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
     return "sha256-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
+def _is_hosted_provider(provider_key: str) -> bool:
+    """True for a paid narration provider, false for the local narrator
+    (and for the fake backends tests generate with).
+
+    Asked as "is this one of the hosted providers" rather than "is this
+    not local" on purpose: the question being answered is which of a
+    speaker's two voices to use, and only a real hosted engine has a
+    print roster. Anything else is drafting.
+    """
+    from app.audiobook import tts_providers
+    return provider_key in tts_providers.PROVIDERS
+
+
+def _is_print_pass(backend: SynthesisBackend) -> bool:
+    return _is_hosted_provider(backend.key)
+
+
 def segment_layout(segment: dict) -> str:
     """A flow segment's fragment layout as a basis fingerprint: the
     fragment character lengths, which move whenever a mid-paragraph
@@ -297,8 +314,16 @@ def audio_status(workspace_path: str) -> dict:
         for item in chapter["items"]:
             if item.get("kind") != "segment":
                 continue
+            # Which roster this segment's audio came from -- a hosted
+            # segment is measured against the print voice, a local one
+            # against the draft voice. Getting this wrong would report a
+            # correctly narrated cast book as permanently outdated.
+            was_premium = _is_hosted_provider(item.get("provider", ""))
             expected_voice = workspace.voice_for_speaker(
-                item.get("voice", ""), cast, narrator_voice)
+                item.get("voice", ""), cast,
+                str(book_manifest.get("selected_premium_voice") or "") if was_premium
+                else narrator_voice,
+                premium=was_premium)
             verdict = segment_audio_state(item, rules, settings, expected_voice)
             counts[verdict["state"]] += 1
             totals[verdict["state"]] += 1
@@ -360,6 +385,7 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
         # The cast maps [voice:NAME] spans to voice ids. Read once per
         # run: recasting mid-run would give one chapter two voices.
         cast = workspace.speakers(book)
+        is_premium = _is_print_pass(backend)
 
         queue_ids: list[str] = []
         for chapter in manifest["chapters"]:
@@ -376,7 +402,8 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
                 basis = payload_basis(
                     pronunciation.prepare_tts_text(item["text"], rules),
                     backend,
-                    workspace.voice_for_speaker(item.get("voice", ""), cast, voice_id),
+                    workspace.voice_for_speaker(item.get("voice", ""), cast, voice_id,
+                                                premium=is_premium),
                     effective_pace(item, settings),
                     layout=segment_layout(item), draft=draft,
                 )
@@ -433,6 +460,7 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
         book = workspace.load_manifest(workspace_path)
         settings = workspace.narration_settings(book)
         cast = workspace.speakers(book)
+        is_premium = _is_print_pass(backend)
         for segment_id in queue_ids:
             # Control flags are honored BETWEEN segments only -- a segment
             # in flight always finishes (or fails) before the run stops.
@@ -450,7 +478,7 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             # One segment, one voice: the span's name resolved against
             # the cast, falling back to the run's narrator voice.
             segment_voice = workspace.voice_for_speaker(
-                segment.get("voice", ""), cast, voice_id)
+                segment.get("voice", ""), cast, voice_id, premium=is_premium)
             _generate_one(workspace_path, backend, segment_voice, rules, settings,
                           segment, draft=draft)
 

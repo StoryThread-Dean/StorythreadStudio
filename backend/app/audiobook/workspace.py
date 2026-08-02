@@ -94,11 +94,19 @@ def narration_settings(manifest: dict) -> dict:
 #
 # Two rules hold the design together:
 #
-#   ONE RUN, ONE ENGINE. Speakers choose a VOICE, never a provider. A
-#   cast that mixed the local narrator with a hosted engine would price
-#   and fail per line, and half a chapter could come back in a voice the
-#   writer never paid for. The book's engine is chosen once, in Audiobook
-#   Settings, exactly as before.
+#   A SPEAKER HAS TWO VOICES, ONE PER PASS. This app's whole workflow is
+#   "draft locally, print premium", so a book has two narration paths at
+#   once: the free local narrator it is drafted with, and the hosted
+#   engine it may be printed with. Voice ids do not carry across -- the
+#   rosters are different -- so each speaker holds a DRAFT voice (local)
+#   and optionally a PRINT voice (that book's hosted engine). Generation
+#   picks whichever matches the engine actually running.
+#
+#   An earlier build stored one voice and decided availability by "is
+#   this the book's current engine", which greyed out the entire local
+#   roster the moment a hosted engine was chosen -- for a writer whose
+#   local voices were the ones they had been using all along (live
+#   finding).
 #
 #   NAMES, NOT IDS. The narration copy says [voice:Elena]; the cast maps
 #   Elena to a voice id. Recasting a character is one edit in the cast,
@@ -119,6 +127,10 @@ def _narrator_entry(manifest: dict) -> dict:
         "display_name": NARRATOR_NAME,
         "role": "narrator",
         "voice_id": str(manifest.get("selected_voice") or ""),
+        # The book's premium voice has lived in the manifest since Stage
+        # D; the narrator simply reads it, so the two places that set it
+        # (the Premium panel and the cast) can never disagree.
+        "premium_voice_id": str(manifest.get("selected_premium_voice") or ""),
     }
 
 
@@ -141,8 +153,11 @@ def speakers(manifest: dict) -> list[dict]:
         if not name or name.lower() == NARRATOR_NAME.lower():
             # The narrator is synthesized above; a stored duplicate would
             # give the cast two entries answering to the same name.
-            if name.lower() == NARRATOR_NAME.lower() and raw.get("voice_id"):
-                cast[0]["voice_id"] = str(raw["voice_id"])
+            if name.lower() == NARRATOR_NAME.lower():
+                if raw.get("voice_id"):
+                    cast[0]["voice_id"] = str(raw["voice_id"])
+                if raw.get("premium_voice_id"):
+                    cast[0]["premium_voice_id"] = str(raw["premium_voice_id"])
             continue
         if any(name.lower() == existing["display_name"].lower() for existing in cast):
             continue                       # first one wins; names are the key
@@ -152,22 +167,33 @@ def speakers(manifest: dict) -> list[dict]:
             "display_name": name,
             "role": "character",
             "voice_id": str(raw.get("voice_id") or ""),
+            "premium_voice_id": str(raw.get("premium_voice_id") or ""),
         })
     return cast
 
 
-def voice_for_speaker(name: str, cast: list[dict], default_voice: str) -> str:
-    """The voice id a [voice:NAME] span should narrate in.
+def voice_for_speaker(name: str, cast: list[dict], default_voice: str,
+                      premium: bool = False) -> str:
+    """
+    The voice id a [voice:NAME] span should narrate in, for the pass that
+    is actually running.
 
-    An unknown name falls back to the narrator's voice rather than
-    failing the run. A misspelt name in one paragraph must not stop a
-    book from generating -- the editor warns about it at save time, which
-    is where the writer can actually fix it.
+    `premium=True` means a hosted engine is generating, so the speaker's
+    PRINT voice is used; a speaker who has not been given one falls back
+    to the run's default rather than sending a local voice id to a hosted
+    engine that has never heard of it.
+
+    An unknown NAME also falls back to the default rather than failing
+    the run. A misspelt name in one paragraph must not stop a book from
+    generating -- the editor warns about it at save time, which is where
+    the writer can actually fix it.
     """
     if name:
         for entry in cast:
             if entry["display_name"].lower() == name.strip().lower():
-                return entry["voice_id"] or default_voice
+                chosen = (entry.get("premium_voice_id") if premium
+                          else entry.get("voice_id"))
+                return str(chosen or "") or default_voice
     return default_voice
 
 

@@ -1000,16 +1000,20 @@ def get_speakers(workspace_path: str):
 @router.get("/voice-options")
 def get_voice_options(workspace_path: str):
     """
-    Every voice this app knows, grouped by engine and tier, each group
-    saying plainly whether this book can actually use it.
+    The two rosters a cast actually needs, because this app has two
+    narration passes at once (the headline workflow is "draft locally,
+    print premium"):
 
-    Three states a writer needs to tell apart at a glance, and could not
-    before: the free local roster (usable now, unlimited), a paid
-    engine's roster this book is not using (real, but switching engines
-    is a deliberate act), and a paid engine with no API key connected
-    (not an option until they connect one). Hiding the last two would
-    make the cast look impoverished; offering them silently would let
-    someone cast a book against voices that cannot speak.
+      DRAFT -- the free local narrator. Always offered when installed.
+      PRINT -- the hosted engine this book is set to print with, offered
+               only when one is chosen AND its key is connected.
+
+    An earlier build asked instead "is this the book's CURRENT engine",
+    which greyed out the whole local roster the moment a hosted engine
+    was chosen, and papered the panel with a warning tile for every
+    engine the writer had not picked. Both were wrong: the local voices
+    were the ones they had been drafting with all along, and an engine
+    nobody selected does not need an alert (live finding).
     """
     _require_workspace(workspace_path)
     from app.audiobook import tts_providers
@@ -1018,18 +1022,7 @@ def get_voice_options(workspace_path: str):
     manifest = workspace.load_manifest(workspace_path)
     settings = load_settings()
     selection = tts_providers.resolve_narration_selection(settings, manifest)
-    # No DELIBERATE hosted choice means the book is on the free local
-    # narrator -- the default and the common case. The resolver's level-3
-    # fallback names the writing side's chat model, which is a report
-    # about settings, not an engine this book narrates with.
-    chose_hosted = selection.get("source") in ("book", "settings")
-    current_provider = (selection.get("provider") or "") if chose_hosted else "local-kokoro"
-    current_model = (selection.get("model") or "") if chose_hosted else ""
 
-    groups: list[dict] = []
-
-    # The free local narrator always leads -- it is the default engine
-    # and the only one that costs nothing.
     local_voices: list[dict] = []
     try:
         local_voices = [
@@ -1039,65 +1032,59 @@ def get_voice_options(workspace_path: str):
         # Engine not installed yet. Say so rather than showing an empty
         # list that looks like a bug.
         local_voices = []
-    local_current = current_provider == "local-kokoro"
-    groups.append({
-        "key": "local-kokoro:",
+
+    draft = {
         "label": "Free -- your local narrator",
-        "tier": "free",
-        "provider": "local-kokoro",
-        "model": "",
-        "is_current": local_current,
-        "usable": local_current and bool(local_voices),
-        "free_preview": True,
+        "installed": bool(local_voices),
+        "voices": local_voices,
         "note": ("" if local_voices else
                  "The free narrator is not installed yet. Install it in the "
-                 "narration panel to see its voices."),
-        "voices": local_voices,
-    })
-
-    for provider in tts_providers.catalog():
-        config = tts_providers.PROVIDERS[provider["provider"]]
-        has_key = bool(tts_providers.narration_api_key(settings, config).strip())
-        for model in provider["models"]:
-            is_current = (provider["provider"] == current_provider
-                          and model["id"] == current_model)
-            if has_key:
-                note = "" if is_current else (
-                    "This book narrates with "
-                    f"{selection.get('model_label') if chose_hosted else 'the free local narrator'}. "
-                    "Switch engines in Audiobook Settings to cast from these."
-                )
-            else:
-                note = (f"No {provider['provider_label']} API key is connected, "
-                        "so these voices cannot narrate yet. Add one in "
-                        "Audiobook Settings.")
-            groups.append({
-                "key": f"{provider['provider']}:{model['id']}",
-                "label": f"{tts_providers.TIER_LABELS.get(model['tier'], model['tier'])}"
-                         f" -- {model['label']} ({provider['provider_label']})",
-                "tier": model["tier"],
-                "provider": provider["provider"],
-                "model": model["id"],
-                "is_current": is_current,
-                "usable": is_current and has_key,
-                # Hosted auditions cost money and live behind the
-                # cost-quoted flow in the Premium Narration panel.
-                "free_preview": False,
-                "note": note,
-                "voices": [{"id": v["id"], "label": v["label"]} for v in model["voices"]],
-            })
-
-    return {
-        "groups": groups,
-        "current_label": (selection.get("model_label") if chose_hosted
-                          else "your local narrator"),
-        "current_provider": current_provider,
+                 "narration panel, then reopen the cast."),
     }
+
+    # A hosted engine only counts when it was deliberately chosen: the
+    # resolver's level-3 fallback names the writing side's CHAT model,
+    # which is a report about settings rather than an engine that
+    # narrates.
+    chose_hosted = selection.get("source") in ("book", "settings")
+    print_roster: dict = {
+        "configured": False,
+        "label": "",
+        "tier_label": "",
+        "has_api_key": False,
+        "voices": [],
+        "note": "No print engine is chosen, so this book prints with "
+                "whatever you pick in Audiobook Settings. Draft voices are "
+                "all you need until then.",
+    }
+    if chose_hosted:
+        voices, _fallback = tts_providers.voices_for(
+            selection["provider"], selection["model"])
+        has_key = bool(selection.get("has_api_key"))
+        print_roster = {
+            "configured": True,
+            "label": f"{selection.get('model_label')} "
+                     f"({selection.get('provider_label')})",
+            "tier_label": selection.get("tier_label", ""),
+            "has_api_key": has_key,
+            "voices": [{"id": v["id"], "label": v["label"]} for v in voices],
+            "note": "" if has_key else (
+                f"No {selection.get('provider_label')} API key is connected, "
+                "so these voices cannot narrate yet. Add one in Audiobook "
+                "Settings."
+            ),
+        }
+
+    return {"draft": draft, "print": print_roster}
 
 
 class SpeakerEntry(BaseModel):
     display_name: str = Field(min_length=1, max_length=60)
+    # Two voices per speaker, one per pass: the free local narrator this
+    # book is drafted with, and the hosted engine it may be printed with.
+    # Voice ids do not carry between rosters.
     voice_id: str = ""
+    premium_voice_id: str = ""
 
 
 class SaveSpeakersRequest(BaseModel):
@@ -1106,6 +1093,7 @@ class SaveSpeakersRequest(BaseModel):
     # harmless (its voice is taken) but it can never be removed.
     speakers: list[SpeakerEntry]
     narrator_voice: str | None = None
+    narrator_premium_voice: str | None = None
 
 
 @router.put("/speakers")
@@ -1116,8 +1104,14 @@ def save_speakers(request: SaveSpeakersRequest):
     manifest = workspace.load_manifest(request.workspace_path)
     if request.narrator_voice is not None:
         manifest["selected_voice"] = request.narrator_voice
+    if request.narrator_premium_voice is not None:
+        # The same field the Premium panel writes, so the two places that
+        # can set the narrator's print voice never disagree.
+        manifest["selected_premium_voice"] = request.narrator_premium_voice
     manifest["speakers"] = [
-        {"display_name": entry.display_name.strip(), "voice_id": entry.voice_id}
+        {"display_name": entry.display_name.strip(),
+         "voice_id": entry.voice_id,
+         "premium_voice_id": entry.premium_voice_id}
         for entry in request.speakers
         if entry.display_name.strip()
     ]

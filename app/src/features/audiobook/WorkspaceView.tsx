@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, BookMarked, EyeOff, HardDrive, HelpCircle, Loader2,
-  MessageSquareQuote, Plus, Save, Scissors, Settings as SettingsIcon, Sparkles,
+  MessageSquareQuote, Plus, Save, Scissors, Settings as SettingsIcon,
   Users, Wand2, X,
 } from "lucide-react";
 
@@ -523,38 +523,6 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         >
           <EyeOff size={11} /> Exclude
         </button>
-        {/* ── The cast cluster ───────────────────────────────────────
-            Cast, Voice and the walkthrough are one feature and sit
-            together in violet. Voice and Walkthrough appear only once
-            somebody has actually been cast: a book with a single
-            narrator has no use for either, and two mystery buttons on
-            the toolbar are worse than none. */}
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
-        <button
-          onClick={openCast}
-          title="Give characters their own voices. Works with the free local narrator."
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-violet-600 hover:text-violet-300"
-        >
-          <Users size={11} /> Cast{castNames.length > 0 && ` (${castNames.length})`}
-        </button>
-        {castNames.length > 0 && (
-          <>
-            <button
-              onClick={() => wrapSelection("[voice:]", "[/voice]", "[voice:".length)}
-              title="Read the selected passage as one of your cast. Type the name between the brackets."
-              className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-violet-600 hover:text-violet-300"
-            >
-              Voice
-            </button>
-            <button
-              onClick={() => setCastWalk(v => !v)}
-              title="Walk the dialogue line by line and say who speaks each one. Finds the lines instantly; the AI is optional."
-              className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-violet-600 hover:text-violet-300"
-            >
-              <Sparkles size={11} /> {castWalk ? "Hide walkthrough" : "Cast Walkthrough"}
-            </button>
-          </>
-        )}
         <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
           onClick={handleRemoveMarkers}
@@ -650,6 +618,13 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-blue-600 hover:text-blue-300"
             >
               <SettingsIcon size={12} /> Audiobook Settings
+            </button>
+            <button
+              onClick={openCast}
+              title="Give characters their own voices -- free on your local narrator"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-violet-600 hover:text-violet-300"
+            >
+              <Users size={12} /> Cast{castNames.length > 0 && ` (${castNames.length})`}
             </button>
             <button
               onClick={() => setStorageOpen(true)}
@@ -774,6 +749,9 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <CastPanel
           workspacePath={workspacePath}
           onClose={() => setCastOpen(false)}
+          onMarkSelection={() =>
+            wrapSelection("[voice:]", "[/voice]", "[voice:".length)}
+          onStartWalkthrough={() => setCastWalk(true)}
           onSaved={() => {
             // Recasting outdates that character's lines, and nothing
             // else -- the badges should say so immediately.

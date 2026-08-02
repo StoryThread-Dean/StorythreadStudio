@@ -320,47 +320,89 @@ def test_markers_module_names_the_narrator_once(tmp_path):
     assert markers.NARRATOR == workspace.NARRATOR_NAME
 
 
-# ── The voice roster the Cast panel reads (live-testing feedback) ─────────────
+# ── The two rosters the Cast panel reads (live-testing feedback) ─────────────
 
-def test_voice_options_group_by_engine_and_say_what_is_reachable(tmp_path, monkeypatch):
-    # Live feedback: the cast screen offered a flat list with no
-    # indication of which voices were free, which belonged to a paid
-    # engine, and which needed an API key the writer had not connected.
-    # Three states, told apart at a glance.
+def test_voice_options_always_offer_the_local_roster(tmp_path, monkeypatch):
+    # Live finding: choosing a hosted print engine greyed out EVERY local
+    # voice, which were the ones the writer had been drafting with all
+    # along. Availability is not "is this the current engine" -- the app
+    # has two passes at once, and the free one is always available.
     from app.audiobook import local_worker
 
     monkeypatch.setattr(local_worker, "list_voices", lambda: [
         {"id": "af_heart", "label": "Heart (American female)"},
         {"id": "bf_emma", "label": "Emma (British female)"},
     ])
-    # Hermetic settings. Without this the test reads the DEVELOPER'S real
-    # settings file, so it passes or fails depending on which narration
-    # engine happens to be selected on this machine -- which is exactly
-    # how it failed the first time it ran.
+    monkeypatch.setattr("app.settings_store.load_settings", lambda: {
+        # A hosted print engine IS chosen, with a working key.
+        "audiobook_tts_provider": "openrouter",
+        "audiobook_tts_model": "deepgram/aura-2",
+        "openrouter_api_key": "sk-test",
+    })
+    ws = _workspace(tmp_path)
+    body = client.get("/api/audiobook/voice-options",
+                      params={"workspace_path": ws}).json()
+
+    assert body["draft"]["installed"] is True
+    assert len(body["draft"]["voices"]) == 2
+    assert body["draft"]["note"] == ""
+
+
+def test_voice_options_offer_the_chosen_print_engine_when_its_key_is_connected(
+        tmp_path, monkeypatch):
+    from app.audiobook import local_worker
+
+    monkeypatch.setattr(local_worker, "list_voices", lambda: [])
+    monkeypatch.setattr("app.settings_store.load_settings", lambda: {
+        "audiobook_tts_provider": "openrouter",
+        "audiobook_tts_model": "deepgram/aura-2",
+        "openrouter_api_key": "sk-test",
+    })
+    ws = _workspace(tmp_path)
+    body = client.get("/api/audiobook/voice-options",
+                      params={"workspace_path": ws}).json()
+
+    assert body["print"]["configured"] is True
+    assert body["print"]["has_api_key"] is True
+    assert body["print"]["voices"], "a connected engine must offer its voices"
+    assert body["print"]["note"] == ""
+    assert "Aura-2" in body["print"]["label"]
+
+
+def test_voice_options_do_not_warn_about_engines_nobody_chose(tmp_path, monkeypatch):
+    # Live finding: the panel opened with five alert tiles for engines
+    # the writer had never selected. An engine nobody picked is not a
+    # problem to be alerted about.
+    from app.audiobook import local_worker
+
+    monkeypatch.setattr(local_worker, "list_voices", lambda: [
+        {"id": "af_heart", "label": "Heart"}])
     monkeypatch.setattr("app.settings_store.load_settings", lambda: {})
     ws = _workspace(tmp_path)
-    response = client.get("/api/audiobook/voice-options",
-                          params={"workspace_path": ws})
-    assert response.status_code == 200, response.text
-    groups = response.json()["groups"]
+    body = client.get("/api/audiobook/voice-options",
+                      params={"workspace_path": ws}).json()
 
-    # The free local narrator leads: it is the default and costs nothing.
-    assert groups[0]["provider"] == "local-kokoro"
-    assert groups[0]["tier"] == "free"
-    assert groups[0]["usable"] is True
-    assert groups[0]["free_preview"] is True
-    assert len(groups[0]["voices"]) == 2
+    # Exactly two rosters come back, never a list of every engine.
+    assert set(body) == {"draft", "print"}
+    assert body["print"]["configured"] is False
+    assert body["print"]["voices"] == []
+    # And the local roster is unaffected by there being no print engine.
+    assert body["draft"]["voices"]
 
-    # Paid engines are LISTED, never hidden -- hiding them would make the
-    # app look like it has two voices -- but they are not usable, and
-    # each says which of the two reasons applies.
-    hosted = [g for g in groups if g["provider"] != "local-kokoro"]
-    assert hosted, "hosted engines must still appear"
-    assert all(g["usable"] is False for g in hosted)
-    assert all(g["note"] for g in hosted)
-    assert any("API key" in g["note"] for g in hosted)
-    # Tier is named in the label, so budget/standard/pro is visible.
-    assert any(g["label"].startswith("Pro -- ") for g in hosted)
+
+def test_voice_options_say_when_the_print_engine_has_no_key(tmp_path, monkeypatch):
+    from app.audiobook import local_worker
+
+    monkeypatch.setattr(local_worker, "list_voices", lambda: [])
+    monkeypatch.setattr("app.settings_store.load_settings", lambda: {
+        "audiobook_tts_provider": "openrouter",
+        "audiobook_tts_model": "deepgram/aura-2",
+    })
+    ws = _workspace(tmp_path)
+    body = client.get("/api/audiobook/voice-options",
+                      params={"workspace_path": ws}).json()
+    assert body["print"]["has_api_key"] is False
+    assert "API key is connected" in body["print"]["note"]
 
 
 def test_voice_options_admit_when_the_local_engine_is_not_installed(tmp_path, monkeypatch):
@@ -375,7 +417,39 @@ def test_voice_options_admit_when_the_local_engine_is_not_installed(tmp_path, mo
     ws = _workspace(tmp_path)
     body = client.get("/api/audiobook/voice-options",
                       params={"workspace_path": ws}).json()
-    local = body["groups"][0]
-    assert local["voices"] == []
-    assert local["usable"] is False
-    assert "not installed yet" in local["note"]
+    assert body["draft"]["voices"] == []
+    assert body["draft"]["installed"] is False
+    assert "not installed yet" in body["draft"]["note"]
+
+
+# ── Two voices per speaker, one per pass ─────────────────────────────────────
+
+def test_a_speaker_holds_a_draft_voice_and_a_print_voice():
+    cast = workspace.speakers({
+        "selected_voice": "af_heart",
+        "selected_premium_voice": "thalia",
+        "speakers": [{"display_name": "Elena", "voice_id": "bf_emma",
+                      "premium_voice_id": "asteria"}],
+    })
+    # Drafting uses the local roster...
+    assert workspace.voice_for_speaker("Elena", cast, "af_heart") == "bf_emma"
+    # ...and printing uses the hosted one. Sending "bf_emma" to a hosted
+    # engine that never heard of it would fail line by line.
+    assert workspace.voice_for_speaker(
+        "Elena", cast, "thalia", premium=True) == "asteria"
+
+
+def test_a_speaker_with_no_print_voice_falls_back_to_the_narrators():
+    # Half-cast books are the normal state during a print pass. Falling
+    # back to the run's voice keeps the book generating.
+    cast = workspace.speakers({
+        "speakers": [{"display_name": "Elena", "voice_id": "bf_emma"}]})
+    assert workspace.voice_for_speaker(
+        "Elena", cast, "thalia", premium=True) == "thalia"
+
+
+def test_the_narrators_print_voice_is_the_books_premium_voice():
+    # One field, written by both the Premium panel and the cast, so the
+    # two can never disagree about who narrates a print pass.
+    cast = workspace.speakers({"selected_premium_voice": "thalia"})
+    assert cast[0]["premium_voice_id"] == "thalia"
