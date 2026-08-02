@@ -608,6 +608,46 @@ reconstructed is stated in the warnings band; and the two failure cases
 
 ---
 
+## 17. Audiobook Converter -- cast and multiple voices (Stage G)
+
+**Touches:** the Cast panel, `[voice:...]` spans, per-speaker generation,
+and the AI speaker pass. Needs a chapter with some dialogue and a working
+AI provider key for step 5 onward.
+
+Steps:
+1. **Mark a line by hand**: select a line of dialogue, click [Voice] on
+   the toolbar. The wrapper is typed with the caret between the colon and
+   the bracket -- type `Elena`. Save. The warnings band says Elena is not
+   in your cast yet.
+2. **Cast panel**: click [Cast] at the bottom of the chapter rail. Elena
+   is offered as a one-click add under "your narration already asks
+   for...". Add her, give her a different voice, Save Cast.
+3. **Hear the difference**: select the marked paragraph plus a
+   surrounding one and press [Sample selection]. The narrator's paragraph
+   and Elena's line come back in different voices, with the beat between
+   them intact.
+4. **Recasting re-narrates only her**: generate the chapter, then change
+   Elena's voice in the Cast panel. The chapter dot turns amber, not red,
+   and pressing Generate re-does only her lines.
+5. **The AI pass**: select a passage of dialogue and click
+   [Find speakers]. Proposals walk one at a time with a confidence and a
+   reason. Correct one name in the box before accepting it, use
+   [Keep narrator] on another.
+6. **Nothing is saved**: after accepting a proposal or two, close the
+   workspace WITHOUT saving and reopen it. The markers are gone -- the
+   pass only ever edited the buffer.
+7. **The AI cannot rewrite you**: with the pass open, check that every
+   quoted line shown matches your text exactly, punctuation included. If
+   a proposal is discarded the panel says how many, rather than pretending
+   it found nothing.
+
+Expected: a passage never plays in a voice you did not assign; an unknown
+name reads as the narrator and says so at save time rather than at listen
+time; and no AI proposal can put words in your manuscript that you did
+not write.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

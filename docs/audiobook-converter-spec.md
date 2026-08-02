@@ -2085,6 +2085,26 @@ Low-confidence speaker assignments should require explicit review.
 
 ---
 
+### 27.4 What Stage G actually built (2026-08-01)
+
+The structure above landed close to as written. Four decisions the implementation had to make, and one limit it did not remove.
+
+**Speakers choose a voice, never a provider -- one run, one engine.** A cast that mixed the free local narrator with a hosted engine would price and fail line by line, and half a chapter could come back in a voice the writer never paid for. The book's engine stays chosen once, in Audiobook Settings; the cast only varies the voice.
+
+**The narration copy carries NAMES, not voice ids.** `[voice:Elena]...[/voice]` is the marker; the cast maps Elena to a voice. Three reasons: recasting is one edit instead of a find-and-replace through the manuscript, the narration copy stays readable in any text editor (the whole point of the format), and a segment can keep its identity across a recast -- changing Elena's voice re-queues exactly her lines.
+
+**Voice is the OUTER span, pace the inner one.** A character's line may change speed within it; a pace change never changes who is speaking. Nesting a voice inside a voice warns and drops the inner opener, exactly as pace does.
+
+**A voice change is the hardest segment boundary there is** -- two speakers can never share one synthesis request, because a request has exactly one voice.
+
+An unknown name falls back to the narrator rather than failing the run: a misspelling in one paragraph must not stop a book from generating. It is reported on SAVE instead, beside the marker warnings, which is the last moment the writer is looking at the spelling.
+
+**The AI pass proposes and never applies** (27.3 as specified), with one addition the spec did not anticipate. A model asked to quote a passage will paraphrase it, straighten its quotation marks, or repair a typo on the way past. If the app wrapped a `[voice:...]` span around what the AI said was there, it would be silently editing the writer's prose -- the one thing the product forbids. So **every proposal is verified against the source character for character, and dropped if it does not match**, however confident it is. The dropped count is reported rather than hidden, since a discarding pass would otherwise look like a model that found nothing.
+
+**Known limit:** the Cast panel lists the LOCAL narrator's voices. Casting characters on a hosted engine works (the ids are stored and used) but the panel cannot yet enumerate that engine's roster, so a hosted cast has to be set while the local voices are showing or the ids typed elsewhere. Wiring the panel to the selected engine's catalog is the natural follow-up.
+
+---
+
 ## 28. Safety, Rights, and Misuse Controls
 
 ### 28.1 Required User Confirmations

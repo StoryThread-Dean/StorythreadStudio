@@ -680,6 +680,73 @@ export async function resetGeneration(workspacePath: string): Promise<void> {
   }));
 }
 
+// ── The cast (spec 27) ───────────────────────────────────────────────────────
+// Speakers choose a VOICE, never a provider: one run, one engine. And the
+// narration copy carries NAMES ([voice:Elena]), not voice ids, so
+// recasting a character never touches a word of the manuscript.
+
+export interface Speaker {
+  speaker_id: string;
+  display_name: string;
+  role: "narrator" | "character";
+  voice_id: string;
+}
+
+export interface CastReport {
+  speakers: Speaker[];
+  /** Names the manuscript already uses that the cast does not have. */
+  unassigned_names: string[];
+  single_engine: boolean;
+}
+
+export async function fetchCast(workspacePath: string): Promise<CastReport> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/speakers?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<CastReport>(res);
+}
+
+export async function saveCast(
+  workspacePath: string,
+  speakers: { display_name: string; voice_id: string }[],
+  narratorVoice?: string,
+): Promise<CastReport> {
+  const res = await fetch(`${API_BASE}/api/audiobook/speakers`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspace_path: workspacePath,
+      speakers,
+      narrator_voice: narratorVoice ?? null,
+    }),
+  });
+  return toJson<CastReport>(res);
+}
+
+/** One AI proposal about who speaks a passage. `start`/`end` index into
+ *  the text that was analysed, so the editor wraps the REAL words. */
+export interface SpeakerProposal {
+  quote: string;
+  speaker: string;
+  confidence: number;
+  reason: string;
+  start: number;
+  end: number;
+  in_cast: boolean;
+}
+
+export async function analyzeSpeakers(
+  workspacePath: string,
+  text: string,
+): Promise<{ proposals: SpeakerProposal[]; dropped: number; model_used: string }> {
+  const res = await fetch(`${API_BASE}/api/audiobook/analyze-speakers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, text }),
+  });
+  return toJson(res);
+}
+
 // ── Audio freshness (spec 24.2) ──────────────────────────────────────────────
 // Which chapters still match their narration. Read-only: asking never
 // spawns the local engine and never touches a paid one, so the rail can

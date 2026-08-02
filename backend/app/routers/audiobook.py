@@ -1027,6 +1027,80 @@ def save_speakers(request: SaveSpeakersRequest):
     return get_speakers(request.workspace_path)
 
 
+class AnalyzeSpeakersRequest(BaseModel):
+    workspace_path: str
+    # The editor's CURRENT text, so a writer can analyse work they have
+    # not saved yet -- the same buffer the Formatting Walkthrough reads.
+    text: str = Field(min_length=1)
+
+
+@router.post("/analyze-speakers")
+async def analyze_speakers(request: AnalyzeSpeakersRequest):
+    """
+    Propose who speaks each line of dialogue in a passage (spec 27.3).
+
+    Proposes only. Nothing is written, nothing is applied, and every
+    proposal is verified to exist in the passage character for character
+    before it is offered -- an AI that paraphrased on the way past would
+    otherwise have its words wrapped in a [voice:...] span and saved as
+    the writer's own.
+
+    Runs on the WRITING side's AI provider and model, like every other
+    editorial pass. Narration keys pay for speech, not for reading.
+    """
+    from app.ai.openrouter import run_completion
+    from app.audiobook import speaker_analysis
+    from app.routers.ai import (
+        TEMPERATURE_DEFAULTS, _prompt_cache_enabled, _provider_exc,
+        _resolve_model_and_key,
+    )
+
+    _require_workspace(request.workspace_path)
+    text = request.text
+    if len(text) > 30000:
+        raise HTTPException(
+            status_code=400,
+            detail="That passage is too long to analyse in one pass (30,000 "
+                   "characters). Analyse a chapter at a time.",
+        )
+
+    provider, api_key, model_id = _resolve_model_and_key(None)
+    manifest = workspace.load_manifest(request.workspace_path)
+    known = [s["display_name"] for s in workspace.speakers(manifest)
+             if s["speaker_id"] != workspace.NARRATOR_ID]
+
+    import httpx
+    try:
+        result = await run_completion(
+            provider=provider, api_key=api_key, model_id=model_id,
+            cache_prompts=_prompt_cache_enabled(provider),
+            system_prompt=speaker_analysis.SPEAKER_ANALYSIS_PROMPT,
+            user_message=speaker_analysis.build_user_message(text, known),
+            # Reading, not writing: the coolest setting we have, because
+            # invention is the failure mode here.
+            temperature=TEMPERATURE_DEFAULTS["critique"],
+        )
+    except httpx.HTTPStatusError as e:
+        raise _provider_exc(e, provider)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503,
+                            detail=f"Could not reach {provider.label}: {e}")
+
+    raw_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+    proposals, dropped = speaker_analysis.parse_response(raw_text, text)
+    cast_names = {name.lower() for name in known}
+    for proposal in proposals:
+        # Whether accepting this also means adding somebody to the cast.
+        proposal["in_cast"] = proposal["speaker"].lower() in cast_names
+    return {
+        "proposals": proposals,
+        # Said out loud rather than hidden: a pass that quietly discarded
+        # half its answers would look like a model that found nothing.
+        "dropped": dropped,
+        "model_used": model_id,
+    }
+
+
 @router.get("/audio-status")
 def get_audio_status(workspace_path: str):
     """Per-chapter audio freshness (spec 24.2): Current / Partially

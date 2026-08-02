@@ -215,6 +215,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_audiobook_mp3_transport.py` -- per-model `response_format`, mp3 byte sniffing + decode, and the self-healing 400 retry (provider names a format, or the field is dropped)
   - `test_audiobook_level_matching.py` -- loudness matching at assembly (-20 dBFS RMS, -1 dBFS ceiling, clamped gain), including that flow dynamics survive it
   - `test_audiobook_pdf.py` -- PDF import against REAL PDFs built by `tests/pdf_builder.py`: scanned rejection, running-header/page-number removal that never eats prose or headings, hyphen rejoining, paragraph reconstruction by indent and by line length
+  - `test_audiobook_speakers.py` -- the cast + [voice:NAME] spans (spec 27): span parsing and its three failure modes, voice change as a hard segment boundary, name-to-voice resolution, recasting requeues only that character
+  - `test_audiobook_speaker_analysis.py` -- the AI speaker pass (spec 27.3): a proposal that does not quote the source character for character is DROPPED, overlap/ordering rules, prompt guardrails, and the endpoint writing nothing
   - `test_audiobook_storage.py` -- storage measurement + cleanup (spec 25): per-category sizes, orphan detection by leftover, nothing irreversible pre-checked, deleted audio resets its segment records, export-only state, retention migration
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
@@ -243,6 +245,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/audiobook/VoicePicker.test.tsx` -- one picker, three shapes (two dropdowns / one / free text), value stays a single composed id in all of them
   - `src/features/audiobook/ToggleSwitch.test.tsx` -- a switch, not a checkbox: its look carries the state
   - `src/features/audiobook/SpokenLine.test.tsx` -- the read-aloud flourish never costs readability (every word present as text, spaces survive, staggered delays)
+  - `src/features/audiobook/CastPanel.test.tsx` -- the cast screen: manuscript names offered as one-click adds, duplicate names block the save, one-book-one-engine explained
+  - `src/features/audiobook/SpeakerReview.test.tsx` -- the AI proposal walk: confidence shown honestly, Accept passes the corrected name, Keep narrator applies nothing, a moved passage cannot be wrapped
   - `src/features/audiobook/StorageDialog.test.tsx` -- the delete screen: only free-to-rebuild categories pre-checked, losses stated on the row, the confirm repeats categories + size, cancelling deletes nothing, locked files surfaced
   - `src/features/audiobook/ExportPanel.test.tsx` -- retention after export: keep says nothing, ask shows the size, auto-delete acts and reports it, and only intermediate audio is ever removed
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
