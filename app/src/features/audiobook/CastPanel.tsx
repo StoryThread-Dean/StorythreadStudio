@@ -1,42 +1,50 @@
 // features/audiobook/CastPanel.tsx
 // =================================
-// Who narrates this book, and who speaks in it (spec 27).
+// The Cast workbench (spec 27): one self-contained window where a writer
+// casts their characters AND walks the chapter's dialogue, watching each
+// decision land on their own text.
 //
-// Written against the three things this app is for. TEACH: one short
-// line says what a cast is and shows the marker, and everything deeper
-// lives behind "What's this?" so nobody has to read a wall of text to
-// start. ASSIST: the names the manuscript already uses are one click to
-// add, and the walkthrough does the line-by-line marking a writer would
-// otherwise do by hand. REMOVE GUESSWORK: every voice can be heard
-// before it is chosen, and the panel never offers a voice that cannot
-// speak.
+// It is not a settings dialog. The voice list is configuration that gets
+// out of the way -- collapsed as soon as a cast exists -- and the
+// dialogue window below it is the actual work surface. That ordering is
+// deliberate: the job is marking who speaks, not filling in a form.
 //
-// The model that took two tries to get right: a book has TWO narration
-// passes at once -- the free local narrator it is drafted with, and the
-// hosted engine it may be printed with. Voice ids do not carry between
-// them, so each speaker holds one of each. An earlier build stored a
-// single voice and decided availability by "is this the book's current
-// engine", which greyed out the entire local roster the moment a print
-// engine was chosen and papered the panel with alerts for engines nobody
-// had selected.
+// Built against the three things this app is for:
+//   TEACH -- the window shows real markers on real prose, so the syntax
+//     is learned by watching rather than by reading, and every deeper
+//     question sits behind a full-width button nobody has to open.
+//   ASSIST -- a hundred lines of dialogue is an afternoon by hand; the
+//     walk turns each one into a single click.
+//   REMOVE GUESSWORK -- the colour says who speaks, the marker says what
+//     will be written, and a voice can be heard before it is chosen.
+//
+// Nothing here writes to disk. Every change edits the editor buffer, and
+// the editor's own Save is still the only thing that commits -- the same
+// rule every other tool in this app follows.
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Loader2, Play, Plus, Users, Wand2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle, ChevronDown, ChevronRight, Loader2, Play, Plus, Users, X,
+} from "lucide-react";
 
 import { fetchCast, fetchVoiceOptions, previewVoice, saveCast } from "./api";
 import type { CastReport, VoiceRoster } from "./api";
-import { WhatsThis } from "./WhatsThis";
+import { castColor, castTextColor } from "./castColors";
+import { DialogueWindow } from "./DialogueWindow";
+import {
+  chapterCast, chapterRanges, countCharacterUsage, removeCharacterMarkers,
+  scanDialogue, setStopVoice,
+} from "./speakerScan";
+import type { ChapterRange } from "./speakerScan";
 
 interface CastPanelProps {
   workspacePath: string;
+  /** The narration buffer, live from the editor. */
+  content: string;
+  /** Buffer edit -- the caller marks the editor dirty. */
+  onContentChange: (next: string) => void;
   onClose: () => void;
-  /** Saved: the rail re-reads the cast (recasting outdates that
-   *  character's lines, and the toolbar shows the count). */
   onSaved?: () => void;
-  /** Close and wrap the editor's current selection in a voice span. */
-  onMarkSelection?: () => void;
-  /** Close and start the line-by-line walk. */
-  onStartWalkthrough?: () => void;
 }
 
 interface Row {
@@ -49,8 +57,10 @@ const SAMPLE_LINE =
   "The road disappeared beneath the gathering snow, and somewhere behind her, "
   + "a second set of footsteps stopped.";
 
+const NARRATOR = "Narrator";
+
 export function CastPanel({
-  workspacePath, onClose, onSaved, onMarkSelection, onStartWalkthrough,
+  workspacePath, content, onContentChange, onClose, onSaved,
 }: CastPanelProps) {
   const [report, setReport] = useState<CastReport | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
@@ -62,7 +72,14 @@ export function CastPanel({
   const [draftRoster, setDraftRoster] = useState<VoiceRoster | null>(null);
   const [printRoster, setPrintRoster] = useState<VoiceRoster | null>(null);
   const [sampling, setSampling] = useState<string | null>(null);
+  const [voicesOpen, setVoicesOpen] = useState<boolean | null>(null);
+  const [openHelp, setOpenHelp] = useState<string | null>(null);
+  const [chapterIndex, setChapterIndex] = useState(0);
+  const [stopIndex, setStopIndex] = useState(0);
+  const [showOthers, setShowOthers] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // ── The cast ────────────────────────────────────────────────────────
 
   function applyReport(fresh: CastReport) {
     setReport(fresh);
@@ -78,10 +95,12 @@ export function CastPanel({
     setNarratorVoice(narrator?.voice_id ?? "");
     setNarratorPrintVoice(narrator?.premium_voice_id ?? "");
     setSnapshot(JSON.stringify({
-      characters,
-      narrator: narrator?.voice_id ?? "",
+      characters, narrator: narrator?.voice_id ?? "",
       narratorPrint: narrator?.premium_voice_id ?? "",
     }));
+    // Voices open when there is nothing cast yet (that IS the job), and
+    // out of the way once there is (the job is now the dialogue).
+    setVoicesOpen(prev => prev ?? characters.length === 0);
   }
 
   const load = useCallback(async () => {
@@ -100,10 +119,7 @@ export function CastPanel({
         const options = await fetchVoiceOptions(workspacePath);
         setDraftRoster(options.draft);
         setPrintRoster(options.print);
-      } catch {
-        // No roster is a thinner panel, never a broken one -- stored
-        // ids still show and still save.
-      }
+      } catch { /* stored ids still show and still save */ }
     })();
   }, [workspacePath]);
 
@@ -115,7 +131,7 @@ export function CastPanel({
 
   const attemptClose = useCallback(() => {
     if (dirty && !window.confirm(
-      "You have unsaved cast changes. Close without saving?")) return;
+      "You have unsaved cast changes. Close without saving them?")) return;
     onClose();
   }, [dirty, onClose]);
 
@@ -125,21 +141,14 @@ export function CastPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [attemptClose]);
 
-  function addRow(name = "") {
-    setRows(prev => [...prev, { display_name: name, voice_id: "", premium_voice_id: "" }]);
-  }
-
-  async function handleSave() {
+  async function handleSaveCast() {
     if (saving) return;
     setSaving(true);
     setError(null);
     try {
       applyReport(await saveCast(
-        workspacePath,
-        rows.filter(r => r.display_name.trim()),
-        narratorVoice,
-        narratorPrintVoice,
-      ));
+        workspacePath, rows.filter(r => r.display_name.trim()),
+        narratorVoice, narratorPrintVoice));
       onSaved?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the cast.");
@@ -165,18 +174,77 @@ export function CastPanel({
     }
   }
 
-  // A name typed twice would make [voice:Elena] ambiguous, and the
-  // ambiguity would be resolved silently at render time.
-  const duplicates = new Set(
-    rows.map(r => r.display_name.trim().toLowerCase())
-      .filter((name, index, all) => name && all.indexOf(name) !== index));
+  /** Removing a character is the one destructive act in this panel, so
+      it counts the real damage first. An unused character goes quietly;
+      a used one says how many lines and which chapters, and makes clear
+      the WORDS survive -- those lines simply go back to the narrator. */
+  function removeCharacter(index: number) {
+    const name = rows[index].display_name.trim();
+    const usage = name ? countCharacterUsage(content, name) : { lines: 0, chapters: [] };
+    if (usage.lines > 0) {
+      const where = usage.chapters.length === 1
+        ? `in "${usage.chapters[0]}"`
+        : `across ${usage.chapters.length} chapters`;
+      const ok = window.confirm(
+        `${name} is used on ${usage.lines} line${usage.lines === 1 ? "" : "s"} `
+        + `${where}.\n\n`
+        + "Removing this character deletes those voice markers everywhere in "
+        + "the book, not just this chapter. The dialogue itself stays -- those "
+        + "lines go back to the narrator.\n\nAre you sure?");
+      if (!ok) return;
+      onContentChange(removeCharacterMarkers(content, name));
+    }
+    setRows(prev => prev.filter((_r, i) => i !== index));
+  }
+
+  // ── The walk ────────────────────────────────────────────────────────
+
+  const chapters = useMemo<ChapterRange[]>(() => chapterRanges(content), [content]);
+  const chapter = chapters[Math.min(chapterIndex, chapters.length - 1)];
+  const stops = useMemo(
+    () => (chapter ? scanDialogue(content, chapter) : []),
+    [content, chapter]);
+  const stop = stops[stopIndex] ?? null;
+
+  const castNames = useMemo(
+    () => [NARRATOR, ...rows.map(r => r.display_name.trim()).filter(Boolean)],
+    [rows]);
+
+  // Who this chapter actually uses: marked speakers plus anyone its prose
+  // names in a tag. A thirty-character book shows three buttons.
+  const present = useMemo(() => {
+    if (!chapter) return [];
+    const here = chapterCast(content, chapter).map(n => n.toLowerCase());
+    return castNames.filter(n =>
+      n === NARRATOR || here.includes(n.toLowerCase()));
+  }, [content, chapter, castNames]);
+  const others = castNames.filter(n => !present.includes(n));
+
+  const assignedCount = stops.filter(s => s.assigned).length;
+  const remaining = stops.length - assignedCount;
+
+  // Start on the first undecided line -- the writer opened this to work,
+  // not to scroll past what they already did.
+  useEffect(() => {
+    const first = stops.findIndex(s => !s.assigned);
+    setStopIndex(first < 0 ? 0 : first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterIndex]);
+
+  const assign = useCallback((name: string | null) => {
+    if (!stop) return;
+    onContentChange(setStopVoice(content, stop, name));
+  }, [stop, content, onContentChange]);
+
+  const accept = useCallback(() => {
+    setStopIndex(i => Math.min(i + 1, Math.max(stops.length - 1, 0)));
+  }, [stops.length]);
+
+  // ── Voice pickers ───────────────────────────────────────────────────
 
   const printReady = !!printRoster?.configured && !!printRoster.has_api_key
     && printRoster.voices.length > 0;
 
-  /** A draft-voice picker plus its Sample button. Local previews are
-      free and instant, which is what makes "hear it before you choose
-      it" a reasonable default rather than a paid gamble. */
   function draftVoice(value: string, onChange: (v: string) => void,
                       label: string, sampleKey: string) {
     return (
@@ -212,7 +280,7 @@ export function CastPanel({
     );
   }
 
-  function printVoice(value: string, onChange: (v: string) => void, label: string) {
+  function proVoice(value: string, onChange: (v: string) => void, label: string) {
     return (
       <select
         aria-label={label}
@@ -220,7 +288,10 @@ export function CastPanel({
         onChange={e => onChange(e.target.value)}
         className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
       >
-        <option value="">Same as the narrator</option>
+        {/* "None chosen" is a sanity check, not a placeholder: a writer
+            who never set these can be sure they have not quietly armed a
+            paid render. */}
+        <option value="">-- None chosen</option>
         {(printRoster?.voices ?? []).map(voice => (
           <option key={voice.id} value={voice.id}>{voice.label}</option>
         ))}
@@ -231,6 +302,67 @@ export function CastPanel({
     );
   }
 
+  const HELP: { key: string; label: string; body: React.ReactNode }[] = [
+    { key: "needed", label: "Is this needed?", body: (
+      <>
+        No. A book read entirely by one narrator is a finished audiobook,
+        and most are. This is here if you want it, and it costs nothing to
+        try: everything below runs on your free local narrator, so you can
+        cast a chapter, listen to it, and undo the whole thing by closing
+        the editor without saving. Play with it. Nothing is committed until
+        you press Save back in the editor.
+      </>
+    ) },
+    { key: "how", label: "How do I set the voices?", body: (
+      <>
+        Here. Add a character, give them a voice, then walk the chapter's
+        dialogue below and click who says each line -- the marker is
+        written for you.
+        <br /><br />
+        You can also do it by hand in the editor if you prefer: wrap the
+        spoken words in{" "}
+        <code className="rounded bg-zinc-800 px-1 text-[10px] text-violet-300">
+          [voice:Lara Croft]"Can I help you?"[/voice]
+        </code>{" "}
+        and it means exactly the same thing. This window is just faster,
+        and it shows you the result as you go.
+      </>
+    ) },
+    { key: "limits", label: "What are the limits?", body: (
+      <>
+        A voice is not a performance. The engine gives each character a
+        consistent voice, but it does not act -- no shouting, whispering,
+        or emotion per line. Pace markers are the only performance control
+        there is.
+        <br /><br />
+        Voice ids do not carry between engines, so a character needs a
+        voice for each pass you use: one from your free local narrator for
+        drafting, and a Pro voice only if you choose to print with a paid
+        engine. Changing a character's voice re-narrates their lines and
+        nothing else.
+        <br /><br />
+        A name your cast does not know reads as the narrator. The editor
+        warns you when you save rather than surprising you in the audio.
+      </>
+    ) },
+    { key: "cost", label: "Does casting cost more?", body: (
+      <>
+        Locally, no -- and locally is where almost all of this happens.
+        Your own narrator is free and unlimited, so a book with six voices
+        costs exactly what a book with one costs: nothing. Cast the whole
+        novel, change your mind twice, regenerate every chapter. Still
+        nothing.
+        <br /><br />
+        The Pro voices exist so that the option is here rather than sending
+        you to another service for it. If you use one, you are billed by
+        the character whether one voice reads the book or six -- so casting
+        itself still costs nothing extra. What costs is CHANGING a voice
+        after a paid render, because that character's lines are narrated
+        again.
+      </>
+    ) },
+  ];
+
   return (
     <div
       role="dialog"
@@ -238,15 +370,12 @@ export function CastPanel({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
-      <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
         <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-5 py-3">
           <Users size={15} className="text-violet-300" />
           <h2 className="flex-1 text-sm font-semibold text-zinc-100">Cast</h2>
-          <button
-            onClick={attemptClose}
-            aria-label="Close cast"
-            className="rounded p-1 text-zinc-500 hover:text-zinc-100"
-          >
+          <button onClick={attemptClose} aria-label="Close cast"
+                  className="rounded p-1 text-zinc-500 hover:text-zinc-100">
             <X size={15} />
           </button>
         </div>
@@ -258,60 +387,38 @@ export function CastPanel({
               Loading the cast...
             </p>
           ) : (
-            <div className="space-y-5">
-              {/* ONE line of what, ONE example, and depth on request. */}
-              <div>
-                <p className="text-[12px] leading-relaxed text-zinc-300">
-                  Give a character their own voice, and every line you mark
-                  as theirs is read in it. Everything else stays with the
-                  narrator. Free on your local narrator.
-                </p>
-                <p className="mt-1.5 font-mono text-[11px] text-zinc-500">
-                  <span className="text-violet-300">[voice:Elena]</span>
-                  "This cannot continue," she said.
-                  <span className="text-violet-300">[/voice]</span>
-                </p>
-                <div className="mt-1.5 flex flex-wrap gap-x-4">
-                  <WhatsThis label="How do I mark the lines?">
-                    Three ways, and you can mix them. Select a line and press
-                    Mark selection below -- the marker is typed around it for
-                    you. Or run the Cast Walkthrough, which finds every line
-                    of dialogue in the chapter and lets you click who says
-                    each one. Or type the markers yourself; they are plain
-                    text and the narration copy stays readable in any editor.
-                    Nothing you do here is saved until you press Save in the
-                    editor, so it is always safe to try.
-                  </WhatsThis>
-                  <WhatsThis label="What are the limits?">
-                    A voice is not a performance. The engine gives each
-                    character a consistent voice, but it does not act -- no
-                    shouting, whispering, or emotion per line. Pace markers
-                    are the only performance control there is.
-                    <br /><br />
-                    Voice ids do not carry between engines, so a character
-                    needs a voice for each pass you use: one from your free
-                    local narrator for drafting, and one from your print
-                    engine if you print with a paid voice. Changing a
-                    character's voice re-narrates their lines and nothing
-                    else.
-                    <br /><br />
-                    A name your cast does not know reads as the narrator.
-                    The editor warns you when you save rather than
-                    surprising you in the audio.
-                  </WhatsThis>
-                  <WhatsThis label="Does casting cost more?">
-                    No. Locally, everything is free and unlimited. On a paid
-                    engine you are billed by the character whether one voice
-                    reads the book or six, so casting itself costs nothing
-                    extra. What does cost is CHANGING a voice later: that
-                    character's lines are re-narrated, and re-narrating is
-                    what you pay for.
-                  </WhatsThis>
-                </div>
+            <div className="space-y-4">
+              <p className="text-[12px] leading-relaxed text-zinc-300">
+                Give each character their own voice, and every dialogue line
+                you mark as theirs is read in that voice. The rest is read
+                as the narrator.
+              </p>
+
+              {/* Depth on request, one row each, nothing open by default. */}
+              <div className="space-y-1">
+                {HELP.map(item => (
+                  <div key={item.key}>
+                    <button
+                      onClick={() => setOpenHelp(prev =>
+                        prev === item.key ? null : item.key)}
+                      className={"flex w-full items-center gap-1.5 rounded border px-2.5 py-1.5 text-left text-[11px] transition-colors "
+                        + (openHelp === item.key
+                          ? "border-violet-700 bg-violet-950/30 text-violet-200"
+                          : "border-zinc-700 text-zinc-300 hover:border-violet-700 hover:text-violet-200")}
+                    >
+                      {openHelp === item.key
+                        ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                      {item.label}
+                    </button>
+                    {openHelp === item.key && (
+                      <p className="mt-1 rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                        {item.body}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
 
-              {/* Only ever ONE warning, and only about an engine the
-                  writer actually chose. */}
               {draftRoster?.note && (
                 <p className="flex items-start gap-1.5 rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2 text-[10px] leading-relaxed text-amber-200">
                   <AlertTriangle size={11} className="mt-0.5 shrink-0" />
@@ -325,145 +432,261 @@ export function CastPanel({
                 </p>
               )}
 
+              {/* ── VOICES ───────────────────────────────────────────── */}
               <section>
-                <div className="mb-2 flex items-baseline gap-2 border-b border-zinc-800 pb-2">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                <button
+                  onClick={() => setVoicesOpen(v => !v)}
+                  className="flex w-full items-center gap-1.5 border-b border-zinc-800 pb-2 text-left"
+                >
+                  {voicesOpen ? <ChevronDown size={12} className="text-zinc-500" />
+                              : <ChevronRight size={12} className="text-zinc-500" />}
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                     Voices
-                  </h3>
+                  </span>
                   <span className="text-[10px] text-zinc-600">
-                    Draft = your free local narrator
-                    {printReady && ` -- Print = ${printRoster?.label}`}
+                    {rows.length === 0
+                      ? "start here -- add the characters who speak"
+                      : `${rows.length} character${rows.length === 1 ? "" : "s"}`
+                        + " -- narrator reads the rest"}
+                  </span>
+                </button>
+
+                {voicesOpen && (
+                  <div className="mt-2">
+                    <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-600">
+                      <span className="w-32 shrink-0">Character</span>
+                      <span className="flex-1">Draft voice (free, local)</span>
+                      {printReady && <span className="flex-1">Pro / Premium voice</span>}
+                      <span className="w-5 shrink-0" />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-32 shrink-0 text-[11px] text-zinc-200">
+                          Narrator
+                        </span>
+                        {draftVoice(narratorVoice, setNarratorVoice,
+                                    "Narrator voice", "narrator")}
+                        {printReady && proVoice(narratorPrintVoice,
+                                                setNarratorPrintVoice,
+                                                "Narrator Pro voice")}
+                        <span className="w-5 shrink-0" />
+                      </div>
+
+                      {rows.map((row, index) => {
+                        const name = row.display_name.trim();
+                        const clash = name && rows.some((r, i) =>
+                          i !== index
+                          && r.display_name.trim().toLowerCase() === name.toLowerCase());
+                        return (
+                          <div key={index} className="flex items-center gap-2">
+                            <input
+                              aria-label={`Character ${index + 1} name`}
+                              value={row.display_name}
+                              placeholder="Elena"
+                              onChange={e => setRows(prev => prev.map((r, i) =>
+                                i === index ? { ...r, display_name: e.target.value } : r))}
+                              className={"w-32 shrink-0 rounded border bg-zinc-900 px-2 py-1 text-[11px] text-zinc-100 "
+                                + (clash ? "border-rose-600" : "border-zinc-700")}
+                              style={name && !clash
+                                ? { borderLeft: `3px solid ${castColor(name, castNames)}` }
+                                : undefined}
+                            />
+                            {draftVoice(
+                              row.voice_id,
+                              value => setRows(prev => prev.map((r, i) =>
+                                i === index ? { ...r, voice_id: value } : r)),
+                              `Voice for character ${index + 1}`, `row-${index}`)}
+                            {printReady && proVoice(
+                              row.premium_voice_id,
+                              value => setRows(prev => prev.map((r, i) =>
+                                i === index ? { ...r, premium_voice_id: value } : r)),
+                              `Pro voice for character ${index + 1}`)}
+                            <button
+                              onClick={() => removeCharacter(index)}
+                              aria-label={`Remove ${name || "character"}`}
+                              className="w-5 shrink-0 rounded text-zinc-600 hover:text-rose-400"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {report.unassigned_names.filter(n => !rows.some(
+                      r => r.display_name.trim().toLowerCase() === n.toLowerCase())).length > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] text-zinc-500">
+                          Already in your narration:
+                        </span>
+                        {report.unassigned_names
+                          .filter(n => !rows.some(
+                            r => r.display_name.trim().toLowerCase() === n.toLowerCase()))
+                          .map(name => (
+                            <button
+                              key={name}
+                              onClick={() => setRows(prev => [...prev, {
+                                display_name: name, voice_id: "", premium_voice_id: "" }])}
+                              className="inline-flex items-center gap-1 rounded border border-violet-700 px-2 py-0.5 text-[11px] text-violet-200 hover:border-violet-500"
+                            >
+                              <Plus size={10} /> {name}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        onClick={() => setRows(prev => [...prev, {
+                          display_name: "", voice_id: "", premium_voice_id: "" }])}
+                        className="inline-flex items-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-400 hover:border-violet-600 hover:text-violet-300"
+                      >
+                        <Plus size={11} /> Add a character
+                      </button>
+                      <button
+                        onClick={() => void handleSaveCast()}
+                        disabled={!dirty || saving}
+                        className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                      >
+                        {saving && <Loader2 size={11} className="animate-spin" />}
+                        Save Cast
+                      </button>
+                      {dirty && (
+                        <span className="text-[10px] text-amber-300">
+                          Save the cast to use these voices below.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {/* ── THE WALK ─────────────────────────────────────────── */}
+              <section>
+                <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-zinc-800 pb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Dialogue
+                  </span>
+                  <select
+                    aria-label="Chapter"
+                    value={chapterIndex}
+                    onChange={e => setChapterIndex(Number(e.target.value))}
+                    className="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200"
+                  >
+                    {chapters.map((c, i) => (
+                      <option key={i} value={i}>{c.title}</option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-zinc-600">
+                    {stops.length === 0
+                      ? "no dialogue found in this chapter"
+                      : `line ${Math.min(stopIndex + 1, stops.length)} of ${stops.length}`}
                   </span>
                 </div>
 
-                <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-600">
-                  <span className="w-32 shrink-0">Character</span>
-                  <span className="flex-1">Draft voice (free)</span>
-                  {printReady && <span className="flex-1">Print voice</span>}
-                  <span className="w-5 shrink-0" />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-[11px] text-zinc-200">
-                      Narrator
-                    </span>
-                    {draftVoice(narratorVoice, setNarratorVoice,
-                                "Narrator voice", "narrator")}
-                    {printReady && printVoice(narratorPrintVoice,
-                                              setNarratorPrintVoice,
-                                              "Narrator print voice")}
-                    <span className="w-5 shrink-0" />
-                  </div>
-
-                  {rows.map((row, index) => {
-                    const clash = row.display_name.trim()
-                      && duplicates.has(row.display_name.trim().toLowerCase());
+                {/* Who is in this chapter -- one click each. */}
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                  {present.map(name => {
+                    const active = stop?.assigned
+                      ? stop.assigned.toLowerCase() === name.toLowerCase()
+                      : name === NARRATOR;
+                    const color = name === NARRATOR ? "" : castColor(name, castNames);
                     return (
-                      <div key={index} className="flex items-center gap-2">
-                        <input
-                          aria-label={`Character ${index + 1} name`}
-                          value={row.display_name}
-                          placeholder="Elena"
-                          onChange={e => setRows(prev => prev.map((r, i) =>
-                            i === index ? { ...r, display_name: e.target.value } : r))}
-                          className={"w-32 shrink-0 rounded border bg-zinc-900 px-2 py-1 text-[11px] text-zinc-100 "
-                            + (clash ? "border-rose-600" : "border-zinc-700")}
-                        />
-                        {draftVoice(
-                          row.voice_id,
-                          value => setRows(prev => prev.map((r, i) =>
-                            i === index ? { ...r, voice_id: value } : r)),
-                          `Voice for character ${index + 1}`,
-                          `row-${index}`)}
-                        {printReady && printVoice(
-                          row.premium_voice_id,
-                          value => setRows(prev => prev.map((r, i) =>
-                            i === index ? { ...r, premium_voice_id: value } : r)),
-                          `Print voice for character ${index + 1}`)}
-                        <button
-                          onClick={() => setRows(prev => prev.filter((_r, i) => i !== index))}
-                          aria-label={`Remove ${row.display_name || "character"}`}
-                          className="w-5 shrink-0 rounded text-zinc-600 hover:text-rose-400"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
+                      <button
+                        key={name}
+                        onClick={() => assign(name === NARRATOR ? null : name)}
+                        disabled={!stop}
+                        className={"rounded border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 "
+                          + (active ? "" : "border-zinc-700 text-zinc-200 hover:border-zinc-500")}
+                        style={active
+                          ? { backgroundColor: color || "#52525B",
+                              borderColor: color || "#71717A",
+                              color: color ? castTextColor(color) : "#F4F4F5" }
+                          : color
+                            ? { borderColor: `${color}80`, color }
+                            : undefined}
+                      >
+                        {name}
+                      </button>
                     );
                   })}
+                  {others.length > 0 && (
+                    showOthers ? others.map(name => (
+                      <button
+                        key={name}
+                        onClick={() => assign(name)}
+                        disabled={!stop}
+                        className="rounded border border-zinc-800 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-zinc-600 disabled:opacity-40"
+                        style={{ borderColor: `${castColor(name, castNames)}40` }}
+                      >
+                        {name}
+                      </button>
+                    )) : (
+                      <button
+                        onClick={() => setShowOthers(true)}
+                        className="rounded border border-dashed border-zinc-700 px-2 py-1 text-[10px] text-zinc-500 hover:text-zinc-300"
+                      >
+                        + {others.length} more in this book
+                      </button>
+                    )
+                  )}
+                  {stop?.assigned && (
+                    <button
+                      onClick={() => assign(null)}
+                      className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-rose-600 hover:text-rose-300"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
 
-                {duplicates.size > 0 && (
-                  <p className="mt-1.5 text-[10px] text-rose-300">
-                    Two characters share a name. The narration says
-                    [voice:Name], so each name has to belong to one voice.
-                  </p>
-                )}
+                <DialogueWindow content={content} stop={stop} castNames={castNames} />
 
-                {/* Names the manuscript already uses. One click each --
-                    the app read them, so the app should offer them. */}
-                {report.unassigned_names.filter(name => !rows.some(
-                  r => r.display_name.trim().toLowerCase() === name.toLowerCase())).length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500">
-                      Already in your narration:
-                    </span>
-                    {report.unassigned_names
-                      .filter(name => !rows.some(
-                        r => r.display_name.trim().toLowerCase() === name.toLowerCase()))
-                      .map(name => (
-                        <button
-                          key={name}
-                          onClick={() => addRow(name)}
-                          className="inline-flex items-center gap-1 rounded border border-violet-700 px-2 py-0.5 text-[11px] text-violet-200 hover:border-violet-500"
-                        >
-                          <Plus size={10} /> {name}
-                        </button>
-                      ))}
-                  </div>
-                )}
-
-                <button
-                  onClick={() => addRow()}
-                  className="mt-2 inline-flex items-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-400 hover:border-violet-600 hover:text-violet-300"
-                >
-                  <Plus size={11} /> Add a character
-                </button>
-              </section>
-
-              {/* The two marking tools, HERE rather than on the main
-                  toolbar: they exist only for writers who chose to use a
-                  cast, and a book with a single narrator should never
-                  see them. */}
-              <section>
-                <h3 className="mb-2 border-b border-zinc-800 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                  Mark who speaks
-                </h3>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <button
-                    onClick={() => { onStartWalkthrough?.(); onClose(); }}
-                    disabled={rows.length === 0 || dirty}
-                    title={dirty
-                      ? "Save the cast first, then walk the dialogue."
-                      : "Go through the chapter's dialogue line by line and click who says each one"}
-                    className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    onClick={() => setStopIndex(i => Math.max(0, i - 1))}
+                    disabled={stopIndex === 0}
+                    className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
                   >
-                    <Wand2 size={12} /> Cast Walkthrough
+                    &lt;- Back
                   </button>
                   <button
-                    onClick={() => { onMarkSelection?.(); onClose(); }}
-                    disabled={rows.length === 0}
-                    title="Wrap the text you have selected in the editor with a voice marker"
-                    className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-200 hover:border-violet-600 hover:text-violet-300 disabled:opacity-40"
+                    onClick={accept}
+                    disabled={!stop}
+                    className="rounded bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
                   >
-                    Mark selection
+                    Accept
                   </button>
-                  {rows.length === 0 && (
+                  <button
+                    onClick={accept}
+                    disabled={!stop}
+                    className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+                  >
+                    Skip
+                  </button>
+                  {stop?.guess && !stop.assigned && (
                     <span className="text-[10px] text-zinc-500">
-                      Add a character first.
+                      your text says{" "}
+                      <button
+                        onClick={() => assign(stop.guess)}
+                        aria-label={`Use ${stop.guess}`}
+                        className="rounded border border-emerald-700 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:border-emerald-500"
+                      >
+                        {stop.guess}
+                      </button>
                     </span>
                   )}
                 </div>
+
+                <p className="mt-2 flex flex-wrap gap-x-3 text-[10px] text-zinc-500">
+                  <span>{remaining} line{remaining === 1 ? "" : "s"} left</span>
+                  <span>{assignedCount} assigned</span>
+                  <span>{present.length - 1} character{present.length - 1 === 1 ? "" : "s"} in this chapter</span>
+                  <span className="text-zinc-600">
+                    Markers go to the editor only -- press Save there to keep them.
+                  </span>
+                </p>
               </section>
             </div>
           )}
@@ -475,23 +698,12 @@ export function CastPanel({
               {error}
             </p>
           )}
-          {!error && dirty && (
-            <p className="flex-1 text-[11px] text-amber-300">Unsaved changes.</p>
-          )}
-          {!error && !dirty && <span className="flex-1" />}
+          {!error && <span className="flex-1" />}
           <button
             onClick={attemptClose}
             className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
           >
             Close
-          </button>
-          <button
-            onClick={() => void handleSave()}
-            disabled={!dirty || saving || duplicates.size > 0}
-            className="inline-flex items-center gap-2 rounded bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
-          >
-            {saving && <Loader2 size={12} className="animate-spin" />}
-            Save Cast
           </button>
         </div>
       </div>

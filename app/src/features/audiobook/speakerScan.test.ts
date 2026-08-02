@@ -1,119 +1,201 @@
 // speakerScan.test.ts
 // ====================
-// Finding dialogue locally. This exists because the first build asked an
-// AI where the dialogue was, which made a feature that cannot start
-// without a network call, cannot be cancelled, and hung for fifteen
-// minutes on one chapter. Quotation marks need no intelligence.
+// The Cast workbench's scanner. All of it is plain string work, which is
+// the point: finding dialogue needs no model, so the workbench opens
+// instantly, costs nothing, and works offline. An earlier build asked an
+// AI where the dialogue was and hung for fifteen minutes on one chapter.
 //
-// The heuristic's job is to be RIGHT ABOUT LOCATION and merely helpful
-// about names: a wrong location wraps the wrong words, a wrong name is
-// one click to fix.
+// The unit is a PARAGRAPH. Two quotes by the same speaker in one
+// paragraph is one decision, not two -- and assigning wraps the quoted
+// runs only, so the dialogue tag stays with the narrator, which is how
+// audiobooks are actually read.
 
 import { describe, it, expect } from "vitest";
 
-import { mergeAiGuesses, scanSpeakers } from "./speakerScan";
+import {
+  chapterCast, chapterRanges, countCharacterUsage, mergeAiGuesses,
+  removeCharacterMarkers, scanDialogue, setStopVoice, stripVoiceSpans,
+} from "./speakerScan";
 
-describe("scanSpeakers", () => {
-  it("finds quoted dialogue in reading order", () => {
-    const text = 'He waited.\n\n"First line."\n\nShe left.\n\n"Second line."';
-    const stops = scanSpeakers(text);
-    expect(stops.map(s => s.quote)).toEqual(['"First line."', '"Second line."']);
-    expect(text.slice(stops[0].start, stops[0].end)).toBe('"First line."');
+const BOOK =
+  "# Chapter One\n\n"
+  + "The gate stood open.\n\n"
+  + '"This cannot continue," Lara said.\n\n'
+  + '"I heard a noise," Alexandra said. "I was just checking."\n\n'
+  + "# Chapter Two\n\n"
+  + '"Enough." The door closed behind her.\n';
+
+function chapterOne() {
+  return chapterRanges(BOOK)[0];
+}
+
+describe("chapterRanges", () => {
+  it("splits on h1 headings and excludes the heading itself", () => {
+    const ranges = chapterRanges(BOOK);
+    expect(ranges.map(r => r.title)).toEqual(["Chapter One", "Chapter Two"]);
+    expect(BOOK.slice(ranges[0].start, ranges[0].end)).toContain("The gate stood open.");
+    expect(BOOK.slice(ranges[0].start, ranges[0].end)).not.toContain("# Chapter One");
   });
 
-  it("reads the speaker out of a dialogue tag after the line", () => {
-    const stops = scanSpeakers('"This cannot continue," Elena said.');
-    expect(stops[0].guess).toBe("Elena");
-    expect(stops[0].guessSource).toBe("tag");
+  it("treats a file with no headings as one chapter", () => {
+    expect(chapterRanges('"Hello," she said.')).toHaveLength(1);
+  });
+});
+
+describe("scanDialogue", () => {
+  it("finds dialogue paragraphs, not quotations", () => {
+    const stops = scanDialogue(BOOK, chapterOne());
+    expect(stops).toHaveLength(2);
+    // Two quotes by one speaker in one paragraph = ONE decision.
+    expect(stops[1].quotes).toHaveLength(2);
   });
 
-  it("reads a tag written the other way round", () => {
-    const stops = scanSpeakers('"It already has," replied Marcus.');
+  it("offsets point at the real paragraph in the whole buffer", () => {
+    const stops = scanDialogue(BOOK, chapterOne());
+    expect(BOOK.slice(stops[0].start, stops[0].end)).toBe(stops[0].text);
+  });
+
+  it("reads the speaker from a dialogue tag, either way round", () => {
+    expect(scanDialogue(BOOK, chapterOne())[0].guess).toBe("Lara");
+    const stops = scanDialogue('"It has," replied Marcus.', {
+      title: "x", start: 0, end: 24 });
     expect(stops[0].guess).toBe("Marcus");
   });
 
-  it("reads a tag that comes before the line", () => {
-    const stops = scanSpeakers('Elena said, "This cannot continue."');
-    expect(stops[0].guess).toBe("Elena");
+  it("does not offer a pronoun as a character", () => {
+    // "he said" is the commonest tag in fiction and names nobody.
+    const text = '"Enough," he said.';
+    expect(scanDialogue(text, { title: "x", start: 0, end: text.length })[0].guess)
+      .toBe("");
   });
 
-  it("keeps a two-word name whole", () => {
-    const stops = scanSpeakers('"Enough," Elena Vasquez said.');
-    expect(stops[0].guess).toBe("Elena Vasquez");
-  });
-
-  it("does not mistake a pronoun or article for a name", () => {
-    // "he said" is the commonest tag in fiction and names nobody. A
-    // scanner that offered "He" as a cast member would be worse than
-    // one that offered nothing.
-    expect(scanSpeakers('"Enough," he said.')[0].guess).toBe("");
-    expect(scanSpeakers('"Enough," the man said.')[0].guess).toBe("");
-    expect(scanSpeakers('"Enough," they said.')[0].guess).toBe("");
-  });
-
-  it("does not let one paragraph's tag claim the next line", () => {
-    // The worst version of a wrong guess: in an alternating exchange,
-    // a tag that leaks across the paragraph break gives every second
-    // line the wrong speaker -- confidently, and in the writer's own
-    // vocabulary, so it reads as correct until you hear it.
-    const text = '"This cannot continue," Elena said.\n\n"It already has."';
-    const stops = scanSpeakers(text);
-    expect(stops[0].guess).toBe("Elena");
-    expect(stops[1].guess).toBe("");
-  });
-
-  it("leaves the name blank when there is no tag at all", () => {
-    const stops = scanSpeakers('"Enough." The door closed behind her.');
+  it("does not let one paragraph's tag claim the next", () => {
+    // In an alternating exchange this would give every second line the
+    // wrong speaker -- confidently, and in the writer's own vocabulary.
+    const stops = scanDialogue(BOOK, chapterRanges(BOOK)[1]);
     expect(stops[0].guess).toBe("");
-    expect(stops[0].guessSource).toBe("");
   });
 
-  it("skips lines the writer has already assigned", () => {
-    // Re-asking about answered lines is what makes a walk feel endless.
-    const text = '[voice:Elena]"Enough," she said.[/voice]\n\n"And this one?"';
-    const stops = scanSpeakers(text);
-    expect(stops.map(s => s.quote)).toEqual(['"And this one?"']);
+  it("reports a paragraph that is already assigned", () => {
+    const text = '[voice:Lara]"Enough."[/voice]';
+    const stops = scanDialogue(text, { title: "x", start: 0, end: text.length });
+    expect(stops[0].assigned).toBe("Lara");
+    // The quote is still found, so the writer can reassign it.
+    expect(stops[0].quotes).toHaveLength(1);
   });
 
-  it("handles curly quotes, which is what a pasted manuscript has", () => {
-    const stops = scanSpeakers('“This cannot continue,” Elena said.');
-    expect(stops).toHaveLength(1);
-    expect(stops[0].guess).toBe("Elena");
+  it("skips paragraphs with no dialogue at all", () => {
+    const stops = scanDialogue(BOOK, chapterOne());
+    expect(stops.every(s => !s.text.startsWith("The gate"))).toBe(true);
+  });
+});
+
+describe("setStopVoice", () => {
+  it("wraps every quoted run in the paragraph, leaving the tag to the narrator", () => {
+    const stops = scanDialogue(BOOK, chapterOne());
+    const next = setStopVoice(BOOK, stops[1], "Alexandra");
+    expect(next).toContain('[voice:Alexandra]"I heard a noise,"[/voice] Alexandra said.');
+    expect(next).toContain('[voice:Alexandra]"I was just checking."[/voice]');
+    // "Alexandra said." is narration and must stay outside the span.
+    expect(next).not.toContain('Alexandra said."[/voice]');
   });
 
-  it("ignores a quotation too short to be a line of dialogue", () => {
-    // Scare quotes around one word are not somebody speaking.
-    expect(scanSpeakers('She called it "a" problem.')).toHaveLength(0);
+  it("re-assigning replaces rather than nesting", () => {
+    // Clicking through three characters in a row is normal. The last
+    // click must simply be what the paragraph says.
+    const first = setStopVoice(BOOK, scanDialogue(BOOK, chapterOne())[0], "Lara");
+    const stops = scanDialogue(first, chapterRanges(first)[0]);
+    const second = setStopVoice(first, stops[0], "Alexandra");
+    expect(second).toContain('[voice:Alexandra]"This cannot continue,"[/voice]');
+    expect(second).not.toContain("[voice:Lara]");
+    expect(second.match(/\[voice:/g)).toHaveLength(1);
+  });
+
+  it("clearing puts the line back to the narrator without losing a word", () => {
+    const assigned = setStopVoice(BOOK, scanDialogue(BOOK, chapterOne())[0], "Lara");
+    const stops = scanDialogue(assigned, chapterRanges(assigned)[0]);
+    const cleared = setStopVoice(assigned, stops[0], null);
+    expect(cleared).toBe(BOOK);
+  });
+
+  it("never touches the rest of the book", () => {
+    const next = setStopVoice(BOOK, scanDialogue(BOOK, chapterOne())[0], "Lara");
+    expect(next).toContain("# Chapter Two");
+    expect(next).toContain('"Enough." The door closed behind her.');
+  });
+});
+
+describe("chapterCast", () => {
+  it("names only the people this chapter uses", () => {
+    // A thirty-character book has to show three buttons, and the AI must
+    // not be offered names that are not in the scene.
+    expect(chapterCast(BOOK, chapterOne()).sort()).toEqual(["Alexandra", "Lara"]);
+    expect(chapterCast(BOOK, chapterRanges(BOOK)[1])).toEqual([]);
+  });
+
+  it("counts a marked speaker even when the prose never names them", () => {
+    const text = '[voice:Innkeeper]"Room for one?"[/voice]';
+    expect(chapterCast(text, { title: "x", start: 0, end: text.length }))
+      .toEqual(["Innkeeper"]);
+  });
+});
+
+describe("removing a character", () => {
+  it("counts real usage across the book before anything is deleted", () => {
+    let book = setStopVoice(BOOK, scanDialogue(BOOK, chapterOne())[0], "Lara");
+    const second = scanDialogue(book, chapterRanges(book)[0])[1];
+    book = setStopVoice(book, second, "Lara");
+    const usage = countCharacterUsage(book, "lara");
+    // Two paragraphs, three quoted runs between them.
+    expect(usage.lines).toBe(3);
+    expect(usage.chapters).toEqual(["Chapter One"]);
+  });
+
+  it("removes the markers everywhere and keeps every word", () => {
+    const book = setStopVoice(BOOK, scanDialogue(BOOK, chapterOne())[0], "Lara");
+    const cleaned = removeCharacterMarkers(book, "Lara");
+    expect(cleaned).toBe(BOOK);
+    expect(cleaned).toContain('"This cannot continue," Lara said.');
+  });
+
+  it("leaves other characters alone", () => {
+    let book = setStopVoice(BOOK, scanDialogue(BOOK, chapterOne())[0], "Lara");
+    const second = scanDialogue(book, chapterRanges(book)[0])[1];
+    book = setStopVoice(book, second, "Alexandra");
+    const cleaned = removeCharacterMarkers(book, "Lara");
+    expect(cleaned).not.toContain("[voice:Lara]");
+    expect(cleaned).toContain("[voice:Alexandra]");
+  });
+});
+
+describe("stripVoiceSpans", () => {
+  it("dissolves the wrapper and never the words", () => {
+    expect(stripVoiceSpans('[voice:Lara]"Hello"[/voice] she said.'))
+      .toBe('"Hello" she said.');
   });
 });
 
 describe("mergeAiGuesses", () => {
-  const stops = scanSpeakers('"Enough."\n\n"Not yet," Elena said.');
-
   it("fills in a name the prose did not give", () => {
+    const stops = scanDialogue(BOOK, chapterRanges(BOOK)[1]);
     const merged = mergeAiGuesses(stops, [
-      { quote: '"Enough."', speaker: "Marcus", confidence: 0.7 },
-    ]);
+      { quote: '"Enough."', speaker: "Marcus", confidence: 0.7 }]);
     expect(merged[0].guess).toBe("Marcus");
     expect(merged[0].guessSource).toBe("ai");
   });
 
   it("never overrides a tag the writer actually wrote", () => {
-    // The writer's own tag is evidence; the model's guess is a guess.
+    const stops = scanDialogue(BOOK, chapterOne());
     const merged = mergeAiGuesses(stops, [
-      { quote: '"Not yet,"', speaker: "Marcus", confidence: 0.99 },
-    ]);
-    const tagged = merged.find(s => s.quote.startsWith('"Not yet'))!;
-    expect(tagged.guess).toBe("Elena");
-    expect(tagged.guessSource).toBe("tag");
+      { quote: '"This cannot continue,"', speaker: "Marcus", confidence: 0.99 }]);
+    expect(merged[0].guess).toBe("Lara");
+    expect(merged[0].guessSource).toBe("tag");
   });
 
-  it("ignores a proposal that matches no line the scan found", () => {
-    // The model may have an opinion about who speaks. It never gets one
-    // about where the writer's words begin and end.
+  it("ignores a proposal matching no line the scan found", () => {
+    const stops = scanDialogue(BOOK, chapterOne());
     const merged = mergeAiGuesses(stops, [
-      { quote: '"A line nobody wrote."', speaker: "Ghost", confidence: 1 },
-    ]);
+      { quote: '"A line nobody wrote."', speaker: "Ghost", confidence: 1 }]);
     expect(merged.every(s => s.guess !== "Ghost")).toBe(true);
   });
 });

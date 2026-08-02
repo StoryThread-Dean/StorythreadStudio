@@ -20,12 +20,10 @@ import {
 
 import {
   addChapters, fetchAudioStatus, fetchAvailableChapters, fetchCast,
-  fetchNarration, saveCast, saveNarration,
+  fetchNarration, saveNarration,
 } from "./api";
 import type { AudioStatus, AvailableChapter, ChapterAudioStatus } from "./api";
-import type { SpeakerStop } from "./speakerScan";
 import { CastPanel } from "./CastPanel";
-import { SpeakerWalkthrough } from "./SpeakerWalkthrough";
 import { StorageDialog } from "./StorageDialog";
 import { InsertWalkthrough } from "./InsertWalkthrough";
 import { GenerationPanel } from "./GenerationPanel";
@@ -173,12 +171,11 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     };
   }, [content]);
 
-  // ── The cast tools ──────────────────────────────────────────────────────
-  // Voice markers and the walkthrough only make sense once somebody has
-  // been cast, so the toolbar hides them until then: a single-narrator
-  // book never sees a control it has no use for.
+  // ── The cast ────────────────────────────────────────────────────────────
+  // Everything about casting lives in the Cast workbench: the voices,
+  // the dialogue walk, and the markers it writes. All this screen keeps
+  // is the count for the rail button and a refresh when it saves.
   const [castNames, setCastNames] = useState<string[]>([]);
-  const [castWalk, setCastWalk] = useState(false);
 
   const refreshCast = useCallback(async () => {
     try {
@@ -195,44 +192,6 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   useEffect(() => { void refreshCast(); }, [refreshCast]);
 
   const openCast = useCallback(() => setCastOpen(true), []);
-
-  /** Wrap one walkthrough stop's exact words in a voice span. */
-  const assignSpeaker = useCallback((stop: SpeakerStop, speaker: string) => {
-    setContent(prev => {
-      // Re-check before wrapping: offsets came from a scan, and a scan
-      // is only true of the text it read.
-      if (prev.slice(stop.start, stop.end) !== stop.quote) return prev;
-      return prev.slice(0, stop.start)
-        + `[voice:${speaker}]` + stop.quote + "[/voice]"
-        + prev.slice(stop.end);
-    });
-    setDirty(true);
-  }, []);
-
-  /** A name used in the walk that is not cast yet. Added with no voice,
-      so it reads as the narrator until the writer picks one -- audible
-      continuity beats a silent gap. */
-  const addToCast = useCallback(async (name: string) => {
-    try {
-      const cast = await fetchCast(workspacePath);
-      const characters = cast.speakers
-        .filter(s => s.role === "character")
-        .map(s => ({ display_name: s.display_name, voice_id: s.voice_id }));
-      if (characters.some(c => c.display_name.toLowerCase() === name.toLowerCase())) return;
-      await saveCast(workspacePath, [...characters, { display_name: name, voice_id: "" }]);
-      void refreshCast();
-    } catch { /* the marker still stands; the cast panel can fix it */ }
-  }, [workspacePath, refreshCast]);
-
-  /** Select and scroll to a stop, so the walk points at real words. */
-  const highlightRange = useCallback((start: number, length: number) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.focus({ preventScroll: true });
-    ta.setSelectionRange(start, start + length);
-    ta.scrollTop = (start / Math.max(content.length, 1)) * ta.scrollHeight
-      - ta.clientHeight / 3;
-  }, [content]);
 
   // ── The [say] popout (user-designed) ────────────────────────────────────
   // Instead of typing into raw brackets, [say] opens a structured card
@@ -656,17 +615,6 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               onClose={() => setSayEditor(null)}
             />
           )}
-          {castWalk && (
-            <SpeakerWalkthrough
-              content={content}
-              workspacePath={workspacePath}
-              castNames={castNames}
-              onAssign={assignSpeaker}
-              onHighlight={highlightRange}
-              onAddToCast={name => void addToCast(name)}
-              onClose={() => setCastWalk(false)}
-            />
-          )}
           {warnings.length > 0 && (
             <div className="shrink-0 border-b border-zinc-800 bg-blue-950/40 px-4 py-2">
               {warnings.map((warning, i) => (
@@ -748,10 +696,9 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       {castOpen && (
         <CastPanel
           workspacePath={workspacePath}
+          content={content}
+          onContentChange={next => { setContent(next); setDirty(true); }}
           onClose={() => setCastOpen(false)}
-          onMarkSelection={() =>
-            wrapSelection("[voice:]", "[/voice]", "[voice:".length)}
-          onStartWalkthrough={() => setCastWalk(true)}
           onSaved={() => {
             // Recasting outdates that character's lines, and nothing
             // else -- the badges should say so immediately.

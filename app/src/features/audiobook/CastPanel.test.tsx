@@ -1,15 +1,9 @@
 // CastPanel.test.tsx
 // ===================
-// The cast screen's contract. Two things here are not cosmetic:
-//
-//   The manuscript already knows the names. A writer who typed
-//   [voice:Elena] before opening this panel must not have to retype
-//   "Elena" -- the app read it, so the app offers it.
-//
-//   A name belongs to one voice. The narration says [voice:Name], so two
-//   characters sharing a name would make that ambiguous, and the
-//   ambiguity would be resolved silently at render time. Save is blocked
-//   rather than letting it through.
+// The Cast workbench. What is pinned here is the behaviour that makes it
+// a workbench rather than a settings dialog: the dialogue is the work
+// surface, a click lands on the writer's real text immediately, and
+// nothing reaches disk from this window at all.
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
@@ -18,9 +12,35 @@ import { CastPanel } from "./CastPanel";
 
 const WS = "C:/books/hollow-road-audio";
 
-// Two rosters, because the app has two narration passes at once. The
-// local one is always offered; the print one only when an engine is
-// chosen AND its key is connected.
+const BOOK =
+  "# Chapter One\n\n"
+  + "The gate stood open.\n\n"
+  + '"This cannot continue," Lara said.\n\n'
+  + '"I heard a noise," Alexandra said.\n';
+
+function report(over: Record<string, unknown> = {}) {
+  return {
+    speakers: [
+      { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
+        voice_id: "af_heart", premium_voice_id: "" },
+    ],
+    unassigned_names: [],
+    single_engine: true,
+    ...over,
+  };
+}
+
+const CAST_WITH_TWO = report({
+  speakers: [
+    { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
+      voice_id: "af_heart", premium_voice_id: "" },
+    { speaker_id: "character-lara", display_name: "Lara", role: "character",
+      voice_id: "bf_emma", premium_voice_id: "" },
+    { speaker_id: "character-alexandra", display_name: "Alexandra",
+      role: "character", voice_id: "af_bella", premium_voice_id: "" },
+  ],
+});
+
 const DRAFT_ONLY = {
   draft: {
     label: "Free -- your local narrator", installed: true, note: "",
@@ -29,11 +49,7 @@ const DRAFT_ONLY = {
       { id: "bf_emma", label: "Emma (British female)" },
     ],
   },
-  print: {
-    configured: false, has_api_key: false, voices: [], label: "",
-    note: "No print engine is chosen, so this book prints with whatever you "
-        + "pick in Audiobook Settings.",
-  },
+  print: { configured: false, has_api_key: false, voices: [], label: "", note: "" },
 };
 
 const WITH_PRINT = {
@@ -45,34 +61,8 @@ const WITH_PRINT = {
   },
 };
 
-function report(over: Partial<Record<string, unknown>> = {}) {
-  return {
-    speakers: [
-      { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
-        voice_id: "af_heart" },
-    ],
-    unassigned_names: ["Elena"],
-    single_engine: true,
-    ...over,
-  };
-}
-
 function mockFetch(initial = report(), options: unknown = DRAFT_ONLY) {
-  return vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.includes("/speakers") && (init?.method ?? "GET") === "PUT") {
-      const body = JSON.parse(String(init?.body));
-      return { ok: true, json: async () => report({
-        speakers: [
-          { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
-            voice_id: body.narrator_voice ?? "af_heart" },
-          ...body.speakers.map((s: { display_name: string; voice_id: string }) => ({
-            speaker_id: `character-${s.display_name.toLowerCase()}`,
-            display_name: s.display_name, role: "character", voice_id: s.voice_id,
-          })),
-        ],
-        unassigned_names: [],
-      }) };
-    }
+  return vi.fn(async (url: string) => {
     if (url.includes("/speakers")) return { ok: true, json: async () => initial };
     if (url.includes("/voice-options")) return { ok: true, json: async () => options };
     if (url.includes("/preview")) return { ok: true, blob: async () => new Blob(["wav"]) };
@@ -80,19 +70,18 @@ function mockFetch(initial = report(), options: unknown = DRAFT_ONLY) {
   });
 }
 
-async function open(fetchMock: ReturnType<typeof mockFetch>) {
+async function open(fetchMock: ReturnType<typeof mockFetch>, content = BOOK) {
   vi.stubGlobal("fetch", fetchMock);
+  const onContentChange = vi.fn();
   const onSaved = vi.fn();
-  render(<CastPanel workspacePath={WS} onClose={vi.fn()} onSaved={onSaved} />);
+  render(<CastPanel workspacePath={WS} content={content}
+                    onContentChange={onContentChange}
+                    onClose={vi.fn()} onSaved={onSaved} />);
+  // Ready = the panel rendered. NOT the voice picker: with a cast
+  // present the voice list is folded away, which is the point.
   await waitFor(() =>
-    expect(screen.getByLabelText("Narrator voice")).toBeTruthy());
-  return { onSaved };
-}
-
-function putBodies(fetchMock: ReturnType<typeof mockFetch>) {
-  return fetchMock.mock.calls
-    .filter(([, init]) => (init as RequestInit | undefined)?.method === "PUT")
-    .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+    expect(screen.getByRole("button", { name: /Is this needed\?/ })).toBeTruthy());
+  return { onContentChange, onSaved };
 }
 
 afterEach(() => {
@@ -101,154 +90,155 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("CastPanel", () => {
-  it("offers the names the manuscript already uses", async () => {
+describe("CastPanel workbench", () => {
+  it("opens on the first line that still needs deciding", async () => {
+    // The writer opened this to work, not to scroll past what they
+    // already did.
+    const assigned = BOOK.replace('"This cannot continue,"',
+                                  '[voice:Lara]"This cannot continue,"[/voice]');
+    await open(mockFetch(CAST_WITH_TWO), assigned);
+    expect(screen.getByText(/line 2 of 2/)).toBeTruthy();
+    expect(screen.getByText(/1 line left/)).toBeTruthy();
+  });
+
+  it("leads with what happens, not with instructions", async () => {
     await open(mockFetch());
-    expect(screen.getByText(/Already in your narration/)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Elena" }));
-    expect((screen.getByLabelText("Character 1 name") as HTMLInputElement).value)
-      .toBe("Elena");
+    expect(screen.getByText(/you mark as theirs is read in that voice/)).toBeTruthy();
   });
 
-  it("saves characters and the narrator voice, and the narrator is not a character", async () => {
-    // The narrator is implicit: it is the book's own voice, not a row
-    // the writer can delete or duplicate.
-    const fetchMock = mockFetch();
-    const { onSaved } = await open(fetchMock);
-
-    fireEvent.click(screen.getByRole("button", { name: "Elena" }));
-    fireEvent.change(screen.getByLabelText("Voice for character 1"),
-                     { target: { value: "bf_emma" } });
-    fireEvent.change(screen.getByLabelText("Narrator voice"),
-                     { target: { value: "af_heart" } });
-    fireEvent.click(screen.getByRole("button", { name: /Save Cast/ }));
-
-    await waitFor(() => expect(putBodies(fetchMock).length).toBe(1));
-    const body = putBodies(fetchMock)[0];
-    expect(body.speakers).toEqual([
-      { display_name: "Elena", voice_id: "bf_emma", premium_voice_id: "" },
-    ]);
-    expect(body.narrator_voice).toBe("af_heart");
-    await waitFor(() => expect(onSaved).toHaveBeenCalled());
-  });
-
-  it("refuses to save two characters with the same name", async () => {
-    const fetchMock = mockFetch();
-    await open(fetchMock);
-
-    fireEvent.click(screen.getByRole("button", { name: /Add a character/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Add a character/ }));
-    fireEvent.change(screen.getByLabelText("Character 1 name"),
-                     { target: { value: "Elena" } });
-    fireEvent.change(screen.getByLabelText("Character 2 name"),
-                     { target: { value: "elena" } });
-
-    expect(screen.getByText(/each name has to belong to one voice/)).toBeTruthy();
-    expect((screen.getByRole("button", { name: /Save Cast/ }) as HTMLButtonElement)
-      .disabled).toBe(true);
-    expect(putBodies(fetchMock)).toEqual([]);
-  });
-
-  it("explains the cost question where a writer will ask it", async () => {
-    // "Does casting cost more?" is the question that stops people
-    // trying the feature at all. The answer is no, and it belongs one
-    // click away rather than in a paragraph nobody reads.
+  it("keeps every explanation closed until asked, starting with 'is this needed'", async () => {
+    // The panel used to open with a wall of text. Depth is one click
+    // away and the honest answer -- no, you do not need this -- leads.
     await open(mockFetch());
-    fireEvent.click(screen.getByText(/Does casting cost more\?/));
-    expect(screen.getByText(/free and unlimited/)).toBeTruthy();
-    expect(screen.getByText(/billed by the character whether one voice/))
-      .toBeTruthy();
+    expect(screen.queryByText(/A book read entirely by one narrator/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Is this needed\?/ }));
+    expect(screen.getByText(/A book read entirely by one narrator/)).toBeTruthy();
   });
 
-  it("a character with no voice reads as the narrator, and says so", async () => {
+  it("opens the voice list when nothing is cast, and folds it when something is", async () => {
     await open(mockFetch());
-    fireEvent.click(screen.getByRole("button", { name: "Elena" }));
-    const select = screen.getByLabelText("Voice for character 1") as HTMLSelectElement;
-    expect(select.value).toBe("");
-    expect(screen.getAllByText("Same as the narrator").length).toBeGreaterThan(0);
-  });
-  it("says in one line that this is free, and shows the marker", async () => {
-    // The writer's own first reaction was "wait, can I even do this on
-    // local generation?". The answer is the first thing on screen, and
-    // it fits on one line -- the wall of text it replaced is now behind
-    // What's this.
-    await open(mockFetch());
-    expect(screen.getByText(/Free on your local narrator/)).toBeTruthy();
-    expect(screen.getByText("[voice:Elena]")).toBeTruthy();
+    expect(screen.getByText(/start here -- add the characters who speak/)).toBeTruthy();
+    expect(screen.getByLabelText("Narrator voice")).toBeTruthy();
+
+    cleanup();
+    await open(mockFetch(CAST_WITH_TWO));
+    expect(screen.getByText(/2 characters -- narrator reads the rest/)).toBeTruthy();
+    expect(screen.queryByLabelText("Voice for character 1")).toBeNull();
   });
 
-  it("always offers the local roster, print engine or not", async () => {
-    // Live finding: choosing a hosted print engine greyed out EVERY
-    // local voice -- the ones the writer had been drafting with all
-    // along. Availability is not "is this the current engine".
-    await open(mockFetch(report(), WITH_PRINT));
-    const draft = screen.getByLabelText("Narrator voice") as HTMLSelectElement;
-    const enabled = Array.from(draft.querySelectorAll("option"))
-      .filter(o => !o.disabled).map(o => o.value);
-    expect(enabled).toContain("af_heart");
-    expect(enabled).toContain("bf_emma");
-  });
-
-  it("offers a print voice only when a print engine is connected", async () => {
+  it("shows a Pro voice column only when a print engine is connected, defaulting to none", async () => {
+    // "-- None chosen" is a sanity check: a writer who never set these
+    // can be sure they have not quietly armed a paid render.
     await open(mockFetch());
-    expect(screen.queryByLabelText("Narrator print voice")).toBeNull();
+    expect(screen.queryByLabelText("Narrator Pro voice")).toBeNull();
 
     cleanup();
     await open(mockFetch(report(), WITH_PRINT));
-    const print = screen.getByLabelText("Narrator print voice") as HTMLSelectElement;
-    expect(Array.from(print.querySelectorAll("option")).map(o => o.value))
-      .toContain("thalia");
+    const pro = screen.getByLabelText("Narrator Pro voice") as HTMLSelectElement;
+    expect(pro.value).toBe("");
+    expect(screen.getByText("-- None chosen")).toBeTruthy();
   });
 
-  it("does not warn about engines nobody chose", async () => {
-    // Live finding: the panel opened with five alert tiles for engines
-    // the writer had never selected.
-    await open(mockFetch());
-    expect(screen.queryByText(/API key is connected/)).toBeNull();
-    expect(screen.queryByText(/Switch engines/)).toBeNull();
+  it("offers only the characters this chapter actually uses", async () => {
+    // A thirty-character book must not show thirty buttons.
+    const cast = report({
+      speakers: [
+        ...CAST_WITH_TWO.speakers,
+        { speaker_id: "character-marcus", display_name: "Marcus",
+          role: "character", voice_id: "", premium_voice_id: "" },
+      ],
+    });
+    await open(mockFetch(cast));
+    expect(screen.getByRole("button", { name: "Lara" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Alexandra" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Marcus" })).toBeNull();
+    expect(screen.getByText(/\+ 1 more in this book/)).toBeTruthy();
   });
 
-  it("warns once when the chosen print engine has no key", async () => {
-    await open(mockFetch(report(), {
-      draft: DRAFT_ONLY.draft,
-      print: { configured: true, has_api_key: false, label: "Deepgram Aura-2",
-               voices: [], note: "No OpenRouter API key is connected." },
-    }));
-    expect(screen.getAllByText(/No OpenRouter API key is connected/)).toHaveLength(1);
+  it("a click lands on the writer's real text straight away", async () => {
+    // Click-applies is the point of the window: you see the marker
+    // appear on your own line rather than staging a decision.
+    const { onContentChange } = await open(mockFetch(CAST_WITH_TWO));
+    fireEvent.click(screen.getByRole("button", { name: "Lara" }));
+    expect(onContentChange).toHaveBeenCalledTimes(1);
+    expect(onContentChange.mock.calls[0][0])
+      .toContain('[voice:Lara]"This cannot continue,"[/voice] Lara said.');
   });
 
-  it("samples a local voice for free", async () => {
-    const fetchMock = mockFetch();
-    await open(fetchMock);
-    window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-    window.URL.createObjectURL = vi.fn(() => "blob:sample");
-
-    fireEvent.change(screen.getByLabelText("Narrator voice"),
-                     { target: { value: "bf_emma" } });
-    fireEvent.click(screen.getByLabelText("Sample Narrator voice"));
-    await waitFor(() => expect(fetchMock.mock.calls.some(
-      ([url]) => String(url).includes("/preview"))).toBe(true));
+  it("the narrator is a real answer, not a skip", async () => {
+    // Most books have far more speakers than cast members -- the store
+    // clerk with one line should never be cast.
+    const assigned = BOOK.replace('"This cannot continue,"',
+                                  '[voice:Lara]"This cannot continue,"[/voice]');
+    const { onContentChange } = await open(mockFetch(CAST_WITH_TWO), assigned);
+    // The walk opens on the first UNDECIDED line, so step back to the
+    // one already given to Lara.
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Narrator" }));
+    expect(onContentChange.mock.calls[0][0]).not.toContain("[voice:Lara]");
+    expect(onContentChange.mock.calls[0][0]).toContain('"This cannot continue,"');
   });
 
-  it("keeps the deep explanation behind What's this, not on the page", async () => {
-    // The panel used to open with a wall of text nobody would read. One
-    // line and an example up front; depth on request.
-    await open(mockFetch());
-    expect(screen.queryByText(/A voice is not a performance/)).toBeNull();
-    fireEvent.click(screen.getByText(/What are the limits\?/));
-    expect(screen.getByText(/A voice is not a performance/)).toBeTruthy();
+  it("offers the name the writer's own tag gives", async () => {
+    await open(mockFetch(CAST_WITH_TWO));
+    expect(screen.getByText(/your text says/)).toBeTruthy();
   });
 
-  it("offers the marking tools here, and only once somebody is cast", async () => {
-    // They exist ONLY for a writer who chose to use a cast, so they do
-    // not belong on the main toolbar.
-    await open(mockFetch());
-    expect((screen.getByRole("button", { name: /Cast Walkthrough/ }) as HTMLButtonElement)
-      .disabled).toBe(true);
+  it("Back walks to the previous line", async () => {
+    await open(mockFetch(CAST_WITH_TWO));
+    expect(screen.getByText(/line 1 of 2/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Back/ }) as HTMLButtonElement).disabled)
+      .toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Elena" }));
-    expect((screen.getByRole("button", { name: /Mark selection/ }) as HTMLButtonElement)
-      .disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(screen.getByText(/line 2 of 2/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+    expect(screen.getByText(/line 1 of 2/)).toBeTruthy();
+  });
+
+  it("counts what is left, and says nothing is saved from here", async () => {
+    await open(mockFetch(CAST_WITH_TWO));
+    expect(screen.getByText(/2 lines left/)).toBeTruthy();
+    expect(screen.getByText(/press Save there to keep them/)).toBeTruthy();
+  });
+
+  it("removes an unused character without ceremony", async () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const { onContentChange } = await open(
+      mockFetch(CAST_WITH_TWO), "# Chapter One\n\nNo dialogue at all.\n");
+    fireEvent.click(screen.getByRole("button", { name: /Voices/ }));
+    fireEvent.click(screen.getByLabelText("Remove Lara"));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(onContentChange).not.toHaveBeenCalled();
+  });
+
+  it("warns before removing a character who is used, and keeps the words", async () => {
+    const assigned = BOOK.replace('"This cannot continue,"',
+                                  '[voice:Lara]"This cannot continue,"[/voice]');
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { onContentChange } = await open(mockFetch(CAST_WITH_TWO), assigned);
+
+    fireEvent.click(screen.getByRole("button", { name: /Voices/ }));
+    fireEvent.click(screen.getByLabelText("Remove Lara"));
+    const message = confirm.mock.calls[0][0] as string;
+    expect(message).toContain("1 line");
+    expect(message).toContain("Chapter One");
+    expect(message).toContain("everywhere in the book");
+    expect(message).toContain("go back to the narrator");
+
+    const next = onContentChange.mock.calls[0][0] as string;
+    expect(next).not.toContain("[voice:Lara]");
+    expect(next).toContain('"This cannot continue," Lara said.');
+  });
+
+  it("declining the removal changes nothing at all", async () => {
+    const assigned = BOOK.replace('"This cannot continue,"',
+                                  '[voice:Lara]"This cannot continue,"[/voice]');
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { onContentChange } = await open(mockFetch(CAST_WITH_TWO), assigned);
+    fireEvent.click(screen.getByRole("button", { name: /Voices/ }));
+    fireEvent.click(screen.getByLabelText("Remove Lara"));
+    expect(onContentChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Lara" })).toBeTruthy();
   });
 });
