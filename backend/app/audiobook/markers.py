@@ -57,6 +57,29 @@ _PACE_CLOSE_RE = re.compile(r"\[/pace\]", re.IGNORECASE)
 
 PACE_MIN, PACE_MAX = 0.5, 2.0
 
+# Voice spans narrate their contents as somebody else -- the third
+# universal span marker, after pace (and before volume). One paragraph of
+# dialogue read by Elena's voice, the rest of the book by the narrator:
+#
+#   [voice:Elena]"This cannot continue," she said.[/voice]
+#
+# The span carries a NAME, not a voice id. Names are what the writer
+# thinks in, they survive recasting (change Elena's voice once in the
+# cast and every one of her lines re-renders), and a narration copy full
+# of "af_heart" would be unreadable in the plain-text editor this whole
+# format exists to stay compatible with.
+#
+# Universal by construction in the same sense as pace: every engine takes
+# a voice id, so a voice span means the same thing everywhere. What is
+# NOT universal is mixing engines -- one run, one engine, many voices.
+_VOICE_RE = re.compile(r"\[voice:([^\]]*)\](.*?)\[/voice\]", re.IGNORECASE | re.DOTALL)
+_VOICE_OPEN_RE = re.compile(r"\[voice:([^\]]*)\]", re.IGNORECASE)
+_VOICE_CLOSE_RE = re.compile(r"\[/voice\]", re.IGNORECASE)
+
+# The cast always contains this one, it can never be deleted, and it is
+# what an unknown or unset speaker falls back to.
+NARRATOR = "Narrator"
+
 
 @dataclass
 class ParsedChapter:
@@ -139,17 +162,22 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
             tail_excluded = {"type": "excluded", "content": tail_text}
         body_wo_excludes = body_wo_excludes[:cut]
 
-    # 2. Split into pace regions: text inside [pace:X]...[/pace] carries a
-    #    speed; everything else runs at 1.0. Regions are processed in
-    #    order, so the exclude placeholders' iterator stays in sync.
-    regions = _pace_regions(body_wo_excludes, warnings, chapter_title)
+    # 2. Split into VOICE regions first, then pace regions inside each.
+    #    Voice is the outer span deliberately: a character's line may
+    #    change speed within it, but a pace change never changes who is
+    #    speaking. Regions are processed in order, so the exclude
+    #    placeholders' iterator stays in sync.
+    regions: list[tuple[float | str, str, str]] = []
+    for voice, voice_chunk in _voice_regions(body_wo_excludes, warnings, chapter_title):
+        for pace, chunk in _pace_regions(voice_chunk, warnings, chapter_title):
+            regions.append((pace, voice, chunk))
 
     # 3. Walk each region's text, splitting at the remaining markers. The
     #    placeholder marks where an excluded block sat; its element is
     #    emitted at that spot so reading order is preserved.
     pending_excludes = iter(elements_holder)
 
-    def _flush_with_excludes(chunk: str, pace: float | str) -> None:
+    def _flush_with_excludes(chunk: str, pace: float | str, voice: str) -> None:
         pieces = chunk.split("\x00EXCL\x00")
         for i, piece in enumerate(pieces):
             text = piece.strip()
@@ -157,6 +185,8 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
                 element = {"type": "text", "content": text}
                 if pace != 1.0:
                     element["pace"] = pace
+                if voice:
+                    element["voice"] = voice
                 elements.append(element)
             if i < len(pieces) - 1:
                 try:
@@ -164,11 +194,11 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
                 except StopIteration:
                     pass
 
-    for pace, region in regions:
+    for pace, voice, region in regions:
         pos = 0
         for match in _MARKER_RE.finditer(region):
             before_chunk = region[pos : match.start()]
-            _flush_with_excludes(before_chunk, pace)
+            _flush_with_excludes(before_chunk, pace, voice)
             pos = match.end()
             if match.group(1):                   # pause with duration
                 raw = (match.group(2) or "").strip()
@@ -199,7 +229,7 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
                 elements.append({"type": "scene_break"})
             else:
                 elements.append({"type": "chapter_break"})
-        _flush_with_excludes(region[pos:], pace)
+        _flush_with_excludes(region[pos:], pace, voice)
 
     if tail_excluded is not None:
         elements.append(tail_excluded)
@@ -235,6 +265,89 @@ def _parse_pace_value(raw: str, warnings: list[str], chapter_title: str) -> floa
             f"{PACE_MIN} to {PACE_MAX}); normal pace was used."
         )
         return 1.0
+
+
+def _voice_regions(body: str, warnings: list[str],
+                   chapter_title: str) -> list[tuple[str, str]]:
+    """Split a chapter body into (voice name, chunk) runs, in reading
+    order. "" means the narrator.
+
+    The failure modes are the same three the pace splitter learned, and
+    they matter more here: a passage silently read by the wrong character
+    is worse than one read at the wrong speed, because the writer hears a
+    stranger rather than a slightly-off tempo.
+      - nested spans are not supported (warned, inner opener dropped)
+      - an unclosed [voice:...] applies to the rest of the chapter (warned)
+      - a stray [/voice] is dropped WITH a warning -- the classic cause is
+        a preview selection that cut into a span, which would otherwise
+        play in the narrator's voice with no explanation
+    """
+
+    def _drop_stray_closers(chunk: str) -> str:
+        if _VOICE_CLOSE_RE.search(chunk):
+            warnings.append(
+                f"Chapter '{chapter_title}': a [/voice] has no opening "
+                "[voice:...] and was ignored. If this is a preview, make sure "
+                "the selection includes the [voice:...] tag -- otherwise the "
+                "passage is read by the narrator."
+            )
+            return _VOICE_CLOSE_RE.sub("", chunk)
+        return chunk
+
+    def _clean_name(raw: str) -> str:
+        name = " ".join(raw.split()).strip()
+        if not name:
+            warnings.append(
+                f"Chapter '{chapter_title}': a [voice:] marker has no name; "
+                "the narrator was used."
+            )
+        return name
+
+    regions: list[tuple[str, str]] = []
+    pos = 0
+    for match in _VOICE_RE.finditer(body):
+        if match.start() > pos:
+            regions.append(("", _drop_stray_closers(body[pos:match.start()])))
+        inner = match.group(2)
+        if _VOICE_OPEN_RE.search(inner):
+            warnings.append(
+                f"Chapter '{chapter_title}': voice markers cannot nest; the "
+                "inner [voice:...] was ignored."
+            )
+            inner = _VOICE_OPEN_RE.sub("", inner)
+        regions.append((_clean_name(match.group(1)), inner))
+        pos = match.end()
+
+    tail = body[pos:]
+    leftover = _VOICE_OPEN_RE.search(tail)
+    if leftover:
+        warnings.append(
+            f"Chapter '{chapter_title}': a [voice:...] has no closing "
+            "[/voice]; it applies to the rest of the chapter."
+        )
+        before = tail[: leftover.start()]
+        if before.strip():
+            regions.append(("", _drop_stray_closers(before)))
+        regions.append((_clean_name(leftover.group(1)),
+                        _drop_stray_closers(tail[leftover.end():])))
+    elif tail.strip() or not regions:
+        regions.append(("", _drop_stray_closers(tail)))
+    return regions
+
+
+def speaker_names(narration_text: str) -> list[str]:
+    """Every distinct name used in a [voice:...] span, in first-use order.
+
+    Used to tell the writer which names their manuscript expects, so the
+    cast screen can offer to add the ones that are missing rather than
+    making them retype what they already wrote.
+    """
+    seen: list[str] = []
+    for match in _VOICE_OPEN_RE.finditer(narration_text):
+        name = " ".join(match.group(1).split()).strip()
+        if name and not any(name.lower() == s.lower() for s in seen):
+            seen.append(name)
+    return seen
 
 
 def _pace_regions(body: str, warnings: list[str],

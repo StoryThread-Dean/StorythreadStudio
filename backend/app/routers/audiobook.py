@@ -28,6 +28,7 @@ from app.audiobook import (
     import_service,
     local_worker,
     locking,
+    markers,
     pronunciation,
     recents_store,
     segmenter,
@@ -508,10 +509,12 @@ def preview_selection(request: PreviewSelectionRequest):
 
     from app.audiobook import marker_demos
     rules = pronunciation.effective_rules(request.workspace_path)
-    settings = workspace.narration_settings(workspace.load_manifest(request.workspace_path))
+    book = workspace.load_manifest(request.workspace_path)
+    settings = workspace.narration_settings(book)
     try:
         audio, warnings, trace = marker_demos.render_marked_text(
-            text, backend, request.voice_id, rules, settings)
+            text, backend, request.voice_id, rules, settings,
+            cast=workspace.speakers(book))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except synthesis.SynthesisError as e:
@@ -785,11 +788,12 @@ def print_preview(request: PrintPreviewRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
     rules = pronunciation.effective_rules(request.workspace_path)
-    settings = workspace.narration_settings(
-        workspace.load_manifest(request.workspace_path))
+    book = workspace.load_manifest(request.workspace_path)
+    settings = workspace.narration_settings(book)
     try:
         audio, warnings, trace = marker_demos.render_marked_text(
-            text, backend, request.voice_id, rules, settings)
+            text, backend, request.voice_id, rules, settings,
+            cast=workspace.speakers(book))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except synthesis.SynthesisError as e:
@@ -966,6 +970,61 @@ def start_assemble(request: StartExportRequest):
 @router.get("/assemble/status")
 def assemble_status():
     return assembly.export_status()
+
+
+# ── The cast (spec 27) ────────────────────────────────────────────────────────
+
+@router.get("/speakers")
+def get_speakers(workspace_path: str):
+    """The book's cast, plus any [voice:NAME] the manuscript uses that
+    the cast does not contain -- so the panel can offer to add exactly
+    the characters the writer has already written."""
+    _require_workspace(workspace_path)
+    manifest = workspace.load_manifest(workspace_path)
+    cast = workspace.speakers(manifest)
+    known = {s["display_name"].lower() for s in cast}
+    try:
+        text = workspace.read_narration(workspace_path)
+    except OSError:
+        text = ""
+    used = markers.speaker_names(text)
+    return {
+        "speakers": cast,
+        "unassigned_names": [n for n in used if n.lower() not in known],
+        # Every speaker narrates on the SAME engine; only the voice
+        # differs. Said here so the UI never has to invent the rule.
+        "single_engine": True,
+    }
+
+
+class SpeakerEntry(BaseModel):
+    display_name: str = Field(min_length=1, max_length=60)
+    voice_id: str = ""
+
+
+class SaveSpeakersRequest(BaseModel):
+    workspace_path: str
+    # The narrator is implicit and always present; sending it is
+    # harmless (its voice is taken) but it can never be removed.
+    speakers: list[SpeakerEntry]
+    narrator_voice: str | None = None
+
+
+@router.put("/speakers")
+def save_speakers(request: SaveSpeakersRequest):
+    """Replace the character cast. The narrator is never in this list --
+    its voice is the book's own narrator voice, set in the rail."""
+    _require_workspace(request.workspace_path)
+    manifest = workspace.load_manifest(request.workspace_path)
+    if request.narrator_voice is not None:
+        manifest["selected_voice"] = request.narrator_voice
+    manifest["speakers"] = [
+        {"display_name": entry.display_name.strip(), "voice_id": entry.voice_id}
+        for entry in request.speakers
+        if entry.display_name.strip()
+    ]
+    workspace.save_manifest(request.workspace_path, manifest)
+    return get_speakers(request.workspace_path)
 
 
 @router.get("/audio-status")

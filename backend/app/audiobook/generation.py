@@ -229,6 +229,11 @@ def segment_audio_state(segment: dict, rules, settings: dict,
     # A voice change is checked FIRST and separately. It is the print
     # pass: every segment is outdated, and saying "the voice changed"
     # explains a whole-book requeue far better than "the text moved".
+    #
+    # `book_voice` is the voice this segment SHOULD have, which for a
+    # [voice:NAME] span is that character's voice rather than the
+    # narrator's -- otherwise every line of dialogue in a cast book would
+    # read as permanently outdated.
     if book_voice and stored_voice and stored_voice != book_voice:
         return {"state": AUDIO_OUTDATED, "reason": "voice"}
 
@@ -279,7 +284,8 @@ def audio_status(workspace_path: str) -> dict:
     book_manifest = workspace.load_manifest(workspace_path)
     rules = pronunciation.effective_rules(workspace_path)
     settings = workspace.narration_settings(book_manifest)
-    book_voice = str(book_manifest.get("selected_voice") or "")
+    narrator_voice = str(book_manifest.get("selected_voice") or "")
+    cast = workspace.speakers(book_manifest)
 
     chapters = []
     totals = {"current": 0, "outdated": 0, "missing": 0}
@@ -291,7 +297,9 @@ def audio_status(workspace_path: str) -> dict:
         for item in chapter["items"]:
             if item.get("kind") != "segment":
                 continue
-            verdict = segment_audio_state(item, rules, settings, book_voice)
+            expected_voice = workspace.voice_for_speaker(
+                item.get("voice", ""), cast, narrator_voice)
+            verdict = segment_audio_state(item, rules, settings, expected_voice)
             counts[verdict["state"]] += 1
             totals[verdict["state"]] += 1
             if verdict["state"] == AUDIO_OUTDATED:
@@ -347,7 +355,11 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             if c.get("selected_for_generation", True)
         }
         rules = pronunciation.effective_rules(workspace_path)
-        settings = workspace.narration_settings(workspace.load_manifest(workspace_path))
+        book = workspace.load_manifest(workspace_path)
+        settings = workspace.narration_settings(book)
+        # The cast maps [voice:NAME] spans to voice ids. Read once per
+        # run: recasting mid-run would give one chapter two voices.
+        cast = workspace.speakers(book)
 
         queue_ids: list[str] = []
         for chapter in manifest["chapters"]:
@@ -363,7 +375,9 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
                 # including via the book-level pace settings.
                 basis = payload_basis(
                     pronunciation.prepare_tts_text(item["text"], rules),
-                    backend, voice_id, effective_pace(item, settings),
+                    backend,
+                    workspace.voice_for_speaker(item.get("voice", ""), cast, voice_id),
+                    effective_pace(item, settings),
                     layout=segment_layout(item), draft=draft,
                 )
                 if item.get("payload_hash") != basis:
@@ -416,7 +430,9 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
     _set_sleep_inhibit(True)
     try:
         rules = pronunciation.effective_rules(workspace_path)
-        settings = workspace.narration_settings(workspace.load_manifest(workspace_path))
+        book = workspace.load_manifest(workspace_path)
+        settings = workspace.narration_settings(book)
+        cast = workspace.speakers(book)
         for segment_id in queue_ids:
             # Control flags are honored BETWEEN segments only -- a segment
             # in flight always finishes (or fails) before the run stops.
@@ -431,7 +447,11 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             if segment is None:
                 continue                    # re-segmented away mid-run
 
-            _generate_one(workspace_path, backend, voice_id, rules, settings,
+            # One segment, one voice: the span's name resolved against
+            # the cast, falling back to the run's narrator voice.
+            segment_voice = workspace.voice_for_speaker(
+                segment.get("voice", ""), cast, voice_id)
+            _generate_one(workspace_path, backend, segment_voice, rules, settings,
                           segment, draft=draft)
 
             if segment["status"] == "completed":

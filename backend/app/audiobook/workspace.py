@@ -86,6 +86,109 @@ def narration_settings(manifest: dict) -> dict:
     return merged
 
 
+# ── The cast (spec 27) ────────────────────────────────────────────────────────
+# Every segment has referenced a speaker since Stage B, when the whole
+# cast was one entry called Narrator. Stage G makes that structure real:
+# a writer can add characters, give each one a voice, and mark their
+# lines with [voice:Elena] spans.
+#
+# Two rules hold the design together:
+#
+#   ONE RUN, ONE ENGINE. Speakers choose a VOICE, never a provider. A
+#   cast that mixed the local narrator with a hosted engine would price
+#   and fail per line, and half a chapter could come back in a voice the
+#   writer never paid for. The book's engine is chosen once, in Audiobook
+#   Settings, exactly as before.
+#
+#   NAMES, NOT IDS. The narration copy says [voice:Elena]; the cast maps
+#   Elena to a voice id. Recasting a character is one edit in the cast,
+#   not a find-and-replace through the manuscript -- and the narration
+#   copy stays readable in any text editor, which is the whole point of
+#   the format.
+
+NARRATOR_ID = "narrator"
+NARRATOR_NAME = "Narrator"
+
+
+def _narrator_entry(manifest: dict) -> dict:
+    """The cast entry that always exists. Its voice falls back to the
+    book's remembered narrator voice, so the voice picker in the rail
+    keeps meaning what it has always meant."""
+    return {
+        "speaker_id": NARRATOR_ID,
+        "display_name": NARRATOR_NAME,
+        "role": "narrator",
+        "voice_id": str(manifest.get("selected_voice") or ""),
+    }
+
+
+def speakers(manifest: dict) -> list[dict]:
+    """The book's cast, narrator first, always at least one entry.
+
+    Tolerant by design: this reads manifests written before the cast
+    existed, and hand-edited ones. Anything unusable is dropped rather
+    than raising -- a broken cast entry must never make a book
+    unopenable.
+    """
+    stored = manifest.get("speakers")
+    cast = [_narrator_entry(manifest)]
+    if not isinstance(stored, list):
+        return cast
+    for raw in stored:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("display_name") or "").strip()
+        if not name or name.lower() == NARRATOR_NAME.lower():
+            # The narrator is synthesized above; a stored duplicate would
+            # give the cast two entries answering to the same name.
+            if name.lower() == NARRATOR_NAME.lower() and raw.get("voice_id"):
+                cast[0]["voice_id"] = str(raw["voice_id"])
+            continue
+        if any(name.lower() == existing["display_name"].lower() for existing in cast):
+            continue                       # first one wins; names are the key
+        cast.append({
+            "speaker_id": str(raw.get("speaker_id") or "").strip()
+                          or f"character-{name.lower().replace(' ', '-')}",
+            "display_name": name,
+            "role": "character",
+            "voice_id": str(raw.get("voice_id") or ""),
+        })
+    return cast
+
+
+def voice_for_speaker(name: str, cast: list[dict], default_voice: str) -> str:
+    """The voice id a [voice:NAME] span should narrate in.
+
+    An unknown name falls back to the narrator's voice rather than
+    failing the run. A misspelt name in one paragraph must not stop a
+    book from generating -- the editor warns about it at save time, which
+    is where the writer can actually fix it.
+    """
+    if name:
+        for entry in cast:
+            if entry["display_name"].lower() == name.strip().lower():
+                return entry["voice_id"] or default_voice
+    return default_voice
+
+
+def unknown_speaker_warnings(narration_text: str, manifest: dict) -> list[str]:
+    """One warning per [voice:NAME] the cast does not contain.
+
+    Surfaced on save, next to the marker warnings, because that is the
+    moment the writer can still fix the spelling. Silence here would mean
+    discovering it as a stranger's voice mid-chapter.
+    """
+    from app.audiobook.markers import speaker_names
+
+    known = {entry["display_name"].lower() for entry in speakers(manifest)}
+    return [
+        f"[voice:{name}] is not in your cast, so those passages will be read "
+        f"by the narrator. Add {name} in the Cast panel, or fix the spelling."
+        for name in speaker_names(narration_text)
+        if name.lower() not in known
+    ]
+
+
 # ── Book metadata (spec 17) ───────────────────────────────────────────────────
 # What the exported files SAY about themselves: ID3 tags on the MP3s, the
 # M4B's metadata atom, and the embedded cover. Stored under
@@ -361,7 +464,17 @@ def write_narration(workspace_path: str, content: str) -> dict:
     manifest = segmenter.resegment(parsed, segmenter.load_segments(workspace_path))
     segmenter.save_segments(workspace_path, manifest)
 
-    return {"chapters": chapter_records, "warnings": parsed.warnings}
+    # A [voice:NAME] the cast does not know reads in the narrator's voice
+    # at generation time. Say so HERE, on save, because this is the last
+    # moment the writer is looking at the spelling -- the alternative is
+    # finding out as a stranger's voice mid-chapter.
+    warnings = list(parsed.warnings)
+    try:
+        warnings.extend(unknown_speaker_warnings(content, load_manifest(workspace_path)))
+    except OSError:
+        pass                                 # no manifest = nothing to check against
+
+    return {"chapters": chapter_records, "warnings": warnings}
 
 
 def _write_chapter_files(workspace_path: str, records: list[dict]) -> None:

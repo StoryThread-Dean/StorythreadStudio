@@ -112,7 +112,8 @@ _demo_cache: dict[tuple[str, str, str], bytes] = {}
 
 
 def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
-                       rules: list, settings: dict | None = None) -> tuple[bytes, list[str]]:
+                       rules: list, settings: dict | None = None,
+                       cast: list[dict] | None = None) -> tuple[bytes, list[str]]:
     """
     The marker-aware renderer: any narration text -> one WAV, with real
     stitched silence for pauses/breaks, excluded spans skipped, and the
@@ -133,7 +134,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
 
     Raises ValueError when the text contains nothing narratable.
     """
-    from app.audiobook import flow, segmenter
+    from app.audiobook import flow, segmenter, workspace
     from app.audiobook.generation import effective_pace
 
     settings = settings or dict(NARRATION_DEFAULTS)
@@ -154,6 +155,11 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                 pieces.append(gap_ms)
             if kind == "segment_text":
                 speed = effective_pace(item, settings)
+                # [voice:NAME] spans resolve here too, so auditioning a
+                # passage of dialogue plays it in the character's voice --
+                # the preview is a rehearsal or it is nothing.
+                piece_voice = (workspace.voice_for_speaker(
+                    item.get("voice", ""), cast, voice_id) if cast else voice_id)
                 fragments = item.get("fragments")
                 if fragments and len(fragments) >= 2:
                     # Flow segment: mid-paragraph pauses. Synthesize the
@@ -161,7 +167,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                     # matched gaps -- the preview IS the generation path.
                     payloads = [prepare_tts_text(f, rules) for f in fragments]
                     audio, cuts, flowed = flow.synthesize_flow(
-                        backend, voice_id, speed, payloads)
+                        backend, piece_voice, speed, payloads)
                     # One gain for the whole run, applied BEFORE the split:
                     # the pieces are one utterance and must not be levelled
                     # against each other.
@@ -174,10 +180,11 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                             "marker_pace": item.get("pace"),
                             "snippet": payload[:32],
                             "flow": flowed,
+                            "voice": item.get("voice", ""),
                         })
                     continue
                 payload = prepare_tts_text(item["text"], rules)
-                audio, _duration = backend.synthesize(payload, voice_id, speed)
+                audio, _duration = backend.synthesize(payload, piece_voice, speed)
                 # Each paragraph is its own request, and hosted engines
                 # answer them at their own levels -- this is what stops
                 # paragraph two arriving louder than paragraph one.
@@ -187,6 +194,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                     "dialogue": bool(item.get("dialogue")),
                     "marker_pace": item.get("pace"),
                     "snippet": payload[:32],
+                    "voice": item.get("voice", ""),
                 })
             elif kind == "pause":
                 pieces.append(int(item["duration_ms"]))
