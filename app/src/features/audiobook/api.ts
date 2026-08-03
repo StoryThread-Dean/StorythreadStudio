@@ -834,6 +834,9 @@ export interface AudioStatus {
   book: ChapterAudioStatus;
   outdated_segments: number;
   draft_segments: number;
+  /** Pause groups whose continuous render could not be matched, so they
+   *  fell back to isolated fragments -- where the seam slurs live. */
+  flow_fallbacks: number;
   /** "voice" | "text" when the whole book agrees on one cause, else "". */
   outdated_reason: string;
 }

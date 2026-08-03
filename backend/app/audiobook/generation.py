@@ -325,6 +325,7 @@ def audio_status(workspace_path: str) -> dict:
     chapters = []
     totals = {"current": 0, "outdated": 0, "missing": 0}
     drafts = 0
+    fallbacks = 0
     reasons: set[str] = set()
 
     for chapter in manifest["chapters"]:
@@ -349,6 +350,13 @@ def audio_status(workspace_path: str) -> dict:
                 reasons.add(verdict["reason"])
             if verdict["reason"] == "draft":
                 drafts += 1
+            # A pause group whose continuous render could not be matched
+            # fell back to isolated fragments -- which is precisely the
+            # manufactured utterance ending flow synthesis exists to
+            # remove. Counting them turns "I can hear a slur somewhere"
+            # into a number, and points at the paragraphs to check.
+            if item.get("flowed") is False:
+                fallbacks += 1
         chapters.append({
             "chapter_id": chapter["chapter_id"],
             "title": chapter.get("title", ""),
@@ -361,6 +369,7 @@ def audio_status(workspace_path: str) -> dict:
         "book": _chapter_rollup(totals),
         "outdated_segments": totals["outdated"],
         "draft_segments": drafts,
+        "flow_fallbacks": fallbacks,
         # One word for why, when the whole book agrees on it. The panel
         # uses this to say "the voice changed" instead of the vaguer
         # "edited since generation".

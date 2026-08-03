@@ -295,7 +295,7 @@ describe("GenerationPanel", () => {
     vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
     render(<GenerationPanel workspacePath={WS} audioStatus={{
       chapters: [], book: "partial", outdated_segments: 4,
-      draft_segments: 0, outdated_reason: "text",
+      draft_segments: 0, flow_fallbacks: 0, outdated_reason: "text",
     }} />);
     await waitFor(() =>
       expect(screen.getByText(/4 sections no longer match their audio/)).toBeTruthy());
@@ -308,7 +308,7 @@ describe("GenerationPanel", () => {
     vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
     render(<GenerationPanel workspacePath={WS} audioStatus={{
       chapters: [], book: "outdated", outdated_segments: 120,
-      draft_segments: 0, outdated_reason: "voice",
+      draft_segments: 0, flow_fallbacks: 0, outdated_reason: "voice",
     }} />);
     await waitFor(() =>
       expect(screen.getByText(/the voice changed/)).toBeTruthy());
@@ -318,7 +318,7 @@ describe("GenerationPanel", () => {
     vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
     render(<GenerationPanel workspacePath={WS} audioStatus={{
       chapters: [], book: "current", outdated_segments: 0,
-      draft_segments: 0, outdated_reason: "",
+      draft_segments: 0, flow_fallbacks: 0, outdated_reason: "",
     }} />);
     await waitFor(() =>
       expect(screen.getByText("Generate Audiobook")).toBeTruthy());
@@ -418,5 +418,40 @@ describe("GenerationPanel", () => {
     await waitFor(() => expect(screen.getByText("Generate Audiobook")).toBeTruthy(),
                   { timeout: 4000 });
     expect(screen.queryByText(/Checking on the run/)).toBeNull();
+  });
+  it("refreshes what depends on the audio when a run finishes", async () => {
+    // Live finding: "16 sections no longer match their audio" stayed on
+    // screen after the run that fixed them. The freshness badges are
+    // derived from the audio, so they are stale the moment it stops.
+    let done = false;
+    const onRunFinished = vi.fn();
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      const ep = exportPanelRoutes(url); if (ep) return ep;
+      if (url.includes("/generation/status")) {
+        return { ok: true, json: async () => (done
+          ? { run: makeRun({ status: "completed" }), active: false }
+          : { run: makeRun(), active: true }) };
+      }
+      if (url.includes("/narration-settings")) return { ok: true, json: async () => DEFAULT_SETTINGS };
+      throw new Error(`unexpected fetch ${url}`);
+    }));
+    render(<GenerationPanel workspacePath={WS} onRunFinished={onRunFinished} />);
+    await waitFor(() => expect(screen.getByText(/Pause/)).toBeTruthy());
+
+    done = true;
+    await waitFor(() => expect(onRunFinished).toHaveBeenCalled(), { timeout: 4000 });
+  });
+
+  it("says how many pause groups fell back, because that is where the seams are", async () => {
+    vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
+    render(<GenerationPanel workspacePath={WS} audioStatus={{
+      chapters: [], book: "current", outdated_segments: 0,
+      draft_segments: 0, flow_fallbacks: 7, outdated_reason: "",
+    }} />);
+    await waitFor(() =>
+      expect(screen.getByText(/7 pause groups rendered as separate pieces/))
+        .toBeTruthy());
+    expect(screen.getByText(/several pauses sit close together/)).toBeTruthy();
   });
 });

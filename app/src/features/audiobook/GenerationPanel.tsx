@@ -45,6 +45,9 @@ interface GenerationPanelProps {
   /** Bumped by WorkspaceView whenever Audiobook Settings are saved, so
       the rail refetches what depends on them (the narration engine). */
   settingsVersion?: number;
+  /** A run reached a terminal state, so anything derived from the audio
+      (the chapter freshness badges, above all) is now stale. */
+  onRunFinished?: () => void;
   /** Open the Audiobook Settings dialog -- the premium panel points at
       it, since the engine is chosen there and nowhere else. */
   onOpenSettings?: () => void;
@@ -162,6 +165,7 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
 export function GenerationPanel({
   workspacePath, getSelectionText, initialVoiceId,
   settingsVersion = 0, onOpenSettings, audioStatus, onVoiceChange,
+  onRunFinished,
 }: GenerationPanelProps) {
   const [voices, setVoices] = useState<NarratorVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
@@ -232,8 +236,11 @@ export function GenerationPanel({
       if (body.active) {
         setWatching(true);
       } else if (body.run && TERMINAL_STATUSES.includes(body.run.status)) {
-        // The run really is over: it said so itself.
-        setWatching(false);
+        // The run really is over: it said so itself. Everything derived
+        // from the audio is stale the moment it stops -- the freshness
+        // notice above the button was still claiming "16 sections no
+        // longer match" after the run that fixed them (live finding).
+        setWatching(prev => { if (prev) onRunFinished?.(); return false; });
       }
       // Not active and no readable run? Say nothing and keep watching.
       // "I could not read it" is not "it finished".
@@ -530,6 +537,27 @@ export function GenerationPanel({
               out loud with the count. Never a prompt to spend -- the
               Generate button below already re-does exactly the changed
               segments, so this is information, not a second path. */}
+          {/* Where the seam slurs are. A pause group whose continuous
+              render could not be matched falls back to isolated
+              fragments, and an isolated fragment is exactly what flow
+              synthesis exists to avoid -- the engine performs an ending
+              on it. Reporting the count turns "I can hear a slur
+              somewhere" into paragraphs to look at. */}
+          {!active && !watching && audioStatus
+            && audioStatus.flow_fallbacks > 0 && (
+            <p className="rounded border border-zinc-700 bg-zinc-900/60 px-2.5 py-2 text-[10px] leading-relaxed text-zinc-400">
+              <span className="text-zinc-300">
+                {audioStatus.flow_fallbacks} pause group
+                {audioStatus.flow_fallbacks === 1 ? "" : "s"} rendered as
+                separate pieces.
+              </span>{" "}
+              Those are the places a seam can be heard. It happens when
+              several pauses sit close together and the continuous render
+              cannot be lined up against them. Moving one pause to a
+              sentence boundary, or removing it, usually clears it.
+            </p>
+          )}
+
           {!active && !watching && audioStatus && audioStatus.outdated_segments > 0 && (
             <div className="rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2">
               <p className="text-[11px] leading-relaxed text-amber-200">

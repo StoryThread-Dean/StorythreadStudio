@@ -668,6 +668,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           workspacePath={workspacePath}
           initialVoiceId={narratorVoice}
           onVoiceChange={setNarratorVoice}
+          onRunFinished={() => void refreshAudioStatus()}
           settingsVersion={settingsVersion}
           onOpenSettings={() => setSettingsOpen(true)}
           audioStatus={audioStatus}
