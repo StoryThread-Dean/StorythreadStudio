@@ -16,15 +16,15 @@
 // only and the darker variants lose contrast on charcoal. The darks are
 // the second wave once a cast grows past four.
 
-const PALETTE = [
-  "#0C7BDC",   // vibrant blue
-  "#FFC20A",   // golden yellow
-  "#E66100",   // warm orange
-  "#40B0A6",   // teal
-  "#005B9A",   // the same four, darker
-  "#F2A900",
-  "#F57C00",
-  "#00796B",
+export const PALETTE: { hex: string; label: string }[] = [
+  { hex: "#0C7BDC", label: "Blue" },
+  { hex: "#FFC20A", label: "Gold" },
+  { hex: "#E66100", label: "Orange" },
+  { hex: "#40B0A6", label: "Teal" },
+  { hex: "#005B9A", label: "Deep blue" },
+  { hex: "#F2A900", label: "Amber" },
+  { hex: "#F57C00", label: "Burnt orange" },
+  { hex: "#00796B", label: "Deep teal" },
 ];
 
 /** The colour for a character, stable for as long as the cast order is.
@@ -33,12 +33,12 @@ const PALETTE = [
 export function castColor(name: string, castNames: string[]): string {
   const index = castNames.findIndex(n => n.toLowerCase() === name.trim().toLowerCase());
   if (index < 0) return "#F59E0B";
-  return PALETTE[index % PALETTE.length];
+  return PALETTE[index % PALETTE.length].hex;
 }
 
 /** Readable text on top of a cast colour. Gold and orange are light
  *  enough that white text on them is unreadable; the rest take white. */
 export function castTextColor(background: string): string {
-  return ["#FFC20A", "#F2A900", "#40B0A6"].includes(background)
-    ? "#0F172A" : "#FFFFFF";
+  return ["#FFC20A", "#F2A900", "#40B0A6", "#E66100", "#F57C00"]
+    .includes(background) ? "#0F172A" : "#FFFFFF";
 }

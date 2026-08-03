@@ -24,7 +24,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, ChevronDown, ChevronRight, Loader2, Play, Plus, Users, X,
+  AlertTriangle, ChevronDown, ChevronRight, GraduationCap, Loader2, Play, Plus,
+  Users, X,
 } from "lucide-react";
 
 import {
@@ -32,7 +33,8 @@ import {
   previewVoice, saveCast,
 } from "./api";
 import type { CastReport, SpeakerPassEstimate, VoiceRoster } from "./api";
-import { castColor, castTextColor } from "./castColors";
+import { castColor, castTextColor, PALETTE } from "./castColors";
+import { CastTutorial } from "./CastTutorial";
 import { DialogueWindow } from "./DialogueWindow";
 import {
   chapterCast, chapterRanges, countCharacterUsage, detectSpeakerNames,
@@ -54,6 +56,8 @@ interface Row {
   display_name: string;
   /** Nicknames the book uses for this character. */
   aliases: string[];
+  /** The writer's own colour choice; "" means the palette decides. */
+  color: string;
   voice_id: string;
   premium_voice_id: string;
 }
@@ -123,6 +127,7 @@ export function CastPanel({
   const [reviewOnly, setReviewOnly] = useState(false);
   const [ignored, setIgnored] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [tutorial, setTutorial] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // ── The cast ────────────────────────────────────────────────────────
@@ -134,6 +139,7 @@ export function CastPanel({
       .map(s => ({
         display_name: s.display_name,
         aliases: s.aliases ?? [],
+        color: s.color ?? "",
         voice_id: s.voice_id,
         premium_voice_id: s.premium_voice_id ?? "",
       }));
@@ -267,6 +273,13 @@ export function CastPanel({
   const castNames = useMemo(
     () => [NARRATOR, ...rows.map(r => r.display_name.trim()).filter(Boolean)],
     [rows]);
+
+  /** A character's colour: their own pick, or the palette's. */
+  const colorOf = useCallback((name: string): string => {
+    const own = rows.find(r =>
+      r.display_name.trim().toLowerCase() === name.trim().toLowerCase());
+    return own?.color || castColor(name, castNames);
+  }, [rows, castNames]);
 
   /** Which character a detected or hand-typed name belongs to. "Lexi"
    *  resolves to Alexandra; an unknown name resolves to nothing. */
@@ -573,30 +586,48 @@ export function CastPanel({
                 as the narrator.
               </p>
 
-              {/* Depth on request, one row each, nothing open by default. */}
-              <div className="space-y-1">
+              {/* Reference, one row. These answer a question the
+                  writer already has; the walkthrough beside them is for
+                  the one who does not know what to ask yet. */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={() => { setTutorial(v => !v); setOpenHelp(null); }}
+                  className={"inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors "
+                    + (tutorial
+                      ? "border-violet-500 bg-violet-900/40 text-violet-100"
+                      : "border-violet-700 text-violet-200 hover:border-violet-500")}
+                >
+                  <GraduationCap size={11} /> Show me how this works
+                </button>
                 {HELP.map(item => (
-                  <div key={item.key}>
-                    <button
-                      onClick={() => setOpenHelp(prev =>
-                        prev === item.key ? null : item.key)}
-                      className={"flex w-full items-center gap-1.5 rounded border px-2.5 py-1.5 text-left text-[11px] transition-colors "
-                        + (openHelp === item.key
-                          ? "border-violet-700 bg-violet-950/30 text-violet-200"
-                          : "border-zinc-700 text-zinc-300 hover:border-violet-700 hover:text-violet-200")}
-                    >
-                      {openHelp === item.key
-                        ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                      {item.label}
-                    </button>
-                    {openHelp === item.key && (
-                      <p className="mt-1 rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-                        {item.body}
-                      </p>
-                    )}
-                  </div>
+                  <button
+                    key={item.key}
+                    onClick={() => { setOpenHelp(prev =>
+                      prev === item.key ? null : item.key); setTutorial(false); }}
+                    className={"inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors "
+                      + (openHelp === item.key
+                        ? "border-violet-700 bg-violet-950/40 text-violet-200"
+                        : "border-zinc-700 text-zinc-300 hover:border-violet-700 hover:text-violet-200")}
+                  >
+                    {openHelp === item.key
+                      ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                    {item.label}
+                  </button>
                 ))}
               </div>
+
+              {openHelp && (
+                <p className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                  {HELP.find(h => h.key === openHelp)?.body}
+                </p>
+              )}
+
+              {tutorial && (
+                <CastTutorial
+                  hasPrintEngine={printReady}
+                  onClose={() => setTutorial(false)}
+                />
+              )}
 
               {draftRoster?.note && (
                 <p className="flex items-start gap-1.5 rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2 text-[10px] leading-relaxed text-amber-200">
@@ -669,7 +700,7 @@ export function CastPanel({
                               className={"w-32 shrink-0 rounded border bg-zinc-900 px-2 py-1 text-[11px] text-zinc-100 "
                                 + (clash ? "border-rose-600" : "border-zinc-700")}
                               style={name && !clash
-                                ? { borderLeft: `3px solid ${castColor(name, castNames)}` }
+                                ? { borderLeft: `3px solid ${colorOf(name)}` }
                                 : undefined}
                             />
                             {draftVoice(
@@ -716,6 +747,24 @@ export function CastPanel({
                                   {name || "the full name"}.
                                 </p>
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                  <label className="flex items-center gap-1 text-[10px] text-zinc-500">
+                                    Colour
+                                    <select
+                                      aria-label={`Colour for character ${index + 1}`}
+                                      value={row.color}
+                                      onChange={e => setRows(prev => prev.map((r, i) =>
+                                        i === index ? { ...r, color: e.target.value } : r))}
+                                      className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-200"
+                                      style={{ borderLeft: `4px solid ${colorOf(name)}` }}
+                                    >
+                                      <option value="">
+                                        Chosen for me
+                                      </option>
+                                      {PALETTE.map(c => (
+                                        <option key={c.hex} value={c.hex}>{c.label}</option>
+                                      ))}
+                                    </select>
+                                  </label>
                                   {row.aliases.map(alias => (
                                     <span
                                       key={alias}
@@ -781,7 +830,7 @@ export function CastPanel({
                             <span key={name} className="inline-flex items-center overflow-hidden rounded border border-zinc-700">
                               <button
                                 onClick={() => setRows(prev => [...prev, {
-                                  display_name: name, aliases: [],
+                                  display_name: name, aliases: [], color: "",
                                   voice_id: "", premium_voice_id: "" }])}
                                 className="px-2 py-0.5 text-[11px] text-violet-200 hover:bg-violet-950/50"
                               >
@@ -822,7 +871,7 @@ export function CastPanel({
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         onClick={() => setRows(prev => [...prev, {
-                          display_name: "", aliases: [],
+                          display_name: "", aliases: [], color: "",
                           voice_id: "", premium_voice_id: "" }])}
                         className="inline-flex items-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-400 hover:border-violet-600 hover:text-violet-300"
                       >
@@ -924,7 +973,7 @@ export function CastPanel({
                     const active = stop?.assigned
                       ? stop.assigned.toLowerCase() === name.toLowerCase()
                       : name === NARRATOR;
-                    const color = name === NARRATOR ? "" : castColor(name, castNames);
+                    const color = name === NARRATOR ? "" : colorOf(name);
                     return (
                       <button
                         key={name}
@@ -951,7 +1000,7 @@ export function CastPanel({
                         onClick={() => assign(name)}
                         disabled={!stop}
                         className="rounded border border-zinc-800 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-zinc-600 disabled:opacity-40"
-                        style={{ borderColor: `${castColor(name, castNames)}40` }}
+                        style={{ borderColor: `${colorOf(name)}40` }}
                       >
                         {name}
                       </button>
@@ -974,7 +1023,7 @@ export function CastPanel({
                   )}
                 </div>
 
-                <DialogueWindow content={content} stop={stop} castNames={castNames} />
+                <DialogueWindow content={content} stop={stop} colorOf={colorOf} />
 
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <button

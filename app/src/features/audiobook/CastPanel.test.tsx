@@ -64,7 +64,8 @@ const WITH_PRINT = {
 
 function mockFetch(initial = report(), options: unknown = DRAFT_ONLY,
                    proposals: unknown[] = []) {
-  return vi.fn(async (url: string) => {
+  return vi.fn(async (url: string, init?: RequestInit) => {
+    void init;
     if (url.includes("/speaker-pass-estimate")) {
       return { ok: true, json: async () => ({
         model_id: "some/model", price_known: true, cost_usd: 0.03, note: "" }) };
@@ -496,5 +497,67 @@ describe("CastPanel workbench", () => {
     await open(mockFetch(withAlias), book);
     expect(screen.getByText(/your text says Lexi/)).toBeTruthy();
     expect(screen.getByLabelText("Use Alexandra")).toBeTruthy();
+  });
+  it("keeps the reference answers on one row, and only one open at a time", async () => {
+    // Four stacked accordions ate the panel. They are chips now.
+    await open(mockFetch());
+    fireEvent.click(screen.getByRole("button", { name: /Is this needed\?/ }));
+    expect(screen.getByText(/A book read entirely by one narrator/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Does casting cost more\?/ }));
+    expect(screen.queryByText(/A book read entirely by one narrator/)).toBeNull();
+    expect(screen.getByText(/free and unlimited/)).toBeTruthy();
+  });
+
+  it("offers a step-by-step walk for somebody who has never done this", async () => {
+    // The reference answers are useless to a writer who does not yet
+    // know what to ask. This is the other half.
+    await open(mockFetch());
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    expect(screen.getByText(/1\. Add the people who speak/)).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Next step"));
+    expect(screen.getByText(/2\. Give each character a voice/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Previous step"));
+    expect(screen.getByText(/1\. Add the people who speak/)).toBeTruthy();
+  });
+
+  it("the walk skips the Pro step when there is no paid engine", async () => {
+    // A step about a control that is not on screen teaches nothing.
+    await open(mockFetch());
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    const withoutPro = screen.getByTestId("tutorial-progress").textContent ?? "";
+
+    cleanup();
+    await open(mockFetch(report(), WITH_PRINT));
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    const withPro = screen.getByTestId("tutorial-progress").textContent ?? "";
+    expect(withPro).not.toBe(withoutPro);
+  });
+
+  it("opening the walk closes a reference answer, and the other way round", async () => {
+    await open(mockFetch());
+    fireEvent.click(screen.getByRole("button", { name: /Is this needed\?/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    expect(screen.queryByText(/A book read entirely by one narrator/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Is this needed\?/ }));
+    expect(screen.queryByText(/1\. Add the people who speak/)).toBeNull();
+  });
+
+  it("a character's colour can be changed, and the choice is what gets saved", async () => {
+    const fetchMock = mockFetch(CAST_WITH_TWO);
+    await open(fetchMock);
+    fireEvent.click(screen.getByRole("button", { name: /Voices/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Also called/ })[0]);
+    fireEvent.change(screen.getByLabelText("Colour for character 1"),
+                     { target: { value: "#00796B" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Cast/ }));
+
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(
+        ([, init]) => (init as RequestInit | undefined)?.method === "PUT");
+      expect(put).toBeTruthy();
+      const body = JSON.parse(String((put![1] as RequestInit).body));
+      expect(body.speakers[0].color).toBe("#00796B");
+    });
   });
 });

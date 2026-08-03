@@ -1,22 +1,27 @@
 // features/audiobook/DialogueWindow.tsx
 // ======================================
 // The work surface: the writer's own text, with the paragraph being
-// decided highlighted in its speaker's colour, and the markers shown
-// exactly as they will sit in the file.
+// decided called out and the markers shown exactly as they will sit in
+// the file.
 //
 // Showing the raw markers is the point, not a leak of implementation.
-// A writer who watches [voice:Lara Croft] appear around their own line
-// has learned the syntax without being taught it, and can hand-type it
-// forever after. Hiding it behind a pretty rendering would make this
-// screen the only place casting is possible.
+// A writer who watches [voice:Elizabeth Bennet] appear around their own
+// line has learned the syntax without being taught it, and can hand-type
+// it forever after.
 //
 // Read-only by design. The real editor is one keystroke behind this
 // window; two live editors over one buffer is a caret-and-scroll war for
 // no gain. Everything here changes through the character buttons.
+//
+// The highlight rule matters more than it looks. An unassigned paragraph
+// is washed grey as a whole -- the question is "who says this
+// paragraph". Once a speaker is chosen, only the SPOKEN WORDS carry
+// their colour: "I could easily forgive his pride," she said, "if he had
+// not mortified mine." The tag in the middle is the narrator's, and
+// colouring it would tell the writer their narrator had changed voice.
 
 import { useEffect, useRef } from "react";
 
-import { castColor, castTextColor } from "./castColors";
 import type { DialogueStop } from "./speakerScan";
 
 interface DialogueWindowProps {
@@ -24,43 +29,54 @@ interface DialogueWindowProps {
   content: string;
   /** The paragraph under decision, or null when the walk is finished. */
   stop: DialogueStop | null;
-  castNames: string[];
+  /** A character's colour, looked up by name. */
+  colorOf: (name: string) => string;
   /** How much text to show around the stop, in characters. */
   context?: number;
 }
 
+const VOICE_SPAN = /\[voice:[^\]]*\][\s\S]*?\[\/voice\]/gi;
 const VOICE_TOKEN = /(\[voice:[^\]]*\]|\[\/voice\])/gi;
 const OTHER_MARKER = /(\[(?:pause:[^\]]*|scene-break|chapter-break|\/?exclude|say:[^\]]*|\/say|pace:[^\]]*|\/pace)\])/gi;
 
-/** Paint one run of text: cast markers in the speaker's colour, other
- *  markers dimmed so they read as machinery rather than prose. */
-function paint(text: string, color: string, keyPrefix: string) {
-  return text.split(VOICE_TOKEN).map((chunk, i) => {
-    if (VOICE_TOKEN.test(chunk)) {
-      VOICE_TOKEN.lastIndex = 0;
+/** Narration: markers dimmed so they read as machinery, prose plain. */
+function plain(text: string, keyPrefix: string) {
+  return text.split(OTHER_MARKER).map((piece, i) => {
+    const isMarker = OTHER_MARKER.test(piece);
+    OTHER_MARKER.lastIndex = 0;
+    return isMarker
+      ? <span key={`${keyPrefix}-m${i}`} className="text-zinc-600">{piece}</span>
+      : <span key={`${keyPrefix}-p${i}`}>{piece}</span>;
+  });
+}
+
+/** One [voice:...]...[/voice] span: the tags in the character's colour,
+ *  the words inside carrying it as a highlight. */
+function spoken(span: string, color: string, keyPrefix: string) {
+  return span.split(VOICE_TOKEN).map((chunk, i) => {
+    const isTag = VOICE_TOKEN.test(chunk);
+    VOICE_TOKEN.lastIndex = 0;
+    if (isTag) {
       return (
-        <span key={`${keyPrefix}-v${i}`} style={{ color }} className="font-medium">
+        <span key={`${keyPrefix}-t${i}`} style={{ color }} className="font-medium">
           {chunk}
         </span>
       );
     }
-    VOICE_TOKEN.lastIndex = 0;
     return (
-      <span key={`${keyPrefix}-t${i}`}>
-        {chunk.split(OTHER_MARKER).map((piece, j) => {
-          const isMarker = OTHER_MARKER.test(piece);
-          OTHER_MARKER.lastIndex = 0;
-          return isMarker
-            ? <span key={j} className="text-zinc-600">{piece}</span>
-            : <span key={j}>{piece}</span>;
-        })}
+      <span
+        key={`${keyPrefix}-s${i}`}
+        className="rounded px-0.5"
+        style={{ backgroundColor: `${color}40`, color: "#F4F4F5" }}
+      >
+        {plain(chunk, `${keyPrefix}-s${i}`)}
       </span>
     );
   });
 }
 
 export function DialogueWindow({
-  content, stop, castNames, context = 320,
+  content, stop, colorOf, context = 320,
 }: DialogueWindowProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const markRef = useRef<HTMLSpanElement | null>(null);
@@ -88,9 +104,23 @@ export function DialogueWindow({
   }
 
   const speaker = stop.assigned;
-  const color = speaker ? castColor(speaker, castNames) : "";
+  const color = speaker ? colorOf(speaker) : "";
   const before = content.slice(Math.max(0, stop.start - context), stop.start);
   const after = content.slice(stop.end, stop.end + context);
+
+  // Assigned: a slim bar in the speaker's colour says WHICH paragraph,
+  // and the spoken words carry the colour. Unassigned: the whole
+  // paragraph is washed, because the whole paragraph is the question.
+  const body = speaker
+    ? stop.text.split(VOICE_SPAN).flatMap((run, i, all) => {
+        const spans = stop.text.match(VOICE_SPAN) ?? [];
+        const out = [<span key={`n${i}`}>{plain(run, `n${i}`)}</span>];
+        if (i < all.length - 1 && spans[i]) {
+          out.push(<span key={`v${i}`}>{spoken(spans[i], color, `v${i}`)}</span>);
+        }
+        return out;
+      })
+    : plain(stop.text, "stop");
 
   return (
     <div
@@ -101,18 +131,16 @@ export function DialogueWindow({
       <span className="whitespace-pre-wrap">{before}</span>
       <span
         ref={markRef}
-        className="whitespace-pre-wrap rounded px-0.5"
+        data-assigned={speaker || undefined}
+        className={"whitespace-pre-wrap " + (speaker ? "pl-1.5" : "rounded px-0.5")}
         style={speaker
-          ? { backgroundColor: `${color}26`, boxShadow: `inset 0 0 0 1px ${color}`,
-              color: "#E4E4E7" }
+          ? { borderLeft: `2px solid ${color}`, color: "#D4D4D8" }
           : { backgroundColor: "#3F3F4640", boxShadow: "inset 0 0 0 1px #52525B",
               color: "#E4E4E7" }}
       >
-        {paint(stop.text, color || "#A1A1AA", "stop")}
+        {body}
       </span>
       <span className="whitespace-pre-wrap">{after}</span>
     </div>
   );
 }
-
-export { castColor, castTextColor };

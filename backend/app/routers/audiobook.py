@@ -1087,6 +1087,8 @@ class SpeakerEntry(BaseModel):
     # "Lexi" and "Lex"; all of them resolve to her voice, and the marker
     # written into the file is always the canonical name.
     aliases: list[str] = []
+    # Screen-only: which colour marks this character in the workbench.
+    color: str = ""
     # Two voices per speaker, one per pass: the free local narrator this
     # book is drafted with, and the hosted engine it may be printed with.
     # Voice ids do not carry between rosters.
@@ -1127,6 +1129,7 @@ def save_speakers(request: SaveSpeakersRequest):
         {"display_name": entry.display_name.strip(),
          "aliases": [" ".join(a.split()).strip() for a in entry.aliases
                      if a and a.strip()],
+         "color": entry.color,
          "voice_id": entry.voice_id,
          "premium_voice_id": entry.premium_voice_id}
         for entry in request.speakers

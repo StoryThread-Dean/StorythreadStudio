@@ -691,6 +691,8 @@ export interface Speaker {
   role: "narrator" | "character";
   /** Nicknames the book uses for this character. */
   aliases: string[];
+  /** Screen-only colour override; "" means the palette decides. */
+  color: string;
   /** Local voice, used when drafting. */
   voice_id: string;
   /** Hosted voice, used on a print pass. */
@@ -715,8 +717,8 @@ export async function fetchCast(workspacePath: string): Promise<CastReport> {
 
 export async function saveCast(
   workspacePath: string,
-  speakers: { display_name: string; aliases?: string[]; voice_id: string;
-              premium_voice_id?: string }[],
+  speakers: { display_name: string; aliases?: string[]; color?: string;
+              voice_id: string; premium_voice_id?: string }[],
   narratorVoice?: string,
   narratorPremiumVoice?: string,
   ignoredNames?: string[],
@@ -726,7 +728,8 @@ export async function saveCast(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       workspace_path: workspacePath,
-      speakers: speakers.map(s => ({ premium_voice_id: "", aliases: [], ...s })),
+      speakers: speakers.map(s => ({
+        premium_voice_id: "", aliases: [], color: "", ...s })),
       narrator_voice: narratorVoice ?? null,
       narrator_premium_voice: narratorPremiumVoice ?? null,
       ignored_names: ignoredNames ?? null,

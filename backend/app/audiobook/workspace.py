@@ -134,6 +134,7 @@ def _narrator_entry(manifest: dict) -> dict:
         "display_name": NARRATOR_NAME,
         "role": "narrator",
         "aliases": [],
+        "color": "",
         "voice_id": str(manifest.get("selected_voice") or ""),
         # The book's premium voice has lived in the manifest since Stage
         # D; the narrator simply reads it, so the two places that set it
@@ -178,6 +179,10 @@ def speakers(manifest: dict) -> list[dict]:
             # would make [voice:Lexi] ambiguous, and the ambiguity would
             # be resolved silently at render time.
             "aliases": _clean_aliases(raw.get("aliases"), name, cast),
+            # A writer's own colour choice, or "" for the one the panel
+            # picks from its palette. Only used for reading the screen --
+            # nothing about the audio depends on it.
+            "color": str(raw.get("color") or "").strip()[:9],
             "voice_id": str(raw.get("voice_id") or ""),
             "premium_voice_id": str(raw.get("premium_voice_id") or ""),
         })
