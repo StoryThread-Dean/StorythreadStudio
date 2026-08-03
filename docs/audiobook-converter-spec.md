@@ -893,9 +893,11 @@ That is a genuinely different failure from the other two, and it names the third
 
 All three Standard candidates are now demoted, so that tier is **empty on the recommended shelf**. The settings screen says so in as many words rather than leaving a silent gap between Budget and Pro -- an unexplained hole reads as a failed load, and papering over it with a reluctant pick would be worse than admitting the shortfall.
 
-##### The seed question (PINNED 2026-08-01)
+##### The seed question (CLOSED 2026-08-03)
 
-**Pinned by user direction at the close of Stage D.** The Standard tier ships empty and the hunt stops here -- everything below is the note to pick up from, not work in flight. Reopen it when there is a reason to (a new engine, a cheaper Pro option, or a writer asking for the tier); do not spend more auditions on it in passing.
+**Closed by user direction: "off the table for now. We have no real Standard tier option that is recommended."** Pinned at the close of Stage D, closed here. The Standard tier ships empty on purpose and v1.1.0 goes out that way -- three engines auditioned, three demoted, each with its reason attached and each still selectable by a writer who wants it. That is a finished answer, not an outstanding task.
+
+Everything below is preserved as the record of what was tried, so nobody repeats it. Reopen only on a real trigger -- a new engine appears, a Pro option gets cheap, or a writer asks for the tier. Do not spend auditions on it in passing.
 
 
 OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.
@@ -1425,6 +1427,74 @@ by live listening tests and encoded in the say popout's tips accordion
   parentheses (letters pronounce separately, symbols get spoken,
   unnatural pauses, engine chunk-splits, markdown stripping
   downstream). Accented characters: a few work, most do not.
+- **Some respellings the engine simply will not take (CLOSED
+  2026-08-03).** `[say:Thee]The[/say]` -- the long-E "thee" as in
+  *see* -- comes back sounding like "neh". The payload is provably
+  correct: `prepare_tts_text` hands Kokoro the plain word `Thee` and
+  there are tests pinning that. Kokoro's own grapheme-to-phoneme step
+  is what mangles it, which is outside anything this app can reach.
+  Investigated and dropped by user direction; do not re-open it as a
+  text-handling bug. The practical rule this leaves: **a respelling
+  that sounds wrong is not a bug to file, it is a respelling to
+  replace** -- try another spelling of the same sound (`thee` ->
+  `dhee`, `thii`) and let Preview decide. The say popout prints
+  "engine heard: ..." under the button precisely so this call takes
+  seconds instead of an afternoon: if the trace shows the right word,
+  the engine is the limit and only a different spelling will move it.
+
+### 18.6 Heteronyms: the ear decides, one word at a time (user-designed 2026-08-03; NOT BUILT)
+
+**Scheduled for its own session.** The problem: English is full of words
+whose spelling does not fix their sound -- *read* is "reed" or "red",
+*lead* is "leed" or "led", *wound* is "woond" or "wow-nd" -- and Kokoro
+picks one reading from grammar it only half-understands. It gets these
+wrong often enough to break a sentence, and the writer has no way to
+find them except by listening to the whole book.
+
+Source material: the writer's own audition table at
+`local/kokoro_heteronym_list.md` -- word, disambiguating context, the
+Kokoro respelling for that sense, and a confidence rating. It is a
+CANDIDATE list, not a verified one. Section 18.5's closed finding
+applies directly: a respelling can be perfectly formed and still not be
+honoured by the engine, so **every entry needs an audition pass against
+the real engine before it ships** and the ones that fail need a
+different spelling of the same sound, not a bug report.
+
+**Where it lives: inside the Formatting Walkthrough, as another trigger
+kind** (18.4). Not a separate screen, not a batch tool.
+
+**Why it cannot be automated, and must not pretend to be:** which
+reading is correct depends on the sentence, and only the writer knows
+which they meant. So the walk STOPS at every heteronym occurrence -- no
+guessing, no silent apply, no "we found 40, apply all."
+
+**The stop's shape, and the whole point of the design:**
+
+- Both readings are offered as **audio, not spelling.** Each candidate
+  gets its own `[Play]`, rendered in the writer's narration voice, in
+  this sentence.
+- The writer **listens to both**, picks the one they meant, and clicks
+  Next. That choice writes a `[say]` override at that occurrence.
+- Nothing is chosen for them and nothing is pre-selected. Skip leaves
+  the word alone, which is the right answer whenever the engine already
+  reads it correctly.
+
+The reason for audio over text: "reed / red" on screen asks the writer
+to trust a respelling notation they have no reason to trust. Two Play
+buttons ask them to use the one instrument that is actually reliable
+here -- their ear -- and the decision takes about two seconds. This is
+the "removes guesswork by providing examples graspable immediately"
+rule applied to the one part of narration that no amount of explanation
+can settle in the abstract.
+
+Open questions for the build session: whether a chosen reading should
+offer to apply to the same word-in-the-same-sense elsewhere in the
+chapter (probably yes, with a count and a confirm, since *read* as past
+tense tends to repeat); whether low-confidence rows from the table are
+worth stopping on at all before they are auditioned; and whether the
+per-stop audio should pre-render while the writer reads the previous
+stop, since two syntheses per stop across a long chapter is the one
+thing that could make this tedious.
 
 ---
 
