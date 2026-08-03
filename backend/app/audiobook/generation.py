@@ -17,13 +17,13 @@
 
 import ctypes
 import hashlib
-import json
 import os
 import threading
 import uuid
 from datetime import datetime, timezone
 
 from app.audiobook import flow, locking, pronunciation, segmenter, workspace
+from app.audiobook.jsonstore import read_json, write_json_atomic
 from app.audiobook.synthesis import SynthesisBackend, SynthesisError
 
 RUN_FILE = "generation-run.json"
@@ -46,17 +46,35 @@ def run_path(workspace_path: str) -> str:
     return os.path.join(workspace_path, RUN_FILE)
 
 
+def read_run(workspace_path: str) -> tuple[dict | None, bool]:
+    """
+    (run, readable). `readable=False` means the record is there and could
+    not be parsed THIS INSTANT -- almost always a read that landed inside
+    a write.
+
+    Every caller that decides something about a live run must use this
+    rather than load_run: "I could not read it" is not "there is none",
+    and conflating them is what made a running job look finished.
+    """
+    data, readable = read_json(run_path(workspace_path))
+    return (data if isinstance(data, dict) else None), readable
+
+
 def load_run(workspace_path: str) -> dict | None:
-    try:
-        with open(run_path(workspace_path), "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None
+    """The run record, or None when it is missing OR unreadable.
+
+    Kept tolerant for display callers (the dashboard's progress column),
+    where a momentary miss just means one row shows no progress for a
+    second. Anything that GATES behaviour wants read_run instead.
+    """
+    return read_run(workspace_path)[0]
 
 
 def save_run(workspace_path: str, run: dict) -> None:
-    with open(run_path(workspace_path), "w", encoding="utf-8") as f:
-        json.dump(run, f, indent=2, ensure_ascii=False)
+    # Atomic: this is written after every completed segment, and the
+    # status poll reads it every 1.5 seconds. A truncate-then-write here
+    # is a collision waiting to happen -- and it happened.
+    write_json_atomic(run_path(workspace_path), run)
 
 
 # ── Windows sleep inhibit (spec 21) ──────────────────────────────────────────
@@ -150,6 +168,23 @@ def payload_basis(payload_text: str, backend: SynthesisBackend, voice_id: str,
     return "sha256-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
+def _is_hosted_provider(provider_key: str) -> bool:
+    """True for a paid narration provider, false for the local narrator
+    (and for the fake backends tests generate with).
+
+    Asked as "is this one of the hosted providers" rather than "is this
+    not local" on purpose: the question being answered is which of a
+    speaker's two voices to use, and only a real hosted engine has a
+    print roster. Anything else is drafting.
+    """
+    from app.audiobook import tts_providers
+    return provider_key in tts_providers.PROVIDERS
+
+
+def _is_print_pass(backend: SynthesisBackend) -> bool:
+    return _is_hosted_provider(backend.key)
+
+
 def segment_layout(segment: dict) -> str:
     """A flow segment's fragment layout as a basis fingerprint: the
     fragment character lengths, which move whenever a mid-paragraph
@@ -229,6 +264,11 @@ def segment_audio_state(segment: dict, rules, settings: dict,
     # A voice change is checked FIRST and separately. It is the print
     # pass: every segment is outdated, and saying "the voice changed"
     # explains a whole-book requeue far better than "the text moved".
+    #
+    # `book_voice` is the voice this segment SHOULD have, which for a
+    # [voice:NAME] span is that character's voice rather than the
+    # narrator's -- otherwise every line of dialogue in a cast book would
+    # read as permanently outdated.
     if book_voice and stored_voice and stored_voice != book_voice:
         return {"state": AUDIO_OUTDATED, "reason": "voice"}
 
@@ -279,11 +319,13 @@ def audio_status(workspace_path: str) -> dict:
     book_manifest = workspace.load_manifest(workspace_path)
     rules = pronunciation.effective_rules(workspace_path)
     settings = workspace.narration_settings(book_manifest)
-    book_voice = str(book_manifest.get("selected_voice") or "")
+    narrator_voice = str(book_manifest.get("selected_voice") or "")
+    cast = workspace.speakers(book_manifest)
 
     chapters = []
     totals = {"current": 0, "outdated": 0, "missing": 0}
     drafts = 0
+    fallbacks = 0
     reasons: set[str] = set()
 
     for chapter in manifest["chapters"]:
@@ -291,13 +333,30 @@ def audio_status(workspace_path: str) -> dict:
         for item in chapter["items"]:
             if item.get("kind") != "segment":
                 continue
-            verdict = segment_audio_state(item, rules, settings, book_voice)
+            # Which roster this segment's audio came from -- a hosted
+            # segment is measured against the print voice, a local one
+            # against the draft voice. Getting this wrong would report a
+            # correctly narrated cast book as permanently outdated.
+            was_premium = _is_hosted_provider(item.get("provider", ""))
+            expected_voice = workspace.voice_for_speaker(
+                item.get("voice", ""), cast,
+                str(book_manifest.get("selected_premium_voice") or "") if was_premium
+                else narrator_voice,
+                premium=was_premium)
+            verdict = segment_audio_state(item, rules, settings, expected_voice)
             counts[verdict["state"]] += 1
             totals[verdict["state"]] += 1
             if verdict["state"] == AUDIO_OUTDATED:
                 reasons.add(verdict["reason"])
             if verdict["reason"] == "draft":
                 drafts += 1
+            # A pause group whose continuous render could not be matched
+            # fell back to isolated fragments -- which is precisely the
+            # manufactured utterance ending flow synthesis exists to
+            # remove. Counting them turns "I can hear a slur somewhere"
+            # into a number, and points at the paragraphs to check.
+            if item.get("flowed") is False:
+                fallbacks += 1
         chapters.append({
             "chapter_id": chapter["chapter_id"],
             "title": chapter.get("title", ""),
@@ -310,6 +369,7 @@ def audio_status(workspace_path: str) -> dict:
         "book": _chapter_rollup(totals),
         "outdated_segments": totals["outdated"],
         "draft_segments": drafts,
+        "flow_fallbacks": fallbacks,
         # One word for why, when the whole book agrees on it. The panel
         # uses this to say "the voice changed" instead of the vaguer
         # "edited since generation".
@@ -347,7 +407,12 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             if c.get("selected_for_generation", True)
         }
         rules = pronunciation.effective_rules(workspace_path)
-        settings = workspace.narration_settings(workspace.load_manifest(workspace_path))
+        book = workspace.load_manifest(workspace_path)
+        settings = workspace.narration_settings(book)
+        # The cast maps [voice:NAME] spans to voice ids. Read once per
+        # run: recasting mid-run would give one chapter two voices.
+        cast = workspace.speakers(book)
+        is_premium = _is_print_pass(backend)
 
         queue_ids: list[str] = []
         for chapter in manifest["chapters"]:
@@ -363,7 +428,10 @@ def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
                 # including via the book-level pace settings.
                 basis = payload_basis(
                     pronunciation.prepare_tts_text(item["text"], rules),
-                    backend, voice_id, effective_pace(item, settings),
+                    backend,
+                    workspace.voice_for_speaker(item.get("voice", ""), cast, voice_id,
+                                                premium=is_premium),
+                    effective_pace(item, settings),
                     layout=segment_layout(item), draft=draft,
                 )
                 if item.get("payload_hash") != basis:
@@ -416,7 +484,10 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
     _set_sleep_inhibit(True)
     try:
         rules = pronunciation.effective_rules(workspace_path)
-        settings = workspace.narration_settings(workspace.load_manifest(workspace_path))
+        book = workspace.load_manifest(workspace_path)
+        settings = workspace.narration_settings(book)
+        cast = workspace.speakers(book)
+        is_premium = _is_print_pass(backend)
         for segment_id in queue_ids:
             # Control flags are honored BETWEEN segments only -- a segment
             # in flight always finishes (or fails) before the run stops.
@@ -431,7 +502,11 @@ def _worker(workspace_path: str, backend: SynthesisBackend, voice_id: str,
             if segment is None:
                 continue                    # re-segmented away mid-run
 
-            _generate_one(workspace_path, backend, voice_id, rules, settings,
+            # One segment, one voice: the span's name resolved against
+            # the cast, falling back to the run's narrator voice.
+            segment_voice = workspace.voice_for_speaker(
+                segment.get("voice", ""), cast, voice_id, premium=is_premium)
+            _generate_one(workspace_path, backend, segment_voice, rules, settings,
                           segment, draft=draft)
 
             if segment["status"] == "completed":
@@ -609,17 +684,28 @@ def reset(workspace_path: str) -> None:
 
 # ── Status with restart recovery ─────────────────────────────────────────────
 
-def status_with_recovery(workspace_path: str) -> dict | None:
+def status_with_recovery(workspace_path: str,
+                         is_active: bool | None = None) -> dict | None:
     """
     The run record, healed on read: a record claiming "generating" with no
     live thread in this process means the app (or sidecar) died mid-run --
     mark it paused so Resume picks up exactly where the last persisted
     segment left off. This IS the restart recovery (spec 21.2).
+
+    `is_active` is passed in by the caller so the liveness check and the
+    healing decision use ONE snapshot. Reading it twice invites a window
+    where a run finishes between the two calls.
+
+    An UNREADABLE record is never healed. Writing "interrupted" over a
+    job that is running perfectly well, because the file happened to be
+    mid-write when we looked, would turn a one-poll blip into a
+    permanent lie on disk.
     """
-    run = load_run(workspace_path)
-    if run is None:
+    run, readable = read_run(workspace_path)
+    if run is None or not readable:
         return None
-    if run.get("status") == "generating" and active_workspace() != workspace_path:
+    live = active_workspace() == workspace_path if is_active is None else is_active
+    if run.get("status") == "generating" and not live:
         run["status"] = "paused"
         run["paused_at"] = _now_iso()
         run["note"] = ("Generation was interrupted (the app closed or the backend "

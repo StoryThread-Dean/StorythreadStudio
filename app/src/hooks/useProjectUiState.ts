@@ -31,6 +31,12 @@ export interface ProjectUiState {
   profilesCollapsed?: boolean;
   notesCollapsed?:    boolean;
   collapsedActs?:     string[];   // act ids from manuscript/structure.json
+  /** Which voice Passage / Dialogue Check reads this book in. Follows
+   *  the BOOK rather than the machine, for the same reason the narrator
+   *  voice does: a writer hears their book in a particular voice, and
+   *  re-picking it every session is a small tax on the one feature that
+   *  is supposed to take two seconds. */
+  passageCheckVoice?: string;
 }
 
 const DEBOUNCE_MS = 800;

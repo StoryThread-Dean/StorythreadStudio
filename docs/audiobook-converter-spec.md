@@ -893,9 +893,11 @@ That is a genuinely different failure from the other two, and it names the third
 
 All three Standard candidates are now demoted, so that tier is **empty on the recommended shelf**. The settings screen says so in as many words rather than leaving a silent gap between Budget and Pro -- an unexplained hole reads as a failed load, and papering over it with a reluctant pick would be worse than admitting the shortfall.
 
-##### The seed question (PINNED 2026-08-01)
+##### The seed question (CLOSED 2026-08-03)
 
-**Pinned by user direction at the close of Stage D.** The Standard tier ships empty and the hunt stops here -- everything below is the note to pick up from, not work in flight. Reopen it when there is a reason to (a new engine, a cheaper Pro option, or a writer asking for the tier); do not spend more auditions on it in passing.
+**Closed by user direction: "off the table for now. We have no real Standard tier option that is recommended."** Pinned at the close of Stage D, closed here. The Standard tier ships empty on purpose and v1.1.0 goes out that way -- three engines auditioned, three demoted, each with its reason attached and each still selectable by a writer who wants it. That is a finished answer, not an outstanding task.
+
+Everything below is preserved as the record of what was tried, so nobody repeats it. Reopen only on a real trigger -- a new engine appears, a Pro option gets cheap, or a writer asks for the tier. Do not spend auditions on it in passing.
 
 
 OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.
@@ -1377,11 +1379,29 @@ Relics. I read it. The Cambodia chapter. My god! That tomb door.").
 
 Trigger points (initial catalog; each individually toggleable):
 
-- Narration-to-dialogue transitions (a paragraph or sentence run ends
-  and a quoted speech begins) -- offer [pause] before the dialogue.
+- Narration-to-dialogue transitions **inside one paragraph** (a narration
+  sentence ends and a quoted speech begins on the same line) -- offer
+  [pause] before the dialogue. The ACROSS-A-PARAGRAPH-BREAK version was
+  removed 2026-08-03: `paragraph_gap_ms` (550ms by default) already puts a
+  real beat at every paragraph boundary, so offering it asked the writer
+  to hand-place a pause the pipeline inserts for them. The same-paragraph
+  case has nothing covering it -- dialogue is detected per PARAGRAPH in
+  the segmenter, so a quote opening mid-paragraph gets neither a seam nor
+  a pace change -- which is why it stays.
 - Dialogue-to-narration returns -- offer [pause] after the closing quote.
-- Short-sentence bursts (2+ consecutive sentences under ~25 characters)
-  -- offer small [pause] beats between them.
+- Short-sentence bursts -- offer small [pause] beats between them.
+  **Retuned against a real chapter (2026-08-03).** The shipped rule had
+  drifted to "2+ consecutive sentences under 35 characters", which on a
+  22,000-word chapter fired 394 times, one stop every 56 words. At 35
+  characters it was catching ordinary prose ("I don't know their names."
+  is 25; "I've thrown books before." is 25), and a *pair* of short
+  sentences is what ordinary prose looks like. Now: **3+ consecutive
+  sentences of 22 characters or fewer**, measured on the SPOKEN text with
+  marker tokens stripped, and never running across a paragraph break.
+  Same chapter: 166 stops, one per 132 words, and every sampled trigger
+  was deliberate rhythm ("Call me Lexa. Or Lexi. Or Alex.", "Lara Croft.
+  The Lara Croft. Adventurer. Archaeologist."). Requiring a RUN is what
+  separates the writer's intent from their sentence lengths.
 - Paragraph endings without any trailing marker -- offer [pause].
 - Interjections and exclamations ("My god!", "No.") -- offer a beat
   before, after, or both.
@@ -1395,12 +1415,92 @@ Trigger points (initial catalog; each individually toggleable):
   an unclosed [pause:0.4 ...) surfaces as a stop with a one-click fix --
   the walkthrough doubles as the marker linter.
 
-UX contract: modeless overlay pinned above the editor; Next/Skip/Apply
-keyboard-first; each stop shows the sentence in context with the
-proposed insert rendered inline; Apply edits the narration copy exactly
-like typing (manual save still owns persistence); a per-session "don't
-suggest this trigger again" mute; progress indicator (stop N of M in
-this chapter). Every insert type links its audible demo (18.3).
+UX contract: Next/Skip/Apply keyboard-first; each stop shows the sentence
+in context with the proposed insert rendered inline; Apply edits the
+narration copy exactly like typing (manual save still owns persistence);
+a per-session "don't suggest this trigger again" mute; progress indicator
+(stop N of M in this chapter). Every insert type links its audible demo
+(18.3).
+
+**Shell: a pop-out window, sharing the Cast panel's frame (user decision,
+2026-08-03).** This was originally specified as a modeless strip pinned
+above the editor, chosen so a writer could hand-edit between stops. The
+strip ran out of room: seven kind toggles, per-reading Play buttons for
+word readings, a ten-step tutorial with before/after audio, and the
+Auto-apply confirm banner do not fit in a horizontal band -- and the
+deferred heteronym work only adds rows. Cast had already solved the
+identical interaction (walk the chapter, decide one thing at a time, land
+every change on the buffer), so two different shells for one interaction
+shape was the real inconsistency.
+
+What the change trades away, deliberately: hand-editing mid-walk, since
+the panel covers the editor. Closing and reopening resumes from the
+cursor. Two consequences that must not be lost:
+
+- **The panel renders the WHOLE paragraph**, not the strip's 90 characters
+  either side. A window that covers the manuscript has to carry its own
+  context; the ±90 window was only ever adequate because the editor sat
+  visible behind it. This is the property that makes Cast work.
+- **The editor's highlight no longer takes focus.** It still selects and
+  scrolls, so closing lands the writer on the last stop they saw, but
+  focusing a textarea underneath an open dialog would route their
+  keystrokes into the manuscript behind the panel they are reading.
+
+Layout: left rail lists every trigger kind with its count AND a one-line
+description of what it is for -- a count beside a label the writer cannot
+interpret is a toggle nobody ever touches. The work surface holds the
+paragraph, the decision row, and (for word readings) the per-reading
+Play buttons. Keyboard shortcuts sit as quiet grey text directly beneath
+the decision row: reference belongs beside the thing it describes, and as
+a tutorial step it had the least important part of the feature on equal
+footing with why any of it exists.
+
+**Tutorial structure: trunk, then branches, then specifics (writer's
+review, 2026-08-03).** The guided walk is ordered so no step needs
+anything from a later one:
+
+1. *What this is for* -- none of it is required; it improves pacing and
+   pronunciation; the local narrator is named (Kokoro) and its two real
+   faults are owned outright. A writer being asked to tune something has
+   to be told first that it was broken, and that ignoring it is allowed.
+2. *Two ways to use it* -- one at a time, or all at once. Names both and
+   says which to start with.
+3. *What a pause does* -- the marker itself, with three clips of one
+   sentence at no / short / long, because the three length buttons are
+   otherwise just numbers. Deliberately no dialogue in this step.
+4-7. The four beat types, each with its own before/after pair, running
+   (see also the amber caution on step 6, below)
+   **one continuous scene** (Elena's argument) in order. By the third clip
+   the writer is judging the pause rather than reading a new sentence, and
+   because Kokoro is fairly monotone the words themselves have to carry
+   who is speaking.
+8. *Word readings* -- the only pair where the flat clip is not a matter of
+   taste but plainly wrong ("reed" in a past-tense sentence).
+9. *Fixes* -- broken markers, and why they are never guessed at.
+10. *Choosing what it suggests* -- the rail and the all-at-once button.
+
+**The short-burst step carries a deliberate flaw (writer's instruction,
+2026-08-03).** Its "with pauses" clip has three `[pause:0.4]` markers
+packed into one line, and Kokoro slurs slightly under that density. The
+demo is NOT to be cleaned up. An amber note above the clips says so
+plainly: pauses close together can make the narrator run words together,
+it is a limitation of the engine and not of this app, when it happens is
+unpredictable, and the fix is fewer pauses or more space between them.
+
+The reasoning is worth keeping: a tutorial that only ever plays the
+narrator at its best sets the writer up to believe the first garbled run
+in their own chapter is something they did. Naming the failure, pointing
+at an audible instance of it, and saying whose it is turns a mystery into
+a known limitation. `test_the_short_burst_demo_keeps_its_three_packed_pauses`
+guards the script against a well-meaning future edit that would space the
+pauses out and silently delete the warning.
+
+Language is written for a first-time writer. Specifically retired in that
+review: "Marker problems" (renamed **Fixes** -- they are already found and
+the fix is in hand, so the label says what the writer gets rather than
+what is wrong with their file), and **"Auto-apply N beats"**, which to its
+intended reader was a letter and a musical term. It now reads *"Add all 41
+pauses at once."*
 
 ### 18.5 Respelling Doctrine (ear-tested by the user, 2026-07-30)
 
@@ -1413,6 +1513,30 @@ by live listening tests and encoded in the say popout's tips accordion
   land differently). Runs of 2+ capitals are folded by the app -- the
   engine reads caps runs as letters (bare-word measurement: LARah
   0.92s beside the "L A R ah" letter baseline 0.98s vs larah 0.72s).
+  **Now explained, and bounded (phoneme-measured 2026-08-03):** the
+  mechanism is that espeak treats a mid-word capital as a WORD BOUNDARY.
+  `hey-Soos` fuses to `heySoos` and phonemizes as two words with two
+  primary stresses. That is why it re-inflects -- and why it is unusable
+  for anything meant to be one word: `pruh-Jekt` arrives as
+  `pɹˈʌ dʒˈɛkt`, "pruh Jekt", with a gap between. Use the capital only
+  when a two-word feel is what you want.
+- **To move stress, spell the weak syllable weakly -- not with a
+  capital** (measured 2026-08-03). `record` -> `ɹˈɛkɚd` (noun);
+  `rekord` -> `ɹᵻkˈɔːɹd` (verb, stress on 2, correct). A plain `e`
+  reduces and lets the stress fall past it, while `ruhkord` and
+  `rihkord` get the first syllable stressed instead. This is the only
+  lever found for the noun/verb stress pairs.
+- **`ih` before a consonant is the one silent-h spelling that is not
+  silent** (measured on ten consonants, 2026-08-03): `lihv` ->
+  `lˈɪhv`, `wihnd` -> `wˈɪhnd` -- a real /h/ phoneme, heard as a breath
+  mid-word. `ah`/`eh`/`oh`/`uh` before a consonant are usually clean
+  (`bohd`, `dohz`, `mohpt` all verified) but not guaranteed (`rehkord`
+  leaks where `behko` does not). **An `h` between two vowels always
+  leaks** (`soher` -> `sˈoʊhɚ`). Pin the absolutes, audition the rest.
+- **`[[IPA]]` phoneme injection does not work.** espeak reads the
+  brackets as letters and speaks them (`[[rIk'O:d]]` came back as
+  "ar ee-koh-dee"). There is no escape hatch past the grapheme-to-phoneme
+  step; a respelling is the only instrument.
 - **Separation strength, strongest to softest:** SPACE (near two
   words), HYPHEN (syllable-like units of one word; the app fuses them
   so no hesitation gap), APOSTROPHE (the softest internal break --
@@ -1425,6 +1549,151 @@ by live listening tests and encoded in the say popout's tips accordion
   parentheses (letters pronounce separately, symbols get spoken,
   unnatural pauses, engine chunk-splits, markdown stripping
   downstream). Accented characters: a few work, most do not.
+- **Some respellings the engine simply will not take (CLOSED
+  2026-08-03).** `[say:Thee]The[/say]` -- the long-E "thee" as in
+  *see* -- comes back sounding like "neh". The payload is provably
+  correct: `prepare_tts_text` hands Kokoro the plain word `Thee` and
+  there are tests pinning that. Kokoro's own grapheme-to-phoneme step
+  is what mangles it, which is outside anything this app can reach.
+  Investigated and dropped by user direction; do not re-open it as a
+  text-handling bug. The practical rule this leaves: **a respelling
+  that sounds wrong is not a bug to file, it is a respelling to
+  replace** -- try another spelling of the same sound (`thee` ->
+  `dhee`, `thii`) and let Preview decide. The say popout prints
+  "engine heard: ..." under the button precisely so this call takes
+  seconds instead of an afternoon: if the trace shows the right word,
+  the engine is the limit and only a different spelling will move it.
+
+### 18.6 Heteronyms: the ear decides, one word at a time (user-designed 2026-08-03; BUILT 2026-08-03)
+
+The problem: English is full of words
+whose spelling does not fix their sound -- *read* is "reed" or "red",
+*lead* is "leed" or "led", *wound* is "woond" or "wow-nd" -- and Kokoro
+picks one reading from grammar it only half-understands. It gets these
+wrong often enough to break a sentence, and the writer has no way to
+find them except by listening to the whole book.
+
+Source material: the writer's own audition table at
+`local/kokoro_heteronym_list.md` -- word, disambiguating context, the
+Kokoro respelling for that sense, and a confidence rating. It is a
+CANDIDATE list, not a verified one. Section 18.5's closed finding
+applies directly: a respelling can be perfectly formed and still not be
+honoured by the engine, so **every entry needs an audition pass against
+the real engine before it ships** and the ones that fail need a
+different spelling of the same sound, not a bug report.
+
+**The audition, and what it found (2026-08-03).** espeak-ng -- the exact
+grapheme-to-phoneme step Kokoro uses -- sits inside the local narrator's
+virtual environment, so most of the audition needed no listening at all.
+`scripts/audition-heteronyms.py` runs every candidate through
+`speakable()` (the real payload path, which fuses hyphens and folds caps
+runs) and compares three things: what the engine says in each sense's own
+sentence, what the respelling produces, and whether the respelling
+survives as one word. Of the 214 candidate rows:
+
+- **84 produced a broken payload** -- 60-odd from the mid-word capital
+  splitting the word in two, the rest from `ih`-before-consonant leaking
+  an audible /h/. See the 18.5 additions; both are now measured.
+- **8 were no-ops** -- the respelling produced exactly what the engine
+  already said.
+- **~54 words are structurally deferred** -- the whole noun/verb stress
+  family (record, object, project, present, desert, console...) plus the
+  `-ate` family (separate, moderate, estimate...). A weak-vowel
+  respelling *does* work for some (`rekord` -> `ɹᵻkˈɔːɹd`), but each
+  needs its own hunt, so the family gets its own pass rather than
+  shipping half-fixed.
+- **12 words were dropped as already correct** -- tear, tears, house,
+  learned, abuse, crooked, jagged, ragged, naked, polish, mobile, lives.
+  espeak reads both senses right on its own; stopping on them would be a
+  tax for a miss that does not happen, and it is the first thing that
+  would make the walk feel like busywork.
+
+**What ships: 22 words**, each with a verified wrong reading and a
+verified respelling, in `app/src/features/audiobook/heteronyms.ts`. The
+deterministic misses are the reason the feature exists -- these are wrong
+*every time*, not sometimes:
+
+```
+"I read it yesterday."       -> reed    (needs [say:red])
+"The pipe contains lead."    -> leed    (needs [say:led])
+"She wound the cord."        -> woond   (needs [say:wow-nd])
+"Close the door."            -> kloce   (needs [say:klohz])
+"He dove into the water."    -> duv     (needs [say:dohv])
+"Bow before the queen."      -> boh     (needs [say:bau])
+```
+
+Six of the 22 ship **muted by default** (`rare: true`): does, minute,
+use, live, axes, sewer. Their wrong reading is real but unlikely in
+fiction -- "does" the female deer against "does" the verb -- so they are
+switched off rather than deleted, and a writer with a hunting scene turns
+them on. Muting the tax, not the capability.
+
+The phonemizer is a filter, never a verdict: `[say:Thee]` phonemizes
+correctly to `ðˈiː` and still came back sounding like "neh" (18.5). It
+kills the rows that never had a chance, in bulk, for free. Everything
+past that is the ear's job, which is why every reading has its own Play.
+Rerun the script after any worker version bump -- a new espeak changes
+the answers, and a shipped table nobody re-auditioned is a table of
+guesses.
+
+**Where it lives: inside the Formatting Walkthrough, as another trigger
+kind** (18.4). Not a separate screen, not a batch tool.
+
+**Why it cannot be automated, and must not pretend to be:** which
+reading is correct depends on the sentence, and only the writer knows
+which they meant. So the walk STOPS at every heteronym occurrence -- no
+guessing, no silent apply, no "we found 40, apply all."
+
+**The stop's shape, and the whole point of the design:**
+
+- Both readings are offered as **audio, not spelling.** Each candidate
+  gets its own `[Play]`, rendered in the writer's narration voice, in
+  this sentence.
+- The writer **listens to both**, picks the one they meant, and clicks
+  Next. That choice writes a `[say]` override at that occurrence.
+- Nothing is chosen for them and nothing is pre-selected. Skip leaves
+  the word alone, which is the right answer whenever the engine already
+  reads it correctly.
+
+The reason for audio over text: "reed / red" on screen asks the writer
+to trust a respelling notation they have no reason to trust. Two Play
+buttons ask them to use the one instrument that is actually reliable
+here -- their ear -- and the decision takes about two seconds. This is
+the "removes guesswork by providing examples graspable immediately"
+rule applied to the one part of narration that no amount of explanation
+can settle in the abstract.
+
+**The three open questions, resolved in the build session (2026-08-03):**
+
+- **Apply to the same sense elsewhere? No -- show the count instead**
+  (user decision). The next *read* may be the other sense entirely, and a
+  wrong batch is worse than a skip because the writer then believes the
+  spot is handled. The panel says "2 more 'read' lie ahead -- each one
+  gets its own ask", so the writer knows the walk continues rather than
+  wondering whether it caught them all.
+- **Are low-confidence rows worth stopping on?** The question dissolved
+  once the audition ran: confidence was the writer's guess about a
+  respelling, and the phonemizer answers it directly. A row ships if the
+  engine is measurably wrong and the respelling measurably fixes it.
+  Nothing ships on a rating.
+- **Pre-render the audio?** Cached, not pre-rendered. Clips are keyed by
+  (sentence, spoken form), so a replay and a step Back are instant, and
+  previews go through `previewSelection` whose provider is hardcoded to
+  `local-kokoro` -- free, CPU only, never a paid engine. Speculative
+  pre-rendering of stops the writer may Skip was not worth the
+  complexity once replays were free.
+
+**Also settled: the two axes must not collapse.** A beat suggestion and a
+word-reading question can land on the same spot and both be right, so the
+scanner's near-duplicate collapse now runs within an axis only, the
+nearby-pause suppression does not apply to readings (a pause says nothing
+about which sense was meant), and Auto-apply excludes readings entirely
+alongside marker repairs -- a broken pace has a direction only the writer
+can pick, and a reading is a claim about what the sentence means.
+
+Deferred, in order: the noun/verb stress family via a scripted
+weak-vowel spelling search (~54 words, the largest remaining group), then
+`august`, `content`, `refuse`, and `invalid`, which are stress pairs too.
 
 ---
 
@@ -2082,6 +2351,26 @@ Confidence: 86%
 ```
 
 Low-confidence speaker assignments should require explicit review.
+
+---
+
+### 27.4 What Stage G actually built (2026-08-01)
+
+The structure above landed close to as written. Four decisions the implementation had to make, and one limit it did not remove.
+
+**Speakers choose a voice, never a provider -- one run, one engine.** A cast that mixed the free local narrator with a hosted engine would price and fail line by line, and half a chapter could come back in a voice the writer never paid for. The book's engine stays chosen once, in Audiobook Settings; the cast only varies the voice.
+
+**The narration copy carries NAMES, not voice ids.** `[voice:Elena]...[/voice]` is the marker; the cast maps Elena to a voice. Three reasons: recasting is one edit instead of a find-and-replace through the manuscript, the narration copy stays readable in any text editor (the whole point of the format), and a segment can keep its identity across a recast -- changing Elena's voice re-queues exactly her lines.
+
+**Voice is the OUTER span, pace the inner one.** A character's line may change speed within it; a pace change never changes who is speaking. Nesting a voice inside a voice warns and drops the inner opener, exactly as pace does.
+
+**A voice change is the hardest segment boundary there is** -- two speakers can never share one synthesis request, because a request has exactly one voice.
+
+An unknown name falls back to the narrator rather than failing the run: a misspelling in one paragraph must not stop a book from generating. It is reported on SAVE instead, beside the marker warnings, which is the last moment the writer is looking at the spelling.
+
+**The AI pass proposes and never applies** (27.3 as specified), with one addition the spec did not anticipate. A model asked to quote a passage will paraphrase it, straighten its quotation marks, or repair a typo on the way past. If the app wrapped a `[voice:...]` span around what the AI said was there, it would be silently editing the writer's prose -- the one thing the product forbids. So **every proposal is verified against the source character for character, and dropped if it does not match**, however confident it is. The dropped count is reported rather than hidden, since a discarding pass would otherwise look like a model that found nothing.
+
+**Known limit:** the Cast panel lists the LOCAL narrator's voices. Casting characters on a hosted engine works (the ids are stored and used) but the panel cannot yet enumerate that engine's roster, so a hosted cast has to be set while the local voices are showing or the ids typed elsewhere. Wiring the panel to the selected engine's catalog is the natural follow-up.
 
 ---
 

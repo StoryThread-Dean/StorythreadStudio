@@ -28,6 +28,7 @@ from app.audiobook import (
     import_service,
     local_worker,
     locking,
+    markers,
     pronunciation,
     recents_store,
     segmenter,
@@ -482,6 +483,93 @@ class PreviewSelectionRequest(BaseModel):
 PREVIEW_SELECTION_MAX_CHARS = 3000
 
 
+# ── Passage / Dialogue Check (writing app, not a workspace) ───────────────────
+# Hearing a passage read aloud is the fastest way to find out whether it
+# works. Dialogue is the obvious case, but the ear catches a different
+# class of problem than the eye across any prose: a word repeated three
+# times in a paragraph, a sentence that only parses on the second read,
+# and the right-word-wrong-word errors no checker flags -- "walked
+# through the dessert" is perfect spelling and perfect grammar.
+#
+# Deliberately nothing more than that: one voice, local only, no markers,
+# no cost, nothing written anywhere. The writer is listening, not
+# producing -- the Audiobook Converter is where audio gets produced.
+
+# Four voices, not fifty-four. A picker with the whole roster turns a
+# two-second check into a browsing session, and the point is to hear the
+# WORDS. One American and one British of each gender, chosen from the
+# best-rated of the local set.
+DIALOGUE_CHECK_VOICES = [
+    {"id": "af_heart", "label": "Heart (American female)"},
+    {"id": "am_michael", "label": "Michael (American male)"},
+    {"id": "bf_emma", "label": "Emma (British female)"},
+    {"id": "bm_george", "label": "George (British male)"},
+]
+
+# A ceiling rather than a target. The writer is warned as a selection
+# grows; this is only here so a stray Ctrl+A cannot queue an hour of
+# synthesis.
+DIALOGUE_CHECK_MAX_CHARS = 20000
+
+
+@router.get("/dialogue-check/voices")
+def dialogue_check_voices():
+    return {"voices": DIALOGUE_CHECK_VOICES}
+
+
+class DialogueCheckRequest(BaseModel):
+    text: str = Field(min_length=1)
+    voice_id: str = "af_heart"
+
+
+@router.post("/dialogue-check")
+def dialogue_check(request: DialogueCheckRequest):
+    """
+    Read a passage aloud so the writer can hear whether it flows.
+
+    Local engine only, and nothing is persisted: the audio is returned in
+    the response body and never touches disk. There is no workspace here
+    -- this runs against the manuscript in the writing editor, which has
+    no narration copy, no cast and no markers.
+
+    Any audiobook marker that somehow appears in the text is STRIPPED
+    rather than honoured. This tool is not a rehearsal of a narration
+    pass; treating [pause:0.8] as a real pause here would quietly make it
+    one, and the writer would be tuning an audiobook they did not know
+    they were making.
+    """
+    from app.audiobook import marker_demos
+    from app.audiobook.markers import strip_all_markers
+
+    text = strip_all_markers(request.text).strip()
+    if not text:
+        raise HTTPException(
+            status_code=400,
+            detail="There is nothing to read in that selection.")
+    if len(text) > DIALOGUE_CHECK_MAX_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"That selection is {len(text):,} characters -- more than "
+                   f"Dialogue Check will read in one go "
+                   f"({DIALOGUE_CHECK_MAX_CHARS:,}). Select a scene rather "
+                   "than a chapter, or use the Audiobook Converter for the "
+                   "whole book.")
+
+    try:
+        backend = synthesis.resolve_backend("local-kokoro")
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    try:
+        audio, _warnings, _trace = marker_demos.render_marked_text(
+            text, backend, request.voice_id, rules=[])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(content=audio, media_type="audio/wav")
+
+
 @router.post("/preview-selection")
 def preview_selection(request: PreviewSelectionRequest):
     """Select text in the narration editor, hear EXACTLY how it will
@@ -508,10 +596,12 @@ def preview_selection(request: PreviewSelectionRequest):
 
     from app.audiobook import marker_demos
     rules = pronunciation.effective_rules(request.workspace_path)
-    settings = workspace.narration_settings(workspace.load_manifest(request.workspace_path))
+    book = workspace.load_manifest(request.workspace_path)
+    settings = workspace.narration_settings(book)
     try:
         audio, warnings, trace = marker_demos.render_marked_text(
-            text, backend, request.voice_id, rules, settings)
+            text, backend, request.voice_id, rules, settings,
+            cast=workspace.speakers(book))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except synthesis.SynthesisError as e:
@@ -785,11 +875,12 @@ def print_preview(request: PrintPreviewRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
     rules = pronunciation.effective_rules(request.workspace_path)
-    settings = workspace.narration_settings(
-        workspace.load_manifest(request.workspace_path))
+    book = workspace.load_manifest(request.workspace_path)
+    settings = workspace.narration_settings(book)
     try:
         audio, warnings, trace = marker_demos.render_marked_text(
-            text, backend, request.voice_id, rules, settings)
+            text, backend, request.voice_id, rules, settings,
+            cast=workspace.speakers(book))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except synthesis.SynthesisError as e:
@@ -845,14 +936,21 @@ def start_generation(request: StartGenerationRequest):
 
 @router.get("/generation/status")
 def generation_status(workspace_path: str):
+    """
+    Is this book generating, and how far has it got?
+
+    `active` comes from the PROCESS, never from the run file, and it is
+    read once and reused. The earlier version short-circuited to
+    `active: False` whenever the record could not be loaded -- so a poll
+    that landed inside a write reported "nothing is generating" while the
+    worker thread was demonstrably alive. The UI believed it, stopped
+    polling, and offered a Generate button that answered with "already
+    generating" (live bug).
+    """
     _require_workspace(workspace_path)
-    run = generation.status_with_recovery(workspace_path)
-    if run is None:
-        return {"run": None, "active": False}
-    return {
-        "run": run,
-        "active": generation.active_workspace() == workspace_path,
-    }
+    active = generation.active_workspace() == workspace_path
+    run = generation.status_with_recovery(workspace_path, is_active=active)
+    return {"run": run, "active": active}
 
 
 class GenerationControlRequest(BaseModel):
@@ -966,6 +1064,331 @@ def start_assemble(request: StartExportRequest):
 @router.get("/assemble/status")
 def assemble_status():
     return assembly.export_status()
+
+
+# ── The cast (spec 27) ────────────────────────────────────────────────────────
+
+@router.get("/speakers")
+def get_speakers(workspace_path: str):
+    """The book's cast, plus any [voice:NAME] the manuscript uses that
+    the cast does not contain -- so the panel can offer to add exactly
+    the characters the writer has already written."""
+    _require_workspace(workspace_path)
+    manifest = workspace.load_manifest(workspace_path)
+    cast = workspace.speakers(manifest)
+    known = {n.lower() for s in cast for n in workspace.all_names_for(s)}
+    known.update(str(n).strip().lower()
+                 for n in (manifest.get("ignored_speaker_names") or []))
+    try:
+        text = workspace.read_narration(workspace_path)
+    except OSError:
+        text = ""
+    used = markers.speaker_names(text)
+    return {
+        "speakers": cast,
+        "ignored_names": list(manifest.get("ignored_speaker_names") or []),
+        "unassigned_names": [n for n in used if n.lower() not in known],
+        # Every speaker narrates on the SAME engine; only the voice
+        # differs. Said here so the UI never has to invent the rule.
+        "single_engine": True,
+    }
+
+
+@router.get("/voice-options")
+def get_voice_options(workspace_path: str):
+    """
+    The two rosters a cast actually needs, because this app has two
+    narration passes at once (the headline workflow is "draft locally,
+    print premium"):
+
+      DRAFT -- the free local narrator. Always offered when installed.
+      PRINT -- the hosted engine this book is set to print with, offered
+               only when one is chosen AND its key is connected.
+
+    An earlier build asked instead "is this the book's CURRENT engine",
+    which greyed out the whole local roster the moment a hosted engine
+    was chosen, and papered the panel with a warning tile for every
+    engine the writer had not picked. Both were wrong: the local voices
+    were the ones they had been drafting with all along, and an engine
+    nobody selected does not need an alert (live finding).
+    """
+    _require_workspace(workspace_path)
+    from app.audiobook import tts_providers
+    from app.settings_store import load_settings
+
+    manifest = workspace.load_manifest(workspace_path)
+    settings = load_settings()
+    selection = tts_providers.resolve_narration_selection(settings, manifest)
+
+    local_voices: list[dict] = []
+    try:
+        local_voices = [
+            {"id": v["id"], "label": v["label"]} for v in local_worker.list_voices()
+        ]
+    except Exception:
+        # Engine not installed yet. Say so rather than showing an empty
+        # list that looks like a bug.
+        local_voices = []
+
+    draft = {
+        "label": "Free -- your local narrator",
+        "installed": bool(local_voices),
+        "voices": local_voices,
+        "note": ("" if local_voices else
+                 "The free narrator is not installed yet. Install it in the "
+                 "narration panel, then reopen the cast."),
+    }
+
+    # A hosted engine only counts when it was deliberately chosen: the
+    # resolver's level-3 fallback names the writing side's CHAT model,
+    # which is a report about settings rather than an engine that
+    # narrates.
+    chose_hosted = selection.get("source") in ("book", "settings")
+    print_roster: dict = {
+        "configured": False,
+        "label": "",
+        "tier_label": "",
+        "has_api_key": False,
+        "voices": [],
+        "note": "No print engine is chosen, so this book prints with "
+                "whatever you pick in Audiobook Settings. Draft voices are "
+                "all you need until then.",
+    }
+    if chose_hosted:
+        voices, _fallback = tts_providers.voices_for(
+            selection["provider"], selection["model"])
+        has_key = bool(selection.get("has_api_key"))
+        print_roster = {
+            "configured": True,
+            "label": f"{selection.get('model_label')} "
+                     f"({selection.get('provider_label')})",
+            "tier_label": selection.get("tier_label", ""),
+            "has_api_key": has_key,
+            "voices": [{"id": v["id"], "label": v["label"]} for v in voices],
+            "note": "" if has_key else (
+                f"No {selection.get('provider_label')} API key is connected, "
+                "so these voices cannot narrate yet. Add one in Audiobook "
+                "Settings."
+            ),
+        }
+
+    return {"draft": draft, "print": print_roster}
+
+
+class SpeakerEntry(BaseModel):
+    display_name: str = Field(min_length=1, max_length=60)
+    # Nicknames the book uses for this character. A novel calls Alexandra
+    # "Lexi" and "Lex"; all of them resolve to her voice, and the marker
+    # written into the file is always the canonical name.
+    aliases: list[str] = []
+    # Screen-only: which colour marks this character in the workbench.
+    color: str = ""
+    # Two voices per speaker, one per pass: the free local narrator this
+    # book is drafted with, and the hosted engine it may be printed with.
+    # Voice ids do not carry between rosters.
+    voice_id: str = ""
+    premium_voice_id: str = ""
+
+
+class SaveSpeakersRequest(BaseModel):
+    workspace_path: str
+    # The narrator is implicit and always present; sending it is
+    # harmless (its voice is taken) but it can never be removed.
+    speakers: list[SpeakerEntry]
+    narrator_voice: str | None = None
+    narrator_premium_voice: str | None = None
+    # Detected names the writer said to leave alone: the narrator reads
+    # them, and they stop being offered as characters.
+    ignored_names: list[str] | None = None
+
+
+@router.put("/speakers")
+def save_speakers(request: SaveSpeakersRequest):
+    """Replace the character cast. The narrator is never in this list --
+    its voice is the book's own narrator voice, set in the rail."""
+    _require_workspace(request.workspace_path)
+    manifest = workspace.load_manifest(request.workspace_path)
+    if request.narrator_voice is not None:
+        manifest["selected_voice"] = request.narrator_voice
+    if request.narrator_premium_voice is not None:
+        # The same field the Premium panel writes, so the two places that
+        # can set the narrator's print voice never disagree.
+        manifest["selected_premium_voice"] = request.narrator_premium_voice
+    if request.ignored_names is not None:
+        manifest["ignored_speaker_names"] = [
+            " ".join(n.split()).strip() for n in request.ignored_names
+            if n and n.strip()
+        ]
+    manifest["speakers"] = [
+        {"display_name": entry.display_name.strip(),
+         "aliases": [" ".join(a.split()).strip() for a in entry.aliases
+                     if a and a.strip()],
+         "color": entry.color,
+         "voice_id": entry.voice_id,
+         "premium_voice_id": entry.premium_voice_id}
+        for entry in request.speakers
+        if entry.display_name.strip()
+    ]
+    workspace.save_manifest(request.workspace_path, manifest)
+    return get_speakers(request.workspace_path)
+
+
+# How long the optional speaker pass may take before it is called a
+# failure. Deliberately far below the shared 300s AI timeout: this is a
+# structured read, the walkthrough works without it, and a spinner
+# nobody can cancel is worse than an answer nobody gets.
+SPEAKER_PASS_TIMEOUT = 90.0
+
+
+@router.get("/speaker-pass-estimate")
+async def speaker_pass_estimate(workspace_path: str, characters: int = 0):
+    """
+    What one AI speaker pass over this much text would cost, in money.
+
+    Shown BEFORE the writer presses Start, because "it's probably cheap"
+    is not something anyone should have to take on faith. The honest
+    answer is usually a few cents, and saying so removes the reason
+    people avoid a feature that would save them an hour.
+
+    Pricing comes from the provider's own model list. When it cannot be
+    had -- NanoGPT publishes none, and a network hiccup is always
+    possible -- the answer is "unknown", never a guessed number.
+    """
+    _require_workspace(workspace_path)
+    from app.routers.ai import _resolve_model_and_key
+
+    try:
+        provider, api_key, model_id = _resolve_model_and_key(None)
+    except HTTPException:
+        # No key or no model yet: the estimate is not the place to nag.
+        return {"model_id": "", "price_known": False, "cost_usd": None,
+                "note": "Pick an AI model in Settings to use the AI passes."}
+
+    # Roughly four characters to a token for English prose, plus the
+    # prompt itself. Output is one short JSON line per line of dialogue.
+    input_tokens = int(max(0, characters) / 4) + 700
+    output_tokens = int(max(0, characters) / 40) + 100
+
+    cost = None
+    try:
+        from app.ai.openrouter import list_models
+        models = await list_models(api_key, provider)
+        row = next((m for m in models if m.get("id") == model_id), None)
+        if row and (row.get("cost_input_per_million") or row.get("cost_output_per_million")):
+            cost = (input_tokens / 1_000_000 * float(row["cost_input_per_million"])
+                    + output_tokens / 1_000_000 * float(row["cost_output_per_million"]))
+    except Exception:
+        cost = None                      # unknown beats invented
+
+    return {
+        "model_id": model_id,
+        "provider_label": provider.label,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "price_known": cost is not None,
+        "cost_usd": round(cost, 4) if cost is not None else None,
+        "note": "" if cost is not None else
+                f"{provider.label} does not publish prices for this model, so "
+                "the cost cannot be quoted. Passes like this are normally a "
+                "few cents.",
+    }
+
+
+class AnalyzeSpeakersRequest(BaseModel):
+    workspace_path: str
+    # The editor's CURRENT text, so a writer can analyse work they have
+    # not saved yet -- the same buffer the Formatting Walkthrough reads.
+    text: str = Field(min_length=1)
+
+
+@router.post("/analyze-speakers")
+async def analyze_speakers(request: AnalyzeSpeakersRequest):
+    """
+    Propose who speaks each line of dialogue in a passage (spec 27.3).
+
+    Proposes only. Nothing is written, nothing is applied, and every
+    proposal is verified to exist in the passage character for character
+    before it is offered -- an AI that paraphrased on the way past would
+    otherwise have its words wrapped in a [voice:...] span and saved as
+    the writer's own.
+
+    Runs on the WRITING side's AI provider and model, like every other
+    editorial pass. Narration keys pay for speech, not for reading.
+    """
+    from app.ai.openrouter import run_completion
+    from app.audiobook import speaker_analysis
+    from app.routers.ai import (
+        TEMPERATURE_DEFAULTS, _prompt_cache_enabled, _provider_exc,
+        _resolve_model_and_key,
+    )
+
+    _require_workspace(request.workspace_path)
+    text = request.text
+    if len(text) > 30000:
+        raise HTTPException(
+            status_code=400,
+            detail="That passage is too long to analyse in one pass (30,000 "
+                   "characters). Analyse a chapter at a time.",
+        )
+
+    provider, api_key, model_id = _resolve_model_and_key(None)
+    manifest = workspace.load_manifest(request.workspace_path)
+    # The AI is told every spelling the book uses -- "Lexi" in the prose
+    # has to resolve to Alexandra, and a model that has never heard the
+    # nickname will invent a new character for it.
+    known = [n for s in workspace.speakers(manifest)
+             if s["speaker_id"] != workspace.NARRATOR_ID
+             for n in workspace.all_names_for(s)]
+
+    import asyncio
+
+    import httpx
+    try:
+        # A hard ceiling of our own. The shared AI timeout is 300s,
+        # which is right for a model DRAFTING prose and far too long
+        # for a structured read of one chapter -- five minutes of
+        # spinner is indistinguishable from a hang, and this pass is
+        # optional help rather than the feature itself.
+        result = await asyncio.wait_for(
+            run_completion(
+                provider=provider, api_key=api_key, model_id=model_id,
+                cache_prompts=_prompt_cache_enabled(provider),
+                system_prompt=speaker_analysis.SPEAKER_ANALYSIS_PROMPT,
+                user_message=speaker_analysis.build_user_message(text, known),
+                # Reading, not writing: the coolest setting we have,
+                # because invention is the failure mode here.
+                temperature=TEMPERATURE_DEFAULTS["critique"],
+            ),
+            timeout=SPEAKER_PASS_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=f"{model_id} did not answer within "
+                   f"{int(SPEAKER_PASS_TIMEOUT)} seconds. Try a shorter "
+                   "passage, or a faster model in Settings -- reasoning "
+                   "models are slow at this. You can assign speakers "
+                   "yourself in the walkthrough either way.",
+        )
+    except httpx.HTTPStatusError as e:
+        raise _provider_exc(e, provider)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503,
+                            detail=f"Could not reach {provider.label}: {e}")
+
+    raw_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+    proposals, dropped = speaker_analysis.parse_response(raw_text, text)
+    cast_names = {name.lower() for name in known}
+    for proposal in proposals:
+        # Whether accepting this also means adding somebody to the cast.
+        proposal["in_cast"] = proposal["speaker"].lower() in cast_names
+    return {
+        "proposals": proposals,
+        # Said out loud rather than hidden: a pass that quietly discarded
+        # half its answers would look like a model that found nothing.
+        "dropped": dropped,
+        "model_used": model_id,
+    }
 
 
 @router.get("/audio-status")

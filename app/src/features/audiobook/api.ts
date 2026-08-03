@@ -680,6 +680,138 @@ export async function resetGeneration(workspacePath: string): Promise<void> {
   }));
 }
 
+// ── The cast (spec 27) ───────────────────────────────────────────────────────
+// Speakers choose a VOICE, never a provider: one run, one engine. And the
+// narration copy carries NAMES ([voice:Elena]), not voice ids, so
+// recasting a character never touches a word of the manuscript.
+
+export interface Speaker {
+  speaker_id: string;
+  display_name: string;
+  role: "narrator" | "character";
+  /** Nicknames the book uses for this character. */
+  aliases: string[];
+  /** Screen-only colour override; "" means the palette decides. */
+  color: string;
+  /** Local voice, used when drafting. */
+  voice_id: string;
+  /** Hosted voice, used on a print pass. */
+  premium_voice_id: string;
+}
+
+export interface CastReport {
+  speakers: Speaker[];
+  /** Detected names the writer told us the narrator reads. */
+  ignored_names: string[];
+  /** Names the manuscript already uses that the cast does not have. */
+  unassigned_names: string[];
+  single_engine: boolean;
+}
+
+export async function fetchCast(workspacePath: string): Promise<CastReport> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/speakers?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<CastReport>(res);
+}
+
+export async function saveCast(
+  workspacePath: string,
+  speakers: { display_name: string; aliases?: string[]; color?: string;
+              voice_id: string; premium_voice_id?: string }[],
+  narratorVoice?: string,
+  narratorPremiumVoice?: string,
+  ignoredNames?: string[],
+): Promise<CastReport> {
+  const res = await fetch(`${API_BASE}/api/audiobook/speakers`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspace_path: workspacePath,
+      speakers: speakers.map(s => ({
+        premium_voice_id: "", aliases: [], color: "", ...s })),
+      narrator_voice: narratorVoice ?? null,
+      narrator_premium_voice: narratorPremiumVoice ?? null,
+      ignored_names: ignoredNames ?? null,
+    }),
+  });
+  return toJson<CastReport>(res);
+}
+
+/** The two rosters a cast needs, because the app has two narration
+ *  passes at once: the free local narrator a book is drafted with, and
+ *  the hosted engine it may be printed with. Voice ids do not carry
+ *  between them. */
+export interface VoiceRoster {
+  label?: string;
+  installed?: boolean;
+  configured?: boolean;
+  tier_label?: string;
+  has_api_key?: boolean;
+  voices: { id: string; label: string }[];
+  /** Why it is empty or unusable, in the writer's terms. "" when fine. */
+  note: string;
+}
+
+export async function fetchVoiceOptions(
+  workspacePath: string,
+): Promise<{ draft: VoiceRoster; print: VoiceRoster }> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/voice-options?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson(res);
+}
+
+/** One AI proposal about who speaks a passage. `start`/`end` index into
+ *  the text that was analysed, so the editor wraps the REAL words. */
+export interface SpeakerProposal {
+  quote: string;
+  speaker: string;
+  confidence: number;
+  reason: string;
+  start: number;
+  end: number;
+  in_cast: boolean;
+}
+
+export interface SpeakerPassEstimate {
+  model_id: string;
+  provider_label?: string;
+  price_known: boolean;
+  cost_usd: number | null;
+  note: string;
+}
+
+/** What one AI pass over this much text would cost, before it runs. */
+export async function fetchSpeakerPassEstimate(
+  workspacePath: string,
+  characters: number,
+): Promise<SpeakerPassEstimate> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/speaker-pass-estimate`
+    + `?workspace_path=${encodeURIComponent(workspacePath)}`
+    + `&characters=${characters}`,
+  );
+  return toJson<SpeakerPassEstimate>(res);
+}
+
+/** Optional AI attribution. Takes an AbortSignal because this is the one
+ *  audiobook call that waits on a language model, and a writer who is
+ *  tired of waiting must be able to take their walk back. */
+export async function analyzeSpeakers(
+  workspacePath: string,
+  text: string,
+  signal?: AbortSignal,
+): Promise<{ proposals: SpeakerProposal[]; dropped: number; model_used: string }> {
+  const res = await fetch(`${API_BASE}/api/audiobook/analyze-speakers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, text }),
+    signal,
+  });
+  return toJson(res);
+}
+
 // ── Audio freshness (spec 24.2) ──────────────────────────────────────────────
 // Which chapters still match their narration. Read-only: asking never
 // spawns the local engine and never touches a paid one, so the rail can
@@ -702,6 +834,9 @@ export interface AudioStatus {
   book: ChapterAudioStatus;
   outdated_segments: number;
   draft_segments: number;
+  /** Pause groups whose continuous render could not be matched, so they
+   *  fell back to isolated fragments -- where the seam slurs live. */
+  flow_fallbacks: number;
   /** "voice" | "text" when the whole book agrees on one cause, else "". */
   outdated_reason: string;
 }

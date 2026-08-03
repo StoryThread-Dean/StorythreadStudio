@@ -33,6 +33,7 @@ import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
 import { EditorMenu } from "./components/EditorMenu";
+import { DialogueCheck } from "./components/DialogueCheck";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import { toPutPayload } from "./types/structure";
 import type { StructureManifest } from "./types/structure";
@@ -419,6 +420,15 @@ function App() {
   // The live CodeMirror EditorView instance.
   // useState so the toolbar gets the view via props (ref changes don't trigger re-renders).
   const [editorView, setEditorView] = useState<EditorView | null>(null);
+  // Dialogue Check: the passage the writer had selected when they opened
+  // it. Held as TEXT rather than offsets -- the tool is read-only and
+  // never edits, so it should not care what happens in the editor while
+  // it is open.
+  const [dialogueCheckText, setDialogueCheckText] = useState<string | null>(null);
+  // Whether that text came from a real selection. The panel says so --
+  // a gentle reminder, because reading a whole chapter is legitimate but
+  // rarely what somebody meant by "check this passage".
+  const [dialogueCheckSelected, setDialogueCheckSelected] = useState(true);
 
   // Ref for use inside callbacks -- gives the latest value without stale closures.
   // A "stale closure" is when a function captures an old version of a variable.
@@ -2533,6 +2543,21 @@ function App() {
                   : undefined
               }
               suggestBreaksRunning={suggestBreaksRunning}
+              onDialogueCheck={
+                currentView === "editor" && currentChapter
+                  ? () => {
+                      // Selection if there is one, otherwise the whole
+                      // chapter -- a writer who wants to hear the scene
+                      // they are in should not have to select it first.
+                      const view = editorViewRef.current;
+                      const sel = view?.state.selection.main;
+                      const selected = view && sel && !sel.empty
+                        ? view.state.sliceDoc(sel.from, sel.to) : "";
+                      setDialogueCheckSelected(Boolean(selected.trim()));
+                      setDialogueCheckText(selected || chapterContent);
+                    }
+                  : undefined
+              }
               onOpenChapterSummary={
                 currentView === "editor" && currentChapter
                   ? () => openChapterSummary(currentChapter.filename)
@@ -3508,6 +3533,19 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Dialogue Check: listening only. Local, free, saves nothing --
+          and it says so, plus where to go for real audio. */}
+      {dialogueCheckText !== null && (
+        <DialogueCheck
+          text={dialogueCheckText}
+          hadSelection={dialogueCheckSelected}
+          voiceId={projectUi.uiState.passageCheckVoice}
+          onVoiceChange={voice =>
+            projectUi.update({ passageCheckVoice: voice })}
+          onClose={() => setDialogueCheckText(null)}
+        />
       )}
 
       </div>

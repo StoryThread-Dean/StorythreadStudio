@@ -36,11 +36,18 @@ interface GenerationPanelProps {
   getSelectionText?: () => string;
   /** The voice remembered for THIS book (manifest.selected_voice) --
       restored when the workspace opens; different books use different
-      voices on purpose. */
+      voices on purpose. The Cast panel writes the same field, so a
+      change there arrives here as a new value and is adopted. */
   initialVoiceId?: string | null;
+  /** The writer picked a voice HERE, so whoever owns the narrator's
+      voice elsewhere (the Cast panel) can stay in step. */
+  onVoiceChange?: (voiceId: string) => void;
   /** Bumped by WorkspaceView whenever Audiobook Settings are saved, so
       the rail refetches what depends on them (the narration engine). */
   settingsVersion?: number;
+  /** A run reached a terminal state, so anything derived from the audio
+      (the chapter freshness badges, above all) is now stale. */
+  onRunFinished?: () => void;
   /** Open the Audiobook Settings dialog -- the premium panel points at
       it, since the engine is chosen there and nowhere else. */
   onOpenSettings?: () => void;
@@ -52,6 +59,13 @@ interface GenerationPanelProps {
 
 // The out-of-the-box narrator when a book has no remembered voice yet.
 const DEFAULT_VOICE_ID = "am_michael";
+
+// A run that reports one of these has genuinely stopped. Anything else
+// -- including a status that could not be read at all -- means keep
+// looking.
+const TERMINAL_STATUSES = [
+  "completed", "partially_completed", "cancelled", "paused",
+];
 
 const PREVIEW_SAMPLE =
   "The road disappeared beneath the gathering snow, and somewhere behind " +
@@ -150,7 +164,8 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
 
 export function GenerationPanel({
   workspacePath, getSelectionText, initialVoiceId,
-  settingsVersion = 0, onOpenSettings, audioStatus,
+  settingsVersion = 0, onOpenSettings, audioStatus, onVoiceChange,
+  onRunFinished,
 }: GenerationPanelProps) {
   const [voices, setVoices] = useState<NarratorVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
@@ -167,6 +182,12 @@ export function GenerationPanel({
 
   const [run, setRun] = useState<GenerationRun | null>(null);
   const [active, setActive] = useState(false);
+  // Keep watching after a run is known to exist, until a TERMINAL status
+  // is actually seen. One falsey reading used to end the polling loop
+  // for good -- and a status read that lands inside a file write is a
+  // falsey reading, which over a 200-segment run is a certainty. The
+  // writer was left with an idle Generate button over a live job.
+  const [watching, setWatching] = useState(false);
   const [busy, setBusy] = useState(false);          // a control call in flight
   const [error, setError] = useState<string | null>(null);
   const pollTimer = useRef<number | null>(null);
@@ -196,12 +217,33 @@ export function GenerationPanel({
 
   useEffect(() => { void loadVoices(); }, [loadVoices]);
 
+  // The narrator's voice lives in ONE place -- the book's manifest --
+  // and two screens edit it: this rail and the Cast panel. Whichever
+  // wrote last wins, and this is how the other one finds out. Without
+  // it the rail kept showing Lily while the cast said Alice, and the
+  // writer had no way to tell which one the audio would use.
+  useEffect(() => {
+    if (initialVoiceId && initialVoiceId !== voiceId) setVoiceId(initialVoiceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialVoiceId]);
+
   // ── Status polling ───────────────────────────────────────────────────────
   const pollOnce = useCallback(async () => {
     try {
       const body = await fetchGenerationStatus(workspacePath);
       setRun(body.run);
       setActive(body.active);
+      if (body.active) {
+        setWatching(true);
+      } else if (body.run && TERMINAL_STATUSES.includes(body.run.status)) {
+        // The run really is over: it said so itself. Everything derived
+        // from the audio is stale the moment it stops -- the freshness
+        // notice above the button was still claiming "16 sections no
+        // longer match" after the run that fixed them (live finding).
+        setWatching(prev => { if (prev) onRunFinished?.(); return false; });
+      }
+      // Not active and no readable run? Say nothing and keep watching.
+      // "I could not read it" is not "it finished".
       return body.active;
     } catch {
       return false;      // backend hiccup -- the banner system covers it
@@ -213,7 +255,7 @@ export function GenerationPanel({
   }, [pollOnce]);
 
   useEffect(() => {
-    if (!active) {
+    if (!active && !watching) {
       if (pollTimer.current !== null) {
         window.clearInterval(pollTimer.current);
         pollTimer.current = null;
@@ -225,7 +267,7 @@ export function GenerationPanel({
       if (pollTimer.current !== null) window.clearInterval(pollTimer.current);
       pollTimer.current = null;
     };
-  }, [active, pollOnce]);
+  }, [active, watching, pollOnce]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const handlePreview = useCallback(async () => {
@@ -290,6 +332,7 @@ export function GenerationPanel({
     setOfferForce(false);
     try {
       await startGeneration(workspacePath, voiceId, force, draftPass);
+      setWatching(true);
       await pollOnce();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not start generation.";
@@ -366,6 +409,7 @@ export function GenerationPanel({
                 value={voiceId}
                 onChange={e => {
                   setVoiceId(e.target.value);
+                  onVoiceChange?.(e.target.value);
                   // Fire-and-forget: the book remembers its narrator.
                   void saveVoice(workspacePath, e.target.value).catch(() => {});
                 }}
@@ -446,7 +490,13 @@ export function GenerationPanel({
               skipped (pauses kept, pre-flow sound) -- about twice as
               fast on pause-heavy chapters. Draft audio is stale to a
               Standard run, so it can never ship by accident. */}
-          {!active && !resumable && (
+          {watching && !active && !resumable && (
+            <p className="flex items-center gap-2 text-[11px] text-blue-300">
+              <Loader2 size={12} className="animate-spin" />
+              Checking on the run...
+            </p>
+          )}
+          {!active && !resumable && !watching && (
             <div>
               <ToggleSwitch
                 checked={draftPass}
@@ -487,7 +537,28 @@ export function GenerationPanel({
               out loud with the count. Never a prompt to spend -- the
               Generate button below already re-does exactly the changed
               segments, so this is information, not a second path. */}
-          {!active && audioStatus && audioStatus.outdated_segments > 0 && (
+          {/* Where the seam slurs are. A pause group whose continuous
+              render could not be matched falls back to isolated
+              fragments, and an isolated fragment is exactly what flow
+              synthesis exists to avoid -- the engine performs an ending
+              on it. Reporting the count turns "I can hear a slur
+              somewhere" into paragraphs to look at. */}
+          {!active && !watching && audioStatus
+            && audioStatus.flow_fallbacks > 0 && (
+            <p className="rounded border border-zinc-700 bg-zinc-900/60 px-2.5 py-2 text-[10px] leading-relaxed text-zinc-400">
+              <span className="text-zinc-300">
+                {audioStatus.flow_fallbacks} pause group
+                {audioStatus.flow_fallbacks === 1 ? "" : "s"} rendered as
+                separate pieces.
+              </span>{" "}
+              Those are the places a seam can be heard. It happens when
+              several pauses sit close together and the continuous render
+              cannot be lined up against them. Moving one pause to a
+              sentence boundary, or removing it, usually clears it.
+            </p>
+          )}
+
+          {!active && !watching && audioStatus && audioStatus.outdated_segments > 0 && (
             <div className="rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2">
               <p className="text-[11px] leading-relaxed text-amber-200">
                 {audioStatus.outdated_segments === 1
@@ -508,7 +579,7 @@ export function GenerationPanel({
           )}
 
           {/* Start / resume -- the emerald path */}
-          {!active && (
+          {!active && !watching && (
             <button
               onClick={() => void (resumable ? control(resumeGeneration) : handleStart())}
               disabled={busy || !voiceId}

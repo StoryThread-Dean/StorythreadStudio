@@ -162,3 +162,40 @@ def test_corrupt_rules_file_loads_as_empty(tmp_path):
     with open(pronunciation.workspace_rules_path(str(workspace)), "w") as f:
         f.write("{ not json")
     assert pronunciation.load_workspace_rules(str(workspace)) == []
+
+
+# ── No marker is ever spoken (live finding) ──────────────────────────────────
+
+def test_a_stray_say_tag_never_reaches_the_engine():
+    # Live bug: the [say] preview said "You will hear laruh SLASH in the
+    # narration". A selection that clipped the tail of an existing span
+    # carried "[/say]" into the word, the carrier phrase wrapped it
+    # again, and the leftover half was read out loud.
+    from app.audiobook.pronunciation import prepare_tts_text
+
+    payload = prepare_tts_text(
+        "You will hear [say:LAR-uh]Lara[/say][/say] in the narration.", [])
+    assert payload == "You will hear laruh in the narration."
+    assert "/" not in payload
+
+
+def test_every_marker_shape_is_silenced_not_spoken():
+    from app.audiobook.pronunciation import prepare_tts_text
+
+    payload = prepare_tts_text(
+        "A [/voice] and [pace:+2] and [say:X] and [exclude] survive nothing.", [])
+    for shape in ("[/voice]", "[pace:", "[say:", "[exclude]"):
+        assert shape not in payload
+    # The WORDS are all still there -- stripping a marker never removes
+    # prose, which is the line this whole feature cannot cross.
+    for word in ("A", "and", "survive", "nothing."):
+        assert word in payload
+
+
+def test_a_writers_own_square_brackets_are_left_alone():
+    # Only recognised marker shapes are stripped. Prose that happens to
+    # use brackets is the writer's, and must be read as written.
+    from app.audiobook.pronunciation import prepare_tts_text
+
+    assert prepare_tts_text("She wrote [a note] on the door.", []) == \
+        "She wrote [a note] on the door."

@@ -14,13 +14,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, BookMarked, EyeOff, HardDrive, HelpCircle, Loader2,
-  MessageSquareQuote, Plus, Save, Scissors, Settings as SettingsIcon, Wand2, X,
+  MessageSquareQuote, Plus, Save, Scissors, Settings as SettingsIcon,
+  Users, Wand2, X,
 } from "lucide-react";
 
 import {
-  addChapters, fetchAudioStatus, fetchAvailableChapters, fetchNarration, saveNarration,
+  addChapters, fetchAudioStatus, fetchAvailableChapters, fetchCast,
+  fetchNarration, saveNarration,
 } from "./api";
 import type { AudioStatus, AvailableChapter, ChapterAudioStatus } from "./api";
+import { clampAnchor } from "./anchorPlacement";
+import { CastPanel } from "./CastPanel";
 import { StorageDialog } from "./StorageDialog";
 import { InsertWalkthrough } from "./InsertWalkthrough";
 import { GenerationPanel } from "./GenerationPanel";
@@ -35,6 +39,10 @@ interface WorkspaceViewProps {
   payload: AudiobookProjectPayload;
   onBack: () => void;
 }
+
+// The [say] popout's width, kept in step with SayEditor's own w-[26rem]
+// so the placement maths can keep it clear of the right edge.
+const SAY_POPOUT_WIDTH = 416;
 
 // The quick-action marker set (spec 10.1 defaults; configurability
 // arrives with Settings in a later slice). Placement matters: a pause is
@@ -73,6 +81,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   // The Insert Walkthrough starts at the caret when opened (null = closed).
   const [walkthroughStart, setWalkthroughStart] = useState<number | null>(null);
   const [storageOpen, setStorageOpen] = useState(false);
+  const [castOpen, setCastOpen] = useState(false);
   // Which chapters still match their narration (spec 24.2). Read-only and
   // engine-free, so it can be refreshed after every save without cost.
   const [audioStatus, setAudioStatus] = useState<AudioStatus | null>(null);
@@ -167,6 +176,35 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     };
   }, [content]);
 
+  // ── The cast ────────────────────────────────────────────────────────────
+  // Everything about casting lives in the Cast workbench: the voices,
+  // the dialogue walk, and the markers it writes. All this screen keeps
+  // is the count for the rail button and a refresh when it saves.
+  const [castNames, setCastNames] = useState<string[]>([]);
+  // The book's narrator voice, owned here because TWO screens edit it:
+  // the narration rail and the Cast panel. Keeping one copy is what
+  // stops them disagreeing about who reads the book.
+  const [narratorVoice, setNarratorVoice] = useState<string>(
+    payload.manifest.selected_voice ?? "");
+
+  const refreshCast = useCallback(async () => {
+    try {
+      const cast = await fetchCast(workspacePath);
+      setCastNames(cast.speakers
+        .filter(s => s.role === "character")
+        .map(s => s.display_name));
+      const narrator = cast.speakers.find(s => s.role === "narrator");
+      if (narrator?.voice_id) setNarratorVoice(narrator.voice_id);
+    } catch {
+      // No cast is not an error -- it is the normal state of most books.
+      setCastNames([]);
+    }
+  }, [workspacePath]);
+
+  useEffect(() => { void refreshCast(); }, [refreshCast]);
+
+  const openCast = useCallback(() => setCastOpen(true), []);
+
   // ── The [say] popout (user-designed) ────────────────────────────────────
   // Instead of typing into raw brackets, [say] opens a structured card
   // over the word: only the spoken form is typeable, with Preview and
@@ -174,6 +212,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [sayEditor, setSayEditor] = useState<{
     start: number; end: number;
     anchor: { top: number; left: number } | null;
+    existing: { spanStart: number; spanEnd: number; spoken: string } | null;
   } | null>(null);
 
   /** Approximate pixel position of a text offset inside the textarea,
@@ -186,12 +225,21 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       const style = window.getComputedStyle(ta);
       const mirror = document.createElement("div");
       mirror.style.position = "absolute";
+      mirror.style.top = "0";
+      mirror.style.left = "-9999px";
       mirror.style.visibility = "hidden";
       mirror.style.whiteSpace = "pre-wrap";
       mirror.style.overflowWrap = "break-word";
+      // border-box + clientWidth is the only pairing that reproduces the
+      // textarea's CONTENT width. Copying the padding shorthand does not
+      // work -- getComputedStyle returns "" for it whenever the sides
+      // differ, and the mirror then wraps at a different column, which
+      // puts every line at the wrong height.
+      mirror.style.boxSizing = "border-box";
       mirror.style.width = `${ta.clientWidth}px`;
-      for (const prop of ["fontFamily", "fontSize", "fontWeight",
-                          "lineHeight", "letterSpacing", "padding"] as const) {
+      for (const prop of ["fontFamily", "fontSize", "fontWeight", "lineHeight",
+                          "letterSpacing", "paddingTop", "paddingRight",
+                          "paddingBottom", "paddingLeft"] as const) {
         mirror.style[prop] = style[prop];
       }
       mirror.textContent = ta.value.slice(0, index);
@@ -199,24 +247,78 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       marker.textContent = ta.value.slice(index, index + 1) || ".";
       mirror.appendChild(marker);
       document.body.appendChild(mirror);
-      // Just under the word's line, clamped into view.
-      const top = ta.offsetTop + marker.offsetTop - ta.scrollTop + 26;
-      const left = marker.offsetLeft - ta.scrollLeft;
+      const markerTop = marker.offsetTop;
+      const markerLeft = marker.offsetLeft;
       mirror.remove();
-      return {
-        top: Math.max(8, top),
-        left: Math.max(8, Math.min(left, Math.max(8, ta.clientWidth - 440))),
+
+      // Measure in VIEWPORT space, then convert into the popout's own
+      // containing block. The previous version added ta.offsetTop to an
+      // offset measured inside the mirror, which only agreed with
+      // reality while the textarea sat at the top of its container and
+      // was itself the scroller. It is neither, so the popout drifted
+      // further down the page the further into a chapter the writer was
+      // -- reported as "it always appears at the bottom".
+      const box = (ta.offsetParent as HTMLElement | null) ?? ta;
+      const taRect = ta.getBoundingClientRect();
+      const boxRect = box.getBoundingClientRect();
+      const raw = {
+        top: taRect.top - boxRect.top + (markerTop - ta.scrollTop) + 26,
+        left: taRect.left - boxRect.left + (markerLeft - ta.scrollLeft),
       };
+      return clampAnchor(raw, {
+        height: boxRect.height,
+        width: boxRect.width,
+        popoutWidth: SAY_POPOUT_WIDTH,
+      });
     } catch {
       return null;
     }
   }, []);
+
+  /** The [say] span the caret is sitting inside, if any. Editing an
+      existing override is the normal reason to open this a second time,
+      and it has to work: opening on one used to report "no more
+      occurrences", because the occurrence filter skips anything already
+      wrapped. */
+  const saySpanAt = useCallback((caret: number) => {
+    const re = /\[say:([^\]]*)\]([\s\S]*?)\[\/say\]/gi;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(content)) !== null) {
+      const spanStart = match.index;
+      const spanEnd = spanStart + match[0].length;
+      if (caret >= spanStart && caret <= spanEnd) {
+        const innerStart = spanStart + `[say:${match[1]}]`.length;
+        return {
+          spanStart, spanEnd,
+          spoken: match[1],
+          innerStart,
+          innerEnd: innerStart + match[2].length,
+        };
+      }
+    }
+    return null;
+  }, [content]);
 
   const handleSay = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     let start = ta.selectionStart ?? 0;
     let end = ta.selectionEnd ?? 0;
+
+    const inside = saySpanAt(start);
+    if (inside) {
+      // Re-open the existing override for editing, with its spoken form
+      // already filled in, rather than treating the marker text as a
+      // fresh word to wrap.
+      setSayEditor({
+        start: inside.innerStart, end: inside.innerEnd,
+        anchor: measureAnchor(inside.innerStart),
+        existing: { spanStart: inside.spanStart, spanEnd: inside.spanEnd,
+                    spoken: inside.spoken },
+      });
+      return;
+    }
+
     const wordChar = /[A-Za-z0-9'’-]/;
     if (start === end) {
       // No selection: the word under the caret is the obvious target.
@@ -225,9 +327,9 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     }
     while (start < end && /\s/.test(content[start])) start += 1;
     while (end > start && /\s/.test(content[end - 1])) end -= 1;
-    if (start === end) return;                 // nothing to pronounce
-    setSayEditor({ start, end, anchor: measureAnchor(start) });
-  }, [content, measureAnchor]);
+    if (start === end) return;
+    setSayEditor({ start, end, anchor: measureAnchor(start), existing: null });
+  }, [content, measureAnchor, saySpanAt]);
 
   const handleExclude = useCallback(() => {
     wrapSelection("[exclude]", "[/exclude]");
@@ -489,12 +591,20 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           onHighlight={(offset, length) => {
             const ta = textareaRef.current;
             if (!ta) return;
-            ta.focus({ preventScroll: true });
+            // Select and scroll, but do NOT focus. The walkthrough is a
+            // window over the editor now: pulling focus back to the
+            // textarea would put the writer's keystrokes into the
+            // manuscript behind the panel they are looking at. The
+            // selection still shows unfocused (see the textarea::selection
+            // rule in App.css), so closing the panel lands them on the
+            // last stop they saw.
             ta.setSelectionRange(offset, offset + Math.max(length, 1));
             ta.scrollTop = (offset / Math.max(content.length, 1)) * ta.scrollHeight
               - ta.clientHeight / 3;
           }}
           onClose={() => setWalkthroughStart(null)}
+          workspacePath={workspacePath}
+          voiceId={payload.manifest.selected_voice ?? "am_michael"}
         />
       )}
 
@@ -553,6 +663,13 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               <SettingsIcon size={12} /> Audiobook Settings
             </button>
             <button
+              onClick={openCast}
+              title="Give characters their own voices -- free on your local narrator"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-violet-600 hover:text-violet-300"
+            >
+              <Users size={12} /> Cast{castNames.length > 0 && ` (${castNames.length})`}
+            </button>
+            <button
               onClick={() => setStorageOpen(true)}
               title="How much space this audiobook is using, and what you can safely delete"
               className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300"
@@ -571,10 +688,18 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               workspacePath={workspacePath}
               voiceId={payload.manifest.selected_voice ?? "am_michael"}
               anchor={sayEditor.anchor}
+              existing={sayEditor.existing}
               onApply={next => { setContent(next); setDirty(true); }}
-              onLocate={pos => {
+              onLocate={(pos, length) => {
                 const ta = textareaRef.current;
                 if (!ta) return;
+                // Select the occurrence, not just scroll to it. The
+                // popout takes focus, so without a visible selection the
+                // writer is answering questions about a word they cannot
+                // see -- and "next occurrence" moves somewhere they have
+                // no way to follow. An unfocused textarea still paints
+                // its selection; App.css gives it a colour worth seeing.
+                ta.setSelectionRange(pos, pos + length);
                 ta.scrollTop = (pos / Math.max(content.length, 1)) * ta.scrollHeight
                   - ta.clientHeight / 3;
                 setSayEditor(prev => prev && { ...prev, anchor: measureAnchor(pos) });
@@ -626,7 +751,9 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             rehearsing the wrong words. */}
         <GenerationPanel
           workspacePath={workspacePath}
-          initialVoiceId={payload.manifest.selected_voice}
+          initialVoiceId={narratorVoice}
+          onVoiceChange={setNarratorVoice}
+          onRunFinished={() => void refreshAudioStatus()}
           settingsVersion={settingsVersion}
           onOpenSettings={() => setSettingsOpen(true)}
           audioStatus={audioStatus}
@@ -656,6 +783,21 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             // Pacing and voice both feed the freshness basis, so a
             // settings save can outdate chapters on its own.
             void refreshAudioStatus();
+          }}
+        />
+      )}
+
+      {castOpen && (
+        <CastPanel
+          workspacePath={workspacePath}
+          content={content}
+          onContentChange={next => { setContent(next); setDirty(true); }}
+          onClose={() => setCastOpen(false)}
+          onSaved={() => {
+            // Recasting outdates that character's lines, and nothing
+            // else -- the badges should say so immediately.
+            void refreshAudioStatus();
+            void refreshCast();
           }}
         />
       )}

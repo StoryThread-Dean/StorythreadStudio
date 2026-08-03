@@ -8,7 +8,8 @@ This is a snapshot of what Storythread Studio does today. For where it is going 
 - Manual save (`Ctrl+S` or Save button); unsaved-change indicator with a confirm-before-close prompt; saving refreshes the sidebar title from the chapter's `# Heading`
 - Session undo and redo
 - Formatting toolbar, font selector, find and replace
-- A **Tools** pulldown in the title bar collects the one-off actions: Generate Scene Summaries, Suggest Scene Breaks, Chapter Summary, Reader Mode, and Export
+- A **Tools** pulldown in the title bar collects the one-off actions: Generate Scene Summaries, Suggest Scene Breaks, Chapter Summary, Reader Mode, Passage / Dialogue Check, and Export
+- **Passage / Dialogue Check** reads the selected passage aloud. Reading silently hides a passage's rhythm -- the writer supplies the pauses and emphasis without noticing, and an indifferent voice does not. It catches repeated words, sentences that only parse on the second read, and right-word-wrong-word errors no checker flags ("walked through the dessert" is perfectly spelled). Four voices, remembered per book, entirely local and free using the same engine as the Audiobook Converter; it saves nothing and applies no markers
 - Light and dark themes (app-wide, persisted)
 - Selection highlight persists when the writer moves focus into the chat or Smart Advisor panels
 
@@ -217,6 +218,72 @@ Two export modes, both run from `POST /api/export/full-manuscript` and `POST /ap
 
 - **Full manuscript** — combines chapters in order into a single file in `exports/`. Optional flags append chapter summaries, scene summaries, notes, and profiles as `#` appendices.
 - **Manual snapshot** — dated folder under `exports/snapshot-YYYY-MM-DD/` mirroring the project layout, with the same opt-in toggles for summaries, notes, and profiles.
+
+## Audiobook Converter
+
+A standalone workspace that turns a finished manuscript into an audiobook: per-chapter MP3s, a combined MP3, and an M4B with chapter marks. Reached from Project Home. Each audiobook is its own folder; the source manuscript is copied in and never modified.
+
+The headline workflow is **draft locally, print premium** -- narrate the whole book free with the local narrator to hear awkward prose and fix pronunciations, then regenerate once with a paid voice when the book is final. Full specification: [`audiobook-converter-spec.md`](audiobook-converter-spec.md).
+
+### Import
+
+- DOCX, EPUB, Markdown, TXT, PDF, or an existing Storythread project
+- Chapters detected per format (headings, EPUB spine, Markdown `#`, project manifest)
+- Text-based PDFs only. A scanned book is refused rather than guessed at, because OCR errors would be spoken aloud. PDF import reconstructs what page layout removed: repeated headers and footers, page numbers, hyphens split across lines, and paragraph breaks. Every step reports what it did.
+- Chapters can be added or removed from the workspace afterward
+
+### The narration copy and its markers
+
+The workspace edits a *copy* of the manuscript, so nothing here touches the book. Manual save only, same as the writing app.
+
+| Marker | Effect |
+|---|---|
+| `[pause:0.8]` | Exactly that many seconds of silence |
+| `[scene-break]` / `[chapter-break]` | Longer silence, lengths set per book |
+| `[exclude]...[/exclude]` | Present on screen, never spoken |
+| `[say:Hay-SOOS]Jesus[/say]` | One-spot pronunciation override |
+| `[pace:+2]...[/pace]` | Faster or slower in steps, capped to the band the engine renders cleanly |
+| `[voice:Elena]...[/voice]` | Narrated in that character's voice |
+
+Plus a **pronunciation dictionary** for book-wide and app-wide rules, and **Preview selection** -- select any passage and hear exactly how it will sound, markers and all, free. Every marker has a "What's this?" card with a live-rendered audio example.
+
+### The Formatting Walkthrough
+
+A pop-out that walks the chapter from the cursor and stops wherever narration could be improved, one decision at a time. Edits land in the editor; Save still commits.
+
+- **Beats** before and after mid-paragraph dialogue, between runs of three or more clipped sentences, and after interjections
+- **Fixes** for markers typed wrong (`[pace:=2]`, an unclosed `[pause:0.4`), which the parser can otherwise only warn about
+- **Word readings** for the 22 words where the narrator reliably guesses wrong (*read*, *wound*, *close*, *lead*, *bow*). Each pronunciation is offered as audio in the writer's own sentence; nothing is applied automatically, because which reading is right depends on what the writer meant
+- Each suggestion type can be switched off, and one button adds every remaining pause at once behind a confirm. Marker fixes and word readings are never batched
+- **[Show me how this works]** is a ten-step tutorial with before/after audio on every audible claim
+
+### Narration engines
+
+One engine per book; only the voice varies within it.
+
+- **Free** -- local Kokoro-82M, 54 voices, an on-demand ~372 MB download (SHA256-verified, installed from inside the app, version-gated)
+- **Budget** -- hosted Kokoro, the same 54 voices, roughly 35 cents for a novel
+- **Standard** -- deliberately empty. Three candidates were auditioned and demoted; the app says so rather than recommending one it does not trust
+- **Pro** -- Deepgram Aura-2, ElevenLabs Turbo
+
+Demoted engines stay visible in a labelled drawer with the reason each was rejected. Narration borrows the writing API key by default or takes its own; keys are masked and never echoed back. Any voice or passage can be auditioned for a fraction of a cent, and a print pass quotes the exact dollar cost before spending, with the number repeated in the confirm.
+
+### Cast and multiple voices
+
+A **Cast** panel names the narrator and any characters and gives each a voice (a draft voice from the local narrator, a print voice from the paid engine). Manuscript names are offered as one-click additions. A **Find speakers** pass asks the AI who speaks each line and walks the proposals one at a time -- accept, correct the name, or keep the narrator. The AI proposes and never applies, and any suggestion it cannot quote from the text word for word is discarded. Recasting a character re-narrates only that character's lines.
+
+### Generation, freshness, and storage
+
+- Background generation with pause, resume, cancel, per-segment progress, and restart recovery
+- Segments keep stable identities across edits, so inserting a paragraph regenerates one segment rather than the chapter
+- A freshness dot per chapter: green matches, amber partly edited, red fully edited, hollow not yet narrated. Nothing regenerates on its own
+- **Draft pass** trades seam quality for roughly half the time while testing; draft audio re-queues automatically before an export so it can never ship by accident
+- A **Storage** screen measures the workspace by category and deletes only what is ticked. Free-to-rebuild categories start ticked; segment audio and finished exports never do
+- Deleting segment audio while exports remain marks the book **Export Only**, honestly, since sections can no longer be regenerated without narrating again
+
+### Output
+
+Per-chapter MP3s with real ID3 titles, one combined MP3, and an M4B with navigable chapter marks, all mastered to the same broadcast-safe loudness. Book metadata and cover art are embedded. The audio assembler (~139 MB, LGPL FFmpeg) installs on demand from inside the app.
 
 ## Settings
 

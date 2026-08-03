@@ -101,6 +101,102 @@ DEMO_SCRIPTS: dict[str, str] = {
         "\n\n[exclude]This author note sits in the text but is never spoken.[/exclude]\n\n"
         "And the narration continues as if the excluded text was never there."
     ),
+
+    # ── Formatting Walkthrough beats: the A/B pairs ────────────────────────────
+    # Each pair is the SAME sentence twice, differing only by the marker.
+    # That is the entire design: no narration explaining what to listen
+    # for, because a spoken preamble is exactly what stops a listener
+    # hearing the difference. The writer plays one, plays the other, and
+    # the beat either earned its place or it did not.
+    #
+    # Shape borrowed from the word-reading stops (spec 18.6), which is the
+    # one thing in this feature that needed no explaining at all -- two
+    # buttons, one sentence, decide by ear.
+    #
+    # Deliberately neutral prose, written for this purpose. Never lift
+    # demo text out of the writer's manuscript: it can carry licensed
+    # characters and content that does not belong in a tutorial shipped to
+    # strangers.
+    #
+    # Single-line scripts on purpose. A blank line would collect
+    # paragraph_gap_ms and put silence in BOTH clips, which would blunt
+    # the very contrast the pair exists to show.
+    # ── What a pause IS, before any of the specific cases ─────────────────────
+    # Three clips of one sentence: none, short, long. The panel offers three
+    # lengths, so the tutorial's job here is to make those three buttons
+    # mean something before the writer is asked to choose between them.
+    # No dialogue in this one on purpose -- it is about the marker, and the
+    # dialogue cases have their own tiles.
+    "beat-pause-flat": (
+        "She counted the steps up to the landing. Nothing moved above her."
+    ),
+    "beat-pause-short": (
+        "She counted the steps up to the landing. [pause:0.4] "
+        "Nothing moved above her."
+    ),
+    "beat-pause-long": (
+        "She counted the steps up to the landing. [pause:1.5] "
+        "Nothing moved above her."
+    ),
+
+    # ── One continuous scene across the four beat tiles ───────────────────────
+    # Deliberately the SAME argument running through all four, in order
+    # (user-designed): narration into speech, speech back into narration,
+    # then the clipped run, then the interjection. A writer who has heard
+    # the first two clips already knows these voices and this moment, so by
+    # the third tile they are judging the PAUSE instead of re-reading a new
+    # sentence. Kokoro is fairly monotone, so the words themselves have to
+    # carry who is speaking and how they feel.
+    "beat-dialogue-open-flat": (
+        'The rage Elena had held back all evening boiled over. '
+        '"How dare you speak to me that way."'
+    ),
+    "beat-dialogue-open": (
+        'The rage Elena had held back all evening boiled over. [pause:0.8] '
+        '"How dare you speak to me that way."'
+    ),
+    "beat-dialogue-close-flat": (
+        '"How dare you speak to me that way." '
+        'Her fists tightened until the knuckles went white.'
+    ),
+    "beat-dialogue-close": (
+        '"How dare you speak to me that way." [pause:0.8] '
+        'Her fists tightened until the knuckles went white.'
+    ),
+    # Four clipped sentences in a row -- a real burst by the scanner's own
+    # rule (3 or more, each 22 characters or fewer), so what the tutorial
+    # plays is what the walk would actually offer.
+    "beat-short-burst-flat": (
+        "He said nothing. Not a word. Not a step back. Nothing at all."
+    ),
+    "beat-short-burst": (
+        "He said nothing. [pause:0.4] Not a word. [pause:0.4] "
+        "Not a step back. [pause:0.4] Nothing at all."
+    ),
+    # The subtlest of the four, and the writer said so: the first attempt
+    # ("Oh no!") was barely audible. This one gives the interjection
+    # something to cut into -- a single hard word against a sentence that
+    # starts immediately, at 0.8 rather than 0.4 -- because a demo nobody
+    # can hear the difference in teaches that the feature does not work.
+    "beat-interjection-flat": (
+        "Elena stopped in the doorway. Enough! "
+        "She would not hear another word of it tonight."
+    ),
+    "beat-interjection": (
+        "Elena stopped in the doorway. Enough! [pause:0.8] "
+        "She would not hear another word of it tonight."
+    ),
+
+    # ── Word readings: the pair where the flat side is plainly WRONG ──────────
+    # Every other pair here asks "is this better?" This one asks nothing --
+    # the first clip says "reed" in a past-tense sentence, which is simply
+    # a mistake, and hearing it is the entire argument for the feature.
+    "word-reading-flat": (
+        "Yesterday I read the letter twice, then folded it away."
+    ),
+    "word-reading": (
+        "Yesterday I [say:red]read[/say] the letter twice, then folded it away."
+    ),
 }
 
 
@@ -112,7 +208,8 @@ _demo_cache: dict[tuple[str, str, str], bytes] = {}
 
 
 def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
-                       rules: list, settings: dict | None = None) -> tuple[bytes, list[str]]:
+                       rules: list, settings: dict | None = None,
+                       cast: list[dict] | None = None) -> tuple[bytes, list[str]]:
     """
     The marker-aware renderer: any narration text -> one WAV, with real
     stitched silence for pauses/breaks, excluded spans skipped, and the
@@ -133,7 +230,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
 
     Raises ValueError when the text contains nothing narratable.
     """
-    from app.audiobook import flow, segmenter
+    from app.audiobook import flow, segmenter, workspace
     from app.audiobook.generation import effective_pace
 
     settings = settings or dict(NARRATION_DEFAULTS)
@@ -154,6 +251,11 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                 pieces.append(gap_ms)
             if kind == "segment_text":
                 speed = effective_pace(item, settings)
+                # [voice:NAME] spans resolve here too, so auditioning a
+                # passage of dialogue plays it in the character's voice --
+                # the preview is a rehearsal or it is nothing.
+                piece_voice = (workspace.voice_for_speaker(
+                    item.get("voice", ""), cast, voice_id) if cast else voice_id)
                 fragments = item.get("fragments")
                 if fragments and len(fragments) >= 2:
                     # Flow segment: mid-paragraph pauses. Synthesize the
@@ -161,7 +263,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                     # matched gaps -- the preview IS the generation path.
                     payloads = [prepare_tts_text(f, rules) for f in fragments]
                     audio, cuts, flowed = flow.synthesize_flow(
-                        backend, voice_id, speed, payloads)
+                        backend, piece_voice, speed, payloads)
                     # One gain for the whole run, applied BEFORE the split:
                     # the pieces are one utterance and must not be levelled
                     # against each other.
@@ -174,10 +276,11 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                             "marker_pace": item.get("pace"),
                             "snippet": payload[:32],
                             "flow": flowed,
+                            "voice": item.get("voice", ""),
                         })
                     continue
                 payload = prepare_tts_text(item["text"], rules)
-                audio, _duration = backend.synthesize(payload, voice_id, speed)
+                audio, _duration = backend.synthesize(payload, piece_voice, speed)
                 # Each paragraph is its own request, and hosted engines
                 # answer them at their own levels -- this is what stops
                 # paragraph two arriving louder than paragraph one.
@@ -187,6 +290,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                     "dialogue": bool(item.get("dialogue")),
                     "marker_pace": item.get("pace"),
                     "snippet": payload[:32],
+                    "voice": item.get("voice", ""),
                 })
             elif kind == "pause":
                 pieces.append(int(item["duration_ms"]))

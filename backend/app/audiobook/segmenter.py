@@ -30,11 +30,11 @@
 # replaced segments until cleanup.
 
 import hashlib
-import json
 import os
 import re
 import uuid
 
+from app.audiobook.jsonstore import read_json, write_json_atomic
 from app.audiobook.markers import ParsedNarration
 
 # Bumped to 2 when paragraphs stopped grouping into shared segments. The
@@ -132,6 +132,10 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
     pending_paragraphs: list[str] = []
     pending_len = 0
     pending_pace = 1.0
+    # Who is speaking. "" is the narrator. Like pace, a change is a hard
+    # segment boundary -- one segment, one voice -- and the value rides
+    # the segment record so generation can resolve it per segment.
+    pending_voice = ""
     pending_dialogue = False
     # True when the pending text OPENS a paragraph. Assembly reads this to
     # decide where the inter-paragraph beat belongs -- the continuation
@@ -206,6 +210,8 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
             if item is not None:
                 if pending_pace != 1.0:
                     item["pace"] = pending_pace
+                if pending_voice:
+                    item["voice"] = pending_voice
                 if pending_dialogue:
                     item["dialogue"] = True
                 if starts_paragraph:
@@ -218,6 +224,8 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
             item = {"kind": "segment_text", "text": text}
             if pending_pace != 1.0:
                 item["pace"] = pending_pace
+            if pending_voice:
+                item["voice"] = pending_voice
             if pending_dialogue:
                 item["dialogue"] = True
             if starts_paragraph:
@@ -232,6 +240,12 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
             if pace != pending_pace:
                 flush()
                 pending_pace = pace
+            # A voice change is the hardest boundary of all: two speakers
+            # can never share one synthesis request.
+            voice = element.get("voice", "")
+            if voice != pending_voice:
+                flush()
+                pending_voice = voice
             # Paragraphs group until the cap; oversize paragraphs split.
             # A dialogue/narration change is ALSO a boundary, so the
             # book-level Dialogue Pace can act on dialogue segments alone.
@@ -391,6 +405,12 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
                 }
                 if raw.get("pace"):
                     segment["pace"] = raw["pace"]
+                if raw.get("voice"):
+                    # The NAME the writer wrote, not a voice id. Resolving
+                    # it against the cast happens at generation, so
+                    # recasting a character re-renders her lines without
+                    # touching a word of the narration copy.
+                    segment["voice"] = raw["voice"]
                 if raw.get("dialogue"):
                     segment["dialogue"] = True
                 if raw.get("paragraph_start"):
@@ -429,7 +449,7 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
             # identity; the payload basis catches the pace change and
             # re-queues the audio (never a new segment ID).
             preserved = {**old, "chapter_id": slot["chapter_id"]}
-            for attr in ("pace", "dialogue", "fragments", "internal_pauses"):
+            for attr in ("pace", "voice", "dialogue", "fragments", "internal_pauses"):
                 if slot.get(attr):
                     preserved[attr] = slot[attr]
                 else:
@@ -460,14 +480,13 @@ def segments_path(workspace_path: str) -> str:
 
 
 def load_segments(workspace_path: str) -> dict | None:
-    try:
-        with open(segments_path(workspace_path), "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None                          # first run, or corrupt = rebuild
+    data, _readable = read_json(segments_path(workspace_path))
+    return data if isinstance(data, dict) else None   # first run, or corrupt = rebuild
 
 
 def save_segments(workspace_path: str, manifest: dict) -> None:
-    os.makedirs(os.path.dirname(segments_path(workspace_path)), exist_ok=True)
-    with open(segments_path(workspace_path), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
+    # Atomic, for the same reason as the run record: this file is
+    # rewritten after every generated segment, it is the biggest one in
+    # the workspace, and half a dozen endpoints read it. A reader inside
+    # the truncate window would conclude the book has no segments at all.
+    write_json_atomic(segments_path(workspace_path), manifest)

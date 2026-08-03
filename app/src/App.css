@@ -47,6 +47,17 @@
  *   surface  = cards, input fields, inner boxes (lightest of the three)
  */
 :root {
+  /*
+   * Native controls follow the OS palette unless told otherwise, and a
+   * dropdown is drawn by the OS, not by us. On Windows in light mode
+   * that gave a <select> popup LIGHT grey panels with our white option
+   * text on top -- an option was only readable while it was
+   * highlighted. One declaration fixes every select, scrollbar, date
+   * picker and context menu in the app, and it is the only way to
+   * reach a popup that lives outside the page.
+   */
+  color-scheme: dark;
+
   --color-bg-primary:   #070724;
   --color-bg-panel:     #0d0d2b;
   --color-bg-surface:   #12122e;
@@ -357,4 +368,49 @@
   .stw-read {
     animation: none;
   }
+}
+
+
+/*
+ * Dropdown options
+ * ================
+ * color-scheme above should be enough, but WebView2 has shipped builds
+ * where the <option> list keeps the light palette regardless. Naming the
+ * colours explicitly costs nothing and removes the failure mode where a
+ * writer can only read the option they happen to be hovering.
+ */
+select,
+option,
+optgroup {
+  background-color: var(--color-bg-panel);
+  color: var(--color-text-primary);
+}
+
+optgroup {
+  color: var(--color-text-muted);
+  font-style: normal;
+}
+
+option:disabled {
+  color: var(--color-faint);
+}
+
+
+/*
+ * Selection that survives losing focus
+ * ====================================
+ * A popout that edits a word takes focus away from the editor, and an
+ * unfocused textarea paints its selection in a near-invisible grey by
+ * default. The writer is then answering questions about a word they
+ * cannot see -- and when the tool walks to the NEXT occurrence, they
+ * have no way to follow it.
+ *
+ * Naming the colour makes the selection hold whether the editor has
+ * focus or not. Amber rather than the usual blue: this is "the tool is
+ * working here", not "you selected this".
+ */
+textarea::selection,
+textarea::-moz-selection {
+  background-color: #f59e0b66;
+  color: inherit;
 }

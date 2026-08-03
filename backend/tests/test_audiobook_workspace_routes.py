@@ -412,3 +412,85 @@ def test_recents_order_most_recently_opened_first(tmp_path):
     recents = client.get("/api/audiobook/recents").json()["audiobooks"]
     assert recents[0]["workspace_path"] == str(ws1)
     assert recents[1]["workspace_path"] == str(ws2)
+
+
+# ── Dialogue Check (writing app, no workspace) ───────────────────────────────
+# Hearing dialogue read aloud is how a writer finds out whether it flows.
+# The tool is deliberately the smallest thing that does that job, and the
+# tests are about the limits rather than the audio.
+
+def test_dialogue_check_offers_four_voices_not_fifty_four():
+    # A picker with the whole roster turns a two-second check into a
+    # browsing session. One American and one British of each gender.
+    voices = client.get("/api/audiobook/dialogue-check/voices").json()["voices"]
+    assert len(voices) == 4
+    ids = [v["id"] for v in voices]
+    assert ids == ["af_heart", "am_michael", "bf_emma", "bm_george"]
+
+
+def test_dialogue_check_strips_markers_rather_than_honouring_them():
+    # This is not a narration rehearsal and must not become one: treating
+    # [pause:0.8] as a real pause here would quietly tune an audiobook the
+    # writer did not know they were making.
+    from app.audiobook.markers import strip_all_markers
+
+    text = ('[voice:Lara]"Enough."[/voice] [pause:0.8] She left. '
+            '[say:LAR-uh]Lara[/say] [pace:-2]slowly[/pace] [scene-break]')
+    stripped = strip_all_markers(text)
+    for marker in ("[voice:", "[/voice]", "[pause:", "[say:", "[pace:",
+                   "[scene-break]"):
+        assert marker not in stripped
+    # Every WORD survives -- stripping a marker never removes prose.
+    for word in ('"Enough."', "She", "left.", "Lara", "slowly"):
+        assert word in stripped
+
+
+def test_dialogue_check_refuses_a_selection_nobody_meant_to_send():
+    # A stray Ctrl+A must not queue an hour of synthesis.
+    response = client.post("/api/audiobook/dialogue-check",
+                           json={"text": "x" * 20001, "voice_id": "af_heart"})
+    assert response.status_code == 400
+    assert "Audiobook Converter" in response.json()["detail"]
+
+
+def test_dialogue_check_says_when_there_is_nothing_to_read():
+    response = client.post("/api/audiobook/dialogue-check",
+                           json={"text": "[pause:0.8] [scene-break]",
+                                 "voice_id": "af_heart"})
+    assert response.status_code == 400
+    assert "nothing to read" in response.json()["detail"]
+
+
+def test_dialogue_check_needs_no_workspace_at_all(monkeypatch):
+    # It runs against the manuscript in the WRITING editor, which has no
+    # narration copy, no cast and no workspace -- so it must never ask
+    # for one.
+    from app.audiobook import synthesis
+
+    calls: list[tuple] = []
+
+    class FakeLocal:
+        key = "local-kokoro"
+        model_id = "kokoro-82m"
+        engine_version = "fake 1.0"
+        file_extension = "wav"
+
+        def synthesize(self, text, voice_id, speed=1.0):
+            calls.append((text, voice_id))
+            import io as _io
+            import wave as _wave
+            buffer = _io.BytesIO()
+            with _wave.open(buffer, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(24000)
+                w.writeframes(b"\x00\x00" * 2400)
+            return buffer.getvalue(), 0.1
+
+    monkeypatch.setattr(synthesis, "resolve_backend", lambda *a, **k: FakeLocal())
+    response = client.post("/api/audiobook/dialogue-check",
+                           json={"text": '"You came back," she said.',
+                                 "voice_id": "bf_emma"})
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "audio/wav"
+    assert calls and calls[0][1] == "bf_emma"

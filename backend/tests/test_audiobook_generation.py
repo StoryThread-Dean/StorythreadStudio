@@ -20,6 +20,7 @@ from app.audiobook import (
     locking,
     pronunciation,
     recents_store,
+    segmenter,
     workspace,
 )
 from app.audiobook.synthesis import SynthesisBackend, SynthesisError
@@ -716,3 +717,110 @@ def test_audio_status_endpoint_matches_the_module(tmp_path):
                           params={"workspace_path": str(ws)})
     assert response.status_code == 200, response.text
     assert response.json() == generation.audio_status(str(ws))
+
+
+# ── The idle-button bug (live finding, 2026-08-02) ───────────────────────────
+# A writer started a 197-segment run, switched windows for five minutes,
+# and came back to an idle [Generate Audiobook] button -- which answered
+# "an audiobook is already generating" when pressed. The worker was fine.
+# The status read was not: generation-run.json is rewritten after EVERY
+# segment, a poll landed inside one of those writes, and the endpoint
+# reported "nothing is running" on the strength of a file it could not
+# parse.
+
+def test_the_run_record_is_never_written_non_atomically(tmp_path):
+    # The trigger. A reader must see the whole old record or the whole
+    # new one -- never a truncated file.
+    ws = _make_workspace(tmp_path, paragraphs=1)
+    generation.save_run(str(ws), {"run_id": "r1", "status": "generating"})
+
+    seen: list[dict | None] = []
+    real_replace = os.replace
+
+    def replace_spy(src, dst):
+        # Mid-write is exactly here: the temp file exists, the real one
+        # still holds the previous version. Read it and prove it parses.
+        seen.append(generation.load_run(str(ws)))
+        return real_replace(src, dst)
+
+    import app.audiobook.jsonstore as jsonstore
+    original = jsonstore.os.replace
+    jsonstore.os.replace = replace_spy
+    try:
+        generation.save_run(str(ws), {"run_id": "r2", "status": "completed"})
+    finally:
+        jsonstore.os.replace = original
+
+    assert seen and seen[0] is not None, "a reader saw a half-written record"
+    assert seen[0]["run_id"] == "r1"          # the whole OLD file
+    assert generation.load_run(str(ws))["run_id"] == "r2"
+
+
+def test_status_reports_running_even_when_the_record_cannot_be_read(tmp_path, monkeypatch):
+    # THE bug. `active` is a fact about this process and must never be
+    # inferred from a file.
+    ws = _make_workspace(tmp_path, paragraphs=1)
+    generation.save_run(str(ws), {"run_id": "r1", "status": "generating",
+                                  "total_segments": 197, "completed_segments": 12,
+                                  "failed_segments": 0})
+    # Pretend the worker is alive, and the record is mid-write.
+    monkeypatch.setattr(generation, "active_workspace", lambda: str(ws))
+    with open(generation.run_path(str(ws)), "w", encoding="utf-8") as f:
+        f.write("")
+
+    response = client.get("/api/audiobook/generation/status",
+                          params={"workspace_path": str(ws)})
+    assert response.status_code == 200, response.text
+    assert response.json()["active"] is True
+
+
+def test_an_unreadable_record_is_never_healed_to_paused(tmp_path, monkeypatch):
+    # The worse latent version: writing "interrupted" over a job that is
+    # running perfectly well turns a one-poll blip into a lie on disk.
+    ws = _make_workspace(tmp_path, paragraphs=1)
+    generation.save_run(str(ws), {"run_id": "r1", "status": "generating"})
+    monkeypatch.setattr(generation, "active_workspace", lambda: str(ws))
+    with open(generation.run_path(str(ws)), "w", encoding="utf-8") as f:
+        f.write("{ not json")
+
+    generation.status_with_recovery(str(ws), is_active=True)
+
+    # The garbage is still garbage -- nothing overwrote it with a verdict.
+    with open(generation.run_path(str(ws)), encoding="utf-8") as f:
+        assert f.read() == "{ not json"
+
+
+def test_a_genuinely_interrupted_run_is_still_healed(tmp_path):
+    # The recovery this all sits next to must keep working: readable
+    # record, says generating, no live thread -> paused.
+    ws = _make_workspace(tmp_path, paragraphs=1)
+    generation.save_run(str(ws), {"run_id": "r1", "status": "generating",
+                                  "total_segments": 3, "completed_segments": 1,
+                                  "failed_segments": 0, "note": None})
+    healed = generation.status_with_recovery(str(ws), is_active=False)
+    assert healed["status"] == "paused"
+    assert "interrupted" in healed["note"]
+
+
+def test_the_segments_manifest_is_atomic_too(tmp_path):
+    # Same hazard, bigger file, read by half a dozen endpoints: a reader
+    # inside the write window would conclude the book has no segments.
+    ws = _make_workspace(tmp_path, paragraphs=2)
+    before = segmenter.load_segments(str(ws))
+    assert before is not None
+
+    seen: list[dict | None] = []
+    import app.audiobook.jsonstore as jsonstore
+    real_replace = jsonstore.os.replace
+
+    def replace_spy(src, dst):
+        seen.append(segmenter.load_segments(str(ws)))
+        return real_replace(src, dst)
+
+    jsonstore.os.replace = replace_spy
+    try:
+        segmenter.save_segments(str(ws), before)
+    finally:
+        jsonstore.os.replace = real_replace
+
+    assert seen and seen[0] is not None

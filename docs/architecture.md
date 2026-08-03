@@ -32,6 +32,16 @@ A local-only HTTP server bound to `127.0.0.1:8000`. Handles file I/O, parses Mar
 
 **AI provider dispatch** (v1.0.10): `backend/app/ai/providers.py` holds a frozen `ProviderConfig` per connection (base URL, key storage field, capability flags). `backend/app/ai/openrouter.py` -- historically named for the first provider -- is a generic OpenAI-compatible client parameterized by that config, and `_resolve_model_and_key()` in `routers/ai.py` is the single seam that resolves `(provider, api_key, model_id)` for all AI endpoints, so switching providers in Settings reroutes every AI feature at once. Adding a provider is one `ProviderConfig` plus one panel entry in `app/src/components/settings/providerMeta.ts`. API keys never reach the WebView; each provider's key is stored (and masked) independently in global settings. Prompt caching (OpenRouter only, gated by `supports_cache_control`) marks the system prompt with an Anthropic-style `cache_control` block when the setting is on.
 
+### Two on-demand companion processes (Audiobook Converter)
+
+Neither ships inside the installer, because together they would roughly quadruple its size for a feature not every writer uses. Both are downloaded from inside the app, SHA256-verified before extraction, and installed under the user's app data.
+
+**`kokoro-worker.exe`** -- the local narrator (~372 MB), a tiny FastAPI service wrapping `kokoro-onnx`, versioned and released independently of the app as a GitHub *prerelease* (a normal release would become `releases/latest` and break the updater's `latest.json` lookup). The backend spawns it on demand, talks to it over `127.0.0.1`, and gates on version: an installed worker from a different release is refused with a one-click Update rather than being spoken to and misunderstood. The worker watches its parent process and exits if the backend dies, so no orphan survives a crash. It lives in `kokoro-worker/` in the repo and is built by `scripts/build-worker.ps1`; the built artifact's hash is pinned in `backend/app/audiobook/local_worker.py`, and publish-and-pin always travel together.
+
+**FFmpeg** (~139 MB, LGPL build) -- assembly only: loudness normalization, MP3 encoding, and M4B chapter marks. Invoked as a subprocess; the backend never links it.
+
+A third thing that is *not* a process: `espeak-ng` ships inside the worker's environment as `kokoro-onnx`'s grapheme-to-phoneme step. It is deliberately absent from the backend, which has no phonemizer at all -- adding one would drag native libraries into the frozen sidecar. `scripts/audition-heteronyms.py` reaches into the worker's environment to use it, which is how pronunciation claims get verified without listening to anything.
+
 ## Dual storage model
 
 Two storage systems work together:
@@ -79,6 +89,32 @@ MyNovel/
     cache/
     logs/
 ```
+
+### Audiobook workspace layout
+
+An audiobook lives in its own folder, outside the project folder. It is not a project and holds no Markdown source of truth -- it is a derived workspace built from one, and deleting it loses nothing but rendered audio.
+
+```
+MyNovel-audiobook/
+  audiobook-project.json         the manifest: title, metadata, voice, cast,
+                                 narration settings, source linkage
+  source/                        the imported file, copied in and never modified
+  manuscript/
+    extracted-original.md        what the extractor produced, kept for reference
+    narration-copy.md            THE editable narration text, markers and all
+    narration-structure.json     derived chapter boundaries
+    pronunciation-dictionary.json
+  chapters/                      per-chapter derived data (segments, hashes)
+  generated-segments/            rendered segment audio -- the expensive artifact
+  previews/                      throwaway audition clips
+  revisions/                     superseded segment audio
+  output/
+    chapters/                    per-chapter MP3s
+                                 combined MP3 and M4B sit in output/
+  logs/
+```
+
+Storage cleanup is built on that separation: `previews/` and failed takes cost nothing to remake and are pre-ticked for deletion, while `generated-segments/` and `output/` are never pre-ticked because they cost either hours of CPU or real money. Deleting `generated-segments/` while `output/` remains puts the book in an honest **Export Only** state -- the audiobook still exists, but no individual section can be regenerated or reassembled without narrating again.
 
 ### Acts and chapter order (`manuscript/structure.json`)
 
@@ -259,6 +295,54 @@ POST   /restore                (undo from the most recent snapshot)
 POST   /full-manuscript        (markdown / txt / docx / epub; optional appendix flags)
 POST   /snapshot
 ```
+
+### Audiobook — `/api/audiobook`
+
+The largest single router. Grouped by what it serves:
+
+```
+Workspace and import
+POST   /import                 (docx / epub / md / txt / pdf / storythread project)
+POST   /suggest-workspace
+GET    /project
+GET    /recents                POST /recents/remove
+GET    /chapters/available     POST /chapters/add
+
+Narration copy
+GET    /narration              PUT  /narration
+GET    /pronunciations         PUT  /pronunciations
+GET    /segments
+GET    /speakers               PUT  /speakers
+POST   /analyze-speakers       POST /speaker-pass-estimate
+
+Local engine (the kokoro-worker sidecar)
+GET    /local-engine/status    POST /local-engine/install    POST /local-engine/remove
+GET    /voices                 GET  /voice-options
+POST   /preview                POST /preview-selection       POST /marker-demo
+POST   /dialogue-check         GET  /dialogue-check/voices
+
+Generation
+POST   /generate               GET  /generation/status
+POST   /generation/pause       POST /generation/resume
+POST   /generation/cancel      POST /generation/reset
+GET    /audio-status
+GET/PUT /voice                 GET/PUT /narration-settings
+
+Hosted narration
+GET    /tts-catalog            GET  /narration-selection
+GET/PUT /settings              PUT  /narration-choice
+POST   /print-estimate         POST /print-preview
+
+Assembly and output
+GET    /ffmpeg/status          POST /ffmpeg/install
+POST   /assemble               GET  /assemble/status
+GET/PUT /metadata              PUT/DELETE /metadata/cover    GET /metadata/cover-image
+
+Storage
+GET    /storage                POST /storage/cleanup         PUT /storage/retention
+```
+
+Two conventions worth knowing. Endpoints that accept an API key follow the writing side's rules exactly: a GET returns a masked value plus a `*_set` boolean, and a PUT treats `null` as "leave alone" and `""` as "clear", so the frontend never echoes a mask back. And `/preview`, `/preview-selection`, `/marker-demo` and `/dialogue-check` are hardcoded to the local engine, so nothing in the rehearsal loop can ever spend money.
 
 ## CORS
 

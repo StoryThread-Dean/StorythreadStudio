@@ -6,6 +6,7 @@
 # engine emitting tiny valid WAVs).
 
 import io
+import re
 import wave
 
 import pytest
@@ -182,6 +183,117 @@ def test_pace_demo_speaks_each_step_while_the_listener_hears_it():
 def test_every_script_renders():
     for kind in DEMO_SCRIPTS:
         assert len(build_demo(kind, DemoBackend())) > 44   # bigger than a WAV header
+
+
+# ── The Formatting Walkthrough's A/B beat demos ──────────────────────────────
+# The tutorial's whole claim is "play these two and hear the difference."
+# That only holds if the pair is the same sentence -- one changed word
+# would let the writer hear a difference that has nothing to do with the
+# beat, and quietly teach them the wrong thing.
+
+BEAT_PAIRS = [
+    "beat-dialogue-open", "beat-dialogue-close",
+    "beat-short-burst", "beat-interjection",
+    # Not a beat, same contract: one sentence, two readings, decide by ear.
+    "word-reading",
+]
+
+
+def test_each_beat_demo_has_a_flat_partner():
+    for kind in BEAT_PAIRS:
+        assert kind in DEMO_SCRIPTS
+        assert f"{kind}-flat" in DEMO_SCRIPTS
+
+
+def test_the_pause_tile_offers_a_short_and_a_long_of_one_sentence():
+    # Three clips, one sentence: the panel has three length buttons, and
+    # this is where they stop being numbers. All three must be the same
+    # words or the comparison teaches nothing.
+    trio = [DEMO_SCRIPTS[k] for k in
+            ("beat-pause-flat", "beat-pause-short", "beat-pause-long")]
+    words = {" ".join(re.sub(r"\[[^\]]*\]", " ", s).split()) for s in trio}
+    assert len(words) == 1, words
+    assert "[pause:0.4]" in trio[1]
+    assert "[pause:1.5]" in trio[2]
+
+
+def test_the_beat_tiles_run_one_continuous_scene():
+    # The four beat tiles are one argument in order, so that by the third
+    # clip the writer is judging the pause rather than reading a new
+    # sentence. If these drift apart the tutorial loses that grounding.
+    assert "Elena" in DEMO_SCRIPTS["beat-dialogue-open-flat"]
+    quote = "How dare you speak to me that way."
+    assert quote in DEMO_SCRIPTS["beat-dialogue-open-flat"]
+    assert quote in DEMO_SCRIPTS["beat-dialogue-close-flat"]
+    assert "Elena" in DEMO_SCRIPTS["beat-interjection-flat"]
+
+
+def test_the_short_burst_demo_keeps_its_three_packed_pauses():
+    # DO NOT "fix" this demo. Three pauses this close together make Kokoro
+    # slur slightly, and the tutorial's amber note points at that clip as
+    # the demonstration. The flaw is the lesson: a writer who has only ever
+    # heard the narrator at its best will assume the first garbled run in
+    # their own chapter is something they did wrong.
+    #
+    # So spacing the pauses out, dropping one, or lengthening them would
+    # each silently delete a warning the writer specifically asked for.
+    script = DEMO_SCRIPTS["beat-short-burst"]
+    assert script.count("[pause:0.4]") == 3, script
+    assert "[pause:0.8]" not in script and "[pause:1.5]" not in script
+    # Four short sentences, three gaps -- every gap marked.
+    assert script.count(".") >= 4
+
+
+def test_the_word_reading_demo_shows_the_engine_getting_it_wrong():
+    # Unlike the beat pairs, this one is not a matter of taste: the flat
+    # clip says "reed" in a past-tense sentence. The fix must be a say
+    # override on that exact word.
+    flat = DEMO_SCRIPTS["word-reading-flat"]
+    fixed = DEMO_SCRIPTS["word-reading"]
+    assert "Yesterday I read" in flat
+    assert "[say:red]read[/say]" in fixed
+
+
+def test_a_beat_pair_differs_only_by_its_markers():
+    for kind in BEAT_PAIRS:
+        with_beat = DEMO_SCRIPTS[kind]
+        flat = DEMO_SCRIPTS[f"{kind}-flat"]
+        # Strip the markers out of the marked version and the two must be
+        # character-for-character identical, whitespace aside.
+        stripped = re.sub(r"\[[^\]]*\]", " ", with_beat)
+        assert " ".join(stripped.split()) == " ".join(flat.split()), kind
+        # And the marked one must actually carry a marker, or the pair is
+        # two identical clips and the tutorial is lying. Beats carry a
+        # pause; the word-reading pair carries a say override instead.
+        assert "[" in with_beat, kind
+        assert "[" not in flat, kind
+        if kind.startswith("beat-"):
+            assert "[pause:" in with_beat, kind
+
+
+def test_a_flat_beat_demo_renders_as_one_unbroken_utterance():
+    # No silence anywhere in the "before" clip: the contrast IS the
+    # silence, so any gap leaking into the flat side blunts it. A blank
+    # line would do exactly that by collecting paragraph_gap_ms.
+    for kind in BEAT_PAIRS:
+        flat = DEMO_SCRIPTS[f"{kind}-flat"]
+        assert "\n" not in flat, kind
+        backend = DemoBackend()
+        _audio, warnings, trace = marker_demos.render_marked_text(
+            flat, backend, DEMO_VOICE, rules=[], settings=NARRATION_DEFAULTS)
+        assert not warnings, kind
+        assert len(trace) == 1, f"{kind} should synthesize as one piece"
+
+
+def test_the_short_burst_demo_is_a_real_burst_by_the_scanner_rule():
+    # The tutorial must play what the walk would actually offer. The
+    # scanner wants 3+ consecutive sentences of 22 characters or fewer;
+    # a demo that does not meet its own rule teaches a stop that never
+    # appears.
+    flat = DEMO_SCRIPTS["beat-short-burst-flat"]
+    sentences = [s.strip() for s in re.findall(r"[^.!?]+[.!?]", flat)]
+    clipped = [s for s in sentences if len(s) <= 22]
+    assert len(clipped) >= 3, sentences
 
 
 # ── render_marked_text (the select-text preview renderer) ────────────────────

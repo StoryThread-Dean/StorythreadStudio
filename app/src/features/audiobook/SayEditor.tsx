@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Loader2, Play, X } from "lucide-react";
 
 import { previewSelection } from "./api";
+import { stripAudioMarkers } from "./markers";
 
 interface SayEditorProps {
   content: string;
@@ -26,9 +27,15 @@ interface SayEditorProps {
   onClose: () => void;
   /** Approximate pixel anchor of the word inside the editor wrapper. */
   anchor: { top: number; left: number } | null;
+  /** The writer opened this ON an existing [say] span: its bounds in the
+   *  buffer and the spoken form already set. Editing one is the normal
+   *  reason to open this twice, and it used to be impossible -- the
+   *  occurrence filter skipped anything already inside a span, so the
+   *  panel answered "no more occurrences from here". */
+  existing?: { spanStart: number; spanEnd: number; spoken: string } | null;
   /** Fired when the current occurrence changes -- the parent scrolls
       the editor there and repositions the popout. */
-  onLocate?: (pos: number) => void;
+  onLocate?: (pos: number, length: number) => void;
 }
 
 // The tips library: an ACCORDION of ear-tested techniques (one section
@@ -109,12 +116,23 @@ const TIPS: Array<{ title: string; body: string; important?: boolean }> = [
 
 export function SayEditor({
   content, start, end, workspacePath, voiceId, onApply, onClose, anchor,
+  existing = null,
   onLocate,
 }: SayEditorProps) {
+  // The word, fixed at open and SCRUBBED of any marker the selection
+  // happened to clip. A drag that caught the tail of an existing
+  // [say:...]word[/say] used to carry "[/say]" into the word itself,
+  // which then went into the carrier phrase and came back out of the
+  // engine as an audible "slash" (live finding).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const word = useMemo(() => content.slice(start, end), []);  // fixed at open
+  const word = useMemo(
+    () => stripAudioMarkers(content.slice(start, end)).trim(), []);
   const [searchFrom, setSearchFrom] = useState(start);
-  const [spoken, setSpoken] = useState("");
+  const [spoken, setSpoken] = useState(existing?.spoken ?? "");
+  // What the engine was actually given, straight from the render trace.
+  // A preview that sounds wrong is otherwise an argument between ears --
+  // this makes it a fact the writer can read.
+  const [heard, setHeard] = useState<string | null>(null);
   const [showTips, setShowTips] = useState(false);
   // The accordion: one tip open at a time -- opening one closes the other.
   const [openTip, setOpenTip] = useState<number | null>(null);
@@ -122,9 +140,13 @@ export function SayEditor({
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
+  // Focus follows the walk to its end, so Enter and Escape keep working
+  // once the input is gone.
+  useEffect(() => { doneRef.current?.focus(); });
   useEffect(() => () => audioRef.current?.pause(), []);
 
   // Every occurrence of the word (exact, word-boundary) not already
@@ -136,6 +158,9 @@ export function SayEditor({
     const found: number[] = [];
     let match: RegExpExecArray | null;
     while ((match = re.exec(content)) !== null) {
+      // The one the writer opened on always counts, even though it is
+      // inside a span -- that IS the edit they came to make.
+      if (existing && match.index === start) { found.push(match.index); continue; }
       const before = content.slice(Math.max(0, match.index - 60), match.index);
       const opens = before.lastIndexOf("[say:");
       const closes = before.lastIndexOf("[/say]");
@@ -143,7 +168,7 @@ export function SayEditor({
       found.push(match.index);
     }
     return found;
-  }, [content, word]);
+  }, [content, word, existing, start]);
 
   const remaining = occurrences.filter(pos => pos >= searchFrom);
   const currentPos = remaining[0] ?? null;
@@ -151,19 +176,24 @@ export function SayEditor({
     ? 0 : occurrences.indexOf(currentPos) + 1;
 
   useEffect(() => {
-    if (currentPos !== null) onLocate?.(currentPos);
+    if (currentPos !== null) onLocate?.(currentPos, word.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPos]);
 
   const handleAccept = useCallback(() => {
     if (currentPos === null || !spoken.trim()) return;
     const replacement = `[say:${spoken.trim()}]${word}[/say]`;
-    const next = content.slice(0, currentPos) + replacement
-      + content.slice(currentPos + word.length);
+    // Editing an existing span replaces the WHOLE span, markers and all.
+    // Inserting a new wrapper around its inner word would nest one
+    // inside the other, and the parser would take the inner one.
+    const editingThis = existing !== null && currentPos === start;
+    const from = editingThis ? existing.spanStart : currentPos;
+    const to = editingThis ? existing.spanEnd : currentPos + word.length;
+    const next = content.slice(0, from) + replacement + content.slice(to);
     setApplied(n => n + 1);
-    setSearchFrom(currentPos + replacement.length);
+    setSearchFrom(from + replacement.length);
     onApply(next);
-  }, [content, currentPos, onApply, spoken, word]);
+  }, [content, currentPos, onApply, spoken, word, existing, start]);
 
   const handleNext = useCallback(() => {
     if (currentPos !== null) setSearchFrom(currentPos + 1);
@@ -185,7 +215,8 @@ export function SayEditor({
         ? `[say:${spoken.trim()}]${word}[/say]`
         : word;
       const carrier = `You will hear ${wrapped} in the narration.`;
-      const { blob } = await previewSelection(workspacePath, carrier, voiceId);
+      const { blob, trace } = await previewSelection(workspacePath, carrier, voiceId);
+      setHeard(trace.map(piece => piece.snippet).join(" ").trim() || null);
       audioRef.current?.pause();
       const audio = new Audio(URL.createObjectURL(blob));
       audioRef.current = audio;
@@ -197,13 +228,18 @@ export function SayEditor({
     }
   }, [content, currentPos, previewing, spoken, voiceId, word, workspacePath]);
 
+  // The anchor is already clamped by whoever measured it; this is the
+  // belt to that braces. A popout that expands after opening -- tips,
+  // occurrence counter, preview player -- must never start low enough
+  // that growing pushes its controls off the screen.
   const style = anchor
-    ? { top: anchor.top, left: Math.max(8, Math.min(anchor.left, 9999)) }
-    : { top: 8, left: 8 };
+    ? { top: Math.max(8, anchor.top), left: Math.max(8, anchor.left),
+        maxHeight: "calc(100vh - 5rem)" }
+    : { top: 8, left: 8, maxHeight: "calc(100vh - 5rem)" };
 
   return (
     <div
-      className="absolute z-40 w-[26rem] max-w-[92%] rounded-lg border border-blue-800 bg-zinc-900 p-3 shadow-xl shadow-black/50"
+      className="absolute z-40 w-[26rem] max-w-[92%] overflow-y-auto rounded-lg border border-blue-800 bg-zinc-900 p-3 shadow-xl shadow-black/50"
       style={style}
       onKeyDown={e => {
         if (e.key === "Escape") onClose();
@@ -211,11 +247,26 @@ export function SayEditor({
       }}
     >
       {currentPos === null ? (
-        <p className="text-xs text-zinc-300">
-          {applied > 0
-            ? `Done -- ${applied} spot${applied === 1 ? "" : "s"} set.`
-            : "No more occurrences from here."}
-        </p>
+        // The end of the walk. This used to be a bare sentence with no
+        // way out: applying the last occurrence left a small window
+        // sitting over the manuscript that only Escape could dismiss,
+        // and only while it still had focus (live finding).
+        <div className="flex items-center gap-3">
+          <p className="flex-1 text-xs text-zinc-300">
+            {applied > 0
+              ? `Done -- ${applied} spot${applied === 1 ? "" : "s"} set.`
+              : word
+                ? `No more "${word}" to set from here.`
+                : "Select a word in the manuscript first, then press [say]."}
+          </p>
+          <button
+            ref={doneRef}
+            onClick={onClose}
+            className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+          >
+            Close
+          </button>
+        </div>
       ) : (
         <>
           {/* The structured marker: only the spoken form is typeable. */}
@@ -244,6 +295,17 @@ export function SayEditor({
               Preview
             </button>
           </div>
+
+          {/* What the engine was handed, verbatim. A respelling that
+              sounds wrong is otherwise ear against ear; this says
+              whether the text was right and the ENGINE read it oddly,
+              or the text never made it through intact. */}
+          {heard && (
+            <p className="mb-2 truncate font-mono text-[10px] text-zinc-500"
+               title={heard}>
+              engine heard: {heard}
+            </p>
+          )}
 
           {/* Tips: the vetted respelling tricks, expandable. */}
           <button
