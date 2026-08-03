@@ -62,6 +62,21 @@ export const STOP_KIND_LABELS: Record<StopKind, string> = {
   "heteronym-rare": "Rare word senses",
 };
 
+/** One line per kind, for the panel's rail. A count on its own ("Word
+ *  readings (9)") tells the writer how many without ever telling them
+ *  what they are -- and a toggle nobody understands gets left at whatever
+ *  it shipped as. Each line says what the stop is FOR, in the terms the
+ *  listener will hear it. */
+export const STOP_KIND_HINTS: Record<StopKind, string> = {
+  "dialogue-open": "A breath before a spoken line starts mid-paragraph",
+  "dialogue-close": "A breath as the narration takes over again",
+  "short-burst": "Separation between three or more clipped sentences",
+  "interjection": "Air after a short exclamation, so it lands",
+  "broken-marker": "Repairs, not suggestions -- a typo the parser rejects",
+  "heteronym": "Words with two sounds: read, wound, close, bow",
+  "heteronym-rare": "The same, for senses that rarely come up in fiction",
+};
+
 /** Kinds muted the moment the walkthrough opens. The rare heteronym
  *  senses are right nearly every time -- "does" the verb vastly
  *  outnumbers "does" the female deer -- so stopping on each one by

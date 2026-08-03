@@ -162,7 +162,64 @@ describe("InsertWalkthrough", () => {
 
   it("says so plainly when there is nothing to suggest", () => {
     renderPanel({ content: "# Heading\n\nOne long ordinary paragraph of prose without any dialogue at all in it." });
-    expect(screen.getByText(/nothing to suggest/)).toBeTruthy();
+    expect(screen.getByText(/nothing to suggest/i)).toBeTruthy();
+  });
+
+  it("offers a way out when the walk has nothing left", () => {
+    // As a strip this just went quiet. As a window it would be an empty
+    // box, and the writer would reasonably assume something broke.
+    renderPanel({ content: "# Heading\n\nOne long ordinary paragraph of prose without any dialogue at all in it." });
+    expect(screen.getByText(/starts at your cursor/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+  });
+});
+
+// ── The pop-out shell (user decision, 2026-08-03) ─────────────────────────────
+
+describe("InsertWalkthrough as a window", () => {
+  it("is a dialog, and the backdrop closes it", () => {
+    const props = renderPanel();
+    const dialog = screen.getByRole("dialog", { name: "Formatting Walkthrough" });
+    expect(dialog).toBeTruthy();
+    fireEvent.click(dialog);
+    expect(props.onClose).toHaveBeenCalledOnce();
+  });
+
+  it("does not close when a click lands inside the panel", () => {
+    // Clicking the backdrop is a deliberate gesture; clicking a control
+    // and losing the walk is a bug.
+    const props = renderPanel();
+    fireEvent.click(screen.getByText(/Narration hands off to dialogue/));
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it("says what each kind is FOR, not just how many there are", () => {
+    // A count beside a label the writer cannot interpret is a toggle they
+    // will never touch. The rail has room for a reason.
+    renderPanel();
+    expect(screen.getByText(/breath before a spoken line starts mid-paragraph/))
+      .toBeTruthy();
+    expect(screen.getByText(/Repairs, not suggestions/)).toBeTruthy();
+    expect(screen.getByText(/Words with two sounds: read, wound, close, bow/))
+      .toBeTruthy();
+  });
+
+  it("shows the whole paragraph, not a 90-character window", () => {
+    // The panel covers the editor, so the context in here is the only
+    // context there is. Deciding a beat needs the sentence around it.
+    const long = "He waited by the door for a long time, listening to the "
+      + "house settle around him and counting the seconds. She left. "
+      + "No word. No note. Nothing at all to go on.";
+    renderPanel({ content: long });
+    expect(screen.getByText(/listening to the\s+house settle around him/))
+      .toBeTruthy();
+  });
+
+  it("keeps the paragraph it is working in, and does not spill into the next", () => {
+    const text = "She left. No word. No note at all.\n\nThe second paragraph "
+      + "is somewhere else entirely and has no business in this box.";
+    renderPanel({ content: text });
+    expect(screen.queryByText(/no business in this box/)).toBeNull();
   });
   it("explains itself on request, and the explanation is about SOUND", async () => {
     // The walkthrough's controls are guessable; what is not guessable is

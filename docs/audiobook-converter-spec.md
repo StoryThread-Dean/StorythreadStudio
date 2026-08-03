@@ -1415,12 +1415,42 @@ Trigger points (initial catalog; each individually toggleable):
   an unclosed [pause:0.4 ...) surfaces as a stop with a one-click fix --
   the walkthrough doubles as the marker linter.
 
-UX contract: modeless overlay pinned above the editor; Next/Skip/Apply
-keyboard-first; each stop shows the sentence in context with the
-proposed insert rendered inline; Apply edits the narration copy exactly
-like typing (manual save still owns persistence); a per-session "don't
-suggest this trigger again" mute; progress indicator (stop N of M in
-this chapter). Every insert type links its audible demo (18.3).
+UX contract: Next/Skip/Apply keyboard-first; each stop shows the sentence
+in context with the proposed insert rendered inline; Apply edits the
+narration copy exactly like typing (manual save still owns persistence);
+a per-session "don't suggest this trigger again" mute; progress indicator
+(stop N of M in this chapter). Every insert type links its audible demo
+(18.3).
+
+**Shell: a pop-out window, sharing the Cast panel's frame (user decision,
+2026-08-03).** This was originally specified as a modeless strip pinned
+above the editor, chosen so a writer could hand-edit between stops. The
+strip ran out of room: seven kind toggles, per-reading Play buttons for
+word readings, a ten-step tutorial with before/after audio, and the
+Auto-apply confirm banner do not fit in a horizontal band -- and the
+deferred heteronym work only adds rows. Cast had already solved the
+identical interaction (walk the chapter, decide one thing at a time, land
+every change on the buffer), so two different shells for one interaction
+shape was the real inconsistency.
+
+What the change trades away, deliberately: hand-editing mid-walk, since
+the panel covers the editor. Closing and reopening resumes from the
+cursor. Two consequences that must not be lost:
+
+- **The panel renders the WHOLE paragraph**, not the strip's 90 characters
+  either side. A window that covers the manuscript has to carry its own
+  context; the ±90 window was only ever adequate because the editor sat
+  visible behind it. This is the property that makes Cast work.
+- **The editor's highlight no longer takes focus.** It still selects and
+  scrolls, so closing lands the writer on the last stop they saw, but
+  focusing a textarea underneath an open dialog would route their
+  keystrokes into the manuscript behind the panel they are reading.
+
+Layout: left rail lists every trigger kind with its count AND a one-line
+description of what it is for -- a count beside a label the writer cannot
+interpret is a toggle nobody ever touches. The work surface holds the
+paragraph, the decision row, and (for word readings) the per-reading
+Play buttons.
 
 ### 18.5 Respelling Doctrine (ear-tested by the user, 2026-07-30)
 

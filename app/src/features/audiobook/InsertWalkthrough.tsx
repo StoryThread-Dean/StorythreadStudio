@@ -3,13 +3,25 @@
 // The Guided Insert Walkthrough (spec 18.4, user-designed): starting at
 // the cursor, walk DOWN the manuscript stop by stop -- every spot where
 // a pause or a marker repair could improve the narration. At each stop
-// the writer applies a proposal, picks a different one, or skips.
-// Modeless strip pinned above the editor; edits land in the BUFFER like
-// typing (manual save still owns persistence).
+// the writer applies a proposal, picks a different one, or skips. Edits
+// land in the BUFFER like typing (manual save still owns persistence).
 //
-// Keyboard (works even while the editor has focus, so the writer can
-// hand-edit between stops): Ctrl+Enter apply, Ctrl+Right skip,
-// Ctrl+Left back, Esc close.
+// A pop-out window, sharing the Cast panel's shell (user decision,
+// 2026-08-03). It began as a modeless strip above the editor, which the
+// spec chose so a writer could hand-edit between stops -- but the strip
+// ran out of room: seven kind toggles, per-reading Play buttons, a
+// ten-step tutorial and a confirm banner do not fit in a band, and the
+// remaining heteronym work only adds rows. Cast had already solved the
+// same interaction (walk the chapter, decide one thing at a time, land
+// every change on the buffer), so this now matches it.
+//
+// The trade, made deliberately: hand-editing mid-walk is gone, since the
+// panel covers the editor. Closing and reopening resumes from the cursor.
+// What that costs is offset by rendering the WHOLE paragraph in here --
+// the panel must never need the screen behind it, which is the property
+// that makes Cast work.
+//
+// Keyboard: Ctrl+Enter apply, Ctrl+Right skip, Ctrl+Left back, Esc close.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -21,11 +33,12 @@ import { InsertWalkthroughHelp } from "./InsertWalkthroughHelp";
 import { previewSelection } from "./api";
 import {
   applyStop, bulkApplyDefaults, DEFAULT_MUTED_KINDS, isBeatKind,
-  isHeteronymKind, scanForStops, sentenceAround, STOP_KIND_LABELS,
+  isHeteronymKind, scanForStops, sentenceAround, STOP_KIND_HINTS,
+  STOP_KIND_LABELS,
 } from "./insertScan";
 import type { InsertOption, InsertStop, StopKind } from "./insertScan";
 import type { HeteronymReading } from "./heteronyms";
-import { stripAudioMarkers } from "./markers";
+import { paragraphBoundsAt, stripAudioMarkers } from "./markers";
 
 interface InsertWalkthroughProps {
   content: string;
@@ -228,64 +241,72 @@ export function InsertWalkthrough({
 
   const countOf = (kind: StopKind) => stops.filter(s => s.kind === kind).length;
 
-  // Context snippet around the stop, proposal rendered inline.
-  const context = current ? {
-    before: content.slice(Math.max(0, current.offset - 90), current.offset),
-    replaced: content.slice(current.offset, current.offset + current.length),
-    after: content.slice(current.offset + current.length,
-                         current.offset + current.length + 90),
-  } : null;
+  // The stop in context, proposal rendered inline. Now the WHOLE
+  // paragraph: this panel covers the editor, so a 90-character window
+  // either side -- which was fine when the manuscript sat visible behind
+  // the strip -- would leave the writer deciding a beat without being able
+  // to see the sentence it belongs to. Cast works for exactly this reason;
+  // it never needs the screen behind it.
+  const context = useMemo(() => {
+    if (!current) return null;
+    const { start, end } = paragraphBoundsAt(content, current.offset);
+    return {
+      before: content.slice(start, current.offset),
+      replaced: content.slice(current.offset, current.offset + current.length),
+      after: content.slice(current.offset + current.length, Math.max(end, current.offset)),
+      // Whether the paragraph runs past the window we are showing, so the
+      // ellipses tell the truth instead of always claiming there is more.
+      truncatedStart: start > 0,
+      truncatedEnd: end < content.length,
+    };
+  }, [content, current]);
 
   return (
-    // Same mild blue wash as the toolbar button: one look says "you are
-    // in the Formatting Walkthrough" (user-requested unification).
-    <div className="shrink-0 border-b border-blue-900/60 bg-blue-950/30 px-4 py-3">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-300">
-          <Wand2 size={12} /> Formatting Walkthrough
-        </span>
-        <span className="text-[11px] text-zinc-500">
-          {visible.length === 0
-            ? (applied > 0 ? `all done -- ${applied} applied` : "nothing to suggest from here")
-            : `stop ${index + 1} of ${visible.length}${applied > 0 ? ` -- ${applied} applied` : ""}`}
-        </span>
-        <span className="ml-auto flex flex-wrap items-center gap-2">
-          {autoBeatCount > 0 && !confirmingAuto && (
-            <button
-              onClick={() => setConfirmingAuto(true)}
-              title="Apply every remaining suggested beat at its default length. Marker repairs stay manual."
-              className="rounded border border-amber-700 px-2 py-0.5 text-[10px] text-amber-300 hover:border-amber-500"
-            >
-              Auto-apply {autoBeatCount} beats
-            </button>
-          )}
-          {ALL_KINDS.map(kind => (
-            <label key={kind}
-                   className="flex cursor-pointer items-center gap-1 text-[10px] text-zinc-500"
-                   title={`Suggest ${STOP_KIND_LABELS[kind].toLowerCase()} stops`}>
-              <input type="checkbox" checked={!muted.has(kind)}
-                     onChange={() => toggleKind(kind)} />
-              {STOP_KIND_LABELS[kind]} ({countOf(kind)})
-            </label>
-          ))}
+    // A workbench, not a toolbar. Same shell as the Cast panel because it
+    // is the same interaction -- walk the chapter, decide one thing at a
+    // time, every change lands in the buffer -- and two shells for one
+    // shape was the real inconsistency. The strip this replaced had run
+    // out of room: seven kind toggles, three reading rows with their own
+    // Play buttons, a ten-step tutorial and a confirm banner, all in a
+    // band above the editor.
+    <div
+      role="dialog"
+      aria-label="Formatting Walkthrough"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col rounded-lg border border-blue-900 bg-zinc-900 shadow-2xl">
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-5 py-3">
+          <Wand2 size={15} className="text-blue-300" />
+          <h2 className="text-sm font-semibold text-zinc-100">
+            Formatting Walkthrough
+          </h2>
+          {/* Progress only. When the walk is empty the panel below says so
+              in full -- saying it in both places is one sentence too many
+              in a window this size. */}
+          <span className="flex-1 text-[11px] text-zinc-500">
+            {visible.length > 0
+              && `stop ${index + 1} of ${visible.length}`
+                 + (applied > 0 ? ` -- ${applied} applied` : "")}
+          </span>
           <button
             onClick={() => setShowHelp(v => !v)}
-            className={"inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] transition-colors "
+            className={"inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] transition-colors "
               + (showHelp
                 ? "border-blue-500 bg-blue-900/40 text-blue-100"
                 : "border-blue-800 text-blue-200 hover:border-blue-500")}
           >
-            <GraduationCap size={10} /> Show me how this works
+            <GraduationCap size={11} /> Show me how this works
           </button>
           <button onClick={onClose} aria-label="Close walkthrough"
-                  className="rounded p-1 text-zinc-500 hover:text-zinc-200">
-            <X size={13} />
+                  className="rounded p-1 text-zinc-500 hover:text-zinc-100">
+            <X size={15} />
           </button>
-        </span>
-      </div>
+        </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
       {showHelp && (
-        <div className="mb-2">
+        <div className="mb-3">
           <InsertWalkthroughHelp onClose={() => setShowHelp(false)} />
         </div>
       )}
@@ -325,6 +346,52 @@ export function InsertWalkthrough({
         </div>
       )}
 
+      <div className="flex flex-col gap-4 sm:flex-row">
+        {/* The rail: what the walk is looking for, and how much of each it
+            found. Every kind names what it is FOR -- a count beside a
+            label the writer cannot interpret is a toggle they will never
+            touch. */}
+        <div className="shrink-0 sm:w-56">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+            What to look for
+          </p>
+          <div className="overflow-hidden rounded border border-zinc-800">
+            {ALL_KINDS.map(kind => (
+              <label
+                key={kind}
+                className="flex cursor-pointer items-start gap-2 border-b border-zinc-800/60 px-2 py-1.5 last:border-b-0 hover:bg-zinc-800/30"
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 shrink-0"
+                  checked={!muted.has(kind)}
+                  onChange={() => toggleKind(kind)}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-1 text-[11px] font-medium text-zinc-200">
+                    <span className="flex-1">{STOP_KIND_LABELS[kind]}</span>
+                    <span className="text-[10px] text-zinc-500">{countOf(kind)}</span>
+                  </span>
+                  <span className="block text-[10px] leading-tight text-zinc-500">
+                    {STOP_KIND_HINTS[kind]}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {autoBeatCount > 0 && !confirmingAuto && (
+            <button
+              onClick={() => setConfirmingAuto(true)}
+              title="Apply every remaining suggested beat at its default length. Marker repairs and word readings stay manual."
+              className="mt-2 w-full rounded border border-amber-700 px-2 py-1 text-[10px] text-amber-300 hover:border-amber-500"
+            >
+              Auto-apply {autoBeatCount} beats
+            </button>
+          )}
+        </div>
+
+        {/* The work surface. */}
+        <div className="min-w-0 flex-1">
       {current && context && (
         <>
           <p className="mb-1 text-xs font-medium text-zinc-200">{current.title}</p>
@@ -332,8 +399,8 @@ export function InsertWalkthrough({
           {/* The sentence in context. A word-reading stop shows the word
               itself standing where it is -- there is no proposal to
               preview until the writer picks a reading. */}
-          <p className="mb-2 overflow-hidden whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-950 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-zinc-400">
-            {"..."}{context.before}
+          <p className="mb-2 max-h-52 overflow-y-auto whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-[12px] leading-relaxed text-zinc-400">
+            {context.truncatedStart && "... "}{context.before}
             {isHeteronymKind(current.kind) ? (
               <span className="rounded bg-blue-950 px-0.5 font-semibold text-blue-300">
                 {context.replaced}
@@ -348,7 +415,7 @@ export function InsertWalkthrough({
                 </span>
               </>
             )}
-            {context.after}{"..."}
+            {context.after}{context.truncatedEnd && " ..."}
           </p>
 
           {/* Word readings: each candidate is offered as AUDIO, in this
@@ -454,6 +521,38 @@ export function InsertWalkthrough({
           </div>
         </>
       )}
+
+      {!current && (
+        // The panel used to be a strip that simply went quiet here. As a
+        // window it has to say what happened and offer a way out, or the
+        // writer is looking at an empty box wondering what they broke.
+        <div className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-4 text-center">
+          <p className="text-[12px] text-zinc-300">
+            {applied > 0
+              ? `Nothing further from here -- ${applied} applied.`
+              : "Nothing to suggest from here."}
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+            {muted.size > 0
+              ? "The walk starts at your cursor and runs to the end of the "
+                + "chapter. Switch a kind back on beside this, or close and "
+                + "reopen from higher up."
+              : "The walk starts at your cursor and runs to the end of the "
+                + "chapter. Close and reopen from higher up to cover what is "
+                + "above it."}
+          </p>
+          <button
+            onClick={onClose}
+            className="mt-3 rounded bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-500"
+          >
+            Close
+          </button>
+        </div>
+      )}
+        </div>
+      </div>
+        </div>
+      </div>
     </div>
   );
 }

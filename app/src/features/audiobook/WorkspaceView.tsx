@@ -591,7 +591,13 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           onHighlight={(offset, length) => {
             const ta = textareaRef.current;
             if (!ta) return;
-            ta.focus({ preventScroll: true });
+            // Select and scroll, but do NOT focus. The walkthrough is a
+            // window over the editor now: pulling focus back to the
+            // textarea would put the writer's keystrokes into the
+            // manuscript behind the panel they are looking at. The
+            // selection still shows unfocused (see the textarea::selection
+            // rule in App.css), so closing the panel lands them on the
+            // last stop they saw.
             ta.setSelectionRange(offset, offset + Math.max(length, 1));
             ta.scrollTop = (offset / Math.max(content.length, 1)) * ta.scrollHeight
               - ta.clientHeight / 3;
