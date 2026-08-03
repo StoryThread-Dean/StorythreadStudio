@@ -6,6 +6,7 @@
 # engine emitting tiny valid WAVs).
 
 import io
+import re
 import wave
 
 import pytest
@@ -182,6 +183,63 @@ def test_pace_demo_speaks_each_step_while_the_listener_hears_it():
 def test_every_script_renders():
     for kind in DEMO_SCRIPTS:
         assert len(build_demo(kind, DemoBackend())) > 44   # bigger than a WAV header
+
+
+# ── The Formatting Walkthrough's A/B beat demos ──────────────────────────────
+# The tutorial's whole claim is "play these two and hear the difference."
+# That only holds if the pair is the same sentence -- one changed word
+# would let the writer hear a difference that has nothing to do with the
+# beat, and quietly teach them the wrong thing.
+
+BEAT_PAIRS = [
+    "beat-dialogue-open", "beat-dialogue-close",
+    "beat-short-burst", "beat-interjection",
+]
+
+
+def test_each_beat_demo_has_a_flat_partner():
+    for kind in BEAT_PAIRS:
+        assert kind in DEMO_SCRIPTS
+        assert f"{kind}-flat" in DEMO_SCRIPTS
+
+
+def test_a_beat_pair_differs_only_by_its_markers():
+    for kind in BEAT_PAIRS:
+        with_beat = DEMO_SCRIPTS[kind]
+        flat = DEMO_SCRIPTS[f"{kind}-flat"]
+        # Strip the markers out of the marked version and the two must be
+        # character-for-character identical, whitespace aside.
+        stripped = re.sub(r"\[[^\]]*\]", " ", with_beat)
+        assert " ".join(stripped.split()) == " ".join(flat.split()), kind
+        # And the marked one must actually carry a beat, or the pair is
+        # two identical clips and the tutorial is lying.
+        assert "[pause:" in with_beat, kind
+        assert "[" not in flat, kind
+
+
+def test_a_flat_beat_demo_renders_as_one_unbroken_utterance():
+    # No silence anywhere in the "before" clip: the contrast IS the
+    # silence, so any gap leaking into the flat side blunts it. A blank
+    # line would do exactly that by collecting paragraph_gap_ms.
+    for kind in BEAT_PAIRS:
+        flat = DEMO_SCRIPTS[f"{kind}-flat"]
+        assert "\n" not in flat, kind
+        backend = DemoBackend()
+        _audio, warnings, trace = marker_demos.render_marked_text(
+            flat, backend, DEMO_VOICE, rules=[], settings=NARRATION_DEFAULTS)
+        assert not warnings, kind
+        assert len(trace) == 1, f"{kind} should synthesize as one piece"
+
+
+def test_the_short_burst_demo_is_a_real_burst_by_the_scanner_rule():
+    # The tutorial must play what the walk would actually offer. The
+    # scanner wants 3+ consecutive sentences of 22 characters or fewer;
+    # a demo that does not meet its own rule teaches a stop that never
+    # appears.
+    flat = DEMO_SCRIPTS["beat-short-burst-flat"]
+    sentences = [s.strip() for s in re.findall(r"[^.!?]+[.!?]", flat)]
+    clipped = [s for s in sentences if len(s) <= 22]
+    assert len(clipped) >= 3, sentences
 
 
 # ── render_marked_text (the select-text preview renderer) ────────────────────

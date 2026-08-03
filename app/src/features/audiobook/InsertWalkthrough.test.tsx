@@ -17,9 +17,33 @@ import { InsertWalkthrough } from "./InsertWalkthrough";
 const previewSelection = vi.fn(async () => ({
   blob: new Blob(["wav"]), warnings: [], trace: [],
 }));
+// The guided walk plays before/after beat demos through the same cached
+// backend endpoint the marker help uses.
+const fetchMarkerDemo = vi.fn(async () => new Blob(["wav"]));
 vi.mock("./api", () => ({
   previewSelection: (...args: unknown[]) => previewSelection(...(args as [])),
+  fetchMarkerDemo: (...args: unknown[]) => fetchMarkerDemo(...(args as [])),
 }));
+
+/** Walk the guided tutorial forward until the named step is showing.
+ *  Navigating by TITLE rather than by a click count -- a hardcoded count
+ *  breaks every time a step is inserted, which is exactly what happened
+ *  when the dialogue step was split in two.
+ *
+ *  Pass the bare title; the step number is added here. Several step
+ *  titles are also mute-checkbox labels in the strip behind the card
+ *  ("Marker problems", "Word readings"), and matching those would let the
+ *  walk stop on step one and silently assert nothing. */
+function walkToStep(title: string) {
+  const heading = new RegExp(`^\\d+\\. ${title}`);
+  for (let i = 0; i < 25; i += 1) {
+    if (screen.queryByText(heading)) return;
+    const next = screen.queryByLabelText("Next step");
+    if (!next) break;
+    fireEvent.click(next);
+  }
+  expect(screen.getByText(heading)).toBeTruthy();
+}
 // jsdom has no audio device; play() would reject and noise up the run.
 window.HTMLMediaElement.prototype.play = vi.fn(async () => {});
 window.HTMLMediaElement.prototype.pause = vi.fn();
@@ -161,10 +185,43 @@ describe("InsertWalkthrough", () => {
     // worth doing even by a writer who skips every other stop.
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
-    for (let i = 0; i < 5; i += 1) {
-      fireEvent.click(screen.getByLabelText("Next step"));
-    }
+    walkToStep("Marker problems");
     expect(screen.getByText(/They are repairs|are not suggestions/)).toBeTruthy();
+  });
+
+  it("gives every beat kind its own step with before/after audio", () => {
+    // The kinds are audible, so describing them is the weakest option
+    // available. Each one gets the same two-button A/B shape that made
+    // word readings work: one sentence, played both ways.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    for (const title of ["Before dialogue", "After dialogue",
+                         "Short-sentence beats", "Interjections"]) {
+      walkToStep(title);
+      expect(screen.getByLabelText(/Play: Without/)).toBeTruthy();
+      expect(screen.getByLabelText(/Play: With a/)).toBeTruthy();
+    }
+  });
+
+  it("plays a beat demo through the cached backend endpoint", async () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Short-sentence beats");
+    fireEvent.click(screen.getByLabelText(/Play: Without/));
+    await waitFor(() => expect(fetchMarkerDemo)
+      .toHaveBeenCalledWith("beat-short-burst-flat"));
+    // Replaying is free: the clip is cached, so no second request.
+    fireEvent.click(screen.getByLabelText(/Play: Without/));
+    await waitFor(() => expect(fetchMarkerDemo).toHaveBeenCalledTimes(1));
+  });
+
+  it("says the paragraph gap already covers dialogue in its own paragraph", () => {
+    // Otherwise a writer hand-places 550ms the pipeline inserts for them,
+    // and wonders why the walk went quiet on paragraph-leading dialogue.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Before dialogue");
+    expect(screen.getByText(/550 milliseconds by\s+default/)).toBeTruthy();
   });
 });
 
@@ -281,9 +338,7 @@ describe("InsertWalkthrough word readings", () => {
     // help has to land is why their ear is the instrument here.
     renderPanel({ content: READ_TEXT });
     fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
-    for (let i = 0; i < 6; i += 1) {
-      fireEvent.click(screen.getByLabelText("Next step"));
-    }
+    walkToStep("Word readings");
     expect(screen.getByText(/Word readings -- let your ear decide/)).toBeTruthy();
     expect(screen.getByText(/comes out as "I reed it yesterday"/)).toBeTruthy();
     expect(screen.getByText(/Skip -- that is the right\s+answer most of the time/))

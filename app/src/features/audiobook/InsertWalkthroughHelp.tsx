@@ -42,35 +42,76 @@ const STEPS: WalkStep[] = [
       file -- so an unconvincing walk costs one undo, or closing without
       saving.
     </>,
-    example: <>...the tomb door. [pause:0.8] I read it twice.</>,
+    example: <>She turned back. [pause:0.8] The door was already shut.</>,
   },
   {
-    title: "Before and after dialogue",
+    title: "Before dialogue",
     body: <>
-      The commonest two stops. Narration handing off to speech, and
-      speech handing back, are the moments a human reader breathes and
-      an engine runs straight through. A beat here is what stops a line
-      of dialogue sounding welded to the sentence before it.
+      Narration hands off to someone speaking. A person reading aloud
+      takes a breath here and changes voice; the narrator does neither,
+      so the spoken line arrives welded to the sentence in front of it.
+      <br /><br />
+      The walk only offers this <i>inside</i> a paragraph. When dialogue
+      starts its own paragraph you already get a beat automatically --
+      that is the paragraph gap in Audiobook Settings, 550 milliseconds by
+      default. Mid-paragraph is the case nothing else covers, because the
+      narrator treats the whole paragraph as one breath.
+      <br /><br />
+      Play both. The second one is the same sentence with the beat in it.
     </>,
-    example: <>She turned. [pause:0.8] "You came back."</>,
+    demos: [
+      { kind: "beat-dialogue-open-flat", label: "Without a beat -- what you get today" },
+      { kind: "beat-dialogue-open", label: "With a beat before the line" },
+    ],
+  },
+  {
+    title: "After dialogue",
+    body: <>
+      The same moment in reverse: someone stops speaking and the narration
+      picks back up. Without a beat the narrator's own voice sounds like a
+      continuation of the character's, and a listener needs a moment to
+      work out that the speech ended.
+      <br /><br />
+      This one is worth listening to twice. It is a smaller difference than
+      the one before it, and it is the stop writers most often skip and
+      then miss.
+    </>,
+    demos: [
+      { kind: "beat-dialogue-close-flat", label: "Without a beat -- the speech runs into the narration" },
+      { kind: "beat-dialogue-close", label: "With a beat after the quote" },
+    ],
   },
   {
     title: "Short-sentence beats",
     body: <>
-      Consecutive clipped sentences are a rhythm you wrote on purpose --
-      "I read it. The Cambodia chapter. My god." Read aloud without
-      beats they blur into one breath and the effect is lost. These
-      stops offer the shortest pause by default, because the point is
-      separation, not weight.
+      Three or more clipped sentences in a row is a rhythm you wrote on
+      purpose. Read aloud without beats they blur into a single breath and
+      the effect you built disappears.
+      <br /><br />
+      These offer the <i>shortest</i> pause by default, because the point
+      is separation rather than weight. A long pause here turns a quick
+      run into a list.
+      <br /><br />
+      The walk needs three in a row before it says anything. Two short
+      sentences together is just prose, and stopping on every pair of them
+      buried the real ones.
     </>,
+    demos: [
+      { kind: "beat-short-burst-flat", label: "Without beats -- four sentences in one breath" },
+      { kind: "beat-short-burst", label: "With a short beat between each" },
+    ],
   },
   {
     title: "Interjections",
     body: <>
-      A short exclamation lands harder with air around it. Same idea as
-      the short-sentence beats, aimed at the single line that is meant
-      to stop the reader.
+      A short exclamation lands harder with air after it. Same idea as the
+      short-sentence beats, aimed at the single line meant to stop the
+      listener rather than at a run of them.
     </>,
+    demos: [
+      { kind: "beat-interjection-flat", label: "Without a beat -- the exclamation gets swallowed" },
+      { kind: "beat-interjection", label: "With a beat after it" },
+    ],
   },
   {
     title: "Marker problems",

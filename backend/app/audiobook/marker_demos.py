@@ -101,6 +101,57 @@ DEMO_SCRIPTS: dict[str, str] = {
         "\n\n[exclude]This author note sits in the text but is never spoken.[/exclude]\n\n"
         "And the narration continues as if the excluded text was never there."
     ),
+
+    # ── Formatting Walkthrough beats: the A/B pairs ────────────────────────────
+    # Each pair is the SAME sentence twice, differing only by the marker.
+    # That is the entire design: no narration explaining what to listen
+    # for, because a spoken preamble is exactly what stops a listener
+    # hearing the difference. The writer plays one, plays the other, and
+    # the beat either earned its place or it did not.
+    #
+    # Shape borrowed from the word-reading stops (spec 18.6), which is the
+    # one thing in this feature that needed no explaining at all -- two
+    # buttons, one sentence, decide by ear.
+    #
+    # Deliberately neutral prose, written for this purpose. Never lift
+    # demo text out of the writer's manuscript: it can carry licensed
+    # characters and content that does not belong in a tutorial shipped to
+    # strangers.
+    #
+    # Single-line scripts on purpose. A blank line would collect
+    # paragraph_gap_ms and put silence in BOTH clips, which would blunt
+    # the very contrast the pair exists to show.
+    "beat-dialogue-open-flat": (
+        'She set the lantern down on the step. "You should not have come."'
+    ),
+    "beat-dialogue-open": (
+        'She set the lantern down on the step. [pause:0.8] '
+        '"You should not have come."'
+    ),
+    "beat-dialogue-close-flat": (
+        '"You should not have come." She did not look up from the lantern.'
+    ),
+    "beat-dialogue-close": (
+        '"You should not have come." [pause:0.8] '
+        'She did not look up from the lantern.'
+    ),
+    # Four clipped sentences in a row -- a real burst by the scanner's own
+    # rule (3 or more, each 22 characters or fewer), so what the tutorial
+    # plays is what the walk would actually offer.
+    "beat-short-burst-flat": (
+        "The gate stood open. No lock. No guard. No sound at all."
+    ),
+    "beat-short-burst": (
+        "The gate stood open. [pause:0.4] No lock. [pause:0.4] "
+        "No guard. [pause:0.4] No sound at all."
+    ),
+    "beat-interjection-flat": (
+        "The rope went slack in his hands. Oh no! He began to climb again."
+    ),
+    "beat-interjection": (
+        "The rope went slack in his hands. Oh no! [pause:0.4] "
+        "He began to climb again."
+    ),
 }
 
 

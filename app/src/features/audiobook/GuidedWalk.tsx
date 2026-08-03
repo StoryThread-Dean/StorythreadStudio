@@ -16,8 +16,19 @@
 // back -- so it sits inside the panel it describes and everything
 // underneath stays usable while it is open.
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, GraduationCap, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ChevronLeft, ChevronRight, GraduationCap, Loader2, Play, X,
+} from "lucide-react";
+
+import { fetchMarkerDemo } from "./api";
+
+export interface WalkDemo {
+  /** A DEMO_SCRIPTS key on the backend (marker_demos.py). */
+  kind: string;
+  /** What the writer is about to hear, in their terms. */
+  label: string;
+}
 
 export interface WalkStep {
   title: string;
@@ -25,6 +36,12 @@ export interface WalkStep {
   /** What this step looks like in the app. Optional, but a step with a
    *  concrete example teaches roughly twice as much as one without. */
   example?: React.ReactNode;
+  /** Clips to hear. Where a step describes something AUDIBLE, describing
+   *  it is the weakest option available -- two buttons and four seconds
+   *  settle what a paragraph of prose only gestures at. Rendered through
+   *  the real pipeline in the reference voice and cached on the backend,
+   *  so the second press of any of them is instant. */
+  demos?: WalkDemo[];
 }
 
 interface GuidedWalkProps {
@@ -64,6 +81,41 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
   const step = steps[Math.min(index, steps.length - 1)];
   const c = TONES[tone];
 
+  // Demo playback. Clips are cached by URL here and by rendered bytes on
+  // the backend, so replaying an A/B comparison a few times -- which is
+  // exactly how a listener decides -- costs nothing after the first pass.
+  const [loading, setLoading] = useState<string | null>(null);
+  const [demoError, setDemoError] = useState<string | null>(null);
+  const clips = useRef<Map<string, string>>(new Map());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => {
+    audioRef.current?.pause();
+    for (const url of clips.current.values()) URL.revokeObjectURL(url);
+  }, []);
+
+  async function playDemo(kind: string) {
+    setDemoError(null);
+    const cached = clips.current.get(kind);
+    if (cached) {
+      audioRef.current?.pause();
+      audioRef.current = new Audio(cached);
+      void audioRef.current.play();
+      return;
+    }
+    setLoading(kind);
+    try {
+      const url = URL.createObjectURL(await fetchMarkerDemo(kind));
+      clips.current.set(kind, url);
+      audioRef.current?.pause();
+      audioRef.current = new Audio(url);
+      void audioRef.current.play();
+    } catch (e) {
+      setDemoError(e instanceof Error ? e.message : "Could not play that.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
   return (
     <div className={`rounded border px-3 py-2.5 ${c.box}`}>
       <div className="mb-1.5 flex items-center gap-2">
@@ -85,6 +137,36 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
       {step.example && (
         <p className={`mt-1.5 rounded border bg-zinc-950/60 px-2 py-1 font-mono text-[10px] leading-relaxed text-zinc-400 ${c.example}`}>
           {step.example}
+        </p>
+      )}
+
+      {step.demos && step.demos.length > 0 && (
+        <div className={`mt-1.5 overflow-hidden rounded border bg-zinc-950/60 ${c.example}`}>
+          {step.demos.map(demo => (
+            <div key={demo.kind}
+                 className="flex items-center gap-2 border-b border-zinc-800/60 px-2 py-1.5 last:border-b-0">
+              <button
+                onClick={() => void playDemo(demo.kind)}
+                disabled={loading !== null}
+                aria-label={`Play: ${demo.label}`}
+                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+              >
+                {loading === demo.kind
+                  ? <Loader2 size={11} className="animate-spin" />
+                  : <Play size={11} />}
+                Play
+              </button>
+              <span className="min-w-0 flex-1 text-[11px] leading-tight text-zinc-300">
+                {demo.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {demoError && (
+        <p className="mt-1.5 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-[10px] text-rose-300">
+          {demoError}
         </p>
       )}
 
