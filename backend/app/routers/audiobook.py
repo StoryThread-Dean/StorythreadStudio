@@ -849,14 +849,21 @@ def start_generation(request: StartGenerationRequest):
 
 @router.get("/generation/status")
 def generation_status(workspace_path: str):
+    """
+    Is this book generating, and how far has it got?
+
+    `active` comes from the PROCESS, never from the run file, and it is
+    read once and reused. The earlier version short-circuited to
+    `active: False` whenever the record could not be loaded -- so a poll
+    that landed inside a write reported "nothing is generating" while the
+    worker thread was demonstrably alive. The UI believed it, stopped
+    polling, and offered a Generate button that answered with "already
+    generating" (live bug).
+    """
     _require_workspace(workspace_path)
-    run = generation.status_with_recovery(workspace_path)
-    if run is None:
-        return {"run": None, "active": False}
-    return {
-        "run": run,
-        "active": generation.active_workspace() == workspace_path,
-    }
+    active = generation.active_workspace() == workspace_path
+    run = generation.status_with_recovery(workspace_path, is_active=active)
+    return {"run": run, "active": active}
 
 
 class GenerationControlRequest(BaseModel):

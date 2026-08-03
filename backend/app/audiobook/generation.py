@@ -17,13 +17,13 @@
 
 import ctypes
 import hashlib
-import json
 import os
 import threading
 import uuid
 from datetime import datetime, timezone
 
 from app.audiobook import flow, locking, pronunciation, segmenter, workspace
+from app.audiobook.jsonstore import read_json, write_json_atomic
 from app.audiobook.synthesis import SynthesisBackend, SynthesisError
 
 RUN_FILE = "generation-run.json"
@@ -46,17 +46,35 @@ def run_path(workspace_path: str) -> str:
     return os.path.join(workspace_path, RUN_FILE)
 
 
+def read_run(workspace_path: str) -> tuple[dict | None, bool]:
+    """
+    (run, readable). `readable=False` means the record is there and could
+    not be parsed THIS INSTANT -- almost always a read that landed inside
+    a write.
+
+    Every caller that decides something about a live run must use this
+    rather than load_run: "I could not read it" is not "there is none",
+    and conflating them is what made a running job look finished.
+    """
+    data, readable = read_json(run_path(workspace_path))
+    return (data if isinstance(data, dict) else None), readable
+
+
 def load_run(workspace_path: str) -> dict | None:
-    try:
-        with open(run_path(workspace_path), "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None
+    """The run record, or None when it is missing OR unreadable.
+
+    Kept tolerant for display callers (the dashboard's progress column),
+    where a momentary miss just means one row shows no progress for a
+    second. Anything that GATES behaviour wants read_run instead.
+    """
+    return read_run(workspace_path)[0]
 
 
 def save_run(workspace_path: str, run: dict) -> None:
-    with open(run_path(workspace_path), "w", encoding="utf-8") as f:
-        json.dump(run, f, indent=2, ensure_ascii=False)
+    # Atomic: this is written after every completed segment, and the
+    # status poll reads it every 1.5 seconds. A truncate-then-write here
+    # is a collision waiting to happen -- and it happened.
+    write_json_atomic(run_path(workspace_path), run)
 
 
 # ── Windows sleep inhibit (spec 21) ──────────────────────────────────────────
@@ -657,17 +675,28 @@ def reset(workspace_path: str) -> None:
 
 # ── Status with restart recovery ─────────────────────────────────────────────
 
-def status_with_recovery(workspace_path: str) -> dict | None:
+def status_with_recovery(workspace_path: str,
+                         is_active: bool | None = None) -> dict | None:
     """
     The run record, healed on read: a record claiming "generating" with no
     live thread in this process means the app (or sidecar) died mid-run --
     mark it paused so Resume picks up exactly where the last persisted
     segment left off. This IS the restart recovery (spec 21.2).
+
+    `is_active` is passed in by the caller so the liveness check and the
+    healing decision use ONE snapshot. Reading it twice invites a window
+    where a run finishes between the two calls.
+
+    An UNREADABLE record is never healed. Writing "interrupted" over a
+    job that is running perfectly well, because the file happened to be
+    mid-write when we looked, would turn a one-poll blip into a
+    permanent lie on disk.
     """
-    run = load_run(workspace_path)
-    if run is None:
+    run, readable = read_run(workspace_path)
+    if run is None or not readable:
         return None
-    if run.get("status") == "generating" and active_workspace() != workspace_path:
+    live = active_workspace() == workspace_path if is_active is None else is_active
+    if run.get("status") == "generating" and not live:
         run["status"] = "paused"
         run["paused_at"] = _now_iso()
         run["note"] = ("Generation was interrupted (the app closed or the backend "

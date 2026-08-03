@@ -353,4 +353,70 @@ describe("GenerationPanel", () => {
                      { target: { value: "am_adam" } });
     expect(onVoiceChange).toHaveBeenCalledWith("am_adam");
   });
+  it("keeps watching when a status read comes back unreadable", async () => {
+    // THE live bug. generation-run.json is rewritten after every
+    // segment; a poll that lands inside a write used to end the polling
+    // loop for good, leaving an idle Generate button over a live job
+    // that then answered "already generating".
+    let phase: "running" | "blip" | "running-again" = "running";
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      const ep = exportPanelRoutes(url); if (ep) return ep;
+      if (url.includes("/generation/status")) {
+        if (phase === "blip") {
+          phase = "running-again";
+          // What a mid-write read produced before the fix.
+          return { ok: true, json: async () => ({ run: null, active: false }) };
+        }
+        return { ok: true, json: async () => ({ run: makeRun(), active: true }) };
+      }
+      if (url.includes("/narration-settings")) return { ok: true, json: async () => DEFAULT_SETTINGS };
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<GenerationPanel workspacePath={WS} />);
+
+    await waitFor(() => expect(screen.getByText(/Pause/)).toBeTruthy());
+    const before = fetchMock.mock.calls.filter(
+      ([url]) => String(url).includes("/generation/status")).length;
+
+    phase = "blip";
+    // The blip must not offer the idle button...
+    await waitFor(() =>
+      expect(screen.getByText(/Checking on the run/)).toBeTruthy(), { timeout: 4000 });
+    expect(screen.queryByText("Generate Audiobook")).toBeNull();
+
+    // ...and polling must recover on its own.
+    await waitFor(() => {
+      const after = fetchMock.mock.calls.filter(
+        ([url]) => String(url).includes("/generation/status")).length;
+      expect(after).toBeGreaterThan(before + 1);
+    }, { timeout: 6000 });
+    await waitFor(() => expect(screen.getByText(/Pause/)).toBeTruthy());
+  });
+
+  it("stops watching when the run says it is genuinely over", async () => {
+    // The other half: it must not poll forever either. A terminal
+    // status from the run itself is the only thing that ends the watch.
+    let done = false;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      const ep = exportPanelRoutes(url); if (ep) return ep;
+      if (url.includes("/generation/status")) {
+        return { ok: true, json: async () => (done
+          ? { run: makeRun({ status: "completed", completed_segments: 10 }), active: false }
+          : { run: makeRun(), active: true }) };
+      }
+      if (url.includes("/narration-settings")) return { ok: true, json: async () => DEFAULT_SETTINGS };
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<GenerationPanel workspacePath={WS} />);
+    await waitFor(() => expect(screen.getByText(/Pause/)).toBeTruthy());
+
+    done = true;
+    await waitFor(() => expect(screen.getByText("Generate Audiobook")).toBeTruthy(),
+                  { timeout: 4000 });
+    expect(screen.queryByText(/Checking on the run/)).toBeNull();
+  });
 });

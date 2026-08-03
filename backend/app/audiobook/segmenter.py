@@ -30,11 +30,11 @@
 # replaced segments until cleanup.
 
 import hashlib
-import json
 import os
 import re
 import uuid
 
+from app.audiobook.jsonstore import read_json, write_json_atomic
 from app.audiobook.markers import ParsedNarration
 
 # Bumped to 2 when paragraphs stopped grouping into shared segments. The
@@ -480,14 +480,13 @@ def segments_path(workspace_path: str) -> str:
 
 
 def load_segments(workspace_path: str) -> dict | None:
-    try:
-        with open(segments_path(workspace_path), "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None                          # first run, or corrupt = rebuild
+    data, _readable = read_json(segments_path(workspace_path))
+    return data if isinstance(data, dict) else None   # first run, or corrupt = rebuild
 
 
 def save_segments(workspace_path: str, manifest: dict) -> None:
-    os.makedirs(os.path.dirname(segments_path(workspace_path)), exist_ok=True)
-    with open(segments_path(workspace_path), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
+    # Atomic, for the same reason as the run record: this file is
+    # rewritten after every generated segment, it is the biggest one in
+    # the workspace, and half a dozen endpoints read it. A reader inside
+    # the truncate window would conclude the book has no segments at all.
+    write_json_atomic(segments_path(workspace_path), manifest)

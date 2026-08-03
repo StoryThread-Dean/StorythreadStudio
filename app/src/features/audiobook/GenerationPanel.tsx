@@ -57,6 +57,13 @@ interface GenerationPanelProps {
 // The out-of-the-box narrator when a book has no remembered voice yet.
 const DEFAULT_VOICE_ID = "am_michael";
 
+// A run that reports one of these has genuinely stopped. Anything else
+// -- including a status that could not be read at all -- means keep
+// looking.
+const TERMINAL_STATUSES = [
+  "completed", "partially_completed", "cancelled", "paused",
+];
+
 const PREVIEW_SAMPLE =
   "The road disappeared beneath the gathering snow, and somewhere behind " +
   "her, a second set of footsteps stopped.";
@@ -171,6 +178,12 @@ export function GenerationPanel({
 
   const [run, setRun] = useState<GenerationRun | null>(null);
   const [active, setActive] = useState(false);
+  // Keep watching after a run is known to exist, until a TERMINAL status
+  // is actually seen. One falsey reading used to end the polling loop
+  // for good -- and a status read that lands inside a file write is a
+  // falsey reading, which over a 200-segment run is a certainty. The
+  // writer was left with an idle Generate button over a live job.
+  const [watching, setWatching] = useState(false);
   const [busy, setBusy] = useState(false);          // a control call in flight
   const [error, setError] = useState<string | null>(null);
   const pollTimer = useRef<number | null>(null);
@@ -216,6 +229,14 @@ export function GenerationPanel({
       const body = await fetchGenerationStatus(workspacePath);
       setRun(body.run);
       setActive(body.active);
+      if (body.active) {
+        setWatching(true);
+      } else if (body.run && TERMINAL_STATUSES.includes(body.run.status)) {
+        // The run really is over: it said so itself.
+        setWatching(false);
+      }
+      // Not active and no readable run? Say nothing and keep watching.
+      // "I could not read it" is not "it finished".
       return body.active;
     } catch {
       return false;      // backend hiccup -- the banner system covers it
@@ -227,7 +248,7 @@ export function GenerationPanel({
   }, [pollOnce]);
 
   useEffect(() => {
-    if (!active) {
+    if (!active && !watching) {
       if (pollTimer.current !== null) {
         window.clearInterval(pollTimer.current);
         pollTimer.current = null;
@@ -239,7 +260,7 @@ export function GenerationPanel({
       if (pollTimer.current !== null) window.clearInterval(pollTimer.current);
       pollTimer.current = null;
     };
-  }, [active, pollOnce]);
+  }, [active, watching, pollOnce]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const handlePreview = useCallback(async () => {
@@ -304,6 +325,7 @@ export function GenerationPanel({
     setOfferForce(false);
     try {
       await startGeneration(workspacePath, voiceId, force, draftPass);
+      setWatching(true);
       await pollOnce();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not start generation.";
@@ -461,7 +483,13 @@ export function GenerationPanel({
               skipped (pauses kept, pre-flow sound) -- about twice as
               fast on pause-heavy chapters. Draft audio is stale to a
               Standard run, so it can never ship by accident. */}
-          {!active && !resumable && (
+          {watching && !active && !resumable && (
+            <p className="flex items-center gap-2 text-[11px] text-blue-300">
+              <Loader2 size={12} className="animate-spin" />
+              Checking on the run...
+            </p>
+          )}
+          {!active && !resumable && !watching && (
             <div>
               <ToggleSwitch
                 checked={draftPass}
@@ -502,7 +530,7 @@ export function GenerationPanel({
               out loud with the count. Never a prompt to spend -- the
               Generate button below already re-does exactly the changed
               segments, so this is information, not a second path. */}
-          {!active && audioStatus && audioStatus.outdated_segments > 0 && (
+          {!active && !watching && audioStatus && audioStatus.outdated_segments > 0 && (
             <div className="rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2">
               <p className="text-[11px] leading-relaxed text-amber-200">
                 {audioStatus.outdated_segments === 1
@@ -523,7 +551,7 @@ export function GenerationPanel({
           )}
 
           {/* Start / resume -- the emerald path */}
-          {!active && (
+          {!active && !watching && (
             <button
               onClick={() => void (resumable ? control(resumeGeneration) : handleStart())}
               disabled={busy || !voiceId}
