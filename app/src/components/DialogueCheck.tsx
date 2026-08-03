@@ -26,7 +26,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, Headphones, Loader2, Play, Square, X,
+  AlertTriangle, ChevronDown, ChevronRight, Headphones, Loader2, Play,
+  Square, X,
 } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
@@ -68,6 +69,7 @@ export function DialogueCheck({
   const [busy, setBusy] = useState<null | "reading" | "sample">(null);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
+  const [showWhy, setShowWhy] = useState(false);
   // ONE player: the visible <audio> element. An earlier version also
   // created a detached Audio() to start playback, which meant two
   // elements on the same blob and a pause() from one aborting the
@@ -223,19 +225,46 @@ export function DialogueCheck({
 
         <div className="space-y-4 px-5 py-4">
           <p className="text-[12px] leading-relaxed text-text-secondary">
-            Hear this passage read aloud. Reading your own words silently
-            hides their rhythm -- you supply the pauses and the emphasis
-            without noticing, and an indifferent voice does not.
+            Hear this passage read aloud. Your ear catches what your eye
+            skims.
           </p>
-          <p className="text-[12px] leading-relaxed text-text-secondary">
-            Dialogue is the obvious use: whether an exchange sounds like
-            people talking. It works just as well on narration, where the
-            ear catches what the eye skims -- a word repeated three times
-            in a paragraph, a sentence that only parses on the second
-            read, and the right-word-wrong-word errors no checker flags.
-            "Lara walked through the dessert" is perfect spelling and
-            perfect grammar.
-          </p>
+
+          {/* Everything else on request. A writer who opened this knows
+              what they came for; the reasoning is worth reading once and
+              should not sit between them and the button every time. */}
+          <div>
+            <button
+              onClick={() => setShowWhy(v => !v)}
+              className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
+            >
+              {showWhy ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+              What's this for?
+            </button>
+            {showWhy && (
+              <div className="mt-1.5 space-y-2 rounded border border-border bg-bg-surface px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
+                <p>
+                  Reading your own words silently hides their rhythm. You
+                  supply the pauses and the emphasis without noticing, so it
+                  always sounds better in your head than on the page. An
+                  indifferent voice supplies none of that.
+                </p>
+                <p>
+                  Dialogue is the obvious use: whether an exchange sounds
+                  like people talking, or like one person writing both
+                  halves. It works just as well on narration, where the ear
+                  catches a different class of problem -- a word repeated
+                  three times in a paragraph, a sentence that only parses
+                  on the second read, and the right-word-wrong-word errors
+                  no checker flags. "Lara walked through the dessert" is
+                  perfect spelling and perfect grammar.
+                </p>
+                <p>
+                  Pick a voice, press the button, listen. Nothing is saved
+                  and nothing is changed in your manuscript.
+                </p>
+              </div>
+            )}
+          </div>
 
           {!hadSelection && (
             <p className="rounded border border-border bg-bg-surface px-3 py-2 text-[11px] leading-relaxed text-text-secondary">

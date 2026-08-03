@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Loader2, Play, X } from "lucide-react";
 
 import { previewSelection } from "./api";
+import { stripAudioMarkers } from "./markers";
 
 interface SayEditorProps {
   content: string;
@@ -111,8 +112,14 @@ export function SayEditor({
   content, start, end, workspacePath, voiceId, onApply, onClose, anchor,
   onLocate,
 }: SayEditorProps) {
+  // The word, fixed at open and SCRUBBED of any marker the selection
+  // happened to clip. A drag that caught the tail of an existing
+  // [say:...]word[/say] used to carry "[/say]" into the word itself,
+  // which then went into the carrier phrase and came back out of the
+  // engine as an audible "slash" (live finding).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const word = useMemo(() => content.slice(start, end), []);  // fixed at open
+  const word = useMemo(
+    () => stripAudioMarkers(content.slice(start, end)).trim(), []);
   const [searchFrom, setSearchFrom] = useState(start);
   const [spoken, setSpoken] = useState("");
   const [showTips, setShowTips] = useState(false);
@@ -122,9 +129,13 @@ export function SayEditor({
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
+  // Focus follows the walk to its end, so Enter and Escape keep working
+  // once the input is gone.
+  useEffect(() => { doneRef.current?.focus(); });
   useEffect(() => () => audioRef.current?.pause(), []);
 
   // Every occurrence of the word (exact, word-boundary) not already
@@ -216,11 +227,24 @@ export function SayEditor({
       }}
     >
       {currentPos === null ? (
-        <p className="text-xs text-zinc-300">
-          {applied > 0
-            ? `Done -- ${applied} spot${applied === 1 ? "" : "s"} set.`
-            : "No more occurrences from here."}
-        </p>
+        // The end of the walk. This used to be a bare sentence with no
+        // way out: applying the last occurrence left a small window
+        // sitting over the manuscript that only Escape could dismiss,
+        // and only while it still had focus (live finding).
+        <div className="flex items-center gap-3">
+          <p className="flex-1 text-xs text-zinc-300">
+            {applied > 0
+              ? `Done -- ${applied} spot${applied === 1 ? "" : "s"} set.`
+              : "No more occurrences from here."}
+          </p>
+          <button
+            ref={doneRef}
+            onClick={onClose}
+            className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+          >
+            Close
+          </button>
+        </div>
       ) : (
         <>
           {/* The structured marker: only the spoken form is typeable. */}

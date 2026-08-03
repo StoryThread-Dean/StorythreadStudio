@@ -85,6 +85,8 @@ NARRATOR = "Narrator"
 # only so markers.py can dissolve the wrapper without importing it.
 _SAY_SPAN_RE = re.compile(r"\[say:[^\]]+\](.*?)\[/say\]",
                           re.IGNORECASE | re.DOTALL)
+_SAY_OPEN_RE = re.compile(r"\[say:[^\]]*\]", re.IGNORECASE)
+_SAY_CLOSE_RE = re.compile(r"\[/say\]", re.IGNORECASE)
 
 
 @dataclass
@@ -426,8 +428,12 @@ def strip_all_markers(text: str) -> str:
     out = _PACE_RE.sub(lambda m: m.group(2), out)
     out = _EXCLUDE_RE.sub(lambda m: m.group(1), out)
     out = _MARKER_RE.sub("", out)
-    for stray in (_VOICE_OPEN_RE, _VOICE_CLOSE_RE, _PACE_OPEN_RE,
-                  _PACE_CLOSE_RE, _EXCLUDE_OPEN_RE):
+    # Unmatched halves last. A lone [/say] left by a selection that
+    # clipped one is the commonest of these, and the engine reads it out
+    # as "slash" -- markers must never be audible.
+    for stray in (_SAY_OPEN_RE, _SAY_CLOSE_RE, _VOICE_OPEN_RE,
+                  _VOICE_CLOSE_RE, _PACE_OPEN_RE, _PACE_CLOSE_RE,
+                  _EXCLUDE_OPEN_RE):
         out = stray.sub("", out)
     return out
 

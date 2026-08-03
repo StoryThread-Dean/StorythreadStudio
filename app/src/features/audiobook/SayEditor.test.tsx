@@ -126,4 +126,30 @@ describe("SayEditor", () => {
     fireEvent.click(screen.getByText(/Space vs Hyphen vs Apostrophe/));
     expect(screen.queryByText(/softest internal break/)).toBeNull();
   });
+  it("scrubs a marker the selection clipped out of the word", () => {
+    // Live bug: a drag that caught the tail of an existing span carried
+    // "[/say]" into the word, which went into the preview carrier and
+    // came back out of the engine as an audible "slash".
+    const content = 'She met [say:LAR-uh]Lara[/say] again.';
+    const start = content.indexOf("Lara");
+    render(<SayEditor content={content} start={start}
+                      end={start + "Lara[/say]".length}
+                      workspacePath={WS} voiceId="af_heart"
+                      anchor={null} onApply={vi.fn()} onLocate={vi.fn()}
+                      onClose={vi.fn()} />);
+    expect(screen.queryByText(/\[\/say\]\[\/say\]/)).toBeNull();
+  });
+
+  it("the end of the walk can be closed", async () => {
+    // It used to be a bare sentence with no way out: applying the last
+    // occurrence left a small window over the manuscript that only
+    // Escape could dismiss, and only while it still had focus.
+    const onClose = vi.fn();
+    render(<SayEditor content="Nothing to find here." start={0} end={0}
+                      workspacePath={WS} voiceId="af_heart"
+                      anchor={null} onApply={vi.fn()} onLocate={vi.fn()}
+                      onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalled();
+  });
 });

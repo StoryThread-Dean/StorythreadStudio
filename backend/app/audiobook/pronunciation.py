@@ -203,5 +203,19 @@ def prepare_tts_text(text: str, rules: list[PronunciationRule]) -> str:
       4. punctuation normalization ('--' to em dash)
 
     Display text elsewhere is never changed by design.
+
+    A final guard runs last: any MARKER-SHAPED token still standing is
+    removed. By this point the parser has already turned every real
+    marker into structure, so anything left is a stray -- an unmatched
+    [/say] from a selection that clipped one, say. The engine has no
+    idea it is a marker and reads it out: a lone [/say] became an
+    audible "slash" mid-sentence (live finding). No marker should ever
+    be spoken, and this is the one place that can promise it. Only
+    recognised shapes are stripped, so a writer's own square brackets
+    survive.
     """
-    return normalize_for_tts(apply_pronunciations(resolve_say_markers(text), rules))
+    from app.audiobook.markers import strip_all_markers
+
+    prepared = normalize_for_tts(
+        apply_pronunciations(resolve_say_markers(text), rules))
+    return strip_all_markers(prepared).strip()
