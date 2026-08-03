@@ -17,6 +17,13 @@ dependencies = [
     # is a single 268 KB wheel with no numpy behind it, which matters when
     # the whole backend is frozen into a sidecar exe.
     "miniaudio>=1.71",
+    "pypdf>=6.1.1",
+    # PDF import (Stage F). pypdf is pure Python under a BSD licence and
+    # ships no binaries, which is what makes it safe to freeze into the
+    # sidecar exe. PyMuPDF extracts better but is AGPL and carries native
+    # libraries; pdfminer.six is heavier for the same job. Text-based
+    # PDFs only -- scanned pages are rejected, never OCR'd.
+    "pypdf>=6.1.1",
     "python-docx>=1.1.2",
     "pyyaml>=6.0.2",
     "uvicorn[standard]>=0.44.0",

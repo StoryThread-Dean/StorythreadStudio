@@ -338,19 +338,37 @@ The dominant long-term loop is edit, regenerate changed sections, and re-export 
 
 DOCX and EPUB extraction reuse libraries already shipped with the backend (`python-docx` and `ebooklib`, used today by the export feature), so no new dependencies are required for the MVP format set.
 
-### 7.2 Deferred Format Behavior
+### 7.2 PDF (landed in Stage F, 2026-08-01)
 
-PDF import is deferred to a later phase. It is the only format that requires a new extraction dependency and it carries the highest extraction-quality risk in the project.
+PDF was deferred to its own stage because it is the only format that requires a new extraction dependency and carries the highest extraction-quality risk in the project. It now imports, with the limits below intact.
 
-When PDF support lands, it will cover text-based PDFs only. Scanned or image-only PDF documents will not use OCR.
-
-Suggested error (for the PDF phase):
+**Text-based PDFs only.** Scanned or image-only documents are refused with the wording this section always specified:
 
 > This PDF appears to contain scanned pages rather than selectable text. Scanned-document OCR is not currently supported. Convert it to a text-searchable PDF, DOCX, EPUB, Markdown, or TXT file and try again.
 
-Until PDF lands, selecting a PDF should produce:
+OCR stays out of scope, and the reason is worth stating plainly: a bad OCR pass would put **invented words** into a narration copy, and the writer might not find out until they hear them. Refusing is the safer failure.
 
-> PDF import is not supported yet. Export the manuscript as DOCX, EPUB, Markdown, or TXT and try again.
+**Dependency: `pypdf`.** Pure Python, BSD, no binaries -- which is what makes it safe to freeze into the sidecar exe. PyMuPDF extracts better but is AGPL with native libraries; pdfminer.six is heavier for the same job. Named explicitly in `backend.spec` hiddenimports, because `pdf_extractor` is itself imported lazily.
+
+#### What "extraction" means here
+
+A PDF does not contain a manuscript. It contains a picture of one -- glyphs at coordinates, with no paragraphs, no chapters, and no idea which lines belong together. Everything the extractor produces is reconstruction, which shapes two rules:
+
+1. **Never lose the writer's words.** Cleanup removes page furniture and rejoins text the layout split. Nothing that could be prose is dropped, and anything ambiguous is kept.
+2. **Say what was reconstructed.** Every cleanup reports itself as an import warning, and every PDF import ends with the note that paragraph breaks are a best guess -- because this is the one format where the app is guessing, and the writer is about to spend an engine on the result.
+
+**Page furniture** (running headers, running footers, page numbers) is detected by REPETITION, not by position or font: take the first and last line of every page, normalize away the digits, and remove it only when the same skeleton appears on most of the book (60%, minimum 3 pages). A line that looks like a chapter heading is never removed however often it repeats -- losing it would silently merge the whole book into one chapter. Bare numbers are stripped only at page EDGES: a line reading "1985" mid-page is prose.
+
+**Paragraph reconstruction** uses two signals together, because each catches what the other misses:
+
+- **Indent.** In typeset fiction the first line of a paragraph starts further right. A PDF stores no space characters there -- the glyphs simply begin at a different x -- so extraction runs in pypdf's `layout` mode, which is the only mode that reconstructs it. When a book indents, this is exact, and it catches the paragraph whose last line happens to run full width.
+- **Length.** Every line runs nearly the full measure except the last one of a paragraph, so a short line ends one. This is the only signal available for block-paragraph layouts, and it catches dialogue, which is usually set flush left.
+
+The measure is a high percentile of line lengths rather than the median: headings, page numbers and dialogue are all short, and a median would sink until no line looked short at all -- merging every paragraph in the book into one. (Found by test, not by reasoning.)
+
+**Hyphenation.** A line ending in a hyphen followed by a lowercase continuation is rejoined and the hyphen dropped. That is right for a line-break hyphen and wrong for a genuinely hyphenated word that landed at the margin, and nothing short of a dictionary can tell them apart -- so the join is made, and COUNTED, so the warning can tell the writer how many words to spot-check. A hyphen before a capital is left alone.
+
+Why paragraph accuracy matters more here than it looks: the segmenter treats **one paragraph as one unit of speech**, and assembly inserts the paragraph beat between them. A merged pair loses a beat; a false split invents one.
 
 ### 7.3 Import Workflow
 

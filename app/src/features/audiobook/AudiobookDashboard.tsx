@@ -47,7 +47,7 @@ const WORKFLOW_STEPS: Array<{
   { gem: "#1e3a8a", badge: "bg-blue-500 text-white", Icon: BookOpen,
     title: "Load your book",
     detail: "Start from one of your Storythread books, or bring in a "
-      + "manuscript from anywhere: DOCX, EPUB, Markdown, plain text. "
+      + "manuscript from anywhere: DOCX, EPUB, Markdown, plain text, PDF. "
       + "Storythread copies it in and never touches your original, so "
       + "the words you wrote are never at risk." },
   { gem: "#312e81", badge: "bg-indigo-500 text-white", Icon: FolderOpen,

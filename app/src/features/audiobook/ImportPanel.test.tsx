@@ -96,4 +96,18 @@ describe("ImportPanel (Get Started)", () => {
     expect(body.source_path).toBe(BOOK);
     expect(body.workspace_path).toBe(SUGGESTED);
   });
+  it("offers PDF in the manuscript picker (Stage F)", async () => {
+    // Hiding PDF would send writers hunting for a converter they may
+    // not need -- text-based PDFs import for real now, and a scanned one
+    // is refused with the reason and the workaround.
+    vi.stubGlobal("fetch", mockFetch());
+    openMock.mockResolvedValue("C:\books\novel.pdf");
+    render(<ImportPanel onBack={vi.fn()} onImported={vi.fn()} />);
+
+    fireEvent.click(screen.getByText("Choose Manuscript File"));
+    const options = openMock.mock.calls[0][0] as { filters: { extensions: string[] }[] };
+    expect(options.filters[0].extensions).toContain("pdf");
+    // And the caption sets the one expectation that matters.
+    expect(screen.getByText(/real text rather than page images/)).toBeTruthy();
+  });
 });

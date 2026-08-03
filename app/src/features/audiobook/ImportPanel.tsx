@@ -57,9 +57,11 @@ export function ImportPanel({ onBack, onImported }: ImportPanelProps) {
     const selected = await openDialog({
       title: "Choose a manuscript",
       filters: [
-        // PDF is deliberately absent -- deferred; the backend would reject
-        // it with the honest message anyway, but not offering it is kinder.
-        { name: "Manuscripts", extensions: ["docx", "epub", "md", "markdown", "txt"] },
+        // PDF joined the list in Stage F -- text-based PDFs only. A
+        // scanned one is refused with the reason and the workaround, so
+        // offering it here costs nothing and hiding it would send
+        // writers hunting for a converter they may not need.
+        { name: "Manuscripts", extensions: ["docx", "epub", "md", "markdown", "pdf", "txt"] },
       ],
     });
     if (typeof selected === "string" && selected) {
@@ -141,7 +143,8 @@ export function ImportPanel({ onBack, onImported }: ImportPanelProps) {
         </button>
       </div>
       <p className="mb-1 text-[11px] text-zinc-600">
-        DOCX, EPUB, Markdown, or TXT. PDF isn't supported yet.
+        DOCX, EPUB, Markdown, TXT, or PDF. A PDF has to contain real text
+        rather than page images -- a scanned book will say so and stop.
       </p>
       {sourcePath && (
         <p className="mb-4 truncate rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-emerald-300" title={sourcePath}>

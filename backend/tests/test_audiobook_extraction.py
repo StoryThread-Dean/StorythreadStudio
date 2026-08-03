@@ -15,12 +15,17 @@ from app.audiobook.extraction import extract_source, normalize_text
 
 # ── Dispatch guards ───────────────────────────────────────────────────────────
 
-def test_pdf_is_rejected_with_the_honest_deferred_message(tmp_path):
+def test_a_damaged_pdf_names_the_problem_and_the_way_out(tmp_path):
+    # PDF stopped being deferred in Stage F, so this file now tests the
+    # OTHER honest refusal: a file that claims to be a PDF but is not
+    # readable as one. Working PDFs are covered in test_audiobook_pdf.py.
     pdf = tmp_path / "book.pdf"
     pdf.write_bytes(b"%PDF-1.4 fake")
     with pytest.raises(ValueError) as err:
         extract_source(str(pdf))
-    assert "PDF import is not supported yet" in str(err.value)
+    message = str(err.value)
+    assert "PDF import is not supported" not in message      # no longer true
+    assert "DOCX, EPUB, Markdown, or TXT" in message
 
 
 def test_unknown_extension_is_rejected(tmp_path):

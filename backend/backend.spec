@@ -79,6 +79,14 @@ a = Analysis(
         # those engines at narration time. Named explicitly for that
         # reason. It is a compiled extension, so its .pyd travels too.
         'miniaudio',
+        # PDF import (Stage F). pdf_extractor is itself imported lazily
+        # from the extraction dispatcher, so pypdf sits two levels of
+        # deferred import away from anything PyInstaller sees at the top
+        # of a module. Named explicitly rather than trusted to analysis:
+        # a miss would ship a build that refuses every PDF at import
+        # time, which is exactly the failure the miniaudio note above
+        # describes.
+        'pypdf',
         # Export format libraries (DOCX and EPUB generation, Markdown->HTML)
         'docx',
         'docx.opc',

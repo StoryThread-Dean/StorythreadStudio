@@ -214,6 +214,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_audiobook_narration_selection.py` -- three-level engine resolution (book -> settings -> writing fallback), `can_spend` vs `fallback_note` vs `caveat`, and each demoted engine's recorded reason
   - `test_audiobook_mp3_transport.py` -- per-model `response_format`, mp3 byte sniffing + decode, and the self-healing 400 retry (provider names a format, or the field is dropped)
   - `test_audiobook_level_matching.py` -- loudness matching at assembly (-20 dBFS RMS, -1 dBFS ceiling, clamped gain), including that flow dynamics survive it
+  - `test_audiobook_pdf.py` -- PDF import against REAL PDFs built by `tests/pdf_builder.py`: scanned rejection, running-header/page-number removal that never eats prose or headings, hyphen rejoining, paragraph reconstruction by indent and by line length
   - `test_audiobook_storage.py` -- storage measurement + cleanup (spec 25): per-category sizes, orphan detection by leftover, nothing irreversible pre-checked, deleted audio resets its segment records, export-only state, retention migration
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
