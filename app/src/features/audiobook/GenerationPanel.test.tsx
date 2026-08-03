@@ -324,4 +324,33 @@ describe("GenerationPanel", () => {
       expect(screen.getByText("Generate Audiobook")).toBeTruthy());
     expect(screen.queryByText(/no longer match/)).toBeNull();
   });
+  it("adopts a narrator voice changed somewhere else", async () => {
+    // The narrator's voice lives in ONE place and two screens edit it:
+    // this rail and the Cast panel. Live finding: the cast was changed
+    // to Alice, the rail still said Lily, and nothing on screen told the
+    // writer which one the audio would actually use.
+    vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
+    const { rerender } = render(
+      <GenerationPanel workspacePath={WS} initialVoiceId="af_heart" />);
+    await waitFor(() => expect(
+      (screen.getByLabelText(/Narrator voice/) as HTMLSelectElement).value)
+      .toBe("af_heart"));
+
+    rerender(<GenerationPanel workspacePath={WS} initialVoiceId="am_adam" />);
+    await waitFor(() => expect(
+      (screen.getByLabelText(/Narrator voice/) as HTMLSelectElement).value)
+      .toBe("am_adam"));
+  });
+
+  it("tells its owner when the writer picks a voice here", async () => {
+    const onVoiceChange = vi.fn();
+    vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
+    render(<GenerationPanel workspacePath={WS} initialVoiceId="af_heart"
+                            onVoiceChange={onVoiceChange} />);
+    await waitFor(() => expect(screen.getByLabelText(/Narrator voice/)).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText(/Narrator voice/),
+                     { target: { value: "am_adam" } });
+    expect(onVoiceChange).toHaveBeenCalledWith("am_adam");
+  });
 });

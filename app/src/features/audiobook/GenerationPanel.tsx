@@ -36,8 +36,12 @@ interface GenerationPanelProps {
   getSelectionText?: () => string;
   /** The voice remembered for THIS book (manifest.selected_voice) --
       restored when the workspace opens; different books use different
-      voices on purpose. */
+      voices on purpose. The Cast panel writes the same field, so a
+      change there arrives here as a new value and is adopted. */
   initialVoiceId?: string | null;
+  /** The writer picked a voice HERE, so whoever owns the narrator's
+      voice elsewhere (the Cast panel) can stay in step. */
+  onVoiceChange?: (voiceId: string) => void;
   /** Bumped by WorkspaceView whenever Audiobook Settings are saved, so
       the rail refetches what depends on them (the narration engine). */
   settingsVersion?: number;
@@ -150,7 +154,7 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
 
 export function GenerationPanel({
   workspacePath, getSelectionText, initialVoiceId,
-  settingsVersion = 0, onOpenSettings, audioStatus,
+  settingsVersion = 0, onOpenSettings, audioStatus, onVoiceChange,
 }: GenerationPanelProps) {
   const [voices, setVoices] = useState<NarratorVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
@@ -195,6 +199,16 @@ export function GenerationPanel({
   }, [initialVoiceId]);
 
   useEffect(() => { void loadVoices(); }, [loadVoices]);
+
+  // The narrator's voice lives in ONE place -- the book's manifest --
+  // and two screens edit it: this rail and the Cast panel. Whichever
+  // wrote last wins, and this is how the other one finds out. Without
+  // it the rail kept showing Lily while the cast said Alice, and the
+  // writer had no way to tell which one the audio would use.
+  useEffect(() => {
+    if (initialVoiceId && initialVoiceId !== voiceId) setVoiceId(initialVoiceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialVoiceId]);
 
   // ── Status polling ───────────────────────────────────────────────────────
   const pollOnce = useCallback(async () => {
@@ -366,6 +380,7 @@ export function GenerationPanel({
                 value={voiceId}
                 onChange={e => {
                   setVoiceId(e.target.value);
+                  onVoiceChange?.(e.target.value);
                   // Fire-and-forget: the book remembers its narrator.
                   void saveVoice(workspacePath, e.target.value).catch(() => {});
                 }}

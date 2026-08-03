@@ -176,6 +176,11 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   // the dialogue walk, and the markers it writes. All this screen keeps
   // is the count for the rail button and a refresh when it saves.
   const [castNames, setCastNames] = useState<string[]>([]);
+  // The book's narrator voice, owned here because TWO screens edit it:
+  // the narration rail and the Cast panel. Keeping one copy is what
+  // stops them disagreeing about who reads the book.
+  const [narratorVoice, setNarratorVoice] = useState<string>(
+    payload.manifest.selected_voice ?? "");
 
   const refreshCast = useCallback(async () => {
     try {
@@ -183,6 +188,8 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       setCastNames(cast.speakers
         .filter(s => s.role === "character")
         .map(s => s.display_name));
+      const narrator = cast.speakers.find(s => s.role === "narrator");
+      if (narrator?.voice_id) setNarratorVoice(narrator.voice_id);
     } catch {
       // No cast is not an error -- it is the normal state of most books.
       setCastNames([]);
@@ -659,7 +666,8 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             rehearsing the wrong words. */}
         <GenerationPanel
           workspacePath={workspacePath}
-          initialVoiceId={payload.manifest.selected_voice}
+          initialVoiceId={narratorVoice}
+          onVoiceChange={setNarratorVoice}
           settingsVersion={settingsVersion}
           onOpenSettings={() => setSettingsOpen(true)}
           audioStatus={audioStatus}
