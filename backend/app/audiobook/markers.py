@@ -34,8 +34,21 @@ _EXCLUDE_RE = re.compile(
 )
 _EXCLUDE_OPEN_RE = re.compile(r"\[exclude\]", re.IGNORECASE)
 
-# Pace spans: [pace:0.85]...[/pace] narrates its contents at a different
-# speed -- slower to let a scene breathe, faster to carry an action beat.
+# Pace spans narrate their contents at a different speed -- slower to let
+# a scene breathe, faster to carry an action beat. Two value forms:
+#
+#   [pace:+2]...[/pace]   STEP form (what the toolbar inserts): N steps of
+#                         0.05 up or down from the book's base pace, so a
+#                         span always lands on a speed the engine renders
+#                         cleanly. Capped to the proven 0.8-1.2 band at
+#                         synthesis time -- stacking steps can never go
+#                         "well past the bar" into S-L-O-W or chipmunk.
+#                         The SIGN is what marks a step.
+#   [pace:0.85]...[/pace] legacy MULTIPLIER form: base times the number,
+#                         snapped to the 0.05 grid. Still parsed so
+#                         narration files written before the step form
+#                         keep their meaning.
+#
 # Universal by construction: the local engine takes speed natively, cloud
 # engines either do too or get time-stretched at assembly.
 _PACE_RE = re.compile(r"\[pace:([^\]]*)\](.*?)\[/pace\]", re.IGNORECASE | re.DOTALL)
@@ -136,7 +149,7 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
     #    emitted at that spot so reading order is preserved.
     pending_excludes = iter(elements_holder)
 
-    def _flush_with_excludes(chunk: str, pace: float) -> None:
+    def _flush_with_excludes(chunk: str, pace: float | str) -> None:
         pieces = chunk.split("\x00EXCL\x00")
         for i, piece in enumerate(pieces):
             text = piece.strip()
@@ -154,7 +167,8 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
     for pace, region in regions:
         pos = 0
         for match in _MARKER_RE.finditer(region):
-            _flush_with_excludes(region[pos : match.start()], pace)
+            before_chunk = region[pos : match.start()]
+            _flush_with_excludes(before_chunk, pace)
             pos = match.end()
             if match.group(1):                   # pause with duration
                 raw = (match.group(2) or "").strip()
@@ -162,7 +176,20 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
                     seconds = float(raw)
                     if not (0 < seconds <= 60):
                         raise ValueError
-                    elements.append({"type": "pause", "duration_ms": int(round(seconds * 1000))})
+                    pause: dict = {"type": "pause", "duration_ms": int(round(seconds * 1000))}
+                    # A pause with prose (not a paragraph break) on BOTH
+                    # sides sits mid-paragraph: it splits a sentence run,
+                    # not two paragraphs. The segmenter synthesizes such
+                    # runs continuously (flow groups) because isolated
+                    # fragment synthesis manufactures utterance endings
+                    # (see flow.py).
+                    after_probe = region[match.end() : match.end() + 24]
+                    if (before_chunk.strip()
+                            and not before_chunk.rstrip(" \t").endswith("\n")
+                            and after_probe.strip()
+                            and not after_probe.lstrip(" \t").startswith("\n")):
+                        pause["mid_paragraph"] = True
+                    elements.append(pause)
                 except ValueError:
                     warnings.append(
                         f"Chapter '{chapter_title}': [pause:{raw}] is not a valid duration "
@@ -179,21 +206,39 @@ def _parse_body(body: str, warnings: list[str], chapter_title: str) -> list[dict
     return elements
 
 
-def _parse_pace_value(raw: str, warnings: list[str], chapter_title: str) -> float:
+def _parse_pace_value(raw: str, warnings: list[str], chapter_title: str) -> float | str:
+    """A pace value is either a signed STEP count ('+2', '-1') or a bare
+    legacy multiplier ('0.85'). Steps come back as a normalized signed
+    string so downstream code can tell the two forms apart; multipliers
+    stay floats. Either way, 1.0 means 'no change'."""
+    value = raw.strip()
+    if value[:1] in ("+", "-"):
+        try:
+            steps = int(value)
+        except ValueError:
+            warnings.append(
+                f"Chapter '{chapter_title}': [pace:{value}] is not a valid pace "
+                "(use whole steps like [pace:+2] or [pace:-1]); normal pace was used."
+            )
+            return 1.0
+        # +0/-0 is an explicit "no change" -- treated as unmarked text.
+        return f"{steps:+d}" if steps else 1.0
     try:
-        pace = float(raw.strip())
+        pace = float(value)
         if not (PACE_MIN <= pace <= PACE_MAX):
             raise ValueError
         return pace
     except ValueError:
         warnings.append(
-            f"Chapter '{chapter_title}': [pace:{raw.strip()}] is not a valid pace "
-            f"(use {PACE_MIN} to {PACE_MAX}, e.g. [pace:0.85]); normal pace was used."
+            f"Chapter '{chapter_title}': [pace:{value}] is not a valid pace "
+            f"(use steps like [pace:+2] or [pace:-1], or a multiplier "
+            f"{PACE_MIN} to {PACE_MAX}); normal pace was used."
         )
         return 1.0
 
 
-def _pace_regions(body: str, warnings: list[str], chapter_title: str) -> list[tuple[float, str]]:
+def _pace_regions(body: str, warnings: list[str],
+                  chapter_title: str) -> list[tuple[float | str, str]]:
     """Split a chapter body into (pace, chunk) runs, in reading order.
     Nested pace spans are not supported (warned, inner opener dropped);
     an unclosed [pace:...] applies to the rest of the chapter (warned);
@@ -213,7 +258,7 @@ def _pace_regions(body: str, warnings: list[str], chapter_title: str) -> list[tu
             return _PACE_CLOSE_RE.sub("", chunk)
         return chunk
 
-    regions: list[tuple[float, str]] = []
+    regions: list[tuple[float | str, str]] = []
     pos = 0
     for match in _PACE_RE.finditer(body):
         if match.start() > pos:

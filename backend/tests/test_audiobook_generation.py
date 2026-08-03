@@ -349,7 +349,66 @@ def test_marker_pace_multiplies_the_base(tmp_path):
 
     generation.start_run(str(ws), SpeedSpy(), voice_id="v")
     generation.wait_for_idle()
-    assert speeds == [pytest.approx(0.72)]      # 0.9 base * 0.8 marker
+    # 0.9 base * 0.8 marker = 0.72, snapped to the 0.05 grid -> 0.7.
+    assert speeds == [pytest.approx(0.7)]
+
+
+def test_compound_pace_snaps_to_the_engine_grid():
+    """
+    Pinned from a listening test on the user's real chapter: dialogue
+    base 0.9 under a [pace:1.2] span produced 1.08x, and Kokoro renders
+    a sibilant slur at that off-grid speed while 0.05-step neighbors
+    are clean. Compound paces must land on the 0.05 grid.
+    """
+    settings = {"narrator_pace": 0.85, "dialogue_pace": 0.9,
+                "scene_break_ms": 2000, "chapter_break_ms": 3000}
+    # The lisp case: fast span inside dialogue -> 1.08 raw -> 1.1.
+    assert generation.effective_pace(
+        {"dialogue": True, "pace": 1.2}, settings) == pytest.approx(1.1)
+    # Slow span over narration: 0.85 * 0.8 = 0.68 -> 0.7.
+    assert generation.effective_pace(
+        {"dialogue": False, "pace": 0.8}, settings) == pytest.approx(0.7)
+    # On-grid values pass through untouched.
+    assert generation.effective_pace(
+        {"dialogue": True}, settings) == pytest.approx(0.9)
+    assert generation.effective_pace(
+        {"dialogue": False}, settings) == pytest.approx(0.85)
+
+
+def test_step_pace_moves_in_grid_steps_and_stops_at_the_band():
+    """
+    The step form ([pace:+2] / [pace:-1]): N steps of 0.05 off the book
+    base, capped to the proven 0.8-1.2 band -- the user-designed pace
+    system. Narrator at 1.2 with +5 must NOT sail past the bar, and a
+    base at the floor cannot be stepped into S-L-O-W territory.
+    """
+    settings = {"narrator_pace": 0.85, "dialogue_pace": 0.9,
+                "scene_break_ms": 2000, "chapter_break_ms": 3000}
+    # Plain steps: dialogue 0.9 +1 -> 0.95, +2 -> 1.0 (the design example).
+    assert generation.effective_pace(
+        {"dialogue": True, "pace": "+1"}, settings) == pytest.approx(0.95)
+    assert generation.effective_pace(
+        {"dialogue": True, "pace": "+2"}, settings) == pytest.approx(1.0)
+    # Narration 0.85 -2 -> 0.8 exactly on the band floor.
+    assert generation.effective_pace(
+        {"dialogue": False, "pace": "-1"}, settings) == pytest.approx(0.8)
+
+    # High cap: base 1.2 with +5 stays 1.2; low cap: base 0.8 with -5
+    # stays 0.8.
+    fast_book = {**settings, "narrator_pace": 1.2}
+    assert generation.effective_pace(
+        {"pace": "+5"}, fast_book) == pytest.approx(1.2)
+    slow_book = {**settings, "narrator_pace": 0.8}
+    assert generation.effective_pace(
+        {"pace": "-5"}, slow_book) == pytest.approx(0.8)
+
+    # A base the writer deliberately set OUTSIDE the band is respected,
+    # but steps can only move back toward the band, never further out.
+    extreme = {**settings, "narrator_pace": 1.4}
+    assert generation.effective_pace(
+        {"pace": "+2"}, extreme) == pytest.approx(1.4)
+    assert generation.effective_pace(
+        {"pace": "-2"}, extreme) == pytest.approx(1.3)
 
 
 # ── Control: pause, cancel, single-run, lock ─────────────────────────────────

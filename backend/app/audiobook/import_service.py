@@ -101,3 +101,65 @@ def import_source(source_path: str, workspace_path: str,
         "chapters": derived["chapters"],
         "warnings": result.warnings + derived["warnings"],
     }
+
+
+# ── Adding chapters to an EXISTING audiobook ─────────────────────────────────
+# The writer keeps writing after the audiobook exists. Instead of a
+# destructive re-import (which would wipe every narration edit), the
+# source is re-extracted and chapters whose titles are not in the
+# narration copy yet can be appended one by one. Removal needs no
+# backend: deleting a chapter's heading+body in the narration editor and
+# saving supersedes its segments automatically.
+
+def available_chapters(workspace_path: str) -> dict:
+    """
+    Chapters in the ORIGINAL source that the narration copy does not have
+    (matched by exact title -- a renamed chapter shows as available; the
+    writer simply skips it). Raises ValueError when the source is gone.
+    """
+    origin = workspace.source_origin_path(workspace_path)
+    if not origin or not os.path.exists(origin):
+        raise ValueError(
+            "The original source for this audiobook could not be found "
+            "(it may have been moved or deleted)."
+        )
+    result = extract_source(origin)
+    from app.audiobook.markers import split_chapters
+    existing = {title for title, _body in
+                split_chapters(workspace.read_narration(workspace_path))}
+    fresh = [
+        {"title": c.title, "characters": len(c.text)}
+        for c in result.chapters if c.title not in existing
+    ]
+    return {"available": fresh, "source": origin, "warnings": result.warnings}
+
+
+def add_chapters(workspace_path: str, titles: list[str]) -> dict:
+    """
+    Append the named source chapters to the narration copy (in source
+    order) and re-derive structure/chapters/segments. Returns the same
+    shape as a narration save so the frontend refreshes in one motion.
+    """
+    origin = workspace.source_origin_path(workspace_path)
+    if not origin or not os.path.exists(origin):
+        raise ValueError("The original source for this audiobook could not be found.")
+    wanted = [t for t in titles if t.strip()]
+    if not wanted:
+        raise ValueError("Pick at least one chapter to add.")
+    result = extract_source(origin)
+    by_title = {c.title: c for c in result.chapters}
+    missing = [t for t in wanted if t not in by_title]
+    if missing:
+        raise ValueError(
+            "These chapters were not found in the source: " + ", ".join(missing[:3])
+        )
+
+    narration = workspace.read_narration(workspace_path).rstrip("\n")
+    parts = [narration] if narration else []
+    for title in wanted:                     # keep the writer's picked order
+        chapter = by_title[title]
+        parts.append(f"# {chapter.title}\n\n{chapter.text.strip()}")
+    updated = "\n\n".join(parts) + "\n"
+    derived = workspace.write_narration(workspace_path, updated)
+    return {"content": updated, "chapters": derived["chapters"],
+            "warnings": derived["warnings"]}

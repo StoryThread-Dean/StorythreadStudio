@@ -108,6 +108,36 @@ def test_invalid_pace_warns_and_uses_normal():
     assert any("not a valid pace" in w for w in parsed.warnings)
 
 
+def test_step_pace_markers_parse_to_signed_strings():
+    # The step form (what the toolbar inserts): the SIGN marks a step,
+    # a bare number stays the legacy multiplier. Steps normalize to a
+    # signed string so downstream code can tell the forms apart.
+    parsed = parse_narration(
+        "# C\n\n[pace:-2]Two steps slower.[/pace]\n\n"
+        "[pace:+3]Three steps faster.[/pace]\n\n"
+        "[pace:0.8]Legacy multiplier still works.[/pace]"
+    )
+    elements = parsed.chapters[0].elements
+    assert parsed.warnings == []
+    assert [(e["content"], e.get("pace")) for e in elements] == [
+        ("Two steps slower.", "-2"),
+        ("Three steps faster.", "+3"),
+        ("Legacy multiplier still works.", 0.8),
+    ]
+
+
+def test_zero_step_pace_is_treated_as_unmarked_text():
+    parsed = parse_narration("# C\n\n[pace:+0]No change asked for.[/pace]")
+    assert parsed.warnings == []
+    assert parsed.chapters[0].elements[0].get("pace") is None
+
+
+def test_invalid_step_pace_warns_and_uses_normal():
+    parsed = parse_narration("# C\n\n[pace:+fast]Not a number.[/pace]")
+    assert parsed.chapters[0].elements[0].get("pace") is None
+    assert any("not a valid pace" in w for w in parsed.warnings)
+
+
 def test_unclosed_pace_applies_to_rest_of_chapter_with_warning():
     parsed = parse_narration("# C\n\nNormal.\n\n[pace:0.7]Slow from here on.")
     elements = parsed.chapters[0].elements

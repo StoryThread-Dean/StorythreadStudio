@@ -110,26 +110,102 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
       {"kind": "pause", "duration_ms": ...}   assembly-time silence
       {"kind": "scene_break"} / {"kind": "chapter_break"}
     Excluded elements vanish here -- they are never narrated. Markers act
-    as hard segment boundaries (they are CUT POINTS, spec 10.3).
+    as hard segment boundaries (they are CUT POINTS, spec 10.3) -- with
+    ONE refinement: a MID-PARAGRAPH pause does not cut the speech into
+    separate segments. Isolated fragment synthesis manufactures utterance
+    endings (cold onset, stretched delivery, breathy release -- see
+    flow.py), so the fragments around mid-paragraph pauses stay together
+    as one FLOW segment:
+      {"kind": "segment_text", "text": <fragments joined>,
+       "fragments": [f1, f2, ...], "internal_pauses": [ms, ...]}
+    synthesized continuously, with the pauses inserted into the audio's
+    natural gaps at stitch time.
     """
     items: list[dict] = []
     pending_paragraphs: list[str] = []
     pending_len = 0
     pending_pace = 1.0
     pending_dialogue = False
+    # The open flow group: fragments accumulated across mid-paragraph
+    # pauses. Invariant: pauses trail fragments -- after fragment k is
+    # added its pause follows, so len(pauses) == len(fragments) until the
+    # next fragment arrives.
+    group_fragments: list[str] = []
+    group_pauses: list[int] = []
+    # Quote state carries ACROSS fragments: a [pause] inside a speech
+    # splits it into pieces where only the first carries the opening
+    # quote mark. Without this, continuation fragments fell back to
+    # narrator pace -- one speech changing speed mid-flow (live finding:
+    # captured speeds [0.85, 0.9, 0.85, 0.85] for a single quotation).
+    in_quote = False
+
+    def _update_quote_state(paragraph: str) -> None:
+        nonlocal in_quote
+        for ch in paragraph:
+            if ch == '"':
+                in_quote = not in_quote
+            elif ch == "“":
+                in_quote = True
+            elif ch == "”":
+                in_quote = False
+
+    def _take_pending() -> str | None:
+        """Drain pending paragraphs to one text, or None when there is
+        nothing speakable. Never synthesize a fragment with no words in
+        it: a pace span opening just inside a quote leaves a lone '"'
+        fragment, and the engine renders bare punctuation as a
+        breath-like false start (live finding: an audible hiccup)."""
+        nonlocal pending_paragraphs, pending_len
+        if not pending_paragraphs:
+            return None
+        text = "\n\n".join(pending_paragraphs)
+        pending_paragraphs = []
+        pending_len = 0
+        return text if re.search(r"[A-Za-z0-9]", text) else None
 
     def flush() -> None:
-        nonlocal pending_paragraphs, pending_len
-        if pending_paragraphs:
-            item = {"kind": "segment_text",
-                    "text": "\n\n".join(pending_paragraphs)}
+        """Close the open flow group (if any) and the pending text into
+        emitted items. Every hard boundary funnels through here."""
+        nonlocal group_fragments, group_pauses
+        text = _take_pending()
+        if group_fragments:
+            fragments = group_fragments
+            pauses = group_pauses
+            group_fragments = []
+            group_pauses = []
+            if text is not None:
+                fragments.append(text)
+            # Interleave shape: pauses[i] follows fragments[i]. With a
+            # final fragment there are n-1 internal pauses; without one
+            # (the group ended on a pause) the last pause trails the
+            # group and is emitted as a plain pause item.
+            trailing = pauses[len(fragments) - 1:] if fragments else pauses
+            internal = pauses[: max(0, len(fragments) - 1)]
+            if len(fragments) == 1:
+                item = {"kind": "segment_text", "text": fragments[0]}
+            elif fragments:
+                item = {"kind": "segment_text",
+                        "text": " ".join(fragments),
+                        "fragments": fragments,
+                        "internal_pauses": internal}
+            else:
+                item = None
+            if item is not None:
+                if pending_pace != 1.0:
+                    item["pace"] = pending_pace
+                if pending_dialogue:
+                    item["dialogue"] = True
+                items.append(item)
+            for ms in trailing:
+                items.append({"kind": "pause", "duration_ms": ms})
+            return
+        if text is not None:
+            item = {"kind": "segment_text", "text": text}
             if pending_pace != 1.0:
                 item["pace"] = pending_pace
             if pending_dialogue:
                 item["dialogue"] = True
             items.append(item)
-            pending_paragraphs = []
-            pending_len = 0
 
     for element in elements:
         etype = element.get("type")
@@ -142,11 +218,29 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
             # Paragraphs group until the cap; oversize paragraphs split.
             # A dialogue/narration change is ALSO a boundary, so the
             # book-level Dialogue Pace can act on dialogue segments alone.
-            for paragraph in element["content"].split("\n\n"):
+            for paragraph_index, paragraph in enumerate(element["content"].split("\n\n")):
                 paragraph = paragraph.strip()
                 if not paragraph:
                     continue
-                dialogue = is_dialogue_paragraph(paragraph)
+                # A real paragraph break ends any open flow group -- flow
+                # groups never span paragraphs. (Index 0 right after a
+                # mid-paragraph pause is the CONTINUATION of the split
+                # paragraph, so the group stays open for it.)
+                if paragraph_index > 0 and group_fragments:
+                    flush()
+                # Inside an unclosed quote, every fragment is dialogue
+                # regardless of its own quote marks -- EXCEPT when the
+                # fragment BEGINS with the closing quote (a pace span
+                # ending right at the quote leaves '" Lexa set the book
+                # aside...'), in which case the quote char belongs to the
+                # PREVIOUS speech and the rest is judged on its own.
+                stripped = paragraph.lstrip()
+                if in_quote and stripped[:1] in ('"', "”"):
+                    rest = stripped[1:].lstrip()
+                    dialogue = bool(rest) and is_dialogue_paragraph(rest)
+                else:
+                    dialogue = in_quote or is_dialogue_paragraph(paragraph)
+                _update_quote_state(paragraph)
                 if dialogue != pending_dialogue:
                     flush()
                     pending_dialogue = dialogue
@@ -162,8 +256,26 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
         elif etype == "excluded":
             continue
         elif etype == "pause":
-            flush()
-            items.append({"kind": "pause", "duration_ms": element["duration_ms"]})
+            if element.get("mid_paragraph"):
+                # The pause splits a sentence run, not two paragraphs:
+                # bank the text so far as a flow fragment and keep going.
+                text = _take_pending()
+                if text is not None:
+                    group_fragments.append(text)
+                if group_fragments:
+                    if len(group_pauses) >= len(group_fragments):
+                        # The fragment between two pauses had no words in
+                        # it (a lone quote mark) -- merge the silences.
+                        group_pauses[-1] += element["duration_ms"]
+                    else:
+                        group_pauses.append(element["duration_ms"])
+                else:
+                    # Nothing speakable before it -- a pause cannot anchor
+                    # a flow group; emit it plainly.
+                    items.append({"kind": "pause", "duration_ms": element["duration_ms"]})
+            else:
+                flush()
+                items.append({"kind": "pause", "duration_ms": element["duration_ms"]})
         elif etype in ("scene_break", "chapter_break"):
             flush()
             items.append({"kind": etype})
@@ -242,6 +354,13 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
                     segment["pace"] = raw["pace"]
                 if raw.get("dialogue"):
                     segment["dialogue"] = True
+                if raw.get("fragments"):
+                    # Flow segment (mid-paragraph pauses): the fragment
+                    # layout drives continuous synthesis + cut matching;
+                    # the pause durations stay OUT of the payload basis
+                    # so retiming a pause never regenerates speech.
+                    segment["fragments"] = raw["fragments"]
+                    segment["internal_pauses"] = raw.get("internal_pauses", [])
                 items.append(segment)
                 new_segment_slots.append(segment)
             else:
@@ -265,7 +384,7 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
             # identity; the payload basis catches the pace change and
             # re-queues the audio (never a new segment ID).
             preserved = {**old, "chapter_id": slot["chapter_id"]}
-            for attr in ("pace", "dialogue"):
+            for attr in ("pace", "dialogue", "fragments", "internal_pauses"):
                 if slot.get(attr):
                     preserved[attr] = slot[attr]
                 else:

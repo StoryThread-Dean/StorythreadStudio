@@ -90,12 +90,65 @@ def test_dialogue_paragraphs_segment_separately():
     ]
 
 
+def test_dialogue_persists_across_pause_splits_inside_a_quote():
+    # THE live finding (captured speeds 0.85/0.9/0.85/0.85 for ONE
+    # speech): a [pause] inside a quotation splits it into fragments
+    # where only the first carries the quote mark. All fragments of an
+    # open quote are dialogue; the fragment AFTER the closing quote
+    # is narration again.
+    text = ('# C1\n\nLara watched her for a moment.\n\n'
+            '"I don\'t know what the ritual was called.\n\n[pause:0.4]\n\n'
+            'I don\'t even know if it had a name.\n\n[pause:0.4]\n\n'
+            'I just know what they did."\n\n[pause:0.8]\n\n'
+            'The silence stretched between them.')
+    segments = _segments(_first_manifest(text))
+    flags = [(s["text"][:20], s.get("dialogue", False)) for s in segments]
+    assert flags == [
+        ("Lara watched her for", False),
+        ('"I don\'t know what t', True),
+        ("I don't even know if", True),      # continuation: STILL dialogue
+        ("I just know what the", True),      # closes the quote
+        ("The silence stretche", False),     # narration resumes
+    ]
+
+
+def test_narration_after_a_leading_closing_quote_is_not_dialogue():
+    # From a real trace: '...That's a start.[/pace]" Lexa set the book
+    # aside.' -- the closing quote rides the FRONT of the narration
+    # fragment. That fragment is narration, not dialogue.
+    text = ('# C1\n\n"[pace:1.2]So this ritual was performed. '
+            '[pause:0.8] That\'s a start.[/pace]" Lexa set the book aside '
+            'and reached for another.')
+    segments = _segments(_first_manifest(text))
+    lexa = next(s for s in segments if "Lexa set the book" in s["text"])
+    assert not lexa.get("dialogue", False)
+    # The paced speech itself is still dialogue.
+    ritual = next(s for s in segments if "So this ritual" in s["text"])
+    assert ritual.get("dialogue") is True
+
+
 def test_quote_dominant_paragraph_counts_as_dialogue():
     from app.audiobook.segmenter import is_dialogue_paragraph
     assert is_dialogue_paragraph('"Run," she said.')
     assert is_dialogue_paragraph("“Curly quotes too,” he agreed, nodding along without another word.")
     assert not is_dialogue_paragraph('He remembered her saying "run" once.')
     assert not is_dialogue_paragraph("No quotes at all in this paragraph.")
+
+
+def test_punctuation_only_fragments_are_never_synthesized():
+    # THE live hiccup: a quote mark left OUTSIDE a pace span became its
+    # own fragment, and the engine rendered the bare punctuation as a
+    # breath-like false start. Word-less fragments never become segments.
+    text = ('# C1\n\nLara watched her for a moment.\n\n'
+            '"[pace:1.2]So this ritual was performed, you saw it.[/pace]" '
+            'Lexa set the book aside.')
+    segments = _segments(_first_manifest(text))
+    texts = [s["text"] for s in segments]
+    assert '"' not in texts                       # the lone quote is gone
+    assert all(any(ch.isalnum() for ch in t) for t in texts)
+    # The real speech all survives.
+    assert any("So this ritual" in t for t in texts)
+    assert any("Lexa set the book" in t for t in texts)
 
 
 def test_pace_changes_are_segment_boundaries():

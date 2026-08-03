@@ -61,7 +61,43 @@ class DemoBackend(SynthesisBackend):
 
 def test_concat_inserts_exact_silence():
     out = concat_wav([_tone_wav(1.0), 1500, _tone_wav(1.0)])
-    assert _duration(out) == pytest.approx(3.5, abs=0.01)
+    assert _duration(out) == pytest.approx(3.5, abs=0.03)
+
+
+def _padded_tone_wav(speech_s: float, pad_s: float, rate: int = 24000) -> bytes:
+    """A tone clip with true-silence padding on both edges -- the shape of
+    real engine output whose padding used to stack onto inserted pauses."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        pad = b"\x00\x00" * int(rate * pad_s)
+        w.writeframes(pad + (b"\x11\x22" * int(rate * speech_s)) + pad)
+    return buffer.getvalue()
+
+
+def test_engine_edge_padding_is_trimmed_so_pauses_stay_exact():
+    # 1s speech padded 0.15s each side, twice, with a 0.5s pause between:
+    # trimming keeps the writer's pause the ONLY gap (2s speech + 0.5s).
+    clip = _padded_tone_wav(1.0, 0.15)
+    out = concat_wav([clip, 500, clip])
+    assert _duration(out) == pytest.approx(2.5, abs=0.03)
+
+
+def test_boundary_fades_ramp_the_seams():
+    # The first samples of a conditioned clip ramp from zero -- the
+    # discontinuity that read as a consonant slur at pause seams is gone.
+    out = concat_wav([_tone_wav(1.0)])
+    with wave.open(io.BytesIO(out), "rb") as w:
+        frames = w.readframes(w.getnframes())
+    import array as array_module
+    samples = array_module.array("h")
+    samples.frombytes(frames)
+    assert abs(samples[0]) < 100                 # starts at ~zero
+    assert abs(samples[-1]) < 100                # ends at ~zero
+    peak = max(abs(s) for s in samples)
+    assert peak > 4000                           # the speech itself is intact
 
 
 def test_concat_refuses_mismatched_rates():
@@ -121,7 +157,7 @@ def test_say_demo_covers_both_use_cases():
     assert "[say:" not in spoken                   # markup never narrated
 
 
-def test_pace_demo_sends_three_speeds_and_speaks_each_value():
+def test_pace_demo_speaks_each_step_while_the_listener_hears_it():
     speeds: list[float] = []
 
     class SpeedDemoBackend(DemoBackend):
@@ -131,13 +167,15 @@ def test_pace_demo_sends_three_speeds_and_speaks_each_value():
 
     backend = SpeedDemoBackend()
     build_demo("pace", backend)
-    assert speeds == [1.0, 0.8, 1.2]
-    # Each pace value is NARRATED while the listener experiences it, and
+    # Demos render at the default base (1.0), so the step markers land on
+    # 1.0 - 2*0.05 = 0.9 and 1.0 + 2*0.05 = 1.1.
+    assert speeds == [1.0, pytest.approx(0.9), pytest.approx(1.1), 1.0]
+    # Each step value is NARRATED while the listener experiences it, and
     # the spoken value matches the speed actually in effect for that piece.
     by_text = dict(zip(backend.texts, speeds))
-    assert by_text[next(t for t in backend.texts if "one point zero" in t)] == 1.0
-    assert by_text[next(t for t in backend.texts if "zero point eight" in t)] == 0.8
-    assert by_text[next(t for t in backend.texts if "one point two" in t)] == 1.2
+    assert by_text[next(t for t in backend.texts if "base pace" in t)] == 1.0
+    assert by_text[next(t for t in backend.texts if "pace minus two" in t)] == pytest.approx(0.9)
+    assert by_text[next(t for t in backend.texts if "pace plus two" in t)] == pytest.approx(1.1)
 
 
 def test_every_script_renders():
@@ -202,7 +240,8 @@ def test_post_span_text_returns_to_the_book_base_not_to_one():
         '"Unmarked dialogue right after," she said, "at the dialogue base."',
         SpeedSpy(), DEMO_VOICE, rules=[], settings=settings)
     assert warnings == []
-    assert speeds == [0.85, pytest.approx(0.68), 0.85, 0.95]
+    # 0.85 * 0.8 = 0.68 raw, snapped to the engine's 0.05 grid -> 0.7.
+    assert speeds == [0.85, pytest.approx(0.7), 0.85, 0.95]
     # The trace reports the same truth the audio used.
     assert [t["speed"] for t in trace] == speeds
     assert [t["dialogue"] for t in trace] == [False, False, False, True]

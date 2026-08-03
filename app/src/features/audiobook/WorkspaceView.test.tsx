@@ -38,8 +38,25 @@ const SAVE_RESPONSE = {
   warnings: ["Chapter 'Chapter 3': an [exclude] has no closing [/exclude]; everything after it is excluded from narration."],
 };
 
+const ADDED_NARRATION = NARRATION + "\n# Chapter 3\n\nBrand new prose.\n";
+
 function mockFetch() {
   return vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.includes("/chapters/available")) {
+      return { ok: true, json: async () => ({
+        available: [{ title: "Chapter 3", characters: 1200 }],
+        source: "C:\\books\\b.txt", warnings: [],
+      }) };
+    }
+    if (url.includes("/chapters/add")) {
+      return { ok: true, json: async () => ({
+        content: ADDED_NARRATION,
+        chapters: SAVE_RESPONSE.chapters, warnings: [],
+      }) };
+    }
+    if (url.includes("/metadata")) {
+      return { ok: true, json: async () => ({ cover_file: null }) };
+    }
     if (url.includes("/narration") && init?.method === "PUT") {
       return { ok: true, json: async () => SAVE_RESPONSE };
     }
@@ -62,6 +79,18 @@ function mockFetch() {
       return { ok: true, json: async () => ({
         narrator_pace: 1.0, dialogue_pace: 1.0,
         scene_break_ms: 2000, chapter_break_ms: 3000,
+      }) };
+    }
+    if (url.includes("/ffmpeg/status")) {
+      return { ok: true, json: async () => ({
+        installed: true, version: "n8.1.2", download_size_mb: 138.6,
+        install: { state: "idle", progress: 0, error: null },
+      }) };
+    }
+    if (url.includes("/assemble/status")) {
+      return { ok: true, json: async () => ({
+        state: "idle", message: null, progress: 0, error: null,
+        outputs: [], workspace_path: null,
       }) };
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -149,17 +178,20 @@ describe("WorkspaceView", () => {
     expect(textarea.value).toContain("[exclude]Second prose.[/exclude]");
   });
 
-  it("Slow and Fast wrap the selection in pace spans", async () => {
+  it("Slow and Fast wrap the selection in step-form pace spans", async () => {
+    // Step form: +-2 steps of 0.05 off the book base, so every span lands
+    // on an engine-clean speed (the old multiplier form produced off-grid
+    // speeds like 1.08x, which audibly slurred).
     const textarea = await renderLoaded();
     const start = NARRATION.indexOf("First prose.");
     textarea.setSelectionRange(start, start + "First prose.".length);
     fireEvent.click(screen.getByText("Slow"));
-    expect(textarea.value).toContain("[pace:0.8]First prose.[/pace]");
+    expect(textarea.value).toContain("[pace:-2]First prose.[/pace]");
 
     const start2 = textarea.value.indexOf("Second prose.");
     textarea.setSelectionRange(start2, start2 + "Second prose.".length);
     fireEvent.click(screen.getByText("Fast"));
-    expect(textarea.value).toContain("[pace:1.2]Second prose.[/pace]");
+    expect(textarea.value).toContain("[pace:+2]Second prose.[/pace]");
   });
 
   it("Remove strips markers from the selection, keeping the words", async () => {
@@ -208,6 +240,50 @@ describe("WorkspaceView", () => {
     const body = JSON.parse(String((putCall?.[1] as RequestInit).body));
     expect(body.workspace_path).toBe(PAYLOAD.manifest.workspace_path);
     expect(body.content).toContain("# Chapter 3");
+  });
+
+  it("a chapter can be removed from the narration buffer (manual save owns it)", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const textarea = await renderLoaded();
+
+    fireEvent.click(screen.getByLabelText("Remove chapter Chapter 1"));
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    // Heading + body gone from the BUFFER; nothing saved yet.
+    expect(textarea.value).not.toContain("# Chapter 1");
+    expect(textarea.value).not.toContain("First prose.");
+    expect(textarea.value).toContain("# Chapter 2");
+    expect(screen.getByTitle("Unsaved changes")).toBeTruthy();
+  });
+
+  it("declining the remove confirm leaves the narration untouched", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const textarea = await renderLoaded();
+    fireEvent.click(screen.getByLabelText("Remove chapter Chapter 1"));
+    expect(textarea.value).toBe(NARRATION);
+  });
+
+  it("Add chapters pulls new source chapters in and refreshes everything", async () => {
+    const textarea = await renderLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: /Add chapters/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: /Chapter 3/ })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Chapter 3/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add 1 selected/ }));
+
+    // The backend saved and returned the grown narration -- editor and
+    // chapter rail refresh together, no dirty state.
+    await waitFor(() => expect(textarea.value).toBe(ADDED_NARRATION));
+    expect(screen.getByText("3. Chapter 3")).toBeTruthy();
+    expect(screen.queryByTitle("Unsaved changes")).toBeNull();
+  });
+
+  it("Add chapters is disabled while the narration has unsaved edits", async () => {
+    const textarea = await renderLoaded();
+    fireEvent.change(textarea, { target: { value: NARRATION + "edited" } });
+    const button = screen.getByRole("button", { name: /Add chapters/ }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
   });
 
   it("clicking a chapter moves the caret to its heading", async () => {

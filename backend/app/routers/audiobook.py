@@ -16,12 +16,14 @@
 #   PUT  /api/audiobook/pronunciations     replace workspace/global rules
 
 import json
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.audiobook import (
+    assembly,
     generation,
     import_service,
     local_worker,
@@ -269,6 +271,165 @@ def save_narration_settings(request: NarrationSettingsRequest):
     return workspace.narration_settings(manifest)
 
 
+class VoiceRequest(BaseModel):
+    workspace_path: str
+    voice_id: str
+
+
+@router.put("/voice")
+def save_voice(request: VoiceRequest):
+    """Remember the narrator voice PER BOOK: the dropdown restores it next
+    session (different books legitimately use different voices)."""
+    _require_workspace(request.workspace_path)
+    manifest = workspace.load_manifest(request.workspace_path)
+    manifest["selected_voice"] = request.voice_id
+    workspace.save_manifest(request.workspace_path, manifest)
+    return {"selected_voice": request.voice_id}
+
+
+@router.get("/chapters/available")
+def chapters_available(workspace_path: str):
+    """Chapters in the original source that the narration copy does not
+    have yet -- the writer kept writing after the audiobook was made."""
+    _require_workspace(workspace_path)
+    try:
+        return import_service.available_chapters(workspace_path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class AddChaptersRequest(BaseModel):
+    workspace_path: str
+    titles: list[str]
+
+
+@router.post("/chapters/add")
+def chapters_add(request: AddChaptersRequest):
+    """Append the picked source chapters to the narration copy and
+    re-derive structure -- a re-import that cannot destroy edits."""
+    _require_workspace(request.workspace_path)
+    try:
+        return import_service.add_chapters(request.workspace_path, request.titles)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class MetadataRequest(BaseModel):
+    workspace_path: str
+    title: str = ""
+    subtitle: str = ""
+    author: str = ""
+    narrator: str = ""
+    series: str = ""
+    series_number: str = ""
+    description: str = ""
+    genre: str = ""
+    publication_year: str = ""
+    publisher: str = ""
+    copyright: str = ""
+    language: str = ""
+    use_chapter_names: bool = True
+    embed_cover: bool = True
+    apply_to_chapter_mp3s: bool = True
+
+
+@router.get("/metadata")
+def get_metadata(workspace_path: str):
+    _require_workspace(workspace_path)
+    manifest = workspace.load_manifest(workspace_path)
+    return workspace.book_metadata(manifest, workspace_path)
+
+
+@router.put("/metadata")
+def save_metadata(request: MetadataRequest):
+    """Book metadata for the exported files (spec 17): ID3 tags, the M4B
+    metadata atom, and the embed options. The stored cover file is
+    managed by the /metadata/cover endpoints and survives this PUT."""
+    _require_workspace(request.workspace_path)
+    manifest = workspace.load_manifest(request.workspace_path)
+    stored = manifest.get("metadata")
+    stored = stored if isinstance(stored, dict) else {}
+    updated = {field: getattr(request, field).strip()
+               for field in workspace.METADATA_TEXT_FIELDS}
+    for key in workspace.METADATA_OPTION_DEFAULTS:
+        updated[key] = getattr(request, key)
+    if stored.get("cover_file"):
+        updated["cover_file"] = stored["cover_file"]
+    manifest["metadata"] = updated
+    workspace.save_manifest(request.workspace_path, manifest)
+    return workspace.book_metadata(manifest, request.workspace_path)
+
+
+class CoverRequest(BaseModel):
+    workspace_path: str
+    source_path: str      # file the writer picked in the OS dialog
+
+
+@router.post("/metadata/cover")
+def set_cover(request: CoverRequest):
+    """Copy a cover image into the workspace (validated: JPG/PNG, size
+    cap, readable dimensions). Returns the stored file + dimensions so
+    the UI can show the square-format hint."""
+    _require_workspace(request.workspace_path)
+    try:
+        with open(request.source_path, "rb") as f:
+            data = f.read()
+    except OSError:
+        raise HTTPException(status_code=400, detail="That image file could not be read.")
+    try:
+        ext, width, height = workspace.validate_cover_bytes(data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    manifest = workspace.load_manifest(request.workspace_path)
+    stored = manifest.get("metadata")
+    stored = stored if isinstance(stored, dict) else {}
+    # One cover per book: replacing a jpg with a png removes the old file.
+    for name in workspace.COVER_FILENAMES.values():
+        old = os.path.join(request.workspace_path, name)
+        if os.path.isfile(old):
+            os.remove(old)
+    filename = workspace.COVER_FILENAMES[ext]
+    with open(os.path.join(request.workspace_path, filename), "wb") as f:
+        f.write(data)
+    stored["cover_file"] = filename
+    manifest["metadata"] = stored
+    workspace.save_manifest(request.workspace_path, manifest)
+    return {"cover_file": filename, "width": width, "height": height,
+            "square": width == height}
+
+
+@router.delete("/metadata/cover")
+def remove_cover(workspace_path: str):
+    _require_workspace(workspace_path)
+    manifest = workspace.load_manifest(workspace_path)
+    stored = manifest.get("metadata")
+    stored = stored if isinstance(stored, dict) else {}
+    for name in workspace.COVER_FILENAMES.values():
+        path = os.path.join(workspace_path, name)
+        if os.path.isfile(path):
+            os.remove(path)
+    stored.pop("cover_file", None)
+    manifest["metadata"] = stored
+    workspace.save_manifest(workspace_path, manifest)
+    return {"cover_file": None}
+
+
+@router.get("/metadata/cover-image")
+def cover_image(workspace_path: str):
+    """The stored cover's bytes, for the preview thumbnail."""
+    _require_workspace(workspace_path)
+    meta = workspace.book_metadata(workspace.load_manifest(workspace_path))
+    if not meta.get("cover_file"):
+        raise HTTPException(status_code=404, detail="No cover image is set.")
+    path = os.path.join(workspace_path, meta["cover_file"])
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="The cover file is missing on disk.")
+    media = "image/png" if meta["cover_file"].endswith(".png") else "image/jpeg"
+    with open(path, "rb") as f:
+        return Response(content=f.read(), media_type=media)
+
+
 class PreviewSelectionRequest(BaseModel):
     workspace_path: str
     text: str
@@ -435,6 +596,56 @@ def resume_generation(request: GenerationControlRequest):
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Export (assembly) ─────────────────────────────────────────────────────────
+
+@router.get("/ffmpeg/status")
+def get_ffmpeg_status():
+    """Audio assembler (FFmpeg) install state for the export panel."""
+    return assembly.ffmpeg_status()
+
+
+class InstallFfmpegRequest(BaseModel):
+    source_zip: str | None = None    # local override for tests/pre-publish
+
+
+@router.post("/ffmpeg/install")
+def install_ffmpeg(request: InstallFfmpegRequest):
+    """Download the pinned LGPL FFmpeg build, verify, install ffmpeg +
+    ffprobe only. Poll /ffmpeg/status for progress."""
+    try:
+        assembly.start_ffmpeg_install(request.source_zip)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"ok": True}
+
+
+class StartExportRequest(BaseModel):
+    workspace_path: str
+    formats: list[str]
+
+
+@router.post("/assemble")
+def start_assemble(request: StartExportRequest):
+    """Export the generated audiobook to the chosen formats. Runs in the
+    background; poll /assemble/status. Fails fast (before the thread) on
+    missing ffmpeg, empty formats, or a disk-space shortfall."""
+    _require_workspace(request.workspace_path)
+    try:
+        assembly.start_export(request.workspace_path, request.formats)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except assembly.FfmpegUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except assembly.AssemblyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@router.get("/assemble/status")
+def assemble_status():
+    return assembly.export_status()
 
 
 # ── Pronunciation rules ───────────────────────────────────────────────────────

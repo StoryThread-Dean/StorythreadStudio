@@ -369,6 +369,56 @@ themselves in the pace demo.
 
 ---
 
+## 12. Audiobook Converter -- export, metadata, and audio quality (Stage C)
+
+**Touches:** the ffmpeg component install, chapter mastering + the three
+export formats, Book Details metadata + cover embedding, flow synthesis
+(the pre-pause slur fix), step-form pace markers, per-book voice memory,
+and chapter add/remove on an existing audiobook.
+
+Steps:
+1. Fresh assembler: with no `~/.storythread/ffmpeg`, the Export block
+   offers **Install Audio Assembler (~139 MB)**. Install; the format
+   checkboxes appear by themselves when it lands.
+2. **Book Details** (above Export): for a project-sourced audiobook,
+   Genre / Description / Series arrive pre-filled from the writing
+   project; edits save manually (amber "unsaved" tag) and survive
+   reopen. The **Use current voice** link fills Narrator with the
+   picked voice's name. Pick a cover image -- a non-square one shows
+   the square-format hint but still sticks; the thumbnail previews it.
+3. **Export** with all three formats. In the output folder:
+   `chapters/NN - Title.mp3` per chapter, one combined MP3, one `.m4b`.
+   Check file properties / an audiobook player: tags carry your Book
+   Details, the cover shows as album art, and the M4B has named chapter
+   markers (or "Chapter N" if you unchecked chapter names).
+4. **Listen at a pause-heavy passage** (pauses mid-paragraph): no slur,
+   lisp, or garble on the words directly before pauses -- the speech
+   should sound like one continuous read with silences opened up inside
+   it. Retime one [pause] longer, save, export again WITHOUT
+   regenerating: the new length is audible (pause timing never costs a
+   regeneration).
+5. **Pace steps**: wrap a passage with Slow (inserts `[pace:-2]`) and
+   preview -- the trace under the player shows the base pace stepped
+   down by exactly 0.10, and no stack of hand-edited steps can push a
+   preview past 0.8-1.2.
+6. **Voice memory**: switch the narrator voice, close the app entirely,
+   reopen the workspace -- the voice is still yours. A brand-new
+   audiobook defaults to Michael (American male).
+7. **Chapters on an existing audiobook**: add a chapter to the ORIGINAL
+   source file/project, then **+ Add chapters** -- it lists exactly the
+   new one; adding it appends without touching your narration edits.
+   Hover-**x** a chapter in the rail: it leaves the buffer (unsaved dot
+   on), and leaving without saving restores it.
+8. Generation staleness honesty: after changing a pace span or moving a
+   pause to a different sentence, Generate re-queues ONLY the affected
+   segments; a pause DURATION change alone re-queues nothing.
+
+Expected: exports never run with half-generated chapters (clear error
+naming them); the original book is untouched by chapter add/remove; no
+em dashes anywhere in tags or filenames.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

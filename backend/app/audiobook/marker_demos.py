@@ -71,19 +71,28 @@ DEMO_SCRIPTS: dict[str, str] = {
         "want it to sound."
     ),
     # The narration SPEAKS each pace value while the listener experiences
-    # it (user-shaped: hearing "zero point eight" AT 0.8x ties the number
-    # to the sensation, so writers know exactly what to type). Numbers are
-    # written as words -- the engine can't misread "zero point eight".
+    # it (user-shaped: hearing the value AT that speed ties the marker to
+    # the sensation, so writers know exactly what to type). Step form
+    # (2026-07-30 redesign): markers move in steps of 0.05 off the book's
+    # base pace, capped to the proven 0.8-1.2 band -- every step lands on
+    # a speed the engine renders cleanly, and no stack of steps can reach
+    # S-L-O-W or chipmunk territory.
     "pace": (
-        "This sentence moves at the narrator's natural pace: one point zero."
+        "This sentence moves at your book's base pace, straight from the "
+        "narration settings."
         "\n\n[pause:0.5]\n\n"
-        "[pace:0.8]You are now hearing pace zero point eight. When a moment "
-        "needs weight, slow the narration down, and let the scene breathe "
-        "around the listener.[/pace]"
+        "[pace:-2]You are now hearing pace minus two: two small steps "
+        "slower than the base. When a moment needs weight, slow the "
+        "narration down, and let the scene breathe around the "
+        "listener.[/pace]"
         "\n\n[pause:0.5]\n\n"
-        "[pace:1.2]And this is pace one point two. When the fight breaks "
-        "out, the pace quickens, blow after blow, carrying the listener "
-        "through the action.[/pace]"
+        "[pace:+2]And this is pace plus two, stepped up from the base. "
+        "When the fight breaks out, the pace quickens, blow after blow, "
+        "carrying the listener through the action.[/pace]"
+        "\n\n[pause:0.5]\n\n"
+        "Steps always move from your chosen base, and they stop at the "
+        "tested limits, so the narration never crawls and never turns "
+        "into a chipmunk."
     ),
     "exclude": (
         "This sentence is narrated normally."
@@ -122,7 +131,7 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
 
     Raises ValueError when the text contains nothing narratable.
     """
-    from app.audiobook import segmenter
+    from app.audiobook import flow, segmenter
     from app.audiobook.generation import effective_pace
 
     settings = settings or dict(NARRATION_DEFAULTS)
@@ -134,8 +143,27 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
         for item in segmenter._segment_texts_from_elements(chapter.elements):
             kind = item["kind"]
             if kind == "segment_text":
-                payload = prepare_tts_text(item["text"], rules)
                 speed = effective_pace(item, settings)
+                fragments = item.get("fragments")
+                if fragments and len(fragments) >= 2:
+                    # Flow segment: mid-paragraph pauses. Synthesize the
+                    # run continuously and insert the pauses into the
+                    # matched gaps -- the preview IS the generation path.
+                    payloads = [prepare_tts_text(f, rules) for f in fragments]
+                    audio, cuts, flowed = flow.synthesize_flow(
+                        backend, voice_id, speed, payloads)
+                    pieces.extend(flow.split_flow_pieces(
+                        audio, cuts, item.get("internal_pauses", [])))
+                    for payload in payloads:
+                        trace.append({
+                            "speed": speed,
+                            "dialogue": bool(item.get("dialogue")),
+                            "marker_pace": item.get("pace"),
+                            "snippet": payload[:32],
+                            "flow": flowed,
+                        })
+                    continue
+                payload = prepare_tts_text(item["text"], rules)
                 audio, _duration = backend.synthesize(payload, voice_id, speed)
                 pieces.append(audio)
                 trace.append({

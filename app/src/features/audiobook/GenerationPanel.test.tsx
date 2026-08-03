@@ -1,4 +1,4 @@
-// GenerationPanel.test.tsx
+﻿// GenerationPanel.test.tsx
 // =========================
 // The narration rail's contract: voices load (spawning the engine behind
 // the scenes), Generate posts the right body and shows live progress,
@@ -14,6 +14,7 @@ import type { GenerationRun } from "./types";
 const VOICES = [
   { id: "af_heart", label: "Heart (American female)", language: "en-US", gender_presentation: "female" },
   { id: "am_adam", label: "Adam (American male)", language: "en-US", gender_presentation: "male" },
+  { id: "am_michael", label: "Michael (American male)", language: "en-US", gender_presentation: "male" },
 ];
 
 const WS = "C:\\Audiobooks\\Book";
@@ -34,9 +35,36 @@ const DEFAULT_SETTINGS = {
   scene_break_ms: 2000, chapter_break_ms: 3000,
 };
 
+const FFMPEG_OK = {
+  installed: true, version: "n8.1.2", download_size_mb: 138.6,
+  install: { state: "idle", progress: 0, error: null },
+};
+
+const EXPORT_IDLE = {
+  state: "idle", message: null, progress: 0, error: null,
+  outputs: [], workspace_path: null,
+};
+
+const METADATA_DEFAULTS = {
+  title: "The Hollow Road", subtitle: "", author: "Dean", narrator: "",
+  series: "", series_number: "", description: "", genre: "",
+  publication_year: "", publisher: "", copyright: "", language: "en-US",
+  use_chapter_names: true, embed_cover: true, apply_to_chapter_mp3s: true,
+  cover_file: null,
+};
+
+/** Handle the ExportPanel + BookDetailsPanel mount fetches in any custom mock. */
+function exportPanelRoutes(url: string) {
+  if (url.includes("/ffmpeg/status")) return { ok: true, json: async () => FFMPEG_OK };
+  if (url.includes("/assemble/status")) return { ok: true, json: async () => EXPORT_IDLE };
+  if (url.includes("/metadata")) return { ok: true, json: async () => METADATA_DEFAULTS };
+  return null;
+}
+
 function mockFetch(statusBody: { run: GenerationRun | null; active: boolean }) {
   return vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+    if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) }; const ep = exportPanelRoutes(url); if (ep) return ep;
+    if (url.endsWith("/voice")) return { ok: true, json: async () => ({ selected_voice: "" }) };
     if (url.includes("/generation/status")) return { ok: true, json: async () => statusBody };
     if (url.includes("/narration-settings")) return { ok: true, json: async () => DEFAULT_SETTINGS };
     if (url.includes("/generate")) return { ok: true, json: async () => makeRun() };
@@ -51,13 +79,40 @@ afterEach(() => {
 });
 
 describe("GenerationPanel", () => {
-  it("loads voices and defaults to the first one", async () => {
+  it("loads voices and defaults to Michael when no voice is remembered", async () => {
     vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
     render(<GenerationPanel workspacePath={WS} />);
     await waitFor(() => expect(screen.getByText("Heart (American female)")).toBeTruthy());
     const select = screen.getByLabelText(/Narrator voice/) as HTMLSelectElement;
-    expect(select.value).toBe("af_heart");
+    expect(select.value).toBe("am_michael");
     expect(screen.getByText("Generate Audiobook")).toBeTruthy();
+  });
+
+  it("restores the book's remembered voice over the default", async () => {
+    vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
+    render(<GenerationPanel workspacePath={WS} initialVoiceId="af_heart" />);
+    await waitFor(() => {
+      const select = screen.getByLabelText(/Narrator voice/) as HTMLSelectElement;
+      expect(select.value).toBe("af_heart");
+    });
+  });
+
+  it("changing the voice persists it for this book", async () => {
+    const fetchMock = mockFetch({ run: null, active: false });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<GenerationPanel workspacePath={WS} />);
+    await waitFor(() => expect(screen.getByText("Heart (American female)")).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText(/Narrator voice/), {
+      target: { value: "am_adam" } });
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(([url, init]) =>
+        String(url).endsWith("/api/audiobook/voice") &&
+        init && (init as RequestInit).method === "PUT");
+      expect(put).toBeTruthy();
+      const body = JSON.parse(String((put![1] as RequestInit).body));
+      expect(body).toEqual({ workspace_path: WS, voice_id: "am_adam" });
+    });
   });
 
   it("Generate posts workspace + voice and shows live progress", async () => {
@@ -65,7 +120,7 @@ describe("GenerationPanel", () => {
     // matching the real endpoint's behavior across the mount poll.
     let started = false;
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) }; const ep = exportPanelRoutes(url); if (ep) return ep;
       if (url.includes("/generation/status")) {
         return { ok: true, json: async () => (
           started ? { run: makeRun(), active: true } : { run: null, active: false }
@@ -89,7 +144,8 @@ describe("GenerationPanel", () => {
 
     const generateCall = fetchMock.mock.calls.find(([u]) => String(u).includes("/generate"));
     expect(JSON.parse(String(generateCall?.[1]?.body))).toEqual({
-      workspace_path: WS, provider: "local-kokoro", voice_id: "af_heart", force: false,
+      // am_michael: the default narrator when no voice is remembered.
+      workspace_path: WS, provider: "local-kokoro", voice_id: "am_michael", force: false,
     });
     // Active run shows the between-segments controls.
     expect(screen.getByText("Pause")).toBeTruthy();
@@ -118,7 +174,7 @@ describe("GenerationPanel", () => {
   it("offers Regenerate Everything when the backend says up to date", async () => {
     const calls: { force?: boolean }[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) };
+      if (url.includes("/voices")) return { ok: true, json: async () => ({ voices: VOICES }) }; const ep = exportPanelRoutes(url); if (ep) return ep;
       if (url.includes("/generation/status")) {
         return { ok: true, json: async () => ({ run: null, active: false }) };
       }
@@ -169,3 +225,4 @@ describe("GenerationPanel", () => {
       expect(screen.getByText(/not installed/)).toBeTruthy());
   });
 });
+

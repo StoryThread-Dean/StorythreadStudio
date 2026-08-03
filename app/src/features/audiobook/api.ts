@@ -208,6 +208,48 @@ export async function installEngine(): Promise<void> {
   }));
 }
 
+// ── Export (assembly) ────────────────────────────────────────────────────────
+
+export interface FfmpegStatus {
+  installed: boolean;
+  version: string;
+  download_size_mb: number;
+  install: { state: string; progress: number; error: string | null };
+}
+
+export interface ExportStatus {
+  state: "idle" | "starting" | "running" | "done" | "error";
+  message: string | null;
+  progress: number;
+  error: string | null;
+  outputs: string[];
+  workspace_path: string | null;
+}
+
+export async function fetchFfmpegStatus(): Promise<FfmpegStatus> {
+  return toJson(await fetch(`${API_BASE}/api/audiobook/ffmpeg/status`));
+}
+
+export async function installFfmpeg(): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/ffmpeg/install`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  }));
+}
+
+export async function startExport(workspacePath: string, formats: string[]): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/assemble`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, formats }),
+  }));
+}
+
+export async function fetchExportStatus(): Promise<ExportStatus> {
+  return toJson(await fetch(`${API_BASE}/api/audiobook/assemble/status`));
+}
+
 export interface NarrationSettings {
   narrator_pace: number;
   dialogue_pace: number;
@@ -232,6 +274,122 @@ export async function saveNarrationSettings(
     body: JSON.stringify({ workspace_path: workspacePath, ...settings }),
   });
   return toJson<NarrationSettings>(res);
+}
+
+/** Remember the narrator voice PER BOOK -- restored next session. */
+export async function saveVoice(workspacePath: string, voiceId: string): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/voice`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, voice_id: voiceId }),
+  }));
+}
+
+// ── Adding chapters to an existing audiobook ─────────────────────────────────
+
+export interface AvailableChapter {
+  title: string;
+  characters: number;
+}
+
+export async function fetchAvailableChapters(workspacePath: string): Promise<{
+  available: AvailableChapter[];
+  source: string;
+  warnings: string[];
+}> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/chapters/available?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson(res);
+}
+
+export async function addChapters(
+  workspacePath: string,
+  titles: string[],
+): Promise<{
+  content: string;
+  chapters: AudiobookProjectPayload["chapters"];
+  warnings: string[];
+}> {
+  const res = await fetch(`${API_BASE}/api/audiobook/chapters/add`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, titles }),
+  });
+  return toJson(res);
+}
+
+// ── Book metadata + cover (spec 17) ──────────────────────────────────────────
+
+export interface BookMetadata {
+  title: string;
+  subtitle: string;
+  author: string;
+  narrator: string;
+  series: string;
+  series_number: string;
+  description: string;
+  genre: string;
+  publication_year: string;
+  publisher: string;
+  copyright: string;
+  language: string;
+  use_chapter_names: boolean;
+  embed_cover: boolean;
+  apply_to_chapter_mp3s: boolean;
+  cover_file: string | null;
+}
+
+export async function fetchMetadata(workspacePath: string): Promise<BookMetadata> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/metadata?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<BookMetadata>(res);
+}
+
+export async function saveMetadata(
+  workspacePath: string,
+  metadata: Omit<BookMetadata, "cover_file">,
+): Promise<BookMetadata> {
+  const res = await fetch(`${API_BASE}/api/audiobook/metadata`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, ...metadata }),
+  });
+  return toJson<BookMetadata>(res);
+}
+
+export interface CoverInfo {
+  cover_file: string | null;
+  width?: number;
+  height?: number;
+  square?: boolean;
+}
+
+export async function setCover(
+  workspacePath: string,
+  sourcePath: string,
+): Promise<CoverInfo> {
+  const res = await fetch(`${API_BASE}/api/audiobook/metadata/cover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, source_path: sourcePath }),
+  });
+  return toJson<CoverInfo>(res);
+}
+
+export async function removeCover(workspacePath: string): Promise<void> {
+  await toJson(await fetch(
+    `${API_BASE}/api/audiobook/metadata/cover?workspace_path=${encodeURIComponent(workspacePath)}`,
+    { method: "DELETE" },
+  ));
+}
+
+/** The preview <img> URL for the stored cover; cache-busted so a
+ * replaced cover shows immediately. */
+export function coverImageUrl(workspacePath: string, bust: number): string {
+  return `${API_BASE}/api/audiobook/metadata/cover-image`
+    + `?workspace_path=${encodeURIComponent(workspacePath)}&v=${bust}`;
 }
 
 export async function fetchMarkerDemo(kind: string): Promise<Blob> {

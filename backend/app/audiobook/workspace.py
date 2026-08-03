@@ -78,6 +78,144 @@ def narration_settings(manifest: dict) -> dict:
     return merged
 
 
+# ── Book metadata (spec 17) ───────────────────────────────────────────────────
+# What the exported files SAY about themselves: ID3 tags on the MP3s, the
+# M4B's metadata atom, and the embedded cover. Stored under
+# manifest["metadata"]; title/author fall back to the manifest's own
+# fields so a book exported before ever opening the metadata form still
+# tags sensibly.
+
+METADATA_TEXT_FIELDS = [
+    "title", "subtitle", "author", "narrator", "series", "series_number",
+    "description", "genre", "publication_year", "publisher", "copyright",
+    "language",
+]
+
+METADATA_OPTION_DEFAULTS = {
+    "use_chapter_names": True,       # chapter markers carry real titles
+    "embed_cover": True,
+    "apply_to_chapter_mp3s": True,   # full tag set on per-chapter files too
+}
+
+# Covers: JPG/PNG only, kept under a sane embed size (players choke on
+# multi-MB art, and it rides EVERY chapter MP3 when embedding is on).
+COVER_MAX_BYTES = 10 * 1024 * 1024
+COVER_FILENAMES = {"jpg": "cover.jpg", "png": "cover.png"}
+
+
+def book_metadata(manifest: dict, workspace_path: str | None = None) -> dict:
+    """The manifest's metadata over the fallbacks: every text field (empty
+    string when unset), the option flags, and the stored cover file.
+
+    With a workspace_path, empty fields additionally fall back to the
+    SOURCE Storythread project's own details (genre, description, series
+    name) -- the writer already typed those once; the app should not ask
+    twice. Saved metadata always wins over every fallback."""
+    stored = manifest.get("metadata")
+    stored = stored if isinstance(stored, dict) else {}
+    merged: dict = {}
+    for field in METADATA_TEXT_FIELDS:
+        value = stored.get(field)
+        merged[field] = str(value) if value is not None else ""
+    if not merged["title"]:
+        merged["title"] = manifest.get("title") or ""
+    if not merged["author"]:
+        merged["author"] = manifest.get("author") or ""
+    if not merged["language"]:
+        merged["language"] = manifest.get("language") or ""
+    if workspace_path:
+        for field, value in project_prefill(workspace_path).items():
+            if not merged.get(field):
+                merged[field] = value
+    for key, default in METADATA_OPTION_DEFAULTS.items():
+        merged[key] = bool(stored.get(key, default))
+    merged["cover_file"] = stored.get("cover_file") or None
+    return merged
+
+
+def source_origin_path(workspace_path: str) -> str | None:
+    """Where this audiobook was imported FROM (recorded at import time in
+    source/source-metadata.json). None when the record is missing."""
+    try:
+        with open(os.path.join(workspace_path, "source", "source-metadata.json"),
+                  "r", encoding="utf-8") as f:
+            origin = json.load(f).get("origin_path")
+        return origin if isinstance(origin, str) and origin else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def project_prefill(workspace_path: str) -> dict:
+    """
+    Metadata fallbacks pulled from the source Storythread PROJECT, when
+    the audiobook was imported from one: genre and description from
+    project.json, the series name from series.json. (Storythread projects
+    do not record author or publication year -- nothing to pull there.)
+    Returns {} for file imports or when the project has moved.
+    """
+    origin = source_origin_path(workspace_path)
+    if not origin or not os.path.isdir(origin):
+        return {}
+    try:
+        with open(os.path.join(origin, "project.json"), "r", encoding="utf-8") as f:
+            project = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    prefill: dict = {}
+    if project.get("genre"):
+        prefill["genre"] = str(project["genre"])
+    if project.get("description"):
+        prefill["description"] = str(project["description"])
+    series_path = project.get("series_path")
+    if series_path and os.path.isdir(series_path):
+        try:
+            with open(os.path.join(series_path, "series.json"), "r", encoding="utf-8") as f:
+                series = json.load(f)
+            if series.get("name"):
+                prefill["series"] = str(series["name"])
+        except (OSError, json.JSONDecodeError):
+            pass
+    return prefill
+
+
+def validate_cover_bytes(data: bytes) -> tuple[str, int, int]:
+    """
+    Validate cover image bytes: returns (extension, width, height) or
+    raises ValueError with a writer-facing message. Dimensions are read
+    straight from the file headers -- no imaging library needed for the
+    two formats we accept.
+    """
+    if len(data) > COVER_MAX_BYTES:
+        raise ValueError(
+            f"Cover image is {len(data) / (1024 * 1024):.1f} MB "
+            f"(max {COVER_MAX_BYTES // (1024 * 1024)} MB). Use a smaller file "
+            "-- 1400x1400 to 3000x3000 JPG is the audiobook standard."
+        )
+    # PNG: 8-byte signature, then the IHDR chunk holds width/height.
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+        width = int.from_bytes(data[16:20], "big")
+        height = int.from_bytes(data[20:24], "big")
+        return "png", width, height
+    # JPEG: scan segment markers for a SOF (start of frame) header.
+    if data[:2] == b"\xff\xd8":
+        pos = 2
+        while pos + 9 < len(data):
+            if data[pos] != 0xFF:
+                break
+            marker = data[pos + 1]
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                pos += 2
+                continue
+            length = int.from_bytes(data[pos + 2 : pos + 4], "big")
+            if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                height = int.from_bytes(data[pos + 5 : pos + 7], "big")
+                width = int.from_bytes(data[pos + 7 : pos + 9], "big")
+                return "jpg", width, height
+            pos += 2 + length
+        raise ValueError("This JPG could not be read -- the file may be corrupt.")
+    raise ValueError("Cover images must be JPG or PNG.")
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
