@@ -1379,11 +1379,29 @@ Relics. I read it. The Cambodia chapter. My god! That tomb door.").
 
 Trigger points (initial catalog; each individually toggleable):
 
-- Narration-to-dialogue transitions (a paragraph or sentence run ends
-  and a quoted speech begins) -- offer [pause] before the dialogue.
+- Narration-to-dialogue transitions **inside one paragraph** (a narration
+  sentence ends and a quoted speech begins on the same line) -- offer
+  [pause] before the dialogue. The ACROSS-A-PARAGRAPH-BREAK version was
+  removed 2026-08-03: `paragraph_gap_ms` (550ms by default) already puts a
+  real beat at every paragraph boundary, so offering it asked the writer
+  to hand-place a pause the pipeline inserts for them. The same-paragraph
+  case has nothing covering it -- dialogue is detected per PARAGRAPH in
+  the segmenter, so a quote opening mid-paragraph gets neither a seam nor
+  a pace change -- which is why it stays.
 - Dialogue-to-narration returns -- offer [pause] after the closing quote.
-- Short-sentence bursts (2+ consecutive sentences under ~25 characters)
-  -- offer small [pause] beats between them.
+- Short-sentence bursts -- offer small [pause] beats between them.
+  **Retuned against a real chapter (2026-08-03).** The shipped rule had
+  drifted to "2+ consecutive sentences under 35 characters", which on a
+  22,000-word chapter fired 394 times, one stop every 56 words. At 35
+  characters it was catching ordinary prose ("I don't know their names."
+  is 25; "I've thrown books before." is 25), and a *pair* of short
+  sentences is what ordinary prose looks like. Now: **3+ consecutive
+  sentences of 22 characters or fewer**, measured on the SPOKEN text with
+  marker tokens stripped, and never running across a paragraph break.
+  Same chapter: 166 stops, one per 132 words, and every sampled trigger
+  was deliberate rhythm ("Call me Lexa. Or Lexi. Or Alex.", "Lara Croft.
+  The Lara Croft. Adventurer. Archaeologist."). Requiring a RUN is what
+  separates the writer's intent from their sentence lengths.
 - Paragraph endings without any trailing marker -- offer [pause].
 - Interjections and exclamations ("My god!", "No.") -- offer a beat
   before, after, or both.

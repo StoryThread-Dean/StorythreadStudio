@@ -83,6 +83,20 @@ export function isHeteronymKind(kind: StopKind): boolean {
   return kind === "heteronym" || kind === "heteronym-rare";
 }
 
+/** Which axis a stop lives on. Three different questions get asked at
+ *  these stops -- "should a beat go here", "which word did you mean", and
+ *  "this marker is broken" -- and two of them landing on the same spot is
+ *  not a duplicate. The near-duplicate collapse runs within one axis only,
+ *  because a beat suggestion silently eating a marker REPAIR would hide
+ *  the one stop that is never optional. */
+type StopAxis = "beat" | "reading" | "repair";
+
+export function stopAxis(kind: StopKind): StopAxis {
+  if (kind === "broken-marker") return "repair";
+  if (isHeteronymKind(kind)) return "reading";
+  return "beat";
+}
+
 /** Kinds Auto-apply is allowed to touch: plain beats only. Marker
  *  repairs have a direction choice, heteronyms have a meaning choice --
  *  neither is ours to make. */
@@ -95,12 +109,19 @@ const PAUSE_OPTIONS: InsertOption[] = [
   { label: "Pause 0.8s", text: "[pause:0.8]" },
   { label: "Pause 1.5s", text: "[pause:1.5]" },
 ];
-// Paragraph-boundary transitions read naturally with a longer default.
-const PAUSE_OPTIONS_LONG_FIRST: InsertOption[] = [
-  PAUSE_OPTIONS[1], PAUSE_OPTIONS[0], PAUSE_OPTIONS[2],
-];
 
-const SHORT_SENTENCE_MAX = 35;   // chars -- "The Cambodia chapter." is 21
+// A clipped sentence, in characters. Measured against a real 22k-word
+// chapter: at 35 this caught ordinary prose ("I don't know their names."
+// is 25, "I've thrown books before." is 25) and fired 394 times, one stop
+// every 56 words, which is not a walk anyone finishes. The spec always
+// said "~25"; the code had drifted well past it.
+const SHORT_SENTENCE_MAX = 22;   // chars -- "The Cambodia chapter." is 21
+// How many clipped sentences in a row make a BURST. Two short sentences
+// back to back is just prose. Three or more is the deliberate rhythm this
+// rule exists for -- "From Ruins to Relics. I read it. The Cambodia
+// chapter. My god! That tomb door." is five. Requiring a run is what
+// separates the writer's intent from their sentence lengths.
+const MIN_BURST_RUN = 3;
 const NEARBY_MARKER_RADIUS = 14; // an existing pause this close = writer chose
 
 /** Character ranges of complete [marker] tokens -- suggestions never
@@ -125,6 +146,19 @@ function hasNearbyPause(text: string, pos: number): boolean {
   return /\[(pause|scene-break|chapter-break)/i.test(window);
 }
 
+/**
+ * How long a sentence is TO THE EAR: marker tokens removed, because none
+ * of them are spoken. Two ways this matters, both of them real in a
+ * worked chapter:
+ *   - a genuinely clipped line carrying a [say:red] override measures 16
+ *     characters longer than it sounds, and would miss its own beat;
+ *   - a fragment that is nothing BUT markers is not clipped prose at all
+ *     and must not extend a burst.
+ */
+function spokenLength(sentence: string): number {
+  return sentence.replace(/\[[^\]\n]*\]/g, "").trim().length;
+}
+
 /** Line containing pos starts with "# " (a chapter heading). */
 function onHeadingLine(text: string, pos: number): boolean {
   const lineStart = text.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
@@ -147,18 +181,15 @@ function scanDialogueTransitions(text: string, stops: InsertStop[]): void {
       options: PAUSE_OPTIONS,
     });
   }
-  // Same hand-off across a paragraph break (narration paragraph, then a
-  // dialogue paragraph). The pause sits at the end of the narration.
-  const openPara = /([^"”\n])\n\n(?=["“])/g;
-  while ((match = openPara.exec(text)) !== null) {
-    stops.push({
-      offset: match.index + 1, length: 0, kind: "dialogue-open",
-      title: "Dialogue begins after this paragraph",
-      detail: "A beat between the scene-setting and the first spoken line "
-        + "gives the hand-off room to breathe.",
-      options: PAUSE_OPTIONS_LONG_FIRST,
-    });
-  }
+  // The same hand-off ACROSS a paragraph break used to be offered here
+  // too. It no longer is: `paragraph_gap_ms` (550ms by default, set in
+  // Audiobook Settings) already puts a real beat at every paragraph
+  // boundary, so this rule was asking the writer to hand-place a pause
+  // the pipeline inserts for them. Only the SAME-paragraph hand-offs
+  // below are left, and those genuinely have nothing covering them:
+  // dialogue is detected per PARAGRAPH in the segmenter, so a quote that
+  // opens mid-paragraph gets no seam of any kind.
+  //
   // A speech CLOSES (.!? then the closing quote) and narration resumes
   // with a capitalized word -- inside one paragraph.
   const close = /[.!?](["”])[ \t]+(?=[A-Z])/g;
@@ -192,32 +223,63 @@ function scanInterjections(text: string, stops: InsertStop[]): void {
 }
 
 function scanShortBursts(text: string, stops: InsertStop[]): void {
-  // Consecutive clipped sentences inside a paragraph: each boundary in
-  // the burst is a beat candidate ("From Ruins to Relics. I read it.").
-  const sentenceEnd = /([.!?])[ \t]+/g;
-  let match: RegExpExecArray | null;
-  let prevStart = 0;
-  const boundaries: Array<{ pos: number; leftLen: number }> = [];
-  while ((match = sentenceEnd.exec(text)) !== null) {
-    const boundary = match.index + 1;
-    const lineBreak = text.lastIndexOf("\n", match.index);
-    const sentenceStart = Math.max(prevStart, lineBreak + 1);
-    boundaries.push({ pos: boundary, leftLen: match.index + 1 - sentenceStart });
-    prevStart = match.index + match[0].length;
-  }
-  for (let i = 0; i < boundaries.length; i++) {
-    const rightLen = i + 1 < boundaries.length
-      ? boundaries[i + 1].pos - boundaries[i].pos - 1
-      : Infinity;
-    if (boundaries[i].leftLen <= SHORT_SENTENCE_MAX && rightLen <= SHORT_SENTENCE_MAX) {
-      stops.push({
-        offset: boundaries[i].pos, length: 0, kind: "short-burst",
-        title: "Beat between short sentences",
-        detail: "Clipped back-to-back sentences are usually deliberate "
-          + "rhythm on the page. The engine reads them in one breath -- a "
-          + "small pause restores the beat a human reader would take.",
-        options: PAUSE_OPTIONS,
+  // A RUN of clipped sentences is the target: "From Ruins to Relics. I
+  // read it. The Cambodia chapter. My god! That tomb door." Every
+  // boundary inside the run is a beat candidate; a lone pair of short
+  // sentences is not, because that is what ordinary prose looks like.
+  //
+  // Walked line by line: a rhythm never carries across a paragraph break,
+  // and keeping each line self-contained means a run cannot accidentally
+  // stitch the end of one paragraph to the start of the next.
+  const lineRe = /[^\n]+/g;
+  let line: RegExpExecArray | null;
+  while ((line = lineRe.exec(text)) !== null) {
+    const base = line.index;
+    const body = line[0];
+
+    // The line's sentences, each with the boundary that FOLLOWS it. The
+    // final sentence has none inside this line, so it can extend a run
+    // without being a place to insert.
+    const sentences: Array<{ length: number; boundary: number | null }> = [];
+    const sentenceEnd = /([.!?])[ \t]+/g;
+    let match: RegExpExecArray | null;
+    let start = 0;
+    while ((match = sentenceEnd.exec(body)) !== null) {
+      sentences.push({
+        length: spokenLength(body.slice(start, match.index + 1)),
+        boundary: base + match.index + 1,
       });
+      start = match.index + match[0].length;
+    }
+    if (start < body.length) {
+      sentences.push({
+        length: spokenLength(body.slice(start)), boundary: null,
+      });
+    }
+
+    // Maximal runs of consecutive clipped sentences; a run of MIN_BURST_RUN
+    // or more earns beats at every boundary it contains.
+    let runStart = 0;
+    for (let i = 0; i <= sentences.length; i++) {
+      const clipped = i < sentences.length
+        && sentences[i].length <= SHORT_SENTENCE_MAX;
+      if (clipped) continue;
+      if (i - runStart >= MIN_BURST_RUN) {
+        for (let j = runStart; j < i - 1; j++) {
+          const at = sentences[j].boundary;
+          if (at === null) continue;
+          stops.push({
+            offset: at, length: 0, kind: "short-burst",
+            title: "Beat between short sentences",
+            detail: `${i - runStart} clipped sentences in a row is usually `
+              + "deliberate rhythm on the page. The engine reads them in one "
+              + "breath -- a small pause restores the beat a human reader "
+              + "would take.",
+            options: PAUSE_OPTIONS,
+          });
+        }
+      }
+      runStart = i + 1;
     }
   }
 }
@@ -359,11 +421,12 @@ export function scanForStops(text: string, from = 0): InsertStop[] {
     || KIND_PRIORITY.indexOf(a.kind) - KIND_PRIORITY.indexOf(b.kind));
   const deduped: InsertStop[] = [];
   for (const stop of filtered) {
-    // Collision collapse runs WITHIN an axis only. A beat suggestion at
-    // the same spot as a word-reading question is not a duplicate --
-    // dropping either one would silently lose a real stop.
+    // Collision collapse runs WITHIN an axis only -- see stopAxis. A beat
+    // landing beside a word-reading question or a marker repair is not a
+    // duplicate of it, and dropping either would silently lose a real stop.
+    const axis = stopAxis(stop.kind);
     const prev = [...deduped].reverse().find(
-      other => isHeteronymKind(other.kind) === isHeteronymKind(stop.kind));
+      other => stopAxis(other.kind) === axis);
     if (prev && Math.abs(stop.offset - prev.offset) <= 2) continue;
     deduped.push(stop);
   }

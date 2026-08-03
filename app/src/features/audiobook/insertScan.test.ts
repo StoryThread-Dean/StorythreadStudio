@@ -41,15 +41,23 @@ describe("scanForStops", () => {
     expect(kinds).toContain("dialogue-close");
   });
 
-  it("flags a dialogue paragraph following narration", () => {
+  it("leaves a dialogue paragraph alone -- the paragraph gap covers it", () => {
+    // This used to be offered as a stop. It no longer is: paragraph_gap_ms
+    // (550ms by default) puts a real beat at every paragraph boundary, so
+    // suggesting one here asked the writer to hand-place a pause the
+    // pipeline already inserts.
     const text = 'The room went quiet.\n\n"Who are you?"';
-    const stops = scanForStops(text);
-    const open = stops.find(s => s.kind === "dialogue-open");
+    expect(scanForStops(text).filter(s => s.kind === "dialogue-open")).toEqual([]);
+  });
+
+  it("still flags a hand-off INSIDE a paragraph, which nothing else covers", () => {
+    // Dialogue is detected per paragraph in the segmenter, so a quote that
+    // opens mid-paragraph gets no seam from any setting. This is the one
+    // dialogue case the walk still has to offer.
+    const text = 'The woman\'s jaw tightened. "I don\'t have time."';
+    const open = scanForStops(text).find(s => s.kind === "dialogue-open");
     expect(open).toBeTruthy();
-    // The pause lands at the END of the narration paragraph.
-    expect(open!.offset).toBe(text.indexOf("\n\n"));
-    // Paragraph hand-offs default to the longer beat.
-    expect(open!.options[0].text).toBe("[pause:0.8]");
+    expect(open!.offset).toBe(text.indexOf(".") + 1);
   });
 
   it("never suggests where the writer already placed a pause", () => {
@@ -176,6 +184,64 @@ describe("bulkApplyDefaults", () => {
     const { next } = bulkApplyDefaults(text, stops);
     expect(next).not.toContain("[say:");
     expect(next).toContain("[pause:");             // the beat still landed
+  });
+});
+
+describe("scanForStops short bursts", () => {
+  it("keeps the live example's rhythm -- a beat at every boundary in the run", () => {
+    const text = "From Ruins to Relics. I read it. The Cambodia chapter. "
+      + "My god! That tomb door.";
+    const beats = scanForStops(text).filter(s => isBeatKind(s.kind));
+    // Five clipped sentences, so four internal boundaries (the last
+    // sentence has no boundary after it inside the line). Three come
+    // through as bursts; the boundary after "My god!" is claimed by the
+    // interjection rule instead, which is the more specific explanation
+    // for the same beat.
+    expect(beats).toHaveLength(4);
+    expect(beats.filter(s => s.kind === "short-burst")).toHaveLength(3);
+    expect(beats.filter(s => s.kind === "interjection")).toHaveLength(1);
+    expect(text.slice(beats[0].offset - 7, beats[0].offset)).toBe("Relics.");
+  });
+
+  it("leaves a lone pair of short sentences alone", () => {
+    // Measured against a real chapter: this is what ordinary prose looks
+    // like, and firing on it produced one stop every 56 words.
+    const text = "Not that I am judging. I have thrown a book before, once, "
+      + "in a mood I am not proud of and would rather not discuss.";
+    expect(scanForStops(text).filter(s => s.kind === "short-burst")).toEqual([]);
+  });
+
+  it("does not count ordinary mid-length sentences as clipped", () => {
+    const text = "I don't know their names. I don't know where they were "
+      + "based. I just know what they wanted from the people who knelt.";
+    expect(scanForStops(text).filter(s => s.kind === "short-burst")).toEqual([]);
+  });
+
+  it("measures a sentence by what is SPOKEN, not by its markers", () => {
+    // A clipped line carrying a [say] override is still clipped. Counting
+    // the marker's characters would push it over the limit and lose its
+    // beat -- exactly backwards, since a worked chapter has the most
+    // markers and needs the walk least wrong.
+    const text = "Ruins to Relics. I [say:red]read[/say] it. Cambodia now. "
+      + "My god! The door.";
+    expect(scanForStops(text).filter(s => s.kind === "short-burst").length)
+      .toBeGreaterThanOrEqual(3);
+  });
+
+  it("never lets a beat swallow a marker repair", () => {
+    // Different axes: a repair is not optional, and a beat landing a
+    // character away from it must not collapse it as a near-duplicate.
+    const text = 'Wait. Go. Now. [pace:=2]"Run!"[/pace]';
+    const kinds = scanForStops(text).map(s => s.kind);
+    expect(kinds).toContain("broken-marker");
+    expect(kinds).toContain("short-burst");
+  });
+
+  it("does not run a burst across a paragraph break", () => {
+    // Two clipped sentences ending one paragraph plus one opening the next
+    // is not a rhythm -- and the paragraph gap already sits between them.
+    const text = "He waited. She left.\n\nThe door shut.";
+    expect(scanForStops(text).filter(s => s.kind === "short-burst")).toEqual([]);
   });
 });
 
