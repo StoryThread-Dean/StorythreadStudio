@@ -53,7 +53,13 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
   const [busy, setBusy] = useState<null | "reading" | "sample">(null);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // ONE player: the visible <audio> element. An earlier version also
+  // created a detached Audio() to start playback, which meant two
+  // elements on the same blob and a pause() from one aborting the
+  // other's play() -- a rejected promise reported as an error over
+  // audio that was playing perfectly.
+  const playerRef = useRef<HTMLAudioElement | null>(null);
+  const urlRef = useRef<string | null>(null);
 
   const chars = text.trim().length;
   const long = chars > 4000;
@@ -102,10 +108,25 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
     return () => window.clearInterval(timer);
   }, [installing]);
 
-  // Nothing is kept: the object URL dies with the window.
+  // Nothing is kept: the object URL dies with the window. Cleanup is
+  // tied to UNMOUNT, not to the url changing -- the old version tore
+  // down on every new clip, which paused the player a beat after it had
+  // been told to start.
   useEffect(() => () => {
-    audioRef.current?.pause();
-    if (url) URL.revokeObjectURL(url);
+    if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+  }, []);
+
+  // Play whatever clip is current. Autoplay is allowed here because
+  // every clip arrives from a button the writer just pressed.
+  useEffect(() => {
+    if (!url || !playerRef.current) return;
+    playerRef.current.play().catch((e: unknown) => {
+      // AbortError means something replaced this clip before it got
+      // going -- the writer pressing the button twice. Not a failure,
+      // and certainly not one to report over working audio.
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setError(e instanceof Error ? e.message : "Could not play that audio.");
+    });
   }, [url]);
 
   useEffect(() => {
@@ -130,13 +151,14 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
         throw new Error(detail);
       }
       const blob = await res.blob();
-      audioRef.current?.pause();
-      if (url) URL.revokeObjectURL(url);
+      playerRef.current?.pause();
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       const fresh = URL.createObjectURL(blob);
+      urlRef.current = fresh;
       setUrl(fresh);
-      const audio = new Audio(fresh);
-      audioRef.current = audio;
-      await audio.play();
+      // Playback is started by the effect above, once the element has
+      // actually been given the new src. Calling play() here would race
+      // React's render and reject for no reason.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read that passage.");
     } finally {
@@ -265,7 +287,7 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
                 </button>
                 {url && (
                   <button
-                    onClick={() => { audioRef.current?.pause(); }}
+                    onClick={() => { playerRef.current?.pause(); }}
                     className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary"
                   >
                     <Square size={12} /> Stop
@@ -274,7 +296,8 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
               </div>
 
               {url && (
-                <audio controls src={url} className="w-full" aria-label="Playback" />
+                <audio ref={playerRef} controls src={url} className="w-full"
+                       aria-label="Playback" />
               )}
             </>
           )}
