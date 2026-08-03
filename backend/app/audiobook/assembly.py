@@ -31,7 +31,7 @@ from pathlib import Path
 import httpx
 
 from app.audiobook import flow, segmenter, workspace
-from app.audiobook.wav_assembly import concat_wav
+from app.audiobook.wav_assembly import concat_wav, match_level
 
 # Where the component manager installs ffmpeg (ffmpeg.exe + ffprobe.exe).
 FFMPEG_DIR = Path.home() / ".storythread" / "ffmpeg"
@@ -168,12 +168,34 @@ def _stitch_chapter_wav(workspace_path: str, chapter: dict,
     """One chapter's items -> one WAV: segment audio in order, silence for
     pauses and breaks (durations from Narration Settings, spec 10.3)."""
     pieces: list[bytes | int] = []
+    gap_ms = int(settings.get("paragraph_gap_ms", 0) or 0)
+
+    def _open_paragraph() -> None:
+        """Put the inter-paragraph beat in, unless something already has.
+
+        Only between two SPOKEN pieces: a scene break, chapter break, or
+        the writer's own [pause] already supplies a gap, and stacking ours
+        on top would read as a hesitation. Continuation pieces of one
+        oversize paragraph are not paragraph starts and never land here.
+        """
+        if gap_ms and pieces and isinstance(pieces[-1], bytes):
+            pieces.append(gap_ms)
+
     for item in chapter["items"]:
         kind = item.get("kind")
+        if kind == "segment" and item.get("paragraph_start"):
+            _open_paragraph()
         if kind == "segment":
             audio_path = Path(workspace_path) / item["output_file"]
             with open(audio_path, "rb") as f:
                 audio = f.read()
+            # Level-match the WHOLE segment before any splitting, so a
+            # flow run keeps one gain across its pieces. Done at assembly
+            # rather than at synthesis on purpose: the stored .wav files
+            # stay exactly as the engine made them, so this costs nobody a
+            # re-render, and a book generated before this existed comes
+            # out even on its next assembly.
+            audio = match_level(audio)
             if item.get("flow_cuts_ms"):
                 # Flow segment (mid-paragraph pauses): the audio is one
                 # continuous render; split it at the recorded cuts and

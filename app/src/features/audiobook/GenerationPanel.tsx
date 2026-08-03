@@ -12,17 +12,20 @@
 // them on the next poll, not instantly.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ban, ChevronDown, ChevronRight, Loader2, Mic2, Pause, Play, Square } from "lucide-react";
+import { Ban, Loader2, Mic2, Pause, Play, Square } from "lucide-react";
 
 import {
   cancelGeneration, fetchEngineStatus, fetchGenerationStatus,
-  fetchNarrationSettings, fetchVoices, installEngine, pauseGeneration,
+  fetchVoices, installEngine, pauseGeneration,
   previewSelection, previewVoice, resetGeneration, resumeGeneration,
-  saveNarrationSettings, saveVoice, startGeneration,
+  saveVoice, startGeneration,
 } from "./api";
-import type { EngineStatus, NarrationSettings, PreviewTracePiece } from "./api";
+import type { EngineStatus, PreviewTracePiece } from "./api";
 import { BookDetailsPanel } from "./BookDetailsPanel";
 import { ExportPanel } from "./ExportPanel";
+import { PremiumNarrationPanel } from "./PremiumNarrationPanel";
+import { ToggleSwitch } from "./ToggleSwitch";
+import { WhatsThis } from "./WhatsThis";
 import type { GenerationRun, NarratorVoice } from "./types";
 
 interface GenerationPanelProps {
@@ -35,6 +38,12 @@ interface GenerationPanelProps {
       restored when the workspace opens; different books use different
       voices on purpose. */
   initialVoiceId?: string | null;
+  /** Bumped by WorkspaceView whenever Audiobook Settings are saved, so
+      the rail refetches what depends on them (the narration engine). */
+  settingsVersion?: number;
+  /** Open the Audiobook Settings dialog -- the premium panel points at
+      it, since the engine is chosen there and nowhere else. */
+  onOpenSettings?: () => void;
 }
 
 // The out-of-the-box narrator when a book has no remembered voice yet.
@@ -135,7 +144,10 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
   );
 }
 
-export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceId }: GenerationPanelProps) {
+export function GenerationPanel({
+  workspacePath, getSelectionText, initialVoiceId,
+  settingsVersion = 0, onOpenSettings,
+}: GenerationPanelProps) {
   const [voices, setVoices] = useState<NarratorVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
   const [engineState, setEngineState] = useState<"starting" | "ready" | "unavailable">("starting");
@@ -148,19 +160,6 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
   const [previewTrace, setPreviewTrace] = useState<PreviewTracePiece[]>([]);
-
-  // Book-level narration settings: base narrator/dialogue speeds and
-  // break silences. These tame the engine's own pacing instincts
-  // globally; [pace] markers multiply on top for specific moments.
-  const [settings, setSettings] = useState<NarrationSettings | null>(null);
-  const [savedSnapshot, setSavedSnapshot] = useState<string>("");
-  const [showSettings, setShowSettings] = useState(false);
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [settingsSaved, setSettingsSaved] = useState(false);
-  // Unsaved settings are the classic silent trap: tweak the pace inputs,
-  // preview, hear nothing change -- because the preview reads what's
-  // SAVED. The amber "unsaved" tag makes that state impossible to miss.
-  const settingsDirty = settings !== null && JSON.stringify(settings) !== savedSnapshot;
 
   const [run, setRun] = useState<GenerationRun | null>(null);
   const [active, setActive] = useState(false);
@@ -208,33 +207,6 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
   useEffect(() => {
     void pollOnce();     // pick up an existing/interrupted run on mount
   }, [pollOnce]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const loaded = await fetchNarrationSettings(workspacePath);
-        setSettings(loaded);
-        setSavedSnapshot(JSON.stringify(loaded));
-      } catch { /* backend banner covers unreachable; defaults render */ }
-    })();
-  }, [workspacePath]);
-
-  const handleSaveSettings = useCallback(async () => {
-    if (!settings || savingSettings) return;
-    setSavingSettings(true);
-    setError(null);
-    try {
-      const saved = await saveNarrationSettings(workspacePath, settings);
-      setSettings(saved);
-      setSavedSnapshot(JSON.stringify(saved));
-      setSettingsSaved(true);
-      window.setTimeout(() => setSettingsSaved(false), 3000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save narration settings.");
-    } finally {
-      setSavingSettings(false);
-    }
-  }, [settings, savingSettings, workspacePath]);
 
   useEffect(() => {
     if (!active) {
@@ -382,41 +354,56 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
             <label className="mb-1 block text-[11px] text-zinc-500" htmlFor="narrator-voice">
               Narrator voice ({voices.length} available, free and local)
             </label>
-            <select
-              id="narrator-voice"
-              value={voiceId}
-              onChange={e => {
-                setVoiceId(e.target.value);
-                // Fire-and-forget: the book remembers its narrator.
-                void saveVoice(workspacePath, e.target.value).catch(() => {});
-              }}
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-emerald-500"
-            >
-              {voices.map(voice => (
-                <option key={voice.id} value={voice.id}>{voice.label}</option>
-              ))}
-            </select>
+            {/* Voice and its sample share one line: the dropdown sizes to
+                its widest option instead of stretching the rail. */}
+            <div className="flex items-center gap-2">
+              <select
+                id="narrator-voice"
+                value={voiceId}
+                onChange={e => {
+                  setVoiceId(e.target.value);
+                  // Fire-and-forget: the book remembers its narrator.
+                  void saveVoice(workspacePath, e.target.value).catch(() => {});
+                }}
+                className="w-auto min-w-0 max-w-[11rem] flex-1 truncate rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-emerald-500"
+              >
+                {voices.map(voice => (
+                  <option key={voice.id} value={voice.id}>{voice.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => void handlePreview()}
+                disabled={previewing !== null || !voiceId}
+                title={previewing === "selection" ? "Waiting for the selection sample to finish" : "Play a short sample sentence in this voice"}
+                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+              >
+                {previewIcon("voice")}
+                Sample
+              </button>
+            </div>
+            <div className="mt-1">
+              <WhatsThis label="Which voices work with premium?">
+                Every voice here is also available on the Budget hosted
+                Kokoro tier -- it is the same engine, so the voice you
+                draft with carries straight through to the paid narration.
+                The Standard and Pro engines are different models with
+                their own casts, so a voice from this list cannot follow
+                you there; you would pick from theirs instead. Worth
+                knowing before you fall for one particular narrator.
+              </WhatsThis>
+            </div>
           </div>
 
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => void handlePreview()}
-                disabled={previewing !== null || !voiceId}
-                title={previewing === "selection" ? "Waiting for the selection preview to finish" : "Play a short sample sentence in this voice"}
-                className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
-              >
-                {previewIcon("voice")}
-                Preview voice
-              </button>
-              <button
                 onClick={() => void handlePreviewSelection()}
                 disabled={previewing !== null || !voiceId}
-                title={previewing === "voice" ? "Waiting for the voice preview to finish" : "Highlight a passage in the editor, then hear exactly how it will sound -- pauses, pronunciations, and all. Local and free."}
+                title={previewing === "voice" ? "Waiting for the voice sample to finish" : "Highlight a passage in the editor, then hear exactly how it will sound -- pauses, pronunciations, and all. Local and free."}
                 className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
               >
                 {previewIcon("selection")}
-                Preview selection
+                Sample selection
               </button>
             </div>
             <p className="mt-1 text-[9px] text-zinc-600">local &middot; free &middot; up to 3,000 characters</p>
@@ -446,81 +433,50 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
             )}
           </div>
 
-          {/* Book-level narration settings */}
-          {settings && (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/40">
-              <button
-                onClick={() => setShowSettings(v => !v)}
-                className="flex w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-zinc-300 hover:text-blue-300"
-              >
-                {showSettings ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                Narration Settings
-                {settingsDirty && (
-                  <span className="ml-auto text-[10px] font-normal text-amber-400"
-                        title="Previews and generation use the SAVED values -- save to apply">
-                    unsaved
-                  </span>
-                )}
-                {!settingsDirty && settingsSaved && (
-                  <span className="ml-auto text-[10px] font-normal text-emerald-400">saved</span>
-                )}
-              </button>
-              {showSettings && (
-                <div className="space-y-2 px-3 pb-3">
-                  {([
-                    ["narrator_pace", "Narrator pace", 0.5, 2.0, 0.05,
-                     "Base speed for all narration. 1.0 = the voice's natural pace. Sounds most natural between 0.8 and 1.2."],
-                    ["dialogue_pace", "Dialogue pace", 0.5, 2.0, 0.05,
-                     "Speed for dialogue paragraphs -- where the engine's own pacing goes wildest. Try 0.9 if dialogue races. Sounds most natural between 0.8 and 1.2."],
-                    ["scene_break_ms", "Scene break (ms)", 0, 15000, 250,
-                     "Silence at every [scene-break]."],
-                    ["chapter_break_ms", "Chapter break (ms)", 0, 15000, 250,
-                     "Silence at every [chapter-break]."],
-                  ] as [keyof NarrationSettings, string, number, number, number, string][]).map(
-                    ([key, label, min, max, step, hint]) => (
-                    <label key={key} className="block" title={hint}>
-                      <span className="mb-0.5 block text-[10px] text-zinc-500">{label}</span>
-                      <input
-                        type="number"
-                        min={min} max={max} step={step}
-                        value={settings[key]}
-                        onChange={e => setSettings({
-                          ...settings, [key]: Number(e.target.value),
-                        })}
-                        className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-emerald-500"
-                      />
-                    </label>
-                  ))}
-                  <button
-                    onClick={() => void handleSaveSettings()}
-                    disabled={savingSettings}
-                    className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
-                  >
-                    {savingSettings && <Loader2 size={11} className="animate-spin" />}
-                    Save Settings
-                  </button>
-                  <p className="text-[9px] leading-relaxed text-zinc-600">
-                    Pace changes mark affected audio as outdated -- the next
-                    Generate re-does exactly those segments. [pace] markers
-                    multiply on top of these base speeds.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Narration Settings (pacing and break lengths) now live in
+              Audiobook Settings, behind the gear at the bottom of the
+              chapter rail -- four numeric fields were crowding the work
+              out of a 288px rail. */}
 
           {/* Draft toggle: the fast testing gear. Flow synthesis is
               skipped (pauses kept, pre-flow sound) -- about twice as
               fast on pause-heavy chapters. Draft audio is stale to a
               Standard run, so it can never ship by accident. */}
           {!active && !resumable && (
-            <label className="flex cursor-pointer items-start gap-2 text-[11px] text-zinc-400"
-                   title="Skips the continuous-flow rendering: about twice as fast on pause-heavy chapters, with the known seam artifacts at pauses. For testing pacing and pronunciation -- regenerate in Standard quality before exporting.">
-              <input type="checkbox" checked={draftPass}
-                     onChange={e => setDraftPass(e.target.checked)}
-                     className="mt-0.5" />
-              Draft pass (faster, testing quality)
-            </label>
+            <div>
+              <ToggleSwitch
+                checked={draftPass}
+                onChange={setDraftPass}
+                tone="amber"
+                label="Draft/Testing pass"
+                hint={draftPass
+                  ? "About twice as fast, with seam artifacts at pauses."
+                  : "Off: full quality. Turn on to test pacing quickly."}
+              />
+              <div className="mt-1">
+                <WhatsThis label="What's the difference?">
+                  <span className="block">
+                    <strong className="text-zinc-200">Off (full quality):</strong>{" "}
+                    a paragraph with mid-sentence pauses is rendered as ONE
+                    continuous read, then your pauses are placed into its
+                    natural sentence gaps. No seams, but the engine does
+                    roughly twice the work on those paragraphs.
+                  </span>
+                  <span className="mt-1.5 block">
+                    <strong className="text-amber-200">On (draft):</strong>{" "}
+                    each fragment is rendered on its own and the pauses sit
+                    at the cuts. About half the time, at the cost of the
+                    slur and cold-start artifacts you hear at pause edges.
+                    Good for checking pacing, beats, and pronunciations.
+                  </span>
+                  <span className="mt-1.5 block">
+                    Draft audio counts as out of date, so a full-quality run
+                    re-does every draft segment automatically. Nothing you
+                    export can be accidentally draft-quality.
+                  </span>
+                </WhatsThis>
+              </div>
+            </div>
           )}
 
           {/* Start / resume -- the emerald path */}
@@ -637,6 +593,17 @@ export function GenerationPanel({ workspacePath, getSelectionText, initialVoiceI
           {error}
         </p>
       )}
+
+      {/* The print pass: everything that can SPEND money, in violet, in
+          one place, behind an estimate and a confirm (spec 13/19). */}
+      <PremiumNarrationPanel
+        workspacePath={workspacePath}
+        localVoices={voices}
+        settingsVersion={settingsVersion}
+        onOpenSettings={onOpenSettings}
+        getSelectionText={getSelectionText}
+        onRunStarted={() => { void pollOnce(); }}
+      />
 
       {/* Book Details: tags + cover for the exported files (spec 17). */}
       <BookDetailsPanel

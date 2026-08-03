@@ -56,7 +56,21 @@ def _require_workspace(workspace_path: str) -> None:
 
 @router.get("/recents")
 def get_recents():
-    return {"audiobooks": recents_store.list_recents()}
+    """The dashboard list, each row carrying how far its generation got
+    (read live from the workspace's run record, so the dashboard can
+    SHOW progress instead of just naming a status). A missing or
+    unreadable run record simply means no progress yet."""
+    rows = recents_store.list_recents()
+    for row in rows:
+        progress = None
+        run = generation.load_run(row["workspace_path"])
+        if run:
+            total = run.get("total_segments") or 0
+            done = (run.get("completed_segments") or 0) + (run.get("failed_segments") or 0)
+            if total > 0:
+                progress = round(min(1.0, done / total), 3)
+        row["progress"] = progress
+    return {"audiobooks": rows}
 
 
 class RemoveRecentRequest(BaseModel):
@@ -197,16 +211,26 @@ def remove_local_engine():
 
 
 @router.get("/voices")
-def get_voices(provider: str = "local-kokoro"):
-    """The voice catalog. Spawns the local worker on first call (a few
-    seconds while the model loads), then serves from the live process."""
-    if provider != "local-kokoro":
-        raise HTTPException(status_code=400,
-                            detail="Only the local narrator has voices so far.")
+def get_voices(provider: str = "local-kokoro", model: str = ""):
+    """
+    The voice catalog. For the local narrator this spawns the worker on
+    first call (a few seconds while the model loads) and serves from the
+    live process. For a hosted model it serves that model's roster --
+    which, for hosted Kokoro, IS the local roster, because it is the same
+    engine (that is the voice-parity promise).
+    """
+    if provider == "local-kokoro":
+        try:
+            return {"voices": local_worker.list_voices(), "voices_are_fallback": False}
+        except local_worker.WorkerUnavailableError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+
+    from app.audiobook import tts_providers
     try:
-        return {"voices": local_worker.list_voices()}
-    except local_worker.WorkerUnavailableError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        voices, is_fallback = tts_providers.voices_for(provider, model)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"voices": voices, "voices_are_fallback": is_fallback}
 
 
 class PreviewRequest(BaseModel):
@@ -285,6 +309,15 @@ def save_voice(request: VoiceRequest):
     manifest["selected_voice"] = request.voice_id
     workspace.save_manifest(request.workspace_path, manifest)
     return {"selected_voice": request.voice_id}
+
+
+@router.get("/suggest-workspace")
+def suggest_workspace(source_path: str, title: str = ""):
+    """Where a new audiobook should live (spec 5.1.2): beside a
+    Storythread book, or under Documents/Storythread Audiobooks for
+    outside manuscripts. A taken folder suggests the next free sibling
+    rather than erroring the writer into a folder picker."""
+    return import_service.suggest_workspace(source_path, title)
 
 
 @router.get("/chapters/available")
@@ -517,6 +550,8 @@ def marker_demo(request: MarkerDemoRequest):
 class StartGenerationRequest(BaseModel):
     workspace_path: str
     provider: str = "local-kokoro"
+    # Hosted providers need a model slug; the local narrator ignores it.
+    model: str = ""
     voice_id: str
     # The explicit "regenerate everything regardless" escape hatch --
     # normal starts already re-queue stale audio automatically.
@@ -527,11 +562,266 @@ class StartGenerationRequest(BaseModel):
     draft: bool = False
 
 
+# ── Audiobook-only settings (narration engine + its own API keys) ────────────
+# Separate from /api/settings on purpose: those fields are the writing
+# side's, all required, and shown in a different screen. Storage is still
+# the one settings.json -- only the route surface is separate.
+
+class AudiobookSettingsUpdate(BaseModel):
+    # Every field optional: None means "leave this alone" (the writing
+    # side's partial-update rule). For the key fields, "" means CLEAR.
+    use_writing_keys: bool | None = None
+    openrouter_api_key: str | None = None
+    nanogpt_api_key: str | None = None
+    narration_provider: str | None = None
+    narration_model: str | None = None
+    premium_voice: str | None = None
+
+
+def _audiobook_settings_payload(settings: dict) -> dict:
+    """The audiobook settings as the frontend may see them: audiobook keys
+    MASKED, writing keys reduced to booleans (they belong to the other
+    screen), everything else plain."""
+    from app.ai.providers import PROVIDERS as WRITING_PROVIDERS
+    from app.settings_store import mask_key
+
+    audiobook_or = str(settings.get("audiobook_openrouter_api_key") or "")
+    audiobook_ng = str(settings.get("audiobook_nanogpt_api_key") or "")
+    return {
+        "use_writing_keys": bool(settings.get("audiobook_use_writing_keys", True)),
+        "openrouter_api_key": mask_key(audiobook_or),
+        "openrouter_api_key_set": bool(audiobook_or),
+        "nanogpt_api_key": mask_key(audiobook_ng),
+        "nanogpt_api_key_set": bool(audiobook_ng),
+        # So the UI can promise that borrowing will actually work.
+        "writing_openrouter_key_set": bool(settings.get("openrouter_api_key")),
+        "writing_nanogpt_key_set": bool(settings.get("nanogpt_api_key")),
+        "writing_provider": str(settings.get("ai_provider") or ""),
+        "writing_provider_label": WRITING_PROVIDERS[settings["ai_provider"]].label
+        if settings.get("ai_provider") in WRITING_PROVIDERS else "",
+        "narration_provider": str(settings.get("audiobook_tts_provider") or ""),
+        "narration_model": str(settings.get("audiobook_tts_model") or ""),
+        "premium_voice": str(settings.get("audiobook_tts_voice") or ""),
+    }
+
+
+@router.get("/settings")
+def get_audiobook_settings():
+    from app import settings_store
+    return _audiobook_settings_payload(settings_store.load_settings())
+
+
+@router.put("/settings")
+def save_audiobook_settings(request: AudiobookSettingsUpdate):
+    """Partial update. A provided key REPLACES, an empty string CLEARS,
+    and an omitted field is left untouched -- so the writer can save the
+    engine choice without retyping a key. The response re-masks."""
+    from app import settings_store
+    from app.audiobook import tts_providers
+    settings = settings_store.load_settings()
+
+    if request.use_writing_keys is not None:
+        settings["audiobook_use_writing_keys"] = bool(request.use_writing_keys)
+    if request.openrouter_api_key is not None:
+        settings["audiobook_openrouter_api_key"] = request.openrouter_api_key.strip()
+    if request.nanogpt_api_key is not None:
+        settings["audiobook_nanogpt_api_key"] = request.nanogpt_api_key.strip()
+    if request.premium_voice is not None:
+        settings["audiobook_tts_voice"] = request.premium_voice.strip()
+
+    # The engine pair is validated together: a stored choice that cannot
+    # resolve would silently read as "no engine", so refuse it out loud
+    # instead of pretending it saved.
+    provider = (request.narration_provider
+                if request.narration_provider is not None
+                else settings.get("audiobook_tts_provider", ""))
+    model = (request.narration_model
+             if request.narration_model is not None
+             else settings.get("audiobook_tts_model", ""))
+    provider = (provider or "").strip()
+    model = (model or "").strip()
+    if request.narration_provider is not None or request.narration_model is not None:
+        if provider and model:
+            try:
+                tts_providers.resolve_model(provider, model)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        settings["audiobook_tts_provider"] = provider
+        settings["audiobook_tts_model"] = model
+
+    settings_store.save_settings(settings)
+    return _audiobook_settings_payload(settings_store.load_settings())
+
+
+@router.get("/narration-selection")
+def narration_selection(workspace_path: str = ""):
+    """WHICH engine narrates: this book's override, the global choice, or
+    the writing side's model with an honest warning attached. One backend
+    answer so the settings screen and the rail can never disagree."""
+    from app import settings_store
+    from app.audiobook import tts_providers
+    manifest = None
+    if workspace_path:
+        _require_workspace(workspace_path)
+        manifest = workspace.load_manifest(workspace_path)
+    return tts_providers.resolve_narration_selection(
+        settings_store.load_settings(), manifest)
+
+
+class NarrationChoiceRequest(BaseModel):
+    workspace_path: str
+    provider: str | None = None
+    model: str | None = None
+    premium_voice: str | None = None
+
+
+@router.put("/narration-choice")
+def save_narration_choice(request: NarrationChoiceRequest):
+    """This BOOK's narration override, written to its manifest. Kept apart
+    from PUT /voice, which remembers the LOCAL narrator's voice -- mixing
+    them would break per-book local voice restore."""
+    _require_workspace(request.workspace_path)
+    from app import settings_store
+    from app.audiobook import tts_providers
+    manifest = workspace.load_manifest(request.workspace_path)
+
+    if request.provider is not None or request.model is not None:
+        provider = (request.provider if request.provider is not None
+                    else manifest.get("selected_provider") or "")
+        model = (request.model if request.model is not None
+                 else manifest.get("selected_model") or "")
+        provider = (provider or "").strip()
+        model = (model or "").strip()
+        if provider and model:
+            try:
+                tts_providers.resolve_model(provider, model)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        manifest["selected_provider"] = provider or None
+        manifest["selected_model"] = model or None
+    if request.premium_voice is not None:
+        manifest["selected_premium_voice"] = request.premium_voice.strip() or None
+
+    workspace.save_manifest(request.workspace_path, manifest)
+    return tts_providers.resolve_narration_selection(
+        settings_store.load_settings(), manifest)
+
+
+@router.get("/tts-catalog")
+def tts_catalog():
+    """Hosted narration options with their real prices, the recommended
+    one-per-budget shelf, and whether a key is already saved for each
+    (spec 13/16). The local narrator leads the shelf -- it is free."""
+    from app import settings_store
+    from app.audiobook import tts_providers
+    settings = settings_store.load_settings()
+    entries = tts_providers.catalog()
+    for entry in entries:
+        config = tts_providers.PROVIDERS[entry["provider"]]
+        entry["has_api_key"] = bool(
+            tts_providers.narration_api_key(settings, config).strip())
+    tiers = tts_providers.recommended_tiers()
+    for tier in tiers:
+        if tier["requires_key"]:
+            config = tts_providers.PROVIDERS[tier["provider"]]
+            tier["has_api_key"] = bool(
+                tts_providers.narration_api_key(settings, config).strip())
+        else:
+            tier["has_api_key"] = True
+    return {
+        "providers": entries,
+        "recommended": tiers,
+        "selection": tts_providers.resolve_narration_selection(settings),
+        "using_writing_keys": bool(settings.get("audiobook_use_writing_keys", True)),
+    }
+
+
+class PrintPreviewRequest(BaseModel):
+    workspace_path: str
+    provider: str
+    model: str
+    voice_id: str
+    # A passage to rehearse; blank falls back to a short sample so the
+    # writer can audition a paid voice for a fraction of a cent.
+    text: str = ""
+
+
+PRINT_PREVIEW_MAX_CHARS = 1200
+_PRINT_PREVIEW_SAMPLE = (
+    "The road disappeared beneath the gathering snow, and somewhere "
+    "behind her, a second set of footsteps stopped."
+)
+
+
+@router.post("/print-preview")
+def print_preview(request: PrintPreviewRequest):
+    """
+    Audition a PAID voice on one passage before committing a whole book
+    (spec 19: never auto-spend). Costs a fraction of a cent, and the
+    charge for this preview is reported in the response headers so the
+    writer sees the number, not a guess.
+    """
+    _require_workspace(request.workspace_path)
+    from app.audiobook import marker_demos, tts_providers
+    text = (request.text or _PRINT_PREVIEW_SAMPLE).strip()
+    if len(text) > PRINT_PREVIEW_MAX_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"That selection is {len(text):,} characters (max "
+                   f"{PRINT_PREVIEW_MAX_CHARS:,} for a paid preview). "
+                   "Select a shorter passage -- previews are for auditioning "
+                   "a voice, not proofing a chapter.",
+        )
+    try:
+        backend = synthesis.resolve_backend(request.provider, request.model)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    rules = pronunciation.effective_rules(request.workspace_path)
+    settings = workspace.narration_settings(
+        workspace.load_manifest(request.workspace_path))
+    try:
+        audio, warnings, trace = marker_demos.render_marked_text(
+            text, backend, request.voice_id, rules, settings)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    # What this audition actually cost, on the same rounding rule as the
+    # full estimate (up, to the next cent).
+    charged = 0
+    for piece in trace:
+        charged += len(piece.get("snippet") or "")
+    spent = tts_providers.estimate_cost_usd(
+        max(charged, len(text)), request.provider, request.model)
+    from urllib.parse import quote
+    headers = {
+        "X-Preview-Trace": quote(json.dumps(trace)),
+        "X-Preview-Cost-Usd": spent,
+    }
+    if warnings:
+        headers["X-Preview-Warnings"] = quote(json.dumps(warnings))
+    return Response(content=audio, media_type="audio/wav", headers=headers)
+
+
+@router.get("/print-estimate")
+def print_estimate(workspace_path: str, provider: str, model: str):
+    """What a print pass would cost BEFORE anything is spent (spec 19:
+    never auto-spend). Counted from the real payload text."""
+    _require_workspace(workspace_path)
+    from app.audiobook import tts_providers
+    try:
+        return tts_providers.estimate_print(workspace_path, provider, model)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/generate")
 def start_generation(request: StartGenerationRequest):
     _require_workspace(request.workspace_path)
     try:
-        backend = synthesis.resolve_backend(request.provider)
+        backend = synthesis.resolve_backend(request.provider, request.model)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
@@ -605,7 +895,8 @@ def resume_generation(request: GenerationControlRequest):
     if run.get("status") not in ("paused", "cancelled", "partially_completed"):
         raise HTTPException(status_code=409, detail=f"The last run is {run.get('status')}, not resumable.")
     try:
-        backend = synthesis.resolve_backend(run.get("provider", ""))
+        backend = synthesis.resolve_backend(run.get("provider", ""),
+                                            run.get("model", ""))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:

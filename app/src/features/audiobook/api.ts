@@ -59,6 +59,27 @@ export async function importSource(
   return toJson<AudiobookProjectPayload>(res);
 }
 
+export interface WorkspaceSuggestion {
+  workspace_path: string;
+  source_kind: "storythread-project" | "external";
+  reason: string;
+  collision: boolean;
+}
+
+/** Where a new audiobook should live: beside a Storythread book, or
+ * under Documents/Storythread Audiobooks for outside manuscripts. */
+export async function suggestWorkspace(
+  sourcePath: string,
+  title = "",
+): Promise<WorkspaceSuggestion> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/suggest-workspace`
+    + `?source_path=${encodeURIComponent(sourcePath)}`
+    + `&title=${encodeURIComponent(title)}`,
+  );
+  return toJson<WorkspaceSuggestion>(res);
+}
+
 export async function fetchProject(workspacePath: string): Promise<AudiobookProjectPayload> {
   const res = await fetch(
     `${API_BASE}/api/audiobook/project?workspace_path=${encodeURIComponent(workspacePath)}`,
@@ -132,12 +153,15 @@ export async function startGeneration(
   voiceId: string,
   force = false,
   draft = false,
+  /** Hosted print pass; defaults to the free local narrator. */
+  provider = "local-kokoro",
+  model = "",
 ): Promise<GenerationRun> {
   const res = await fetch(`${API_BASE}/api/audiobook/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      workspace_path: workspacePath, provider: "local-kokoro", voice_id: voiceId,
+      workspace_path: workspacePath, provider, model, voice_id: voiceId,
       force, draft,
     }),
   });
@@ -254,6 +278,9 @@ export async function fetchExportStatus(): Promise<ExportStatus> {
 export interface NarrationSettings {
   narrator_pace: number;
   dialogue_pace: number;
+  /** Automatic silence at every paragraph break. No engine reliably
+   * pauses between paragraphs on its own. */
+  paragraph_gap_ms: number;
   scene_break_ms: number;
   chapter_break_ms: number;
 }
@@ -318,6 +345,233 @@ export async function addChapters(
     body: JSON.stringify({ workspace_path: workspacePath, titles }),
   });
   return toJson(res);
+}
+
+// ── Hosted narration: the print pass (spec 13/19) ────────────────────────────
+
+export interface NarrationTier {
+  tier: "free" | "budget" | "standard" | "pro";
+  tier_label: string;
+  blurb: string;
+  provider: string;
+  provider_label: string;
+  model: string;
+  model_label: string;
+  price_per_1k_chars: string;
+  /** The unit providers actually quote -- "$0.62 per million" reads, where
+   * "$0.00062 per 1,000" looks like a typo. */
+  price_per_million_chars: string;
+  same_as_local: boolean;
+  voices_same_as_local: boolean;
+  voices_verified: boolean;
+  requires_key: boolean;
+  has_api_key: boolean;
+  signup_steps: string[];
+  notes?: string;
+  /** False = we listened to it and would not steer a writer here. Still
+   * fully selectable, just not on the main shelf. */
+  recommended?: boolean;
+  /** Why it was demoted, in the writer's terms. */
+  caveat?: string;
+  /** How fast this engine is at speed 1.0, on the free narrator's scale.
+   * Below 1 means it reads slowly by nature and the book's pace settings
+   * are re-scaled so they sound the same here. */
+  pace_baseline?: number;
+}
+
+import type { VoiceAxes } from "./VoicePicker";
+
+/** WHICH engine narrates -- resolved once by the backend so the settings
+ * screen and the narration rail can never disagree about money. */
+export interface NarrationSelection {
+  source: "none" | "settings" | "book" | "writing-fallback";
+  provider: string;
+  model: string;
+  provider_label: string;
+  model_label: string;
+  tier: string;
+  tier_label: string;
+  price_per_1k_chars: string | null;
+  price_per_million_chars: string | null;
+  is_recommended: boolean;
+  requires_key: boolean;
+  has_api_key: boolean;
+  using_writing_keys: boolean;
+  key_setting: string;
+  key_hint: string;
+  signup_steps: string[];
+  voices_same_as_local: boolean;
+  voices: Array<{ id: string; label: string; language: string }>;
+  /** Present when the engine separates voice from accent -- the picker
+      then offers one dropdown per axis instead of their cross product. */
+  voice_axes: VoiceAxes | null;
+  voices_are_fallback: boolean;
+  voices_verified: boolean;
+  supports_speed: boolean;
+  default_voice: string;
+  book_voice: string | null;
+  /** The one gate the UI uses to decide whether spending controls exist. */
+  can_spend: boolean;
+  /** Amber: a recommended engine with no key connected. */
+  warning: string | null;
+  /** Red: not a recommended narration model at all. */
+  fallback_note: string | null;
+  /** Zinc: a real engine with a flaw we heard for ourselves. Spending is
+      still allowed -- the writer decides whether the flaw matters. */
+  caveat: string;
+}
+
+/** The audiobook's own settings: narration engine + its own API keys.
+ * Keys arrive MASKED and must never be sent back as-is. */
+export interface AudiobookSettings {
+  use_writing_keys: boolean;
+  openrouter_api_key: string;
+  openrouter_api_key_set: boolean;
+  nanogpt_api_key: string;
+  nanogpt_api_key_set: boolean;
+  writing_openrouter_key_set: boolean;
+  writing_nanogpt_key_set: boolean;
+  writing_provider: string;
+  writing_provider_label: string;
+  narration_provider: string;
+  narration_model: string;
+  premium_voice: string;
+}
+
+export async function fetchAudiobookSettings(): Promise<AudiobookSettings> {
+  return toJson<AudiobookSettings>(
+    await fetch(`${API_BASE}/api/audiobook/settings`));
+}
+
+/** Partial save: omit a key field to leave it alone, send "" to clear it.
+ * NEVER send a masked value back -- it would be stored verbatim. */
+export async function saveAudiobookSettings(
+  patch: Partial<{
+    use_writing_keys: boolean;
+    openrouter_api_key: string;
+    nanogpt_api_key: string;
+    narration_provider: string;
+    narration_model: string;
+    premium_voice: string;
+  }>,
+): Promise<AudiobookSettings> {
+  const res = await fetch(`${API_BASE}/api/audiobook/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  return toJson<AudiobookSettings>(res);
+}
+
+export async function fetchNarrationSelection(
+  workspacePath: string,
+): Promise<NarrationSelection> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/narration-selection`
+    + `?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<NarrationSelection>(res);
+}
+
+/** This BOOK's narration override (kept apart from the local narrator's
+ * remembered voice). */
+export async function saveNarrationChoice(
+  workspacePath: string,
+  choice: { provider?: string; model?: string; premium_voice?: string },
+): Promise<NarrationSelection> {
+  const res = await fetch(`${API_BASE}/api/audiobook/narration-choice`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, ...choice }),
+  });
+  return toJson<NarrationSelection>(res);
+}
+
+export interface TtsCatalog {
+  recommended: NarrationTier[];
+  selection: NarrationSelection;
+  using_writing_keys: boolean;
+  providers: Array<{
+    provider: string;
+    provider_label: string;
+    key_hint: string;
+    has_api_key: boolean;
+    models: Array<{
+      id: string;
+      label: string;
+      price_per_1k_chars: string;
+      price_per_million_chars: string;
+      tier: string;
+      same_as_local: boolean;
+      voices_same_as_local: boolean;
+      voices_verified: boolean;
+      supports_speed: boolean;
+      notes: string;
+      recommended: boolean;
+      caveat: string;
+      voice_axes: VoiceAxes | null;
+      voices: Array<{ id: string; label: string; language: string }>;
+    }>;
+  }>;
+}
+
+export async function fetchTtsCatalog(): Promise<TtsCatalog> {
+  return toJson<TtsCatalog>(await fetch(`${API_BASE}/api/audiobook/tts-catalog`));
+}
+
+export interface PrintEstimate {
+  provider: string;
+  provider_label: string;
+  model: string;
+  model_label: string;
+  characters: number;
+  segments: number;
+  chapters: number;
+  flow_segments: number;
+  price_per_1k_chars: string;
+  estimate_usd: string;
+  note: string;
+}
+
+export async function fetchPrintEstimate(
+  workspacePath: string,
+  provider: string,
+  model: string,
+): Promise<PrintEstimate> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/print-estimate`
+    + `?workspace_path=${encodeURIComponent(workspacePath)}`
+    + `&provider=${encodeURIComponent(provider)}`
+    + `&model=${encodeURIComponent(model)}`,
+  );
+  return toJson<PrintEstimate>(res);
+}
+
+/** Audition a PAID voice on one passage. Returns the audio plus what
+ * the audition itself cost. */
+export async function printPreview(
+  workspacePath: string,
+  provider: string,
+  model: string,
+  voiceId: string,
+  text = "",
+): Promise<{ blob: Blob; costUsd: string }> {
+  const res = await fetch(`${API_BASE}/api/audiobook/print-preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspace_path: workspacePath, provider, model, voice_id: voiceId, text,
+    }),
+  });
+  if (!res.ok) {
+    let detail = `Preview failed (${res.status}).`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+    throw new Error(detail);
+  }
+  return {
+    blob: await res.blob(),
+    costUsd: res.headers.get("X-Preview-Cost-Usd") ?? "0.00",
+  };
 }
 
 // ── Book metadata + cover (spec 17) ──────────────────────────────────────────

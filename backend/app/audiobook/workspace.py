@@ -54,6 +54,14 @@ MANIFEST_NAME = "audiobook-project.json"
 NARRATION_DEFAULTS = {
     "narrator_pace": 1.0,
     "dialogue_pace": 1.0,
+    # The beat between paragraphs. A paragraph break is a real pause when
+    # a person reads aloud, but no TTS engine can be relied on to produce
+    # one: some ignore a blank line entirely, and clip-edge trimming then
+    # removes even the engine's own trailing breath. Without this, one
+    # paragraph lands milliseconds after the last -- which readers hear
+    # immediately as wrong, and which forced writers to hand-place a
+    # [pause] after every single paragraph (live finding).
+    "paragraph_gap_ms": 550,
     "scene_break_ms": 2000,
     "chapter_break_ms": 3000,
 }
@@ -70,7 +78,7 @@ def narration_settings(manifest: dict) -> dict:
                 merged[key] = min(2.0, max(0.5, float(stored.get(key, merged[key]))))
             except (TypeError, ValueError):
                 pass
-        for key in ("scene_break_ms", "chapter_break_ms"):
+        for key in ("paragraph_gap_ms", "scene_break_ms", "chapter_break_ms"):
             try:
                 merged[key] = min(15000, max(0, int(stored.get(key, merged[key]))))
             except (TypeError, ValueError):
@@ -275,9 +283,17 @@ def new_manifest(workspace_path: str, title: str, author: str, source_file: str)
         "status": "needs_review",            # fresh imports start at review
         "created_at": now,
         "updated_at": now,
-        "selected_provider": None,           # chosen in the Voice step (Stage B+)
+        # Per-book narration choice. selected_voice is the LOCAL narrator's
+        # remembered voice; selected_provider/selected_model/
+        # selected_premium_voice are this book's optional override of the
+        # global hosted-narration choice (see
+        # tts_providers.resolve_narration_selection). Every reader must use
+        # .get() -- load_manifest has no migration layer, so older files
+        # simply lack the newer keys.
+        "selected_provider": None,
         "selected_model": None,
         "selected_voice": None,
+        "selected_premium_voice": None,
         "output_formats": ["chapter_mp3", "combined_mp3", "m4b"],
         "retain_intermediate_audio": True,
     }

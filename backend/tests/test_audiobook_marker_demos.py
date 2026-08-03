@@ -14,6 +14,7 @@ from app.audiobook import marker_demos
 from app.audiobook.marker_demos import DEMO_SCRIPTS, DEMO_VOICE, build_demo
 from app.audiobook.synthesis import SynthesisBackend
 from app.audiobook.wav_assembly import WavMismatchError, concat_wav
+from app.audiobook.workspace import NARRATION_DEFAULTS
 
 
 @pytest.fixture(autouse=True)
@@ -267,7 +268,11 @@ def test_multi_paragraph_pace_span_with_embedded_markers():
         SpeedSpy(), DEMO_VOICE, rules=[])
     assert warnings == []
     # Every piece inside the span is slow -- including after the pause.
-    assert speeds == [1.0, 0.8, 0.8, 1.0]
+    # Five pieces, not four: the two slow paragraphs before the pause are
+    # separate segments now (paragraphs stopped grouping so each break
+    # gets a real beat). The contract under test is unchanged -- pace
+    # holds across paragraphs AND across the embedded pause.
+    assert speeds == [1.0, 0.8, 0.8, 0.8, 1.0]
 
 
 def test_render_marked_text_refuses_marker_only_selections():
@@ -292,3 +297,71 @@ def test_demos_are_cached_per_engine_version():
     build_demo("pause", newer)
     assert len(newer.texts) > 0
 
+
+
+def test_a_paragraph_break_becomes_real_silence():
+    # THE live finding: without a hand-written [pause], paragraph two
+    # began milliseconds after paragraph one -- "unnatural sounding and
+    # unusable without it". Two causes, both ours: paragraphs shared one
+    # request (so the engine decided the gap, and some ignore it), and
+    # separate clips were butted together after edge-trimming had removed
+    # even the engine's own trailing breath.
+    silences: list[int] = []
+    real_concat = marker_demos.concat_wav
+
+    def spy(pieces):
+        silences.extend(p for p in pieces if isinstance(p, int))
+        return real_concat(pieces)
+
+    marker_demos.concat_wav = spy
+    try:
+        marker_demos.render_marked_text(
+            "Paragraph one, with no marker after it.\n\n"
+            "Paragraph two, which used to start instantly.",
+            DemoBackend(), DEMO_VOICE, rules=[])
+    finally:
+        marker_demos.concat_wav = real_concat
+    assert silences == [550]            # the default paragraph beat
+
+
+def test_the_writers_own_pause_is_not_doubled():
+    # A [pause] already supplies the gap. Stacking the automatic beat on
+    # top would turn a deliberate 0.8s beat into 1.35s -- the writer's
+    # timing must win.
+    silences: list[int] = []
+    real_concat = marker_demos.concat_wav
+
+    def spy(pieces):
+        silences.extend(p for p in pieces if isinstance(p, int))
+        return real_concat(pieces)
+
+    marker_demos.concat_wav = spy
+    try:
+        marker_demos.render_marked_text(
+            "Paragraph one.\n\n[pause:0.8]\n\nParagraph two.",
+            DemoBackend(), DEMO_VOICE, rules=[])
+    finally:
+        marker_demos.concat_wav = real_concat
+    assert silences == [800]
+
+
+def test_the_beat_is_configurable_and_can_be_turned_off():
+    # A writer who wants the old tight join, or a longer breath, sets it
+    # in Narration Settings rather than editing every paragraph.
+    for gap in (0, 1200):
+        silences: list[int] = []
+        real_concat = marker_demos.concat_wav
+
+        def spy(pieces):
+            silences.extend(p for p in pieces if isinstance(p, int))
+            return real_concat(pieces)
+
+        marker_demos.concat_wav = spy
+        try:
+            marker_demos.render_marked_text(
+                "Paragraph one.\n\nParagraph two.",
+                DemoBackend(), DEMO_VOICE, rules=[],
+                settings={**NARRATION_DEFAULTS, "paragraph_gap_ms": gap})
+        finally:
+            marker_demos.concat_wav = real_concat
+        assert silences == ([] if gap == 0 else [1200])

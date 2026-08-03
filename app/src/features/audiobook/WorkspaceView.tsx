@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, BookMarked, EyeOff, HelpCircle, Loader2, MessageSquareQuote,
-  Plus, Save, Scissors, Wand2, X,
+  Plus, Save, Scissors, Settings as SettingsIcon, Wand2, X,
 } from "lucide-react";
 
 import { addChapters, fetchAvailableChapters, fetchNarration, saveNarration } from "./api";
@@ -23,6 +23,7 @@ import { InsertWalkthrough } from "./InsertWalkthrough";
 import { GenerationPanel } from "./GenerationPanel";
 import { MarkerHelpPanel } from "./MarkerHelpPanel";
 import { paragraphBoundsAt, stripAudioMarkers } from "./markers";
+import { AudiobookSettingsDialog } from "./AudiobookSettingsDialog";
 import { PronunciationDialog } from "./PronunciationDialog";
 import { SayEditor } from "./SayEditor";
 import type { AudiobookChapter, AudiobookProjectPayload } from "./types";
@@ -49,6 +50,9 @@ const PAUSE_ACTIONS: { label: string; snippet: string; title: string; inline: bo
 export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const workspacePath = payload.manifest.workspace_path;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // The last passage the writer actually highlighted, kept as TEXT rather
+  // than offsets so later edits cannot make it slice the wrong words.
+  const lastSelectionRef = useRef("");
 
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -59,6 +63,10 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [showPronunciations, setShowPronunciations] = useState(false);
   const [showMarkerHelp, setShowMarkerHelp] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Bumped whenever audiobook settings are saved, so the narration rail
+  // refetches what depends on them (the narration engine, above all).
+  const [settingsVersion, setSettingsVersion] = useState(0);
   // The Insert Walkthrough starts at the caret when opened (null = closed).
   const [walkthroughStart, setWalkthroughStart] = useState<number | null>(null);
 
@@ -366,6 +374,19 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
 
       {/* Marker toolbar -- sapphire accents: informational tooling */}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-zinc-800 px-4 py-2">
+        {/* The walkthrough leads: it is the guided way to place
+            everything the rest of this toolbar inserts by hand. */}
+        <button
+          onClick={() => {
+            if (walkthroughStart !== null) { setWalkthroughStart(null); return; }
+            setWalkthroughStart(textareaRef.current?.selectionStart ?? 0);
+          }}
+          title="Walk the manuscript from the cursor: pauses at dialogue hand-offs, beats between short sentences, marker repairs. Apply or skip each stop."
+          className="inline-flex items-center gap-1 rounded border border-blue-800 bg-blue-950/50 px-2 py-1 text-[11px] text-blue-200 hover:border-blue-500 hover:text-blue-100"
+        >
+          <Wand2 size={11} /> Formatting Walkthrough
+        </button>
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
         {PAUSE_ACTIONS.map(action => (
           <button
             key={action.snippet}
@@ -412,22 +433,13 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         >
           <EyeOff size={11} /> Exclude
         </button>
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
           onClick={handleRemoveMarkers}
           title="Remove audio markers from the selection (or the paragraph under the cursor). Your words stay."
           className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-rose-600 hover:text-rose-300"
         >
           <Scissors size={11} /> Remove
-        </button>
-        <button
-          onClick={() => {
-            if (walkthroughStart !== null) { setWalkthroughStart(null); return; }
-            setWalkthroughStart(textareaRef.current?.selectionStart ?? 0);
-          }}
-          title="Walk the manuscript from the cursor: pauses at dialogue hand-offs, beats between short sentences, marker repairs. Apply or skip each stop."
-          className="inline-flex items-center gap-1 rounded border border-blue-800 bg-blue-950/50 px-2 py-1 text-[11px] text-blue-200 hover:border-blue-500 hover:text-blue-100"
-        >
-          <Wand2 size={11} /> Formatting Walkthrough
         </button>
         <button
           onClick={() => setShowMarkerHelp(v => !v)}
@@ -465,7 +477,11 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
 
       {/* Body: chapter rail + editor */}
       <div className="flex min-h-0 flex-1">
-        <aside className="w-56 shrink-0 overflow-y-auto border-r border-zinc-800 p-3">
+        {/* Left rail: chapters scroll, the settings gear stays pinned at
+            the bottom (so it is always one click away, and never floats
+            in the middle of a long chapter list). */}
+        <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-300">
             <BookMarked size={12} /> Chapters ({chapters.length})
           </h3>
@@ -500,6 +516,16 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           >
             <Plus size={11} /> Add chapters
           </button>
+        </div>
+          <div className="shrink-0 border-t border-zinc-800 p-2">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="Narration engine, API keys, and this book's pacing"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-blue-600 hover:text-blue-300"
+            >
+              <SettingsIcon size={12} /> Audiobook Settings
+            </button>
+          </div>
         </aside>
 
         <div className="relative flex min-w-0 flex-1 flex-col">
@@ -542,6 +568,16 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               aria-label="Narration text"
               value={content}
               onChange={e => { setContent(e.target.value); setDirty(true); }}
+              onSelect={e => {
+                // Remember the last real highlight. A textarea's selection
+                // does not reliably survive clicking a button in the rail
+                // and coming back, and losing it silently turned a second
+                // [Sample selection] click into a canned demo sentence --
+                // paid, and not what the writer asked to hear.
+                const ta = e.currentTarget;
+                const picked = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+                if (picked.trim()) lastSelectionRef.current = picked;
+              }}
               spellCheck={false}
               className="min-h-0 flex-1 resize-none bg-zinc-950 p-5 font-mono text-sm leading-relaxed text-zinc-200 outline-none"
             />
@@ -549,15 +585,22 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         </div>
 
         {/* Right rail: voice, preview, generate, run controls. The
-            selection getter reads live from the textarea so Preview
-            Selection always rehearses exactly what is highlighted. */}
+            selection getter prefers what is highlighted RIGHT NOW and
+            falls back to the last real highlight -- clicking a button in
+            the rail can collapse the textarea's selection, and a silent
+            fall-through to the canned sample sentence spends money
+            rehearsing the wrong words. */}
         <GenerationPanel
           workspacePath={workspacePath}
           initialVoiceId={payload.manifest.selected_voice}
+          settingsVersion={settingsVersion}
+          onOpenSettings={() => setSettingsOpen(true)}
           getSelectionText={() => {
             const ta = textareaRef.current;
-            if (!ta) return "";
-            return content.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0);
+            const live = ta
+              ? content.slice(ta.selectionStart ?? 0, ta.selectionEnd ?? 0)
+              : "";
+            return live.trim() ? live : lastSelectionRef.current;
           }}
         />
       </div>
@@ -566,6 +609,14 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <PronunciationDialog
           workspacePath={workspacePath}
           onClose={() => setShowPronunciations(false)}
+        />
+      )}
+
+      {settingsOpen && (
+        <AudiobookSettingsDialog
+          workspacePath={workspacePath}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={() => setSettingsVersion(v => v + 1)}
         />
       )}
 

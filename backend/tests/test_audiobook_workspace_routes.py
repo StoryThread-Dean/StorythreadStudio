@@ -97,6 +97,59 @@ def test_add_chapters_refuses_unknown_titles_and_a_missing_source(tmp_path):
     assert "could not be found" in response.json()["detail"]
 
 
+# ── Suggested workspace locations (spec 5.1.2) ───────────────────────────────
+
+def test_storythread_books_keep_their_audiobook_beside_the_book(tmp_path):
+    project = tmp_path / "the-curse-of-the-tomb-raider"
+    project.mkdir()
+    (project / "project.json").write_text("{}", encoding="utf-8")
+
+    body = client.get("/api/audiobook/suggest-workspace",
+                      params={"source_path": str(project)}).json()
+    assert body["workspace_path"] == str(project / "audiobook")
+    assert body["source_kind"] == "storythread-project"
+    assert body["collision"] is False
+
+
+def test_outside_manuscripts_collect_under_documents(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / "Documents").mkdir(parents=True)
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("HOME", str(home))
+
+    src = tmp_path / "The Hollow Road.docx"
+    src.write_text("x", encoding="utf-8")
+    body = client.get("/api/audiobook/suggest-workspace",
+                      params={"source_path": str(src)}).json()
+    assert body["workspace_path"] == str(
+        home / "Documents" / "Storythread Audiobooks" / "The Hollow Road")
+    assert body["source_kind"] == "external"
+
+    # A typed title wins over the filename, sanitized for Windows.
+    titled = client.get("/api/audiobook/suggest-workspace",
+                        params={"source_path": str(src),
+                                "title": "Hollow: Road?"}).json()
+    assert titled["workspace_path"].endswith("Hollow Road")
+
+
+def test_a_taken_folder_suggests_the_next_sibling(tmp_path):
+    project = tmp_path / "book"
+    (project / "audiobook").mkdir(parents=True)
+    (project / "project.json").write_text("{}", encoding="utf-8")
+    (project / "audiobook" / "something.txt").write_text("x", encoding="utf-8")
+
+    body = client.get("/api/audiobook/suggest-workspace",
+                      params={"source_path": str(project)}).json()
+    assert body["workspace_path"] == str(project / "audiobook-2")
+    assert body["collision"] is True
+
+    # An EMPTY existing folder is fine -- import scaffolds into it.
+    (project / "audiobook" / "something.txt").unlink()
+    again = client.get("/api/audiobook/suggest-workspace",
+                       params={"source_path": str(project)}).json()
+    assert again["workspace_path"] == str(project / "audiobook")
+
+
 # ── Generation reset (the writer's escape hatch) ─────────────────────────────
 
 def test_reset_clears_a_stuck_run_and_a_stale_lock(tmp_path):

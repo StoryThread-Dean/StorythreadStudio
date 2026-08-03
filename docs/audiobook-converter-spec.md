@@ -776,6 +776,149 @@ Provider landscape facts (verified July 2026):
 
 The speech models are NOT the chat models: same provider accounts and API keys, separate model catalog reached through a separate audio endpoint. This is the "Writing Models vs Audio Models" split in Section 16.
 
+#### 13.1.1 Engines tested by ear (findings, not plans)
+
+A catalog entry is a recommendation, so an engine earns its place on the shelf by being listened to. What that produced:
+
+- **Grok Voice TTS (`x-ai/grok-voice-tts-1.0`, OpenRouter, $15/M) -- DEMOTED.** Two separate problems, both found live.
+  - *Roster:* xAI publishes 26 voices, each able to speak American, British, or Australian via an id suffix (`ara-en-GB`). OpenRouter answers to five bare names only -- `Ara`, `Eve`, `Leo`, `Rex`, `Sal`. Three 404s established this: `iris-en-US`, `iris-en-GB`, and then `ara-en-GB`, that last one a documented voice, which proves it is the SUFFIX being rejected and not just the wider roster. An accent dropdown was built and removed within two commits as a result.
+  - *Prosody drift:* it narrates well sentence by sentence, but pitch and tone reset between sentences, so a chapter arrives sounding like several narrators spliced together. The cause is structural: Storythread sends each segment as its own request and this model re-improvises delivery every time. Nothing on our side can steady it -- flow synthesis (Section 15) fixes seams WITHIN a segment, not identity drift across them. An expressive model without a seed or continuation parameter cannot hold a book together.
+  - Kept selectable behind a "tested but not recommended" disclosure, carrying its reason. Demoting is the honest move; deleting would strand any book already pointed at it and teach nobody anything.
+
+The general lesson, worth applying to every future premium engine: **expressiveness and consistency trade against each other under per-segment synthesis.** The flatter model (Kokoro) stitches invisibly; the performer does not. Any engine considered for the Standard or Pro tier must be auditioned across at least a full chapter, not a sample sentence, because a single sentence is exactly the length at which this defect is inaudible.
+
+- **Voxtral Mini TTS (`mistralai/voxtral-mini-tts-2603`, OpenRouter, $16/M) -- DEMOTED after four tests.** Inside a paragraph it is genuinely good: even, professional, zero slurs or mangled words -- better than Grok on every count that broke Grok. It came off the shelf for the cast. Every voice has a **mood welded into the id**, the same id reads the entire book, and it turns monotonous in roughly twenty seconds; four moods were tried by ear (curious, neutral, sarcastic, confident) and none felt right for narration. There is no mood-free variant -- `neutral` is the plainest available, and it is average. Its other complaint, paragraphs running together, turned out to be **our bug**, not the engine's, and is fixed above. Kept selectable: if one of the moods happens to suit a particular book, it works.
+
+  The general lesson to carry forward: **a fixed emotion is not a narration voice.** It solved the drift problem exactly as predicted -- telling the model "be Oliver, neutral" every time does stop it re-improvising -- and then failed on the thing that prediction did not cover. A narrator varies; a model pinned to one mood cannot.
+
+  Original rationale, kept because the reasoning was sound even though the verdict went against it: Chosen for one structural reason: **the mood is part of the voice id, not a parameter.** Three English narrators ship as one id per emotion (`gb_oliver_neutral`, `en_paul_confident`, `gb_jane_curious`...), so every segment is told "be Oliver, neutral" rather than being asked to interpret the text afresh. That is directly the latitude Grok used to drift. 24 English ids in all -- Paul (American male, 8 moods), Jane (British female, 9), Oliver (British male, 7) -- plus six French not offered. Deliberately NOT modelled as speaker x emotion axes: the mood sets differ per speaker, so two dropdowns would offer combinations that do not exist. Unproven by ear at time of writing; the full-chapter audition above applies to it too.
+
+##### Audio format is per MODEL, not per provider (live 400)
+
+A Voxtral audition came back `400 -- Mistral TTS only supports response_format="mp3". Got "pcm"`. The OpenAI-speech transport had `pcm` hard-coded, on the reasonable-sounding assumption that a format is a property of the endpoint. It is not: OpenRouter forwards to whatever the upstream vendor supports, and that varies model by model within one provider.
+
+`response_format` now lives on `HostedModel` (default `pcm`). mp3 answers are **decoded**, never header-wrapped -- wrapping mp3 bytes in a WAV header produces a file that plays as noise, costs a full book's spend, and fails no automated check. Decoding uses **miniaudio**: a single 268 KB wheel with no transitive dependencies, chosen over `soundfile` because soundfile drags numpy in and the whole backend is frozen into a PyInstaller sidecar. Byte-identical output to soundfile was verified before adopting it. It is named explicitly in `backend.spec` hiddenimports, because the import is inside a `try/except ImportError` -- a miss there would not fail the build, it would quietly ship a backend that refuses mp3 engines at narration time.
+
+Two rules that fell out of it, both about money:
+
+- **Sniff the bytes, not the content-type.** mp3 is detected from an ID3 tag or an MPEG frame sync, so a mislabelled answer still reaches the decoder. This also covers audio fetched from a JSON URL (NanoGPT's async shape), which was the one branch a compressed answer could have slipped through.
+- **A decode failure is NOT retryable.** Bytes that will not decode are a format incompatibility, not a hiccup, and each retry bills again for the identical failure. An EMPTY answer stays retryable -- that one is a hiccup.
+
+##### The paragraph beat (live finding, fixed -- and it was ours)
+
+Four structured tests on Voxtral isolated it cleanly: two selections **without** a trailing `[pause]` both ran the next paragraph in milliseconds later; the same selection **with** `[pause:0.8]` was flawless; a fourth test full of short sentences and pauses was flawless too. So the engine was never the problem. Two of our own decisions were:
+
+1. **Paragraphs grouped into one segment**, joined by a blank line, and the engine decided what that blank line meant. Some ignore it entirely. A boundary the pipeline cannot see is a boundary it cannot time.
+2. **Separate segments were butted together with zero silence** -- and `_condition_edges` had already trimmed away up to 250 ms of the engine's own trailing breath, deliberately, so that writer-placed pauses would not stack. Correct in isolation, wrong in combination.
+
+Fixed by making a paragraph a first-class unit: **one paragraph, one segment** (`SEGMENTS_VERSION` bumped to 2), each stamped `paragraph_start`, with `paragraph_gap_ms` (default **550**) inserted at assembly between two spoken pieces. Four details worth keeping:
+
+- The flag is **layout, not content**: it stays out of `content_hash`, so re-flowing paragraphs never forces a paid re-render of identical speech. Retiming the beat costs nothing either -- it is applied at assembly, not baked into audio.
+- **A writer's own `[pause]` wins.** The automatic beat only lands between two spoken pieces, never stacked on a pause, scene break, or chapter break.
+- **Continuation pieces of an oversize paragraph are not paragraph starts.** Inserting a beat mid-paragraph would be a worse artifact than the one being fixed.
+- **Flow groups still span mid-paragraph pauses.** A paragraph at index 0 with work already open is a continuation, not a new paragraph -- flushing there would break the continuous-render trick that exists to stop consonant slurs.
+
+Cost is unchanged: hosted engines bill per character, not per request.
+
+##### Loudness matching (live finding, fixed)
+
+A two-paragraph Voxtral preview came back with the second paragraph noticeably louder than the first, and it stayed loud for the rest of the clip. Two paragraphs are two requests, and an expressive hosted model picks its own **level** per request just as it picks its own pitch. Kokoro never did this.
+
+Unlike pitch, loudness is fixable from our side. `wav_assembly.match_level()` normalizes to **-20 dBFS RMS** -- the middle of Audible's ACX window (-23 to -18 dB RMS) -- with a -1 dBFS peak ceiling, a hard +/-8 dB clamp so room tone is never amplified into the foreground, and a deadband so a clip already on target is returned byte-identical rather than silently rewritten.
+
+Two decisions inside it matter more than the numbers:
+
+- **The unit is one SYNTHESIS CALL, never one clip.** Flow synthesis renders a run of sentences as one continuous clip and splits it afterwards. Those splits must share a single gain -- level them against each other and the natural rise and fall inside a sentence flattens into mush, destroying precisely what flow synthesis exists to protect. Both callers therefore normalize the whole clip and split second. A test pins a 3:1 dynamic surviving the round trip.
+- **It runs at ASSEMBLY, not at synthesis.** Stored segment `.wav` files stay exactly as the engine made them, so this costs nobody a re-render on a paid engine, and a book generated before the feature existed comes out even on its next assembly.
+
+Residual, and honest: this fixes level jumps. It does NOT fix pitch or timbre drift between segments, which remains an engine property (see Grok above). Voxtral's pitch/tone did shift between paragraphs in the same test, and no amount of gain fixes that.
+
+##### The paid preview must never quietly change what it reads
+
+Same session, second finding: previewing a selection worked, then clicking Sample again played the canned demo sentence instead. A textarea's selection does not reliably survive a round trip through a button in the rail, and `[Sample This Voice]` falls back to a demo sentence when nothing is highlighted -- so it billed for words the writer did not ask to hear.
+
+Two fixes, because either alone leaves a hole: the workspace now remembers the last real highlight **as text** (not offsets, which later edits invalidate) and prefers a live selection over it; and the panel states which was used -- "Read your highlighted passage" or "Read the demo sentence -- highlight a passage to hear your own words". The fallback was never wrong; being silent about it was.
+
+##### Voice ids: there is no authoritative source but a live call
+
+Three engines, three different disagreements between the gateway's metadata and the vendor's own documentation:
+
+| Engine | Gateway metadata | Vendor page | Truth |
+|---|---|---|---|
+| Grok | 5 bare names | 26 voices x 3 dialect suffixes | Gateway. The vendor's extra voices and every suffix 404'd. |
+| Voxtral | 30 ids | -- | Gateway, complete and correct. |
+| MAI-Voice-2 | 4 ids, English stem `en-US-Harper` | 45+ ids, English ShortName `en-US-Harper:MAI-Voice-2` | **Vendor.** The gateway's list was both partial (7 English voices, not 1) and truncated -- an Azure ShortName carries the MODEL as a suffix, and the bare stem looks like a finished id but is not. |
+
+So the earlier rule ("trust the gateway, not the vendor page") was overfitted to Grok. The real rule: **cross-read both, ship the best-documented form, and keep the typed-voice box** -- the only ground truth is a live call.
+
+The failure mode is worth noting too, because it cost two auditions. Sending a bad voice id produced an **opaque** `Provider returned 400`. Sending NO voice produced the useful one: `An explicit voice is required for this TTS provider.` Deliberately removing a parameter to make an error legible is a debugging move worth remembering -- the blank-voice box exists partly for that.
+
+##### Pace is engine-relative (live finding, fixed)
+
+Narrator Pace 0.85 / Dialogue Pace 0.9, tuned by ear on the local narrator and sounding normal there, came out **dramatically slower** on MAI-Voice-2 -- and slurred, because every engine garbles when pushed well below its natural rate. The second symptom was a consequence of the first, not a separate defect.
+
+The cause is a category error in the original design: `speed` was treated as an absolute the way `scene_break_ms` is. It is not. Narration Settings are per BOOK, so switching engines silently changed what 0.85 *meant*, and MAI-Voice-2 at 1.0 already reads about where Kokoro sits at 0.85 -- the two slowdowns compounded.
+
+`HostedModel.pace_baseline` now records how fast an engine is at `speed=1.0` on the reference scale (Kokoro, which every pace number in this app was tuned against). The backend divides by it, so each engine is asked for the same PERCEIVED rate, still snapped to the 0.05 grid that avoids the 1.08x lisp. MAI-Voice-2 is 0.85; everything else is 1.0 and passes through untouched, which is what keeps this from quietly retiming the engines that were already right.
+
+The writer's pace setting is an **intent**. Turning that intent into a number a particular engine understands is the engine's job, not the writer's.
+
+It is an ear estimate, not a measurement -- one float, easy to retune. And the re-scaling is stated on the engine card, because a silent change to speech rate is exactly the kind of invisible transform that reads as a bug when someone hears it.
+
+##### MAI-Voice-2: demoted for not taking direction (live verdict)
+
+Re-auditioned with the pace calibration in place, and the slurs went with it -- confirming they were a symptom of the pace bug rather than a defect. This is the one Standard candidate with **nothing wrong with the voice**. It came off the shelf for a different reason.
+
+The verdict: MAI builds speech on its own engine and voice structure, so every `[pause]`, scene break and pace mark renders differently here than it did on the free narrator the writer formatted against. The markers are not ignored -- they are re-interpreted. Which is worse in a specific way: the writer hand-tuned those beats by ear on Kokoro, and MAI silently gives them a different reading. **Viable at the default narration settings with no inserts; misleading on a hand-formatted book.**
+
+That is a genuinely different failure from the other two, and it names the third property a narration engine needs. The full list is now: **varying** delivery (Voxtral's welded mood went monotonous), **identity held across separate requests** (Grok re-improvises per segment), and **obedience to the writer's markup** (MAI re-interprets it). Only the third is invisible in a short audition, which is why it took a full chapter to surface.
+
+All three Standard candidates are now demoted, so that tier is **empty on the recommended shelf**. The settings screen says so in as many words rather than leaving a silent gap between Budget and Pro -- an unexplained hole reads as a failed load, and papering over it with a reluctant pick would be worse than admitting the shortfall.
+
+##### The seed question (PINNED 2026-08-01)
+
+**Pinned by user direction at the close of Stage D.** The Standard tier ships empty and the hunt stops here -- everything below is the note to pick up from, not work in flight. Reopen it when there is a reason to (a new engine, a cheaper Pro option, or a writer asking for the tier); do not spend more auditions on it in passing.
+
+
+OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.
+
+It is unverified and was not built. Two reasons for caution: `supported_parameters` describes a model's chat-completions surface, and the OpenAI speech schema this endpoint imitates has no `seed` field at all -- so the gateway may drop it silently, or 400 on it mid-book. The test is cheap (one audition) and worth doing before anyone concludes a performer model cannot narrate long-form. If it works, it likely rehabilitates Grok and hardens Voxtral at the same time.
+
+##### The Standard shortlist (researched July 2026, mostly unauditioned)
+
+Three Standard candidates have now been auditioned and all three came off the shelf, so the remaining field is worth writing down rather than rediscovering. **NanoGPT has nothing in this band at all** -- its TTS catalog is Kokoro at $1/M and ElevenLabs Turbo at $60/M, so every candidate below is OpenRouter.
+
+Ranked by what the three failures taught us: an engine needs a **varying** delivery (Voxtral's welded mood went monotonous) that nonetheless **holds identity across separate requests** (Grok's did not) and **reads the writer's markup the way the free narrator does** (MAI re-interprets it), plus enough voices to cast more than one book.
+
+| Slug | $/M | Voices | Seed | Why it might work |
+|---|---|---|---|---|
+| `microsoft/mai-voice-2` | 22 | 4 (**1 English**) | no | **Being tested.** The only engine advertising stable speaker identity across long-form, and the fidelity variant rather than the latency one. |
+| `qwen/qwen-audio-3.0-tts-plus` | 20 | 2 | yes | The vendor's stated narration-grade tier ("naturalness and timbre fidelity"), as against the Flash variant built for real-time agents. |
+| `fish-audio/s2.1-pro` | 15 | not published | no | Well-regarded voice-cloning house; roster would need discovery. A free `:free` tier exists for zero-cost auditioning. |
+| `sesame/csm-1b` | 7 | 7 | yes | A third of the price. Built for natural conversational speech, which may or may not survive as narration. |
+| `canopylabs/orpheus-3b-0.1-ft` | 7 | 7 | yes | Same band, expressive-speech focus. |
+| `zyphra/zonos-v0.1-hybrid` | 7 | 5 | yes | Same band; the hybrid is the more natural of the two Zonos builds. |
+| `google/gemini-3.1-flash-tts-preview` | $1/M in + **$20/M out tokens** | 30 | yes | 30 voices and inline audio tags, but priced per TOKEN, so the estimator (Section 20) cannot quote a book exactly -- the one hard blocker, since quoting before spending is a locked rule. |
+
+Note how many of these expose `seed` -- Grok, Qwen, Zonos, Orpheus, Sesame, Kokoro, Voxtral -- and how few do not (MAI-Voice-2, Aura-2). That makes the open seed question below worth settling: it would apply to most of this table at once.
+
+##### Verified OpenRouter TTS catalog (July 2026, per million characters)
+
+| Slug | $/M | Notes |
+|---|---|---|
+| `hexgrad/kokoro-82m` | 0.62 | 54 voices; identical to the local narrator. Budget tier. |
+| `x-ai/grok-voice-tts-1.0` | 15 | 5 bare-name voices. Demoted -- prosody drift. |
+| `microsoft/mai-voice-2-flash` | 15 | Microsoft's latency variant; positioned for IVR, not narration. |
+| `qwen/qwen-audio-3.0-tts-flash` | 15 | Only 2 voices exposed by the gateway. The narration-grade "Plus" variant is not on OpenRouter. |
+| `mistralai/voxtral-mini-tts-2603` | 16 | 30 voices, mood baked into the id. **Standard tier.** |
+| `microsoft/mai-voice-2` | 22 | Advertises long-form speaker consistency, but the gateway exposes only ONE English voice (`en-US-Harper`) and no seed. Runner-up. |
+| `deepgram/aura-2` | 30 | 86 voices, no tunable parameters at all. Pro tier. |
+| `minimax/speech-2.8-turbo` | 60 | Not evaluated. |
+| `minimax/speech-2.8-hd` | 100 | Not evaluated. |
+| `google/gemini-3.1-flash-tts-preview` | $1/M in + $20/M out **tokens** | Priced per token, not per character, so the estimator (Section 20) cannot quote it exactly. Excluded on that basis alone. |
+
+MAI-Voice-2 was written up here as the near-miss and has since been auditioned -- see the verdict above. Microsoft's claim of "stable, high-fidelity output that preserves speaker consistency across audiobooks" held up; it is the one candidate that does not fall apart between requests. It lost on markup fidelity instead, which no datasheet would have predicted. Two working voices (Harper, Olivia), both American female, is also thin for casting -- the concern this paragraph originally raised, just smaller than feared.
+
 The provider abstraction must allow future providers without rewriting job logic.
 
 ### 13.2 Voice Selection Requirements

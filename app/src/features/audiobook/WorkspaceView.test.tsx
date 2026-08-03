@@ -121,6 +121,30 @@ describe("WorkspaceView", () => {
     expect(screen.getByText("2. Chapter 2")).toBeTruthy();
   });
 
+  it("remembers the last highlight so a second Sample click is not a demo sentence", async () => {
+    // Live report: previewing a selection worked, then clicking preview
+    // AGAIN played the canned demo sentence. A textarea's selection does
+    // not reliably survive a round trip through a button in the rail, and
+    // on the paid path that silently bills for words nobody asked to
+    // hear. The last real highlight is remembered as text.
+    const textarea = await renderLoaded();
+    const start = NARRATION.indexOf("First prose.");
+    textarea.setSelectionRange(start, start + "First prose.".length);
+    fireEvent.select(textarea);
+
+    // The selection collapses -- exactly what clicking away does.
+    textarea.setSelectionRange(start, start);
+
+    fireEvent.click(screen.getByRole("button", { name: /Sample selection/i }));
+    await waitFor(() => {
+      const call = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+        .find(([url]: unknown[]) => String(url).includes("/preview-selection"));
+      expect(call).toBeTruthy();
+      expect(JSON.parse(String((call![1] as RequestInit).body)).text)
+        .toBe("First prose.");
+    });
+  });
+
   it("pauses insert INLINE without shredding the paragraph", async () => {
     const textarea = await renderLoaded();
     // Caret mid-paragraph, right after a sentence's period.

@@ -6,10 +6,14 @@
 #
 # The two rules that make this file matter:
 #
-# 1. SIZE: paragraph-level segments targeting 800-1,500 characters.
-#    Consecutive paragraphs group together until the cap; a single
-#    paragraph over the cap falls back to sentence splits. Fewer requests,
-#    better prosody, fewer audible joins than sentence-level segmentation.
+# 1. SIZE: ONE PARAGRAPH, ONE SEGMENT. A paragraph over the 1,500-char cap
+#    falls back to sentence splits. Paragraphs used to GROUP up to the cap
+#    and travel as one request joined by a blank line, which was cheaper
+#    in requests and turned out to be wrong: an engine is free to ignore
+#    that blank line, and some do, so paragraph two began milliseconds
+#    after paragraph one with no beat between them. A boundary the
+#    pipeline cannot see is a boundary it cannot time. Per-character
+#    pricing means the split costs nothing extra.
 #
 # 2. IDENTITY: segment IDs are STABLE RANDOM IDs, never positional. When
 #    the narration changes and segmentation re-runs, unchanged segments
@@ -33,7 +37,10 @@ import uuid
 
 from app.audiobook.markers import ParsedNarration
 
-SEGMENTS_VERSION = 1
+# Bumped to 2 when paragraphs stopped grouping into shared segments. The
+# version exists so a change in HOW text is cut re-runs segmentation
+# rather than leaving a book half-cut by two different rules.
+SEGMENTS_VERSION = 2
 
 # Spec 23.1 sizing targets. MAX is the grouping cap; a single paragraph
 # larger than MAX is sentence-split into chunks no bigger than MAX.
@@ -126,6 +133,10 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
     pending_len = 0
     pending_pace = 1.0
     pending_dialogue = False
+    # True when the pending text OPENS a paragraph. Assembly reads this to
+    # decide where the inter-paragraph beat belongs -- the continuation
+    # pieces of one oversize paragraph must not get one.
+    pending_paragraph_start = False
     # The open flow group: fragments accumulated across mid-paragraph
     # pauses. Invariant: pauses trail fragments -- after fragment k is
     # added its pause follows, so len(pauses) == len(fragments) until the
@@ -166,7 +177,9 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
     def flush() -> None:
         """Close the open flow group (if any) and the pending text into
         emitted items. Every hard boundary funnels through here."""
-        nonlocal group_fragments, group_pauses
+        nonlocal group_fragments, group_pauses, pending_paragraph_start
+        starts_paragraph = pending_paragraph_start
+        pending_paragraph_start = False
         text = _take_pending()
         if group_fragments:
             fragments = group_fragments
@@ -195,6 +208,8 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
                     item["pace"] = pending_pace
                 if pending_dialogue:
                     item["dialogue"] = True
+                if starts_paragraph:
+                    item["paragraph_start"] = True
                 items.append(item)
             for ms in trailing:
                 items.append({"kind": "pause", "duration_ms": ms})
@@ -205,6 +220,8 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
                 item["pace"] = pending_pace
             if pending_dialogue:
                 item["dialogue"] = True
+            if starts_paragraph:
+                item["paragraph_start"] = True
             items.append(item)
 
     for element in elements:
@@ -244,6 +261,28 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
                 if dialogue != pending_dialogue:
                     flush()
                     pending_dialogue = dialogue
+                # ONE PARAGRAPH, ONE SEGMENT. Paragraphs used to group up
+                # to the character cap and travel as a single request
+                # joined by a blank line -- but an engine is free to
+                # ignore that blank line, and several do: paragraph two
+                # arrived milliseconds after paragraph one with no beat
+                # between them (live finding, Voxtral). A boundary the
+                # pipeline cannot see is a boundary it cannot time, so a
+                # true paragraph break now closes the previous segment.
+                # The gap itself is inserted at assembly from
+                # paragraph_gap_ms, so retiming it later costs nothing.
+                #
+                # Cost is unchanged: hosted engines bill per character,
+                # not per request.
+                #
+                # A paragraph at index 0 with work already open is NOT a
+                # new paragraph -- it is the continuation of one split by
+                # a mid-paragraph pause or an inline exclusion, and
+                # flushing there would break the flow group that exists
+                # to keep such a sentence sounding continuous.
+                if paragraph_index > 0 or not (group_fragments or pending_paragraphs):
+                    flush()
+                    pending_paragraph_start = True
                 pieces = ([paragraph] if len(paragraph) <= SEGMENT_MAX_CHARS
                           else _split_oversize_paragraph(paragraph))
                 for piece in pieces:
@@ -354,6 +393,12 @@ def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
                     segment["pace"] = raw["pace"]
                 if raw.get("dialogue"):
                     segment["dialogue"] = True
+                if raw.get("paragraph_start"):
+                    # Layout, not speech: assembly puts the inter-paragraph
+                    # beat before this segment. Deliberately NOT part of
+                    # content_hash -- moving a paragraph break must not
+                    # force a re-render of audio whose words are the same.
+                    segment["paragraph_start"] = True
                 if raw.get("fragments"):
                     # Flow segment (mid-paragraph pauses): the fragment
                     # layout drives continuous synthesis + cut matching;

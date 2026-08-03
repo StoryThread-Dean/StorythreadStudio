@@ -442,7 +442,7 @@ def test_resume_continues_from_persisted_state_via_api(tmp_path, monkeypatch):
 
     # Resume through the endpoint: it reuses the paused run's provider.
     monkeypatch.setattr("app.routers.audiobook.synthesis.resolve_backend",
-                        lambda provider: FakeBackend())
+                        lambda provider, model="": FakeBackend())
     response = client.post("/api/audiobook/generation/resume",
                            json={"workspace_path": str(ws)})
     assert response.status_code == 200, response.text

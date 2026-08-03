@@ -13,7 +13,7 @@
 from app.audiobook.markers import parse_narration
 from app.audiobook.pronunciation import prepare_tts_text
 from app.audiobook.synthesis import SynthesisBackend
-from app.audiobook.wav_assembly import concat_wav
+from app.audiobook.wav_assembly import concat_wav, match_level
 from app.audiobook.workspace import NARRATION_DEFAULTS
 
 DEMO_VOICE = "af_heart"
@@ -141,9 +141,17 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
 
     pieces: list[bytes | int] = []
     trace: list[dict] = []
+    gap_ms = int(settings.get("paragraph_gap_ms", 0) or 0)
     for chapter in parsed.chapters:
         for item in segmenter._segment_texts_from_elements(chapter.elements):
             kind = item["kind"]
+            # The inter-paragraph beat, on the same rule assembly uses:
+            # only between two spoken pieces, never stacked on top of a
+            # break or the writer's own pause. A preview that skipped this
+            # would misrepresent the finished book.
+            if (kind == "segment_text" and item.get("paragraph_start")
+                    and gap_ms and pieces and isinstance(pieces[-1], bytes)):
+                pieces.append(gap_ms)
             if kind == "segment_text":
                 speed = effective_pace(item, settings)
                 fragments = item.get("fragments")
@@ -154,8 +162,11 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                     payloads = [prepare_tts_text(f, rules) for f in fragments]
                     audio, cuts, flowed = flow.synthesize_flow(
                         backend, voice_id, speed, payloads)
+                    # One gain for the whole run, applied BEFORE the split:
+                    # the pieces are one utterance and must not be levelled
+                    # against each other.
                     pieces.extend(flow.split_flow_pieces(
-                        audio, cuts, item.get("internal_pauses", [])))
+                        match_level(audio), cuts, item.get("internal_pauses", [])))
                     for payload in payloads:
                         trace.append({
                             "speed": speed,
@@ -167,7 +178,10 @@ def render_marked_text(text: str, backend: SynthesisBackend, voice_id: str,
                     continue
                 payload = prepare_tts_text(item["text"], rules)
                 audio, _duration = backend.synthesize(payload, voice_id, speed)
-                pieces.append(audio)
+                # Each paragraph is its own request, and hosted engines
+                # answer them at their own levels -- this is what stops
+                # paragraph two arriving louder than paragraph one.
+                pieces.append(match_level(audio))
                 trace.append({
                     "speed": speed,
                     "dialogue": bool(item.get("dialogue")),

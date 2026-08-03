@@ -46,11 +46,15 @@ class SynthesisBackend:
         raise NotImplementedError
 
 
-def resolve_backend(provider: str) -> SynthesisBackend:
+def resolve_backend(provider: str, model_id: str = "") -> SynthesisBackend:
     """
     Look up the backend for a provider key, or raise ValueError with a
-    user-facing message. Local import avoids a cycle (local_worker imports
-    this module for the base class).
+    user-facing message. Local imports avoid cycles (local_worker and
+    cloud_speech both import this module for the base class).
+
+    Hosted providers need a model id and an API key; the key comes from
+    the same settings store the writing side uses, so a writer who
+    already pays for OpenRouter or NanoGPT does not enter it twice.
     """
     if provider == "local-kokoro":
         from app.audiobook import local_worker
@@ -58,9 +62,22 @@ def resolve_backend(provider: str) -> SynthesisBackend:
             return local_worker.make_backend()
         except local_worker.WorkerUnavailableError as e:
             raise ValueError(str(e))
-    if provider in ("openrouter", "nanogpt"):
-        raise ValueError(
-            "Cloud narration providers arrive in a later stage. The free "
-            "local narrator ships first."
-        )
+
+    from app.audiobook import cloud_speech, tts_providers
+    if provider in tts_providers.PROVIDERS:
+        config = tts_providers.PROVIDERS[provider]
+        if not model_id:
+            raise ValueError(
+                f"Choose a {config.label} narration model before printing.")
+        from app import settings_store
+        settings = settings_store.load_settings()
+        api_key = tts_providers.narration_api_key(settings, config)
+        if not api_key.strip() and not settings.get("audiobook_use_writing_keys", True):
+            raise ValueError(
+                f"No audiobook {config.label} API key saved. Add one in "
+                "Settings under the audiobook narration keys, or switch "
+                "narration back to using your writing key."
+            )
+        return cloud_speech.make_backend(provider, model_id, api_key)
+
     raise ValueError(f"Unknown narration provider '{provider}'.")
