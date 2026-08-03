@@ -1469,6 +1469,7 @@ anything from a later one:
    sentence at no / short / long, because the three length buttons are
    otherwise just numbers. Deliberately no dialogue in this step.
 4-7. The four beat types, each with its own before/after pair, running
+   (see also the amber caution on step 6, below)
    **one continuous scene** (Elena's argument) in order. By the third clip
    the writer is judging the pause rather than reading a new sentence, and
    because Kokoro is fairly monotone the words themselves have to carry
@@ -1477,6 +1478,22 @@ anything from a later one:
    taste but plainly wrong ("reed" in a past-tense sentence).
 9. *Fixes* -- broken markers, and why they are never guessed at.
 10. *Choosing what it suggests* -- the rail and the all-at-once button.
+
+**The short-burst step carries a deliberate flaw (writer's instruction,
+2026-08-03).** Its "with pauses" clip has three `[pause:0.4]` markers
+packed into one line, and Kokoro slurs slightly under that density. The
+demo is NOT to be cleaned up. An amber note above the clips says so
+plainly: pauses close together can make the narrator run words together,
+it is a limitation of the engine and not of this app, when it happens is
+unpredictable, and the fix is fewer pauses or more space between them.
+
+The reasoning is worth keeping: a tutorial that only ever plays the
+narrator at its best sets the writer up to believe the first garbled run
+in their own chapter is something they did. Naming the failure, pointing
+at an audible instance of it, and saying whose it is turns a mystery into
+a known limitation. `test_the_short_burst_demo_keeps_its_three_packed_pauses`
+guards the script against a well-meaning future edit that would space the
+pauses out and silently delete the warning.
 
 Language is written for a first-time writer. Specifically retired in that
 review: "Marker problems" (renamed **Fixes** -- they are already found and

@@ -141,6 +141,19 @@ const STEPS: WalkStep[] = [
       and it hits much harder. Only your ear can settle it, which is
       exactly why the walkthrough asks instead of just doing it.
     </>,
+    // The writer asked for this warning, and asked specifically that the
+    // demo NOT be cleaned up: the clip below slurs slightly, which is the
+    // honest thing for it to do. A tutorial that only ever plays the
+    // narrator at its best sets the writer up to think the first garbled
+    // run in their own chapter is something they did.
+    note: <>
+      Pauses packed close together can make the narrator slur or run words
+      together. You can hear a little of it in the second clip below. That
+      is a limitation of Kokoro rather than anything this app is doing, and
+      when it happens is unpredictable, though it shows up mostly when
+      several pauses land near each other. If a run comes back muddy, use
+      fewer pauses in it or space them further apart.
+    </>,
     demos: [
       { kind: "beat-short-burst-flat", label: "No pauses, all one breath" },
       { kind: "beat-short-burst", label: "With a short pause between each" },

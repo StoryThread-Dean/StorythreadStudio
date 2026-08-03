@@ -309,6 +309,40 @@ describe("InsertWalkthrough as a window", () => {
     expect(screen.getByText(/Still the same scene/)).toBeTruthy();
   });
 
+  it("warns that packed pauses make the narrator slur, and whose fault it is", () => {
+    // The writer asked for this: the audio problem is real, it is random,
+    // and it belongs to Kokoro. Saying so up front is the difference
+    // between a known limitation and the writer assuming they broke
+    // something. The note must name the engine and clear the app.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Short-sentence beats");
+    const note = screen.getByText(/slur or run words\s+together/);
+    expect(note).toBeTruthy();
+    const card = screen.getByTestId("guided-walk");
+    expect(within(card).getByText(/limitation of Kokoro/)).toBeTruthy();
+    expect(within(card).getByText(/when it happens is unpredictable/)).toBeTruthy();
+    // And tells them what to do about it, or the warning is just worry.
+    expect(within(card).getByText(/fewer pauses in it or space them further apart/))
+      .toBeTruthy();
+  });
+
+  it("sets the warning apart from the step body without shouting", () => {
+    // A caution buried in the body gets skimmed with it. Amber, its own
+    // block, above the clips it refers to -- not a full alert box, which
+    // would read as an error in a tutorial.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Short-sentence beats");
+    const note = screen.getByText(/slur or run words\s+together/).closest("p")!;
+    expect(note.className).toMatch(/amber/);
+    // Above the demos, so the writer reads it before playing the clip it
+    // is describing.
+    const play = screen.getByLabelText(/Play: No pauses/);
+    expect(note.compareDocumentPosition(play)
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("admits the short-burst suggestion is a matter of taste", () => {
     // Sometimes the faster version is better. A tutorial that claims
     // every suggestion is an improvement gets disbelieved on the first

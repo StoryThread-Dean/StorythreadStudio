@@ -228,6 +228,22 @@ def test_the_beat_tiles_run_one_continuous_scene():
     assert "Elena" in DEMO_SCRIPTS["beat-interjection-flat"]
 
 
+def test_the_short_burst_demo_keeps_its_three_packed_pauses():
+    # DO NOT "fix" this demo. Three pauses this close together make Kokoro
+    # slur slightly, and the tutorial's amber note points at that clip as
+    # the demonstration. The flaw is the lesson: a writer who has only ever
+    # heard the narrator at its best will assume the first garbled run in
+    # their own chapter is something they did wrong.
+    #
+    # So spacing the pauses out, dropping one, or lengthening them would
+    # each silently delete a warning the writer specifically asked for.
+    script = DEMO_SCRIPTS["beat-short-burst"]
+    assert script.count("[pause:0.4]") == 3, script
+    assert "[pause:0.8]" not in script and "[pause:1.5]" not in script
+    # Four short sentences, three gaps -- every gap marked.
+    assert script.count(".") >= 4
+
+
 def test_the_word_reading_demo_shows_the_engine_getting_it_wrong():
     # Unlike the beat pairs, this one is not a matter of taste: the flat
     # clip says "reed" in a past-tense sentence. The fix must be a say

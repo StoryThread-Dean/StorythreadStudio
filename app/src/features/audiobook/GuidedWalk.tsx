@@ -18,7 +18,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ChevronLeft, ChevronRight, GraduationCap, Loader2, Play, X,
+  AlertTriangle, ChevronLeft, ChevronRight, GraduationCap, Loader2, Play, X,
 } from "lucide-react";
 
 import { fetchMarkerDemo } from "./api";
@@ -36,6 +36,12 @@ export interface WalkStep {
   /** What this step looks like in the app. Optional, but a step with a
    *  concrete example teaches roughly twice as much as one without. */
   example?: React.ReactNode;
+  /** A caution the writer should read before deciding, set apart from the
+   *  body so it is not skimmed with it. Amber in both tones on purpose:
+   *  a warning is not part of the feature's identity, and re-tinting it
+   *  per panel would make it read as decoration. Sits ABOVE the demos so
+   *  a note about what a clip does lands before the clip is played. */
+  note?: React.ReactNode;
   /** Clips to hear. Where a step describes something AUDIBLE, describing
    *  it is the weakest option available -- two buttons and four seconds
    *  settle what a paragraph of prose only gestures at. Rendered through
@@ -141,6 +147,16 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
       {step.example && (
         <p className={`mt-1.5 rounded border bg-zinc-950/60 px-2 py-1 font-mono text-[10px] leading-relaxed text-zinc-400 ${c.example}`}>
           {step.example}
+        </p>
+      )}
+
+      {step.note && (
+        // Set apart by a left accent rather than a filled box: it has to
+        // read as a different KIND of sentence without competing with the
+        // step it belongs to.
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-r border-l-2 border-amber-600/70 bg-amber-950/20 px-2 py-1 text-[10.5px] leading-relaxed text-amber-200/90">
+          <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
+          <span>{step.note}</span>
         </p>
       )}
 
