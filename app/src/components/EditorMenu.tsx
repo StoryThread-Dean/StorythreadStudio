@@ -186,8 +186,8 @@ export function EditorMenu({
               <MenuGroupLabel>Listen</MenuGroupLabel>
               <MenuItem
                 icon={<Headphones size={13} />}
-                label="Dialogue Check..."
-                hint="Hear the selected passage read aloud, to judge how the dialogue flows"
+                label="Passage / Dialogue Check..."
+                hint="Hear the selected passage read aloud -- dialogue that does not flow, repeated words, and the right-word-wrong-word errors no checker catches"
                 onClick={pick(onDialogueCheck)}
               />
             </>

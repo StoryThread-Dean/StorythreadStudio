@@ -1,10 +1,16 @@
-// components/DialogueCheck.tsx -- hear your dialogue read aloud.
-// ================================================================
-// Reading your own dialogue silently is the worst way to judge it: you
+// components/DialogueCheck.tsx -- hear a passage read aloud.
+// ============================================================
+// Reading your own writing silently is the worst way to judge it: you
 // supply the rhythm, the pauses and the intent without noticing, so it
-// always sounds better in your head than on the page. Hearing an
-// indifferent voice read it back is how the flat lines, the repeated
-// beats and the sentences nobody would actually say become obvious.
+// always sounds better in your head than on the page. An indifferent
+// voice supplies none of that.
+//
+// Dialogue is the obvious use and the one it was built for, but it earns
+// its keep on narration too, because the ear catches a different class
+// of problem than the eye: a word repeated three times in a paragraph,
+// a sentence that only parses on the second read, and above all the
+// RIGHT-WORD-WRONG-WORD errors no checker flags -- "Lara walked through
+// the dessert" is perfect spelling, perfect grammar, and audibly absurd.
 //
 // Deliberately the smallest possible tool for that job:
 //
@@ -28,6 +34,11 @@ const API_BASE = "http://localhost:8000";
 interface DialogueCheckProps {
   /** The passage to read -- whatever the writer had selected. */
   text: string;
+  /** False when nothing was selected and this is the whole chapter. */
+  hadSelection?: boolean;
+  /** The voice remembered for THIS book. */
+  voiceId?: string;
+  onVoiceChange?: (voiceId: string) => void;
   onClose: () => void;
 }
 
@@ -45,9 +56,13 @@ function estimateWait(chars: number): string {
   return `about ${Math.round(seconds / 60)} minute${seconds >= 90 ? "s" : ""}`;
 }
 
-export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
+export function DialogueCheck({
+  text, hadSelection = true, voiceId: rememberedVoice, onVoiceChange, onClose,
+}: DialogueCheckProps) {
   const [voices, setVoices] = useState<Voice[]>([]);
-  const [voiceId, setVoiceId] = useState("af_heart");
+  // Heart until the writer picks otherwise; their pick then follows the
+  // book, not the machine.
+  const [voiceId, setVoiceId] = useState(rememberedVoice || "af_heart");
   const [engine, setEngine] = useState<"checking" | "ready" | "missing">("checking");
   const [installing, setInstalling] = useState(false);
   const [busy, setBusy] = useState<null | "reading" | "sample">(null);
@@ -190,7 +205,7 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
   return (
     <div
       role="dialog"
-      aria-label="Dialogue Check"
+      aria-label="Passage / Dialogue Check"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -198,7 +213,7 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
         <div className="flex items-center gap-2 border-b border-border px-5 py-3">
           <Headphones size={15} className="text-accent" />
           <h2 className="flex-1 text-sm font-semibold text-text-primary">
-            Dialogue Check
+            Passage / Dialogue Check
           </h2>
           <button onClick={onClose} aria-label="Close dialogue check"
                   className="rounded p-1 text-text-secondary hover:text-text-primary">
@@ -208,11 +223,27 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
 
         <div className="space-y-4 px-5 py-4">
           <p className="text-[12px] leading-relaxed text-text-secondary">
-            Hear this passage read aloud. Reading your own dialogue silently
-            hides its rhythm -- you supply the pauses without noticing. An
-            indifferent voice does not, which is what makes a flat line
-            obvious.
+            Hear this passage read aloud. Reading your own words silently
+            hides their rhythm -- you supply the pauses and the emphasis
+            without noticing, and an indifferent voice does not.
           </p>
+          <p className="text-[12px] leading-relaxed text-text-secondary">
+            Dialogue is the obvious use: whether an exchange sounds like
+            people talking. It works just as well on narration, where the
+            ear catches what the eye skims -- a word repeated three times
+            in a paragraph, a sentence that only parses on the second
+            read, and the right-word-wrong-word errors no checker flags.
+            "Lara walked through the dessert" is perfect spelling and
+            perfect grammar.
+          </p>
+
+          {!hadSelection && (
+            <p className="rounded border border-border bg-bg-surface px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
+              Nothing was selected, so this is the whole chapter. Select a
+              scene or a passage first and it will read just that -- faster
+              to prepare, and easier to judge.
+            </p>
+          )}
 
           {engine === "missing" ? (
             <div className="rounded border border-amber-800 bg-amber-950/30 px-3 py-2.5">
@@ -243,7 +274,10 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
                 <select
                   id="dc-voice"
                   value={voiceId}
-                  onChange={e => setVoiceId(e.target.value)}
+                  onChange={e => {
+                    setVoiceId(e.target.value);
+                    onVoiceChange?.(e.target.value);
+                  }}
                   className="min-w-0 flex-1 rounded border border-border bg-bg-input px-2 py-1 text-[12px] text-text-primary"
                 >
                   {options.map(v => (
@@ -308,11 +342,13 @@ export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
             </p>
           )}
 
-          <p className="border-t border-border pt-3 text-[11px] leading-relaxed text-text-secondary">
+          {/* Faded on purpose: this is a boundary statement, not
+              instructions. It matters the first time and never again. */}
+          <p className="border-t border-border pt-3 text-[10px] leading-relaxed text-faint">
             This is listening, not producing. Nothing is saved, no markers or
             pacing apply, and the audio disappears when you close this window.
             To make an actual audiobook -- chapter files, an M4B, character
-            voices -- use the <span className="text-text-primary">Audiobook
+            voices -- use the <span className="text-text-muted">Audiobook
             Converter</span> from the project home.
           </p>
         </div>

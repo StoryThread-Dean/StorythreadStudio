@@ -483,12 +483,17 @@ class PreviewSelectionRequest(BaseModel):
 PREVIEW_SELECTION_MAX_CHARS = 3000
 
 
-# ── Dialogue Check (writing app, not a workspace) ─────────────────────────────
-# Hearing dialogue read aloud is the fastest way to find out whether it
-# flows. This is that, and deliberately nothing more: one voice, local
-# only, no markers, no cost, nothing written anywhere. The writer is
-# listening for rhythm, not producing audio -- the Audiobook Converter
-# is where audio gets produced.
+# ── Passage / Dialogue Check (writing app, not a workspace) ───────────────────
+# Hearing a passage read aloud is the fastest way to find out whether it
+# works. Dialogue is the obvious case, but the ear catches a different
+# class of problem than the eye across any prose: a word repeated three
+# times in a paragraph, a sentence that only parses on the second read,
+# and the right-word-wrong-word errors no checker flags -- "walked
+# through the dessert" is perfect spelling and perfect grammar.
+#
+# Deliberately nothing more than that: one voice, local only, no markers,
+# no cost, nothing written anywhere. The writer is listening, not
+# producing -- the Audiobook Converter is where audio gets produced.
 
 # Four voices, not fifty-four. A picker with the whole roster turns a
 # two-second check into a browsing session, and the point is to hear the

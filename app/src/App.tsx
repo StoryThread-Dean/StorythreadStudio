@@ -425,6 +425,10 @@ function App() {
   // never edits, so it should not care what happens in the editor while
   // it is open.
   const [dialogueCheckText, setDialogueCheckText] = useState<string | null>(null);
+  // Whether that text came from a real selection. The panel says so --
+  // a gentle reminder, because reading a whole chapter is legitimate but
+  // rarely what somebody meant by "check this passage".
+  const [dialogueCheckSelected, setDialogueCheckSelected] = useState(true);
 
   // Ref for use inside callbacks -- gives the latest value without stale closures.
   // A "stale closure" is when a function captures an old version of a variable.
@@ -2549,6 +2553,7 @@ function App() {
                       const sel = view?.state.selection.main;
                       const selected = view && sel && !sel.empty
                         ? view.state.sliceDoc(sel.from, sel.to) : "";
+                      setDialogueCheckSelected(Boolean(selected.trim()));
                       setDialogueCheckText(selected || chapterContent);
                     }
                   : undefined
@@ -3535,6 +3540,10 @@ function App() {
       {dialogueCheckText !== null && (
         <DialogueCheck
           text={dialogueCheckText}
+          hadSelection={dialogueCheckSelected}
+          voiceId={projectUi.uiState.passageCheckVoice}
+          onVoiceChange={voice =>
+            projectUi.update({ passageCheckVoice: voice })}
           onClose={() => setDialogueCheckText(null)}
         />
       )}
