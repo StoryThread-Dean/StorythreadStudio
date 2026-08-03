@@ -483,6 +483,88 @@ class PreviewSelectionRequest(BaseModel):
 PREVIEW_SELECTION_MAX_CHARS = 3000
 
 
+# ── Dialogue Check (writing app, not a workspace) ─────────────────────────────
+# Hearing dialogue read aloud is the fastest way to find out whether it
+# flows. This is that, and deliberately nothing more: one voice, local
+# only, no markers, no cost, nothing written anywhere. The writer is
+# listening for rhythm, not producing audio -- the Audiobook Converter
+# is where audio gets produced.
+
+# Four voices, not fifty-four. A picker with the whole roster turns a
+# two-second check into a browsing session, and the point is to hear the
+# WORDS. One American and one British of each gender, chosen from the
+# best-rated of the local set.
+DIALOGUE_CHECK_VOICES = [
+    {"id": "af_heart", "label": "Heart (American female)"},
+    {"id": "am_michael", "label": "Michael (American male)"},
+    {"id": "bf_emma", "label": "Emma (British female)"},
+    {"id": "bm_george", "label": "George (British male)"},
+]
+
+# A ceiling rather than a target. The writer is warned as a selection
+# grows; this is only here so a stray Ctrl+A cannot queue an hour of
+# synthesis.
+DIALOGUE_CHECK_MAX_CHARS = 20000
+
+
+@router.get("/dialogue-check/voices")
+def dialogue_check_voices():
+    return {"voices": DIALOGUE_CHECK_VOICES}
+
+
+class DialogueCheckRequest(BaseModel):
+    text: str = Field(min_length=1)
+    voice_id: str = "af_heart"
+
+
+@router.post("/dialogue-check")
+def dialogue_check(request: DialogueCheckRequest):
+    """
+    Read a passage aloud so the writer can hear whether it flows.
+
+    Local engine only, and nothing is persisted: the audio is returned in
+    the response body and never touches disk. There is no workspace here
+    -- this runs against the manuscript in the writing editor, which has
+    no narration copy, no cast and no markers.
+
+    Any audiobook marker that somehow appears in the text is STRIPPED
+    rather than honoured. This tool is not a rehearsal of a narration
+    pass; treating [pause:0.8] as a real pause here would quietly make it
+    one, and the writer would be tuning an audiobook they did not know
+    they were making.
+    """
+    from app.audiobook import marker_demos
+    from app.audiobook.markers import strip_all_markers
+
+    text = strip_all_markers(request.text).strip()
+    if not text:
+        raise HTTPException(
+            status_code=400,
+            detail="There is nothing to read in that selection.")
+    if len(text) > DIALOGUE_CHECK_MAX_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"That selection is {len(text):,} characters -- more than "
+                   f"Dialogue Check will read in one go "
+                   f"({DIALOGUE_CHECK_MAX_CHARS:,}). Select a scene rather "
+                   "than a chapter, or use the Audiobook Converter for the "
+                   "whole book.")
+
+    try:
+        backend = synthesis.resolve_backend("local-kokoro")
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    try:
+        audio, _warnings, _trace = marker_demos.render_marked_text(
+            text, backend, request.voice_id, rules=[])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except synthesis.SynthesisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(content=audio, media_type="audio/wav")
+
+
 @router.post("/preview-selection")
 def preview_selection(request: PreviewSelectionRequest):
     """Select text in the narration editor, hear EXACTLY how it will

@@ -201,7 +201,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_audiobook_extraction.py` -- audiobook import extractors (TXT/MD/DOCX/EPUB/Storythread-project) incl. real DOCX+EPUB round trips, chapter detection, PDF rejection
   - `test_audiobook_markers.py` -- narration marker grammar ([pause]/[scene-break]/[chapter-break]/[exclude]), derived structure, warnings
   - `test_audiobook_pronunciation.py` -- pronunciation rules, [say] inline overrides, TTS payload prep (`--` to em dash, payload only)
-  - `test_audiobook_workspace_routes.py` -- /api/audiobook import/project/narration/pronunciations/recents/segments end to end
+  - `test_audiobook_workspace_routes.py` -- (also covers Dialogue Check: four voices not fifty-four, markers stripped rather than honoured, oversize refusal, no workspace required) -- /api/audiobook import/project/narration/pronunciations/recents/segments end to end
   - `test_audiobook_segmenter.py` -- segment sizing (paragraph grouping, sentence fallback, marker cuts) + stable-ID identity across inserts/edits/chapter renumbering
   - `test_audiobook_generation.py` -- generation engine: run lifecycle, per-segment persistence, pause/cancel between segments, retry cap + pessimistic attempts, truncation validation, restart recovery, workspace lockfile, narration-settings/dialogue/marker pace flow + staleness
   - `test_audiobook_local_worker.py` -- kokoro-worker manager: KokoroBackend transport errors, spawn command + version gate, install flow (SHA256 integrity, polluted-dir replace, locked-file loud failure), voices/preview/preview-selection endpoints

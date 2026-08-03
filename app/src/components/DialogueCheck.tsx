@@ -1,0 +1,299 @@
+// components/DialogueCheck.tsx -- hear your dialogue read aloud.
+// ================================================================
+// Reading your own dialogue silently is the worst way to judge it: you
+// supply the rhythm, the pauses and the intent without noticing, so it
+// always sounds better in your head than on the page. Hearing an
+// indifferent voice read it back is how the flat lines, the repeated
+// beats and the sentences nobody would actually say become obvious.
+//
+// Deliberately the smallest possible tool for that job:
+//
+//   ONE VOICE, four choices. A picker with fifty-four voices turns a
+//   two-second check into a browsing session, and the point is to hear
+//   the WORDS.
+//   LOCAL ONLY. Free, unlimited, offline, no key, no account.
+//   NOTHING IS KEPT. The audio exists in the browser for as long as the
+//   window is open and is never written anywhere.
+//   NO MARKERS, no pacing, no pauses. This is not a narration rehearsal
+//   and must not become one -- the Audiobook Converter is where audio
+//   gets produced.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle, Headphones, Loader2, Play, Square, X,
+} from "lucide-react";
+
+const API_BASE = "http://localhost:8000";
+
+interface DialogueCheckProps {
+  /** The passage to read -- whatever the writer had selected. */
+  text: string;
+  onClose: () => void;
+}
+
+interface Voice { id: string; label: string }
+
+// Local Kokoro runs faster than realtime; measured around 2.4x on CPU.
+// Prose reads at roughly 1,000 characters a minute, so this lands close
+// enough to set an expectation, which is all it is for.
+const SECONDS_PER_CHAR = 60 / 1000 / 2.4;
+
+function estimateWait(chars: number): string {
+  const seconds = Math.round(chars * SECONDS_PER_CHAR);
+  if (seconds < 20) return "a few seconds";
+  if (seconds < 90) return `about ${Math.round(seconds / 10) * 10} seconds`;
+  return `about ${Math.round(seconds / 60)} minute${seconds >= 90 ? "s" : ""}`;
+}
+
+export function DialogueCheck({ text, onClose }: DialogueCheckProps) {
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [voiceId, setVoiceId] = useState("af_heart");
+  const [engine, setEngine] = useState<"checking" | "ready" | "missing">("checking");
+  const [installing, setInstalling] = useState(false);
+  const [busy, setBusy] = useState<null | "reading" | "sample">(null);
+  const [error, setError] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const chars = text.trim().length;
+  const long = chars > 4000;
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/audiobook/dialogue-check/voices`);
+        const body = await res.json();
+        setVoices(body.voices ?? []);
+      } catch { /* the four ids below still work */ }
+    })();
+  }, []);
+
+  const checkEngine = useCallback(async () => {
+    setEngine("checking");
+    try {
+      const res = await fetch(`${API_BASE}/api/audiobook/local-engine/status`);
+      const body = await res.json();
+      setEngine(body.installed ? "ready" : "missing");
+    } catch {
+      setEngine("missing");
+    }
+  }, []);
+
+  useEffect(() => { void checkEngine(); }, [checkEngine]);
+
+  // Poll while the engine downloads, then carry straight on.
+  useEffect(() => {
+    if (!installing) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/audiobook/local-engine/status`);
+        const body = await res.json();
+        if (body.installed || body.install?.state === "done") {
+          window.clearInterval(timer);
+          setInstalling(false);
+          setEngine("ready");
+        } else if (body.install?.state === "error") {
+          window.clearInterval(timer);
+          setInstalling(false);
+          setError(body.install.error ?? "The voice download failed.");
+        }
+      } catch { /* keep waiting */ }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [installing]);
+
+  // Nothing is kept: the object URL dies with the window.
+  useEffect(() => () => {
+    audioRef.current?.pause();
+    if (url) URL.revokeObjectURL(url);
+  }, [url]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function speak(passage: string, kind: "reading" | "sample") {
+    if (busy) return;
+    setBusy(kind);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/audiobook/dialogue-check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: passage, voice_id: voiceId }),
+      });
+      if (!res.ok) {
+        let detail = `Could not read that (${res.status}).`;
+        try { detail = (await res.json()).detail ?? detail; } catch { /* keep */ }
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      audioRef.current?.pause();
+      if (url) URL.revokeObjectURL(url);
+      const fresh = URL.createObjectURL(blob);
+      setUrl(fresh);
+      const audio = new Audio(fresh);
+      audioRef.current = audio;
+      await audio.play();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read that passage.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function install() {
+    setError(null);
+    try {
+      await fetch(`${API_BASE}/api/audiobook/local-engine/install`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setInstalling(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start the download.");
+    }
+  }
+
+  const options = voices.length ? voices : [
+    { id: "af_heart", label: "Heart (American female)" },
+    { id: "am_michael", label: "Michael (American male)" },
+    { id: "bf_emma", label: "Emma (British female)" },
+    { id: "bm_george", label: "George (British male)" },
+  ];
+
+  return (
+    <div
+      role="dialog"
+      aria-label="Dialogue Check"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="flex w-full max-w-lg flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+          <Headphones size={15} className="text-accent" />
+          <h2 className="flex-1 text-sm font-semibold text-text-primary">
+            Dialogue Check
+          </h2>
+          <button onClick={onClose} aria-label="Close dialogue check"
+                  className="rounded p-1 text-text-secondary hover:text-text-primary">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          <p className="text-[12px] leading-relaxed text-text-secondary">
+            Hear this passage read aloud. Reading your own dialogue silently
+            hides its rhythm -- you supply the pauses without noticing. An
+            indifferent voice does not, which is what makes a flat line
+            obvious.
+          </p>
+
+          {engine === "missing" ? (
+            <div className="rounded border border-amber-800 bg-amber-950/30 px-3 py-2.5">
+              <p className="flex items-start gap-1.5 text-[12px] font-medium text-amber-200">
+                <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                The free voice engine is not installed yet.
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-amber-200/80">
+                Dialogue Check reads entirely on your computer -- no account,
+                no key, nothing sent anywhere. It needs a one-time download of
+                about 372 MB, shared with the Audiobook Converter.
+              </p>
+              <button
+                onClick={() => void install()}
+                disabled={installing}
+                className="mt-2 inline-flex items-center gap-2 rounded bg-accent px-3 py-1.5 text-[12px] font-semibold text-black disabled:opacity-40"
+              >
+                {installing && <Loader2 size={12} className="animate-spin" />}
+                {installing ? "Downloading the voices..." : "Install the voices"}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-[11px] text-text-secondary" htmlFor="dc-voice">
+                  Read by
+                </label>
+                <select
+                  id="dc-voice"
+                  value={voiceId}
+                  onChange={e => setVoiceId(e.target.value)}
+                  className="min-w-0 flex-1 rounded border border-border bg-bg-input px-2 py-1 text-[12px] text-text-primary"
+                >
+                  {options.map(v => (
+                    <option key={v.id} value={v.id}>{v.label}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => void speak(
+                    "The road disappeared beneath the gathering snow.", "sample")}
+                  disabled={busy !== null || engine !== "ready"}
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-text-secondary hover:text-text-primary disabled:opacity-40"
+                >
+                  {busy === "sample"
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <Play size={11} />}
+                  Sample
+                </button>
+              </div>
+
+              <p className="text-[11px] text-text-secondary">
+                {chars.toLocaleString()} characters selected -- around{" "}
+                {estimateWait(chars)} to prepare.
+                {long && (
+                  <span className="text-amber-300">
+                    {" "}Long passages are fine; they just take a while. A
+                    single scene is usually enough to hear the problem.
+                  </span>
+                )}
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => void speak(text, "reading")}
+                  disabled={busy !== null || engine !== "ready" || chars === 0}
+                  className="inline-flex items-center gap-2 rounded bg-accent px-4 py-2 text-[12px] font-semibold text-black disabled:opacity-40"
+                >
+                  {busy === "reading"
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : <Play size={13} />}
+                  {busy === "reading" ? "Preparing..." : "Read it to me"}
+                </button>
+                {url && (
+                  <button
+                    onClick={() => { audioRef.current?.pause(); }}
+                    className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary"
+                  >
+                    <Square size={12} /> Stop
+                  </button>
+                )}
+              </div>
+
+              {url && (
+                <audio controls src={url} className="w-full" aria-label="Playback" />
+              )}
+            </>
+          )}
+
+          {error && (
+            <p className="rounded border border-rose-800 bg-rose-950/40 px-3 py-2 text-[11px] text-rose-300">
+              {error}
+            </p>
+          )}
+
+          <p className="border-t border-border pt-3 text-[11px] leading-relaxed text-text-secondary">
+            This is listening, not producing. Nothing is saved, no markers or
+            pacing apply, and the audio disappears when you close this window.
+            To make an actual audiobook -- chapter files, an M4B, character
+            voices -- use the <span className="text-text-primary">Audiobook
+            Converter</span> from the project home.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

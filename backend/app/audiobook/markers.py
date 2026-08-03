@@ -80,6 +80,12 @@ _VOICE_CLOSE_RE = re.compile(r"\[/voice\]", re.IGNORECASE)
 # what an unknown or unset speaker falls back to.
 NARRATOR = "Narrator"
 
+# [say:SPOKEN]written[/say]. The authority on this lives in
+# pronunciation.py, which owns what a spoken form MEANS; this copy exists
+# only so markers.py can dissolve the wrapper without importing it.
+_SAY_SPAN_RE = re.compile(r"\[say:[^\]]+\](.*?)\[/say\]",
+                          re.IGNORECASE | re.DOTALL)
+
 
 @dataclass
 class ParsedChapter:
@@ -402,6 +408,28 @@ def _pace_regions(body: str, warnings: list[str],
     elif tail.strip():
         regions.append((1.0, _drop_stray_closers(tail)))
     return regions
+
+
+def strip_all_markers(text: str) -> str:
+    """
+    Every narration marker dissolved, every word kept.
+
+    Wrappers give up their contents ([say:X]word[/say] -> word,
+    [voice:N]"line"[/voice] -> "line"); standalone markers vanish. Used
+    by Dialogue Check, which reads a passage from the WRITING editor
+    where markers have no business being honoured -- treating a stray
+    [pause:0.8] as a real pause there would quietly turn a read-aloud
+    into a narration rehearsal.
+    """
+    out = _SAY_SPAN_RE.sub(lambda m: m.group(1), text)
+    out = _VOICE_RE.sub(lambda m: m.group(2), out)
+    out = _PACE_RE.sub(lambda m: m.group(2), out)
+    out = _EXCLUDE_RE.sub(lambda m: m.group(1), out)
+    out = _MARKER_RE.sub("", out)
+    for stray in (_VOICE_OPEN_RE, _VOICE_CLOSE_RE, _PACE_OPEN_RE,
+                  _PACE_CLOSE_RE, _EXCLUDE_OPEN_RE):
+        out = stray.sub("", out)
+    return out
 
 
 def parse_narration(narration_text: str) -> ParsedNarration:
