@@ -234,6 +234,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/audiobook/AudiobookDashboard.test.tsx` -- audiobook dashboard: recents render, empty state, open flow, remove-keeps-files endpoint
   - `src/features/audiobook/WorkspaceView.test.tsx` -- narration editor: inline pause insertion (scroll preserved), [say]/[exclude]/pace wraps, Remove marker stripping, manual save PUT + chapter re-derive, marker help panel, pronunciation dialog
   - `src/features/audiobook/GenerationPanel.test.tsx` -- narration rail: voices load, generate posts + live progress, paused-run resume, failed-segment surfacing, up-to-date force flow, engine-unavailable message
+  - `src/features/audiobook/anchorPlacement.test.ts` -- the [say] popout is never placed below the halfway line (it expands after opening) and never hangs off an edge
   - `src/features/audiobook/markers.test.ts` -- stripAudioMarkers (wrappers dissolve, words never deleted) + paragraphBoundsAt
   - `src/features/audiobook/ImportPanel.test.tsx` -- Get Started flow (spec 5.1.2): workspace location auto-chosen and explained, override sticks, Create posts source + workspace + title
   - `src/features/audiobook/BookDetailsPanel.test.tsx` -- metadata form: loads on mount, dirty tracking (manual save), full-field PUT, cover pick/validate/preview/remove

@@ -23,6 +23,7 @@ import {
   fetchNarration, saveNarration,
 } from "./api";
 import type { AudioStatus, AvailableChapter, ChapterAudioStatus } from "./api";
+import { clampAnchor } from "./anchorPlacement";
 import { CastPanel } from "./CastPanel";
 import { StorageDialog } from "./StorageDialog";
 import { InsertWalkthrough } from "./InsertWalkthrough";
@@ -38,6 +39,10 @@ interface WorkspaceViewProps {
   payload: AudiobookProjectPayload;
   onBack: () => void;
 }
+
+// The [say] popout's width, kept in step with SayEditor's own w-[26rem]
+// so the placement maths can keep it clear of the right edge.
+const SAY_POPOUT_WIDTH = 416;
 
 // The quick-action marker set (spec 10.1 defaults; configurability
 // arrives with Settings in a later slice). Placement matters: a pause is
@@ -219,12 +224,21 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       const style = window.getComputedStyle(ta);
       const mirror = document.createElement("div");
       mirror.style.position = "absolute";
+      mirror.style.top = "0";
+      mirror.style.left = "-9999px";
       mirror.style.visibility = "hidden";
       mirror.style.whiteSpace = "pre-wrap";
       mirror.style.overflowWrap = "break-word";
+      // border-box + clientWidth is the only pairing that reproduces the
+      // textarea's CONTENT width. Copying the padding shorthand does not
+      // work -- getComputedStyle returns "" for it whenever the sides
+      // differ, and the mirror then wraps at a different column, which
+      // puts every line at the wrong height.
+      mirror.style.boxSizing = "border-box";
       mirror.style.width = `${ta.clientWidth}px`;
-      for (const prop of ["fontFamily", "fontSize", "fontWeight",
-                          "lineHeight", "letterSpacing", "padding"] as const) {
+      for (const prop of ["fontFamily", "fontSize", "fontWeight", "lineHeight",
+                          "letterSpacing", "paddingTop", "paddingRight",
+                          "paddingBottom", "paddingLeft"] as const) {
         mirror.style[prop] = style[prop];
       }
       mirror.textContent = ta.value.slice(0, index);
@@ -232,14 +246,29 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       marker.textContent = ta.value.slice(index, index + 1) || ".";
       mirror.appendChild(marker);
       document.body.appendChild(mirror);
-      // Just under the word's line, clamped into view.
-      const top = ta.offsetTop + marker.offsetTop - ta.scrollTop + 26;
-      const left = marker.offsetLeft - ta.scrollLeft;
+      const markerTop = marker.offsetTop;
+      const markerLeft = marker.offsetLeft;
       mirror.remove();
-      return {
-        top: Math.max(8, top),
-        left: Math.max(8, Math.min(left, Math.max(8, ta.clientWidth - 440))),
+
+      // Measure in VIEWPORT space, then convert into the popout's own
+      // containing block. The previous version added ta.offsetTop to an
+      // offset measured inside the mirror, which only agreed with
+      // reality while the textarea sat at the top of its container and
+      // was itself the scroller. It is neither, so the popout drifted
+      // further down the page the further into a chapter the writer was
+      // -- reported as "it always appears at the bottom".
+      const box = (ta.offsetParent as HTMLElement | null) ?? ta;
+      const taRect = ta.getBoundingClientRect();
+      const boxRect = box.getBoundingClientRect();
+      const raw = {
+        top: taRect.top - boxRect.top + (markerTop - ta.scrollTop) + 26,
+        left: taRect.left - boxRect.left + (markerLeft - ta.scrollLeft),
       };
+      return clampAnchor(raw, {
+        height: boxRect.height,
+        width: boxRect.width,
+        popoutWidth: SAY_POPOUT_WIDTH,
+      });
     } catch {
       return null;
     }

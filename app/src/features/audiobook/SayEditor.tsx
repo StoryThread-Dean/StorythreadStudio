@@ -197,13 +197,18 @@ export function SayEditor({
     }
   }, [content, currentPos, previewing, spoken, voiceId, word, workspacePath]);
 
+  // The anchor is already clamped by whoever measured it; this is the
+  // belt to that braces. A popout that expands after opening -- tips,
+  // occurrence counter, preview player -- must never start low enough
+  // that growing pushes its controls off the screen.
   const style = anchor
-    ? { top: anchor.top, left: Math.max(8, Math.min(anchor.left, 9999)) }
-    : { top: 8, left: 8 };
+    ? { top: Math.max(8, anchor.top), left: Math.max(8, anchor.left),
+        maxHeight: "calc(100vh - 5rem)" }
+    : { top: 8, left: 8, maxHeight: "calc(100vh - 5rem)" };
 
   return (
     <div
-      className="absolute z-40 w-[26rem] max-w-[92%] rounded-lg border border-blue-800 bg-zinc-900 p-3 shadow-xl shadow-black/50"
+      className="absolute z-40 w-[26rem] max-w-[92%] overflow-y-auto rounded-lg border border-blue-800 bg-zinc-900 p-3 shadow-xl shadow-black/50"
       style={style}
       onKeyDown={e => {
         if (e.key === "Escape") onClose();
