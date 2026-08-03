@@ -85,6 +85,28 @@ const STEPS: WalkStep[] = [
     example: <>[pace:=2] &rarr; [pace:-2]</>,
   },
   {
+    title: "Word readings -- let your ear decide",
+    body: <>
+      Some words do not have one sound. <i>Read</i> is "reed" or "red",
+      <i> wound</i> is "woond" or "wow-nd", <i>lead</i> is the metal or
+      the verb. The narrator guesses from grammar it only half
+      understands, and on these it guesses wrong more often than not --
+      "I read it yesterday" comes out as "I reed it yesterday" every
+      single time.
+      <br /><br />
+      Nothing here is applied for you, because which one is right depends
+      on what you meant. Instead each reading gets a <b>Play</b> button
+      that speaks <i>your own sentence</i> in the book's voice. Listen to
+      both, click <b>Use this</b> on the one you meant, and move on. If
+      the narrator already reads it correctly, Skip -- that is the right
+      answer most of the time.
+      <br /><br />
+      Two seconds of listening settles this. No spelling on a screen
+      could.
+    </>,
+    example: <>I [say:red]read[/say] it yesterday.</>,
+  },
+  {
     title: "Turn kinds off, or do the beats in one go",
     body: <>
       The checkboxes across the top mute a kind of stop entirely -- if

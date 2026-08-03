@@ -1415,6 +1415,30 @@ by live listening tests and encoded in the say popout's tips accordion
   land differently). Runs of 2+ capitals are folded by the app -- the
   engine reads caps runs as letters (bare-word measurement: LARah
   0.92s beside the "L A R ah" letter baseline 0.98s vs larah 0.72s).
+  **Now explained, and bounded (phoneme-measured 2026-08-03):** the
+  mechanism is that espeak treats a mid-word capital as a WORD BOUNDARY.
+  `hey-Soos` fuses to `heySoos` and phonemizes as two words with two
+  primary stresses. That is why it re-inflects -- and why it is unusable
+  for anything meant to be one word: `pruh-Jekt` arrives as
+  `pɹˈʌ dʒˈɛkt`, "pruh Jekt", with a gap between. Use the capital only
+  when a two-word feel is what you want.
+- **To move stress, spell the weak syllable weakly -- not with a
+  capital** (measured 2026-08-03). `record` -> `ɹˈɛkɚd` (noun);
+  `rekord` -> `ɹᵻkˈɔːɹd` (verb, stress on 2, correct). A plain `e`
+  reduces and lets the stress fall past it, while `ruhkord` and
+  `rihkord` get the first syllable stressed instead. This is the only
+  lever found for the noun/verb stress pairs.
+- **`ih` before a consonant is the one silent-h spelling that is not
+  silent** (measured on ten consonants, 2026-08-03): `lihv` ->
+  `lˈɪhv`, `wihnd` -> `wˈɪhnd` -- a real /h/ phoneme, heard as a breath
+  mid-word. `ah`/`eh`/`oh`/`uh` before a consonant are usually clean
+  (`bohd`, `dohz`, `mohpt` all verified) but not guaranteed (`rehkord`
+  leaks where `behko` does not). **An `h` between two vowels always
+  leaks** (`soher` -> `sˈoʊhɚ`). Pin the absolutes, audition the rest.
+- **`[[IPA]]` phoneme injection does not work.** espeak reads the
+  brackets as letters and speaks them (`[[rIk'O:d]]` came back as
+  "ar ee-koh-dee"). There is no escape hatch past the grapheme-to-phoneme
+  step; a respelling is the only instrument.
 - **Separation strength, strongest to softest:** SPACE (near two
   words), HYPHEN (syllable-like units of one word; the app fuses them
   so no hesitation gap), APOSTROPHE (the softest internal break --
@@ -1442,9 +1466,9 @@ by live listening tests and encoded in the say popout's tips accordion
   seconds instead of an afternoon: if the trace shows the right word,
   the engine is the limit and only a different spelling will move it.
 
-### 18.6 Heteronyms: the ear decides, one word at a time (user-designed 2026-08-03; NOT BUILT)
+### 18.6 Heteronyms: the ear decides, one word at a time (user-designed 2026-08-03; BUILT 2026-08-03)
 
-**Scheduled for its own session.** The problem: English is full of words
+The problem: English is full of words
 whose spelling does not fix their sound -- *read* is "reed" or "red",
 *lead* is "leed" or "led", *wound* is "woond" or "wow-nd" -- and Kokoro
 picks one reading from grammar it only half-understands. It gets these
@@ -1459,6 +1483,60 @@ applies directly: a respelling can be perfectly formed and still not be
 honoured by the engine, so **every entry needs an audition pass against
 the real engine before it ships** and the ones that fail need a
 different spelling of the same sound, not a bug report.
+
+**The audition, and what it found (2026-08-03).** espeak-ng -- the exact
+grapheme-to-phoneme step Kokoro uses -- sits inside the local narrator's
+virtual environment, so most of the audition needed no listening at all.
+`scripts/audition-heteronyms.py` runs every candidate through
+`speakable()` (the real payload path, which fuses hyphens and folds caps
+runs) and compares three things: what the engine says in each sense's own
+sentence, what the respelling produces, and whether the respelling
+survives as one word. Of the 214 candidate rows:
+
+- **84 produced a broken payload** -- 60-odd from the mid-word capital
+  splitting the word in two, the rest from `ih`-before-consonant leaking
+  an audible /h/. See the 18.5 additions; both are now measured.
+- **8 were no-ops** -- the respelling produced exactly what the engine
+  already said.
+- **~54 words are structurally deferred** -- the whole noun/verb stress
+  family (record, object, project, present, desert, console...) plus the
+  `-ate` family (separate, moderate, estimate...). A weak-vowel
+  respelling *does* work for some (`rekord` -> `ɹᵻkˈɔːɹd`), but each
+  needs its own hunt, so the family gets its own pass rather than
+  shipping half-fixed.
+- **12 words were dropped as already correct** -- tear, tears, house,
+  learned, abuse, crooked, jagged, ragged, naked, polish, mobile, lives.
+  espeak reads both senses right on its own; stopping on them would be a
+  tax for a miss that does not happen, and it is the first thing that
+  would make the walk feel like busywork.
+
+**What ships: 22 words**, each with a verified wrong reading and a
+verified respelling, in `app/src/features/audiobook/heteronyms.ts`. The
+deterministic misses are the reason the feature exists -- these are wrong
+*every time*, not sometimes:
+
+```
+"I read it yesterday."       -> reed    (needs [say:red])
+"The pipe contains lead."    -> leed    (needs [say:led])
+"She wound the cord."        -> woond   (needs [say:wow-nd])
+"Close the door."            -> kloce   (needs [say:klohz])
+"He dove into the water."    -> duv     (needs [say:dohv])
+"Bow before the queen."      -> boh     (needs [say:bau])
+```
+
+Six of the 22 ship **muted by default** (`rare: true`): does, minute,
+use, live, axes, sewer. Their wrong reading is real but unlikely in
+fiction -- "does" the female deer against "does" the verb -- so they are
+switched off rather than deleted, and a writer with a hunting scene turns
+them on. Muting the tax, not the capability.
+
+The phonemizer is a filter, never a verdict: `[say:Thee]` phonemizes
+correctly to `ðˈiː` and still came back sounding like "neh" (18.5). It
+kills the rows that never had a chance, in bulk, for free. Everything
+past that is the ear's job, which is why every reading has its own Play.
+Rerun the script after any worker version bump -- a new espeak changes
+the answers, and a shipped table nobody re-auditioned is a table of
+guesses.
 
 **Where it lives: inside the Formatting Walkthrough, as another trigger
 kind** (18.4). Not a separate screen, not a batch tool.
@@ -1487,14 +1565,37 @@ the "removes guesswork by providing examples graspable immediately"
 rule applied to the one part of narration that no amount of explanation
 can settle in the abstract.
 
-Open questions for the build session: whether a chosen reading should
-offer to apply to the same word-in-the-same-sense elsewhere in the
-chapter (probably yes, with a count and a confirm, since *read* as past
-tense tends to repeat); whether low-confidence rows from the table are
-worth stopping on at all before they are auditioned; and whether the
-per-stop audio should pre-render while the writer reads the previous
-stop, since two syntheses per stop across a long chapter is the one
-thing that could make this tedious.
+**The three open questions, resolved in the build session (2026-08-03):**
+
+- **Apply to the same sense elsewhere? No -- show the count instead**
+  (user decision). The next *read* may be the other sense entirely, and a
+  wrong batch is worse than a skip because the writer then believes the
+  spot is handled. The panel says "2 more 'read' lie ahead -- each one
+  gets its own ask", so the writer knows the walk continues rather than
+  wondering whether it caught them all.
+- **Are low-confidence rows worth stopping on?** The question dissolved
+  once the audition ran: confidence was the writer's guess about a
+  respelling, and the phonemizer answers it directly. A row ships if the
+  engine is measurably wrong and the respelling measurably fixes it.
+  Nothing ships on a rating.
+- **Pre-render the audio?** Cached, not pre-rendered. Clips are keyed by
+  (sentence, spoken form), so a replay and a step Back are instant, and
+  previews go through `previewSelection` whose provider is hardcoded to
+  `local-kokoro` -- free, CPU only, never a paid engine. Speculative
+  pre-rendering of stops the writer may Skip was not worth the
+  complexity once replays were free.
+
+**Also settled: the two axes must not collapse.** A beat suggestion and a
+word-reading question can land on the same spot and both be right, so the
+scanner's near-duplicate collapse now runs within an axis only, the
+nearby-pause suppression does not apply to readings (a pause says nothing
+about which sense was meant), and Auto-apply excludes readings entirely
+alongside marker repairs -- a broken pace has a direction only the writer
+can pick, and a reading is a claim about what the sentence means.
+
+Deferred, in order: the noun/verb stress family via a scripted
+weak-vowel spelling search (~54 words, the largest remaining group), then
+`august`, `content`, `refuse`, and `invalid`, which are stress pairs too.
 
 ---
 

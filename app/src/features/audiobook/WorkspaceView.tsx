@@ -597,6 +597,8 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               - ta.clientHeight / 3;
           }}
           onClose={() => setWalkthroughStart(null)}
+          workspacePath={workspacePath}
+          voiceId={payload.manifest.selected_voice ?? "am_michael"}
         />
       )}
 

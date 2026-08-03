@@ -7,7 +7,9 @@
 
 import { describe, it, expect } from "vitest";
 
-import { applyStop, bulkApplyDefaults, scanForStops } from "./insertScan";
+import {
+  applyStop, bulkApplyDefaults, isBeatKind, scanForStops, sentenceAround,
+} from "./insertScan";
 import type { InsertStop } from "./insertScan";
 
 function kindsAt(text: string): Array<[string, number]> {
@@ -23,8 +25,11 @@ describe("scanForStops", () => {
     expect(stops.length).toBeGreaterThanOrEqual(4);
     expect(stops.some(s => s.kind === "interjection"
       && s.title.includes("My god!"))).toBe(true);
-    // Every stop offset sits right after a sentence-ending punctuation.
-    for (const stop of stops) {
+    // Every BEAT stop sits right after a sentence-ending punctuation.
+    // Word-reading stops are the other axis -- they target a word in the
+    // middle of a sentence ("I read it" is in this very example), so they
+    // are deliberately not bound by this.
+    for (const stop of stops.filter(s => isBeatKind(s.kind))) {
       expect([".", "!", "?"]).toContain(text[stop.offset - 1]);
     }
   });
@@ -159,5 +164,109 @@ describe("bulkApplyDefaults", () => {
     expect(skippedRepairs).toBe(1);
     expect(next).toContain("[pace:=2]");           // untouched
     expect(next).toContain("Wait. [pause:0.4] Go.");
+  });
+
+  it("never auto-picks a word reading -- that is a meaning, not a beat", () => {
+    // Auto-apply is a convenience for pacing. Choosing between "reed" and
+    // "red" is choosing what the sentence says, and getting it wrong puts
+    // a mispronunciation in the finished book under the writer's name.
+    const text = "I read it yesterday. Then I burned it. No trace left.";
+    const stops = scanForStops(text);
+    expect(stops.some(s => s.kind === "heteronym")).toBe(true);
+    const { next } = bulkApplyDefaults(text, stops);
+    expect(next).not.toContain("[say:");
+    expect(next).toContain("[pause:");             // the beat still landed
+  });
+});
+
+// ── Word readings (spec 18.6) ─────────────────────────────────────────────────
+
+describe("scanForStops word readings", () => {
+  it("stops on a heteronym and offers only the readings needing a marker", () => {
+    const stops = scanForStops("She wound the cord around her hand.");
+    const stop = stops.find(s => s.kind === "heteronym");
+    expect(stop).toBeTruthy();
+    expect(stop!.word).toBe("wound");
+    expect(stop!.length).toBe("wound".length);
+    // Both readings travel with the stop so each can get a Play button...
+    expect(stop!.readings).toHaveLength(2);
+    // ...but only the one the engine does NOT already produce is applicable.
+    expect(stop!.options).toHaveLength(1);
+    expect(stop!.options[0].text).toBe("[say:wow-nd]wound[/say]");
+  });
+
+  it("keeps the writer's own capitalization when it wraps", () => {
+    // "Read the letter" at the start of a sentence must not come back as
+    // lowercase in the manuscript -- the marker is invisible to the
+    // reader, the word beside it is not.
+    const stops = scanForStops("Read it again, she said.");
+    const stop = stops.find(s => s.kind === "heteronym");
+    expect(stop!.word).toBe("Read");
+    expect(stop!.options[0].text).toBe("[say:red]Read[/say]");
+  });
+
+  it("matches whole words only", () => {
+    // "already", "bread", "closet", "windows" all contain a heteronym as a
+    // substring. Stopping on those would be noise the writer learns to
+    // ignore, which costs the real stops their credibility.
+    const stops = scanForStops(
+      "He already ate bread from the closet by the windows.");
+    expect(stops.filter(s => s.kind === "heteronym")).toEqual([]);
+  });
+
+  it("skips a word the writer already wrapped in a say override", () => {
+    const stops = scanForStops("Yesterday I [say:red]read[/say] the letter.");
+    expect(stops.filter(s => s.kind === "heteronym")).toEqual([]);
+  });
+
+  it("still asks about a word standing beside a pause the writer chose", () => {
+    // A pause says nothing about which reading was meant. The
+    // nearby-pause suppression belongs to the beat axis only, and letting
+    // it swallow a reading question would hide the stop for good.
+    const stops = scanForStops("She stopped. [pause:0.8] I read it yesterday.");
+    expect(stops.some(s => s.kind === "heteronym")).toBe(true);
+  });
+
+  it("keeps a beat and a reading question that land on the same spot", () => {
+    // Different axes, both can be right. Collapsing them as duplicates
+    // would silently drop one of the two.
+    const text = "She waited. Read it now. He would not.";
+    const stops = scanForStops(text);
+    const at = text.indexOf("Read");
+    expect(stops.filter(s => Math.abs(s.offset - at) <= 1).length)
+      .toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not stop on a heteronym inside a chapter heading", () => {
+    expect(scanForStops("# The Lead Casket\n\nProse follows.")).toEqual([]);
+  });
+});
+
+describe("sentenceAround", () => {
+  it("returns the sentence holding the word, for a clip that sounds like the book", () => {
+    const text = "He waited. She wound the cord tight. Then he left.";
+    const { start, end } = sentenceAround(text, text.indexOf("wound"));
+    expect(text.slice(start, end)).toBe("She wound the cord tight.");
+  });
+
+  it("does not mistake a marker's decimal point for a sentence ending", () => {
+    // The bug that pushed the say popout onto a fixed carrier phrase: the
+    // "." in [pause:0.8] read as a full stop, and the clip came out as a
+    // fragment that the engine slurs.
+    const text = "She stopped [pause:0.8] and read it slowly to him.";
+    const { start, end } = sentenceAround(text, text.indexOf("read"));
+    expect(text.slice(start, end)).toBe(text);
+  });
+
+  it("stops at a paragraph break rather than running into the next scene", () => {
+    const text = "First paragraph ends here\n\nShe read it again";
+    const { start, end } = sentenceAround(text, text.indexOf("read"));
+    expect(text.slice(start, end)).toBe("She read it again");
+  });
+
+  it("keeps a closing quote with the sentence it ends", () => {
+    const text = 'He said, "I read it." She nodded.';
+    const { start, end } = sentenceAround(text, text.indexOf("read"));
+    expect(text.slice(start, end)).toBe('He said, "I read it."');
   });
 });

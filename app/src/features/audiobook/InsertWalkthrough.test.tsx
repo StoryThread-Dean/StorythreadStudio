@@ -7,9 +7,26 @@
 // the keyboard fast path.
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 
 import { InsertWalkthrough } from "./InsertWalkthrough";
+
+// Word-reading stops render each candidate pronunciation as audio. The
+// render itself belongs to the local narrator; what this file checks is
+// what gets SENT -- the writer's own sentence with one reading applied.
+const previewSelection = vi.fn(async () => ({
+  blob: new Blob(["wav"]), warnings: [], trace: [],
+}));
+vi.mock("./api", () => ({
+  previewSelection: (...args: unknown[]) => previewSelection(...(args as [])),
+}));
+// jsdom has no audio device; play() would reject and noise up the run.
+window.HTMLMediaElement.prototype.play = vi.fn(async () => {});
+window.HTMLMediaElement.prototype.pause = vi.fn();
+if (!("createObjectURL" in URL)) {
+  Object.defineProperty(URL, "createObjectURL", { value: vi.fn(() => "blob:clip") });
+  Object.defineProperty(URL, "revokeObjectURL", { value: vi.fn() });
+}
 
 const TEXT = 'She made a decision. "A cult." Lexa nodded. [pace:=2]Fast bit.[/pace]';
 
@@ -20,6 +37,8 @@ function renderPanel(overrides: Partial<Parameters<typeof InsertWalkthrough>[0]>
     onApplyEdit: vi.fn(),
     onHighlight: vi.fn(),
     onClose: vi.fn(),
+    workspacePath: "C:/books/mine",
+    voiceId: "am_michael",
     ...overrides,
   };
   render(<InsertWalkthrough {...props} />);
@@ -146,5 +165,140 @@ describe("InsertWalkthrough", () => {
       fireEvent.click(screen.getByLabelText("Next step"));
     }
     expect(screen.getByText(/They are repairs|are not suggestions/)).toBeTruthy();
+  });
+});
+
+// ── Word readings (spec 18.6) ─────────────────────────────────────────────────
+// The one part of narration no explanation can settle in the abstract:
+// which "read" this is. The stop's whole job is to make that a two-second
+// listening decision instead of a spelling argument.
+
+const READ_TEXT = "Yesterday I read the letter twice, then folded it away.";
+
+describe("InsertWalkthrough word readings", () => {
+  it("asks which reading is meant and offers each one as audio", () => {
+    renderPanel({ content: READ_TEXT });
+    expect(screen.getByText('Which "read" is this?')).toBeTruthy();
+    // The engine's own reading is named as a SOUND, so the writer knows
+    // what they are comparing against.
+    expect(screen.getByText(/will say "reed" here/)).toBeTruthy();
+    // One Play per reading -- the point of the design.
+    expect(screen.getByLabelText('Play "present tense"')).toBeTruthy();
+    expect(screen.getByLabelText('Play "past tense"')).toBeTruthy();
+  });
+
+  it("pre-selects nothing -- only the writer knows which sense they meant", () => {
+    renderPanel({ content: READ_TEXT });
+    // A beat stop leads with a highlighted default; a reading stop must
+    // not, or the walk is guessing at the meaning of the sentence.
+    expect(screen.queryByTitle("Apply (Ctrl+Enter)")).toBeNull();
+    // And the keyboard fast path stays inert here for the same reason.
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    expect(screen.getByText('Which "read" is this?')).toBeTruthy();
+  });
+
+  it("says plainly that the engine's own reading needs no marker", () => {
+    renderPanel({ content: READ_TEXT });
+    expect(screen.getByText(/already how it reads -- Skip keeps it/)).toBeTruthy();
+    // Exactly one reading is applicable, so exactly one Use this exists.
+    expect(screen.getAllByRole("button", { name: "Use this" })).toHaveLength(1);
+  });
+
+  it("plays the writer's own sentence with the reading applied", async () => {
+    renderPanel({ content: READ_TEXT });
+    fireEvent.click(screen.getByLabelText('Play "past tense"'));
+    await waitFor(() => expect(previewSelection).toHaveBeenCalled());
+    const [workspace, text, voice] = previewSelection.mock.calls[0] as unknown as
+      [string, string, string];
+    expect(workspace).toBe("C:/books/mine");
+    expect(voice).toBe("am_michael");
+    // The sentence, not a carrier phrase and not a bare word: which
+    // reading is right depends on the sentence, so the sentence is what
+    // has to be heard.
+    expect(text).toContain("Yesterday I");
+    expect(text).toContain("[say:red]read[/say]");
+  });
+
+  it("plays the word untouched for the engine's own reading", async () => {
+    renderPanel({ content: READ_TEXT });
+    fireEvent.click(screen.getByLabelText('Play "present tense"'));
+    await waitFor(() => expect(previewSelection).toHaveBeenCalled());
+    const text = (previewSelection.mock.calls[0] as unknown as string[])[1];
+    expect(text).toContain("I read the letter");
+    expect(text).not.toContain("[say:");
+  });
+
+  it("caches a clip so replaying it costs nothing", async () => {
+    renderPanel({ content: READ_TEXT });
+    fireEvent.click(screen.getByLabelText('Play "past tense"'));
+    await waitFor(() => expect(previewSelection).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByLabelText('Play "past tense"'));
+    await waitFor(() => expect(previewSelection).toHaveBeenCalledTimes(1));
+  });
+
+  it("applies the chosen reading as a buffer edit, wrapping that word only", () => {
+    const props = renderPanel({ content: READ_TEXT });
+    fireEvent.click(screen.getByRole("button", { name: "Use this" }));
+    expect(props.onApplyEdit).toHaveBeenCalledTimes(1);
+    const [next] = (props.onApplyEdit as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(next).toBe(
+      "Yesterday I [say:red]read[/say] the letter twice, then folded it away.");
+    // Manual save still owns persistence -- this is typing, not saving.
+    expect(next.match(/\[say:/g)).toHaveLength(1);
+  });
+
+  it("never stops on a word the writer already settled", () => {
+    // Re-walking a chapter must not re-ask about spots that carry an
+    // override, or every pass would pile a second wrapper on the first.
+    renderPanel({
+      content: "Yesterday I [say:red]read[/say] the letter twice.",
+    });
+    expect(screen.queryByText('Which "read" is this?')).toBeNull();
+  });
+
+  it("counts the same word ahead instead of offering to apply in bulk", () => {
+    // The next "read" may be the other sense entirely, so nothing is
+    // batched -- but the writer should know the walk continues rather
+    // than wonder whether it caught them all.
+    renderPanel({
+      content: "I read it yesterday. She likes to read at night. They read on.",
+    });
+    expect(screen.getByText(/2 more "read"/)).toBeTruthy();
+    expect(screen.queryByText(/Set for the rest/)).toBeNull();
+  });
+
+  it("keeps rare senses out of the walk until asked for", () => {
+    // "does" the female deer against "does" the verb: right nearly every
+    // time, so it ships muted rather than deleted.
+    renderPanel({ content: "She does everything herself, every day." });
+    expect(screen.queryByText(/Which "does" is this\?/)).toBeNull();
+    fireEvent.click(screen.getByLabelText(/Rare word senses/));
+    expect(screen.getByText('Which "does" is this?')).toBeTruthy();
+  });
+
+  it("the guided walk explains the SOUND, not the buttons", () => {
+    // A writer has no reason to trust "reed / red" as notation. What the
+    // help has to land is why their ear is the instrument here.
+    renderPanel({ content: READ_TEXT });
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    for (let i = 0; i < 6; i += 1) {
+      fireEvent.click(screen.getByLabelText("Next step"));
+    }
+    expect(screen.getByText(/Word readings -- let your ear decide/)).toBeTruthy();
+    expect(screen.getByText(/comes out as "I reed it yesterday"/)).toBeTruthy();
+    expect(screen.getByText(/Skip -- that is the right\s+answer most of the time/))
+      .toBeTruthy();
+  });
+
+  it("excludes word readings from Auto-apply", () => {
+    // Auto-apply exists to spare the writer the beat work. A meaning
+    // choice is not beat work, and applying one unasked would put a wrong
+    // pronunciation in the book under the writer's own name.
+    renderPanel({
+      content: 'I read it yesterday. "A cult." Lexa nodded. Short. Bits here.',
+    });
+    const auto = screen.getByRole("button", { name: /Auto-apply \d+ beats/ });
+    fireEvent.click(auto);
+    expect(screen.getByText(/word readings\s+are not included/)).toBeTruthy();
   });
 });

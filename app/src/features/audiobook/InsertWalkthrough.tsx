@@ -13,13 +13,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Check, ChevronLeft, ChevronRight, GraduationCap, Wand2, X,
+  Check, ChevronLeft, ChevronRight, GraduationCap, Loader2, Play, Wand2, X,
 } from "lucide-react";
 
 import { InsertWalkthroughHelp } from "./InsertWalkthroughHelp";
 
-import { applyStop, bulkApplyDefaults, scanForStops, STOP_KIND_LABELS } from "./insertScan";
+import { previewSelection } from "./api";
+import {
+  applyStop, bulkApplyDefaults, DEFAULT_MUTED_KINDS, isBeatKind,
+  isHeteronymKind, scanForStops, sentenceAround, STOP_KIND_LABELS,
+} from "./insertScan";
 import type { InsertOption, InsertStop, StopKind } from "./insertScan";
+import type { HeteronymReading } from "./heteronyms";
+import { stripAudioMarkers } from "./markers";
 
 interface InsertWalkthroughProps {
   content: string;
@@ -31,23 +37,41 @@ interface InsertWalkthroughProps {
   /** Point the editor at the current stop (select + scroll). */
   onHighlight: (offset: number, length: number) => void;
   onClose: () => void;
+  /** Needed by word-reading stops, which render each candidate
+      pronunciation as audio in the book's own narration voice. */
+  workspacePath: string;
+  voiceId: string;
 }
 
 const ALL_KINDS = Object.keys(STOP_KIND_LABELS) as StopKind[];
 
 export function InsertWalkthrough({
   content, startOffset, onApplyEdit, onHighlight, onClose,
+  workspacePath, voiceId,
 }: InsertWalkthroughProps) {
   // Scanned ONCE on open; offsets shift locally after each apply. If the
   // buffer changes some other way (the writer typed), we rescan from the
   // current stop so the walk stays honest.
   const [stops, setStops] = useState<InsertStop[]>(() => scanForStops(content, startOffset));
   const [index, setIndex] = useState(0);
-  const [muted, setMuted] = useState<Set<StopKind>>(new Set());
+  const [muted, setMuted] = useState<Set<StopKind>>(
+    () => new Set(DEFAULT_MUTED_KINDS));
   const [applied, setApplied] = useState(0);
   const [confirmingAuto, setConfirmingAuto] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const expectedContent = useRef(content);
+  // Which reading is currently rendering, and any preview error. Audio is
+  // cached per (sentence, spoken form) so replaying and stepping Back are
+  // instant -- two syntheses per stop across a long chapter is the one
+  // thing that could make this tedious.
+  const [playing, setPlaying] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const clipCache = useRef<Map<string, string>>(new Map());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => {
+    audioRef.current?.pause();
+    for (const url of clipCache.current.values()) URL.revokeObjectURL(url);
+  }, []);
 
   useEffect(() => {
     if (content === expectedContent.current) return;
@@ -95,10 +119,68 @@ export function InsertWalkthrough({
   }, [advance, index, visible.length]);
   const back = useCallback(() => setIndex(i => Math.max(0, i - 1)), []);
 
+  // ── Word-reading audio ──────────────────────────────────────────────────────
+  // The clip is the writer's OWN sentence with one reading applied, in the
+  // book's narration voice. Not a carrier phrase and not a bare word: which
+  // reading is right depends on the sentence, so the sentence is what has
+  // to be heard. Local Kokoro renders it, which is free -- see
+  // previewSelection's hardcoded provider.
+  const clipText = useCallback((stop: InsertStop, reading: HeteronymReading) => {
+    const { start, end } = sentenceAround(content, stop.offset);
+    const left = stripAudioMarkers(content.slice(start, stop.offset));
+    const right = stripAudioMarkers(
+      content.slice(stop.offset + stop.length, end));
+    const middle = reading.spoken === null
+      ? (stop.word ?? "")
+      : `[say:${reading.spoken}]${stop.word ?? ""}[/say]`;
+    return (left + middle + right).trim();
+  }, [content]);
+
+  const playReading = useCallback(async (
+    stop: InsertStop, reading: HeteronymReading,
+  ) => {
+    const text = clipText(stop, reading);
+    const key = `${text}|${reading.spoken ?? ""}`;
+    setPreviewError(null);
+    const cached = clipCache.current.get(key);
+    if (cached) {
+      audioRef.current?.pause();
+      const audio = new Audio(cached);
+      audioRef.current = audio;
+      void audio.play();
+      return;
+    }
+    setPlaying(reading.sense);
+    try {
+      const { blob } = await previewSelection(workspacePath, text, voiceId);
+      const url = URL.createObjectURL(blob);
+      clipCache.current.set(key, url);
+      audioRef.current?.pause();
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      void audio.play();
+    } catch (e) {
+      setPreviewError(e instanceof Error ? e.message : "Preview failed.");
+    } finally {
+      setPlaying(null);
+    }
+  }, [clipText, voiceId, workspacePath]);
+
+  /** How many more of THIS word lie ahead in the chapter. The writer's
+   *  choice is never applied in bulk -- the same word in the next
+   *  sentence may be the other sense entirely -- but they should know the
+   *  walk continues rather than wonder whether it caught them all. */
+  const remainingSameWord = useMemo(() => {
+    if (!current?.word) return 0;
+    return visible.filter(
+      (stop, i) => i > index && stop.word?.toLowerCase() === current.word?.toLowerCase(),
+    ).length;
+  }, [current, index, visible]);
+
   // Auto-apply: every remaining unmuted stop's default beat at once.
   // Marker repairs stay manual (a broken pace has a direction choice
   // only the writer can make).
-  const autoBeatCount = visible.filter(s => s.kind !== "broken-marker").length;
+  const autoBeatCount = visible.filter(s => isBeatKind(s.kind)).length;
   const autoApply = useCallback(() => {
     const { next, applied: batch } = bulkApplyDefaults(content, visible);
     expectedContent.current = next;
@@ -116,7 +198,10 @@ export function InsertWalkthrough({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { onClose(); return; }
       if (!e.ctrlKey) return;
-      if (e.key === "Enter" && current) {
+      // Ctrl+Enter is the fast path for a beat, where there IS a sensible
+      // default. A word-reading stop has none on purpose: picking one for
+      // the writer is picking what their sentence means.
+      if (e.key === "Enter" && current && !isHeteronymKind(current.kind)) {
         e.preventDefault();
         applyOption(current.options[0]);
       } else if (e.key === "ArrowRight") {
@@ -218,8 +303,10 @@ export function InsertWalkthrough({
             inside a rhythm you built on purpose. Listen to the result
             with the free local preview BEFORE printing with paid AI
             voices. Nothing is saved until you Save; leave without saving
-            to discard the whole batch. Marker repairs are not included
-            -- those need your call and stay in the walk.
+            to discard the whole batch. Marker repairs and word readings
+            are not included -- a broken pace has a direction only you can
+            pick, and which reading of "read" you meant is not something
+            any scan can know. Both stay in the walk.
           </p>
           <div className="flex gap-2">
             <button
@@ -242,18 +329,105 @@ export function InsertWalkthrough({
         <>
           <p className="mb-1 text-xs font-medium text-zinc-200">{current.title}</p>
           <p className="mb-2 text-[11px] leading-relaxed text-zinc-400">{current.detail}</p>
+          {/* The sentence in context. A word-reading stop shows the word
+              itself standing where it is -- there is no proposal to
+              preview until the writer picks a reading. */}
           <p className="mb-2 overflow-hidden whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-950 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-zinc-400">
             {"..."}{context.before}
-            {context.replaced
-              ? <s className="text-rose-400">{context.replaced}</s>
-              : null}
-            <span className="rounded bg-blue-950 px-0.5 font-semibold text-blue-300">
-              {current.options[0].text || "(removed)"}
-            </span>
+            {isHeteronymKind(current.kind) ? (
+              <span className="rounded bg-blue-950 px-0.5 font-semibold text-blue-300">
+                {context.replaced}
+              </span>
+            ) : (
+              <>
+                {context.replaced
+                  ? <s className="text-rose-400">{context.replaced}</s>
+                  : null}
+                <span className="rounded bg-blue-950 px-0.5 font-semibold text-blue-300">
+                  {current.options[0].text || "(removed)"}
+                </span>
+              </>
+            )}
             {context.after}{"..."}
           </p>
+
+          {/* Word readings: each candidate is offered as AUDIO, in this
+              sentence, in the book's voice. "reed / red" on screen asks
+              the writer to trust a notation they have no reason to
+              trust; two Play buttons ask them to use their ear, and that
+              takes about two seconds. */}
+          {isHeteronymKind(current.kind) && current.readings && (
+            <div className="mb-2 overflow-hidden rounded border border-zinc-800">
+              {current.readings.map(reading => {
+                const isEngine = reading.spoken === null;
+                const option = current.options.find(
+                  o => o.reading?.sense === reading.sense);
+                return (
+                  <div key={reading.sense}
+                       className="flex flex-wrap items-center gap-2 border-b border-zinc-800/60 bg-zinc-950/60 px-2 py-1.5 last:border-b-0">
+                    <button
+                      onClick={() => void playReading(current, reading)}
+                      disabled={playing !== null}
+                      aria-label={`Play "${reading.sense}"`}
+                      title={`Hear this sentence with the "${reading.sense}" reading`}
+                      className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                    >
+                      {playing === reading.sense
+                        ? <Loader2 size={11} className="animate-spin" />
+                        : <Play size={11} />}
+                      Play
+                    </button>
+                    <span className="min-w-0 flex-1 text-[11px] leading-tight">
+                      <span className="font-medium text-zinc-200">{reading.sense}</span>
+                      <span className="text-zinc-500"> -- {reading.example}</span>
+                      <span className="block text-[10px] text-zinc-600">
+                        sounds like "{reading.sounds}"
+                        {isEngine && " -- what you get today"}
+                      </span>
+                    </span>
+                    {option ? (
+                      <button
+                        onClick={() => applyOption(option)}
+                        className="shrink-0 rounded bg-emerald-600 px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-500"
+                      >
+                        Use this
+                      </button>
+                    ) : (
+                      // The engine's own reading needs no marker. Saying so
+                      // is kinder than an inert button.
+                      <span className="shrink-0 text-[10px] text-zinc-600">
+                        already how it reads -- Skip keeps it
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {remainingSameWord > 0 && (
+            // No bulk apply, by design: the next "read" may be the other
+            // sense entirely, and a wrong batch is worse than a skip
+            // because the writer then believes it is handled.
+            <p className="mb-2 text-[10px] text-zinc-500">
+              {remainingSameWord} more "{current.word}"
+              {remainingSameWord === 1 ? " lies" : " lie"} ahead -- each one
+              gets its own ask.
+            </p>
+          )}
+
+          {previewError && (
+            <p className="mb-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-[10px] text-rose-300">
+              {previewError}
+            </p>
+          )}
+
           <div className="flex flex-wrap items-center gap-1.5">
-            {current.options.map((option, i) => (
+            {/* Beat stops get Apply buttons with a highlighted default.
+                Word readings already have their own per-reading buttons
+                above, and repeating them here would offer a "first"
+                choice this stop is not allowed to have. */}
+            {!isHeteronymKind(current.kind) && current.options.map((option, i) => (
               <button
                 key={option.label}
                 onClick={() => applyOption(option)}

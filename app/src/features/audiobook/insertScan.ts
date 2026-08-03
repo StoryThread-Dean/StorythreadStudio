@@ -11,17 +11,25 @@
 // text, applies edits exactly like typing, and manual save still owns
 // persistence. Every rule is individually muteable in the panel.
 
+import { HETERONYMS } from "./heteronyms";
+import type { HeteronymReading } from "./heteronyms";
+
 export type StopKind =
   | "dialogue-open"     // narration hands off to a quoted speech
   | "dialogue-close"    // a speech ends and narration resumes
   | "short-burst"       // consecutive clipped sentences (beat candidates)
   | "interjection"      // a short exclamation ("My god!")
-  | "broken-marker";    // a marker the parser would reject or misread
+  | "broken-marker"     // a marker the parser would reject or misread
+  | "heteronym"         // a word whose spelling does not fix its sound
+  | "heteronym-rare";   // ...where the wrong reading is unlikely in fiction
 
 export interface InsertOption {
   label: string;
   /** The exact text to place at the stop ("" = remove what's there). */
   text: string;
+  /** Heteronym stops only: the reading this option chooses, so the panel
+   *  can offer it as AUDIO instead of as a respelling. */
+  reading?: HeteronymReading;
 }
 
 export interface InsertStop {
@@ -33,8 +41,15 @@ export interface InsertStop {
   title: string;
   /** The plain-terms explanation the panel shows for this stop. */
   detail: string;
-  /** Proposals, default first. */
+  /** Proposals, default first. Heteronym stops deliberately have NO
+   *  default: nothing is pre-selected, because only the writer knows
+   *  which reading they meant. */
   options: InsertOption[];
+  /** Heteronym stops: every reading including the engine's own, so the
+   *  panel can offer a Play for each. */
+  readings?: HeteronymReading[];
+  /** Heteronym stops: the word as the writer capitalized it. */
+  word?: string;
 }
 
 export const STOP_KIND_LABELS: Record<StopKind, string> = {
@@ -43,14 +58,37 @@ export const STOP_KIND_LABELS: Record<StopKind, string> = {
   "short-burst": "Short-sentence beats",
   "interjection": "Interjections",
   "broken-marker": "Marker problems",
+  "heteronym": "Word readings",
+  "heteronym-rare": "Rare word senses",
 };
+
+/** Kinds muted the moment the walkthrough opens. The rare heteronym
+ *  senses are right nearly every time -- "does" the verb vastly
+ *  outnumbers "does" the female deer -- so stopping on each one by
+ *  default would be a tax the writer pays for a miss they will not hit. */
+export const DEFAULT_MUTED_KINDS: StopKind[] = ["heteronym-rare"];
 
 // Priority when two rules fire on (nearly) the same spot -- most
 // specific wins. Lower = stronger.
 const KIND_PRIORITY: StopKind[] = [
-  "broken-marker", "dialogue-open", "dialogue-close",
-  "interjection", "short-burst",
+  "broken-marker", "heteronym", "heteronym-rare", "dialogue-open",
+  "dialogue-close", "interjection", "short-burst",
 ];
+
+/** A heteronym stop is about one WORD's sound, not about a pause. It is
+ *  never auto-applied (only the writer knows which reading they meant)
+ *  and it never competes with a nearby beat suggestion -- the two live on
+ *  different axes and both can be right in the same spot. */
+export function isHeteronymKind(kind: StopKind): boolean {
+  return kind === "heteronym" || kind === "heteronym-rare";
+}
+
+/** Kinds Auto-apply is allowed to touch: plain beats only. Marker
+ *  repairs have a direction choice, heteronyms have a meaning choice --
+ *  neither is ours to make. */
+export function isBeatKind(kind: StopKind): boolean {
+  return kind !== "broken-marker" && !isHeteronymKind(kind);
+}
 
 const PAUSE_OPTIONS: InsertOption[] = [
   { label: "Pause 0.4s", text: "[pause:0.4]" },
@@ -245,11 +283,57 @@ function scanBrokenMarkers(text: string, stops: InsertStop[]): void {
   }
 }
 
+/** Already inside a [say:...]...[/say] span? Then the writer has settled
+ *  this spot and we must not stop on it again. The word itself sits
+ *  BETWEEN two marker tokens rather than inside one, so markerRanges
+ *  cannot see it -- look back for an unclosed [say: instead. */
+function insideSaySpan(text: string, pos: number): boolean {
+  const before = text.slice(Math.max(0, pos - 200), pos);
+  return before.lastIndexOf("[say:") > before.lastIndexOf("[/say]");
+}
+
+function scanHeteronyms(text: string, stops: InsertStop[]): void {
+  // One stop per occurrence of a verified heteronym. No guessing which
+  // reading is meant -- the engine cannot tell and neither can we, so the
+  // walk asks, and the answer arrives as audio (spec 18.6).
+  for (const entry of HETERONYMS) {
+    const escaped = entry.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`(?<![A-Za-z0-9'’])${escaped}(?![A-Za-z0-9'’])`, "gi");
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      if (insideSaySpan(text, match.index)) continue;
+      const found = match[0];              // the writer's own capitalization
+      const engineReading = entry.readings.find(r => r.spoken === null);
+      stops.push({
+        offset: match.index,
+        length: found.length,
+        kind: entry.rare ? "heteronym-rare" : "heteronym",
+        title: `Which "${found}" is this?`,
+        // Say what the SOUND will be, not what the marker does. The
+        // writer is being asked a question about their own sentence.
+        detail: `The narrator will say "${engineReading?.sounds ?? "one reading"}" `
+          + "here unless you choose otherwise. Play them and pick the one "
+          + "you meant -- your ear settles this faster than any spelling can.",
+        options: entry.readings
+          .filter(reading => reading.spoken !== null)
+          .map(reading => ({
+            label: reading.sense,
+            text: `[say:${reading.spoken}]${found}[/say]`,
+            reading,
+          })),
+        readings: entry.readings,
+        word: found,
+      });
+    }
+  }
+}
+
 // ── The scanner ───────────────────────────────────────────────────────────────
 
 export function scanForStops(text: string, from = 0): InsertStop[] {
   const stops: InsertStop[] = [];
   scanBrokenMarkers(text, stops);
+  scanHeteronyms(text, stops);
   scanDialogueTransitions(text, stops);
   scanInterjections(text, stops);
   scanShortBursts(text, stops);
@@ -260,6 +344,10 @@ export function scanForStops(text: string, from = 0): InsertStop[] {
     if (onHeadingLine(text, stop.offset)) return false;
     if (stop.kind === "broken-marker") return true;  // targets markers by design
     if (insideAny(ranges, stop.offset)) return false;
+    // A heteronym asks about a word, not about a gap: a pause the writer
+    // already placed beside it says nothing about which reading they
+    // meant, so the nearby-pause suppression must not apply.
+    if (isHeteronymKind(stop.kind)) return true;
     if (hasNearbyPause(text, stop.offset)) return false; // the writer already chose
     return true;
   });
@@ -271,7 +359,11 @@ export function scanForStops(text: string, from = 0): InsertStop[] {
     || KIND_PRIORITY.indexOf(a.kind) - KIND_PRIORITY.indexOf(b.kind));
   const deduped: InsertStop[] = [];
   for (const stop of filtered) {
-    const prev = deduped[deduped.length - 1];
+    // Collision collapse runs WITHIN an axis only. A beat suggestion at
+    // the same spot as a word-reading question is not a duplicate --
+    // dropping either one would silently lose a real stop.
+    const prev = [...deduped].reverse().find(
+      other => isHeteronymKind(other.kind) === isHeteronymKind(stop.kind));
     if (prev && Math.abs(stop.offset - prev.offset) <= 2) continue;
     deduped.push(stop);
   }
@@ -279,11 +371,52 @@ export function scanForStops(text: string, from = 0): InsertStop[] {
 }
 
 /**
+ * The sentence containing `offset`, for a preview clip that sounds like
+ * the book rather than like a word read off a card. Marker-aware: the "."
+ * inside [pause:0.8] is not a sentence ending, and mistaking it for one
+ * is exactly the bug that pushed the say popout onto a fixed carrier
+ * phrase. Falls back to a generous window when no boundary is found.
+ */
+export function sentenceAround(
+  text: string, offset: number,
+): { start: number; end: number } {
+  const ranges = markerRanges(text);
+  const guarded = (pos: number) => insideAny(ranges, pos);
+
+  let start = 0;
+  for (let i = Math.min(offset, text.length) - 1; i > 0; i--) {
+    const ch = text[i];
+    if (ch === "\n" && text[i - 1] === "\n") { start = i + 1; break; }
+    if ((ch === "." || ch === "!" || ch === "?") && !guarded(i)) {
+      // Step past the punctuation and any closing quote or space.
+      let j = i + 1;
+      while (j < text.length && /["”'’\s]/.test(text[j])) j++;
+      if (j <= offset) { start = j; break; }
+    }
+  }
+
+  let end = text.length;
+  for (let i = offset; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "\n" && text[i + 1] === "\n") { end = i; break; }
+    if ((ch === "." || ch === "!" || ch === "?") && !guarded(i)) {
+      let j = i + 1;
+      while (j < text.length && /["”'’]/.test(text[j])) j++;
+      end = j;
+      break;
+    }
+  }
+  return { start, end: Math.max(end, offset) };
+}
+
+/**
  * Auto-apply: every remaining stop's DEFAULT beat in one motion -- the
- * brunt of the listening work, writer-reviewed afterward. Marker
- * repairs are deliberately EXCLUDED: a broken [pace:=2] has a direction
- * choice (+2 or -2) only the writer can make, so those stay manual
- * stops. Returns the new text plus honest counts for the panel.
+ * brunt of the listening work, writer-reviewed afterward. Two kinds are
+ * deliberately EXCLUDED: a broken [pace:=2] has a direction choice
+ * (+2 or -2) only the writer can make, and a heteronym has a MEANING
+ * choice -- "read" as past or present -- that no amount of scanning can
+ * settle. Both stay manual stops. Returns the new text plus honest
+ * counts for the panel.
  */
 export function bulkApplyDefaults(
   text: string, stops: InsertStop[],
@@ -294,7 +427,7 @@ export function bulkApplyDefaults(
   let applied = 0;
   let skippedRepairs = 0;
   for (const stop of ordered) {
-    if (stop.kind === "broken-marker") {
+    if (!isBeatKind(stop.kind)) {
       skippedRepairs += 1;
       continue;
     }
