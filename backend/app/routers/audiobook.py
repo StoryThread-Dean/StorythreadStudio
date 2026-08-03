@@ -31,6 +31,7 @@ from app.audiobook import (
     pronunciation,
     recents_store,
     segmenter,
+    storage,
     synthesis,
     workspace,
 )
@@ -267,6 +268,11 @@ class NarrationSettingsRequest(BaseModel):
     workspace_path: str
     narrator_pace: float = Field(ge=0.5, le=2.0)
     dialogue_pace: float = Field(ge=0.5, le=2.0)
+    # Defaulted rather than required: an older client that predates the
+    # paragraph beat still saves successfully instead of 422-ing, and
+    # lands on the same value narration_settings() would have used.
+    paragraph_gap_ms: int = Field(default=workspace.NARRATION_DEFAULTS["paragraph_gap_ms"],
+                                  ge=0, le=15000)
     scene_break_ms: int = Field(ge=0, le=15000)
     chapter_break_ms: int = Field(ge=0, le=15000)
 
@@ -288,6 +294,7 @@ def save_narration_settings(request: NarrationSettingsRequest):
     manifest["narration"] = {
         "narrator_pace": request.narrator_pace,
         "dialogue_pace": request.dialogue_pace,
+        "paragraph_gap_ms": request.paragraph_gap_ms,
         "scene_break_ms": request.scene_break_ms,
         "chapter_break_ms": request.chapter_break_ms,
     }
@@ -959,6 +966,75 @@ def start_assemble(request: StartExportRequest):
 @router.get("/assemble/status")
 def assemble_status():
     return assembly.export_status()
+
+
+@router.get("/audio-status")
+def get_audio_status(workspace_path: str):
+    """Per-chapter audio freshness (spec 24.2): Current / Partially
+    Outdated / Audio Outdated / Not Generated. Read-only by design --
+    it never spawns the local worker and never touches a paid engine, so
+    the rail can ask for it as often as it likes."""
+    _require_workspace(workspace_path)
+    return generation.audio_status(workspace_path)
+
+
+# ── Storage and cleanup (spec 25) ─────────────────────────────────────────────
+
+@router.get("/storage")
+def get_storage(workspace_path: str):
+    """What this workspace is using, by category, plus its retention
+    choice and whether it has fallen to export-only."""
+    _require_workspace(workspace_path)
+    manifest = workspace.load_manifest(workspace_path)
+    return storage.scan(workspace_path, manifest)
+
+
+class RetentionRequest(BaseModel):
+    workspace_path: str
+    retention: str = Field(pattern="^(keep|delete_after_export|ask_after_export)$")
+
+
+@router.put("/storage/retention")
+def save_retention(request: RetentionRequest):
+    """What happens to intermediate audio after a successful export.
+    Per book: one novel can be mid-revision while another is archived."""
+    _require_workspace(request.workspace_path)
+    manifest = workspace.load_manifest(request.workspace_path)
+    manifest["intermediate_retention"] = request.retention
+    # Keep the legacy boolean in step so an older build reading this
+    # workspace still behaves the way the writer just asked.
+    manifest["retain_intermediate_audio"] = request.retention != storage.RETENTION_DELETE
+    workspace.save_manifest(request.workspace_path, manifest)
+    return storage.scan(request.workspace_path, manifest)
+
+
+class CleanupRequest(BaseModel):
+    workspace_path: str
+    categories: list[str]
+
+
+@router.post("/storage/cleanup")
+def run_cleanup(request: CleanupRequest):
+    """Delete the categories the writer checked. Refuses a run with no
+    categories: an empty request almost always means a UI bug, and
+    answering it with a cheerful 'freed 0 bytes' hides that."""
+    _require_workspace(request.workspace_path)
+    if not request.categories:
+        raise HTTPException(
+            status_code=400,
+            detail="No cleanup categories were selected, so nothing was deleted.",
+        )
+    if generation.is_running() and generation.active_workspace() == request.workspace_path:
+        raise HTTPException(
+            status_code=409,
+            detail="Narration is generating right now. Pause or cancel it "
+                   "before deleting files, so a run cannot write audio into "
+                   "a folder being cleared.",
+        )
+    try:
+        return storage.cleanup(request.workspace_path, request.categories)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ── Pronunciation rules ───────────────────────────────────────────────────────

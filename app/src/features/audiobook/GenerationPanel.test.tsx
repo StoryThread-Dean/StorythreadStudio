@@ -288,5 +288,40 @@ describe("GenerationPanel", () => {
     await waitFor(() =>
       expect(screen.getByText(/not installed/)).toBeTruthy());
   });
-});
+  it("says how many sections no longer match their audio (spec 24.3)", async () => {
+    // Information, not a second button. The Generate below already
+    // re-does exactly the changed sections, and nothing is regenerated
+    // until the writer says so -- the spec's own rule.
+    vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
+    render(<GenerationPanel workspacePath={WS} audioStatus={{
+      chapters: [], book: "partial", outdated_segments: 4,
+      draft_segments: 0, outdated_reason: "text",
+    }} />);
+    await waitFor(() =>
+      expect(screen.getByText(/4 sections no longer match their audio/)).toBeTruthy());
+    expect(screen.getByText(/leaves the rest alone/)).toBeTruthy();
+  });
 
+  it("names a voice change as the reason when that is what happened", async () => {
+    // The print pass. "The voice changed" explains a whole-book requeue
+    // far better than "edited since generation".
+    vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
+    render(<GenerationPanel workspacePath={WS} audioStatus={{
+      chapters: [], book: "outdated", outdated_segments: 120,
+      draft_segments: 0, outdated_reason: "voice",
+    }} />);
+    await waitFor(() =>
+      expect(screen.getByText(/the voice changed/)).toBeTruthy());
+  });
+
+  it("stays quiet when every section is current", async () => {
+    vi.stubGlobal("fetch", mockFetch({ run: null, active: false }));
+    render(<GenerationPanel workspacePath={WS} audioStatus={{
+      chapters: [], book: "current", outdated_segments: 0,
+      draft_segments: 0, outdated_reason: "",
+    }} />);
+    await waitFor(() =>
+      expect(screen.getByText("Generate Audiobook")).toBeTruthy());
+    expect(screen.queryByText(/no longer match/)).toBeNull();
+  });
+});

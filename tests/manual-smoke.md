@@ -519,6 +519,57 @@ drafted with survives into the Budget tier and only there.
 
 ---
 
+## 15. Audiobook Converter -- freshness and cleanup (Stage E)
+
+**Touches:** the chapter freshness dots, the outdated-sections notice,
+the Storage screen, the Intermediate Audio setting, the post-export
+prompt, and Export Only. **This scenario deletes files on purpose** --
+run it on a throwaway audiobook, or on one you are willing to re-narrate.
+
+Steps:
+1. **Freshness after a run**: generate a short book on the local
+   narrator. Every chapter dot goes green ("Audio matches..." on hover)
+   and the rail shows no outdated notice.
+2. **One edit, one stale section**: change a single paragraph and save.
+   That chapter's dot turns amber, the others stay green, and the rail
+   says how many sections no longer match. Press Generate -- only the
+   changed section re-narrates.
+3. **A voice change is named as such**: switch the narrator voice. The
+   notice now says "the voice changed" and every chapter turns red.
+   **Do not generate** -- just confirm nothing regenerated on its own,
+   then switch the voice back.
+4. **Storage measures honestly**: open Storage from the bottom of the
+   chapter rail. Sizes are plausible; Preview files and Failed
+   generation attempts are ticked; Current segment files, the manuscript
+   snapshots, and Final MP3 and M4B exports are NOT. Each of those three
+   states what is lost.
+5. **Cancel deletes nothing**: tick Current segment files, press Delete
+   selected, read the confirm (it should name the categories, the book,
+   the size, and the consequence), then **Cancel**. Sizes are unchanged.
+6. **Delete the disposable**: with only previews + failed attempts
+   ticked, delete. The freed size is reported and the segment audio is
+   untouched -- generation still says everything is up to date.
+7. **Ask after export**: set Intermediate Audio to "Ask me after each
+   export", close Storage, and export. When it finishes, the prompt
+   names the size and offers Keep Files / Delete Segment Files / Review
+   Storage. Choose **Keep Files** and confirm nothing was deleted.
+8. **Export Only**: export again, then in Storage delete Current segment
+   files. The Export Only warning appears with its explanation, the
+   chapter dots go hollow, and the exported MP3/M4B files are still in
+   the output folder and still play.
+9. **Delete Working Files from the dashboard**: go back to the
+   dashboard. The book's row has both a storage icon and an X -- the X
+   only forgets the row, the storage icon opens this same dialog for
+   that book without opening the workspace.
+
+Expected: nothing is ever deleted without either a tick plus a confirm,
+or the writer's own standing "delete after export" choice (which reports
+what it freed); the exported audiobook is never deleted by any automatic
+path; and a workspace whose audio is gone says so instead of offering an
+export it cannot make.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** — verified separately by bumping a version and

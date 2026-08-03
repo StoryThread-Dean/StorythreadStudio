@@ -20,7 +20,7 @@ import {
   previewSelection, previewVoice, resetGeneration, resumeGeneration,
   saveVoice, startGeneration,
 } from "./api";
-import type { EngineStatus, PreviewTracePiece } from "./api";
+import type { AudioStatus, EngineStatus, PreviewTracePiece } from "./api";
 import { BookDetailsPanel } from "./BookDetailsPanel";
 import { ExportPanel } from "./ExportPanel";
 import { PremiumNarrationPanel } from "./PremiumNarrationPanel";
@@ -44,6 +44,10 @@ interface GenerationPanelProps {
   /** Open the Audiobook Settings dialog -- the premium panel points at
       it, since the engine is chosen there and nowhere else. */
   onOpenSettings?: () => void;
+  /** Chapter freshness, owned by WorkspaceView (it refreshes on save).
+      Used only to SAY that sections are outdated -- the Generate button
+      already re-does exactly those, so there is no second action. */
+  audioStatus?: AudioStatus | null;
 }
 
 // The out-of-the-box narrator when a book has no remembered voice yet.
@@ -146,7 +150,7 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
 
 export function GenerationPanel({
   workspacePath, getSelectionText, initialVoiceId,
-  settingsVersion = 0, onOpenSettings,
+  settingsVersion = 0, onOpenSettings, audioStatus,
 }: GenerationPanelProps) {
   const [voices, setVoices] = useState<NarratorVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
@@ -476,6 +480,30 @@ export function GenerationPanel({
                   </span>
                 </WhatsThis>
               </div>
+            </div>
+          )}
+
+          {/* Spec 24.3: audio that no longer matches the narration, said
+              out loud with the count. Never a prompt to spend -- the
+              Generate button below already re-does exactly the changed
+              segments, so this is information, not a second path. */}
+          {!active && audioStatus && audioStatus.outdated_segments > 0 && (
+            <div className="rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2">
+              <p className="text-[11px] leading-relaxed text-amber-200">
+                {audioStatus.outdated_segments === 1
+                  ? "1 section no longer matches its audio"
+                  : `${audioStatus.outdated_segments} sections no longer match their audio`}
+                {audioStatus.outdated_reason === "voice"
+                  ? " -- the voice changed." : "."}
+              </p>
+              <p className="mt-1 text-[10px] leading-relaxed text-amber-200/70">
+                {audioStatus.outdated_reason === "voice"
+                  ? "Generating re-narrates the book in the new voice. Keeping "
+                    + "the existing audio is fine too -- nothing is regenerated "
+                    + "until you say so."
+                  : "Generating re-does exactly those sections and leaves the "
+                    + "rest alone. Nothing is regenerated until you say so."}
+              </p>
             </div>
           )}
 

@@ -87,6 +87,24 @@ function mockFetch() {
         install: { state: "idle", progress: 0, error: null },
       }) };
     }
+    if (url.includes("/audio-status")) {
+      return { ok: true, json: async () => ({
+        chapters: [
+          { chapter_id: "chapter-001", title: "Chapter 1", status: "current",
+            current: 4, outdated: 0, missing: 0 },
+          { chapter_id: "chapter-002", title: "Chapter 2", status: "partial",
+            current: 2, outdated: 1, missing: 1 },
+        ],
+        book: "partial", outdated_segments: 1, draft_segments: 0,
+        outdated_reason: "text",
+      }) };
+    }
+    if (url.includes("/storage")) {
+      return { ok: true, json: async () => ({
+        categories: [], total_bytes: 0, export_only: false,
+        export_only_note: "", has_exports: false, retention: "keep",
+      }) };
+    }
     if (url.includes("/assemble/status")) {
       return { ok: true, json: async () => ({
         state: "idle", message: null, progress: 0, error: null,
@@ -338,5 +356,34 @@ describe("WorkspaceView", () => {
     await waitFor(() => expect(screen.getByText("Pronunciation Dictionary")).toBeTruthy());
     // One-spot overrides are pointed at the [say] toolbar, per the spec.
     expect(screen.getByText(/\[say\] toolbar button/)).toBeTruthy();
+  });
+
+  it("marks each chapter's audio freshness in the rail", async () => {
+    // Spec 24.2. A dot rather than a word: the rail is narrow, and the
+    // sentence lives in the tooltip where it does not crowd the titles.
+    await renderLoaded();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/Audio matches this chapter's narration/)).toBeTruthy());
+    expect(screen.getByLabelText(/Partly outdated/)).toBeTruthy();
+  });
+
+  it("shows no freshness dots at all until the status has loaded", async () => {
+    // The failure this prevents: a slow backend painting every chapter
+    // as "not generated" on a book that is fully narrated.
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("/audio-status")) throw new Error("offline");
+      return mockFetch()(url);
+    }));
+    render(<WorkspaceView payload={PAYLOAD} onBack={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("1. Chapter 1")).toBeTruthy());
+    expect(screen.queryByLabelText(/No audio generated yet/)).toBeNull();
+    expect(screen.queryByLabelText(/Audio matches/)).toBeNull();
+  });
+
+  it("opens Storage from the rail", async () => {
+    await renderLoaded();
+    fireEvent.click(screen.getByText("Storage"));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "Audiobook storage" })).toBeTruthy());
   });
 });

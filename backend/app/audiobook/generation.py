@@ -194,6 +194,129 @@ def effective_pace(segment: dict, settings: dict) -> float:
     return max(0.5, min(2.0, snapped))
 
 
+# ── Reading audio state without generating (spec 24.2) ───────────────────────
+# The rail needs to say "Chapter 2 is outdated" WITHOUT starting a run,
+# spawning the local worker, or contacting a paid engine. The trick: a
+# completed segment already records the engine that made it, so its own
+# basis can be recomputed from what is stored. That answers the question
+# the writer actually asks -- "has anything changed since this was
+# narrated?" -- with no engine present at all.
+
+class _StoredEngine:
+    """Just enough of a SynthesisBackend for payload_basis: the identity
+    fields a finished segment already carries."""
+
+    def __init__(self, segment: dict):
+        self.key = str(segment.get("provider") or "")
+        self.model_id = str(segment.get("model") or "")
+        self.engine_version = str(segment.get("engine_version") or "")
+
+
+# Per-segment verdicts (spec 24.2's three markers).
+AUDIO_CURRENT = "current"          # matches the generated audio
+AUDIO_OUTDATED = "outdated"        # modified since generation
+AUDIO_MISSING = "missing"          # no audio generated
+
+
+def segment_audio_state(segment: dict, rules, settings: dict,
+                        book_voice: str = "") -> dict:
+    """One segment's audio verdict, and why."""
+    if segment.get("status") != "completed" or not segment.get("output_file"):
+        return {"state": AUDIO_MISSING,
+                "reason": "failed" if segment.get("status") == "failed" else "none"}
+
+    stored_voice = str(segment.get("voice_id") or "")
+    # A voice change is checked FIRST and separately. It is the print
+    # pass: every segment is outdated, and saying "the voice changed"
+    # explains a whole-book requeue far better than "the text moved".
+    if book_voice and stored_voice and stored_voice != book_voice:
+        return {"state": AUDIO_OUTDATED, "reason": "voice"}
+
+    engine = _StoredEngine(segment)
+    payload = pronunciation.prepare_tts_text(segment["text"], rules)
+    pace = effective_pace(segment, settings)
+    layout = segment_layout(segment)
+    stored_hash = segment.get("payload_hash")
+
+    for draft in (False, True):
+        basis = payload_basis(payload, engine, stored_voice, pace,
+                              layout=layout, draft=draft)
+        if stored_hash == basis:
+            # Draft audio is current for a draft, and deliberately stale
+            # for a real pass -- the rail says so rather than calling it
+            # simply "current".
+            return {"state": AUDIO_CURRENT, "reason": "draft" if draft else "match"}
+
+    # Audio generated before payload_hash existed has nothing to compare
+    # against. Treat it as current rather than nagging a writer to
+    # re-narrate a book that is probably fine.
+    if not stored_hash:
+        return {"state": AUDIO_CURRENT, "reason": "legacy"}
+    return {"state": AUDIO_OUTDATED, "reason": "text"}
+
+
+def _chapter_rollup(counts: dict[str, int]) -> str:
+    """Spec 24.2's four chapter words, from the segment tally."""
+    total = counts["current"] + counts["outdated"] + counts["missing"]
+    if total == 0:
+        return "empty"
+    if counts["current"] == total:
+        return "current"
+    if counts["current"] == 0 and counts["outdated"] == 0:
+        return "not_generated"
+    if counts["current"] == 0:
+        return "outdated"
+    return "partial"
+
+
+def audio_status(workspace_path: str) -> dict:
+    """Per-chapter audio freshness for the rail. Never starts anything."""
+    manifest = segmenter.load_segments(workspace_path)
+    if manifest is None:
+        return {"chapters": [], "book": "empty", "outdated_segments": 0,
+                "draft_segments": 0}
+
+    book_manifest = workspace.load_manifest(workspace_path)
+    rules = pronunciation.effective_rules(workspace_path)
+    settings = workspace.narration_settings(book_manifest)
+    book_voice = str(book_manifest.get("selected_voice") or "")
+
+    chapters = []
+    totals = {"current": 0, "outdated": 0, "missing": 0}
+    drafts = 0
+    reasons: set[str] = set()
+
+    for chapter in manifest["chapters"]:
+        counts = {"current": 0, "outdated": 0, "missing": 0}
+        for item in chapter["items"]:
+            if item.get("kind") != "segment":
+                continue
+            verdict = segment_audio_state(item, rules, settings, book_voice)
+            counts[verdict["state"]] += 1
+            totals[verdict["state"]] += 1
+            if verdict["state"] == AUDIO_OUTDATED:
+                reasons.add(verdict["reason"])
+            if verdict["reason"] == "draft":
+                drafts += 1
+        chapters.append({
+            "chapter_id": chapter["chapter_id"],
+            "title": chapter.get("title", ""),
+            "status": _chapter_rollup(counts),
+            **counts,
+        })
+
+    return {
+        "chapters": chapters,
+        "book": _chapter_rollup(totals),
+        "outdated_segments": totals["outdated"],
+        "draft_segments": drafts,
+        # One word for why, when the whole book agrees on it. The panel
+        # uses this to say "the voice changed" instead of the vaguer
+        # "edited since generation".
+        "outdated_reason": reasons.pop() if len(reasons) == 1 else "",
+    }
+
+
 def start_run(workspace_path: str, backend: SynthesisBackend, voice_id: str,
               force: bool = False, draft: bool = False) -> dict:
     """

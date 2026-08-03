@@ -680,6 +680,114 @@ export async function resetGeneration(workspacePath: string): Promise<void> {
   }));
 }
 
+// ── Audio freshness (spec 24.2) ──────────────────────────────────────────────
+// Which chapters still match their narration. Read-only: asking never
+// spawns the local engine and never touches a paid one, so the rail can
+// refresh it on every save.
+
+export type ChapterAudioStatus =
+  | "current" | "partial" | "outdated" | "not_generated" | "empty";
+
+export interface ChapterAudio {
+  chapter_id: string;
+  title: string;
+  status: ChapterAudioStatus;
+  current: number;
+  outdated: number;
+  missing: number;
+}
+
+export interface AudioStatus {
+  chapters: ChapterAudio[];
+  book: ChapterAudioStatus;
+  outdated_segments: number;
+  draft_segments: number;
+  /** "voice" | "text" when the whole book agrees on one cause, else "". */
+  outdated_reason: string;
+}
+
+export async function fetchAudioStatus(workspacePath: string): Promise<AudioStatus> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/audio-status?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<AudioStatus>(res);
+}
+
+// ── Storage and cleanup (spec 25) ────────────────────────────────────────────
+
+export type RetentionMode = "keep" | "delete_after_export" | "ask_after_export";
+
+export interface StorageCategory {
+  key: string;
+  label: string;
+  description: string;
+  /** What is lost for good. Empty when nothing is. */
+  consequence: string;
+  /** Pre-checked in the dialog. Never true for anything irreversible. */
+  default_selected: boolean;
+  /** Cannot be rebuilt at all -- earns a stronger warning. */
+  protected: boolean;
+  files: number;
+  bytes: number;
+}
+
+export interface StorageReport {
+  categories: StorageCategory[];
+  total_bytes: number;
+  /** Exports survive but the audio behind them does not (spec 25.3). */
+  export_only: boolean;
+  export_only_note: string;
+  has_exports: boolean;
+  retention: RetentionMode;
+}
+
+export async function fetchStorage(workspacePath: string): Promise<StorageReport> {
+  const res = await fetch(
+    `${API_BASE}/api/audiobook/storage?workspace_path=${encodeURIComponent(workspacePath)}`,
+  );
+  return toJson<StorageReport>(res);
+}
+
+export async function saveRetention(
+  workspacePath: string,
+  retention: RetentionMode,
+): Promise<StorageReport> {
+  const res = await fetch(`${API_BASE}/api/audiobook/storage/retention`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, retention }),
+  });
+  return toJson<StorageReport>(res);
+}
+
+export interface CleanupResult {
+  deleted: Record<string, { files: number; bytes: number }>;
+  freed_bytes: number;
+  /** Files that would not delete (locked by a player, usually). */
+  problems: string[];
+  storage: StorageReport;
+}
+
+export async function runCleanup(
+  workspacePath: string,
+  categories: string[],
+): Promise<CleanupResult> {
+  const res = await fetch(`${API_BASE}/api/audiobook/storage/cleanup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath, categories }),
+  });
+  return toJson<CleanupResult>(res);
+}
+
+/** Bytes as a writer reads them. Sizes here run from KB to many GB. */
+export function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "0 KB";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 async function generationControl(action: "pause" | "cancel" | "resume", workspacePath: string) {
   const res = await fetch(`${API_BASE}/api/audiobook/generation/${action}`, {
     method: "POST",

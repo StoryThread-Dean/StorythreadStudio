@@ -16,12 +16,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
-  BookHeadphones, BookOpen, ChevronDown, FolderOpen, Gem, Mic, RefreshCw,
-  Sparkles, Volume2, X,
+  BookHeadphones, BookOpen, ChevronDown, FolderOpen, Gem, HardDrive, Mic,
+  RefreshCw, Sparkles, Volume2, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { fetchProject, fetchRecents, removeRecent } from "./api";
+import { StorageDialog } from "./StorageDialog";
 import { SpokenLine } from "./SpokenLine";
 import type { AudiobookProjectPayload, RecentAudiobook } from "./types";
 import { AUDIOBOOK_STATUS_LABELS } from "./types";
@@ -124,6 +125,9 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
   const [error, setError] = useState<string | null>(null);
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  // Which recent's working files are being reviewed (spec 5.4). Null =
+  // the cleanup dialog is closed.
+  const [storageFor, setStorageFor] = useState<RecentAudiobook | null>(null);
 
   const loadRecents = useCallback(async () => {
     setLoading(true);
@@ -372,6 +376,18 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusClasses(r.status)}`}>
                   {AUDIOBOOK_STATUS_LABELS[r.status] ?? r.status}
                 </span>
+                {/* Spec 5.4: the two very different kinds of "remove".
+                    They sit side by side and are labelled apart on
+                    purpose -- one forgets a row, the other deletes
+                    gigabytes, and confusing them is unrecoverable. */}
+                <button
+                  onClick={() => setStorageFor(r)}
+                  title="Delete working files -- choose what to remove from disk"
+                  aria-label={`Delete working files for ${r.title || "this audiobook"}`}
+                  className="shrink-0 rounded p-1 text-zinc-600 transition-colors hover:text-sky-300"
+                >
+                  <HardDrive size={14} />
+                </button>
                 <button
                   onClick={() => void handleRemove(r.workspace_path)}
                   title="Remove from Recents (keeps all files on disk)"
@@ -385,6 +401,15 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
         )}
       </div>
     </div>
+
+    {storageFor && (
+      <StorageDialog
+        workspacePath={storageFor.workspace_path}
+        title={storageFor.title}
+        onClose={() => setStorageFor(null)}
+        onChanged={() => void loadRecents()}
+      />
+    )}
     </div>
   );
 }

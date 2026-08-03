@@ -214,6 +214,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_audiobook_narration_selection.py` -- three-level engine resolution (book -> settings -> writing fallback), `can_spend` vs `fallback_note` vs `caveat`, and each demoted engine's recorded reason
   - `test_audiobook_mp3_transport.py` -- per-model `response_format`, mp3 byte sniffing + decode, and the self-healing 400 retry (provider names a format, or the field is dropped)
   - `test_audiobook_level_matching.py` -- loudness matching at assembly (-20 dBFS RMS, -1 dBFS ceiling, clamped gain), including that flow dynamics survive it
+  - `test_audiobook_storage.py` -- storage measurement + cleanup (spec 25): per-category sizes, orphan detection by leftover, nothing irreversible pre-checked, deleted audio resets its segment records, export-only state, retention migration
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -241,6 +242,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/audiobook/VoicePicker.test.tsx` -- one picker, three shapes (two dropdowns / one / free text), value stays a single composed id in all of them
   - `src/features/audiobook/ToggleSwitch.test.tsx` -- a switch, not a checkbox: its look carries the state
   - `src/features/audiobook/SpokenLine.test.tsx` -- the read-aloud flourish never costs readability (every word present as text, spaces survive, staggered delays)
+  - `src/features/audiobook/StorageDialog.test.tsx` -- the delete screen: only free-to-rebuild categories pre-checked, losses stated on the row, the confirm repeats categories + size, cancelling deletes nothing, locked files surfaced
+  - `src/features/audiobook/ExportPanel.test.tsx` -- retention after export: keep says nothing, ask shows the size, auto-delete acts and reports it, and only intermediate audio is ever removed
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands
