@@ -117,7 +117,11 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
   }
 
   return (
-    <div className={`rounded border px-3 py-2.5 ${c.box}`}>
+    // Tagged so a test can assert what this CARD says without matching
+    // the panel behind it -- several step titles are also control labels
+    // out there, which is how an assertion ends up passing on the wrong
+    // element.
+    <div data-testid="guided-walk" className={`rounded border px-3 py-2.5 ${c.box}`}>
       <div className="mb-1.5 flex items-center gap-2">
         <GraduationCap size={13} className={`shrink-0 ${c.icon}`} />
         <span className={`flex-1 text-[12px] font-semibold ${c.title}`}>

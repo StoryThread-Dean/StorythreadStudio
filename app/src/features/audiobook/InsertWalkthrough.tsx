@@ -316,31 +316,35 @@ export function InsertWalkthrough({
           {/* Warning sized just under the manuscript's text-sm -- this
               is the one strip that must actually get READ. */}
           <p className="mb-1.5 text-[13px] font-semibold text-amber-200">
-            Apply {autoBeatCount} suggested beats without walking each one?
+            Add all {autoBeatCount} pauses without listening to each one?
           </p>
           <p className="mb-2 text-[13px] leading-relaxed text-amber-300/90">
-            Unreviewed beats can produce unintended audio effects in some
-            scenes -- a pause where a line should press forward, a beat
-            inside a rhythm you built on purpose. Listen to the result
-            with the free local preview BEFORE printing with paid AI
-            voices. Nothing is saved until you Save; leave without saving
-            to discard the whole batch. Marker repairs and word readings
-            are not included -- a broken pace has a direction only you can
-            pick, and which reading of "read" you meant is not something
-            any scan can know. Both stay in the walk.
+            Some of them will be wrong for the scene. A pause where the
+            line should push forward, or a gap inside a run you wrote to
+            tumble. Listen to the chapter with the free narrator on your
+            machine before you pay for a voice.
+            <br /><br />
+            Nothing is written to your file until you press Save in the
+            editor, so if the whole batch reads badly you can close without
+            saving and none of it happened.
+            <br /><br />
+            Marker fixes and word readings are not included. A broken
+            marker could be corrected two different ways, and only you know
+            which reading of a word like "read" you meant. Those stay here
+            for you to decide.
           </p>
           <div className="flex gap-2">
             <button
               onClick={autoApply}
               className="rounded bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-amber-500"
             >
-              Yes, apply all {autoBeatCount}
+              Yes, add all {autoBeatCount}
             </button>
             <button
               onClick={() => setConfirmingAuto(false)}
               className="rounded border border-zinc-700 px-3 py-1 text-[11px] text-zinc-300 hover:border-zinc-500"
             >
-              Keep walking through instead
+              No, let me go one at a time
             </button>
           </div>
         </div>
@@ -382,10 +386,14 @@ export function InsertWalkthrough({
           {autoBeatCount > 0 && !confirmingAuto && (
             <button
               onClick={() => setConfirmingAuto(true)}
-              title="Apply every remaining suggested beat at its default length. Marker repairs and word readings stay manual."
-              className="mt-2 w-full rounded border border-amber-700 px-2 py-1 text-[10px] text-amber-300 hover:border-amber-500"
+              title="Adds every pause still being suggested, at the shorter length. Marker fixes and word readings stay here for you to decide."
+              className="mt-2 w-full rounded border border-amber-700 px-2 py-1 text-[11px] text-amber-300 hover:border-amber-500"
             >
-              Auto-apply {autoBeatCount} beats
+              {/* Was "Auto-apply N beats". Read by a first-time writer,
+                  "N" is a letter and "beats" is music -- the button
+                  announced itself in two words neither of which meant
+                  anything. It now says what it does and to how many. */}
+              Add all {autoBeatCount} pauses at once
             </button>
           )}
         </div>
@@ -519,6 +527,16 @@ export function InsertWalkthrough({
               Skip <ChevronRight size={11} />
             </button>
           </div>
+
+          {/* The shortcuts, greyed, directly under the buttons they
+              duplicate (user-placed). They were a whole tutorial step,
+              which put the least important thing in this feature on equal
+              footing with why any of it exists. Reference belongs beside
+              the thing it describes. */}
+          <p className="mt-2 text-[10px] leading-relaxed text-zinc-600">
+            Keyboard: Ctrl+Enter adds the first choice, Ctrl+Right skips,
+            Ctrl+Left goes back, Esc closes.
+          </p>
         </>
       )}
 

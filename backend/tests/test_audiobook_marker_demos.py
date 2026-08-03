@@ -194,6 +194,8 @@ def test_every_script_renders():
 BEAT_PAIRS = [
     "beat-dialogue-open", "beat-dialogue-close",
     "beat-short-burst", "beat-interjection",
+    # Not a beat, same contract: one sentence, two readings, decide by ear.
+    "word-reading",
 ]
 
 
@@ -201,6 +203,39 @@ def test_each_beat_demo_has_a_flat_partner():
     for kind in BEAT_PAIRS:
         assert kind in DEMO_SCRIPTS
         assert f"{kind}-flat" in DEMO_SCRIPTS
+
+
+def test_the_pause_tile_offers_a_short_and_a_long_of_one_sentence():
+    # Three clips, one sentence: the panel has three length buttons, and
+    # this is where they stop being numbers. All three must be the same
+    # words or the comparison teaches nothing.
+    trio = [DEMO_SCRIPTS[k] for k in
+            ("beat-pause-flat", "beat-pause-short", "beat-pause-long")]
+    words = {" ".join(re.sub(r"\[[^\]]*\]", " ", s).split()) for s in trio}
+    assert len(words) == 1, words
+    assert "[pause:0.4]" in trio[1]
+    assert "[pause:1.5]" in trio[2]
+
+
+def test_the_beat_tiles_run_one_continuous_scene():
+    # The four beat tiles are one argument in order, so that by the third
+    # clip the writer is judging the pause rather than reading a new
+    # sentence. If these drift apart the tutorial loses that grounding.
+    assert "Elena" in DEMO_SCRIPTS["beat-dialogue-open-flat"]
+    quote = "How dare you speak to me that way."
+    assert quote in DEMO_SCRIPTS["beat-dialogue-open-flat"]
+    assert quote in DEMO_SCRIPTS["beat-dialogue-close-flat"]
+    assert "Elena" in DEMO_SCRIPTS["beat-interjection-flat"]
+
+
+def test_the_word_reading_demo_shows_the_engine_getting_it_wrong():
+    # Unlike the beat pairs, this one is not a matter of taste: the flat
+    # clip says "reed" in a past-tense sentence. The fix must be a say
+    # override on that exact word.
+    flat = DEMO_SCRIPTS["word-reading-flat"]
+    fixed = DEMO_SCRIPTS["word-reading"]
+    assert "Yesterday I read" in flat
+    assert "[say:red]read[/say]" in fixed
 
 
 def test_a_beat_pair_differs_only_by_its_markers():
@@ -211,10 +246,13 @@ def test_a_beat_pair_differs_only_by_its_markers():
         # character-for-character identical, whitespace aside.
         stripped = re.sub(r"\[[^\]]*\]", " ", with_beat)
         assert " ".join(stripped.split()) == " ".join(flat.split()), kind
-        # And the marked one must actually carry a beat, or the pair is
-        # two identical clips and the tutorial is lying.
-        assert "[pause:" in with_beat, kind
+        # And the marked one must actually carry a marker, or the pair is
+        # two identical clips and the tutorial is lying. Beats carry a
+        # pause; the word-reading pair carries a say override instead.
+        assert "[" in with_beat, kind
         assert "[" not in flat, kind
+        if kind.startswith("beat-"):
+            assert "[pause:" in with_beat, kind
 
 
 def test_a_flat_beat_demo_renders_as_one_unbroken_utterance():

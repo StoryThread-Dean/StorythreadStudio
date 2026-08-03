@@ -121,36 +121,81 @@ DEMO_SCRIPTS: dict[str, str] = {
     # Single-line scripts on purpose. A blank line would collect
     # paragraph_gap_ms and put silence in BOTH clips, which would blunt
     # the very contrast the pair exists to show.
+    # ── What a pause IS, before any of the specific cases ─────────────────────
+    # Three clips of one sentence: none, short, long. The panel offers three
+    # lengths, so the tutorial's job here is to make those three buttons
+    # mean something before the writer is asked to choose between them.
+    # No dialogue in this one on purpose -- it is about the marker, and the
+    # dialogue cases have their own tiles.
+    "beat-pause-flat": (
+        "She counted the steps up to the landing. Nothing moved above her."
+    ),
+    "beat-pause-short": (
+        "She counted the steps up to the landing. [pause:0.4] "
+        "Nothing moved above her."
+    ),
+    "beat-pause-long": (
+        "She counted the steps up to the landing. [pause:1.5] "
+        "Nothing moved above her."
+    ),
+
+    # ── One continuous scene across the four beat tiles ───────────────────────
+    # Deliberately the SAME argument running through all four, in order
+    # (user-designed): narration into speech, speech back into narration,
+    # then the clipped run, then the interjection. A writer who has heard
+    # the first two clips already knows these voices and this moment, so by
+    # the third tile they are judging the PAUSE instead of re-reading a new
+    # sentence. Kokoro is fairly monotone, so the words themselves have to
+    # carry who is speaking and how they feel.
     "beat-dialogue-open-flat": (
-        'She set the lantern down on the step. "You should not have come."'
+        'The rage Elena had held back all evening boiled over. '
+        '"How dare you speak to me that way."'
     ),
     "beat-dialogue-open": (
-        'She set the lantern down on the step. [pause:0.8] '
-        '"You should not have come."'
+        'The rage Elena had held back all evening boiled over. [pause:0.8] '
+        '"How dare you speak to me that way."'
     ),
     "beat-dialogue-close-flat": (
-        '"You should not have come." She did not look up from the lantern.'
+        '"How dare you speak to me that way." '
+        'Her fists tightened until the knuckles went white.'
     ),
     "beat-dialogue-close": (
-        '"You should not have come." [pause:0.8] '
-        'She did not look up from the lantern.'
+        '"How dare you speak to me that way." [pause:0.8] '
+        'Her fists tightened until the knuckles went white.'
     ),
     # Four clipped sentences in a row -- a real burst by the scanner's own
     # rule (3 or more, each 22 characters or fewer), so what the tutorial
     # plays is what the walk would actually offer.
     "beat-short-burst-flat": (
-        "The gate stood open. No lock. No guard. No sound at all."
+        "He said nothing. Not a word. Not a step back. Nothing at all."
     ),
     "beat-short-burst": (
-        "The gate stood open. [pause:0.4] No lock. [pause:0.4] "
-        "No guard. [pause:0.4] No sound at all."
+        "He said nothing. [pause:0.4] Not a word. [pause:0.4] "
+        "Not a step back. [pause:0.4] Nothing at all."
     ),
+    # The subtlest of the four, and the writer said so: the first attempt
+    # ("Oh no!") was barely audible. This one gives the interjection
+    # something to cut into -- a single hard word against a sentence that
+    # starts immediately, at 0.8 rather than 0.4 -- because a demo nobody
+    # can hear the difference in teaches that the feature does not work.
     "beat-interjection-flat": (
-        "The rope went slack in his hands. Oh no! He began to climb again."
+        "Elena stopped in the doorway. Enough! "
+        "She would not hear another word of it tonight."
     ),
     "beat-interjection": (
-        "The rope went slack in his hands. Oh no! [pause:0.4] "
-        "He began to climb again."
+        "Elena stopped in the doorway. Enough! [pause:0.8] "
+        "She would not hear another word of it tonight."
+    ),
+
+    # ── Word readings: the pair where the flat side is plainly WRONG ──────────
+    # Every other pair here asks "is this better?" This one asks nothing --
+    # the first clip says "reed" in a past-tense sentence, which is simply
+    # a mistake, and hearing it is the entire argument for the feature.
+    "word-reading-flat": (
+        "Yesterday I read the letter twice, then folded it away."
+    ),
+    "word-reading": (
+        "Yesterday I [say:red]read[/say] the letter twice, then folded it away."
     ),
 }
 

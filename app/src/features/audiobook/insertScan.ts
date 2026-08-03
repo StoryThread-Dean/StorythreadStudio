@@ -57,9 +57,12 @@ export const STOP_KIND_LABELS: Record<StopKind, string> = {
   "dialogue-close": "After dialogue",
   "short-burst": "Short-sentence beats",
   "interjection": "Interjections",
-  "broken-marker": "Marker problems",
+  // "Marker problems" called these a problem to be discovered. They are
+  // already found, and the walk hands over the fix -- so the label says
+  // what the writer gets, not what is wrong with their file.
+  "broken-marker": "Fixes",
   "heteronym": "Word readings",
-  "heteronym-rare": "Rare word senses",
+  "heteronym-rare": "Rare word readings",
 };
 
 /** One line per kind, for the panel's rail. A count on its own ("Word
@@ -68,13 +71,13 @@ export const STOP_KIND_LABELS: Record<StopKind, string> = {
  *  it shipped as. Each line says what the stop is FOR, in the terms the
  *  listener will hear it. */
 export const STOP_KIND_HINTS: Record<StopKind, string> = {
-  "dialogue-open": "A breath before a spoken line starts mid-paragraph",
-  "dialogue-close": "A breath as the narration takes over again",
-  "short-burst": "Separation between three or more clipped sentences",
-  "interjection": "Air after a short exclamation, so it lands",
-  "broken-marker": "Repairs, not suggestions -- a typo the parser rejects",
+  "dialogue-open": "A breath before someone starts speaking",
+  "dialogue-close": "A breath as the narrator takes over again",
+  "short-burst": "Space between three or more very short sentences",
+  "interjection": "Room after a shout, so it lands",
+  "broken-marker": "Typos in your markers, with the fix ready",
   "heteronym": "Words with two sounds: read, wound, close, bow",
-  "heteronym-rare": "The same, for senses that rarely come up in fiction",
+  "heteronym-rare": "The same, for meanings that rarely come up in stories",
 };
 
 /** Kinds muted the moment the walkthrough opens. The rare heteronym

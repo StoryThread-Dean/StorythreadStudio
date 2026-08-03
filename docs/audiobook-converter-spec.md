@@ -1450,7 +1450,40 @@ Layout: left rail lists every trigger kind with its count AND a one-line
 description of what it is for -- a count beside a label the writer cannot
 interpret is a toggle nobody ever touches. The work surface holds the
 paragraph, the decision row, and (for word readings) the per-reading
-Play buttons.
+Play buttons. Keyboard shortcuts sit as quiet grey text directly beneath
+the decision row: reference belongs beside the thing it describes, and as
+a tutorial step it had the least important part of the feature on equal
+footing with why any of it exists.
+
+**Tutorial structure: trunk, then branches, then specifics (writer's
+review, 2026-08-03).** The guided walk is ordered so no step needs
+anything from a later one:
+
+1. *What this is for* -- none of it is required; it improves pacing and
+   pronunciation; the local narrator is named (Kokoro) and its two real
+   faults are owned outright. A writer being asked to tune something has
+   to be told first that it was broken, and that ignoring it is allowed.
+2. *Two ways to use it* -- one at a time, or all at once. Names both and
+   says which to start with.
+3. *What a pause does* -- the marker itself, with three clips of one
+   sentence at no / short / long, because the three length buttons are
+   otherwise just numbers. Deliberately no dialogue in this step.
+4-7. The four beat types, each with its own before/after pair, running
+   **one continuous scene** (Elena's argument) in order. By the third clip
+   the writer is judging the pause rather than reading a new sentence, and
+   because Kokoro is fairly monotone the words themselves have to carry
+   who is speaking.
+8. *Word readings* -- the only pair where the flat clip is not a matter of
+   taste but plainly wrong ("reed" in a past-tense sentence).
+9. *Fixes* -- broken markers, and why they are never guessed at.
+10. *Choosing what it suggests* -- the rail and the all-at-once button.
+
+Language is written for a first-time writer. Specifically retired in that
+review: "Marker problems" (renamed **Fixes** -- they are already found and
+the fix is in hand, so the label says what the writer gets rather than
+what is wrong with their file), and **"Auto-apply N beats"**, which to its
+intended reader was a letter and a musical term. It now reads *"Add all 41
+pauses at once."*
 
 ### 18.5 Respelling Doctrine (ear-tested by the user, 2026-07-30)
 

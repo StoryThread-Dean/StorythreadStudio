@@ -7,7 +7,9 @@
 // the keyboard fast path.
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import {
+  render, screen, fireEvent, cleanup, waitFor, within,
+} from "@testing-library/react";
 
 import { InsertWalkthrough } from "./InsertWalkthrough";
 
@@ -137,27 +139,27 @@ describe("InsertWalkthrough", () => {
 
   it("Auto-apply requires a confirm, applies beats, leaves repairs manual", () => {
     const props = renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: /Auto-apply \d+ beats/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add all \d+ pauses at once/ }));
     // The warning strip appears; nothing applied yet.
-    expect(screen.getByText(/unintended audio effects/i)).toBeTruthy();
+    expect(screen.getByText(/wrong for the scene/i)).toBeTruthy();
     expect(props.onApplyEdit).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: /Yes, apply all/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Yes, add all/ }));
     expect(props.onApplyEdit).toHaveBeenCalledOnce();
     const [next] = (props.onApplyEdit as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(next).toContain('She made a decision. [pause:0.4] "A cult."');
     expect(next).toContain("[pace:=2]");           // repair NOT auto-fixed
     // The walk continues with the repair as the remaining stop.
     expect(screen.getByText(/Unreadable pace value/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Auto-apply/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add all \d+ pauses/ })).toBeNull();
   });
 
   it("Keep walking cancels the auto-apply confirm", () => {
     const props = renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: /Auto-apply \d+ beats/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Keep walking through instead/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add all \d+ pauses at once/ }));
+    fireEvent.click(screen.getByRole("button", { name: /let me go one at a time/ }));
     expect(props.onApplyEdit).not.toHaveBeenCalled();
-    expect(screen.queryByText(/unintended audio effects/i)).toBeNull();
+    expect(screen.queryByText(/wrong for the scene/i)).toBeNull();
   });
 
   it("says so plainly when there is nothing to suggest", () => {
@@ -197,9 +199,9 @@ describe("InsertWalkthrough as a window", () => {
     // A count beside a label the writer cannot interpret is a toggle they
     // will never touch. The rail has room for a reason.
     renderPanel();
-    expect(screen.getByText(/breath before a spoken line starts mid-paragraph/))
+    expect(screen.getByText(/breath before someone starts speaking/))
       .toBeTruthy();
-    expect(screen.getByText(/Repairs, not suggestions/)).toBeTruthy();
+    expect(screen.getByText(/Typos in your markers/)).toBeTruthy();
     expect(screen.getByText(/Words with two sounds: read, wound, close, bow/))
       .toBeTruthy();
   });
@@ -221,16 +223,22 @@ describe("InsertWalkthrough as a window", () => {
     renderPanel({ content: text });
     expect(screen.queryByText(/no business in this box/)).toBeNull();
   });
-  it("explains itself on request, and the explanation is about SOUND", async () => {
-    // The walkthrough's controls are guessable; what is not guessable is
-    // why a narration marker exists at all. A writer reading their own
-    // prose supplies the beats without noticing -- the engine does not.
+  it("opens by saying this is optional and naming what it fixes", async () => {
+    // Trunk before branches. Step one has to establish three things
+    // before any specific stop is mentioned: none of this is required,
+    // the narrator has real faults, and this screen exists to fix them.
+    // A writer who does not know that is being asked to tune something
+    // they were never told was broken.
     renderPanel();
-    expect(screen.queryByText(/you pause without noticing/)).toBeNull();
+    expect(screen.queryByText(/None of this is required/)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
-    expect(screen.getByText(/1\. What this walk is for/)).toBeTruthy();
-    expect(screen.getByText(/you pause without noticing/)).toBeTruthy();
+    expect(screen.getByText(/1\. What this is for/)).toBeTruthy();
+    expect(screen.getByText(/None of this is required/)).toBeTruthy();
+    // Names the engine and owns its faults rather than implying the
+    // writer's text is the problem.
+    expect(screen.getByText(/called Kokoro/)).toBeTruthy();
+    expect(screen.getByText(/it has real faults/)).toBeTruthy();
 
     // And the walk itself is still there underneath it -- the card
     // explains the panel, it does not replace it.
@@ -242,8 +250,8 @@ describe("InsertWalkthrough as a window", () => {
     // worth doing even by a writer who skips every other stop.
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
-    walkToStep("Marker problems");
-    expect(screen.getByText(/They are repairs|are not suggestions/)).toBeTruthy();
+    walkToStep("Fixes");
+    expect(screen.getByText(/These are not suggestions/)).toBeTruthy();
   });
 
   it("gives every beat kind its own step with before/after audio", () => {
@@ -255,20 +263,122 @@ describe("InsertWalkthrough as a window", () => {
     for (const title of ["Before dialogue", "After dialogue",
                          "Short-sentence beats", "Interjections"]) {
       walkToStep(title);
-      expect(screen.getByLabelText(/Play: Without/)).toBeTruthy();
+      expect(screen.getByLabelText(/Play: No pause/)).toBeTruthy();
       expect(screen.getByLabelText(/Play: With a/)).toBeTruthy();
     }
+  });
+
+  it("teaches what a pause IS before naming any place to put one", () => {
+    // Trunk, then branches. The pause tile comes before the dialogue
+    // tiles and is deliberately NOT about dialogue -- it is about the
+    // marker and its three lengths, which are otherwise just numbers on
+    // three buttons the writer is asked to choose between.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("What a pause does");
+    expect(screen.getByLabelText("Play: No pause")).toBeTruthy();
+    expect(screen.getByLabelText(/Short pause, 0.4 seconds/)).toBeTruthy();
+    expect(screen.getByLabelText(/Long pause, 1.5 seconds/)).toBeTruthy();
+    // Not a word about dialogue in THIS card; that is the next tile's
+    // job. Scoped to the card, because "Before dialogue" is also a label
+    // in the rail behind it.
+    const card = screen.getByTestId("guided-walk");
+    expect(within(card).queryByText(/dialogue/i)).toBeNull();
+  });
+
+  it("names the two ways to use it before explaining either", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Two ways to use it");
+    expect(screen.getByText(/One at a time/)).toBeTruthy();
+    expect(screen.getByText(/All at once/)).toBeTruthy();
+    // And says which to start with, rather than leaving it to the reader.
+    expect(screen.getByText(/Start with one at a time/)).toBeTruthy();
+  });
+
+  it("runs one continuous scene through the beat tiles", () => {
+    // The same argument in order, so by the third clip the writer is
+    // judging the pause instead of reading a new sentence.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Before dialogue");
+    expect(screen.getByText(/Listen to Elena losing her temper/)).toBeTruthy();
+    walkToStep("After dialogue");
+    expect(screen.getByText(/Elena\s+has finished her line/)).toBeTruthy();
+    walkToStep("Short-sentence beats");
+    expect(screen.getByText(/Still the same scene/)).toBeTruthy();
+  });
+
+  it("admits the short-burst suggestion is a matter of taste", () => {
+    // Sometimes the faster version is better. A tutorial that claims
+    // every suggestion is an improvement gets disbelieved on the first
+    // one the writer disagrees with.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Short-sentence beats");
+    expect(screen.getByText(/Sometimes the faster version is better/)).toBeTruthy();
+    expect(screen.getByText(/drum beat/)).toBeTruthy();
+  });
+
+  it("gives word readings their own two Play buttons", () => {
+    // The strongest demo in the set: the first clip is not a matter of
+    // taste, it is the narrator saying the wrong word.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Word readings");
+    expect(screen.getByLabelText(/Play: Wrong: the narrator says "reed"/)).toBeTruthy();
+    expect(screen.getByLabelText(/Play: Fixed: the narrator says "red"/)).toBeTruthy();
+  });
+
+  it("calls the repair tile Fixes, and never a problem with your file", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Fixes");
+    expect(screen.queryByText(/Marker problems/)).toBeNull();
+  });
+
+  it("explains the left list and the all-at-once button in plain words", () => {
+    // This tile was rewritten from scratch: "Turn kinds off, or do the
+    // beats in one go" needed five readings to parse, and none of the
+    // words in it meant anything to a first-time writer.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    walkToStep("Choosing what it suggests");
+    expect(screen.getByText(/The list on the left/)).toBeTruthy();
+    expect(screen.getByText(/Untick\s+anything you do not want to be asked about/))
+      .toBeTruthy();
+    // Says what it will NOT do, which is the part that protects the book.
+    expect(screen.getByText(/will never do for you/)).toBeTruthy();
+  });
+
+  it("has no tutorial step for the keyboard shortcuts", () => {
+    // They moved out of the tutorial and under the buttons they
+    // duplicate: reference belongs beside the thing it describes, not on
+    // equal footing with why the feature exists.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    for (let i = 0; i < 25; i += 1) {
+      const next = screen.queryByLabelText("Next step");
+      if (!next) break;
+      fireEvent.click(next);
+    }
+    expect(screen.queryByText(/^\d+\. Keyboard/)).toBeNull();
+  });
+
+  it("shows the shortcuts as quiet text under the buttons", () => {
+    renderPanel();
+    expect(screen.getByText(/Ctrl\+Enter adds the first choice/)).toBeTruthy();
   });
 
   it("plays a beat demo through the cached backend endpoint", async () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
     walkToStep("Short-sentence beats");
-    fireEvent.click(screen.getByLabelText(/Play: Without/));
+    fireEvent.click(screen.getByLabelText(/Play: No pause/));
     await waitFor(() => expect(fetchMarkerDemo)
       .toHaveBeenCalledWith("beat-short-burst-flat"));
     // Replaying is free: the clip is cached, so no second request.
-    fireEvent.click(screen.getByLabelText(/Play: Without/));
+    fireEvent.click(screen.getByLabelText(/Play: No pause/));
     await waitFor(() => expect(fetchMarkerDemo).toHaveBeenCalledTimes(1));
   });
 
@@ -278,7 +388,7 @@ describe("InsertWalkthrough as a window", () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
     walkToStep("Before dialogue");
-    expect(screen.getByText(/550 milliseconds by\s+default/)).toBeTruthy();
+    expect(screen.getByText(/already get a pause automatically/)).toBeTruthy();
   });
 });
 
@@ -386,7 +496,7 @@ describe("InsertWalkthrough word readings", () => {
     // time, so it ships muted rather than deleted.
     renderPanel({ content: "She does everything herself, every day." });
     expect(screen.queryByText(/Which "does" is this\?/)).toBeNull();
-    fireEvent.click(screen.getByLabelText(/Rare word senses/));
+    fireEvent.click(screen.getByLabelText(/Rare word readings/));
     expect(screen.getByText('Which "does" is this?')).toBeTruthy();
   });
 
@@ -397,8 +507,8 @@ describe("InsertWalkthrough word readings", () => {
     fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
     walkToStep("Word readings");
     expect(screen.getByText(/Word readings -- let your ear decide/)).toBeTruthy();
-    expect(screen.getByText(/comes out as "I reed it yesterday"/)).toBeTruthy();
-    expect(screen.getByText(/Skip -- that is the right\s+answer most of the time/))
+    expect(screen.getByText(/guesses wrong more often than not/)).toBeTruthy();
+    expect(screen.getByText(/right answer\s+most of the time/))
       .toBeTruthy();
   });
 
@@ -409,8 +519,8 @@ describe("InsertWalkthrough word readings", () => {
     renderPanel({
       content: 'I read it yesterday. "A cult." Lexa nodded. Short. Bits here.',
     });
-    const auto = screen.getByRole("button", { name: /Auto-apply \d+ beats/ });
+    const auto = screen.getByRole("button", { name: /Add all \d+ pauses at once/ });
     fireEvent.click(auto);
-    expect(screen.getByText(/word readings\s+are not included/)).toBeTruthy();
+    expect(screen.getByText(/Marker fixes and word readings are not\s+included/)).toBeTruthy();
   });
 });
