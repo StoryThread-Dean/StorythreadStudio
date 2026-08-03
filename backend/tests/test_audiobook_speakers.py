@@ -453,3 +453,101 @@ def test_the_narrators_print_voice_is_the_books_premium_voice():
     # two can never disagree about who narrates a print pass.
     cast = workspace.speakers({"selected_premium_voice": "thalia"})
     assert cast[0]["premium_voice_id"] == "thalia"
+
+
+# ── Nicknames (live design session) ──────────────────────────────────────────
+
+def test_a_character_answers_to_every_name_the_book_uses():
+    # A novel calls Alexandra "Lexi" to her sister and "Lex" to her
+    # editor. All of them are her.
+    cast = workspace.speakers({
+        "selected_voice": "af_heart",
+        "speakers": [{"display_name": "Alexandra", "voice_id": "bf_emma",
+                      "aliases": ["Lexi", "Lex"]}],
+    })
+    for name in ("Alexandra", "Lexi", "lex", "LEXI"):
+        assert workspace.voice_for_speaker(name, cast, "af_heart") == "bf_emma", name
+
+
+def test_a_nickname_belongs_to_exactly_one_character():
+    # Two owners would make [voice:Lexi] ambiguous, and the ambiguity
+    # would be resolved silently at render time.
+    cast = workspace.speakers({"speakers": [
+        {"display_name": "Alexandra", "voice_id": "bf_emma", "aliases": ["Lexi"]},
+        {"display_name": "Marcus", "voice_id": "am_adam", "aliases": ["Lexi", "Marc"]},
+    ]})
+    marcus = next(s for s in cast if s["display_name"] == "Marcus")
+    assert marcus["aliases"] == ["Marc"]
+
+
+def test_a_nickname_cannot_shadow_another_characters_real_name():
+    cast = workspace.speakers({"speakers": [
+        {"display_name": "Alexandra", "voice_id": "bf_emma"},
+        {"display_name": "Marcus", "voice_id": "am_adam", "aliases": ["Alexandra"]},
+    ]})
+    marcus = next(s for s in cast if s["display_name"] == "Marcus")
+    assert marcus["aliases"] == []
+
+
+def test_a_nickname_is_not_an_unknown_speaker():
+    manifest = {
+        "selected_voice": "af_heart",
+        "speakers": [{"display_name": "Alexandra", "voice_id": "bf_emma",
+                      "aliases": ["Lexi"]}],
+    }
+    assert workspace.unknown_speaker_warnings(
+        '[voice:Lexi]"Not yet."[/voice]', manifest) == []
+
+
+def test_an_ignored_name_is_not_an_unknown_speaker():
+    # The writer said the narrator reads the Librarian. That is an
+    # answer, not a mistake to nag about on every save.
+    manifest = {
+        "selected_voice": "af_heart",
+        "ignored_speaker_names": ["Librarian"],
+    }
+    assert workspace.unknown_speaker_warnings(
+        '[voice:Librarian]"We close at six."[/voice]', manifest) == []
+
+
+def test_aliases_and_ignored_names_round_trip_through_the_api(tmp_path):
+    ws = _workspace(tmp_path)
+    response = client.put("/api/audiobook/speakers", json={
+        "workspace_path": ws,
+        "speakers": [{"display_name": "Alexandra", "voice_id": "bf_emma",
+                      "aliases": ["Lexi", "Lex"]}],
+        "ignored_names": ["Librarian"],
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    alexandra = next(s for s in body["speakers"] if s["display_name"] == "Alexandra")
+    assert alexandra["aliases"] == ["Lexi", "Lex"]
+    assert body["ignored_names"] == ["Librarian"]
+
+
+def test_generation_narrates_a_nickname_in_the_characters_voice(tmp_path):
+    # The end of the chain: a hand-typed [voice:Lexi] has to reach the
+    # engine as Alexandra's voice, not as the narrator's.
+    from tests.test_audiobook_generation import FakeBackend
+
+    src = tmp_path / "book.md"
+    src.write_text('# Chapter 1\n\n[voice:Lexi]"Not yet."[/voice]\n', encoding="utf-8")
+    ws = tmp_path / "ws"
+    client.post("/api/audiobook/import", json={
+        "source_path": str(src), "workspace_path": str(ws), "title": "Nick"})
+    client.put("/api/audiobook/speakers", json={
+        "workspace_path": str(ws),
+        "speakers": [{"display_name": "Alexandra", "voice_id": "bf_emma",
+                      "aliases": ["Lexi"]}],
+    })
+
+    used: list[str] = []
+
+    class VoiceSpy(FakeBackend):
+        def synthesize(self, text, voice_id, speed=1.0):
+            used.append(voice_id)
+            return super().synthesize(text, voice_id)
+
+    generation.start_run(str(ws), VoiceSpy(), voice_id="af_heart")
+    generation.wait_for_idle()
+    assert used == ["bf_emma"]

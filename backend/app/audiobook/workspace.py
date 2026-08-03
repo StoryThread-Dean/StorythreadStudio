@@ -108,6 +108,13 @@ def narration_settings(manifest: dict) -> dict:
 #   local voices were the ones they had been using all along (live
 #   finding).
 #
+#   ONE CHARACTER, MANY NAMES. Alexandra is Lexi to her sister and Lex to
+#   her editor, and a novel will use all three. A speaker therefore has a
+#   canonical display name plus any number of ALIASES. Detection and
+#   hand-typed markers resolve through the aliases; what gets WRITTEN is
+#   always the canonical name, so one character means one spelling in the
+#   file and counting, recasting and removal stay honest.
+#
 #   NAMES, NOT IDS. The narration copy says [voice:Elena]; the cast maps
 #   Elena to a voice id. Recasting a character is one edit in the cast,
 #   not a find-and-replace through the manuscript -- and the narration
@@ -126,6 +133,7 @@ def _narrator_entry(manifest: dict) -> dict:
         "speaker_id": NARRATOR_ID,
         "display_name": NARRATOR_NAME,
         "role": "narrator",
+        "aliases": [],
         "voice_id": str(manifest.get("selected_voice") or ""),
         # The book's premium voice has lived in the manifest since Stage
         # D; the narrator simply reads it, so the two places that set it
@@ -166,10 +174,34 @@ def speakers(manifest: dict) -> list[dict]:
                           or f"character-{name.lower().replace(' ', '-')}",
             "display_name": name,
             "role": "character",
+            # A nickname may belong to exactly one character: two owners
+            # would make [voice:Lexi] ambiguous, and the ambiguity would
+            # be resolved silently at render time.
+            "aliases": _clean_aliases(raw.get("aliases"), name, cast),
             "voice_id": str(raw.get("voice_id") or ""),
             "premium_voice_id": str(raw.get("premium_voice_id") or ""),
         })
     return cast
+
+
+def _clean_aliases(raw, owner: str, cast: list[dict]) -> list[str]:
+    """Trim, de-duplicate, and refuse any nickname already spoken for."""
+    taken = {owner.lower()}
+    for entry in cast:
+        taken.add(entry["display_name"].lower())
+        taken.update(a.lower() for a in entry.get("aliases", []))
+    out: list[str] = []
+    for item in (raw if isinstance(raw, list) else []):
+        alias = " ".join(str(item or "").split()).strip()
+        if alias and alias.lower() not in taken:
+            taken.add(alias.lower())
+            out.append(alias)
+    return out
+
+
+def all_names_for(entry: dict) -> list[str]:
+    """Every spelling that resolves to this speaker."""
+    return [entry["display_name"], *entry.get("aliases", [])]
 
 
 def voice_for_speaker(name: str, cast: list[dict], default_voice: str,
@@ -189,8 +221,9 @@ def voice_for_speaker(name: str, cast: list[dict], default_voice: str,
     the writer can actually fix it.
     """
     if name:
+        wanted = name.strip().lower()
         for entry in cast:
-            if entry["display_name"].lower() == name.strip().lower():
+            if any(n.lower() == wanted for n in all_names_for(entry)):
                 chosen = (entry.get("premium_voice_id") if premium
                           else entry.get("voice_id"))
                 return str(chosen or "") or default_voice
@@ -206,7 +239,11 @@ def unknown_speaker_warnings(narration_text: str, manifest: dict) -> list[str]:
     """
     from app.audiobook.markers import speaker_names
 
-    known = {entry["display_name"].lower() for entry in speakers(manifest)}
+    known = {n.lower() for entry in speakers(manifest)
+             for n in all_names_for(entry)}
+    # A name the writer told us to leave alone is not a mistake.
+    known.update(str(n).strip().lower()
+                 for n in (manifest.get("ignored_speaker_names") or []))
     return [
         f"[voice:{name}] is not in your cast, so those passages will be read "
         f"by the narrator. Add {name} in the Cast panel, or fix the spelling."

@@ -35,8 +35,8 @@ import type { CastReport, SpeakerPassEstimate, VoiceRoster } from "./api";
 import { castColor, castTextColor } from "./castColors";
 import { DialogueWindow } from "./DialogueWindow";
 import {
-  chapterCast, chapterRanges, countCharacterUsage, mergeAiGuesses,
-  removeCharacterMarkers, scanDialogue, setStopVoice,
+  chapterCast, chapterRanges, countCharacterUsage, detectSpeakerNames,
+  mergeAiGuesses, removeCharacterMarkers, scanDialogue, setStopVoice,
 } from "./speakerScan";
 import type { ChapterRange, DialogueStop } from "./speakerScan";
 
@@ -52,6 +52,8 @@ interface CastPanelProps {
 
 interface Row {
   display_name: string;
+  /** Nicknames the book uses for this character. */
+  aliases: string[];
   voice_id: string;
   premium_voice_id: string;
 }
@@ -119,6 +121,8 @@ export function CastPanel({
   // the fastest mode safe -- the review is scoped instead of a hunt.
   const [aiMarked, setAiMarked] = useState<Set<string>>(new Set());
   const [reviewOnly, setReviewOnly] = useState(false);
+  const [ignored, setIgnored] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // ── The cast ────────────────────────────────────────────────────────
@@ -129,6 +133,7 @@ export function CastPanel({
       .filter(s => s.role === "character")
       .map(s => ({
         display_name: s.display_name,
+        aliases: s.aliases ?? [],
         voice_id: s.voice_id,
         premium_voice_id: s.premium_voice_id ?? "",
       }));
@@ -136,9 +141,11 @@ export function CastPanel({
     setRows(characters);
     setNarratorVoice(narrator?.voice_id ?? "");
     setNarratorPrintVoice(narrator?.premium_voice_id ?? "");
+    setIgnored(fresh.ignored_names ?? []);
     setSnapshot(JSON.stringify({
       characters, narrator: narrator?.voice_id ?? "",
       narratorPrint: narrator?.premium_voice_id ?? "",
+      ignored: fresh.ignored_names ?? [],
     }));
     // Voices open when there is nothing cast yet (that IS the job), and
     // out of the way once there is (the job is now the dialogue).
@@ -169,6 +176,7 @@ export function CastPanel({
 
   const dirty = report !== null && JSON.stringify({
     characters: rows, narrator: narratorVoice, narratorPrint: narratorPrintVoice,
+    ignored,
   }) !== snapshot;
 
   const attemptClose = useCallback(() => {
@@ -190,7 +198,7 @@ export function CastPanel({
     try {
       applyReport(await saveCast(
         workspacePath, rows.filter(r => r.display_name.trim()),
-        narratorVoice, narratorPrintVoice));
+        narratorVoice, narratorPrintVoice, ignored));
       onSaved?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the cast.");
@@ -260,6 +268,28 @@ export function CastPanel({
     () => [NARRATOR, ...rows.map(r => r.display_name.trim()).filter(Boolean)],
     [rows]);
 
+  /** Which character a detected or hand-typed name belongs to. "Lexi"
+   *  resolves to Alexandra; an unknown name resolves to nothing. */
+  const resolveName = useCallback((name: string): string => {
+    const wanted = name.trim().toLowerCase();
+    if (!wanted) return "";
+    const owner = rows.find(r =>
+      [r.display_name, ...r.aliases].some(n => n.trim().toLowerCase() === wanted));
+    return owner ? owner.display_name.trim() : "";
+  }, [rows]);
+
+  // Every spelling already spoken for -- a name belongs to exactly one
+  // character, or the marker would be ambiguous.
+  const taken = useMemo(() => new Set([
+    ...rows.flatMap(r => [r.display_name, ...r.aliases]),
+    ...ignored,
+  ].map(n => n.trim().toLowerCase()).filter(Boolean)), [rows, ignored]);
+
+  // Names the book speaks for that nobody has claimed yet.
+  const detected = useMemo(
+    () => detectSpeakerNames(content).filter(n => !taken.has(n.toLowerCase())),
+    [content, taken]);
+
   // Who this chapter actually uses: marked speakers plus anyone its prose
   // names in a tag. A thirty-character book shows three buttons.
   const present = useMemo(() => {
@@ -322,8 +352,8 @@ export function CastPanel({
   async function runPass() {
     if (!chapter || passState === "running") return;
     setPassNote(null);
-    const inCast = (name: string) =>
-      rows.some(r => r.display_name.trim().toLowerCase() === name.trim().toLowerCase());
+    // Nicknames resolve: a chapter that says "Lexi said" marks Alexandra.
+    const inCast = (name: string) => !!resolveName(name);
 
     // The free rung, always: every line the writer's own prose names.
     const open = stops.filter(s => !s.assigned);
@@ -338,7 +368,7 @@ export function CastPanel({
     }
 
     if (mode === "free") {
-      applyBatch(tagged.map(s => ({ stop: s, name: s.guess })), new Set());
+      applyBatch(tagged.map(s => ({ stop: s, name: resolveName(s.guess) })), new Set());
       setPassNote(
         `Marked ${tagged.length} line${tagged.length === 1 ? "" : "s"} from your `
         + `own dialogue tags. ${open.length - tagged.length} left to decide.`
@@ -360,7 +390,7 @@ export function CastPanel({
         const sure = stop.guessSource === "tag"
           || (stop.confidence ?? 0) >= CONFIDENT;
         if (mode === "auto" || sure) {
-          decided.push({ stop, name: stop.guess });
+          decided.push({ stop, name: resolveName(stop.guess) });
           if (stop.guessSource === "ai") fromAi.add(stop.quotes[0].text);
         }
       }
@@ -471,7 +501,7 @@ export function CastPanel({
         You can also do it by hand in the editor if you prefer: wrap the
         spoken words in{" "}
         <code className="rounded bg-zinc-800 px-1 text-[10px] text-violet-300">
-          [voice:Lara Croft]"Can I help you?"[/voice]
+          [voice:Elizabeth Bennet]"I could easily forgive his pride."[/voice]
         </code>{" "}
         and it means exactly the same thing. This window is just faster,
         and it shows you the result as you go.
@@ -628,7 +658,8 @@ export function CastPanel({
                           i !== index
                           && r.display_name.trim().toLowerCase() === name.toLowerCase());
                         return (
-                          <div key={index} className="flex items-center gap-2">
+                          <div key={index}>
+                            <div className="flex items-center gap-2">
                             <input
                               aria-label={`Character ${index + 1} name`}
                               value={row.display_name}
@@ -658,37 +689,141 @@ export function CastPanel({
                             >
                               <X size={12} />
                             </button>
+                            </div>
+
+                            {/* Nicknames, folded away until asked for.
+                                Most characters have none, and a row of
+                                empty alias boxes would make the common
+                                case look complicated. */}
+                            <button
+                              onClick={() => setExpanded(e => (e === index ? null : index))}
+                              className="ml-1 flex items-center gap-1 text-[10px] text-zinc-500 hover:text-violet-300"
+                            >
+                              {expanded === index
+                                ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                              {row.aliases.length === 0
+                                ? "Also called..."
+                                : `Also called ${row.aliases.join(", ")}`}
+                            </button>
+
+                            {expanded === index && (
+                              <div className="ml-4 mt-1 rounded border border-zinc-800 bg-zinc-950/40 px-2.5 py-2">
+                                <p className="text-[10px] leading-relaxed text-zinc-500">
+                                  Nicknames your book uses for{" "}
+                                  {name || "this character"} -- Lexi, Lex, Alexa.
+                                  They are read in this character's voice, and the
+                                  marker written into your text always says{" "}
+                                  {name || "the full name"}.
+                                </p>
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                  {row.aliases.map(alias => (
+                                    <span
+                                      key={alias}
+                                      className="inline-flex items-center gap-1 rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300"
+                                    >
+                                      {alias}
+                                      <button
+                                        onClick={() => setRows(prev => prev.map((r, i) =>
+                                          i === index
+                                            ? { ...r, aliases: r.aliases.filter(a => a !== alias) }
+                                            : r))}
+                                        aria-label={`Remove nickname ${alias}`}
+                                        className="text-zinc-600 hover:text-rose-400"
+                                      >
+                                        <X size={9} />
+                                      </button>
+                                    </span>
+                                  ))}
+                                  {detected.length > 0 ? (
+                                    <select
+                                      aria-label={`Add a nickname for character ${index + 1}`}
+                                      value=""
+                                      onChange={e => {
+                                        const alias = e.target.value;
+                                        if (!alias) return;
+                                        setRows(prev => prev.map((r, i) =>
+                                          i === index
+                                            ? { ...r, aliases: [...r.aliases, alias] } : r));
+                                      }}
+                                      className="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-200"
+                                    >
+                                      <option value="">+ a name found in your book</option>
+                                      {detected.map(n => (
+                                        <option key={n} value={n}>{n}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className="text-[10px] text-zinc-600">
+                                      No unclaimed names left to add.
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
 
-                    {report.unassigned_names.filter(n => !rows.some(
-                      r => r.display_name.trim().toLowerCase() === n.toLowerCase())).length > 0 && (
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span className="text-[10px] text-zinc-500">
-                          Already in your narration:
-                        </span>
-                        {report.unassigned_names
-                          .filter(n => !rows.some(
-                            r => r.display_name.trim().toLowerCase() === n.toLowerCase()))
-                          .map(name => (
-                            <button
-                              key={name}
-                              onClick={() => setRows(prev => [...prev, {
-                                display_name: name, voice_id: "", premium_voice_id: "" }])}
-                              className="inline-flex items-center gap-1 rounded border border-violet-700 px-2 py-0.5 text-[11px] text-violet-200 hover:border-violet-500"
-                            >
-                              <Plus size={10} /> {name}
-                            </button>
+                    {detected.length > 0 && (
+                      <div className="mt-2 rounded border border-zinc-800 bg-zinc-950/40 px-2.5 py-2">
+                        <p className="text-[10px] leading-relaxed text-zinc-500">
+                          <span className="text-zinc-300">
+                            Names found in your book:
+                          </span>{" "}
+                          add one as a character, or let the narrator read them.
+                          Some of these will be nicknames -- add the character
+                          first, then open "Also called" on their row and pick
+                          the nickname there.
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {detected.map(name => (
+                            <span key={name} className="inline-flex items-center overflow-hidden rounded border border-zinc-700">
+                              <button
+                                onClick={() => setRows(prev => [...prev, {
+                                  display_name: name, aliases: [],
+                                  voice_id: "", premium_voice_id: "" }])}
+                                className="px-2 py-0.5 text-[11px] text-violet-200 hover:bg-violet-950/50"
+                              >
+                                + {name}
+                              </button>
+                              <button
+                                onClick={() => setIgnored(prev => [...prev, name])}
+                                aria-label={`Ignore ${name}`}
+                                title={`The narrator reads ${name}. Stops offering the name.`}
+                                className="border-l border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-200"
+                              >
+                                ignore
+                              </button>
+                            </span>
                           ))}
+                        </div>
                       </div>
+                    )}
+
+                    {ignored.length > 0 && (
+                      <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-600">
+                        Narrator reads:
+                        {ignored.map(name => (
+                          <span key={name} className="inline-flex items-center gap-1">
+                            {name}
+                            <button
+                              onClick={() => setIgnored(prev => prev.filter(n => n !== name))}
+                              aria-label={`Stop ignoring ${name}`}
+                              className="hover:text-zinc-300"
+                            >
+                              <X size={9} />
+                            </button>
+                          </span>
+                        ))}
+                      </p>
                     )}
 
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         onClick={() => setRows(prev => [...prev, {
-                          display_name: "", voice_id: "", premium_voice_id: "" }])}
+                          display_name: "", aliases: [],
+                          voice_id: "", premium_voice_id: "" }])}
                         className="inline-flex items-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-400 hover:border-violet-600 hover:text-violet-300"
                       >
                         <Plus size={11} /> Add a character
@@ -863,15 +998,17 @@ export function CastPanel({
                   >
                     Skip
                   </button>
-                  {stop?.guess && !stop.assigned && (
+                  {stop?.guess && !stop.assigned && resolveName(stop.guess) && (
                     <span className="text-[10px] text-zinc-500">
-                      your text says{" "}
+                      your text says {stop.guess}
+                      {resolveName(stop.guess).toLowerCase() !== stop.guess.toLowerCase()
+                        && ", which is"}{" "}
                       <button
-                        onClick={() => assign(stop.guess)}
-                        aria-label={`Use ${stop.guess}`}
+                        onClick={() => assign(resolveName(stop.guess))}
+                        aria-label={`Use ${resolveName(stop.guess)}`}
                         className="rounded border border-emerald-700 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:border-emerald-500"
                       >
-                        {stop.guess}
+                        {resolveName(stop.guess)}
                       </button>
                     </span>
                   )}

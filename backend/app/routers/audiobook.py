@@ -982,7 +982,9 @@ def get_speakers(workspace_path: str):
     _require_workspace(workspace_path)
     manifest = workspace.load_manifest(workspace_path)
     cast = workspace.speakers(manifest)
-    known = {s["display_name"].lower() for s in cast}
+    known = {n.lower() for s in cast for n in workspace.all_names_for(s)}
+    known.update(str(n).strip().lower()
+                 for n in (manifest.get("ignored_speaker_names") or []))
     try:
         text = workspace.read_narration(workspace_path)
     except OSError:
@@ -990,6 +992,7 @@ def get_speakers(workspace_path: str):
     used = markers.speaker_names(text)
     return {
         "speakers": cast,
+        "ignored_names": list(manifest.get("ignored_speaker_names") or []),
         "unassigned_names": [n for n in used if n.lower() not in known],
         # Every speaker narrates on the SAME engine; only the voice
         # differs. Said here so the UI never has to invent the rule.
@@ -1080,6 +1083,10 @@ def get_voice_options(workspace_path: str):
 
 class SpeakerEntry(BaseModel):
     display_name: str = Field(min_length=1, max_length=60)
+    # Nicknames the book uses for this character. A novel calls Alexandra
+    # "Lexi" and "Lex"; all of them resolve to her voice, and the marker
+    # written into the file is always the canonical name.
+    aliases: list[str] = []
     # Two voices per speaker, one per pass: the free local narrator this
     # book is drafted with, and the hosted engine it may be printed with.
     # Voice ids do not carry between rosters.
@@ -1094,6 +1101,9 @@ class SaveSpeakersRequest(BaseModel):
     speakers: list[SpeakerEntry]
     narrator_voice: str | None = None
     narrator_premium_voice: str | None = None
+    # Detected names the writer said to leave alone: the narrator reads
+    # them, and they stop being offered as characters.
+    ignored_names: list[str] | None = None
 
 
 @router.put("/speakers")
@@ -1108,8 +1118,15 @@ def save_speakers(request: SaveSpeakersRequest):
         # The same field the Premium panel writes, so the two places that
         # can set the narrator's print voice never disagree.
         manifest["selected_premium_voice"] = request.narrator_premium_voice
+    if request.ignored_names is not None:
+        manifest["ignored_speaker_names"] = [
+            " ".join(n.split()).strip() for n in request.ignored_names
+            if n and n.strip()
+        ]
     manifest["speakers"] = [
         {"display_name": entry.display_name.strip(),
+         "aliases": [" ".join(a.split()).strip() for a in entry.aliases
+                     if a and a.strip()],
          "voice_id": entry.voice_id,
          "premium_voice_id": entry.premium_voice_id}
         for entry in request.speakers
@@ -1219,8 +1236,12 @@ async def analyze_speakers(request: AnalyzeSpeakersRequest):
 
     provider, api_key, model_id = _resolve_model_and_key(None)
     manifest = workspace.load_manifest(request.workspace_path)
-    known = [s["display_name"] for s in workspace.speakers(manifest)
-             if s["speaker_id"] != workspace.NARRATOR_ID]
+    # The AI is told every spelling the book uses -- "Lexi" in the prose
+    # has to resolve to Alexandra, and a model that has never heard the
+    # nickname will invent a new character for it.
+    known = [n for s in workspace.speakers(manifest)
+             if s["speaker_id"] != workspace.NARRATOR_ID
+             for n in workspace.all_names_for(s)]
 
     import asyncio
 

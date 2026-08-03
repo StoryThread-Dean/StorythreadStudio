@@ -689,6 +689,8 @@ export interface Speaker {
   speaker_id: string;
   display_name: string;
   role: "narrator" | "character";
+  /** Nicknames the book uses for this character. */
+  aliases: string[];
   /** Local voice, used when drafting. */
   voice_id: string;
   /** Hosted voice, used on a print pass. */
@@ -697,6 +699,8 @@ export interface Speaker {
 
 export interface CastReport {
   speakers: Speaker[];
+  /** Detected names the writer told us the narrator reads. */
+  ignored_names: string[];
   /** Names the manuscript already uses that the cast does not have. */
   unassigned_names: string[];
   single_engine: boolean;
@@ -711,18 +715,21 @@ export async function fetchCast(workspacePath: string): Promise<CastReport> {
 
 export async function saveCast(
   workspacePath: string,
-  speakers: { display_name: string; voice_id: string; premium_voice_id?: string }[],
+  speakers: { display_name: string; aliases?: string[]; voice_id: string;
+              premium_voice_id?: string }[],
   narratorVoice?: string,
   narratorPremiumVoice?: string,
+  ignoredNames?: string[],
 ): Promise<CastReport> {
   const res = await fetch(`${API_BASE}/api/audiobook/speakers`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       workspace_path: workspacePath,
-      speakers: speakers.map(s => ({ premium_voice_id: "", ...s })),
+      speakers: speakers.map(s => ({ premium_voice_id: "", aliases: [], ...s })),
       narrator_voice: narratorVoice ?? null,
       narrator_premium_voice: narratorPremiumVoice ?? null,
+      ignored_names: ignoredNames ?? null,
     }),
   });
   return toJson<CastReport>(res);

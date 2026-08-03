@@ -199,6 +199,39 @@ export function chapterCast(content: string, range: ChapterRange): string[] {
   return found;
 }
 
+/**
+ * Every name the book's dialogue tags speak for, book-wide, in first-use
+ * order -- the pool the cast panel offers.
+ *
+ * People who SPEAK, not people who are mentioned: the pool comes from
+ * dialogue tags, which is why "the Librarian said" is found and why a
+ * name that only ever appears in description is not. A cast list padded
+ * with everyone the book names would be worse than no list at all.
+ */
+export function detectSpeakerNames(content: string): string[] {
+  const found: string[] = [];
+  for (const range of chapterRanges(content)) {
+    for (const stop of scanDialogue(content, range)) {
+      const name = stop.guess;
+      if (name && !found.some(n => n.toLowerCase() === name.toLowerCase())) {
+        found.push(name);
+      }
+    }
+    // Names already marked count too: a hand-typed [voice:Lexi] is the
+    // writer telling us Lexi speaks.
+    VOICE_SPAN_RE.lastIndex = 0;
+    const body = content.slice(range.start, range.end);
+    let match: RegExpExecArray | null;
+    while ((match = VOICE_SPAN_RE.exec(body)) !== null) {
+      const name = (match[1] ?? "").trim();
+      if (name && !found.some(n => n.toLowerCase() === name.toLowerCase())) {
+        found.push(name);
+      }
+    }
+  }
+  return found;
+}
+
 /** Where a character is used across the WHOLE book, for the removal
  *  warning: how many lines, and which chapters. */
 export function countCharacterUsage(content: string, name: string): {

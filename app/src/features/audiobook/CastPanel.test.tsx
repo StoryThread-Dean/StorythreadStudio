@@ -22,9 +22,10 @@ function report(over: Record<string, unknown> = {}) {
   return {
     speakers: [
       { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
-        voice_id: "af_heart", premium_voice_id: "" },
+        voice_id: "af_heart", aliases: [], premium_voice_id: "" },
     ],
     unassigned_names: [],
+    ignored_names: [],
     single_engine: true,
     ...over,
   };
@@ -33,11 +34,11 @@ function report(over: Record<string, unknown> = {}) {
 const CAST_WITH_TWO = report({
   speakers: [
     { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
-      voice_id: "af_heart", premium_voice_id: "" },
+      voice_id: "af_heart", aliases: [], premium_voice_id: "" },
     { speaker_id: "character-lara", display_name: "Lara", role: "character",
-      voice_id: "bf_emma", premium_voice_id: "" },
+      voice_id: "bf_emma", aliases: [], premium_voice_id: "" },
     { speaker_id: "character-alexandra", display_name: "Alexandra",
-      role: "character", voice_id: "af_bella", premium_voice_id: "" },
+      role: "character", voice_id: "af_bella", aliases: [], premium_voice_id: "" },
   ],
 });
 
@@ -157,7 +158,7 @@ describe("CastPanel workbench", () => {
       speakers: [
         ...CAST_WITH_TWO.speakers,
         { speaker_id: "character-marcus", display_name: "Marcus",
-          role: "character", voice_id: "", premium_voice_id: "" },
+          role: "character", voice_id: "", aliases: [], premium_voice_id: "" },
       ],
     });
     await open(mockFetch(cast));
@@ -306,9 +307,9 @@ describe("CastPanel workbench", () => {
     const soloCast = report({
       speakers: [
         { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
-          voice_id: "af_heart", premium_voice_id: "" },
+          voice_id: "af_heart", aliases: [], premium_voice_id: "" },
         { speaker_id: "character-lara", display_name: "Lara", role: "character",
-          voice_id: "bf_emma", premium_voice_id: "" },
+          voice_id: "bf_emma", aliases: [], premium_voice_id: "" },
       ],
     });
     await open(mockFetch(soloCast));
@@ -394,5 +395,106 @@ describe("CastPanel workbench", () => {
     await open(mockFetch());
     expect((screen.getByRole("button", { name: "Start" }) as HTMLButtonElement)
       .disabled).toBe(true);
+  });
+  it("offers the names the book speaks for, with two answers each", async () => {
+    // A detected name is not automatically a character: the Librarian
+    // with one line should usually just be the narrator.
+    await open(mockFetch());
+    expect(screen.getByText(/Names found in your book/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "+ Lara" })).toBeTruthy();
+    expect(screen.getByLabelText("Ignore Lara")).toBeTruthy();
+  });
+
+  it("adding a detected name takes it out of the pool", async () => {
+    // A name belongs to exactly one character, or [voice:Lexi] is
+    // ambiguous and the ambiguity gets resolved silently at render.
+    await open(mockFetch());
+    fireEvent.click(screen.getByRole("button", { name: "+ Lara" }));
+    expect(screen.queryByRole("button", { name: "+ Lara" })).toBeNull();
+    expect((screen.getByLabelText("Character 1 name") as HTMLInputElement).value)
+      .toBe("Lara");
+  });
+
+  it("ignoring a name hands it to the narrator and stops offering it", async () => {
+    await open(mockFetch());
+    fireEvent.click(screen.getByLabelText("Ignore Lara"));
+    expect(screen.queryByRole("button", { name: "+ Lara" })).toBeNull();
+    expect(screen.getByText(/Narrator reads:/)).toBeTruthy();
+    // And it can be taken back.
+    fireEvent.click(screen.getByLabelText("Stop ignoring Lara"));
+    expect(screen.getByRole("button", { name: "+ Lara" })).toBeTruthy();
+  });
+
+  it("nicknames are folded away until asked for", async () => {
+    // Most characters have none; a row of empty alias boxes would make
+    // the common case look complicated.
+    await open(mockFetch(CAST_WITH_TWO));
+    fireEvent.click(screen.getByRole("button", { name: /Voices/ }));
+    expect(screen.queryByText(/Nicknames your book uses/)).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: /Also called/ })[0]);
+    expect(screen.getByText(/Nicknames your book uses/)).toBeTruthy();
+    // Every detected name here is already cast, so there is nothing left
+    // to attach -- and the panel says so rather than showing an empty box.
+    expect(screen.getByText(/No unclaimed names left to add/)).toBeTruthy();
+  });
+
+  it("a nickname attaches from the detected pool and leaves it", async () => {
+    const book = "# Chapter One\n\n"
+      + '"Enough," Alexandra said.\n\n'
+      + '"Not yet," Lexi said.\n';
+    const soloCast = report({
+      speakers: [
+        { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
+          voice_id: "af_heart", aliases: [], premium_voice_id: "" },
+        { speaker_id: "character-alexandra", display_name: "Alexandra",
+          role: "character", voice_id: "bf_emma", aliases: [], premium_voice_id: "" },
+      ],
+    });
+    await open(mockFetch(soloCast), book);
+    fireEvent.click(screen.getByRole("button", { name: /Voices/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Also called/ }));
+    fireEvent.change(screen.getByLabelText("Add a nickname for character 1"),
+                     { target: { value: "Lexi" } });
+
+    expect(screen.getByRole("button", { name: /Also called Lexi/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "+ Lexi" })).toBeNull();
+  });
+
+  it("a line tagged with a nickname marks the character, by their real name", async () => {
+    // The marker always says Alexandra. One character, one spelling in
+    // the file -- which is what keeps counting and recasting honest.
+    const book = "# Chapter One\n\n" + '"Not yet," Lexi said.\n';
+    const withAlias = report({
+      speakers: [
+        { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
+          voice_id: "af_heart", aliases: [], premium_voice_id: "" },
+        { speaker_id: "character-alexandra", display_name: "Alexandra",
+          role: "character", voice_id: "bf_emma", aliases: ["Lexi"],
+          premium_voice_id: "" },
+      ],
+    });
+    const { onContentChange } = await open(mockFetch(withAlias), book);
+    pick("free");
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    await waitFor(() => expect(onContentChange).toHaveBeenCalled());
+    expect(onContentChange.mock.calls[0][0])
+      .toContain('[voice:Alexandra]"Not yet,"[/voice] Lexi said.');
+  });
+
+  it("the suggestion names the character even when the prose used a nickname", async () => {
+    const book = "# Chapter One\n\n" + '"Not yet," Lexi said.\n';
+    const withAlias = report({
+      speakers: [
+        { speaker_id: "narrator", display_name: "Narrator", role: "narrator",
+          voice_id: "af_heart", aliases: [], premium_voice_id: "" },
+        { speaker_id: "character-alexandra", display_name: "Alexandra",
+          role: "character", voice_id: "bf_emma", aliases: ["Lexi"],
+          premium_voice_id: "" },
+      ],
+    });
+    await open(mockFetch(withAlias), book);
+    expect(screen.getByText(/your text says Lexi/)).toBeTruthy();
+    expect(screen.getByLabelText("Use Alexandra")).toBeTruthy();
   });
 });
