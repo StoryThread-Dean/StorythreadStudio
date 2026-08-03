@@ -121,4 +121,30 @@ describe("InsertWalkthrough", () => {
     renderPanel({ content: "# Heading\n\nOne long ordinary paragraph of prose without any dialogue at all in it." });
     expect(screen.getByText(/nothing to suggest/)).toBeTruthy();
   });
+  it("explains itself on request, and the explanation is about SOUND", async () => {
+    // The walkthrough's controls are guessable; what is not guessable is
+    // why a narration marker exists at all. A writer reading their own
+    // prose supplies the beats without noticing -- the engine does not.
+    renderPanel();
+    expect(screen.queryByText(/you pause without noticing/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    expect(screen.getByText(/1\. What this walk is for/)).toBeTruthy();
+    expect(screen.getByText(/you pause without noticing/)).toBeTruthy();
+
+    // And the walk itself is still there underneath it -- the card
+    // explains the panel, it does not replace it.
+    expect(screen.getByText(/Formatting Walkthrough/)).toBeTruthy();
+  });
+
+  it("the guided walk explains marker repairs as repairs, not suggestions", async () => {
+    // A mistyped marker either does nothing or swallows the chapter --
+    // worth doing even by a writer who skips every other stop.
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
+    for (let i = 0; i < 5; i += 1) {
+      fireEvent.click(screen.getByLabelText("Next step"));
+    }
+    expect(screen.getByText(/They are repairs|are not suggestions/)).toBeTruthy();
+  });
 });

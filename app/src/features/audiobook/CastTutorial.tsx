@@ -1,40 +1,22 @@
 // features/audiobook/CastTutorial.tsx
 // ====================================
-// A numbered walk through the Cast workbench itself, for a writer who
-// has never cast a book.
-//
-// This app is a teaching tool before it is a production tool, and the
-// four "what's this" answers beside it are REFERENCE -- good when you
-// have a question, useless when you do not yet know what to ask. This is
-// the other half: the order of operations, one step at a time, with an
-// example of what each step actually looks like.
-//
-// Deliberately not a tour that moves the screen around or blocks the
-// controls. A writer should be able to read step 3, do step 3, and come
-// back -- so it sits in the panel, keeps its place, and everything
-// underneath stays usable while it is open.
+// The Cast workbench's guided walk: what to do, in order, for a writer
+// who has never cast a book. The card itself is GuidedWalk -- this file
+// is only the steps.
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, GraduationCap, X } from "lucide-react";
+import { GuidedWalk } from "./GuidedWalk";
+import type { WalkStep } from "./GuidedWalk";
 
 interface CastTutorialProps {
   /** True once a print engine is connected -- the Pro step is skipped
-   *  otherwise, because a step about a thing that is not on screen
+   *  otherwise, because a step about a control that is not on screen
    *  teaches nothing. */
   hasPrintEngine: boolean;
   onClose: () => void;
 }
 
-interface Step {
-  title: string;
-  body: React.ReactNode;
-  example?: React.ReactNode;
-}
-
 export function CastTutorial({ hasPrintEngine, onClose }: CastTutorialProps) {
-  const [index, setIndex] = useState(0);
-
-  const steps: Step[] = [
+  const steps: WalkStep[] = [
     {
       title: "Add the people who speak",
       body: <>
@@ -76,8 +58,8 @@ export function CastTutorial({ hasPrintEngine, onClose }: CastTutorialProps) {
         The <b>Pro / Premium voice</b> column only matters if you plan to
         print with a paid engine. It starts at <b>-- None chosen</b> and
         can stay there forever. Nothing you do in this panel spends money.
-      </> as React.ReactNode,
-    }] : []),
+      </>,
+    } as WalkStep] : []),
     {
       title: "Choose how the dialogue gets marked",
       body: <>
@@ -85,9 +67,9 @@ export function CastTutorial({ hasPrintEngine, onClose }: CastTutorialProps) {
         press <b>Start</b>. Nothing runs until you do.
         <br /><br />
         <b>Manual</b> -- you decide every line.<br />
-        <b>Automatic (free)</b> -- marks every line your own prose names
-        ("...," Elizabeth said). No AI, no cost, instant.<br />
-        <b>Automatic + AI</b> -- your tags first, then the AI names the
+        <b>Automatic (free)</b> -- marks every line your own prose names,
+        by a dialogue tag or an action beat. No AI, no cost, instant.<br />
+        <b>Automatic + AI</b> -- your prose first, then the AI names the
         lines it is confident about, and stops on the rest.<br />
         <b>Fully automatic</b> -- marks everything, including its
         guesses. Fast, and worth reviewing.
@@ -95,7 +77,7 @@ export function CastTutorial({ hasPrintEngine, onClose }: CastTutorialProps) {
         The AI modes show what the chapter will cost before you press
         Start. It is normally a few cents.
       </>,
-      example: <>Automatic (free) -- Start &rarr; "Marked 34 lines from your own dialogue tags. 11 left to decide."</>,
+      example: <>Automatic (free) -- Start &rarr; "Marked 34 lines from your own prose. 11 left to decide."</>,
     },
     {
       title: "Walk the lines that are left",
@@ -103,11 +85,12 @@ export function CastTutorial({ hasPrintEngine, onClose }: CastTutorialProps) {
         The window shows your real text with the line in question called
         out. Click a character to give them the line -- the marker appears
         immediately -- or <b>Keep narrator</b> if nobody should be cast.
-        <b> Accept</b> moves on, <b>Back</b> returns.
+        <b> Accept</b> moves on, <b>Back</b> returns, <b>Hear it</b> plays
+        the line as it will actually sound.
         <br /><br />
-        Each character has their own colour, and only the spoken words are
-        coloured. The dialogue tag stays plain, because the narrator reads
-        that part.
+        Keys 1-9 pick a speaker, Enter accepts, P plays. Each character
+        has their own colour, and only the spoken words are coloured --
+        the dialogue tag stays plain, because the narrator reads that part.
       </>,
       example: <>[voice:Elizabeth]"I could easily forgive his pride,"[/voice] she said.</>,
     },
@@ -134,67 +117,5 @@ export function CastTutorial({ hasPrintEngine, onClose }: CastTutorialProps) {
     },
   ];
 
-  const step = steps[Math.min(index, steps.length - 1)];
-
-  return (
-    <div className="rounded border border-violet-800 bg-violet-950/30 px-3 py-2.5">
-      <div className="mb-1.5 flex items-center gap-2">
-        <GraduationCap size={13} className="shrink-0 text-violet-300" />
-        <span className="flex-1 text-[12px] font-semibold text-violet-100">
-          {index + 1}. {step.title}
-        </span>
-        <button
-          onClick={onClose}
-          aria-label="Close the walkthrough"
-          className="rounded p-0.5 text-violet-400 hover:text-violet-100"
-        >
-          <X size={13} />
-        </button>
-      </div>
-
-      <p className="text-[11px] leading-relaxed text-violet-100/80">{step.body}</p>
-
-      {step.example && (
-        <p className="mt-1.5 rounded border border-violet-900 bg-zinc-950/60 px-2 py-1 font-mono text-[10px] leading-relaxed text-zinc-400">
-          {step.example}
-        </p>
-      )}
-
-      <div className="mt-2 flex items-center gap-1.5">
-        <button
-          onClick={() => setIndex(i => Math.max(0, i - 1))}
-          disabled={index === 0}
-          aria-label="Previous step"
-          className="inline-flex items-center gap-1 rounded border border-violet-800 px-2 py-0.5 text-[11px] text-violet-200 hover:border-violet-500 disabled:opacity-40"
-        >
-          <ChevronLeft size={11} /> Back
-        </button>
-        {index < steps.length - 1 ? (
-          <button
-            onClick={() => setIndex(i => i + 1)}
-            aria-label="Next step"
-            className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-violet-500"
-          >
-            Next <ChevronRight size={11} />
-            <span data-testid="tutorial-progress">
-              {index + 1} of {steps.length}
-            </span>
-          </button>
-        ) : (
-          <button
-            onClick={onClose}
-            className="rounded bg-emerald-600 px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-500"
-          >
-            Done --{" "}
-            <span data-testid="tutorial-progress">
-              {steps.length} of {steps.length}
-            </span>
-          </button>
-        )}
-        <span className="text-[10px] text-violet-300/60">
-          Everything below stays usable while this is open.
-        </span>
-      </div>
-    </div>
-  );
+  return <GuidedWalk steps={steps} tone="violet" onClose={onClose} />;
 }

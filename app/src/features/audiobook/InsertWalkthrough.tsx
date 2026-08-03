@@ -12,7 +12,11 @@
 // Ctrl+Left back, Esc close.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Wand2, X } from "lucide-react";
+import {
+  Check, ChevronLeft, ChevronRight, GraduationCap, Wand2, X,
+} from "lucide-react";
+
+import { InsertWalkthroughHelp } from "./InsertWalkthroughHelp";
 
 import { applyStop, bulkApplyDefaults, scanForStops, STOP_KIND_LABELS } from "./insertScan";
 import type { InsertOption, InsertStop, StopKind } from "./insertScan";
@@ -42,6 +46,7 @@ export function InsertWalkthrough({
   const [muted, setMuted] = useState<Set<StopKind>>(new Set());
   const [applied, setApplied] = useState(0);
   const [confirmingAuto, setConfirmingAuto] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const expectedContent = useRef(content);
 
   useEffect(() => {
@@ -178,12 +183,27 @@ export function InsertWalkthrough({
               {STOP_KIND_LABELS[kind]} ({countOf(kind)})
             </label>
           ))}
+          <button
+            onClick={() => setShowHelp(v => !v)}
+            className={"inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] transition-colors "
+              + (showHelp
+                ? "border-blue-500 bg-blue-900/40 text-blue-100"
+                : "border-blue-800 text-blue-200 hover:border-blue-500")}
+          >
+            <GraduationCap size={10} /> Show me how this works
+          </button>
           <button onClick={onClose} aria-label="Close walkthrough"
                   className="rounded p-1 text-zinc-500 hover:text-zinc-200">
             <X size={13} />
           </button>
         </span>
       </div>
+
+      {showHelp && (
+        <div className="mb-2">
+          <InsertWalkthroughHelp onClose={() => setShowHelp(false)} />
+        </div>
+      )}
 
       {confirmingAuto && (
         <div className="mb-2 rounded border border-amber-800 bg-amber-950/50 px-3 py-2">

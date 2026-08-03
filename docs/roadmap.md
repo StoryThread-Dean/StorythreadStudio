@@ -73,7 +73,7 @@ Built first for the audiobook Cast panel (Stage G) and now the standard for ever
 
 Sections that need one: **Character profiles** (needed? no -- but here is what the AI can do with one that it cannot do without), **Relationships**, **Locations**, **Lore**, **Chapter and scene summaries**, **the Outline**, **Smart Advisor**, **Writing Companion** (Draft and Enhance especially), **Series/arcs**, **Export**, and the **audiobook** sections beyond Cast (markers, pronunciation, generation, print pass).
 
-Worth building the walk itself as a shared component first, so each section is a list of steps rather than a new screen.
+**Done: the shared component exists.** `app/src/features/audiobook/GuidedWalk.tsx` renders the numbered card (steps, examples, Back/Next, tone), so a new one is a list of steps and nothing else. Two use it today -- the Cast workbench and the Formatting Walkthrough. Copy `InsertWalkthroughHelp.tsx` as the template.
 
 ### Book Details: Author + Publication Year fields
 

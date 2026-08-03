@@ -247,6 +247,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/audiobook/SpokenLine.test.tsx` -- the read-aloud flourish never costs readability (every word present as text, spaces survive, staggered delays)
   - `src/features/audiobook/CastPanel.test.tsx` -- the cast screen: manuscript names offered as one-click adds, duplicate names block the save, one-book-one-engine explained
   - `src/features/audiobook/speakerScan.test.ts` -- the Cast workbench's scanner: chapter ranges, one stop per PARAGRAPH, tags read both ways, pronouns rejected, a tag never leaks across a paragraph break, assign/reassign/clear round trips, character removal counts usage and keeps every word
+  - `src/features/audiobook/InsertWalkthrough.test.tsx` -- walkthrough panel + its guided walk (explains SOUND, not buttons; marker repairs framed as repairs)
   - `src/features/audiobook/CastPanel.test.tsx` -- the workbench: help stays closed until asked, voices fold once a cast exists, Pro column only when connected, only this chapter's characters shown, a click lands on the buffer immediately, removal warns with real counts
   - `src/features/audiobook/StorageDialog.test.tsx` -- the delete screen: only free-to-rebuild categories pre-checked, losses stated on the row, the confirm repeats categories + size, cancelling deletes nothing, locked files surfaced
   - `src/features/audiobook/ExportPanel.test.tsx` -- retention after export: keep says nothing, ask shows the size, auto-delete acts and reports it, and only intermediate audio is ever removed
