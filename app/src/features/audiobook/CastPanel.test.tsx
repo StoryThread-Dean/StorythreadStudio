@@ -75,7 +75,10 @@ function mockFetch(initial = report(), options: unknown = DRAFT_ONLY,
     }
     if (url.includes("/speakers")) return { ok: true, json: async () => initial };
     if (url.includes("/voice-options")) return { ok: true, json: async () => options };
-    if (url.includes("/preview")) return { ok: true, blob: async () => new Blob(["wav"]) };
+    if (url.includes("/preview")) {
+      return { ok: true, blob: async () => new Blob(["wav"]),
+               headers: new Headers() };
+    }
     throw new Error(`unexpected fetch ${url}`);
   });
 }
@@ -299,7 +302,9 @@ describe("CastPanel workbench", () => {
     expect(next).toContain('[voice:Alexandra]"I heard a noise,"[/voice]');
     expect(fetchMock.mock.calls.some(
       ([url]) => String(url).includes("/analyze-speakers"))).toBe(false);
-    expect(screen.getByText(/Marked 2 lines from your own dialogue tags/)).toBeTruthy();
+    expect(screen.getByText(
+      /Marked 2 lines from your own prose \(2 from dialogue tags, 0 from action beats\)/))
+      .toBeTruthy();
   });
 
   it("names anybody the prose speaks for who is not cast yet", async () => {
@@ -559,5 +564,47 @@ describe("CastPanel workbench", () => {
       const body = JSON.parse(String((put![1] as RequestInit).body));
       expect(body.speakers[0].color).toBe("#00796B");
     });
+  });
+  it("plays the line exactly as it will be narrated", async () => {
+    // The strongest guesswork-remover available, and free locally: the
+    // same renderer generation uses, so the voice spans in this
+    // paragraph are resolved through the cast.
+    const fetchMock = mockFetch(CAST_WITH_TWO);
+    await open(fetchMock);
+    window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+    window.URL.createObjectURL = vi.fn(() => "blob:line");
+
+    fireEvent.click(screen.getByLabelText("Hear this line"));
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([url]) => String(url).includes("/preview-selection"));
+      expect(call).toBeTruthy();
+      const body = JSON.parse(String((call![1] as RequestInit).body));
+      expect(body.text).toContain('"This cannot continue,"');
+    });
+  });
+
+  it("number keys pick a speaker and Enter accepts", async () => {
+    // A hundred lines is the difference between tedious and fast.
+    const { onContentChange } = await open(mockFetch(CAST_WITH_TWO));
+    fireEvent.keyDown(window, { key: "2" });          // 1 = Narrator
+    expect(onContentChange.mock.calls[0][0])
+      .toContain('[voice:Lara]"This cannot continue,"[/voice]');
+
+    expect(screen.getByText(/line 1 of 2/)).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(screen.getByText(/line 2 of 2/)).toBeTruthy();
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(screen.getByText(/line 1 of 2/)).toBeTruthy();
+  });
+
+  it("never steals a keystroke from a name box", async () => {
+    // The panel is full of text inputs. A shortcut that ate "1" while
+    // somebody typed a name would be worse than no shortcut.
+    const { onContentChange } = await open(mockFetch(CAST_WITH_TWO));
+    fireEvent.click(screen.getByRole("button", { name: /Voices/ }));
+    const input = screen.getByLabelText("Character 1 name");
+    fireEvent.keyDown(input, { key: "2" });
+    expect(onContentChange).not.toHaveBeenCalled();
   });
 });

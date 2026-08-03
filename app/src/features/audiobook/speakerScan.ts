@@ -26,9 +26,13 @@ export interface DialogueStop {
   quotes: Array<{ start: number; end: number; text: string }>;
   /** Character already assigned here, "" when the narrator reads it. */
   assigned: string;
-  /** Suggested speaker, from a dialogue tag or the AI. */
+  /** Suggested speaker, and how it was arrived at. */
   guess: string;
-  guessSource: "tag" | "ai" | "";
+  /** "tag"  -- a dialogue tag names them ("...," Lara said)
+   *  "beat" -- no tag, but the paragraph names exactly one person, in an
+   *            action beat ("...". Lara's voice was flat.)
+   *  "ai"   -- the model's opinion */
+  guessSource: "tag" | "beat" | "ai" | "";
   confidence?: number;
 }
 
@@ -55,6 +59,14 @@ const NAME = "[A-Z][\\w'’-]*(?:\\s+[A-Z][\\w'’-]*){0,2}";
 const TAG_NAME_FIRST = new RegExp(`(${NAME})\\s+(?:${SAID_VERBS})\\b`);
 const TAG_VERB_FIRST = new RegExp(`(?:${SAID_VERBS})\\s+(${NAME})\\b`);
 
+// Every capitalized name-shaped word in a run of narration, possessives
+// included. Fiction attributes at least as often by ACTION BEAT as by
+// dialogue tag -- "Lara's voice was flat." names the speaker exactly as
+// plainly as "Lara said" does, and a scanner that only knows said-verbs
+// silently skips every one of them (live finding: the tagged lines were
+// marked and the possessive ones were not).
+const ANY_NAME = new RegExp(`\\b${NAME}`, "g");
+
 // Words that open a sentence looking like a name and never are. "he
 // said" is the commonest tag in fiction and names nobody; a scanner that
 // offered "He" as a cast member would be worse than one that offered
@@ -70,9 +82,36 @@ const QUOTE_RE = /"[^"\n]{2,}"|“[^”\n]{2,}”/g;
 const VOICE_SPAN_RE = /\[voice:([^\]]*)\]([\s\S]*?)\[\/voice\]/gi;
 
 function cleanName(raw: string | undefined): string {
-  const name = (raw ?? "").trim().replace(/[\s,.;:]+$/, "");
+  // Possessives are the commonest form an action beat takes, and they
+  // are the character, not a different word: Lara's voice is Lara.
+  const name = (raw ?? "").trim()
+    .replace(/[\s,.;:]+$/, "")
+    .replace(/['’]s$/i, "")
+    .trim();
   if (!name) return "";
   return NOT_A_NAME.has(name.split(/\s+/)[0]) ? "" : name;
+}
+
+/**
+ * The one person named in a run of narration, or "" when it is none or
+ * several.
+ *
+ * The guard is what makes this safe. Attributing to "the only name in
+ * the paragraph" is right almost always; attributing when two names are
+ * present is a coin toss, and a coin toss in the writer's own vocabulary
+ * reads as correct until they hear it. So two names means no guess.
+ */
+function soleName(narration: string): string {
+  ANY_NAME.lastIndex = 0;
+  const names: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = ANY_NAME.exec(narration)) !== null) {
+    const name = cleanName(match[0]);
+    if (name && !names.some(n => n.toLowerCase() === name.toLowerCase())) {
+      names.push(name);
+    }
+  }
+  return names.length === 1 ? names[0] : "";
 }
 
 /** Chapter bodies, by their '# ' headings -- the same split the backend
@@ -141,13 +180,18 @@ export function scanDialogue(content: string, range: ChapterRange): DialogueStop
     const outside = quotes.reduce(
       (acc, q, i) => acc + bare.slice(i === 0 ? 0 : quotes[i - 1].end, q.start),
       "") + bare.slice(quotes[quotes.length - 1].end);
-    const guess = cleanName(TAG_NAME_FIRST.exec(outside)?.[1])
+    const tagged = cleanName(TAG_NAME_FIRST.exec(outside)?.[1])
       || cleanName(TAG_VERB_FIRST.exec(outside)?.[1]);
+    // No said-verb? Fall back to the action beat, but only when the
+    // paragraph leaves no room for doubt about who it is about.
+    const beat = tagged ? "" : soleName(outside);
+    const guess = tagged || beat;
 
     stops.push({
       start, end: start + paragraph.length, text: paragraph, quotes,
       assigned: existing ? (existing[1] ?? "").trim() : "",
-      guess, guessSource: guess ? "tag" : "",
+      guess,
+      guessSource: tagged ? "tag" : beat ? "beat" : "",
     });
   }
   return stops;
@@ -277,7 +321,9 @@ export function mergeAiGuesses(
       stop.quotes.some(q => q.text === p.quote
         || q.text.includes(p.quote) || p.quote.includes(q.text)));
     if (!hit || !hit.speaker) return stop;
-    if (stop.guessSource === "tag") return { ...stop, confidence: hit.confidence };
+    if (stop.guessSource === "tag" || stop.guessSource === "beat") {
+      return { ...stop, confidence: hit.confidence };
+    }
     return { ...stop, guess: hit.speaker, guessSource: "ai" as const,
              confidence: hit.confidence };
   });

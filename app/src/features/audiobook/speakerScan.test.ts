@@ -84,6 +84,55 @@ describe("scanDialogue", () => {
     expect(stops[0].quotes).toHaveLength(1);
   });
 
+  it("reads an action beat when there is no dialogue tag", () => {
+    // Live finding: lines tagged "Lara said" were marked and lines
+    // attributed by "Lara's voice was flat." were skipped. Fiction
+    // attributes at least as often by beat as by tag, and a possessive
+    // is the commonest form a beat takes.
+    const text = `"This wasn't about fertility." Lara's voice was flat. `
+      + `"This was about the act itself."`;
+    const stops = scanDialogue(text, { title: "x", start: 0, end: text.length });
+    expect(stops[0].guess).toBe("Lara");
+    expect(stops[0].guessSource).toBe("beat");
+  });
+
+  it("reads a plain action beat too, not just a possessive", () => {
+    const text = '"Enough." Alexandra set the book aside.';
+    const stops = scanDialogue(text, { title: "x", start: 0, end: text.length });
+    expect(stops[0].guess).toBe("Alexandra");
+    expect(stops[0].guessSource).toBe("beat");
+  });
+
+  it("resolves a possessive nickname to the bare nickname", () => {
+    const text = `"Not yet." Lexi's hand closed on the rail.`;
+    expect(scanDialogue(text, { title: "x", start: 0, end: text.length })[0].guess)
+      .toBe("Lexi");
+  });
+
+  it("refuses to guess when the paragraph names two people", () => {
+    // A coin toss in the writer's own vocabulary reads as correct until
+    // they hear it, which is the worst kind of wrong this app can be.
+    const text = '"Enough." Lara looked at Alexandra.';
+    expect(scanDialogue(text, { title: "x", start: 0, end: text.length })[0].guess)
+      .toBe("");
+  });
+
+  it("a real dialogue tag still outranks the beat", () => {
+    const text = '"Enough," Alexandra said. Lara looked away.';
+    const stops = scanDialogue(text, { title: "x", start: 0, end: text.length });
+    expect(stops[0].guess).toBe("Alexandra");
+    expect(stops[0].guessSource).toBe("tag");
+  });
+
+  it("the AI never overrules a name the prose gave, tag or beat", () => {
+    const text = `"Enough." Lara's voice was flat.`;
+    const stops = scanDialogue(text, { title: "x", start: 0, end: text.length });
+    const merged = mergeAiGuesses(stops, [
+      { quote: '"Enough."', speaker: "Marcus", confidence: 0.99 }]);
+    expect(merged[0].guess).toBe("Lara");
+    expect(merged[0].guessSource).toBe("beat");
+  });
+
   it("skips paragraphs with no dialogue at all", () => {
     const stops = scanDialogue(BOOK, chapterOne());
     expect(stops.every(s => !s.text.startsWith("The gate"))).toBe(true);

@@ -30,7 +30,7 @@ import {
 
 import {
   analyzeSpeakers, fetchCast, fetchSpeakerPassEstimate, fetchVoiceOptions,
-  previewVoice, saveCast,
+  previewSelection, previewVoice, saveCast,
 } from "./api";
 import type { CastReport, SpeakerPassEstimate, VoiceRoster } from "./api";
 import { castColor, castTextColor, PALETTE } from "./castColors";
@@ -78,9 +78,10 @@ type PassMode = "manual" | "free" | "free-ai" | "auto";
 const MODES: { value: PassMode; label: string; blurb: string; usesAi: boolean }[] = [
   { value: "manual", label: "Manual -- I'll do every line", usesAi: false,
     blurb: "Nothing is decided for you. Walk the chapter and click who speaks." },
-  { value: "free", label: "Automatic (free) -- use my dialogue tags", usesAi: false,
-    blurb: "Marks every line your prose already names, and stops on the rest. "
-         + "No AI, no cost, instant." },
+  { value: "free", label: "Automatic (free) -- use the names in my prose", usesAi: false,
+    blurb: "Marks every line your prose already names -- by a dialogue tag "
+         + "(\"...,\" Lara said) or by an action beat where she is the only "
+         + "person named. No AI, no cost, instant." },
   { value: "free-ai", label: "Automatic + AI -- recommended", usesAi: true,
     blurb: "Your tags first, then the AI names the lines it is confident "
          + "about. Stops on anything it is unsure of." },
@@ -371,6 +372,8 @@ export function CastPanel({
     // The free rung, always: every line the writer's own prose names.
     const open = stops.filter(s => !s.assigned);
     const tagged = open.filter(s => s.guessSource === "tag" && inCast(s.guess));
+    const beats = open.filter(s => s.guessSource === "beat" && inCast(s.guess));
+    const named = [...tagged, ...beats];
     const uncast = [...new Set(open
       .filter(s => s.guess && !inCast(s.guess))
       .map(s => s.guess))];
@@ -381,10 +384,11 @@ export function CastPanel({
     }
 
     if (mode === "free") {
-      applyBatch(tagged.map(s => ({ stop: s, name: resolveName(s.guess) })), new Set());
+      applyBatch(named.map(s => ({ stop: s, name: resolveName(s.guess) })), new Set());
       setPassNote(
-        `Marked ${tagged.length} line${tagged.length === 1 ? "" : "s"} from your `
-        + `own dialogue tags. ${open.length - tagged.length} left to decide.`
+        `Marked ${named.length} line${named.length === 1 ? "" : "s"} from your `
+        + `own prose (${tagged.length} from dialogue tags, ${beats.length} from `
+        + `action beats). ${open.length - named.length} left to decide.`
         + (uncast.length ? ` Not cast yet: ${uncast.join(", ")}.` : ""));
       return;
     }
@@ -400,7 +404,7 @@ export function CastPanel({
       const fromAi = new Set<string>();
       for (const stop of merged) {
         if (stop.assigned || !stop.guess || !inCast(stop.guess)) continue;
-        const sure = stop.guessSource === "tag"
+        const sure = stop.guessSource === "tag" || stop.guessSource === "beat"
           || (stop.confidence ?? 0) >= CONFIDENT;
         if (mode === "auto" || sure) {
           decided.push({ stop, name: resolveName(stop.guess) });
@@ -411,7 +415,7 @@ export function CastPanel({
       const left = open.length - decided.length;
       setPassNote(
         `Marked ${decided.length} line${decided.length === 1 ? "" : "s"} `
-        + `(${tagged.length} from your tags, ${fromAi.size} by AI). `
+        + `(${named.length} from your own prose, ${fromAi.size} by AI). `
         + `${left} left to decide.`
         + (fromAi.size ? " Use Review AI choices to check its work." : "")
         + (uncast.length ? ` Not cast yet: ${uncast.join(", ")}.` : ""));
@@ -428,9 +432,62 @@ export function CastPanel({
     onContentChange(setStopVoice(content, stop, name));
   }, [stop, content, onContentChange]);
 
+  /** Play the line as it will actually sound: the same renderer
+   *  generation uses, so the voice spans in this paragraph are resolved
+   *  through the cast and the pauses are real silence. Free locally,
+   *  which is what makes "hear it before you accept it" reasonable. */
+  const [hearing, setHearing] = useState(false);
+  const hearLine = useCallback(async () => {
+    if (!stop || hearing) return;
+    setHearing(true);
+    setError(null);
+    try {
+      const { blob } = await previewSelection(
+        workspacePath, stop.text, narratorVoice || "am_michael");
+      audioRef.current?.pause();
+      const audio = new Audio(URL.createObjectURL(blob));
+      audioRef.current = audio;
+      await audio.play();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not play that line.");
+    } finally {
+      setHearing(false);
+    }
+  }, [stop, hearing, workspacePath, narratorVoice]);
+
   const accept = useCallback(() => {
     setStopIndex(i => Math.min(i + 1, Math.max(stops.length - 1, 0)));
   }, [stops.length]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "SELECT"
+        || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (typing || e.ctrlKey || e.altKey || e.metaKey || !stop) return;
+
+      if (e.key >= "1" && e.key <= "9") {
+        const pickIndex = Number(e.key) - 1;
+        const name = present[pickIndex];
+        if (name) {
+          e.preventDefault();
+          assign(name === NARRATOR ? null : name);
+        }
+        return;
+      }
+      if (e.key === "Enter") { e.preventDefault(); accept(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); accept(); }
+      else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setStopIndex(i => Math.max(0, i - 1));
+      } else if (e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        void hearLine();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stop, present, assign, accept, hearLine]);
 
   // ── Voice pickers ───────────────────────────────────────────────────
 
@@ -969,7 +1026,7 @@ export function CastPanel({
 
                 {/* Who is in this chapter -- one click each. */}
                 <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                  {present.map(name => {
+                  {present.map((name, index) => {
                     const active = stop?.assigned
                       ? stop.assigned.toLowerCase() === name.toLowerCase()
                       : name === NARRATOR;
@@ -979,6 +1036,10 @@ export function CastPanel({
                         key={name}
                         onClick={() => assign(name === NARRATOR ? null : name)}
                         disabled={!stop}
+                        // The visible number is a shortcut hint, not part
+                        // of the name -- anything reading this screen
+                        // aloud should hear the character.
+                        aria-label={name}
                         className={"rounded border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 "
                           + (active ? "" : "border-zinc-700 text-zinc-200 hover:border-zinc-500")}
                         style={active
@@ -989,6 +1050,9 @@ export function CastPanel({
                             ? { borderColor: `${color}80`, color }
                             : undefined}
                       >
+                        {index < 9 && (
+                          <span className="mr-1 opacity-50">{index + 1}</span>
+                        )}
                         {name}
                       </button>
                     );
@@ -1041,6 +1105,18 @@ export function CastPanel({
                     Accept
                   </button>
                   <button
+                    onClick={() => void hearLine()}
+                    disabled={!stop || hearing}
+                    title="Hear this line exactly as it will be narrated -- free, on your computer"
+                    aria-label="Hear this line"
+                    className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                  >
+                    {hearing
+                      ? <Loader2 size={11} className="animate-spin" />
+                      : <Play size={11} />}
+                    Hear it
+                  </button>
+                  <button
                     onClick={accept}
                     disabled={!stop}
                     className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
@@ -1049,7 +1125,9 @@ export function CastPanel({
                   </button>
                   {stop?.guess && !stop.assigned && resolveName(stop.guess) && (
                     <span className="text-[10px] text-zinc-500">
-                      your text says {stop.guess}
+                      {stop.guessSource === "beat"
+                        ? `only ${stop.guess} is named here`
+                        : `your text says ${stop.guess}`}
                       {resolveName(stop.guess).toLowerCase() !== stop.guess.toLowerCase()
                         && ", which is"}{" "}
                       <button
@@ -1078,6 +1156,9 @@ export function CastPanel({
                     </button>
                   )}
                   <span>{present.length - 1} character{present.length - 1 === 1 ? "" : "s"} in this chapter</span>
+                  <span className="text-zinc-600">
+                    Keys: 1-9 pick a speaker, Enter accepts, P plays.
+                  </span>
                   <span className="text-zinc-600">
                     Markers go to the editor only -- press Save there to keep them.
                   </span>

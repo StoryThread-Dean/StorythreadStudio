@@ -58,6 +58,23 @@ Long-planned. Storythread Studio is aimed at beginning writers, and editing your
 - Custom prompts are named, per-feature, and swappable at any time; picking DEFAULT always restores stock behavior.
 - Scope ideas for the Advanced side: `{{variable}}` placeholders, per-prompt sampling settings, and JSON import/export packs (see [`research-multi-provider.md`](research-multi-provider.md)).
 
+### "Show me how this works" everywhere
+
+Built first for the audiobook Cast panel (Stage G) and now the standard for every feature in this app, new and old.
+
+**The rule going forward:** any new feature or add-on ships with one. Not a tooltip and not a wall of text at the top of the screen -- a numbered, step-by-step walk through the actual order of operations, with an example of what each step looks like on screen, sitting in the panel so the writer can read step 3, *do* step 3, and come back. Reference answers ("what's this?") are the other half: good when somebody has a question, useless when they do not yet know what to ask.
+
+**Retroactive work, roughly in order of how much it would help a new writer.** Each one needs to answer four questions, in this order:
+
+1. **What is this section?** In one line, in the writer's terms.
+2. **Do I need it?** Usually the honest answer is *no*, and saying so first is what makes the rest safe to read. The Cast panel leads with "No -- a book read entirely by one narrator is a finished audiobook", and that is the model.
+3. **How does it connect to writing the book?** Where it sits in the process, and what it daisy-chains into. Character profiles feed AI context; scene summaries feed the outline; the cast feeds narration. A feature nobody can place in the workflow gets skipped.
+4. **What does it get me if I do use it?** Concrete benefit, not a feature list.
+
+Sections that need one: **Character profiles** (needed? no -- but here is what the AI can do with one that it cannot do without), **Relationships**, **Locations**, **Lore**, **Chapter and scene summaries**, **the Outline**, **Smart Advisor**, **Writing Companion** (Draft and Enhance especially), **Series/arcs**, **Export**, and the **audiobook** sections beyond Cast (markers, pronunciation, generation, print pass).
+
+Worth building the walk itself as a shared component first, so each section is a list of steps rather than a new screen.
+
 ### Book Details: Author + Publication Year fields
 
 Requested during audiobook metadata testing (2026-07-30). The writing
