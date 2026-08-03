@@ -27,9 +27,15 @@ interface SayEditorProps {
   onClose: () => void;
   /** Approximate pixel anchor of the word inside the editor wrapper. */
   anchor: { top: number; left: number } | null;
+  /** The writer opened this ON an existing [say] span: its bounds in the
+   *  buffer and the spoken form already set. Editing one is the normal
+   *  reason to open this twice, and it used to be impossible -- the
+   *  occurrence filter skipped anything already inside a span, so the
+   *  panel answered "no more occurrences from here". */
+  existing?: { spanStart: number; spanEnd: number; spoken: string } | null;
   /** Fired when the current occurrence changes -- the parent scrolls
       the editor there and repositions the popout. */
-  onLocate?: (pos: number) => void;
+  onLocate?: (pos: number, length: number) => void;
 }
 
 // The tips library: an ACCORDION of ear-tested techniques (one section
@@ -110,6 +116,7 @@ const TIPS: Array<{ title: string; body: string; important?: boolean }> = [
 
 export function SayEditor({
   content, start, end, workspacePath, voiceId, onApply, onClose, anchor,
+  existing = null,
   onLocate,
 }: SayEditorProps) {
   // The word, fixed at open and SCRUBBED of any marker the selection
@@ -121,7 +128,11 @@ export function SayEditor({
   const word = useMemo(
     () => stripAudioMarkers(content.slice(start, end)).trim(), []);
   const [searchFrom, setSearchFrom] = useState(start);
-  const [spoken, setSpoken] = useState("");
+  const [spoken, setSpoken] = useState(existing?.spoken ?? "");
+  // What the engine was actually given, straight from the render trace.
+  // A preview that sounds wrong is otherwise an argument between ears --
+  // this makes it a fact the writer can read.
+  const [heard, setHeard] = useState<string | null>(null);
   const [showTips, setShowTips] = useState(false);
   // The accordion: one tip open at a time -- opening one closes the other.
   const [openTip, setOpenTip] = useState<number | null>(null);
@@ -147,6 +158,9 @@ export function SayEditor({
     const found: number[] = [];
     let match: RegExpExecArray | null;
     while ((match = re.exec(content)) !== null) {
+      // The one the writer opened on always counts, even though it is
+      // inside a span -- that IS the edit they came to make.
+      if (existing && match.index === start) { found.push(match.index); continue; }
       const before = content.slice(Math.max(0, match.index - 60), match.index);
       const opens = before.lastIndexOf("[say:");
       const closes = before.lastIndexOf("[/say]");
@@ -154,7 +168,7 @@ export function SayEditor({
       found.push(match.index);
     }
     return found;
-  }, [content, word]);
+  }, [content, word, existing, start]);
 
   const remaining = occurrences.filter(pos => pos >= searchFrom);
   const currentPos = remaining[0] ?? null;
@@ -162,19 +176,24 @@ export function SayEditor({
     ? 0 : occurrences.indexOf(currentPos) + 1;
 
   useEffect(() => {
-    if (currentPos !== null) onLocate?.(currentPos);
+    if (currentPos !== null) onLocate?.(currentPos, word.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPos]);
 
   const handleAccept = useCallback(() => {
     if (currentPos === null || !spoken.trim()) return;
     const replacement = `[say:${spoken.trim()}]${word}[/say]`;
-    const next = content.slice(0, currentPos) + replacement
-      + content.slice(currentPos + word.length);
+    // Editing an existing span replaces the WHOLE span, markers and all.
+    // Inserting a new wrapper around its inner word would nest one
+    // inside the other, and the parser would take the inner one.
+    const editingThis = existing !== null && currentPos === start;
+    const from = editingThis ? existing.spanStart : currentPos;
+    const to = editingThis ? existing.spanEnd : currentPos + word.length;
+    const next = content.slice(0, from) + replacement + content.slice(to);
     setApplied(n => n + 1);
-    setSearchFrom(currentPos + replacement.length);
+    setSearchFrom(from + replacement.length);
     onApply(next);
-  }, [content, currentPos, onApply, spoken, word]);
+  }, [content, currentPos, onApply, spoken, word, existing, start]);
 
   const handleNext = useCallback(() => {
     if (currentPos !== null) setSearchFrom(currentPos + 1);
@@ -196,7 +215,8 @@ export function SayEditor({
         ? `[say:${spoken.trim()}]${word}[/say]`
         : word;
       const carrier = `You will hear ${wrapped} in the narration.`;
-      const { blob } = await previewSelection(workspacePath, carrier, voiceId);
+      const { blob, trace } = await previewSelection(workspacePath, carrier, voiceId);
+      setHeard(trace.map(piece => piece.snippet).join(" ").trim() || null);
       audioRef.current?.pause();
       const audio = new Audio(URL.createObjectURL(blob));
       audioRef.current = audio;
@@ -235,7 +255,9 @@ export function SayEditor({
           <p className="flex-1 text-xs text-zinc-300">
             {applied > 0
               ? `Done -- ${applied} spot${applied === 1 ? "" : "s"} set.`
-              : "No more occurrences from here."}
+              : word
+                ? `No more "${word}" to set from here.`
+                : "Select a word in the manuscript first, then press [say]."}
           </p>
           <button
             ref={doneRef}
@@ -273,6 +295,17 @@ export function SayEditor({
               Preview
             </button>
           </div>
+
+          {/* What the engine was handed, verbatim. A respelling that
+              sounds wrong is otherwise ear against ear; this says
+              whether the text was right and the ENGINE read it oddly,
+              or the text never made it through intact. */}
+          {heard && (
+            <p className="mb-2 truncate font-mono text-[10px] text-zinc-500"
+               title={heard}>
+              engine heard: {heard}
+            </p>
+          )}
 
           {/* Tips: the vetted respelling tricks, expandable. */}
           <button

@@ -212,6 +212,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const [sayEditor, setSayEditor] = useState<{
     start: number; end: number;
     anchor: { top: number; left: number } | null;
+    existing: { spanStart: number; spanEnd: number; spoken: string } | null;
   } | null>(null);
 
   /** Approximate pixel position of a text offset inside the textarea,
@@ -274,11 +275,50 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     }
   }, []);
 
+  /** The [say] span the caret is sitting inside, if any. Editing an
+      existing override is the normal reason to open this a second time,
+      and it has to work: opening on one used to report "no more
+      occurrences", because the occurrence filter skips anything already
+      wrapped. */
+  const saySpanAt = useCallback((caret: number) => {
+    const re = /\[say:([^\]]*)\]([\s\S]*?)\[\/say\]/gi;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(content)) !== null) {
+      const spanStart = match.index;
+      const spanEnd = spanStart + match[0].length;
+      if (caret >= spanStart && caret <= spanEnd) {
+        const innerStart = spanStart + `[say:${match[1]}]`.length;
+        return {
+          spanStart, spanEnd,
+          spoken: match[1],
+          innerStart,
+          innerEnd: innerStart + match[2].length,
+        };
+      }
+    }
+    return null;
+  }, [content]);
+
   const handleSay = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     let start = ta.selectionStart ?? 0;
     let end = ta.selectionEnd ?? 0;
+
+    const inside = saySpanAt(start);
+    if (inside) {
+      // Re-open the existing override for editing, with its spoken form
+      // already filled in, rather than treating the marker text as a
+      // fresh word to wrap.
+      setSayEditor({
+        start: inside.innerStart, end: inside.innerEnd,
+        anchor: measureAnchor(inside.innerStart),
+        existing: { spanStart: inside.spanStart, spanEnd: inside.spanEnd,
+                    spoken: inside.spoken },
+      });
+      return;
+    }
+
     const wordChar = /[A-Za-z0-9'’-]/;
     if (start === end) {
       // No selection: the word under the caret is the obvious target.
@@ -287,9 +327,9 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
     }
     while (start < end && /\s/.test(content[start])) start += 1;
     while (end > start && /\s/.test(content[end - 1])) end -= 1;
-    if (start === end) return;                 // nothing to pronounce
-    setSayEditor({ start, end, anchor: measureAnchor(start) });
-  }, [content, measureAnchor]);
+    if (start === end) return;
+    setSayEditor({ start, end, anchor: measureAnchor(start), existing: null });
+  }, [content, measureAnchor, saySpanAt]);
 
   const handleExclude = useCallback(() => {
     wrapSelection("[exclude]", "[/exclude]");
@@ -640,10 +680,18 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               workspacePath={workspacePath}
               voiceId={payload.manifest.selected_voice ?? "am_michael"}
               anchor={sayEditor.anchor}
+              existing={sayEditor.existing}
               onApply={next => { setContent(next); setDirty(true); }}
-              onLocate={pos => {
+              onLocate={(pos, length) => {
                 const ta = textareaRef.current;
                 if (!ta) return;
+                // Select the occurrence, not just scroll to it. The
+                // popout takes focus, so without a visible selection the
+                // writer is answering questions about a word they cannot
+                // see -- and "next occurrence" moves somewhere they have
+                // no way to follow. An unfocused textarea still paints
+                // its selection; App.css gives it a colour worth seeing.
+                ta.setSelectionRange(pos, pos + length);
                 ta.scrollTop = (pos / Math.max(content.length, 1)) * ta.scrollHeight
                   - ta.clientHeight / 3;
                 setSayEditor(prev => prev && { ...prev, anchor: measureAnchor(pos) });

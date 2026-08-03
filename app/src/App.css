@@ -394,3 +394,23 @@ optgroup {
 option:disabled {
   color: var(--color-faint);
 }
+
+
+/*
+ * Selection that survives losing focus
+ * ====================================
+ * A popout that edits a word takes focus away from the editor, and an
+ * unfocused textarea paints its selection in a near-invisible grey by
+ * default. The writer is then answering questions about a word they
+ * cannot see -- and when the tool walks to the NEXT occurrence, they
+ * have no way to follow it.
+ *
+ * Naming the colour makes the selection hold whether the editor has
+ * focus or not. Amber rather than the usual blue: this is "the tool is
+ * working here", not "you selected this".
+ */
+textarea::selection,
+textarea::-moz-selection {
+  background-color: #f59e0b66;
+  color: inherit;
+}

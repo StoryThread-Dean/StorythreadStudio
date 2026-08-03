@@ -63,7 +63,10 @@ describe("SayEditor", () => {
     fireEvent.click(screen.getByText("Next (1 of 2)"));
     expect(props.onApply).not.toHaveBeenCalled();
     expect(screen.getByText(/Next \(2 of 2\)/)).toBeTruthy();
-    expect(props.onLocate).toHaveBeenLastCalledWith(CONTENT.indexOf("Then Lara") + 5);
+    // onLocate now carries the length too, so the editor can SELECT the
+    // occurrence rather than only scroll to it.
+    expect(props.onLocate).toHaveBeenLastCalledWith(
+      CONTENT.indexOf("Then Lara") + 5, "Lara".length);
   });
 
   it("Preview sends the word in the fixed carrier phrase", async () => {
@@ -151,5 +154,44 @@ describe("SayEditor", () => {
                       onClose={onClose} />);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalled();
+  });
+  it("re-opens an existing override for editing instead of refusing", async () => {
+    // Live bug: after setting one [say], opening the tool again on that
+    // word answered "no more occurrences from here" -- the filter skips
+    // anything already wrapped, so an override could never be changed.
+    const content = 'She met [say:LAR-uh]Lara[/say] again.';
+    const innerStart = content.indexOf("Lara", 8);
+    const onApply = vi.fn();
+    render(<SayEditor content={content} start={innerStart}
+                      end={innerStart + 4}
+                      existing={{ spanStart: content.indexOf("[say:"),
+                                  spanEnd: content.indexOf("[/say]") + 6,
+                                  spoken: "LAR-uh" }}
+                      workspacePath={WS} voiceId="af_heart"
+                      anchor={null} onApply={onApply} onLocate={vi.fn()}
+                      onClose={vi.fn()} />);
+
+    // It opened for editing, with the spoken form already filled in.
+    const input = screen.getByLabelText("Spoken form") as HTMLInputElement;
+    expect(input.value).toBe("LAR-uh");
+    expect(screen.queryByText(/No more/)).toBeNull();
+
+    fireEvent.change(input, { target: { value: "LEER-ah" } });
+    fireEvent.click(screen.getByRole("button", { name: /Accept/ }));
+
+    // The whole span is replaced -- not a new wrapper nested inside it.
+    const next = onApply.mock.calls[0][0] as string;
+    expect(next).toBe('She met [say:LEER-ah]Lara[/say] again.');
+    expect(next.match(/\[say:/g)).toHaveLength(1);
+  });
+
+  it("says what to do when nothing was selected", async () => {
+    // "No more occurrences from here" is baffling when the real problem
+    // is that the caret was not on a word.
+    render(<SayEditor content="Nothing here." start={0} end={0}
+                      workspacePath={WS} voiceId="af_heart"
+                      anchor={null} onApply={vi.fn()} onLocate={vi.fn()}
+                      onClose={vi.fn()} />);
+    expect(screen.getByText(/Select a word in the manuscript first/)).toBeTruthy();
   });
 });
