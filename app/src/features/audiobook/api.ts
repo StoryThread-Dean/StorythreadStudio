@@ -131,13 +131,14 @@ export async function startGeneration(
   workspacePath: string,
   voiceId: string,
   force = false,
+  draft = false,
 ): Promise<GenerationRun> {
   const res = await fetch(`${API_BASE}/api/audiobook/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       workspace_path: workspacePath, provider: "local-kokoro", voice_id: voiceId,
-      force,
+      force, draft,
     }),
   });
   return toJson<GenerationRun>(res);
@@ -413,6 +414,16 @@ export async function fetchGenerationStatus(
     `${API_BASE}/api/audiobook/generation/status?workspace_path=${encodeURIComponent(workspacePath)}`,
   );
   return toJson(res);
+}
+
+/** The escape hatch: forget the interrupted run and force a stale lock
+ * off so generation can start over. Completed audio is kept. */
+export async function resetGeneration(workspacePath: string): Promise<void> {
+  await toJson(await fetch(`${API_BASE}/api/audiobook/generation/reset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_path: workspacePath }),
+  }));
 }
 
 async function generationControl(action: "pause" | "cancel" | "resume", workspacePath: string) {

@@ -97,6 +97,35 @@ def test_add_chapters_refuses_unknown_titles_and_a_missing_source(tmp_path):
     assert "could not be found" in response.json()["detail"]
 
 
+# ── Generation reset (the writer's escape hatch) ─────────────────────────────
+
+def test_reset_clears_a_stuck_run_and_a_stale_lock(tmp_path):
+    # THE live bug scenario: a reboot left a run record and a lock file
+    # pointing at a dead process on this machine; Resume was blocked with
+    # "in use by another Storythread instance". Reset must clear both so
+    # the writer can start over without hand-deleting files.
+    _src, ws, _payload = _import_txt(tmp_path)
+    (ws / "generation-run.json").write_text(json.dumps({
+        "run_id": "r1", "status": "paused", "provider": "local-kokoro",
+        "voice_id": "v", "total_segments": 5, "completed_segments": 2,
+        "failed_segments": 0,
+    }), encoding="utf-8")
+    (ws / ".storythread-audiobook.lock").write_text(json.dumps({
+        "pid": 37372, "hostname": "SOME-OTHER-BOX",   # unbreakable by staleness
+        "acquired_at": "2026-07-29T00:00:00Z",
+    }), encoding="utf-8")
+
+    response = client.post("/api/audiobook/generation/reset",
+                           json={"workspace_path": str(ws)})
+    assert response.status_code == 200
+    assert not (ws / "generation-run.json").exists()
+    assert not (ws / ".storythread-audiobook.lock").exists()
+    # Status now reads clean: no run, ready for a fresh Generate.
+    status = client.get("/api/audiobook/generation/status",
+                        params={"workspace_path": str(ws)}).json()
+    assert status == {"run": None, "active": False}
+
+
 # ── Import ────────────────────────────────────────────────────────────────────
 
 def test_import_builds_the_full_workspace(tmp_path):

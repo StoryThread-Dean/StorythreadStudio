@@ -71,6 +71,9 @@ export interface NarratorVoice {
 export interface GenerationRun {
   run_id: string;
   status: string;
+  /** Draft pass: pauses kept, continuous-flow rendering skipped (fast
+      testing gear). Absent on runs from before the flag existed. */
+  draft?: boolean;
   provider: string;
   model: string;
   engine_version: string;

@@ -195,6 +195,47 @@ exact values are decided when the dashboard UI is built.
 - Configure Providers
 - Open Audiobook Settings
 
+### 5.1.1 Dashboard Redesign (user-designed 2026-07-30, scheduled with Stage D)
+
+The plain button dashboard educates nobody. The redesign makes the FIRST
+look at this screen teach what the tool is and how the workflow runs:
+
+- **Headline + one-line pitch**: "Audiobook Generator" with a plain-terms
+  subtitle in the spirit of "turns your written book into AI-narrated
+  audio" (final wording at build time; no em dashes).
+- **The five-step workflow strip**, each step hover-animated with a
+  short, plainly worded expansion:
+    1. Load your book
+    2. Set up your workspace
+    3. Prepare your manuscript
+    4. Generate the free local version
+    5. (Optional) Print a professional HQ version with premium AI voices
+  Step 5's expansion includes basic pricing honesty (hosted Kokoro
+  around half a dollar a book; premium tiers meaningfully more; real
+  numbers wired when Stage D lands providers).
+- **[Let's Get Started]** replaces [New Audiobook] as the single primary
+  action, clearly signaled as a guided walkthrough that creates the
+  workspace for you.
+- **[Open Existing Workspace] demoted**: tucked under a small pulldown /
+  secondary menu, never competing with the primary flow. Recents on the
+  right stays -- returning users just click their book.
+
+### 5.1.2 Default Workspace Locations (locked rule, with Stage D)
+
+The Get Started flow suggests the workspace location; the writer can
+override, but the default is ALWAYS:
+
+- **Storythread book source**: `<book folder>/audiobook/` inside the
+  book project itself (example:
+  `curse-of-the-tomb-raider/audiobook`). The audiobook lives with its
+  book.
+- **External manuscript** (DOCX/EPUB/TXT/MD from any other tool):
+  `Documents/Storythread Audiobooks/<Book Title>/` (title run through
+  the 8.1 filename sanitizer).
+- Collision handling: if the default folder exists and is not empty,
+  suggest `audiobook-2` / `<Book Title>-2` rather than erroring the
+  writer into folder-picking.
+
 ### 5.2 Recent Activity
 
 Example:
@@ -939,6 +980,26 @@ them by ear later:
   legacy multiplier form (`[pace:0.8]`) still parses, snapped to the
   grid, so older narration files keep their meaning.
 
+### 15.1.1 Worker 0.2 Candidate: Word-Level Timestamps (researched 2026-07-30)
+
+Kokoro-FastAPI (remsky) demonstrates that the PYTORCH Kokoro pipeline
+exposes per-word timestamps (its /dev/captioned_speech endpoint); the
+ONNX build our worker wraps does not. Assessment against our needs:
+
+- Its acclaimed "pause fixes" are silence-between-chunks plus
+  aggressive whitespace stripping -- we already do both, and our flow
+  synthesis goes further (it still cuts text at pause tags and
+  synthesizes chunks in isolation, the exact manufactured-utterance-
+  ending defect flow synthesis eliminates). Not worth adopting as a
+  server; it would replace our worker with a heavier one we control
+  less.
+- The timestamps ARE valuable: they would replace flow synthesis's
+  duration-band gap matcher with EXACT word boundaries, and make
+  short-utterance previews cuttable out of carrier phrases precisely.
+- Cost: switching the worker from kokoro-onnx to PyTorch kokoro
+  roughly doubles-to-triples the installed artifact (torch CPU). A
+  worker 0.2 decision to weigh alongside Stage D, not before.
+
 ### 15.2 Future Note
 
 If GPU acceleration is ever revisited, `onnxruntime-directml` is the single Windows-native path covering NVIDIA, AMD, and Intel hardware together -- not three separate vendor runtimes. Keep the synthesis interface device-agnostic so that door stays open:
@@ -1131,7 +1192,19 @@ begin playback while later pieces are still synthesizing. Requires
 chunked WAV streaming from the worker through the backend to the player;
 backend-side demo caching covers most of the pain meanwhile.
 
-### 18.4 Guided Insert Walkthrough (planned, user-designed 2026-07-30)
+### 18.4 Guided Insert Walkthrough (user-designed 2026-07-30; first build shipped)
+
+Shipped in the first build (`insertScan.ts` + `InsertWalkthrough.tsx`):
+the [Walkthrough] toolbar button walks from the cursor with five trigger
+kinds -- narration-to-dialogue (inline and paragraph hand-offs),
+dialogue-to-narration, short-sentence beats, interjections, and
+malformed-marker repair (the [pace:=2] / unclosed-[pause linter) -- each
+kind muteable, Apply/Skip/Back with Ctrl+Enter / Ctrl+Right / Ctrl+Left /
+Esc, edits landing in the buffer like typing (manual save owns
+persistence), and stops suppressed wherever the writer already placed a
+pause. Remaining catalog below stays open for follow-up builds
+(paragraph endings, speaker alternation, scene-transition prose,
+emphasis candidates, per-stop audible demo links).
 
 An advanced find/insert overlay for the narration editor: the writer
 opens it at the cursor and it WALKS the manuscript downward, stopping at
@@ -1167,6 +1240,30 @@ proposed insert rendered inline; Apply edits the narration copy exactly
 like typing (manual save still owns persistence); a per-session "don't
 suggest this trigger again" mute; progress indicator (stop N of M in
 this chapter). Every insert type links its audible demo (18.3).
+
+### 18.5 Respelling Doctrine (ear-tested by the user, 2026-07-30)
+
+The vetted rules for [say] and Pronunciation spoken forms, established
+by live listening tests and encoded in the say popout's tips accordion
+(one section open at a time). Preview is always the final judge.
+
+- **Lowercase is the rule; a single capital is a dial.** One capital
+  changes a word's inflection (Hey-soos, hey-soos, and hey-Soos all
+  land differently). Runs of 2+ capitals are folded by the app -- the
+  engine reads caps runs as letters (bare-word measurement: LARah
+  0.92s beside the "L A R ah" letter baseline 0.98s vs larah 0.72s).
+- **Separation strength, strongest to softest:** SPACE (near two
+  words), HYPHEN (syllable-like units of one word; the app fuses them
+  so no hesitation gap), APOSTROPHE (the softest internal break --
+  Hey'soos lands gentler than Hey-soos; works on most voices, not all).
+- **The vowel-sound alphabet (silent h):** ah = father, eh = bed,
+  ih = sit, oh = go, uh = unstressed, oo = food. Three Laras from
+  three vowel choices: lah-rah / lah-ruh / lar-uh.
+- **Double vowels lengthen:** laa-rah, lee-ah, koo-per, ree-na.
+- **Characters to avoid:** underscores, asterisks, quotes, slashes,
+  parentheses (letters pronounce separately, symbols get spoken,
+  unnatural pauses, engine chunk-splits, markdown stripping
+  downstream). Accented characters: a few work, most do not.
 
 ---
 

@@ -134,9 +134,15 @@ def apply_pronunciations(text: str, rules: list[PronunciationRule]) -> str:
 # ── Making spoken forms actually speakable ────────────────────────────────────
 # Writers type phonetic respellings the standard way: caps for the
 # stressed syllable, hyphens between syllables ("LAR-uh", "KAY-lith").
-# Two engine behaviors fight that convention (both live findings):
-#   1. ALL-CAPS tokens are read as ACRONYMS and spelled letter by letter
-#      ("LAR-uh" came out "L, A, R, uh") -- so caps syllables lowercase.
+# Two engine behaviors fight that convention (both measured live):
+#   1. A caps RUN inside a word is read as letters, even mid-word and
+#      even fused: bare-word durations put "LARah" (0.92s) with the
+#      letter-spelled baseline "L A R ah" (0.98s), far from "larah"
+#      (0.72s); "absoLOOTlee" shows the same failure mid-word. So caps
+#      syllables lowercase. (A 2026-07-30 backtrack briefly preserved
+#      caps after a sentence-carrier test suggested they added stress --
+#      bare-word measurement disproved it: the "extra dwell" WAS the
+#      letter-spelling. Caps are not a stress dial on this engine.)
 #   2. A syllable boundary rendered as a space (or kept as a hyphen)
 #      becomes a word boundary -- an audible hesitation ("Lar... a") --
 #      so hyphenated syllables FUSE into one word: "LAR-ah" -> "larah".

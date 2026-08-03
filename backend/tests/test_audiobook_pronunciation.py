@@ -33,20 +33,21 @@ def test_whole_word_substitution_only():
     assert out == "kay met Kaelith."
 
 
-# ── speakable(): caps-for-stress must not become spelled-out acronyms ────────
+# ── speakable(): caps-for-stress must not become spelled-out letters ─────────
 
 def test_spoken_forms_are_flattened_and_fused_for_the_engine():
-    # Two live bugs pinned at once: espeak reads ALL-CAPS tokens as
-    # acronyms ("LAR-uh" came out "L, A, R, uh"), and a syllable boundary
-    # left as a space or hyphen becomes an audible hesitation ("Lar... a").
-    # Spoken forms lowercase the caps AND fuse hyphenated syllables; the
-    # dictionary file keeps the writer's "LAR-uh".
+    # Two live bugs pinned at once: the engine reads caps RUNS as
+    # letters even mid-word ("LARah" measured 0.92s, right beside the
+    # "L A R ah" letter baseline at 0.98s, vs "larah" 0.72s -- a brief
+    # caps-preserving backtrack was disproven by that bare-word data),
+    # and a syllable boundary left as a space or hyphen becomes an
+    # audible hesitation ("Lar... a"). Spoken forms lowercase the caps
+    # AND fuse hyphenated syllables; the dictionary keeps "LAR-uh".
     from app.audiobook.pronunciation import speakable
     assert speakable("LAR-uh") == "laruh"
-    assert speakable("LOR-ah") == "lorah"
-    assert speakable("LAIR-ah") == "lairah"
     assert speakable("KAY-lith") == "kaylith"
     assert speakable("luh-THAY-oh") == "luhthayoh"
+    assert speakable("ab-so-LOOT-lee") == "absolootlee"
     # Mixed case and real multi-word forms pass through untouched --
     # spaces the writer typed stay word breaks.
     assert speakable("McRae") == "McRae"

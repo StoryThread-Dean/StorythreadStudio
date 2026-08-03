@@ -103,12 +103,19 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
   }, [busy, formats, workspacePath]);
 
   const openOutputFolder = useCallback(async () => {
-    // Tauri's opener plugin routes the folder to Explorer; in a plain
-    // browser (dev preview) we just do nothing beyond showing paths.
+    // Tauri's opener plugin routes the folder to Explorer. openPath
+    // needs the opener:allow-open-path capability (live bug: the
+    // default opener permission covers URLs only, and the old silent
+    // catch made the button a no-op). Failures now SAY so -- the output
+    // paths are listed below as the fallback either way.
     try {
       const opener = await import("@tauri-apps/plugin-opener");
       await opener.openPath(`${workspacePath}\\output`);
-    } catch { /* paths are listed below either way */ }
+    } catch (e) {
+      setError("Could not open the folder"
+        + (e instanceof Error && e.message ? ` (${e.message})` : "")
+        + " -- the exported files are at the paths listed above.");
+    }
   }, [workspacePath]);
 
   const install = ffmpeg?.install;
