@@ -14,13 +14,16 @@ A local-first Markdown writing app for fiction writers. The writer does the draf
 - **Writing Companion** chat panel for open conversational help — brainstorming, voice work, ad-hoc questions
 - **Series support** — multi-book projects with shared canonical profiles and per-book character arcs
 - **Export** — full manuscript, dated snapshots, optional inclusion of summaries, notes, and profiles
+- **Audiobook Converter** — turn a finished manuscript into a real audiobook: per-chapter MP3s, a combined MP3, and an M4B with navigable chapter marks. Import from DOCX, EPUB, PDF, Markdown, TXT, or a Storythread project. Narrate the whole book **free and offline** with a local voice engine (54 voices, downloaded on demand), then optionally regenerate once with a paid premium voice when the book is final — with the exact cost quoted before anything is spent. Guided walkthroughs help place pauses, fix the words the narrator would mispronounce, and give individual characters their own voices
+- **Passage / Dialogue Check** — hear any passage read aloud while you write. Free, offline, and often the fastest way to catch a repeated word or a sentence that only parses on the second read
 - **Light + dark themes**
 
 ## Requirements
 
 - Windows 10 or 11
-- An [OpenRouter](https://openrouter.ai/) API key for AI features ([It's fairly easy to set up](https://www.youtube.com/watch?v=nhwWwVN22nk))
+- An [OpenRouter](https://openrouter.ai/) API key for AI features ([It's fairly easy to set up](https://www.youtube.com/watch?v=nhwWwVN22nk)). Not needed for the audiobook converter's local narration or the Passage Check, which run entirely on your machine with no key and no account
 - ~60 MB free disk space for the installer
+- For audiobooks, two extra components download from inside the app the first time you need them: the local voice engine (~372 MB) and the audio assembler (~139 MB). Neither ships in the installer, so writers who never make an audiobook never download them
 
 ## Install
 
@@ -75,6 +78,7 @@ The design docs and roadmap live in this repo for transparency:
 - [`docs/architecture.md`](docs/architecture.md) — three-layer architecture, dual storage model, folder layout, API surface
 - [`docs/features.md`](docs/features.md) — what the product does today, in detail
 - [`docs/roadmap.md`](docs/roadmap.md) — Scheduled, Proposed, and Nice-to-Have features
+- [`docs/audiobook-converter-spec.md`](docs/audiobook-converter-spec.md) — the full audiobook converter specification, including the live listening findings behind its pacing and pronunciation rules
 - [`docs/RELEASING.md`](docs/RELEASING.md) — release runbook for maintainers
 - [`CHANGELOG.md`](CHANGELOG.md) — shipped changes per version
 - [`CLAUDE.md`](CLAUDE.md) — guidance for AI coding assistants working on this codebase

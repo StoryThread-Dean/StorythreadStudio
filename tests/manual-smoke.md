@@ -419,44 +419,80 @@ em dashes anywhere in tags or filenames.
 
 ---
 
-## 13. Audiobook Converter -- walkthrough, say popout, draft pass (post-C)
+## 13. Audiobook Converter -- Formatting Walkthrough, word readings, say popout
 
-**Touches:** the Formatting Walkthrough (scan, apply/skip, auto-apply),
-the [say] popout (structured input, carrier preview, tips accordion),
-the Draft pass, the generation reset escape hatch, and Open Output
-Folder.
+**Touches:** the Formatting Walkthrough as a pop-out window (the rail,
+the paragraph surface, beats, marker fixes, word readings, add-all-at-
+once), its guided tutorial with before/after audio, the [say] popout
+(structured input, editing an existing override, the render trace), the
+Draft pass, the generation reset escape hatch, and Open Output Folder.
+
+Needs a chapter with dialogue in it, and at least one of *read*, *wound*,
+*close*, *lead*, *bow* or *dove* somewhere in the prose.
 
 Steps:
-1. **Formatting Walkthrough**: click into a chapter, press the blue
-   [Formatting Walkthrough] button. The strip (same blue wash) walks
-   stop by stop -- Apply inserts with smart spacing and the unsaved dot
-   lights; Skip moves on; Ctrl+Enter / Ctrl+Right work while typing in
-   the editor stays normal. Plant a broken marker ([pace:=2] and an
-   unclosed [pause:0.4 ) -- the walkthrough offers one-click fixes.
-2. **Auto-apply**: reopen the walkthrough, press [Auto-apply N beats].
-   The warning strip is readable (13px); confirming inserts every
-   default beat but leaves marker repairs in the walk. Leave WITHOUT
-   saving -- reload the workspace and confirm the batch is gone.
-3. **[say] popout**: select a word, click [say]. Only the spoken form
-   is typeable. Preview speaks "You will hear <word> in the narration"
-   with no garble at the word's edges. Type a caps respelling
-   (LAR-ah) -- preview says the NAME, never letters. Accept hops to the
-   next occurrence with the counter; occurrences already wrapped are
-   skipped. Tips: two groups (Most Useful blue, Additional gray), one
-   section open at a time.
-4. **Draft pass**: check "Draft pass", Generate Draft (fast) -- roughly
+1. **The window**: click into a chapter, press [Formatting Walkthrough]
+   in the toolbar. It opens as a pop-out over the editor (NOT a strip
+   above it). Check all of: the left rail lists seven types, each with a
+   count AND a line saying what it is for; "Rare word readings" is
+   unticked to begin with; the panel shows the WHOLE paragraph you are
+   deciding about, not a clipped fragment; the keyboard shortcuts sit as
+   grey text under the buttons. Clicking the dark backdrop closes it;
+   clicking inside does not.
+2. **Beats**: walk a few stops. Apply inserts with correct spacing and
+   the unsaved dot lights; Skip moves on; Ctrl+Enter and Ctrl+Right
+   work. Short-sentence beats should feel RARE -- roughly one suggestion
+   per 130 words, and every one landing on a genuine run of three or
+   more clipped sentences. If it is firing on ordinary prose, that is a
+   regression in the burst rule.
+3. **Word readings**: reach a stop for a word like *read* or *wound*.
+   Nothing is pre-selected and there is no green Apply button. Each
+   reading has its own [Play], speaking YOUR sentence in the book's
+   voice; the engine's own reading is labelled "already how it reads --
+   Skip keeps it" and offers no button. Press Play on both, then [Use
+   this] on the other one: it wraps that word only, in place, with your
+   capitalization kept. Replaying a clip is instant the second time.
+   Re-walking the chapter must NOT stop on a word you already set.
+4. **Fixes**: plant a broken marker ([pace:=2] and an unclosed
+   [pause:0.4 ). Both surface under "Fixes" with one-click corrections,
+   and the pace one offers BOTH directions rather than guessing.
+5. **The tutorial**: press [Show me how this works]. Ten steps. Step 1
+   says none of this is required and names Kokoro's faults. Step 3
+   plays one sentence three ways (no pause / 0.4 / 1.5). Steps 4 to 7
+   each have two [Play] buttons and run one continuous scene (Elena's
+   argument). Step 6 carries an amber warning that packed pauses make
+   the narrator slur -- play its second clip and confirm you can hear a
+   slight slur, because that demo is deliberately not cleaned up. Step 8
+   plays the narrator getting *read* wrong, then right. There is no
+   keyboard step.
+6. **Add all at once**: the rail button reads [Add all N pauses at once]
+   with a real number. Confirming inserts every suggested pause but
+   leaves marker fixes AND word readings in the walk. Leave WITHOUT
+   saving -- reload the workspace and confirm the whole batch is gone.
+7. **[say] popout**: select a word, click [say]. Only the spoken form is
+   typeable. The word stays visibly selected while the popout has focus.
+   Preview plays it in a carrier phrase with no garble at the word's
+   edges, and "engine heard: ..." appears underneath. Type a caps
+   respelling (LAR-ah) -- preview says the NAME, never spelled letters.
+   Accept hops to the next occurrence with the counter. Now click into a
+   word you ALREADY set: it must re-open that override for editing with
+   the spoken form filled in, and accepting replaces it rather than
+   nesting a second one. The popout must open NEAR the word, never at
+   the bottom of the screen, including deep in a long chapter.
+8. **Draft pass**: turn on the Draft/Testing switch, Generate -- roughly
    half the time on pause-heavy chapters; the amber regenerate-before-
-   export notice shows. Uncheck and Generate: every draft segment
+   export notice shows. Turn it off and Generate: every draft segment
    re-queues automatically.
-5. **Reset hatch**: pause a run, then click "Cancel generation and
+9. **Reset hatch**: pause a run, then click "Cancel generation and
    start over" under Resume -- after the confirm, Generate is available
    fresh and completed segments are NOT redone.
-6. **Open Output Folder** (after an export): Explorer opens directly in
-   the workspace's output folder.
+10. **Open Output Folder** (after an export): Explorer opens directly in
+    the workspace's output folder.
 
-Expected: walkthrough/say edits are buffer-only until Save; a draft can
-never ship silently (staleness re-queues it); the reset hatch never
-deletes audio.
+Expected: walkthrough and [say] edits are buffer-only until Save; no
+marker is ever audible in any preview; a word reading is never applied
+without a click; a draft can never ship silently (staleness re-queues
+it); the reset hatch never deletes audio.
 
 ---
 
