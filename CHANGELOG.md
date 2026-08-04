@@ -17,6 +17,16 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+---
+
+## [1.1.0] - 2026-08-03
+
+### Added
+
 - **Audiobook Converter -- Stage A foundation** (first slice of the v1.1.0 feature; see `docs/audiobook-converter-spec.md`). A standalone tool reached from the Project Home: import a manuscript (DOCX, EPUB, Markdown, TXT, or an existing Storythread project -- chapters detected per format, PDF honestly deferred) into its own audiobook workspace, where the original file is copied and never touched. A jewel-tone dashboard (emerald actions, sapphire progress, ruby warnings on charcoal) lists recent audiobooks; the narration workspace offers a focused editor over the narration copy with a chapter rail, marker quick-actions ([pause], [scene-break], [chapter-break] as timed silence, [exclude], and one-spot [say:Hay-SOOS]Jesus[/say] pronunciation overrides), plus a pronunciation dictionary for this-audiobook and all-audiobooks rules. Manual save only, exactly like the writing app.
 - **Audiobook Converter -- Stage B local narration.** The free local narrator is real: Kokoro-82M (54 voices) ships as a separate on-demand download (~372 MB, SHA256-verified, installed from inside the app with live progress; a version-mismatched engine offers a one-click Update). Pick a voice, preview it free, or select any passage and hear EXACTLY how it will sound -- pauses as real silence, pronunciations applied, excluded text skipped -- with a render trace under the player showing the exact speed used per piece. Generate the audiobook in the background with pause/resume/cancel, per-segment progress, and restart recovery; segments keep stable identities across edits, so inserting a paragraph regenerates one segment, not the chapter, and changing a pronunciation re-does only the segments containing that word. Pace control at two levels: book-wide Narration Settings (narrator pace, a separate dialogue pace, break silence lengths) and [pace:0.8]-style spans for specific moments (Slow/Fast toolbar presets; most natural between 0.8x and 1.2x). Every marker has a "What's this?" card with a live-rendered audio example (local -- no tokens spent), click-to-pause. Spoken pronunciation forms are engine-proofed automatically (caps flattened, syllables fused -- LAR-uh reads as one word, never letter by letter).
 
@@ -70,6 +80,7 @@ entry while working on a feature, append it under Unreleased.
 - **Dropdown lists were unreadable, app-wide.** Every `<select>` menu drew white text on light grey, readable only while an item was hovered. A dropdown's popup is drawn by the operating system rather than the page, so it followed the Windows light palette and ignored the app's styling. One declaration switches every dropdown, scrollbar and context menu in the app to the dark palette.
 
 - **Passage / Dialogue Check reported a playback error over audio that played perfectly.** Two audio players had been pointed at the same clip, and the cleanup that frees a finished clip ran when a new one arrived rather than on close, tearing down playback a moment after it was told to start.
+
 ---
 
 ## [1.0.11] - 2026-07-28
@@ -287,7 +298,8 @@ First public release.
 - Backend sidecar hung at startup in installed builds, causing "Failed to fetch" errors on first project open. The Tauri shell plugin pipes the child process's stdout and stderr through a Receiver that the setup hook was dropping; uvicorn's startup log lines filled the OS pipe buffer and blocked the backend from binding to port 8000. The setup hook now drains the receiver in a detached task so the backend can start cleanly.
 - API requests from the installed app were blocked by CORS even after the backend started, because the allowlist only included Tauri v1's `tauri://localhost` origin. Tauri v2 on Windows uses `http://tauri.localhost`; both Tauri v2 origins are now on the allowlist.
 
-[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.11...HEAD
+[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.11...v1.1.0
 [1.0.11]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.8...v1.0.9
