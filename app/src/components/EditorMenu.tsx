@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown, Wrench, Sparkles, Scissors, FileText, BookOpen, Download,
+  Headphones,
 } from "lucide-react";
 
 export interface EditorMenuProps {
@@ -33,6 +34,8 @@ export interface EditorMenuProps {
   onSuggestSceneBreaks?: () => void;
   suggestBreaksRunning?: boolean;
   onOpenChapterSummary?: () => void;
+  // Listen group -- local, free, produces nothing.
+  onDialogueCheck?: () => void;
   // View group
   onReaderMode?: () => void;
   // Export group
@@ -81,6 +84,7 @@ export function EditorMenu({
   onSuggestSceneBreaks,
   suggestBreaksRunning = false,
   onOpenChapterSummary,
+  onDialogueCheck,
   onReaderMode,
   onExport,
 }: EditorMenuProps) {
@@ -176,9 +180,23 @@ export function EditorMenu({
             </>
           )}
 
-          {hasViewGroup && (
+          {onDialogueCheck && (
             <>
               {hasAiGroup && <div className="my-1 border-t border-border" />}
+              <MenuGroupLabel>Listen</MenuGroupLabel>
+              <MenuItem
+                icon={<Headphones size={13} />}
+                label="Passage / Dialogue Check..."
+                hint="Hear the selected passage read aloud -- dialogue that does not flow, repeated words, and the right-word-wrong-word errors no checker catches"
+                onClick={pick(onDialogueCheck)}
+              />
+            </>
+          )}
+
+          {hasViewGroup && (
+            <>
+              {(hasAiGroup || onDialogueCheck)
+                && <div className="my-1 border-t border-border" />}
               <MenuGroupLabel>View</MenuGroupLabel>
               {onReaderMode && (
                 <MenuItem
@@ -193,7 +211,8 @@ export function EditorMenu({
 
           {hasExportGroup && (
             <>
-              {(hasAiGroup || hasViewGroup) && <div className="my-1 border-t border-border" />}
+              {(hasAiGroup || onDialogueCheck || hasViewGroup)
+                && <div className="my-1 border-t border-border" />}
               <MenuGroupLabel>Export</MenuGroupLabel>
               {onExport && (
                 <MenuItem

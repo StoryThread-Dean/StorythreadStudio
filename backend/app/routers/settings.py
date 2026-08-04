@@ -13,7 +13,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.settings_store import load_settings, save_settings, get_vault_root
+from app.settings_store import load_settings, mask_key, save_settings, get_vault_root
 from app.ai.openrouter import test_connection
 from app.ai.providers import PROVIDERS, active_provider
 
@@ -266,10 +266,8 @@ def _mask_key(key: str) -> str:
     """
     Partially mask an API key for safe display in the UI.
     "sk-or-v1-abcdefghijklmnop" -> "sk-or-...mnop"
-    Returns "" if the key is empty.
+
+    The rule itself lives in settings_store.mask_key so the audiobook's
+    narration-key surface masks identically -- two copies would drift.
     """
-    if not key:
-        return ""
-    if len(key) <= 8:
-        return "***"
-    return key[:6] + "..." + key[-4:]
+    return mask_key(key)

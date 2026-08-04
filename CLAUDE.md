@@ -198,6 +198,26 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_quick_overview.py` -- side-character Generate Overview: prompt guardrails (grounding, subtext, vary-angle) + endpoint payload
   - `test_names_store.py` -- name-generator seed data contracts (counts, era honesty, no em dashes) + names.db seed/fallback/reseed
   - `test_names_routes.py` -- /api/names/cultures + /pool endpoints incl. fallback used_era and 400s
+  - `test_audiobook_extraction.py` -- audiobook import extractors (TXT/MD/DOCX/EPUB/Storythread-project) incl. real DOCX+EPUB round trips, chapter detection, PDF rejection
+  - `test_audiobook_markers.py` -- narration marker grammar ([pause]/[scene-break]/[chapter-break]/[exclude]), derived structure, warnings
+  - `test_audiobook_pronunciation.py` -- pronunciation rules, [say] inline overrides, TTS payload prep (`--` to em dash, payload only)
+  - `test_audiobook_workspace_routes.py` -- (also covers Dialogue Check: four voices not fifty-four, markers stripped rather than honoured, oversize refusal, no workspace required) -- /api/audiobook import/project/narration/pronunciations/recents/segments end to end
+  - `test_audiobook_segmenter.py` -- segment sizing (paragraph grouping, sentence fallback, marker cuts) + stable-ID identity across inserts/edits/chapter renumbering
+  - `test_audiobook_generation.py` -- generation engine: run lifecycle, per-segment persistence, pause/cancel between segments, retry cap + pessimistic attempts, truncation validation, restart recovery, workspace lockfile, narration-settings/dialogue/marker pace flow + staleness
+  - `test_audiobook_local_worker.py` -- kokoro-worker manager: KokoroBackend transport errors, spawn command + version gate, install flow (SHA256 integrity, polluted-dir replace, locked-file loud failure), voices/preview/preview-selection endpoints
+  - `test_audiobook_marker_demos.py` -- WAV stitcher (exact silence, format guards), audible marker demos (scripts render clean, speeds match narrated values), render_marked_text (rules, silence, pace spans, cut-into-span warnings, trace)
+  - `test_audiobook_flow.py` -- flow synthesis: mid-paragraph pauses cut the AUDIO of a continuous render (never the text), gap located by the duration-calibrated matcher -- pins the pre-pause slur fix
+  - `test_audiobook_assembly.py` -- the assembler against REAL ffmpeg: stitch -> loudnorm -> encode, ffprobe verifies durations, ID3 tags, M4B chapter markers (a missing ffmpeg fails loudly, never skips)
+  - `test_audiobook_metadata.py` -- book metadata + cover art (spec 17): manifest store, HTTP surface, cover validators
+  - `test_audiobook_tts_providers.py` -- hosted catalog + prices, the print-pass estimator, cloud synthesis behind the local seam, and error classification (a retryable verdict on a billing error would charge twice)
+  - `test_audiobook_settings_routes.py` -- the audiobook settings surface: key masking (never echoed back, omitted = leave alone, "" = clear) and engine-pair validation refused out loud
+  - `test_audiobook_narration_selection.py` -- three-level engine resolution (book -> settings -> writing fallback), `can_spend` vs `fallback_note` vs `caveat`, and each demoted engine's recorded reason
+  - `test_audiobook_mp3_transport.py` -- per-model `response_format`, mp3 byte sniffing + decode, and the self-healing 400 retry (provider names a format, or the field is dropped)
+  - `test_audiobook_level_matching.py` -- loudness matching at assembly (-20 dBFS RMS, -1 dBFS ceiling, clamped gain), including that flow dynamics survive it
+  - `test_audiobook_pdf.py` -- PDF import against REAL PDFs built by `tests/pdf_builder.py`: scanned rejection, running-header/page-number removal that never eats prose or headings, hyphen rejoining, paragraph reconstruction by indent and by line length
+  - `test_audiobook_speakers.py` -- the cast + [voice:NAME] spans (spec 27): span parsing and its three failure modes, voice change as a hard segment boundary, name-to-voice resolution, recasting requeues only that character
+  - `test_audiobook_speaker_analysis.py` -- the AI speaker pass (spec 27.3): a proposal that does not quote the source character for character is DROPPED, overlap/ordering rules, prompt guardrails, and the endpoint writing nothing
+  - `test_audiobook_storage.py` -- storage measurement + cleanup (spec 25): per-category sizes, orphan detection by leftover, nothing irreversible pre-checked, deleted audio resets its segment records, export-only state, retention migration
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -211,6 +231,29 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/data/traitPools.test.ts` -- trait randomizer: tier replacement semantics, archetype flavor bias, deterministic rolls
   - `src/data/names/fantasyNames.test.ts` -- fantasy name assembly: 12-race roster, deterministic rng, speakability fuzz, phonology disjointness
   - `src/components/profiles/NameGeneratorPanel.test.tsx` -- generator panel: optgroups, era hiding for races, 6+6 deals, partial accept, fallback note
+  - `src/features/audiobook/AudiobookDashboard.test.tsx` -- audiobook dashboard: recents render, empty state, open flow, remove-keeps-files endpoint
+  - `src/features/audiobook/WorkspaceView.test.tsx` -- narration editor: inline pause insertion (scroll preserved), [say]/[exclude]/pace wraps, Remove marker stripping, manual save PUT + chapter re-derive, marker help panel, pronunciation dialog
+  - `src/features/audiobook/GenerationPanel.test.tsx` -- narration rail: voices load, generate posts + live progress, paused-run resume, failed-segment surfacing, up-to-date force flow, engine-unavailable message
+  - `src/features/audiobook/anchorPlacement.test.ts` -- the [say] popout is never placed below the halfway line (it expands after opening) and never hangs off an edge
+  - `src/features/audiobook/markers.test.ts` -- stripAudioMarkers (wrappers dissolve, words never deleted) + paragraphBoundsAt
+  - `src/features/audiobook/ImportPanel.test.tsx` -- Get Started flow (spec 5.1.2): workspace location auto-chosen and explained, override sticks, Create posts source + workspace + title
+  - `src/features/audiobook/BookDetailsPanel.test.tsx` -- metadata form: loads on mount, dirty tracking (manual save), full-field PUT, cover pick/validate/preview/remove
+  - `src/features/audiobook/SayEditor.test.tsx` -- the [say] popout: brackets are chrome, Accept wraps and hops, already-overridden occurrences skipped, Preview sends the word's sentence
+  - `src/features/audiobook/insertScan.test.ts` -- walkthrough scanner contract, pinned with the user's real manuscript examples incl. broken-marker repairs, plus the word-reading axis (whole words only, never inside a say span, never collapsed against a beat on the same spot) and the marker-aware `sentenceAround`
+  - `src/features/audiobook/heteronyms.test.ts` -- the shipped word-reading table's contracts: every rule here is a way the ENGINE was measured to fail (no mid-word capital -- espeak splits the word; no `ih` before a consonant -- the h is spoken; the already-correct words and the deferred stress family stay out)
+  - `src/features/audiobook/InsertWalkthrough.test.tsx` -- walkthrough panel: stops walk in order, Apply is a buffer edit (never a save), Skip advances, per-kind muting, Ctrl+Enter fast path; the pop-out shell (a dialog, backdrop closes it, kinds say what they are FOR, the whole paragraph is shown and never spills into the next, an empty walk offers a way out); the guided walk explains SOUND rather than buttons, gives every beat kind before/after audio, and frames marker repairs as repairs; word readings offer each candidate as AUDIO with nothing pre-selected, play the writer's own sentence, cache replays, count the same word ahead instead of applying in bulk, and are excluded from Auto-apply
+  - the tutorial's own contracts: opens by saying it is optional and naming the engine's faults, teaches what a pause IS before naming a place to put one, runs one continuous scene through the beat steps, admits the short-burst suggestion is a matter of taste, gives word readings their own two Play buttons, and has no keyboard step (those moved under the buttons)
+  - tutorial navigation in that file goes by step TITLE, never a click count -- a count breaks whenever a step is inserted, and matching a bare title silently matches the mute-checkbox labels behind the card
+  - `src/features/audiobook/AudiobookSettingsDialog.test.tsx` -- settings surface: a masked key is never sent back, engine shelf + demoted drawer with reasons, empty-tier admission, pace re-scale notice
+  - `src/features/audiobook/PremiumNarrationPanel.test.tsx` -- the money gate: engine reported not chosen, unusable engine offers no buttons, estimate precedes any confirm, a stale estimate cannot survive an engine change
+  - `src/features/audiobook/VoicePicker.test.tsx` -- one picker, three shapes (two dropdowns / one / free text), value stays a single composed id in all of them
+  - `src/features/audiobook/ToggleSwitch.test.tsx` -- a switch, not a checkbox: its look carries the state
+  - `src/features/audiobook/SpokenLine.test.tsx` -- the read-aloud flourish never costs readability (every word present as text, spaces survive, staggered delays)
+  - `src/features/audiobook/CastPanel.test.tsx` -- the cast screen: manuscript names offered as one-click adds, duplicate names block the save, one-book-one-engine explained
+  - `src/features/audiobook/speakerScan.test.ts` -- the Cast workbench's scanner: chapter ranges, one stop per PARAGRAPH, tags read both ways, pronouns rejected, a tag never leaks across a paragraph break, assign/reassign/clear round trips, character removal counts usage and keeps every word
+  - `src/features/audiobook/CastPanel.test.tsx` -- the workbench: help stays closed until asked, voices fold once a cast exists, Pro column only when connected, only this chapter's characters shown, a click lands on the buffer immediately, removal warns with real counts
+  - `src/features/audiobook/StorageDialog.test.tsx` -- the delete screen: only free-to-rebuild categories pre-checked, losses stated on the row, the confirm repeats categories + size, cancelling deletes nothing, locked files surfaced
+  - `src/features/audiobook/ExportPanel.test.tsx` -- retention after export: keep says nothing, ask shows the size, auto-delete acts and reports it, and only intermediate audio is ever removed
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands

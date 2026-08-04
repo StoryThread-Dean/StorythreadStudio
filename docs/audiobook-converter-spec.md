@@ -167,6 +167,25 @@ The audiobook dashboard will not share recent activity with Storythread writing 
 
 ## 5. Audiobook Dashboard
 
+### 5.0 Visual Identity: Jewel Tones on Charcoal
+
+The Audiobook Converter uses its OWN color scheme, distinct from the
+writing app's Light and Dark modes, so the writer always knows which side
+of the app they are in.
+
+Dark (primary design target): deep jewel tones on dark charcoal
+backgrounds, with each jewel carrying a consistent meaning:
+
+- **Emerald green** -- primary actions, success, completed states
+- **Sapphire blue** -- information, progress, generation activity
+- **Ruby red** -- costs, warnings, destructive actions, failed states
+
+Implementation: a scoped theme class on the audiobook root element (for
+example `.audiobook-theme`) overriding the design tokens, so the writing
+app's palette is untouched and both themes coexist in one window. The
+light variant keeps the same jewel accent meanings on light surfaces; its
+exact values are decided when the dashboard UI is built.
+
 ### 5.1 Primary Actions
 
 - New Audiobook
@@ -175,6 +194,47 @@ The audiobook dashboard will not share recent activity with Storythread writing 
 - Manage Local Voices
 - Configure Providers
 - Open Audiobook Settings
+
+### 5.1.1 Dashboard Redesign (user-designed 2026-07-30, scheduled with Stage D)
+
+The plain button dashboard educates nobody. The redesign makes the FIRST
+look at this screen teach what the tool is and how the workflow runs:
+
+- **Headline + one-line pitch**: "Audiobook Generator" with a plain-terms
+  subtitle in the spirit of "turns your written book into AI-narrated
+  audio" (final wording at build time; no em dashes).
+- **The five-step workflow strip**, each step hover-animated with a
+  short, plainly worded expansion:
+    1. Load your book
+    2. Set up your workspace
+    3. Prepare your manuscript
+    4. Generate the free local version
+    5. (Optional) Print a professional HQ version with premium AI voices
+  Step 5's expansion includes basic pricing honesty (hosted Kokoro
+  around half a dollar a book; premium tiers meaningfully more; real
+  numbers wired when Stage D lands providers).
+- **[Let's Get Started]** replaces [New Audiobook] as the single primary
+  action, clearly signaled as a guided walkthrough that creates the
+  workspace for you.
+- **[Open Existing Workspace] demoted**: tucked under a small pulldown /
+  secondary menu, never competing with the primary flow. Recents on the
+  right stays -- returning users just click their book.
+
+### 5.1.2 Default Workspace Locations (locked rule, with Stage D)
+
+The Get Started flow suggests the workspace location; the writer can
+override, but the default is ALWAYS:
+
+- **Storythread book source**: `<book folder>/audiobook/` inside the
+  book project itself (example:
+  `curse-of-the-tomb-raider/audiobook`). The audiobook lives with its
+  book.
+- **External manuscript** (DOCX/EPUB/TXT/MD from any other tool):
+  `Documents/Storythread Audiobooks/<Book Title>/` (title run through
+  the 8.1 filename sanitizer).
+- Collision handling: if the default folder exists and is not empty,
+  suggest `audiobook-2` / `<Book Title>-2` rather than erroring the
+  writer into folder-picking.
 
 ### 5.2 Recent Activity
 
@@ -278,19 +338,37 @@ The dominant long-term loop is edit, regenerate changed sections, and re-export 
 
 DOCX and EPUB extraction reuse libraries already shipped with the backend (`python-docx` and `ebooklib`, used today by the export feature), so no new dependencies are required for the MVP format set.
 
-### 7.2 Deferred Format Behavior
+### 7.2 PDF (landed in Stage F, 2026-08-01)
 
-PDF import is deferred to a later phase. It is the only format that requires a new extraction dependency and it carries the highest extraction-quality risk in the project.
+PDF was deferred to its own stage because it is the only format that requires a new extraction dependency and carries the highest extraction-quality risk in the project. It now imports, with the limits below intact.
 
-When PDF support lands, it will cover text-based PDFs only. Scanned or image-only PDF documents will not use OCR.
-
-Suggested error (for the PDF phase):
+**Text-based PDFs only.** Scanned or image-only documents are refused with the wording this section always specified:
 
 > This PDF appears to contain scanned pages rather than selectable text. Scanned-document OCR is not currently supported. Convert it to a text-searchable PDF, DOCX, EPUB, Markdown, or TXT file and try again.
 
-Until PDF lands, selecting a PDF should produce:
+OCR stays out of scope, and the reason is worth stating plainly: a bad OCR pass would put **invented words** into a narration copy, and the writer might not find out until they hear them. Refusing is the safer failure.
 
-> PDF import is not supported yet. Export the manuscript as DOCX, EPUB, Markdown, or TXT and try again.
+**Dependency: `pypdf`.** Pure Python, BSD, no binaries -- which is what makes it safe to freeze into the sidecar exe. PyMuPDF extracts better but is AGPL with native libraries; pdfminer.six is heavier for the same job. Named explicitly in `backend.spec` hiddenimports, because `pdf_extractor` is itself imported lazily.
+
+#### What "extraction" means here
+
+A PDF does not contain a manuscript. It contains a picture of one -- glyphs at coordinates, with no paragraphs, no chapters, and no idea which lines belong together. Everything the extractor produces is reconstruction, which shapes two rules:
+
+1. **Never lose the writer's words.** Cleanup removes page furniture and rejoins text the layout split. Nothing that could be prose is dropped, and anything ambiguous is kept.
+2. **Say what was reconstructed.** Every cleanup reports itself as an import warning, and every PDF import ends with the note that paragraph breaks are a best guess -- because this is the one format where the app is guessing, and the writer is about to spend an engine on the result.
+
+**Page furniture** (running headers, running footers, page numbers) is detected by REPETITION, not by position or font: take the first and last line of every page, normalize away the digits, and remove it only when the same skeleton appears on most of the book (60%, minimum 3 pages). A line that looks like a chapter heading is never removed however often it repeats -- losing it would silently merge the whole book into one chapter. Bare numbers are stripped only at page EDGES: a line reading "1985" mid-page is prose.
+
+**Paragraph reconstruction** uses two signals together, because each catches what the other misses:
+
+- **Indent.** In typeset fiction the first line of a paragraph starts further right. A PDF stores no space characters there -- the glyphs simply begin at a different x -- so extraction runs in pypdf's `layout` mode, which is the only mode that reconstructs it. When a book indents, this is exact, and it catches the paragraph whose last line happens to run full width.
+- **Length.** Every line runs nearly the full measure except the last one of a paragraph, so a short line ends one. This is the only signal available for block-paragraph layouts, and it catches dialogue, which is usually set flush left.
+
+The measure is a high percentile of line lengths rather than the median: headings, page numbers and dialogue are all short, and a median would sink until no line looked short at all -- merging every paragraph in the book into one. (Found by test, not by reasoning.)
+
+**Hyphenation.** A line ending in a hyphen followed by a lowercase continuation is rejoined and the hyphen dropped. That is right for a line-break hyphen and wrong for a genuinely hyphenated word that landed at the margin, and nothing short of a dictionary can tell them apart -- so the join is made, and COUNTED, so the warning can tell the writer how many words to spot-check. A hyphen before a capital is left alone.
+
+Why paragraph accuracy matters more here than it looks: the segmenter treats **one paragraph as one unit of speech**, and assembly inserts the paragraph beat between them. A merged pair loses a beat; a false split invents one.
 
 ### 7.3 Import Workflow
 
@@ -364,6 +442,43 @@ The Hollow Road/
 ```
 
 Storythread's application-data directory should only maintain a lightweight recent-activity index and provider settings.
+
+### 8.1 Windows Filename and Path Hygiene
+
+Book titles become folder and file names, and titles like "The Hollow
+Road: Book 2?" contain characters Windows forbids. One sanitization rule,
+applied everywhere a title becomes a path component:
+
+- Strip the illegal characters `< > : " / \ | ? *` and control characters
+- Strip trailing dots and spaces (Windows silently rejects them)
+- Refuse reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) by
+  appending a suffix
+- Collapse runs of whitespace; cap the component at 60 characters
+- Never sanitize into an empty string -- fall back to "Untitled"
+
+Deep workspaces plus long titles can also brush against MAX_PATH:
+
+- Enable `longPathAware` in the application manifest at build time.
+- Keep generated inner paths short by construction -- stable short segment
+  IDs (Section 23.1) exist partly for this reason.
+- Warn at import time when the chosen workspace path is already longer
+  than 180 characters.
+
+### 8.2 Workspace Locking
+
+A workspace is a folder full of state that is expensive to regenerate;
+two writers (or two app instances, or one instance twice via a bug) must
+not mutate it concurrently. Cheap insurance: a lockfile.
+
+- `<workspace>/.storythread-audiobook.lock` containing PID, hostname, and
+  an ISO timestamp, refreshed periodically while held.
+- MANDATORY around generation runs: acquiring the lock is part of
+  starting or resuming a run; failure to acquire shows who holds it.
+- Advisory on plain open-for-editing: a second opener gets a clear
+  warning rather than a hard block.
+- Staleness: a lock whose PID no longer exists (same host) or whose
+  timestamp is old with no refresh is stale and may be broken with an
+  explicit user confirmation.
 
 ---
 
@@ -475,11 +590,19 @@ She looked toward the window.
 Suggested syntax:
 
 ```text
-[pause:0.8]            explicit duration in seconds
-[scene-break]          uses the configured scene-break duration
-[chapter-break]        uses the configured chapter-break duration
+[pause:0.8]                explicit duration in seconds
+[scene-break]              uses the configured scene-break duration
+[chapter-break]            uses the configured chapter-break duration
 [exclude] ... [/exclude]   text kept in the file but never narrated
+[say:KAY-lith]Kaelith[/say]   one-spot pronunciation override (see 11.1)
 ```
+
+Semantics locked (decided 2026-07-28):
+
+- **`[chapter-break]` is timed silence ONLY** -- a configurable pause
+  (default 3.0 seconds) for mid-file transitions. It never creates a new
+  chapter. Chapter STRUCTURE comes exclusively from `# ` headings in the
+  narration copy; the marker and the heading are independent tools.
 
 The structured form (`narration-structure.json`) is DERIVED by parsing the narration copy, never hand-maintained. This means a writer can repair a narration copy in any text editor and nothing breaks; the parser simply re-derives the structure. The editor renders the markers as friendly visual chips.
 
@@ -521,13 +644,28 @@ Spoken as: KAY-lith
 
 ### 11.1 Pronunciation Scopes
 
-- This occurrence
-- This audiobook
-- All audiobooks
+Two scopes live in dictionary files; the third is an inline marker:
+
+- **This audiobook** (`scope: "audiobook"`) -- the workspace dictionary file
+- **All audiobooks** (`scope: "all"`) -- the app-level dictionary file
+- **This occurrence** -- NOT a dictionary entry. A position-anchored rule
+  would break the moment the writer edits upstream text. Because text is
+  the source of truth, a one-spot override is an inline marker instead:
+
+  ```text
+  [say:KAY-lith]Kaelith[/say]
+  ```
+
+  The display always shows "Kaelith"; the provider payload gets
+  "KAY-lith". The marker travels with the text, survives editing in any
+  external editor, and participates in segment hashing naturally (editing
+  a [say] changes the audio, so the hash SHOULD change). Inline [say]
+  wins over dictionary rules for its span. (Decided 2026-07-28,
+  replacing the earlier position-anchored occurrence scope.)
 
 ### 11.2 Pronunciation Data
 
-Suggested structure:
+Suggested structure (dictionary files carry only the two file scopes):
 
 ```json
 {
@@ -548,6 +686,42 @@ The narration pipeline interacts with two established Storythread rules, in both
 - **Storythread-authored `--` is normalized in the provider payload only.** Manuscripts written inside Storythread use `--` per the house style. A speech engine may read `--` literally or pause oddly, so the same payload-preparation layer that applies pronunciation substitutions converts `--` to natural punctuation (em dash or comma) in the text sent to the provider. The displayed narration copy is never rewritten.
 
 Both transformations live in the same place: the provider payload preparation step, alongside pronunciation substitution. Displayed text is always the writer's text.
+
+### 11.4 Text Verbalization (Payload-Prep Pipeline)
+
+Numbers, dates, ordinals, roman numerals ("Chapter XII", "Henry VIII"),
+abbreviations ("Dr.", "St.", "etc."), and URLs are read differently by
+every engine -- Kokoro/misaki's normalization is limited and hosted models
+vary. Verbalization has a defined home: a step in the payload-prep
+pipeline, which runs in this fixed order for every piece of narration
+text sent to a provider:
+
+```text
+1. [say:...] inline overrides        (writer's explicit word wins)
+2. Pronunciation dictionary rules    (audiobook scope, then all scope)
+3. Verbalization                     (numbers, romans, abbreviations)
+4. Punctuation normalization         ('--' to em dash)
+```
+
+MVP scope is deliberately thin -- expand the constructs engines reliably
+get wrong, pass everything else through and LEARN from the draft passes
+while the stakes are low:
+
+- Roman numerals in headings and honorifics ("Chapter XII" -> "Chapter
+  Twelve", "Henry VIII" -> "Henry the Eighth")
+- Common abbreviations (Dr., Mr., Mrs., Ms., St., etc., vs., e.g., i.e.)
+- Simple integers and ordinals ("Chapter 3" -> "Chapter Three", "21st" ->
+  "twenty-first")
+- URLs read as words ("example.com" -> "example dot com")
+
+Rules:
+
+- Verbalization applies to the PAYLOAD only; displayed text never changes.
+- A `verbalizer_version` is part of the generated-state hash (Section
+  24.1) -- improving the verbalizer marks affected audio stale, which is
+  correct.
+- A [say] marker always beats the verbalizer for its span, so any wrong
+  expansion has an immediate writer-side escape hatch.
 
 ---
 
@@ -619,6 +793,151 @@ Provider landscape facts (verified July 2026):
 - NanoGPT hosts Kokoro-82m -- the SAME model and voice set as the local engine -- at roughly $0.001 per 1,000 characters, plus premium tiers such as ElevenLabs Turbo at roughly $0.06 per 1,000 characters. NanoGPT also provides an asynchronous TTS endpoint (submit a ticket, poll for status) that maps directly onto the remote-job methods in Section 16.1.
 
 The speech models are NOT the chat models: same provider accounts and API keys, separate model catalog reached through a separate audio endpoint. This is the "Writing Models vs Audio Models" split in Section 16.
+
+#### 13.1.1 Engines tested by ear (findings, not plans)
+
+A catalog entry is a recommendation, so an engine earns its place on the shelf by being listened to. What that produced:
+
+- **Grok Voice TTS (`x-ai/grok-voice-tts-1.0`, OpenRouter, $15/M) -- DEMOTED.** Two separate problems, both found live.
+  - *Roster:* xAI publishes 26 voices, each able to speak American, British, or Australian via an id suffix (`ara-en-GB`). OpenRouter answers to five bare names only -- `Ara`, `Eve`, `Leo`, `Rex`, `Sal`. Three 404s established this: `iris-en-US`, `iris-en-GB`, and then `ara-en-GB`, that last one a documented voice, which proves it is the SUFFIX being rejected and not just the wider roster. An accent dropdown was built and removed within two commits as a result.
+  - *Prosody drift:* it narrates well sentence by sentence, but pitch and tone reset between sentences, so a chapter arrives sounding like several narrators spliced together. The cause is structural: Storythread sends each segment as its own request and this model re-improvises delivery every time. Nothing on our side can steady it -- flow synthesis (Section 15) fixes seams WITHIN a segment, not identity drift across them. An expressive model without a seed or continuation parameter cannot hold a book together.
+  - Kept selectable behind a "tested but not recommended" disclosure, carrying its reason. Demoting is the honest move; deleting would strand any book already pointed at it and teach nobody anything.
+
+The general lesson, worth applying to every future premium engine: **expressiveness and consistency trade against each other under per-segment synthesis.** The flatter model (Kokoro) stitches invisibly; the performer does not. Any engine considered for the Standard or Pro tier must be auditioned across at least a full chapter, not a sample sentence, because a single sentence is exactly the length at which this defect is inaudible.
+
+- **Voxtral Mini TTS (`mistralai/voxtral-mini-tts-2603`, OpenRouter, $16/M) -- DEMOTED after four tests.** Inside a paragraph it is genuinely good: even, professional, zero slurs or mangled words -- better than Grok on every count that broke Grok. It came off the shelf for the cast. Every voice has a **mood welded into the id**, the same id reads the entire book, and it turns monotonous in roughly twenty seconds; four moods were tried by ear (curious, neutral, sarcastic, confident) and none felt right for narration. There is no mood-free variant -- `neutral` is the plainest available, and it is average. Its other complaint, paragraphs running together, turned out to be **our bug**, not the engine's, and is fixed above. Kept selectable: if one of the moods happens to suit a particular book, it works.
+
+  The general lesson to carry forward: **a fixed emotion is not a narration voice.** It solved the drift problem exactly as predicted -- telling the model "be Oliver, neutral" every time does stop it re-improvising -- and then failed on the thing that prediction did not cover. A narrator varies; a model pinned to one mood cannot.
+
+  Original rationale, kept because the reasoning was sound even though the verdict went against it: Chosen for one structural reason: **the mood is part of the voice id, not a parameter.** Three English narrators ship as one id per emotion (`gb_oliver_neutral`, `en_paul_confident`, `gb_jane_curious`...), so every segment is told "be Oliver, neutral" rather than being asked to interpret the text afresh. That is directly the latitude Grok used to drift. 24 English ids in all -- Paul (American male, 8 moods), Jane (British female, 9), Oliver (British male, 7) -- plus six French not offered. Deliberately NOT modelled as speaker x emotion axes: the mood sets differ per speaker, so two dropdowns would offer combinations that do not exist. Unproven by ear at time of writing; the full-chapter audition above applies to it too.
+
+##### Audio format is per MODEL, not per provider (live 400)
+
+A Voxtral audition came back `400 -- Mistral TTS only supports response_format="mp3". Got "pcm"`. The OpenAI-speech transport had `pcm` hard-coded, on the reasonable-sounding assumption that a format is a property of the endpoint. It is not: OpenRouter forwards to whatever the upstream vendor supports, and that varies model by model within one provider.
+
+`response_format` now lives on `HostedModel` (default `pcm`). mp3 answers are **decoded**, never header-wrapped -- wrapping mp3 bytes in a WAV header produces a file that plays as noise, costs a full book's spend, and fails no automated check. Decoding uses **miniaudio**: a single 268 KB wheel with no transitive dependencies, chosen over `soundfile` because soundfile drags numpy in and the whole backend is frozen into a PyInstaller sidecar. Byte-identical output to soundfile was verified before adopting it. It is named explicitly in `backend.spec` hiddenimports, because the import is inside a `try/except ImportError` -- a miss there would not fail the build, it would quietly ship a backend that refuses mp3 engines at narration time.
+
+Two rules that fell out of it, both about money:
+
+- **Sniff the bytes, not the content-type.** mp3 is detected from an ID3 tag or an MPEG frame sync, so a mislabelled answer still reaches the decoder. This also covers audio fetched from a JSON URL (NanoGPT's async shape), which was the one branch a compressed answer could have slipped through.
+- **A decode failure is NOT retryable.** Bytes that will not decode are a format incompatibility, not a hiccup, and each retry bills again for the identical failure. An EMPTY answer stays retryable -- that one is a hiccup.
+
+##### The paragraph beat (live finding, fixed -- and it was ours)
+
+Four structured tests on Voxtral isolated it cleanly: two selections **without** a trailing `[pause]` both ran the next paragraph in milliseconds later; the same selection **with** `[pause:0.8]` was flawless; a fourth test full of short sentences and pauses was flawless too. So the engine was never the problem. Two of our own decisions were:
+
+1. **Paragraphs grouped into one segment**, joined by a blank line, and the engine decided what that blank line meant. Some ignore it entirely. A boundary the pipeline cannot see is a boundary it cannot time.
+2. **Separate segments were butted together with zero silence** -- and `_condition_edges` had already trimmed away up to 250 ms of the engine's own trailing breath, deliberately, so that writer-placed pauses would not stack. Correct in isolation, wrong in combination.
+
+Fixed by making a paragraph a first-class unit: **one paragraph, one segment** (`SEGMENTS_VERSION` bumped to 2), each stamped `paragraph_start`, with `paragraph_gap_ms` (default **550**) inserted at assembly between two spoken pieces. Four details worth keeping:
+
+- The flag is **layout, not content**: it stays out of `content_hash`, so re-flowing paragraphs never forces a paid re-render of identical speech. Retiming the beat costs nothing either -- it is applied at assembly, not baked into audio.
+- **A writer's own `[pause]` wins.** The automatic beat only lands between two spoken pieces, never stacked on a pause, scene break, or chapter break.
+- **Continuation pieces of an oversize paragraph are not paragraph starts.** Inserting a beat mid-paragraph would be a worse artifact than the one being fixed.
+- **Flow groups still span mid-paragraph pauses.** A paragraph at index 0 with work already open is a continuation, not a new paragraph -- flushing there would break the continuous-render trick that exists to stop consonant slurs.
+
+Cost is unchanged: hosted engines bill per character, not per request.
+
+##### Loudness matching (live finding, fixed)
+
+A two-paragraph Voxtral preview came back with the second paragraph noticeably louder than the first, and it stayed loud for the rest of the clip. Two paragraphs are two requests, and an expressive hosted model picks its own **level** per request just as it picks its own pitch. Kokoro never did this.
+
+Unlike pitch, loudness is fixable from our side. `wav_assembly.match_level()` normalizes to **-20 dBFS RMS** -- the middle of Audible's ACX window (-23 to -18 dB RMS) -- with a -1 dBFS peak ceiling, a hard +/-8 dB clamp so room tone is never amplified into the foreground, and a deadband so a clip already on target is returned byte-identical rather than silently rewritten.
+
+Two decisions inside it matter more than the numbers:
+
+- **The unit is one SYNTHESIS CALL, never one clip.** Flow synthesis renders a run of sentences as one continuous clip and splits it afterwards. Those splits must share a single gain -- level them against each other and the natural rise and fall inside a sentence flattens into mush, destroying precisely what flow synthesis exists to protect. Both callers therefore normalize the whole clip and split second. A test pins a 3:1 dynamic surviving the round trip.
+- **It runs at ASSEMBLY, not at synthesis.** Stored segment `.wav` files stay exactly as the engine made them, so this costs nobody a re-render on a paid engine, and a book generated before the feature existed comes out even on its next assembly.
+
+Residual, and honest: this fixes level jumps. It does NOT fix pitch or timbre drift between segments, which remains an engine property (see Grok above). Voxtral's pitch/tone did shift between paragraphs in the same test, and no amount of gain fixes that.
+
+##### The paid preview must never quietly change what it reads
+
+Same session, second finding: previewing a selection worked, then clicking Sample again played the canned demo sentence instead. A textarea's selection does not reliably survive a round trip through a button in the rail, and `[Sample This Voice]` falls back to a demo sentence when nothing is highlighted -- so it billed for words the writer did not ask to hear.
+
+Two fixes, because either alone leaves a hole: the workspace now remembers the last real highlight **as text** (not offsets, which later edits invalidate) and prefers a live selection over it; and the panel states which was used -- "Read your highlighted passage" or "Read the demo sentence -- highlight a passage to hear your own words". The fallback was never wrong; being silent about it was.
+
+##### Voice ids: there is no authoritative source but a live call
+
+Three engines, three different disagreements between the gateway's metadata and the vendor's own documentation:
+
+| Engine | Gateway metadata | Vendor page | Truth |
+|---|---|---|---|
+| Grok | 5 bare names | 26 voices x 3 dialect suffixes | Gateway. The vendor's extra voices and every suffix 404'd. |
+| Voxtral | 30 ids | -- | Gateway, complete and correct. |
+| MAI-Voice-2 | 4 ids, English stem `en-US-Harper` | 45+ ids, English ShortName `en-US-Harper:MAI-Voice-2` | **Vendor.** The gateway's list was both partial (7 English voices, not 1) and truncated -- an Azure ShortName carries the MODEL as a suffix, and the bare stem looks like a finished id but is not. |
+
+So the earlier rule ("trust the gateway, not the vendor page") was overfitted to Grok. The real rule: **cross-read both, ship the best-documented form, and keep the typed-voice box** -- the only ground truth is a live call.
+
+The failure mode is worth noting too, because it cost two auditions. Sending a bad voice id produced an **opaque** `Provider returned 400`. Sending NO voice produced the useful one: `An explicit voice is required for this TTS provider.` Deliberately removing a parameter to make an error legible is a debugging move worth remembering -- the blank-voice box exists partly for that.
+
+##### Pace is engine-relative (live finding, fixed)
+
+Narrator Pace 0.85 / Dialogue Pace 0.9, tuned by ear on the local narrator and sounding normal there, came out **dramatically slower** on MAI-Voice-2 -- and slurred, because every engine garbles when pushed well below its natural rate. The second symptom was a consequence of the first, not a separate defect.
+
+The cause is a category error in the original design: `speed` was treated as an absolute the way `scene_break_ms` is. It is not. Narration Settings are per BOOK, so switching engines silently changed what 0.85 *meant*, and MAI-Voice-2 at 1.0 already reads about where Kokoro sits at 0.85 -- the two slowdowns compounded.
+
+`HostedModel.pace_baseline` now records how fast an engine is at `speed=1.0` on the reference scale (Kokoro, which every pace number in this app was tuned against). The backend divides by it, so each engine is asked for the same PERCEIVED rate, still snapped to the 0.05 grid that avoids the 1.08x lisp. MAI-Voice-2 is 0.85; everything else is 1.0 and passes through untouched, which is what keeps this from quietly retiming the engines that were already right.
+
+The writer's pace setting is an **intent**. Turning that intent into a number a particular engine understands is the engine's job, not the writer's.
+
+It is an ear estimate, not a measurement -- one float, easy to retune. And the re-scaling is stated on the engine card, because a silent change to speech rate is exactly the kind of invisible transform that reads as a bug when someone hears it.
+
+##### MAI-Voice-2: demoted for not taking direction (live verdict)
+
+Re-auditioned with the pace calibration in place, and the slurs went with it -- confirming they were a symptom of the pace bug rather than a defect. This is the one Standard candidate with **nothing wrong with the voice**. It came off the shelf for a different reason.
+
+The verdict: MAI builds speech on its own engine and voice structure, so every `[pause]`, scene break and pace mark renders differently here than it did on the free narrator the writer formatted against. The markers are not ignored -- they are re-interpreted. Which is worse in a specific way: the writer hand-tuned those beats by ear on Kokoro, and MAI silently gives them a different reading. **Viable at the default narration settings with no inserts; misleading on a hand-formatted book.**
+
+That is a genuinely different failure from the other two, and it names the third property a narration engine needs. The full list is now: **varying** delivery (Voxtral's welded mood went monotonous), **identity held across separate requests** (Grok re-improvises per segment), and **obedience to the writer's markup** (MAI re-interprets it). Only the third is invisible in a short audition, which is why it took a full chapter to surface.
+
+All three Standard candidates are now demoted, so that tier is **empty on the recommended shelf**. The settings screen says so in as many words rather than leaving a silent gap between Budget and Pro -- an unexplained hole reads as a failed load, and papering over it with a reluctant pick would be worse than admitting the shortfall.
+
+##### The seed question (CLOSED 2026-08-03)
+
+**Closed by user direction: "off the table for now. We have no real Standard tier option that is recommended."** Pinned at the close of Stage D, closed here. The Standard tier ships empty on purpose and v1.1.0 goes out that way -- three engines auditioned, three demoted, each with its reason attached and each still selectable by a writer who wants it. That is a finished answer, not an outstanding task.
+
+Everything below is preserved as the record of what was tried, so nobody repeats it. Reopen only on a real trigger -- a new engine appears, a Pro option gets cheap, or a writer asks for the tier. Do not spend auditions on it in passing.
+
+
+OpenRouter's model metadata lists a `seed` parameter for Grok, Voxtral, Qwen and Kokoro, and NOT for MAI-Voice-2 or Aura-2. A seed held constant across every segment of a book is the obvious candidate cure for identity drift, since it pins the sampling draw that a performer model otherwise re-rolls per request.
+
+It is unverified and was not built. Two reasons for caution: `supported_parameters` describes a model's chat-completions surface, and the OpenAI speech schema this endpoint imitates has no `seed` field at all -- so the gateway may drop it silently, or 400 on it mid-book. The test is cheap (one audition) and worth doing before anyone concludes a performer model cannot narrate long-form. If it works, it likely rehabilitates Grok and hardens Voxtral at the same time.
+
+##### The Standard shortlist (researched July 2026, mostly unauditioned)
+
+Three Standard candidates have now been auditioned and all three came off the shelf, so the remaining field is worth writing down rather than rediscovering. **NanoGPT has nothing in this band at all** -- its TTS catalog is Kokoro at $1/M and ElevenLabs Turbo at $60/M, so every candidate below is OpenRouter.
+
+Ranked by what the three failures taught us: an engine needs a **varying** delivery (Voxtral's welded mood went monotonous) that nonetheless **holds identity across separate requests** (Grok's did not) and **reads the writer's markup the way the free narrator does** (MAI re-interprets it), plus enough voices to cast more than one book.
+
+| Slug | $/M | Voices | Seed | Why it might work |
+|---|---|---|---|---|
+| `microsoft/mai-voice-2` | 22 | 4 (**1 English**) | no | **Being tested.** The only engine advertising stable speaker identity across long-form, and the fidelity variant rather than the latency one. |
+| `qwen/qwen-audio-3.0-tts-plus` | 20 | 2 | yes | The vendor's stated narration-grade tier ("naturalness and timbre fidelity"), as against the Flash variant built for real-time agents. |
+| `fish-audio/s2.1-pro` | 15 | not published | no | Well-regarded voice-cloning house; roster would need discovery. A free `:free` tier exists for zero-cost auditioning. |
+| `sesame/csm-1b` | 7 | 7 | yes | A third of the price. Built for natural conversational speech, which may or may not survive as narration. |
+| `canopylabs/orpheus-3b-0.1-ft` | 7 | 7 | yes | Same band, expressive-speech focus. |
+| `zyphra/zonos-v0.1-hybrid` | 7 | 5 | yes | Same band; the hybrid is the more natural of the two Zonos builds. |
+| `google/gemini-3.1-flash-tts-preview` | $1/M in + **$20/M out tokens** | 30 | yes | 30 voices and inline audio tags, but priced per TOKEN, so the estimator (Section 20) cannot quote a book exactly -- the one hard blocker, since quoting before spending is a locked rule. |
+
+Note how many of these expose `seed` -- Grok, Qwen, Zonos, Orpheus, Sesame, Kokoro, Voxtral -- and how few do not (MAI-Voice-2, Aura-2). That makes the open seed question below worth settling: it would apply to most of this table at once.
+
+##### Verified OpenRouter TTS catalog (July 2026, per million characters)
+
+| Slug | $/M | Notes |
+|---|---|---|
+| `hexgrad/kokoro-82m` | 0.62 | 54 voices; identical to the local narrator. Budget tier. |
+| `x-ai/grok-voice-tts-1.0` | 15 | 5 bare-name voices. Demoted -- prosody drift. |
+| `microsoft/mai-voice-2-flash` | 15 | Microsoft's latency variant; positioned for IVR, not narration. |
+| `qwen/qwen-audio-3.0-tts-flash` | 15 | Only 2 voices exposed by the gateway. The narration-grade "Plus" variant is not on OpenRouter. |
+| `mistralai/voxtral-mini-tts-2603` | 16 | 30 voices, mood baked into the id. **Standard tier.** |
+| `microsoft/mai-voice-2` | 22 | Advertises long-form speaker consistency, but the gateway exposes only ONE English voice (`en-US-Harper`) and no seed. Runner-up. |
+| `deepgram/aura-2` | 30 | 86 voices, no tunable parameters at all. Pro tier. |
+| `minimax/speech-2.8-turbo` | 60 | Not evaluated. |
+| `minimax/speech-2.8-hd` | 100 | Not evaluated. |
+| `google/gemini-3.1-flash-tts-preview` | $1/M in + $20/M out **tokens** | Priced per token, not per character, so the estimator (Section 20) cannot quote it exactly. Excluded on that basis alone. |
+
+MAI-Voice-2 was written up here as the near-miss and has since been auditioned -- see the verdict above. Microsoft's claim of "stable, high-fidelity output that preserves speaker consistency across audiobooks" held up; it is the one candidate that does not fall apart between requests. It lost on markup fidelity instead, which no datasheet would have predicted. Two working voices (Harper, Olivia), both American female, is also thin for casting -- the concern this paragraph originally raised, just smaller than feared.
 
 The provider abstraction must allow future providers without rewriting job logic.
 
@@ -772,7 +1091,79 @@ User-facing framing:
 
 > Local generation runs on your CPU, faster than the audiobook plays. You may continue using Storythread while it runs.
 
-### 15.1 Future Note
+### 15.1 Engine Prosody and the Usable Pace Band (live-testing findings, 2026-07-29)
+
+Findings from extended listening tests, recorded so nobody re-litigates
+them by ear later:
+
+- **Engine prosody is out of scope.** Kokoro infers its own delivery
+  (pace, inflection, emphasis) within each synthesized piece from the
+  text's shape -- punctuation, sentence length, quoting. It sometimes
+  races or drags passages on its own judgment, most visibly in dialogue.
+  The pipeline's speeds were VERIFIED correct end to end (the preview
+  render trace shows the exact speed per piece); the remaining variation
+  lives inside the model and is not correctable from outside. Mitigations
+  that exist: book-level narrator/dialogue pace, [pace] spans, and a
+  [pause] before a racing stretch (segment boundaries reset prosody).
+  Deeper correction is PINNED -- revisit only if a future engine build
+  changes the behavior.
+- **The usable pace band is roughly 0.8 to 1.2.** Outside it, the voice
+  develops audibly robotic inflections (occasionally already at 0.85).
+- **The engine wants 0.05-grid speeds.** A second round of listening
+  tests (2026-07-30) isolated a faint sibilant slur ("lisp") to pieces
+  synthesized at 1.08x -- the product of the old multiplier pace form
+  (dialogue base 0.9 times a [pace:1.2] span). The same words were
+  clean at 0.9, 1.0, 1.1, and 1.2. Every speed handed to the engine is
+  therefore snapped to the nearest 0.05.
+- **Mid-paragraph pauses use FLOW synthesis (2026-07-30).** Cutting text
+  at a [pause] and synthesizing each fragment alone manufactures
+  utterance endings: cold onset, stretched delivery ("A cult." became
+  "Aahh Cuult"), and a breathy final release -- the audible pre-pause
+  slur. No post-processing can fix it; the artifact is performed, not
+  padded. The cure (verified by ear on real passages): a paragraph's
+  pause-split fragment run synthesizes as ONE continuous render, and
+  the writer's pauses are inserted INTO its natural sentence gaps at
+  stitch time. Boundaries are located by a duration-calibrated matcher
+  (each fragment's isolated duration bounds where its boundary can be;
+  longest gap in the band wins; any doubt = fall back to per-fragment
+  audio). Pause DURATIONS stay out of the audio and the payload hash,
+  so retiming a pause never regenerates speech. Paragraph-boundary
+  pauses still cut normally -- a real utterance ending is correct
+  there. Implementation: `flow.py`, flow segments carry `fragments` /
+  `internal_pauses` / `flow_cuts_ms`.
+- **Pace markers use the STEP form: `[pace:+2]` / `[pace:-1]`.** Each
+  step is 0.05 up or down from the book's base pace (Narrator or
+  Dialogue pace, whichever applies to the segment), so a marked span
+  always lands on a confirmed-clean speed. Results are capped to the
+  0.8-1.2 band: a 1.2 base with `[pace:+5]` stays 1.2, and no stack of
+  steps can reach crawl or chipmunk territory. A base deliberately set
+  outside the band is respected but never exceeded by a marker. The
+  toolbar presets Slow/Fast insert -2/+2 (a 0.10 swing); writers
+  hand-edit to other step counts for finer or stronger moves. The
+  legacy multiplier form (`[pace:0.8]`) still parses, snapped to the
+  grid, so older narration files keep their meaning.
+
+### 15.1.1 Worker 0.2 Candidate: Word-Level Timestamps (researched 2026-07-30)
+
+Kokoro-FastAPI (remsky) demonstrates that the PYTORCH Kokoro pipeline
+exposes per-word timestamps (its /dev/captioned_speech endpoint); the
+ONNX build our worker wraps does not. Assessment against our needs:
+
+- Its acclaimed "pause fixes" are silence-between-chunks plus
+  aggressive whitespace stripping -- we already do both, and our flow
+  synthesis goes further (it still cuts text at pause tags and
+  synthesizes chunks in isolation, the exact manufactured-utterance-
+  ending defect flow synthesis eliminates). Not worth adopting as a
+  server; it would replace our worker with a heavier one we control
+  less.
+- The timestamps ARE valuable: they would replace flow synthesis's
+  duration-band gap matcher with EXACT word boundaries, and make
+  short-utterance previews cuttable out of carrier phrases precisely.
+- Cost: switching the worker from kokoro-onnx to PyTorch kokoro
+  roughly doubles-to-triples the installed artifact (torch CPU). A
+  worker 0.2 decision to weigh alongside Stage D, not before.
+
+### 15.2 Future Note
 
 If GPU acceleration is ever revisited, `onnxruntime-directml` is the single Windows-native path covering NVIDIA, AMD, and Intel hardware together -- not three separate vendor runtimes. Keep the synthesis interface device-agnostic so that door stays open:
 
@@ -934,6 +1325,376 @@ Hosted previews should require confirmation when they have a cost.
 
 Playback scope note: previews (and spot-checking generated chapters) require basic audio playback -- play, pause, seek -- inside the app. That is IN scope for the MVP. The deferred item in Section 3.2 is a full audiobook player with listening-position memory, not basic playback.
 
+### 18.3 The Audible Help Standard
+
+Established during Stage B live testing (2026-07-29) and now the rule for
+every feature that changes how audio SOUNDS: explain it with a "Hear it"
+demo, not just prose.
+
+- Demos are RENDERED LIVE through the real pipeline (parse -> synthesize
+  -> stitch), never shipped as recordings -- when defaults or the engine
+  change, the demos change with them.
+- Demos use the default reference voice so every writer hears the same
+  thing, run on the local engine, and carry a faded "local / free" hint
+  (writers trained by metered AI need to know sampling costs nothing).
+- Demo scripts NARRATE what the listener is experiencing ("that gap was a
+  pause marker set to one and a half seconds") so no reading is required.
+- Script respellings and examples are tuned BY LISTENING against the live
+  engine, never by what reads best on paper (live lesson: HEY-zeus read
+  as "Zeheus"; Hay-SOOS is correct). Demo words must produce a contrast
+  the engine cannot out-improve -- prefer names where several readings
+  are RIGHT and the story picks one (Jesus/Hay-SOOS, the regional Laras)
+  over words the engine merely fails today.
+- Demo playback is click-to-pause/resume; rendered demos are cached
+  backend-side per engine version so the first play is the only slow one.
+- Future candidates: voice-picker comparisons, mastering/loudness
+  settings, pause-default changes.
+
+Noted for later (not a redesign now): streaming demo/preview audio --
+begin playback while later pieces are still synthesizing. Requires
+chunked WAV streaming from the worker through the backend to the player;
+backend-side demo caching covers most of the pain meanwhile.
+
+### 18.4 Guided Insert Walkthrough (user-designed 2026-07-30; first build shipped)
+
+Shipped in the first build (`insertScan.ts` + `InsertWalkthrough.tsx`):
+the [Walkthrough] toolbar button walks from the cursor with five trigger
+kinds -- narration-to-dialogue (inline and paragraph hand-offs),
+dialogue-to-narration, short-sentence beats, interjections, and
+malformed-marker repair (the [pace:=2] / unclosed-[pause linter) -- each
+kind muteable, Apply/Skip/Back with Ctrl+Enter / Ctrl+Right / Ctrl+Left /
+Esc, edits landing in the buffer like typing (manual save owns
+persistence), and stops suppressed wherever the writer already placed a
+pause. Remaining catalog below stays open for follow-up builds
+(paragraph endings, speaker alternation, scene-transition prose,
+emphasis candidates, per-stop audible demo links).
+
+An advanced find/insert overlay for the narration editor: the writer
+opens it at the cursor and it WALKS the manuscript downward, stopping at
+each spot where a marker insert could improve the narration. At every
+stop the writer picks an insert type, adjusts it, or skips. Rationale:
+Kokoro transitions instantly from scene narration into dialogue and
+misses the small intentional beats a human reader adds ("From Ruins to
+Relics. I read it. The Cambodia chapter. My god! That tomb door.").
+
+Trigger points (initial catalog; each individually toggleable):
+
+- Narration-to-dialogue transitions **inside one paragraph** (a narration
+  sentence ends and a quoted speech begins on the same line) -- offer
+  [pause] before the dialogue. The ACROSS-A-PARAGRAPH-BREAK version was
+  removed 2026-08-03: `paragraph_gap_ms` (550ms by default) already puts a
+  real beat at every paragraph boundary, so offering it asked the writer
+  to hand-place a pause the pipeline inserts for them. The same-paragraph
+  case has nothing covering it -- dialogue is detected per PARAGRAPH in
+  the segmenter, so a quote opening mid-paragraph gets neither a seam nor
+  a pace change -- which is why it stays.
+- Dialogue-to-narration returns -- offer [pause] after the closing quote.
+- Short-sentence bursts -- offer small [pause] beats between them.
+  **Retuned against a real chapter (2026-08-03).** The shipped rule had
+  drifted to "2+ consecutive sentences under 35 characters", which on a
+  22,000-word chapter fired 394 times, one stop every 56 words. At 35
+  characters it was catching ordinary prose ("I don't know their names."
+  is 25; "I've thrown books before." is 25), and a *pair* of short
+  sentences is what ordinary prose looks like. Now: **3+ consecutive
+  sentences of 22 characters or fewer**, measured on the SPOKEN text with
+  marker tokens stripped, and never running across a paragraph break.
+  Same chapter: 166 stops, one per 132 words, and every sampled trigger
+  was deliberate rhythm ("Call me Lexa. Or Lexi. Or Alex.", "Lara Croft.
+  The Lara Croft. Adventurer. Archaeologist."). Requiring a RUN is what
+  separates the writer's intent from their sentence lengths.
+- Paragraph endings without any trailing marker -- offer [pause].
+- Interjections and exclamations ("My god!", "No.") -- offer a beat
+  before, after, or both.
+- Speaker alternation in dialogue runs (quote paragraph following a
+  quote paragraph) -- offer a beat for the turn-taking rhythm.
+- Scene-transition prose (blank-line clusters, time-skip phrases like
+  "Later that night") -- offer [scene-break] instead of a plain pause.
+- Emphasis candidates inside dialogue (italics in the source, ALL CAPS
+  words) -- offer a [pace] step span or a [say] override.
+- Malformed-marker repair: anything the parser warns about ([pace:=2],
+  an unclosed [pause:0.4 ...) surfaces as a stop with a one-click fix --
+  the walkthrough doubles as the marker linter.
+
+UX contract: Next/Skip/Apply keyboard-first; each stop shows the sentence
+in context with the proposed insert rendered inline; Apply edits the
+narration copy exactly like typing (manual save still owns persistence);
+a per-session "don't suggest this trigger again" mute; progress indicator
+(stop N of M in this chapter). Every insert type links its audible demo
+(18.3).
+
+**Shell: a pop-out window, sharing the Cast panel's frame (user decision,
+2026-08-03).** This was originally specified as a modeless strip pinned
+above the editor, chosen so a writer could hand-edit between stops. The
+strip ran out of room: seven kind toggles, per-reading Play buttons for
+word readings, a ten-step tutorial with before/after audio, and the
+Auto-apply confirm banner do not fit in a horizontal band -- and the
+deferred heteronym work only adds rows. Cast had already solved the
+identical interaction (walk the chapter, decide one thing at a time, land
+every change on the buffer), so two different shells for one interaction
+shape was the real inconsistency.
+
+What the change trades away, deliberately: hand-editing mid-walk, since
+the panel covers the editor. Closing and reopening resumes from the
+cursor. Two consequences that must not be lost:
+
+- **The panel renders the WHOLE paragraph**, not the strip's 90 characters
+  either side. A window that covers the manuscript has to carry its own
+  context; the ±90 window was only ever adequate because the editor sat
+  visible behind it. This is the property that makes Cast work.
+- **The editor's highlight no longer takes focus.** It still selects and
+  scrolls, so closing lands the writer on the last stop they saw, but
+  focusing a textarea underneath an open dialog would route their
+  keystrokes into the manuscript behind the panel they are reading.
+
+Layout: left rail lists every trigger kind with its count AND a one-line
+description of what it is for -- a count beside a label the writer cannot
+interpret is a toggle nobody ever touches. The work surface holds the
+paragraph, the decision row, and (for word readings) the per-reading
+Play buttons. Keyboard shortcuts sit as quiet grey text directly beneath
+the decision row: reference belongs beside the thing it describes, and as
+a tutorial step it had the least important part of the feature on equal
+footing with why any of it exists.
+
+**Tutorial structure: trunk, then branches, then specifics (writer's
+review, 2026-08-03).** The guided walk is ordered so no step needs
+anything from a later one:
+
+1. *What this is for* -- none of it is required; it improves pacing and
+   pronunciation; the local narrator is named (Kokoro) and its two real
+   faults are owned outright. A writer being asked to tune something has
+   to be told first that it was broken, and that ignoring it is allowed.
+2. *Two ways to use it* -- one at a time, or all at once. Names both and
+   says which to start with.
+3. *What a pause does* -- the marker itself, with three clips of one
+   sentence at no / short / long, because the three length buttons are
+   otherwise just numbers. Deliberately no dialogue in this step.
+4-7. The four beat types, each with its own before/after pair, running
+   (see also the amber caution on step 6, below)
+   **one continuous scene** (Elena's argument) in order. By the third clip
+   the writer is judging the pause rather than reading a new sentence, and
+   because Kokoro is fairly monotone the words themselves have to carry
+   who is speaking.
+8. *Word readings* -- the only pair where the flat clip is not a matter of
+   taste but plainly wrong ("reed" in a past-tense sentence).
+9. *Fixes* -- broken markers, and why they are never guessed at.
+10. *Choosing what it suggests* -- the rail and the all-at-once button.
+
+**The short-burst step carries a deliberate flaw (writer's instruction,
+2026-08-03).** Its "with pauses" clip has three `[pause:0.4]` markers
+packed into one line, and Kokoro slurs slightly under that density. The
+demo is NOT to be cleaned up. An amber note above the clips says so
+plainly: pauses close together can make the narrator run words together,
+it is a limitation of the engine and not of this app, when it happens is
+unpredictable, and the fix is fewer pauses or more space between them.
+
+The reasoning is worth keeping: a tutorial that only ever plays the
+narrator at its best sets the writer up to believe the first garbled run
+in their own chapter is something they did. Naming the failure, pointing
+at an audible instance of it, and saying whose it is turns a mystery into
+a known limitation. `test_the_short_burst_demo_keeps_its_three_packed_pauses`
+guards the script against a well-meaning future edit that would space the
+pauses out and silently delete the warning.
+
+Language is written for a first-time writer. Specifically retired in that
+review: "Marker problems" (renamed **Fixes** -- they are already found and
+the fix is in hand, so the label says what the writer gets rather than
+what is wrong with their file), and **"Auto-apply N beats"**, which to its
+intended reader was a letter and a musical term. It now reads *"Add all 41
+pauses at once."*
+
+### 18.5 Respelling Doctrine (ear-tested by the user, 2026-07-30)
+
+The vetted rules for [say] and Pronunciation spoken forms, established
+by live listening tests and encoded in the say popout's tips accordion
+(one section open at a time). Preview is always the final judge.
+
+- **Lowercase is the rule; a single capital is a dial.** One capital
+  changes a word's inflection (Hey-soos, hey-soos, and hey-Soos all
+  land differently). Runs of 2+ capitals are folded by the app -- the
+  engine reads caps runs as letters (bare-word measurement: LARah
+  0.92s beside the "L A R ah" letter baseline 0.98s vs larah 0.72s).
+  **Now explained, and bounded (phoneme-measured 2026-08-03):** the
+  mechanism is that espeak treats a mid-word capital as a WORD BOUNDARY.
+  `hey-Soos` fuses to `heySoos` and phonemizes as two words with two
+  primary stresses. That is why it re-inflects -- and why it is unusable
+  for anything meant to be one word: `pruh-Jekt` arrives as
+  `pɹˈʌ dʒˈɛkt`, "pruh Jekt", with a gap between. Use the capital only
+  when a two-word feel is what you want.
+- **To move stress, spell the weak syllable weakly -- not with a
+  capital** (measured 2026-08-03). `record` -> `ɹˈɛkɚd` (noun);
+  `rekord` -> `ɹᵻkˈɔːɹd` (verb, stress on 2, correct). A plain `e`
+  reduces and lets the stress fall past it, while `ruhkord` and
+  `rihkord` get the first syllable stressed instead. This is the only
+  lever found for the noun/verb stress pairs.
+- **`ih` before a consonant is the one silent-h spelling that is not
+  silent** (measured on ten consonants, 2026-08-03): `lihv` ->
+  `lˈɪhv`, `wihnd` -> `wˈɪhnd` -- a real /h/ phoneme, heard as a breath
+  mid-word. `ah`/`eh`/`oh`/`uh` before a consonant are usually clean
+  (`bohd`, `dohz`, `mohpt` all verified) but not guaranteed (`rehkord`
+  leaks where `behko` does not). **An `h` between two vowels always
+  leaks** (`soher` -> `sˈoʊhɚ`). Pin the absolutes, audition the rest.
+- **`[[IPA]]` phoneme injection does not work.** espeak reads the
+  brackets as letters and speaks them (`[[rIk'O:d]]` came back as
+  "ar ee-koh-dee"). There is no escape hatch past the grapheme-to-phoneme
+  step; a respelling is the only instrument.
+- **Separation strength, strongest to softest:** SPACE (near two
+  words), HYPHEN (syllable-like units of one word; the app fuses them
+  so no hesitation gap), APOSTROPHE (the softest internal break --
+  Hey'soos lands gentler than Hey-soos; works on most voices, not all).
+- **The vowel-sound alphabet (silent h):** ah = father, eh = bed,
+  ih = sit, oh = go, uh = unstressed, oo = food. Three Laras from
+  three vowel choices: lah-rah / lah-ruh / lar-uh.
+- **Double vowels lengthen:** laa-rah, lee-ah, koo-per, ree-na.
+- **Characters to avoid:** underscores, asterisks, quotes, slashes,
+  parentheses (letters pronounce separately, symbols get spoken,
+  unnatural pauses, engine chunk-splits, markdown stripping
+  downstream). Accented characters: a few work, most do not.
+- **Some respellings the engine simply will not take (CLOSED
+  2026-08-03).** `[say:Thee]The[/say]` -- the long-E "thee" as in
+  *see* -- comes back sounding like "neh". The payload is provably
+  correct: `prepare_tts_text` hands Kokoro the plain word `Thee` and
+  there are tests pinning that. Kokoro's own grapheme-to-phoneme step
+  is what mangles it, which is outside anything this app can reach.
+  Investigated and dropped by user direction; do not re-open it as a
+  text-handling bug. The practical rule this leaves: **a respelling
+  that sounds wrong is not a bug to file, it is a respelling to
+  replace** -- try another spelling of the same sound (`thee` ->
+  `dhee`, `thii`) and let Preview decide. The say popout prints
+  "engine heard: ..." under the button precisely so this call takes
+  seconds instead of an afternoon: if the trace shows the right word,
+  the engine is the limit and only a different spelling will move it.
+
+### 18.6 Heteronyms: the ear decides, one word at a time (user-designed 2026-08-03; BUILT 2026-08-03)
+
+The problem: English is full of words
+whose spelling does not fix their sound -- *read* is "reed" or "red",
+*lead* is "leed" or "led", *wound* is "woond" or "wow-nd" -- and Kokoro
+picks one reading from grammar it only half-understands. It gets these
+wrong often enough to break a sentence, and the writer has no way to
+find them except by listening to the whole book.
+
+Source material: the writer's own audition table at
+`local/kokoro_heteronym_list.md` -- word, disambiguating context, the
+Kokoro respelling for that sense, and a confidence rating. It is a
+CANDIDATE list, not a verified one. Section 18.5's closed finding
+applies directly: a respelling can be perfectly formed and still not be
+honoured by the engine, so **every entry needs an audition pass against
+the real engine before it ships** and the ones that fail need a
+different spelling of the same sound, not a bug report.
+
+**The audition, and what it found (2026-08-03).** espeak-ng -- the exact
+grapheme-to-phoneme step Kokoro uses -- sits inside the local narrator's
+virtual environment, so most of the audition needed no listening at all.
+`scripts/audition-heteronyms.py` runs every candidate through
+`speakable()` (the real payload path, which fuses hyphens and folds caps
+runs) and compares three things: what the engine says in each sense's own
+sentence, what the respelling produces, and whether the respelling
+survives as one word. Of the 214 candidate rows:
+
+- **84 produced a broken payload** -- 60-odd from the mid-word capital
+  splitting the word in two, the rest from `ih`-before-consonant leaking
+  an audible /h/. See the 18.5 additions; both are now measured.
+- **8 were no-ops** -- the respelling produced exactly what the engine
+  already said.
+- **~54 words are structurally deferred** -- the whole noun/verb stress
+  family (record, object, project, present, desert, console...) plus the
+  `-ate` family (separate, moderate, estimate...). A weak-vowel
+  respelling *does* work for some (`rekord` -> `ɹᵻkˈɔːɹd`), but each
+  needs its own hunt, so the family gets its own pass rather than
+  shipping half-fixed.
+- **12 words were dropped as already correct** -- tear, tears, house,
+  learned, abuse, crooked, jagged, ragged, naked, polish, mobile, lives.
+  espeak reads both senses right on its own; stopping on them would be a
+  tax for a miss that does not happen, and it is the first thing that
+  would make the walk feel like busywork.
+
+**What ships: 22 words**, each with a verified wrong reading and a
+verified respelling, in `app/src/features/audiobook/heteronyms.ts`. The
+deterministic misses are the reason the feature exists -- these are wrong
+*every time*, not sometimes:
+
+```
+"I read it yesterday."       -> reed    (needs [say:red])
+"The pipe contains lead."    -> leed    (needs [say:led])
+"She wound the cord."        -> woond   (needs [say:wow-nd])
+"Close the door."            -> kloce   (needs [say:klohz])
+"He dove into the water."    -> duv     (needs [say:dohv])
+"Bow before the queen."      -> boh     (needs [say:bau])
+```
+
+Six of the 22 ship **muted by default** (`rare: true`): does, minute,
+use, live, axes, sewer. Their wrong reading is real but unlikely in
+fiction -- "does" the female deer against "does" the verb -- so they are
+switched off rather than deleted, and a writer with a hunting scene turns
+them on. Muting the tax, not the capability.
+
+The phonemizer is a filter, never a verdict: `[say:Thee]` phonemizes
+correctly to `ðˈiː` and still came back sounding like "neh" (18.5). It
+kills the rows that never had a chance, in bulk, for free. Everything
+past that is the ear's job, which is why every reading has its own Play.
+Rerun the script after any worker version bump -- a new espeak changes
+the answers, and a shipped table nobody re-auditioned is a table of
+guesses.
+
+**Where it lives: inside the Formatting Walkthrough, as another trigger
+kind** (18.4). Not a separate screen, not a batch tool.
+
+**Why it cannot be automated, and must not pretend to be:** which
+reading is correct depends on the sentence, and only the writer knows
+which they meant. So the walk STOPS at every heteronym occurrence -- no
+guessing, no silent apply, no "we found 40, apply all."
+
+**The stop's shape, and the whole point of the design:**
+
+- Both readings are offered as **audio, not spelling.** Each candidate
+  gets its own `[Play]`, rendered in the writer's narration voice, in
+  this sentence.
+- The writer **listens to both**, picks the one they meant, and clicks
+  Next. That choice writes a `[say]` override at that occurrence.
+- Nothing is chosen for them and nothing is pre-selected. Skip leaves
+  the word alone, which is the right answer whenever the engine already
+  reads it correctly.
+
+The reason for audio over text: "reed / red" on screen asks the writer
+to trust a respelling notation they have no reason to trust. Two Play
+buttons ask them to use the one instrument that is actually reliable
+here -- their ear -- and the decision takes about two seconds. This is
+the "removes guesswork by providing examples graspable immediately"
+rule applied to the one part of narration that no amount of explanation
+can settle in the abstract.
+
+**The three open questions, resolved in the build session (2026-08-03):**
+
+- **Apply to the same sense elsewhere? No -- show the count instead**
+  (user decision). The next *read* may be the other sense entirely, and a
+  wrong batch is worse than a skip because the writer then believes the
+  spot is handled. The panel says "2 more 'read' lie ahead -- each one
+  gets its own ask", so the writer knows the walk continues rather than
+  wondering whether it caught them all.
+- **Are low-confidence rows worth stopping on?** The question dissolved
+  once the audition ran: confidence was the writer's guess about a
+  respelling, and the phonemizer answers it directly. A row ships if the
+  engine is measurably wrong and the respelling measurably fixes it.
+  Nothing ships on a rating.
+- **Pre-render the audio?** Cached, not pre-rendered. Clips are keyed by
+  (sentence, spoken form), so a replay and a step Back are instant, and
+  previews go through `previewSelection` whose provider is hardcoded to
+  `local-kokoro` -- free, CPU only, never a paid engine. Speculative
+  pre-rendering of stops the writer may Skip was not worth the
+  complexity once replays were free.
+
+**Also settled: the two axes must not collapse.** A beat suggestion and a
+word-reading question can land on the same spot and both be right, so the
+scanner's near-duplicate collapse now runs within an axis only, the
+nearby-pause suppression does not apply to readings (a pause says nothing
+about which sense was meant), and Auto-apply excludes readings entirely
+alongside marker repairs -- a broken pace has a direction only the writer
+can pick, and a reading is a claim about what the sentence means.
+
+Deferred, in order: the noun/verb stress family via a scripted
+weak-vowel spelling search (~54 words, the largest remaining group), then
+`august`, `content`, `refuse`, and `invalid`, which are stress pairs too.
+
 ---
 
 ## 19. Step 7: Generation Review
@@ -993,6 +1754,35 @@ Include a warning:
 > Regenerated sections may create additional provider charges.
 
 Pricing should be retrieved from provider data when available.
+
+### 20.1 Retries and Billing Pessimism
+
+A hosted request that times out client-side may still have billed
+server-side. Rules:
+
+- Automatic retries are CAPPED: at most 2 automatic retries per segment
+  for timeouts and 5xx errors, with backoff. Content refusals get ZERO
+  automatic retries (Section 28.4). After the cap, the segment is Failed
+  and waits for a manual retry.
+- The cost tracker counts PESSIMISTICALLY: every attempt is assumed
+  billed until actual provider usage data proves otherwise. The
+  `attempts` counter on each segment record is the input.
+- The completion report shows attempts alongside cost so surprise
+  overruns are visible, not buried.
+
+### 20.2 Disk Preflight
+
+Estimating output storage is not enough -- check it. At Generate (and
+again at every Resume), verify free space on the workspace drive covers
+the estimated intermediates plus outputs plus a 20 percent margin. Block
+with a clear message when it does not:
+
+> This audiobook needs an estimated 3.4 GB free on drive D: and only
+> 1.1 GB is available. Free up space or choose a different workspace
+> drive before generating.
+
+Running out of disk mid-run remains a handled error (Section 29), but
+preflight makes it rare.
 
 ---
 
@@ -1123,13 +1913,41 @@ Segment sizing target: PARAGRAPH-LEVEL segments of roughly 800 to 1,500 characte
 
 Intermediate format note: segments may be stored as FLAC instead of WAV to halve disk usage losslessly (WAV at 24 kHz mono runs roughly 170 MB per audio hour).
 
-Each generated segment must have a stable ID.
+### 23.1 Segment Identity Survives Editing
+
+Segment IDs are STABLE RANDOM IDs, never positional. A positional scheme
+(segment-0012 = the twelfth segment) breaks the moment a writer inserts
+one paragraph mid-chapter: every downstream segment shifts, every
+downstream hash mismatches, and audio that did not change gets flagged --
+or worse, regenerated at cost. (Design decision 2026-07-28.)
+
+Rules:
+
+- `segment_id` is a short random ID assigned when a segment first exists
+  (e.g. `seg-4f2a9c1e`). Audio files are named BY ID:
+  `generated-segments/<chapter-id>/<segment_id>.flac`.
+- Reading order lives in the chapter's ordered segment list, not in the
+  ID or the filename.
+- **Re-segmentation matches by content, not position.** When the narration
+  text changes and the segmenter re-runs a chapter:
+  1. Compute content hashes for the new segment texts.
+  2. Match new segments to existing ones by longest common subsequence
+     over content hashes (order-preserving; duplicate hashes resolve in
+     order).
+  3. Matched segments KEEP their segment_id, their generated audio, and
+     their generated hash -- unchanged paragraphs stay current.
+  4. Unmatched new segments get fresh IDs (status: not generated).
+  5. Unmatched old segments are marked superseded; their audio is retained
+     until cleanup.
+
+Net effect: inserting one paragraph produces exactly ONE new segment to
+generate, not a cascade to the end of the chapter.
 
 Example:
 
 ```json
 {
-  "segment_id": "chapter-003-segment-0012",
+  "segment_id": "seg-4f2a9c1e",
   "chapter_id": "chapter-003",
   "speaker_id": "narrator",
   "text": "The road disappeared beneath the gathering snow.",
@@ -1137,11 +1955,12 @@ Example:
   "generated_hash": "sha256-generated",
   "provider": "local-kokoro",
   "model": "kokoro-82m",
+  "engine_version": "kokoro-worker 1.2",
   "voice_id": "af_heart",
   "status": "completed",
   "attempts": 1,
   "duration_seconds": 18.4,
-  "output_file": "generated-segments/chapter-003/segment-0012.wav"
+  "output_file": "generated-segments/chapter-003/seg-4f2a9c1e.flac"
 }
 ```
 
@@ -1162,6 +1981,12 @@ The generated-state hash should include:
 - Voice
 - Provider
 - Model
+- **Engine/worker version** (e.g. kokoro-worker 1.3) -- a retrained model
+  in a new worker build produces different audio from identical text, so
+  identical hashes must not claim identical audio. A worker upgrade
+  marking local audio stale is correct behavior.
+- **Verbalizer version** (Section 11.4) -- improved number/abbreviation
+  expansion changes the payload, therefore the audio.
 - Relevant speech settings, captured as the EFFECTIVE per-segment values at generation time
 
 Two deliberate exclusions:
@@ -1187,6 +2012,16 @@ Segment-level markers:
 ● Modified since generation
 ○ No audio generated
 ```
+
+#### Build note (Stage E): reading freshness without an engine
+
+The rail needs to say "Chapter 2 is outdated" on every workspace open, which rules out spawning the local worker or contacting a paid engine to compute it. The way out: a completed segment already records the engine that made it (`provider`, `model`, `engine_version`, `voice_id`), so its own basis can be recomputed from what is stored. That answers the question the writer actually asks -- *has anything changed since this was narrated?* -- with no engine present at all.
+
+Two consequences worth knowing:
+- A **voice change is checked first and separately**, because it is the print pass. Every segment is outdated at once, and "the voice changed" explains a whole-book requeue far better than "the text moved". The chapter rollup carries that reason up.
+- **Draft audio is current for a draft and stale for a real pass.** The basis is recomputed both ways; matching the draft form reports `current` with a draft marker rather than a bare `current`, so a draft can be seen without being mistaken for finished.
+
+Audio generated before `payload_hash` existed has nothing to compare against and is treated as current -- nagging a writer to re-narrate a book that is probably fine is the worse error.
 
 ### 24.3 User Reminder
 
@@ -1256,6 +2091,18 @@ Keeping them allows fast repairs and re-exporting without generating speech agai
 [Review Storage]
 ```
 
+#### Build notes (Stage E, 2026-08-01)
+
+Three decisions the implementation settled that the section above leaves open.
+
+**Superseded audio is found by LEFTOVER, not by the superseded list.** Any audio file under `generated-segments/` that no live segment claims and that is not a `.rejected` take is treated as superseded. Classifying by the manifest's list alone would make files orphaned by an older build -- or by a manifest that lost a record -- invisible forever and therefore unreclaimable.
+
+**Deleting current segments resets those records to not-generated.** Otherwise `segments.json` keeps claiming `status: completed` for audio that no longer exists, and the app offers an export it cannot produce. Only the generated-state fields are cleared; `segment_id`, the text, and every formatting field survive, so identity (and the writer's markers) are untouched.
+
+**`segments.json` is never a deletion candidate under any category.** Losing segment audio costs a re-render. Losing that file costs the writer their formatting -- a categorically different loss, and the reason the file is excluded from the walk rather than merely left unchecked.
+
+Defaults follow from the asymmetry that deleting is instant and permanent while regenerating costs time and, on a hosted engine, money: only previews and failed attempts are pre-checked. The exports and the manuscript snapshot are additionally marked `protected`, which the UI renders in a stronger colour and which can never be pre-checked.
+
 ### 25.3 Cleanup Categories
 
 ```text
@@ -1291,7 +2138,7 @@ Required operations:
 - Concatenate chapters
 - Insert chapter silence
 - Insert scene-break silence
-- Normalize compatible audio properties
+- Normalize to the mastering targets below
 - Create chapter MP3s
 - Create combined MP3
 - Create M4B
@@ -1300,6 +2147,84 @@ Required operations:
 - Add narrator metadata
 - Embed cover art
 - Re-export from retained segments
+
+### 26.1 Canonical Intermediate Format
+
+Mixed-provider audio inside one chapter is GUARANTEED, not an edge case:
+Section 28.4 explicitly routes refused hosted segments to local
+regeneration, so Kokoro 24 kHz mono output will legitimately sit next to
+44.1 kHz premium output. The fix is decided once, at ingest:
+
+Every generated segment -- regardless of provider -- is transcoded ON
+RECEIPT to one canonical intermediate:
+
+```text
+44,100 Hz  |  mono  |  16-bit  |  FLAC
+```
+
+Assembly therefore only ever concatenates identical formats. FLAC keeps
+the intermediate lossless at roughly half of WAV's disk cost; 44.1 kHz is
+the distribution rate (upsampling Kokoro's 24 kHz on receipt is harmless
+and done exactly once).
+
+### 26.2 Mastering Targets (ACX-Safe)
+
+Loudness normalization runs PER CHAPTER (two-pass FFmpeg loudnorm) so
+chapters match each other and segment-level joins do not pump:
+
+```text
+Integrated loudness:  -20 LUFS
+True peak ceiling:    -3.0 dBTP
+```
+
+These land inside ACX/Audible's requirements (-23 to -18 dB RMS, -3 dB
+peak), so output is distribution-safe from day one even though ACX
+submission is not itself an MVP feature.
+
+Output encodes:
+
+```text
+Chapter MP3 / combined MP3:  192 kbps CBR, 44.1 kHz (the ACX spec)
+M4B:                         AAC 128 kbps, 44.1 kHz, chapter markers
+```
+
+### 26.3 Segment Audio Validation
+
+`audio/validation.py` has defined behavior, not just a name. Kokoro is
+known to occasionally truncate long inputs SILENTLY -- a segment that
+"succeeded" but contains half the text must become a Failed segment at
+generation time, not a discovered-at-chapter-30 surprise.
+
+Checks on every generated segment, local and hosted:
+
+- Decodable at all; not zero bytes.
+- **Duration-per-character sanity check**: expected duration is estimated
+  from the payload character count at typical narration pace (roughly
+  1,000 characters per minute). If actual duration is under 60 percent of
+  expected (for segments whose expected duration exceeds 2 seconds), the
+  segment is marked Failed with reason "audio shorter than expected
+  (possible truncation)".
+- Failed-validation audio is kept on disk for inspection but never enters
+  assembly.
+
+### 26.4 Chapter File Naming and Tags
+
+Chapter MP3s follow one template -- unspecified naming means inconsistent
+naming:
+
+```text
+NN - Chapter Title.mp3       (NN zero-padded to the book's chapter count width, minimum 2)
+```
+
+Chapter titles pass through the Section 8.1 filename sanitizer. ID3v2
+tags on every chapter MP3:
+
+- Track number / total tracks
+- Title = chapter title
+- Album = book title
+- Artist = author
+- Composer = narrator (the common audiobook convention)
+- Cover art embedded when "Apply metadata to chapter MP3 files" is checked
 
 FFmpeg packaging and license compliance must be reviewed before release.
 
@@ -1429,6 +2354,26 @@ Low-confidence speaker assignments should require explicit review.
 
 ---
 
+### 27.4 What Stage G actually built (2026-08-01)
+
+The structure above landed close to as written. Four decisions the implementation had to make, and one limit it did not remove.
+
+**Speakers choose a voice, never a provider -- one run, one engine.** A cast that mixed the free local narrator with a hosted engine would price and fail line by line, and half a chapter could come back in a voice the writer never paid for. The book's engine stays chosen once, in Audiobook Settings; the cast only varies the voice.
+
+**The narration copy carries NAMES, not voice ids.** `[voice:Elena]...[/voice]` is the marker; the cast maps Elena to a voice. Three reasons: recasting is one edit instead of a find-and-replace through the manuscript, the narration copy stays readable in any text editor (the whole point of the format), and a segment can keep its identity across a recast -- changing Elena's voice re-queues exactly her lines.
+
+**Voice is the OUTER span, pace the inner one.** A character's line may change speed within it; a pace change never changes who is speaking. Nesting a voice inside a voice warns and drops the inner opener, exactly as pace does.
+
+**A voice change is the hardest segment boundary there is** -- two speakers can never share one synthesis request, because a request has exactly one voice.
+
+An unknown name falls back to the narrator rather than failing the run: a misspelling in one paragraph must not stop a book from generating. It is reported on SAVE instead, beside the marker warnings, which is the last moment the writer is looking at the spelling.
+
+**The AI pass proposes and never applies** (27.3 as specified), with one addition the spec did not anticipate. A model asked to quote a passage will paraphrase it, straighten its quotation marks, or repair a typo on the way past. If the app wrapped a `[voice:...]` span around what the AI said was there, it would be silently editing the writer's prose -- the one thing the product forbids. So **every proposal is verified against the source character for character, and dropped if it does not match**, however confident it is. The dropped count is reported rather than hidden, since a discarding pass would otherwise look like a model that found nothing.
+
+**Known limit:** the Cast panel lists the LOCAL narrator's voices. Casting characters on a hosted engine works (the ids are stored and used) but the panel cannot yet enumerate that engine's roster, so a hosted cast has to be set while the local voices are showing or the ids typed elsewhere. Wiring the panel to the selected engine's catalog is the natural follow-up.
+
+---
+
 ## 28. Safety, Rights, and Misuse Controls
 
 ### 28.1 Required User Confirmations
@@ -1505,6 +2450,9 @@ The system should handle:
 - Provider content refusal (explicit passages; segment-level skip-and-report, see 28.4)
 - Invalid model response
 - Empty audio response
+- Audio failed validation (truncation suspected -- see 26.3)
+- Automatic retry cap reached (see 20.1)
+- Workspace locked by another instance (see 8.2)
 - Local worker download failure or checksum mismatch
 - Local worker installation failure
 - Local worker startup or health-check failure
@@ -1601,8 +2549,8 @@ Logs may contain:
   "current_hash": "sha256-current",
   "generated_hash": "sha256-generated",
   "segments": [
-    "chapter-003-segment-0001",
-    "chapter-003-segment-0002"
+    "seg-4f2a9c1e",
+    "seg-b81d0e77"
   ]
 }
 ```
@@ -1611,7 +2559,7 @@ Logs may contain:
 
 ```json
 {
-  "segment_id": "chapter-003-segment-0001",
+  "segment_id": "seg-4f2a9c1e",
   "chapter_id": "chapter-003",
   "speaker_id": "narrator",
   "text": "The road disappeared beneath the gathering snow.",
@@ -1619,11 +2567,12 @@ Logs may contain:
   "generated_hash": "sha256-generated",
   "provider": "local-kokoro",
   "model": "kokoro-82m",
+  "engine_version": "kokoro-worker 1.2",
   "voice_id": "af_heart",
   "status": "completed",
   "attempts": 1,
   "duration_seconds": 18.4,
-  "output_file": "generated-segments/chapter-003/segment-0001.wav"
+  "output_file": "generated-segments/chapter-003/seg-4f2a9c1e.flac"
 }
 ```
 

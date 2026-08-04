@@ -58,10 +58,12 @@ const STORY_TYPE_OPTIONS: {
 
 interface ProjectHomeProps {
   onProjectOpen: (project: ProjectInfo) => void;
+  /** Open the Audiobook Converter -- a standalone tool, not a project. */
+  onOpenAudiobooks: () => void;
 }
 
 
-export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
+export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProps) {
   // ── Top-level UI mode ────────────────────────────────────────────────────
   // "main"           : tile picker + Open Project button
   // "create_form"    : a story type was chosen; show name + series toggle
@@ -466,6 +468,28 @@ export function ProjectHome({ onProjectOpen }: ProjectHomeProps) {
                 <p className="text-sm font-semibold text-text-primary">Open Project</p>
                 <p className="mt-0.5 text-xs text-text-muted">
                   Opens a folder. Detects whether it's a project or a series.
+                </p>
+              </button>
+
+              {/* Audiobook Converter entry: a standalone tool with its own
+                  dashboard, workspaces, and jewel-tone look -- a manuscript
+                  does NOT need to be a Storythread project. The emerald
+                  accent hints at the converter's own color world. */}
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-faint">tools</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              <button
+                onClick={onOpenAudiobooks}
+                disabled={loading}
+                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-emerald-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                title="Convert a manuscript into MP3 and M4B audiobooks"
+              >
+                <p className="text-sm font-semibold text-emerald-400">Audiobook Converter</p>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  Convert manuscripts into MP3 and M4B audiobooks.
                 </p>
               </button>
             </>

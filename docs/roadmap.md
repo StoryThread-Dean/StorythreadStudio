@@ -32,6 +32,23 @@ Build stages (spec phases in parentheses; estimates in working sessions, the uni
 
 Total: roughly 12 to 17 working sessions to complete all stages, with a usable v1.1.0 at the 7-to-9 session mark. Highest-risk items (watch these first): the kokoro-worker packaging pipeline, EPUB extraction variability, and M4B assembly.
 
+**Status (2026-08-01): all seven stages (A through G) are built and awaiting review as a stacked set of PRs into the converter branch.** Two notes against the estimates above: Stage E came in well under its 1-2 sessions because segment hashing and stale detection had already shipped in Stage B (stable IDs were needed to make generation resumable at all), and the Standard price tier ships EMPTY -- all three candidate engines were auditioned and demoted, with the search pinned rather than closed. See the spec for both.
+
+#### Follow-ups from live testing (2026-08-03)
+
+Two open items on the Formatting Walkthrough, both raised by walking a real 22,000-word chapter. Neither blocks v1.1.0.
+
+**1. Rare word senses need an ear pass.** Word readings (spec 18.6) landed well on the 16 main entries. The 6 rare ones are weaker and need their own session -- the audition proved the respellings are *mechanically* correct, which is not the same as *audibly* right:
+
+- **`use` may not be worth offering at all.** Noun and verb differ only by `/s/` against `/z/`, and to the ear the two clips are nearly identical. If the distinction is inaudible the choice is noise; drop the entry rather than ship a decision that changes nothing.
+- **`minute` has the stress in the wrong place.** `mynoot` renders as "MY-noot"; the real word is "my-NOOT". This is the same problem as the deferred noun/verb stress family, so it wants the same tool: the weak-first-syllable trick (spec 18.5) found by scripted search.
+- **Every `sounds` label needs checking against the audio it actually produces.** The label is a plain-English description written by hand. Where it does not match what the Play button plays, it actively misleads -- worse than having no label, because the writer trusts it.
+- **Then decide whether rare senses earn a stop at all**, or belong in the say popout's tips as documentation. The capability is cheap to keep; the credibility cost of a stop that offers a bad reading is not.
+
+**1b. Interjection beats may not earn their place.** Reviewed 2026-08-03: the tutorial demo was rebuilt around a harder word ("Enough!") at 0.8 seconds rather than 0.4, because the first attempt was inaudible even to the person who asked for it. It is better, still the quietest of the four beat types. The tutorial now says so and tells the writer to skip these if they cannot hear the difference on their voice. If a second listening pass says the effect is still marginal, the honest move is to drop the trigger rather than keep a stop nobody can justify -- it fires roughly once per chapter, so nothing is lost.
+
+**2. The dialogue hand-off defaults were reviewed and kept.** The question was whether `paragraph_gap_ms` (550ms) had made them redundant. Answer: partly. The across-a-paragraph-break variant *was* redundant and has been removed. The same-paragraph variants were kept, because dialogue is detected per PARAGRAPH in the segmenter -- a quote opening mid-paragraph gets no seam and no pace change from any setting, so the walk is the only thing that can put a beat there. On the test chapter they fire 283 + 111 times and every sample inspected was a real hand-off.
+
 ---
 
 ## Proposed
@@ -55,6 +72,35 @@ Long-planned. Storythread Studio is aimed at beginning writers, and editing your
 - An **Advanced** option unlocks custom prompts. Each promptable feature gets its own section in Settings with a pull-down: **DEFAULT** (default), then **Custom <edited name>**, **Custom <edited name 2>**, etc.
 - Custom prompts are named, per-feature, and swappable at any time; picking DEFAULT always restores stock behavior.
 - Scope ideas for the Advanced side: `{{variable}}` placeholders, per-prompt sampling settings, and JSON import/export packs (see [`research-multi-provider.md`](research-multi-provider.md)).
+
+### "Show me how this works" everywhere
+
+Built first for the audiobook Cast panel (Stage G) and now the standard for every feature in this app, new and old.
+
+**The rule going forward:** any new feature or add-on ships with one. Not a tooltip and not a wall of text at the top of the screen -- a numbered, step-by-step walk through the actual order of operations, with an example of what each step looks like on screen, sitting in the panel so the writer can read step 3, *do* step 3, and come back. Reference answers ("what's this?") are the other half: good when somebody has a question, useless when they do not yet know what to ask.
+
+**Retroactive work, roughly in order of how much it would help a new writer.** Each one needs to answer four questions, in this order:
+
+1. **What is this section?** In one line, in the writer's terms.
+2. **Do I need it?** Usually the honest answer is *no*, and saying so first is what makes the rest safe to read. The Cast panel leads with "No -- a book read entirely by one narrator is a finished audiobook", and that is the model.
+3. **How does it connect to writing the book?** Where it sits in the process, and what it daisy-chains into. Character profiles feed AI context; scene summaries feed the outline; the cast feeds narration. A feature nobody can place in the workflow gets skipped.
+4. **What does it get me if I do use it?** Concrete benefit, not a feature list.
+
+Sections that need one: **Character profiles** (needed? no -- but here is what the AI can do with one that it cannot do without), **Relationships**, **Locations**, **Lore**, **Chapter and scene summaries**, **the Outline**, **Smart Advisor**, **Writing Companion** (Draft and Enhance especially), **Series/arcs**, **Export**, and the **audiobook** sections beyond Cast (markers, pronunciation, generation, print pass).
+
+**Done: the shared component exists.** `app/src/features/audiobook/GuidedWalk.tsx` renders the numbered card (steps, examples, Back/Next, tone), so a new one is a list of steps and nothing else. Two use it today -- the Cast workbench and the Formatting Walkthrough. Copy `InsertWalkthroughHelp.tsx` as the template.
+
+### Book Details: Author + Publication Year fields
+
+Requested during audiobook metadata testing (2026-07-30). The writing
+app's Book Details never asks for the author's name or a publication
+year, so the audiobook converter's "never ask twice" prefill has nothing
+to pull for those two fields (it already pulls genre, description, and
+series name from project.json / series.json). Add both to Book Details
+in `project.json` and the Book Details settings UI, include them in
+`_build_story_context()` where sensible, and extend the audiobook
+`project_prefill()` (`backend/app/audiobook/workspace.py`) to read them
+-- the prefill side is already built and one dict entry per field.
 
 ### Character creation follow-ups
 

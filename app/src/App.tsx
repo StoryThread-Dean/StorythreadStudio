@@ -21,6 +21,7 @@ import "./App.css";
 import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
 import { ProjectHome } from "./screens/ProjectHome";
+import { AudiobookConverter } from "./features/audiobook/AudiobookConverter";
 import { ReaderMode } from "./screens/ReaderMode";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { OutlinePlanner } from "./screens/OutlinePlanner";
@@ -32,6 +33,7 @@ import { Settings } from "./screens/Settings";
 import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
 import { EditorMenu } from "./components/EditorMenu";
+import { DialogueCheck } from "./components/DialogueCheck";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import { toPutPayload } from "./types/structure";
 import type { StructureManifest } from "./types/structure";
@@ -117,6 +119,10 @@ function App() {
   const [currentView, setCurrentView]   = useState<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary" | "outline_planner"
   >("editor");
+  // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
+  // when no writing project is open. Not part of currentView because it
+  // never coexists with the editor layout.
+  const [showAudiobookConverter, setShowAudiobookConverter] = useState(false);
   const [profileType, setProfileType]   = useState<ProfileType>("character");
 
   // --- Manuscript tree state (Phase 6) ---
@@ -414,6 +420,15 @@ function App() {
   // The live CodeMirror EditorView instance.
   // useState so the toolbar gets the view via props (ref changes don't trigger re-renders).
   const [editorView, setEditorView] = useState<EditorView | null>(null);
+  // Dialogue Check: the passage the writer had selected when they opened
+  // it. Held as TEXT rather than offsets -- the tool is read-only and
+  // never edits, so it should not care what happens in the editor while
+  // it is open.
+  const [dialogueCheckText, setDialogueCheckText] = useState<string | null>(null);
+  // Whether that text came from a real selection. The panel says so --
+  // a gentle reminder, because reading a whole chapter is legitimate but
+  // rarely what somebody meant by "check this passage".
+  const [dialogueCheckSelected, setDialogueCheckSelected] = useState(true);
 
   // Ref for use inside callbacks -- gives the latest value without stale closures.
   // A "stale closure" is when a function captures an old version of a variable.
@@ -1984,11 +1999,27 @@ function App() {
   );
 
   if (!currentProject) {
+    // The Audiobook Converter is a standalone tool beside the writing app:
+    // its own dashboard, its own workspaces, its own jewel-tone look. It is
+    // only reachable from Project Home (no project open), never from
+    // inside a writing project.
+    if (showAudiobookConverter) {
+      return (
+        <>
+          {backendDownBanner}
+          {updateOverlays}
+          <AudiobookConverter onExit={() => setShowAudiobookConverter(false)} />
+        </>
+      );
+    }
     return (
       <>
         {backendDownBanner}
         {updateOverlays}
-        <ProjectHome onProjectOpen={handleProjectOpen} />
+        <ProjectHome
+          onProjectOpen={handleProjectOpen}
+          onOpenAudiobooks={() => setShowAudiobookConverter(true)}
+        />
       </>
     );
   }
@@ -2512,6 +2543,21 @@ function App() {
                   : undefined
               }
               suggestBreaksRunning={suggestBreaksRunning}
+              onDialogueCheck={
+                currentView === "editor" && currentChapter
+                  ? () => {
+                      // Selection if there is one, otherwise the whole
+                      // chapter -- a writer who wants to hear the scene
+                      // they are in should not have to select it first.
+                      const view = editorViewRef.current;
+                      const sel = view?.state.selection.main;
+                      const selected = view && sel && !sel.empty
+                        ? view.state.sliceDoc(sel.from, sel.to) : "";
+                      setDialogueCheckSelected(Boolean(selected.trim()));
+                      setDialogueCheckText(selected || chapterContent);
+                    }
+                  : undefined
+              }
               onOpenChapterSummary={
                 currentView === "editor" && currentChapter
                   ? () => openChapterSummary(currentChapter.filename)
@@ -3487,6 +3533,19 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Dialogue Check: listening only. Local, free, saves nothing --
+          and it says so, plus where to go for real audio. */}
+      {dialogueCheckText !== null && (
+        <DialogueCheck
+          text={dialogueCheckText}
+          hadSelection={dialogueCheckSelected}
+          voiceId={projectUi.uiState.passageCheckVoice}
+          onVoiceChange={voice =>
+            projectUi.update({ passageCheckVoice: voice })}
+          onClose={() => setDialogueCheckText(null)}
+        />
       )}
 
       </div>

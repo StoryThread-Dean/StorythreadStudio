@@ -1,0 +1,14 @@
+[project]
+name = "kokoro-worker"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.141.0",
+    "kokoro-onnx>=0.5.0",
+    "uvicorn[standard]>=0.52.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.21.0",
+]

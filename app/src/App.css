@@ -47,6 +47,17 @@
  *   surface  = cards, input fields, inner boxes (lightest of the three)
  */
 :root {
+  /*
+   * Native controls follow the OS palette unless told otherwise, and a
+   * dropdown is drawn by the OS, not by us. On Windows in light mode
+   * that gave a <select> popup LIGHT grey panels with our white option
+   * text on top -- an option was only readable while it was
+   * highlighted. One declaration fixes every select, scrollbar, date
+   * picker and context menu in the app, and it is the only way to
+   * reach a popup that lives outside the page.
+   */
+  color-scheme: dark;
+
   --color-bg-primary:   #070724;
   --color-bg-panel:     #0d0d2b;
   --color-bg-surface:   #12122e;
@@ -241,4 +252,165 @@
     width: 100%;
     overflow: hidden;
   }
+}
+
+/*
+ * Audiobook flare -- the sound of the page
+ * ========================================
+ * The Audiobook dashboard is about hearing your words spoken, so the
+ * screen carries two quiet motifs of sound itself:
+ *
+ *   .stw-eq-bar    a live equalizer bar (staggered via --stw-delay)
+ *   .stw-pulse     a slow breathing glow, like a voice holding a note
+ *
+ * Both are decorative only. Anyone who asks their system to reduce
+ * motion gets a still, readable page instead (the animations stop at
+ * a sensible resting size, never collapsed).
+ */
+@keyframes stw-equalize {
+  0%,
+  100% { transform: scaleY(0.35); }
+  50%  { transform: scaleY(1); }
+}
+
+@keyframes stw-breathe {
+  0%,
+  100% { opacity: 0.35; }
+  50%  { opacity: 0.75; }
+}
+
+.stw-eq-bar {
+  transform-origin: bottom;
+  animation: stw-equalize 1.4s ease-in-out infinite;
+  animation-delay: var(--stw-delay, 0s);
+}
+
+.stw-pulse {
+  animation: stw-breathe 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stw-eq-bar,
+  .stw-pulse {
+    animation: none;
+    transform: scaleY(0.7);
+  }
+}
+
+/*
+ * "Read aloud" line styles (SpokenLine.tsx)
+ * =========================================
+ * One of these is chosen at random each time the audiobook dashboard
+ * opens, so the headline is spoken by the page in a different voice
+ * every visit. Every style runs ONCE and settles back to plain text --
+ * the words stay legible from the first frame to the last.
+ */
+.stw-read {
+  display: inline-block;          /* transforms need a box */
+  /* Long enough to feel like a voice dwelling on the word, short
+     enough that only a word or two is lit at narration pace. */
+  animation-duration: 0.8s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  animation-delay: var(--stw-delay, 0s);
+}
+
+/* 1. An underline travels the line, word by word. */
+@keyframes stw-read-underline-kf {
+  0%       { box-shadow: inset 0 -0.08em 0 rgba(52, 211, 153, 0); }
+  25%, 65% { box-shadow: inset 0 -0.08em 0 rgba(52, 211, 153, 0.95); }
+  100%     { box-shadow: inset 0 -0.08em 0 rgba(52, 211, 153, 0); }
+}
+.stw-read-underline { animation-name: stw-read-underline-kf; }
+
+/* 2. Each word thickens and brightens as the voice lands on it.
+ *
+ * The thickening is FAUX bold (glyphs painted twice, a hair to each
+ * side) rather than font-weight. Animating real weight re-measures the
+ * word, which shoved every word after it and made the line hop as the
+ * light travelled (live finding). Text-shadow never touches layout.
+ */
+@keyframes stw-read-bold-kf {
+  0%       { text-shadow: none; color: inherit; }
+  30%, 60% { text-shadow: 0.021em 0 0 currentColor, -0.021em 0 0 currentColor;
+             color: #ecfdf5; }
+  100%     { text-shadow: none; color: inherit; }
+}
+.stw-read-bold { animation-name: stw-read-bold-kf; }
+
+/* 3. A vivid emerald sweeps along and fades back. */
+@keyframes stw-read-color-kf {
+  0%       { color: inherit; }
+  30%, 60% { color: #6ee7b7; text-shadow: 0 0 10px rgba(110, 231, 183, 0.55); }
+  100%     { color: inherit; text-shadow: none; }
+}
+.stw-read-color { animation-name: stw-read-color-kf; }
+
+/* 4. A soft shimmer passes over each word. */
+@keyframes stw-read-sparkle-kf {
+  0%   { filter: none; }
+  40%  { filter: brightness(1.9) saturate(1.4)
+                 drop-shadow(0 0 6px rgba(165, 243, 252, 0.9)); }
+  70%  { filter: brightness(1.25) drop-shadow(0 0 3px rgba(165, 243, 252, 0.4)); }
+  100% { filter: none; }
+}
+.stw-read-sparkle { animation-name: stw-read-sparkle-kf; }
+
+/* 5. Words lift as they are spoken, then settle. */
+@keyframes stw-read-rise-kf {
+  0%   { transform: translateY(0); }
+  35%  { transform: translateY(-0.22em); color: #a7f3d0; }
+  100% { transform: translateY(0); }
+}
+.stw-read-rise { animation-name: stw-read-rise-kf; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stw-read {
+    animation: none;
+  }
+}
+
+
+/*
+ * Dropdown options
+ * ================
+ * color-scheme above should be enough, but WebView2 has shipped builds
+ * where the <option> list keeps the light palette regardless. Naming the
+ * colours explicitly costs nothing and removes the failure mode where a
+ * writer can only read the option they happen to be hovering.
+ */
+select,
+option,
+optgroup {
+  background-color: var(--color-bg-panel);
+  color: var(--color-text-primary);
+}
+
+optgroup {
+  color: var(--color-text-muted);
+  font-style: normal;
+}
+
+option:disabled {
+  color: var(--color-faint);
+}
+
+
+/*
+ * Selection that survives losing focus
+ * ====================================
+ * A popout that edits a word takes focus away from the editor, and an
+ * unfocused textarea paints its selection in a near-invisible grey by
+ * default. The writer is then answering questions about a word they
+ * cannot see -- and when the tool walks to the NEXT occurrence, they
+ * have no way to follow it.
+ *
+ * Naming the colour makes the selection hold whether the editor has
+ * focus or not. Amber rather than the usual blue: this is "the tool is
+ * working here", not "you selected this".
+ */
+textarea::selection,
+textarea::-moz-selection {
+  background-color: #f59e0b66;
+  color: inherit;
 }
