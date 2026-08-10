@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_TYPES,
   CONCEPTS,
+  GROUP_GUIDES,
   STOP_KINDS,
   TONE_CLASSES,
   iconByName,
@@ -63,6 +64,69 @@ describe("the house punctuation rule", () => {
     for (const term of ALL) {
       const text = `${term.term} ${term.short} ${term.does} ${term.whatsThis}`;
       expect(text).not.toMatch(/[—–]/);
+    }
+  });
+});
+
+
+describe("the guide behind each group's What's this?", () => {
+  const GROUPS = ["notes", "profiles", "other"];
+
+  it("has one for all three groups", () => {
+    for (const group of GROUPS) {
+      expect(GROUP_GUIDES[group], group).toBeTruthy();
+    }
+  });
+
+  it("says what the Weave is before saying what the group is", () => {
+    // A writer meeting one of these for the first time needs the context
+    // before the detail.
+    for (const group of GROUPS) {
+      expect(GROUP_GUIDES[group].slice(0, 120)).toMatch(/The Weave/);
+    }
+  });
+
+  it("names what actually lives in the group", () => {
+    expect(GROUP_GUIDES.notes).toMatch(/Outline/);
+    expect(GROUP_GUIDES.notes).toMatch(/Style Guide/);
+    expect(GROUP_GUIDES.profiles).toMatch(/Factions/);
+    expect(GROUP_GUIDES.profiles).toMatch(/Religions/);
+    expect(GROUP_GUIDES.profiles).toMatch(/Governments/);
+    expect(GROUP_GUIDES.other).toMatch(/Events/);
+    expect(GROUP_GUIDES.other).toMatch(/Languages/);
+  });
+
+  it("explains the Custom option too", () => {
+    for (const group of GROUPS) {
+      expect(GROUP_GUIDES[group], group).toMatch(/Something else/);
+    }
+  });
+
+  it("ends by saying what Weaving will do with it", () => {
+    // The part it would be easiest to leave out, and the one that makes
+    // filling any of this in worth doing. A form is a chore until you know
+    // what the app will DO with it.
+    for (const group of GROUPS) {
+      expect(GROUP_GUIDES[group], group).toMatch(/Weaving/);
+    }
+  });
+
+  it("keeps the weaving metaphor rather than dropping into jargon", () => {
+    const all = GROUPS.map(g => GROUP_GUIDES[g]).join(" ");
+    expect(all).toMatch(/thread/i);
+    expect(all).toMatch(/stitch/i);
+  });
+
+  it("is long enough to be worth opening, and not a wall", () => {
+    for (const group of GROUPS) {
+      expect(GROUP_GUIDES[group].length, group).toBeGreaterThan(400);
+      expect(GROUP_GUIDES[group].length, group).toBeLessThan(2000);
+    }
+  });
+
+  it("obeys the house punctuation rule", () => {
+    for (const group of GROUPS) {
+      expect(GROUP_GUIDES[group], group).not.toMatch(/[—–]/);
     }
   });
 });

@@ -30,6 +30,8 @@ import json
 import os
 import re
 
+from app.codex.icon_keywords import icon_for_name
+
 SCHEMA_VERSION = 1
 
 # Identifiers are used as folder names, YAML keys and JSON keys, so they are
@@ -548,7 +550,7 @@ def add_type(
     type_id: str,
     label: str,
     group: str = DEFAULT_GROUP,
-    icon: str = "CircleDashed",
+    icon: str | None = None,
 ) -> dict:
     """
     Add a kind of Thread the Weave did not ship with -- a Government, a
@@ -587,7 +589,10 @@ def add_type(
         # other section: a writer who types "Bloodline" gets "Bloodlines".
         "label": pluralize(label),
         "folder": folder,
-        "icon": icon,
+        # A small surprise: if a word in the name is one the app recognises,
+        # the section gets a fitting icon rather than the neutral fallback.
+        # A miss looks exactly like it did before -- see codex/icon_keywords.
+        "icon": icon or icon_for_name(label) or "CircleDashed",
         "group": group,
         # Same rule as every built-in kind: the section appears once it holds
         # something. Adding a kind is the first half of "choose Government,

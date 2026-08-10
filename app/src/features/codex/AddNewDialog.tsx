@@ -25,8 +25,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader, Plus, X } from "lucide-react";
 
+import { WhatsThis } from "../../components/learn/WhatsThis";
 import { CUSTOM_NAME_MAX, checkCustomName, tidyCustomName } from "./customName";
-import { TONE_CLASSES, threadTypeEntry } from "./lexicon";
+import { GROUP_GUIDES, TONE_CLASSES, threadTypeEntry } from "./lexicon";
 import type { AvailableEntry, SectionsTree } from "./api";
 
 const GROUP_BLURBS: Record<string, string> = {
@@ -117,9 +118,19 @@ export function AddNewDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <p className="mb-3 text-[11px] text-faint">
+          <p className="mb-1 text-[11px] text-faint">
             {GROUP_BLURBS[current?.id ?? ""] ?? ""}
           </p>
+          {/* The long answer, per group. One line tells a writer WHICH group
+              they are in; this tells them what it is for, what lives in it,
+              why any of it is worth keeping, and what Weaving will do with
+              it afterwards. That last part is the one it would be easiest
+              to leave out and the one that makes the rest worth doing. */}
+          <div className="mb-3">
+            <WhatsThis label="What's this?">
+              {GROUP_GUIDES[current?.id ?? ""] ?? ""}
+            </WhatsThis>
+          </div>
 
           {current && current.available.length > 0 ? (
             <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">

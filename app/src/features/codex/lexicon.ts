@@ -22,11 +22,15 @@
 // without a renderer, and nothing here has needed markup.
 
 import {
-  AlertTriangle, BookOpen, Brain, CalendarClock, CalendarOff, CircleDashed,
-  Compass, Drama, Feather, FileSearch, FileText, Flag, Gauge, GitMerge, Heart,
-  History, Landmark, Languages, Lightbulb, Link2, ListTree, MapPin, Network,
-  NotebookPen, Package, Paintbrush, PawPrint, Sparkles, Sun, Unlink, Unplug,
-  User, Waypoints,
+  AlertTriangle, Anchor, Atom, Bird, BookOpen, Bot, Brain, Bug, CalendarClock,
+  CalendarOff, Castle, Church, CircleDashed, Clock, Cog, Coins, Compass, Crown,
+  Drama, Eye, Feather, FileSearch, FileText, Fish, Flag, Flame, FlaskConical,
+  Footprints, Gauge, Gem, Ghost, GitMerge, Hammer, Heart, History, Key,
+  Landmark, Languages, Leaf, Lightbulb, Link2, ListTree, Map, MapPin, Moon,
+  Mountain, Music, Network, NotebookPen, Package, Paintbrush, PawPrint,
+  Pickaxe, Rocket, Scale, ScrollText, Shield, Ship, Skull, Snowflake, Sparkles,
+  Star, Sun, Sword, Swords, Tent, Trees, Unlink, Unplug, User, Users, Wand,
+  Waves, Waypoints, Wheat, Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -96,6 +100,94 @@ export const CONCEPTS: Record<string, LexEntry> = {
     + "a connection your prose implies but nothing records, two facts that disagree. You apply, skip, or say 'not this' -- nothing is ever "
     + "changed without you.",
   ),
+};
+
+// ── The three groups, explained ──────────────────────────────────────────────
+//
+// Each has a "What's this?" in the Add New window, and each answers the same
+// four questions in the same order, because a writer meeting one of these
+// for the first time needs all four and nothing else:
+//
+//   1. what the Weave is, briefly -- the context everything else sits in
+//   2. what THIS group is, and how to tell it from the other two
+//   3. what lives in it, and why each of those is worth keeping
+//   4. what happens next: how Weaving stitches it into the story
+//
+// The last one matters most and is the easiest to leave out. Filling in a
+// form is a chore unless you know what the app will DO with it, and the
+// answer -- that your AI will know who someone was in chapter seven, not
+// just who they end up being -- is the whole reason any of this exists.
+
+export const GROUP_GUIDES: Record<string, string> = {
+  notes: [
+    "The Weave is everything in your world and how it all connects. Notes is "
+    + "the part you write yourself.",
+    "These are documents in your own voice: an Outline of where the story is "
+    + "going, a Style Guide so your prose stays yours, Brainstorming for the "
+    + "ideas that are not ready yet, Research for what you have gathered, "
+    + "Themes for what the book is actually about underneath. They are "
+    + "ordinary files, so you can open them anywhere.",
+    "The difference from Profiles is simple: a note is something you WRITE. A "
+    + "profile is an entry ABOUT something. If you find yourself describing a "
+    + "person or a place, that belongs in Profiles instead.",
+    "Something else lets you add a document of your own -- Dungeon Rules, "
+    + "Magic Costs, whatever this book needs. It appears in the sidebar the "
+    + "moment you make it.",
+    "Every note you keep is a thread laid down. Weaving is the step that "
+    + "picks them up: it reads what you have written, finds the places your "
+    + "notes and your chapters disagree or leave a gap, and stitches them "
+    + "together -- so the AI helping you write chapter twelve knows what you "
+    + "decided in chapter two.",
+  ].join(" "),
+
+  profiles: [
+    "The Weave is everything in your world and how it all connects. Profiles "
+    + "is the part that is about the things IN it.",
+    "A profile is an entry about one thing: a Character, a Location, a piece "
+    + "of Lore. Add more as your world grows -- Factions for groups with "
+    + "their own interests, Religions for what people believe, Governments "
+    + "for who holds power and how it passes, Deities for what is worshipped, "
+    + "Creatures for what lives out there, Cultures for how a people live, "
+    + "Relationships for how two people stand with each other.",
+    "You do not need all of them. A quiet domestic novel may never want a "
+    + "Government; an epic fantasy will want most of them. They stay out of "
+    + "your way until you ask for them.",
+    "What makes a profile more than a note is that it can CHANGE. A character "
+    + "who believes her father died in a raid, and learns otherwise in "
+    + "chapter fourteen, is a different person before and after -- and the "
+    + "Weave records both, pinned to where in the story each became true.",
+    "Something else lets you add a kind of your own: a Bloodline, a Guild, a "
+    + "Starship class. It behaves exactly like the ones we ship with.",
+    "Each profile is a thread; the connections between them are ties. Weaving "
+    + "is the step that pulls them tight -- it reads your chapters, spots the "
+    + "people your prose mentions but your world does not know about, the "
+    + "relationships your writing implies but nothing records, and the places "
+    + "two facts disagree. Stitch by stitch, the pieces become one cloth.",
+  ].join(" "),
+
+  other: [
+    "The Weave is everything in your world and how it all connects. Other is "
+    + "for the pieces that are neither a document you wrote nor a profile of "
+    + "somebody.",
+    "Events are things that happened -- a battle, a coronation, the night "
+    + "everything changed. Objects are things that matter enough to follow: a "
+    + "crown, a letter, a weapon. Concepts are the ideas and rules your world "
+    + "runs on, including how its magic or its technology works and what it "
+    + "costs. Languages are the tongues and names that make a place sound "
+    + "like itself.",
+    "These are the pieces writers most often keep in their head and then "
+    + "contradict three hundred pages later. Writing them down here is what "
+    + "stops that.",
+    "Something else lets you add anything the three shipped kinds do not "
+    + "cover -- and if a word in the name is one we recognise, you may find "
+    + "the section arrives with an icon of its own.",
+    "An Event is a thread with a place in time, which is what makes the rest "
+    + "of the Weave work: once the app knows WHEN something happened, it can "
+    + "tell you who knew what, and when. Weaving is the step that ties these "
+    + "into the story proper -- finding the moment your prose refers to "
+    + "something that has not happened yet, or a character acting on news "
+    + "nobody has given them.",
+  ].join(" "),
 };
 
 // ── What Weaving finds ───────────────────────────────────────────────────────
@@ -178,11 +270,24 @@ export const STOP_KINDS: Record<string, LexEntry> = {
 // this file against ITSELF. A name-to-component map cannot drift that way --
 // a kind the registry adds works immediately, and an icon name nobody has
 // imported degrades to the fallback rather than vanishing.
+// Every name the backend can store must be here, including the ones the
+// keyword easter egg produces -- a surprise that renders as a blank square
+// is worse than no surprise. tests/test_codex_icon_keywords.py reads THIS
+// object and fails if the backend can emit a name it does not contain,
+// because a cross-language contract nothing verifies is one that quietly
+// breaks.
 const ICONS: Record<string, LucideIcon> = {
+  // Shipped kinds and note documents
   User, Heart, MapPin, BookOpen, Flag, Sparkles, Landmark, Sun, PawPrint,
   Drama, Package, Lightbulb, CalendarClock, Languages,
   NotebookPen, ListTree, Feather, Brain, FileSearch, Paintbrush, FileText,
   CircleDashed,
+  // Keyword matches for kinds a writer invents
+  Anchor, Atom, Bird, Bot, Bug, Castle, Church, Clock, Cog, Coins, Compass,
+  Crown, Eye, Fish, Flame, FlaskConical, Footprints, Gem, Ghost, Hammer, Key,
+  Leaf, Map, Moon, Mountain, Music, Pickaxe, Rocket, Scale, ScrollText,
+  Shield, Ship, Skull, Snowflake, Star, Sword, Swords, Tent, Trees, Users,
+  Wand, Waves, Wheat, Zap,
 };
 
 /** Colour and a one-line description per shipped kind. Anything not listed

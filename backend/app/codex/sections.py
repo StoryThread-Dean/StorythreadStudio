@@ -31,6 +31,7 @@
 
 import os
 
+from app.codex.icon_keywords import icon_for_name
 from app.codex.types_registry import (
     GROUPS, TypesError, load_registry, normalize_group,
 )
@@ -208,11 +209,15 @@ def build_sections(project_path: str, converted: bool) -> dict:
         except OSError:
             extra = []
         for filename in extra:
+            label = filename[:-3].replace("-", " ").replace("_", " ").title()
             groups["notes"].append({
                 "kind": "note",
                 "id": filename[:-3].replace("-", "_"),
-                "label": filename[:-3].replace("-", " ").replace("_", " ").title(),
-                "icon": "FileText", "group": "notes", "filename": filename,
+                "label": label,
+                # A note the writer named themselves gets the same small
+                # surprise a custom kind does.
+                "icon": icon_for_name(label) or "FileText",
+                "group": "notes", "filename": filename,
                 "count": 1, "default_section": False,
             })
 
