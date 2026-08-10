@@ -56,9 +56,10 @@ STOP_LOOSE = "loose_thread"         # a Thread nothing connects to
 STOP_SNAG = "snag"                  # two facts that disagree
 STOP_EARLY = "early_mention"        # named before the reader is meant to know
 STOP_UNWOVEN = "unwoven"            # ground rules not worked out yet
+STOP_PINNED = "pinned"              # the writer marked this by hand
 
 STOP_KINDS = (STOP_UNSPUN, STOP_FRAYED, STOP_UNPLACED, STOP_LOOSE,
-              STOP_SNAG, STOP_EARLY, STOP_UNWOVEN)
+              STOP_SNAG, STOP_EARLY, STOP_UNWOVEN, STOP_PINNED)
 
 # How much of this the writer wants in one sitting. The scan is the same
 # work either way; depth decides what survives into the walk.
@@ -69,7 +70,7 @@ DEPTH_QUICK = "quick"
 # Quick pass = problems only. No world-building questions, nothing that asks
 # the writer to invent anything -- just the things that are already wrong.
 _QUICK_KINDS = frozenset({STOP_SNAG, STOP_LOOSE, STOP_FRAYED, STOP_EARLY,
-                          STOP_UNPLACED})
+                          STOP_UNPLACED, STOP_PINNED})
 
 _HEADING_RE = re.compile(r"^#{1,6} .*$", re.MULTILINE)
 _MARKER_RE = re.compile(r"\[[^\]\n]{1,40}\]")
@@ -114,6 +115,9 @@ class ScanRequest:
     # Phrases retired with "not a connection", and stops muted by kind.
     retired: set[str] = field(default_factory=set)
     muted_kinds: set[str] = field(default_factory=set)
+    # Phrases the writer marked by hand: [{phrase, note, where}]. Unlike every
+    # other stop these are not found by a rule -- the writer asked.
+    pinned: list[dict] = field(default_factory=list)
 
     def wants(self, kind: str) -> bool:
         if kind in self.muted_kinds:
@@ -197,12 +201,72 @@ def scan(
     result.stops.extend(manuscript)
     result.unreadable = unreadable
     result.stops.extend(_unwoven_stops(threads, request))
+    result.stops.extend(_pinned_stops(project_path, threads, request))
 
     counts: dict[str, int] = {kind: 0 for kind in STOP_KINDS}
     for stop in result.stops:
         counts[stop.kind] = counts.get(stop.kind, 0) + 1
     result.counts = counts
     return result
+
+
+def _pinned_stops(project_path: str, threads: list[dict],
+                  request: ScanRequest) -> list[Stop]:
+    """
+    The phrases the writer marked by hand.
+
+    THE ONE STOP KIND NOT FOUND BY A RULE. Every other stop exists because a
+    condition in the book is true; this one exists because the writer pointed
+    at something and said "ask me about this". Two consequences:
+
+      - it is raised until they ANSWER it, not until some condition ends. A
+        rule cannot know when a hand-made mark is dealt with, and quietly
+        dropping it would lose the one thing here that was never derivable.
+      - the action it offers depends on whether the phrase already names
+        something. With no entry, the useful next step is to make one; with an
+        entry, the entry exists and the open question is what it connects to.
+    """
+    if not request.wants(STOP_PINNED) or not request.pinned:
+        return []
+
+    alias_map = build_alias_map(threads)
+    by_name = {}
+    for thread in threads:
+        for name in [thread.get("name") or ""] + list(thread.get("aliases") or []):
+            if name:
+                by_name.setdefault(str(name).lower(), thread)
+
+    stops: list[Stop] = []
+    for pinned in request.pinned:
+        phrase = str(pinned.get("phrase") or "").strip()
+        if not phrase:
+            continue
+        note = str(pinned.get("note") or "").strip()
+        thread = by_name.get(phrase.lower())
+        known = phrase.lower() in alias_map
+
+        why = ("You marked this yourself, so it is here until you say what to "
+               "do with it. Nothing found it -- you pointed at it.")
+        if note:
+            why = f'You wrote: "{note}". ' + why
+
+        stops.append(Stop(
+            kind=STOP_PINNED, key=_key(STOP_PINNED, phrase.lower()),
+            entity_id=str(thread.get("entity_id") or "") if thread else "",
+            title=(f"'{phrase}' -- what should this connect to?" if known
+                   else f"'{phrase}' has no entry yet"),
+            quote=str(pinned.get("where") or ""),
+            evidence_hash=_hash(phrase),
+            why=why,
+            detail={
+                "name": phrase,
+                "note": note,
+                "has_entry": known,
+                "type": str(thread.get("type") or "") if thread else "",
+                "filename": str(thread.get("filename") or "") if thread else "",
+            },
+        ))
+    return stops
 
 
 def _unwoven_stops(threads: list[dict], request: ScanRequest) -> list[Stop]:

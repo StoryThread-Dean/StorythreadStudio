@@ -521,3 +521,97 @@ describe("stops with nowhere to send you", () => {
     expect(screen.getByText(/no editor for this kind of entry yet/)).toBeTruthy();
   });
 });
+
+
+describe("something the writer marked themselves", () => {
+  // Weaving will miss things. A pin is how the writer says "this one matters"
+  // about a word no rule raised -- and it MARKS rather than connects, so
+  // there is no relation to get wrong and nothing to connect to yet is a
+  // perfectly good reason to make one.
+
+  const unknown = stop({
+    kind: "pinned", key: "pinned|kithicor forest", entity_id: "",
+    title: "'Kithicor Forest' has no entry yet",
+    why: "You marked this yourself, so it is here until you say what to do with it. Nothing found it -- you pointed at it.",
+    quote: "They rode into Kithicor Forest before dawn.",
+    detail: { name: "Kithicor Forest", note: "", has_entry: false,
+              type: "", filename: "" },
+  });
+
+  const known = stop({
+    kind: "pinned", key: "pinned|lexa", entity_id: "e-lexa",
+    title: "'Lexa' -- what should this connect to?",
+    why: "You marked this yourself.",
+    quote: "Lexa said nothing.",
+    detail: { name: "Lexa", note: "", has_entry: true, type: "character",
+              filename: "alexandra.md" },
+  });
+
+  it("says the writer asked, not that a rule fired", async () => {
+    mockApi({ stops: [unknown] });
+    await start();
+    await userEvent.click(screen.getByText("Why am I seeing this?"));
+    expect(screen.getByText(/you pointed at it/)).toBeTruthy();
+  });
+
+  it("shows the sentence it was marked in", async () => {
+    mockApi({ stops: [unknown] });
+    await start();
+    expect(screen.getByText(/before dawn/)).toBeTruthy();
+  });
+
+  it("offers to create the entry when nothing answers to it", async () => {
+    mockApi({ stops: [unknown] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+    expect(posted("/thread/new")[0].body.name).toBe("Kithicor Forest");
+  });
+
+  it("asks about the CONNECTION when the entry already exists", async () => {
+    // "Make an entry" is the wrong question once there is one.
+    mockApi({ stops: [known] });
+    await start();
+    expect(screen.getByRole("button", { name: /Open it and connect it/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Create the entry/ })).toBeNull();
+  });
+
+  it("opens the existing entry rather than making a second one", async () => {
+    mockApi({ stops: [known] });
+    const onOpenThread = vi.fn();
+    await start({ onOpenThread });
+    await userEvent.click(screen.getByRole("button", { name: /Open it and connect it/ }));
+    await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith(
+      "e-lexa", { type: "character", filename: "alexandra.md" }));
+    expect(posted("/thread/new")).toEqual([]);
+  });
+
+  it("calls saying no REMOVING THE MARK, because that is what it is", async () => {
+    // "Not a connection" is about a rule that was wrong. A pin was not a rule.
+    mockApi({ stops: [unknown] });
+    await start();
+    expect(screen.getByRole("button", { name: /Remove the mark/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Not a connection/ })).toBeNull();
+  });
+
+  it("can still be put off", async () => {
+    mockApi({ stops: [unknown] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    await waitFor(() => expect(posted("/run/answer").length).toBe(1));
+    expect(posted("/run/answer")[0].body.state).toBe("deferred");
+  });
+
+  it("names it Pinned, in the loom vocabulary", async () => {
+    mockApi({ stops: [unknown] });
+    await start();
+    expect(screen.getByText("Pinned")).toBeTruthy();
+  });
+
+  it("explains that marking is not connecting", async () => {
+    mockApi({ stops: [unknown] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /what's this/i }));
+    expect(screen.getByText(/Marking does not make a connection/)).toBeTruthy();
+  });
+});

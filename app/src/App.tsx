@@ -2676,6 +2676,7 @@ function App() {
                 defaultValue={noteContent}
                 onChange={handleContentChange}
                 font={currentFont}
+                projectPath={currentProject.root_path}
                 onEditorReady={(view) => {
                   setEditorView(view);
                   editorViewRef.current = view;
@@ -2705,6 +2706,7 @@ function App() {
                 defaultValue={chapterContent}
                 onChange={handleContentChange}
                 font={currentFont}
+                projectPath={currentProject.root_path}
                 onEditorReady={(view) => {
                   setEditorView(view);
                   editorViewRef.current = view;

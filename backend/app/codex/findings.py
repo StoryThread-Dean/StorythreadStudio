@@ -54,8 +54,8 @@ __all__ = [
     "STATE_DISMISSED", "STATE_STALE", "SCHEMA_VERSION",
     "answer", "book_path", "discard_staged", "empty_book", "is_permanent",
     "list_runs", "load_book", "load_run", "merge", "mute_kind", "new_run",
-    "open_stops", "refresh", "remember_choice", "retire", "run_dir",
-    "save_book", "save_run",
+    "open_stops", "pin", "refresh", "remember_choice", "retire", "run_dir",
+    "save_book", "save_run", "unpin",
 ]
 
 SCHEMA_VERSION = 1
@@ -142,6 +142,9 @@ def empty_book() -> dict:
         "retired": [],
         "muted_kinds": [],
         "disambiguations": {},
+        # Phrases the writer marked by hand. See pin() for why this is a
+        # separate list rather than a kind of answer.
+        "pinned": [],
     }
 
 
@@ -204,6 +207,8 @@ def merge(book: dict, run: dict | None) -> dict:
         "muted_kinds": list(book.get("muted_kinds") or []),
         "disambiguations": {**(book.get("disambiguations") or {}),
                             **(run.get("disambiguations") or {})},
+        # Pins are about the book, never about one sitting.
+        "pinned": list(book.get("pinned") or []),
     }
 
 
@@ -259,6 +264,7 @@ def load_run(project_path: str, run_id: str) -> dict | None:
     data.setdefault("retired", [])
     data.setdefault("muted_kinds", [])
     data.setdefault("disambiguations", {})
+    data.setdefault("pinned", [])
     return data
 
 
@@ -356,6 +362,43 @@ def retire(run: dict, phrase: str) -> None:
     retired = run.setdefault("retired", [])
     if phrase and phrase not in retired:
         retired.append(phrase)
+
+
+def pin(book: dict, phrase: str, note: str = "", where: str = "") -> bool:
+    """
+    The writer marked a phrase by hand. Returns False if it was already pinned.
+
+    WHY A PIN RATHER THAN A CONNECTION. The obvious version of "let me make a
+    connection myself" is a form: pick a relation, pick a direction, pick two
+    endpoints. That form has two failure modes with nothing to catch them --
+    the writer records the wrong relation, or there is nothing to connect to
+    yet and the form cannot be completed at all.
+    
+    A pin records only "this matters, ask me about it". There is no relation
+    to get wrong, and it can wait indefinitely. The walkthrough then handles
+    it like any other stop, which means it inherits the evidence quote, the
+    "why am I seeing this", and the four ways to answer.
+
+    Stored as a PHRASE, not an offset. Offsets rot the moment the writer
+    edits the paragraph above; a phrase is found again by looking for it,
+    which is exactly how `retired` already works.
+    """
+    phrase = " ".join(str(phrase or "").split())
+    if not phrase:
+        return False
+    pinned = book.setdefault("pinned", [])
+    if any(p.get("phrase", "").lower() == phrase.lower() for p in pinned):
+        return False
+    pinned.append({"phrase": phrase, "note": note.strip(), "where": where,
+                   "at": _now()})
+    return True
+
+
+def unpin(book: dict, phrase: str) -> None:
+    """Take a pin back. The writer marked it; only they can unmark it."""
+    key = " ".join(str(phrase or "").split()).lower()
+    book["pinned"] = [p for p in (book.get("pinned") or [])
+                      if p.get("phrase", "").lower() != key]
 
 
 def mute_kind(run: dict, kind: str, muted: bool = True) -> None:

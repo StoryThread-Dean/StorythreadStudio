@@ -59,6 +59,10 @@ const PRIMARY_ACTION: Record<string, string> = {
   // Unwoven has no Thread to open -- the answer does not exist yet. This
   // takes the writer to the KIND of entry it belongs in.
   unwoven: "Go and answer it",
+  // A pin is the writer's own question. If nothing answers to the phrase yet,
+  // the useful next step is an entry; if something does, the entry exists and
+  // the open question is what it connects to.
+  pinned: "Create the entry",
 };
 
 const DEPTHS: { id: Depth; label: string; blurb: string }[] = [
@@ -94,7 +98,17 @@ function target(stop: Stop): { type: string; filename: string } {
 function hasSomewhereToGo(stop: Stop): boolean {
   if (stop.kind === "unspun") return true;          // it CREATES the entry
   if (stop.kind === "unwoven") return EDITABLE_KINDS.has(landsIn(stop)[0] ?? "");
+  if (stop.kind === "pinned") {
+    // No entry yet: creating one is always available. With an entry, it opens
+    // only if that kind has an editor.
+    return !stop.detail?.has_entry || EDITABLE_KINDS.has(target(stop).type);
+  }
   return EDITABLE_KINDS.has(target(stop).type);
+}
+
+/** What a Pinned stop offers, which depends on whether it has an entry. */
+function pinnedAction(stop: Stop): string {
+  return stop.detail?.has_entry ? "Open it and connect it" : "Create the entry";
 }
 
 /** [type, section] an Unwoven answer belongs in. */
@@ -401,7 +415,8 @@ export function WeavingPanel({
             if (!runId) return;
             // Only Unspun writes anything, and what it writes is EMPTY -- a
             // named entry with nothing in it, for the writer to fill.
-            if (stop.kind === "unspun") {
+            if (stop.kind === "unspun"
+                || (stop.kind === "pinned" && !stop.detail?.has_entry)) {
               await createThread(projectPath, String(stop.detail.name ?? ""));
               await apply(projectPath, runId, stop);
             } else if (stop.kind === "unwoven") {
@@ -417,7 +432,9 @@ export function WeavingPanel({
           className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
         >
           {busy ? <Loader size={11} className="animate-spin" /> : <Check size={11} />}
-          {PRIMARY_ACTION[stop.kind] ?? "Open it"}
+          {stop.kind === "pinned"
+            ? pinnedAction(stop)
+            : PRIMARY_ACTION[stop.kind] ?? "Open it"}
         </button>
         )}
 
@@ -432,7 +449,7 @@ export function WeavingPanel({
           title="Permanently. This will not be raised again."
           className="rounded border border-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
         >
-          Not a connection
+          {stop.kind === "pinned" ? "Remove the mark" : "Not a connection"}
         </button>
 
         <button

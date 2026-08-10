@@ -35,8 +35,8 @@ from app.codex.migrate import (
 from app.codex.context import Budget, assemble, estimate_tokens
 from app.codex.findings import (
     answer, discard_staged, is_permanent, list_runs, load_book, load_run,
-    merge, mute_kind, new_run, open_stops, refresh, remember_choice, retire,
-    save_book, save_run,
+    merge, mute_kind, new_run, open_stops, pin, refresh, remember_choice,
+    retire, save_book, save_run, unpin,
 )
 from app.codex.mentions import alias_display, build_alias_map, find_mentions
 from app.codex.resolve import resolve_thread
@@ -903,6 +903,7 @@ async def post_scan(body: ScanBody):
         kinds=body.kinds,
         retired=set(view["retired"]),
         muted_kinds=set(view["muted_kinds"]),
+        pinned=list(view["pinned"]),
     )
 
     threads = codex_store.load_threads(project_path)
@@ -1032,6 +1033,10 @@ class AnswerBody(BaseModel):
     state: str | None = None
     evidence_hash: str = ""
     retire_phrase: str | None = None
+    pin_phrase: str | None = None
+    pin_note: str = ""
+    pin_where: str = ""
+    unpin_phrase: str | None = None
     mute: str | None = None
     unmute: str | None = None
     alias: str | None = None
@@ -1072,10 +1077,21 @@ async def post_answer(body: AnswerBody):
         # open Weaving tomorrow".
         if is_permanent(body.state):
             answer(book, body.key, body.state, evidence_hash=body.evidence_hash)
+            # A pin that has been dealt with stops being a pin. The answer
+            # alone would keep the stop hidden, but the pin list is also a
+            # COUNT the writer sees, and a count that only goes up is a count
+            # they stop believing.
+            if body.key.startswith("pinned|"):
+                unpin(book, body.key.split("|", 1)[1])
 
     # These are all statements about the book rather than about this sitting,
     # so they go in both: the book to be obeyed, the run so the session log
     # says what happened in it.
+    if body.pin_phrase:
+        pin(book, body.pin_phrase, note=body.pin_note, where=body.pin_where)
+    if body.unpin_phrase:
+        unpin(book, body.unpin_phrase)
+
     for target in (run, book):
         if body.retire_phrase:
             retire(target, body.retire_phrase)
@@ -1089,6 +1105,54 @@ async def post_answer(body: AnswerBody):
     save_run(project_path, run)
     save_book(project_path, book)
     return {"run": run, "book": book, "returned": returned}
+
+
+class PinBody(BaseModel):
+    project_path: str
+    phrase: str
+    note: str = ""
+    # The sentence it came from, so the walkthrough can show the writer where
+    # they were when they marked it.
+    where: str = ""
+
+
+@router.post("/pin")
+async def post_pin(body: PinBody):
+    """
+    Mark a phrase from anywhere in the app, with no Weaving session open.
+
+    This is the endpoint behind right-click > Weaving > Mark for Weaving. It
+    exists separately from /run/answer because a pin is not an answer to a
+    question -- it is the writer ASKING one, from the editor, before any
+    walkthrough has started.
+
+    NOTHING IS WRITTEN INTO THE MANUSCRIPT. The mark lives in the Weave's own
+    answers file. Decorating a novel with markup to make a feature work is
+    asking the writer to write for the app instead of for the reader, and the
+    manuscript staying clean prose is a locked product rule.
+    """
+    project_path = validate_project_path(body.project_path)
+    book = load_book(project_path)
+    added = pin(book, body.phrase, note=body.note, where=body.where)
+    save_book(project_path, book)
+    return {"pinned": added, "phrase": body.phrase.strip(),
+            "total": len(book.get("pinned") or [])}
+
+
+@router.get("/pins")
+async def get_pins(project_path: str = Query(...)):
+    """Everything marked and not yet dealt with, for a count in the sidebar."""
+    project_path = validate_project_path(project_path)
+    return {"pinned": load_book(project_path).get("pinned") or []}
+
+
+@router.delete("/pin")
+async def delete_pin(project_path: str = Query(...), phrase: str = Query(...)):
+    project_path = validate_project_path(project_path)
+    book = load_book(project_path)
+    unpin(book, phrase)
+    save_book(project_path, book)
+    return {"pinned": book.get("pinned") or []}
 
 
 # ── Weaving: the brief ───────────────────────────────────────────────────────

@@ -152,23 +152,71 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
   }, [graph, focus, pinned, typeOrder]);
 
   // ── Dragging ───────────────────────────────────────────────────────────
+  //
+  // TWO THINGS THE FIRST VERSION GOT WRONG, both of which a writer feels as
+  // "the dot jumps away from my cursor and then follows an inch to the left".
+  //
+  // 1. LETTERBOXING. The svg has a viewBox and the default
+  //    preserveAspectRatio, so the drawing is scaled uniformly and CENTRED
+  //    inside the element. Whenever the element's shape differs from the
+  //    viewBox's, there is blank padding down one axis -- and mapping the
+  //    cursor linearly across the full element box ignores it, which produces
+  //    exactly a constant offset in one direction.
+  //
+  // 2. NO GRAB OFFSET. Dragging moved the node's CENTRE to the cursor, so
+  //    grabbing a dot near its edge snapped it before it moved at all. A drag
+  //    should preserve where in the thing you took hold of it.
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const dragging = useRef<string | null>(null);
+  const dragging = useRef<{ id: string; dx: number; dy: number } | null>(null);
 
+  /** Cursor position in viewBox coordinates, honouring the letterboxing. */
   function pointAt(event: React.MouseEvent): Point | null {
     const svg = svgRef.current;
     if (!svg) return null;
+
+    // The browser can do this exactly, transforms and all. Preferred whenever
+    // it exists; the arithmetic below is the same answer by hand, for
+    // environments (jsdom, and any future non-DOM renderer) that have no CTM.
+    const ctm = svg.getScreenCTM?.();
+    if (ctm) {
+      const p = svg.createSVGPoint();
+      p.x = event.clientX;
+      p.y = event.clientY;
+      const local = p.matrixTransform(ctm.inverse());
+      return { x: local.x, y: local.y };
+    }
+
     const box = svg.getBoundingClientRect();
+    if (!box.width || !box.height) return null;
+    // xMidYMid meet: one uniform scale, centred, with the slack split evenly.
+    const scale = Math.min(box.width / WIDTH, box.height / HEIGHT);
+    const padX = (box.width - WIDTH * scale) / 2;
+    const padY = (box.height - HEIGHT * scale) / 2;
     return {
-      x: ((event.clientX - box.left) / box.width) * WIDTH,
-      y: ((event.clientY - box.top) / box.height) * HEIGHT,
+      x: (event.clientX - box.left - padX) / scale,
+      y: (event.clientY - box.top - padY) / scale,
     };
   }
 
-  function onMouseMove(event: React.MouseEvent) {
-    if (!dragging.current || !onPin) return;
+  function startDrag(event: React.MouseEvent, entityId: string) {
     const point = pointAt(event);
-    if (point) onPin({ ...(pinned ?? {}), [dragging.current]: point });
+    const at = view?.positions[entityId];
+    // The offset between where the writer grabbed and where the node's centre
+    // is, so the node keeps its grip rather than snapping.
+    dragging.current = point && at
+      ? { id: entityId, dx: at.x - point.x, dy: at.y - point.y }
+      : { id: entityId, dx: 0, dy: 0 };
+  }
+
+  function onMouseMove(event: React.MouseEvent) {
+    const grip = dragging.current;
+    if (!grip || !onPin) return;
+    const point = pointAt(event);
+    if (!point) return;
+    onPin({
+      ...(pinned ?? {}),
+      [grip.id]: { x: point.x + grip.dx, y: point.y + grip.dy },
+    });
   }
 
   if (error) {
@@ -291,7 +339,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
                   key={node.entity_id}
                   transform={`translate(${point.x} ${point.y})`}
                   className="cursor-pointer"
-                  onMouseDown={() => { dragging.current = node.entity_id; }}
+                  onMouseDown={e => startDrag(e, node.entity_id)}
                   onClick={() => setFocus(isFocus ? null : node.entity_id)}
                   onDoubleClick={() => onOpenThread?.(node.entity_id)}
                 >

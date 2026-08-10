@@ -29,7 +29,7 @@ import {
   Landmark, Languages, Leaf, Lightbulb, Link2, ListTree, Map, MapPin, Moon,
   Mountain, Music, Network, NotebookPen, Package, Paintbrush, PawPrint,
   Pickaxe, Rocket, Scale, ScrollText, Shield, Ship, Skull, Snowflake, Sparkles,
-  Scissors, Spline, Spool, Star, Sun, Sword, Swords, Tent, Trees, Unlink,
+  Pin, Scissors, Spline, Spool, Star, Sun, Sword, Swords, Tent, Trees, Unlink,
   User, Users, Wand, Waves, Wheat, Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -260,6 +260,14 @@ export const STOP_KINDS: Record<string, LexEntry> = {
     "It shows you the root problem instead of five separate symptoms of it.",
     "When several contradictions share an entry or a fact, they are usually one mistake seen from different angles. A Tangle groups them so "
     + "you fix the cause rather than the symptoms.",
+  ),
+  pinned: entry(
+    "pinned", "Pinned", Pin, "violet",
+    "Something you marked yourself, to come back to.",
+    "It holds a word in place until you decide what it is, without you having to decide now.",
+    "You selected a word and marked it, so Weaving will ask you about it. Marking does not make a connection -- there is nothing to get wrong yet, and nothing "
+    + "to connect it to is a perfectly good reason to mark it. It is the same idea as pinning a piece of fabric before you stitch it: the pin holds it in place "
+    + "until the real join is made. It stays here until you answer it, because nothing found it. You did.",
   ),
   early_mention: entry(
     "early_mention", "Told early", Clock, "amber",

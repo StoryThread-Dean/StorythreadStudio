@@ -44,7 +44,7 @@ itemises it folder by folder, names the backup destination before the button,
 and requires a second click that repeats the count and the destination. An
 interrupted run offers resume or restore rather than guessing.
 
-#### Pinning a connection by hand (designed, not built)
+#### Pinning a connection by hand -- BUILT
 
 Weaving will miss things, so the writer needs a way to say "this matters"
 about a word the scan never raised. Requested from live testing, with the
@@ -80,6 +80,51 @@ Two rules it must keep:
 Writer-facing name: **Pinned**, with a pin icon. Pinning fabric before you
 stitch it is the same idea in the same vocabulary -- it holds a piece in place
 until the real join is made.
+
+One thing that fell out of building it: a pin is the only stop kind that is
+raised until the writer ANSWERS it rather than until a condition ends. Every
+other stop exists because something in the book is true; this one exists
+because the writer pointed at something. No rule can know when a hand-made
+mark is dealt with, so dropping it on a rule would lose the one thing in the
+scan that was never derivable.
+
+#### The map -- open items from live testing
+
+Right idea, wrong execution so far. Two are fixed; three are not.
+
+**Fixed.** Dragging a Thread jumped away from the cursor and then trailed it,
+which was two bugs: no grip offset was recorded on mouse-down (so the centre
+snapped to the cursor), and the cursor was mapped across the whole element
+while the drawing is letterboxed inside its own viewBox (a constant offset in
+one direction, exactly as reported).
+
+**Not built yet, in the order they matter:**
+
+1. **The scrubber has to look like a timeline.** Today it is a bare slider
+   with a dot, and the only feedback is a chapter title changing colour
+   somewhere else -- so nothing connects the handle to the story. It wants act
+   bands above, a tick per chapter, and the resting chapter's title expanded
+   and word-wrapped while its neighbours truncate. That expansion is the
+   cause-and-effect: the writer sees the handle land ON a chapter.
+
+2. **A bare dot should mean UNCONNECTED, and clicking it should bind it.** The
+   type icons currently read as a legend of what a dot becomes. Clicking a dot
+   should offer the list of existing entries to bind it to, and the dot should
+   become that kind's icon the moment it is bound -- rather than navigating
+   away to a screen.
+
+3. **Name variants need folding together, with the writer choosing the
+   primary.** Lara / Croft / Lara Croft are one person; Cambridge / Cambridge
+   Library / Library are one place. The primary is NOT always the full formal
+   name -- Alexandra Langford may be the official name while the story only
+   ever says Lexa, and the map should say Lexa. This needs a merge operation
+   (fold one Thread into another as an alias, repoint its Ties and facts,
+   choose the display name) plus the UI to drive it.
+
+   Note the cause: Unspun offers one entry per name it finds, so accepting
+   Lara, Croft and Lara Croft produced three Threads where the writer meant
+   one. Merging is the cure; the better fix is for Unspun to notice that a
+   candidate is contained in another and offer them together.
 
 Also open before release: a Thread editor for the kinds the Profile Builder
 does not cover (factions, governments, religions, concepts, events -- until

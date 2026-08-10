@@ -252,3 +252,108 @@ describe("failure", () => {
     await waitFor(() => expect(screen.getByText(/The types file is broken/)).toBeTruthy());
   });
 });
+
+
+describe("dragging a Thread", () => {
+  // Reported from live testing: "clicking on a dot and dragging it, the icon
+  // immediately jumps an inch to the LEFT of the mouse and then follows an
+  // inch away from wherever the mouse is going. Directly left."
+  //
+  // Two causes, both real. The svg is letterboxed by its own viewBox, so
+  // mapping the cursor across the full element box is off by exactly the
+  // padding -- constant, and in one direction. And nothing recorded where in
+  // the dot the writer took hold of it, so the centre snapped to the cursor.
+
+  /** An element WIDER than the viewBox's shape, so the drawing is centred with
+   *  blank padding down the left and right -- the reported case. */
+  function letterbox(el: Element, width = 2000, height = 620) {
+    el.getBoundingClientRect = () => ({
+      left: 0, top: 0, width, height, right: width, bottom: height,
+      x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+  }
+
+  async function map() {
+    const onPin = vi.fn();
+    await renderMap({ onPin });
+    const svg = screen.getByRole("img", { name: /Map of your world/ });
+    letterbox(svg);
+    return { onPin, svg };
+  }
+
+  it("does not move at all until the cursor does", async () => {
+    // The first symptom, exactly: press and the dot leaps away before any
+    // movement. With the grip recorded, pressing and holding still leaves it
+    // precisely where it was.
+    const { onPin, svg } = await map();
+    // A node's position lives on its <g transform>, not on the circle.
+    const node = svg.querySelector("g[transform]")!;
+    const [x, y] = /translate\(([-\d.]+) ([-\d.]+)\)/
+      .exec(node.getAttribute("transform")!)!.slice(1).map(Number);
+    const before = { x, y };
+    fireEvent.mouseDown(node, { clientX: 1000, clientY: 310 });
+    fireEvent.mouseMove(svg, { clientX: 1000, clientY: 310 });
+
+    const after = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
+      { x: number; y: number };
+    expect(after.x).toBeCloseTo(before.x, 0);
+    expect(after.y).toBeCloseTo(before.y, 0);
+  });
+
+  it("tracks the cursor one for one when the drawing is scaled down", async () => {
+    // The subtler half. The svg is letterboxed by its own viewBox, so screen
+    // pixels and viewBox units are not the same size -- here the element is
+    // half the viewBox's size, so 100px of hand movement is 200 units of map.
+    // Getting this wrong makes the dot drift away from the cursor the further
+    // it is dragged, which is a different complaint from the constant offset
+    // and needs its own arithmetic.
+    const { onPin, svg } = await map();
+    letterbox(svg, 500, 310);
+    const node = svg.querySelector("g[transform]")!;
+    fireEvent.mouseDown(node, { clientX: 100, clientY: 155 });
+    fireEvent.mouseMove(svg, { clientX: 100, clientY: 155 });
+    const first = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
+      { x: number; y: number };
+
+    fireEvent.mouseMove(svg, { clientX: 200, clientY: 155 });
+    const second = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
+      { x: number; y: number };
+
+    expect(second.x - first.x).toBeCloseTo(200, 0);
+  });
+
+  it("keeps the grip, rather than snapping the centre to the cursor", async () => {
+    // Grab anywhere in the dot, move 100 units right, and the node moves 100
+    // units right. The reported symptom was the opposite: the centre jumped to
+    // the cursor and then trailed it.
+    const { onPin, svg } = await map();
+    const node = svg.querySelector("g[transform]")!;
+    fireEvent.mouseDown(node, { clientX: 1000, clientY: 310 });
+    fireEvent.mouseMove(svg, { clientX: 1000, clientY: 310 });
+    const first = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
+      { x: number; y: number };
+
+    fireEvent.mouseMove(svg, { clientX: 1100, clientY: 310 });
+    const second = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
+      { x: number; y: number };
+
+    expect(second.x - first.x).toBeCloseTo(100, 0);
+    expect(second.y).toBeCloseTo(first.y, 0);
+  });
+
+  it("moves nothing until a Thread is taken hold of", async () => {
+    const { onPin, svg } = await map();
+    fireEvent.mouseMove(svg, { clientX: 900, clientY: 200 });
+    expect(onPin).not.toHaveBeenCalled();
+  });
+
+  it("lets go on mouse up", async () => {
+    const { onPin, svg } = await map();
+    const node = svg.querySelector("g[transform]")!;
+    fireEvent.mouseDown(node, { clientX: 1000, clientY: 310 });
+    fireEvent.mouseUp(svg);
+    onPin.mockClear();
+    fireEvent.mouseMove(svg, { clientX: 1200, clientY: 400 });
+    expect(onPin).not.toHaveBeenCalled();
+  });
+});
