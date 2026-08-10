@@ -54,6 +54,14 @@ function mockApi(options: {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     if (init?.method === "POST") calls.push({ url, body });
 
+    if (url.includes("/graph")) {
+      return { ok: true, json: async () => ({ nodes: [], edges: [],
+                                              as_of: null, hidden_nodes: 0,
+                                              hidden_edges: 0 }) } as Response;
+    }
+    if (url.includes("/ties")) {
+      return { ok: true, json: async () => ({ ties: [] }) } as Response;
+    }
     if (url.includes("/runs")) {
       return { ok: true, json: async () => ({ runs: options.runs ?? [] }) } as Response;
     }
@@ -611,14 +619,28 @@ describe("something the writer marked themselves", () => {
     expect(screen.queryByRole("button", { name: /Create the entry/ })).toBeNull();
   });
 
-  it("opens the existing entry rather than making a second one", async () => {
+  it("asks what to connect it to WITHOUT leaving the walk", async () => {
+    // Reported: "Open it and connect it" opened the entry's own page and
+    // abandoned the writer there. Connecting happens here now, so the walk
+    // keeps its place and a wrong choice is a step back.
     mockApi({ stops: [known] });
     const onOpenThread = vi.fn();
     await start({ onOpenThread });
     await userEvent.click(screen.getByRole("button", { name: /Open it and connect it/ }));
-    await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith(
-      "e-lexa", { type: "character", filename: "alexandra.md" }));
+    expect(await screen.findByTestId("tie-editor")).toBeTruthy();
+    expect(onOpenThread).not.toHaveBeenCalled();
     expect(posted("/thread/new")).toEqual([]);
+  });
+
+  it("comes back to the same stop when the connector closes", async () => {
+    // The whole point of doing it here. Closing must not lose the writer's
+    // place in the list.
+    mockApi({ stops: [known] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Open it and connect it/ }));
+    await screen.findByTestId("tie-editor");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText(/what should this connect to/)).toBeTruthy();
   });
 
   it("calls saying no REMOVING THE MARK, because that is what it is", async () => {
@@ -715,5 +737,91 @@ describe("one entry for a name and its variants", () => {
     await userEvent.click(screen.getByRole("button", { name: "Not a connection" }));
     await waitFor(() => expect(posted("/run/answer").length).toBe(1));
     expect(posted("/run/answer")[0].body.retire_phrase).toBe("Lara Croft");
+  });
+});
+
+describe("connecting without leaving the walk", () => {
+  // Reported from live testing, on a Loose thread:
+  //
+  //     "Clicked Open it and connect it > Alexandra Langfords profile directly
+  //      opened up... But the continuation of the process stopped there. I'm at
+  //      the profile, now what? No way to go back, no way to accept the
+  //      connection as the correct one. Nothing."
+  //
+  // Three paths were named: it worked and now what; it was wrong and I need to
+  // go back; the thing does not exist yet. All three are one problem -- the
+  // walk gave up its place -- so connecting happens here now.
+
+  const lonely = stop({
+    kind: "loose_thread", key: "loose|e-alex", entity_id: "e-alex",
+    title: "Nothing connects to Alexandra Langford", quote: "",
+    detail: { name: "Alexandra Langford", type: "character",
+              filename: "alexandra-langford.md" },
+  });
+
+  it("says what it will do, rather than promising to open something", async () => {
+    mockApi({ stops: [lonely] });
+    await start();
+    expect(screen.getByRole("button", { name: /Connect it to something/ }))
+      .toBeTruthy();
+  });
+
+  it("asks here instead of sending the writer to the entry's page", async () => {
+    mockApi({ stops: [lonely] });
+    const onOpenThread = vi.fn();
+    await start({ onOpenThread });
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect it to something/ }));
+    expect(await screen.findByTestId("tie-editor")).toBeTruthy();
+    expect(onOpenThread).not.toHaveBeenCalled();
+  });
+
+  it("names the entry being connected, so the writer knows where they are", async () => {
+    mockApi({ stops: [lonely] });
+    await start();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect it to something/ }));
+    expect(await screen.findByRole("dialog",
+      { name: /Connections for Alexandra Langford/ })).toBeTruthy();
+  });
+
+  it("returns to the SAME stop, not the next one", async () => {
+    // Path 2: it was the wrong choice and the writer needs to try again. That
+    // has to be a step back, not a navigation problem.
+    mockApi({ stops: [lonely, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect it to something/ }));
+    await screen.findByTestId("tie-editor");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByText(/Nothing connects to Alexandra Langford/))
+      .toBeTruthy();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
+  });
+
+  it("moves on when the writer says so, not when a screen closes", async () => {
+    // Path 1: it worked, and now what. The writer answers the stop.
+    mockApi({ stops: [lonely, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect it to something/ }));
+    await screen.findByTestId("tie-editor");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    expect(await screen.findByText("Something else")).toBeTruthy();
+  });
+
+  it("offers to connect an entry whose kind has no editor", async () => {
+    // Connecting needs something to connect FROM and nothing else. A writer's
+    // own kind can be connected even though it cannot yet be written in.
+    mockApi({ stops: [stop({
+      kind: "loose_thread", key: "loose|e-drow", entity_id: "e-drow",
+      title: "Nothing connects to Drow", quote: "",
+      detail: { name: "Drow", type: "race", filename: "drow.md" },
+    })] });
+    await start();
+    expect(screen.getByRole("button", { name: /Connect it to something/ }))
+      .toBeTruthy();
   });
 });

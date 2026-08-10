@@ -516,3 +516,112 @@ describe("a connection is allowed to be untyped", () => {
     await waitFor(() => expect(posted("/tie").length).toBe(1));
   });
 });
+
+describe("the other end might not exist yet", () => {
+  // Path 3 from live testing: "the path to the file doesn't exist because it
+  // hasn't been created yet". Sending the writer off to make it somewhere else
+  // loses their place and the half-made thought with it.
+
+  function mockMake() {
+    calls = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      calls.push({ url, method,
+                   body: init?.body ? JSON.parse(String(init.body)) : {} });
+      if (url.includes("/ties")) {
+        return { ok: true, json: async () => ({ ties: [] }) } as Response;
+      }
+      if (url.includes("/relations")) {
+        return { ok: true,
+                 json: async () => ({ forward: [WORSHIPS], reverse: [],
+                                      available: [] }) } as Response;
+      }
+      if (url.includes("/thread/new")) {
+        return { ok: true,
+                 json: async () => ({ thread: { entity_id: "e-made" } }) } as Response;
+      }
+      return { ok: true,
+               json: async () => ({ created: true, warnings: [] }) } as Response;
+    }));
+  }
+
+  it("offers to make one rather than ending the job", async () => {
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect this to something/ }));
+    expect(screen.getByRole("button", { name: /make it/ })).toBeTruthy();
+  });
+
+  it("prefills the name from whatever they searched for", async () => {
+    // Which is usually its name -- they typed it looking for it.
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect this to something/ }));
+    await userEvent.type(screen.getByLabelText("Find an entry"), "The Foot Clan");
+    await userEvent.click(screen.getByRole("button", { name: /make it/ }));
+    expect((screen.getByLabelText("What is it called") as HTMLInputElement).value)
+      .toBe("The Foot Clan");
+  });
+
+  it("asks what kind it is, and will not act without one", async () => {
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: /make it/ }));
+    await userEvent.type(screen.getByLabelText("What is it called"), "The Foot Clan");
+    expect(screen.getByRole("button", { name: /Make it/ })
+      .hasAttribute("disabled")).toBe(true);
+  });
+
+  it("says it is made empty, so the writer is not expecting a form", async () => {
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: /make it/ }));
+    expect(screen.getByText(/made empty and you can fill it in whenever/))
+      .toBeTruthy();
+  });
+
+  it("makes it and treats it as chosen, so the writer carries on", async () => {
+    mockMake();
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: /make it/ }));
+    await userEvent.type(screen.getByLabelText("What is it called"), "The Foot Clan");
+    await userEvent.selectOptions(
+      screen.getByLabelText("What kind of thing is it"), "Faction");
+    await userEvent.click(screen.getByRole("button", { name: /Make it/ }));
+
+    await waitFor(() => expect(screen.getByText(/How is/)).toBeTruthy());
+    const made = posted("/thread/new")[0];
+    expect(made.body).toMatchObject({ type: "faction", name: "The Foot Clan" });
+  });
+
+  it("then connects to the thing it just made", async () => {
+    mockMake();
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: /make it/ }));
+    await userEvent.type(screen.getByLabelText("What is it called"), "The Foot Clan");
+    await userEvent.selectOptions(
+      screen.getByLabelText("What kind of thing is it"), "Faction");
+    await userEvent.click(screen.getByRole("button", { name: /Make it/ }));
+    await waitFor(() => expect(screen.getByText(/How is/)).toBeTruthy());
+
+    await userEvent.click(screen.getByRole("button", { name: /worships/ }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+    expect(posted("/tie")[0].body.dst_id).toBe("e-made");
+  });
+
+  it("can be backed out of", async () => {
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: /make it/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByLabelText("Find an entry")).toBeTruthy();
+  });
+});

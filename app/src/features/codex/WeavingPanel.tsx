@@ -24,6 +24,25 @@
 //    thing and gets out of the way. Nothing is written by AI, and no stop is
 //    resolved without the writer choosing it.
 //
+// CONNECTING HAPPENS HERE, NOT SOMEWHERE ELSE
+// -------------------------------------------
+// Reported from live testing. "Open it and connect it" opened the entry's
+// own page and abandoned the writer there:
+//
+//     "I'm at the profile, now what? No way to go back, no way to accept
+//      the connection as the correct one. Nothing."
+//
+// Three things were missing and they are one thing really: the walk gave up
+// its place. So a connection is now made INSIDE the walk. Pick the other end
+// here, make it here if it does not exist yet, and carry on to the next stop
+// without ever leaving. Getting it wrong is a step back rather than a
+// navigation problem.
+//
+// Stops that genuinely need the writer to go and WRITE -- an entry with an
+// empty Overview -- still send them to the editor, because there is nothing
+// to type in here. Those close the walk on purpose, and reopening it resumes:
+// the answers are kept per book, so nothing is lost by leaving.
+//
 // WHY THERE IS NO "APPLIED" BOOKKEEPING FOR MOST KINDS
 // ----------------------------------------------------
 // Stops are re-derived from the book on every scan and never stored. A
@@ -39,6 +58,8 @@ import {
 
 import { STOP_KINDS, TONE_CLASSES, type LexEntry } from "./lexicon";
 import { WhatsThis } from "../../components/learn/WhatsThis";
+import { TieEditor } from "./TieEditor";
+import { fetchGraph, type GraphNode } from "./api";
 import {
   apply, defer, dismiss, fetchRuns, muteKind, scan, startRun,
   type Depth, type RunSummary, type ScanResult, type Stop,
@@ -52,7 +73,7 @@ import {
 const PRIMARY_ACTION: Record<string, string> = {
   unspun: "Create the entry",
   frayed: "Open it and fill it in",
-  loose_thread: "Open it and connect it",
+  loose_thread: "Connect it to something",
   snag: "Open it and sort it out",
   unplaced: "Open it and place it",
   early_mention: "Open it",
@@ -107,6 +128,9 @@ function target(stop: Stop): { type: string; filename: string } {
 /** Whether the primary action can actually take the writer anywhere. */
 function hasSomewhereToGo(stop: Stop): boolean {
   if (stop.kind === "unspun") return true;          // it CREATES the entry
+  // Connecting happens in the walk, so it needs an entry to connect FROM and
+  // nothing else. A kind with no editor can still be connected to things.
+  if (connectsHere(stop)) return Boolean(stop.entity_id);
   if (stop.kind === "unwoven") return EDITABLE_KINDS.has(landsIn(stop)[0] ?? "");
   if (stop.kind === "pinned") {
     // No entry yet: creating one is always available. With an entry, it opens
@@ -125,6 +149,20 @@ function pinnedAction(stop: Stop): string {
 function alsoCalled(stop: Stop): string[] {
   const also = stop.detail?.also;
   return Array.isArray(also) ? also.map(String) : [];
+}
+
+/**
+ * Stops answered by making a connection, which happens in the walk itself.
+ *
+ * A Loose thread IS the absence of a connection, so sending the writer to
+ * the entry's own page to fix it was always indirect -- and it abandoned
+ * them there. A pinned word with an entry is the same question.
+ */
+const CONNECT_HERE = new Set(["loose_thread", "untied"]);
+
+function connectsHere(stop: Stop): boolean {
+  if (CONNECT_HERE.has(stop.kind)) return true;
+  return stop.kind === "pinned" && Boolean(stop.detail?.has_entry);
 }
 
 /** [type, section] an Unwoven answer belongs in. */
@@ -162,6 +200,11 @@ export function WeavingPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [earlier, setEarlier] = useState<RunSummary[]>([]);
+  // Connecting happens in the walk, so the walk needs to know what there is
+  // to connect to. Fetched once the writer asks, not on mount: most stops
+  // are not about connections.
+  const [connecting, setConnecting] = useState(false);
+  const [world, setWorld] = useState<GraphNode[]>([]);
 
   // The scan runs on mount and on every depth change, BEFORE anything is
   // confirmed. That is what makes the count real -- see the header.
@@ -211,12 +254,24 @@ export function WeavingPanel({
   /** Record an answer and move on. Errors keep the stop on screen -- losing
    *  the writer's place because a write failed would be its own small
    *  betrayal. */
+  /**
+   * Record an answer and move on.
+   *
+   * An action returns whether the stop is FINISHED. Most are: they wrote
+   * something or the writer said no. One is not -- opening the connector keeps
+   * the writer on this stop until they are done with it -- so "advance" is a
+   * return value rather than something inferred.
+   *
+   * Errors keep the stop on screen. Losing the writer's place because a write
+   * failed would be its own small betrayal.
+   */
   async function answerAndAdvance(action: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
     try {
-      await action();
-      setAt(i => i + 1);
+      // Only an explicit false keeps the writer here. Every other answer --
+      // including whatever an endpoint happened to return -- means done.
+      if (await action() !== false) setAt(i => i + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "That could not be recorded.");
     } finally {
@@ -341,6 +396,25 @@ export function WeavingPanel({
   const Icon = lex?.Icon ?? CircleHelp;
   const tone = TONE_CLASSES[lex?.tone ?? "zinc"];
 
+  if (connecting && stop) {
+    return (
+      <TieEditor
+        projectPath={projectPath}
+        thread={{
+          entity_id: stop.entity_id,
+          type: String(stop.detail?.type ?? ""),
+          name: String(stop.detail?.name ?? ""),
+          display_name: "", aliases: [], placeholder: false,
+        }}
+        candidates={world}
+        // Closing comes straight back to the same stop, which is the whole
+        // point: the walk never lost its place.
+        onClose={() => setConnecting(false)}
+        onChanged={() => { /* the scan re-derives it on the next pass */ }}
+      />
+    );
+  }
+
   return (
     <Shell onClose={onClose}>
       <div className="flex items-center gap-2 text-[11px] text-faint">
@@ -452,6 +526,19 @@ export function WeavingPanel({
               await createThread(projectPath, String(stop.detail.name ?? ""),
                                  alsoCalled(stop));
               await apply(projectPath, runId, stop);
+            } else if (connectsHere(stop) && stop.entity_id) {
+              // Stays here. The walk keeps its place, and a wrong choice is a
+              // step back rather than a navigation problem.
+              try {
+                const graph = await fetchGraph(projectPath, { hideSpoilers: false });
+                setWorld(graph.nodes);
+              } catch {
+                setWorld([]);        // the picker says so; it does not crash
+              }
+              setConnecting(true);
+              // NOT finished: the connector closes back onto this stop, and the
+              // writer moves on when they are done with it.
+              return false;
             } else if (stop.kind === "unwoven") {
               // Nothing to open and nothing to record: the question stops
               // being asked when its answer is written, because the scan

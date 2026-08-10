@@ -36,7 +36,14 @@
 //    writer should name the connection themselves. Both are offered here,
 //    because a screen that shrugs is a screen that stops being opened.
 //
-// 5. READ FROM THE END YOU ARE STANDING AT. An incoming "mentored by" reads as
+// 5. THE OTHER END MIGHT NOT EXIST YET, AND THAT MUST NOT END THE JOB.
+//    Reported from live testing: "the path to the file doesn't exist
+//    because it hasn't been created yet". Sending the writer off to make it
+//    somewhere else loses their place and the half-made thought with it. So
+//    it is made here, named and given a kind, and connected in the same
+//    breath.
+//
+// 6. READ FROM THE END YOU ARE STANDING AT. An incoming "mentored by" reads as
 //    "mentor of" from the other side. Showing the stored direction would make
 //    the writer translate every line in their head.
 
@@ -46,10 +53,15 @@ import {
   Trash2, X,
 } from "lucide-react";
 
-import { TONE_CLASSES, threadTypeEntry } from "./lexicon";
+import { BUILT_IN_TYPES, TONE_CLASSES, threadTypeEntry } from "./lexicon";
 import { nodeLabel, type GraphNode } from "./api";
 
 const API_BASE = "http://localhost:8000";
+
+/** The kinds a new entry can be, in the same words the rest of the app
+ *  uses for them. */
+const KINDS = BUILT_IN_TYPES.map(id => ({ id, term: threadTypeEntry(id).term }))
+  .sort((a, b) => a.term.localeCompare(b.term));
 
 interface Tie {
   src_id: string;
@@ -104,6 +116,10 @@ export function TieEditor({
   const [options, setOptions] = useState<{
     forward: Relation[]; reverse: Relation[]; available: Relation[];
   } | null>(null);
+  // Making the other end, when it does not exist yet.
+  const [making, setMaking] = useState(false);
+  const [madeName, setMadeName] = useState("");
+  const [madeKind, setMadeKind] = useState("");
   const [naming, setNaming] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   // What the connection reads as from the OTHER end. Optional, because a
@@ -177,6 +193,44 @@ export function TieEditor({
         return ca - cb || nodeLabel(a).localeCompare(nodeLabel(b));
       });
   }, [candidates, query, thread.entity_id, ties]);
+
+  /**
+   * Make the other end, then treat it as chosen.
+   *
+   * The writer came here to say two things are connected and discovered that
+   * one of them is not written down. Making them leave to fix that costs them
+   * the thought they arrived with.
+   */
+  async function makeOther() {
+    const name = madeName.trim();
+    if (!name || !madeKind) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/codex/thread/new`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_path: projectPath, type: madeKind, name }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body?.detail?.message ?? "That could not be made.");
+      }
+      setMaking(false);
+      setMadeName("");
+      // Chosen straight away, so the writer carries on rather than hunting for
+      // the thing they just made in a list.
+      setOther({
+        entity_id: body.thread.entity_id, type: madeKind, name,
+        display_name: "", aliases: [], placeholder: true,
+      });
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That could not be made.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function connect(relation: Relation) {
     if (!other) return;
@@ -422,7 +476,9 @@ export function TieEditor({
                   <ul className="max-h-40 overflow-y-auto">
                     {reachable.length === 0 ? (
                       <li className="px-1 py-2 text-[11px] text-faint">
-                        Nothing to connect to yet. Fill in another entry first.
+                        {query.trim()
+                          ? "Nothing matches that."
+                          : "Nothing to connect to yet."}
                       </li>
                     ) : reachable.map(node => {
                       const lex = threadTypeEntry(node.type);
@@ -446,6 +502,68 @@ export function TieEditor({
                       );
                     })}
                   </ul>
+
+                  {/* It might not exist yet, and that must not end the job.
+                      Prefilled from whatever they typed to search, because
+                      that is usually its name. */}
+                  {making ? (
+                    <div className="mt-1.5 rounded border border-border p-2">
+                      <label className="block text-[11px] text-text-muted">
+                        What is it called?
+                      </label>
+                      <input
+                        value={madeName}
+                        onChange={e => setMadeName(e.target.value)}
+                        aria-label="What is it called"
+                        className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                      />
+                      <label className="mt-1.5 block text-[11px] text-text-muted">
+                        What kind of thing is it?
+                      </label>
+                      <select
+                        value={madeKind}
+                        onChange={e => setMadeKind(e.target.value)}
+                        aria-label="What kind of thing is it"
+                        className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                      >
+                        <option value="">Choose...</option>
+                        {KINDS.map(kind => (
+                          <option key={kind.id} value={kind.id}>{kind.term}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-[10px] text-faint">
+                        It is made empty and you can fill it in whenever. What
+                        matters now is the connection.
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => void makeOther()}
+                          disabled={!madeName.trim() || !madeKind || busy}
+                          className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                        >
+                          {busy ? <Loader size={11} className="animate-spin" />
+                                : <Check size={11} />}
+                          Make it
+                        </button>
+                        <button
+                          onClick={() => setMaking(false)}
+                          className="rounded border border-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary"
+                        >
+                          Back
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setMaking(true);
+                        setMadeName(query.trim());
+                      }}
+                      className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-200"
+                    >
+                      <Plus size={11} /> It is not here yet -- make it
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
