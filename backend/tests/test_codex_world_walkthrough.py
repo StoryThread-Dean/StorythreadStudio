@@ -149,13 +149,24 @@ def test_the_rest_of_the_example_needs_no_new_vocabulary(world):
 
 # ── A custom kind is connectable, which is the harder half ──────────────────
 
-def test_a_custom_kind_starts_with_no_way_to_connect_to_it(world):
-    # Honest rather than broken: the app has never heard of Race and will not
-    # invent a meaning for it. What matters is that this is not a dead end.
+def test_a_custom_kind_can_be_connected_from_the_moment_it_exists(world):
+    # The plain connection runs between anything, including a kind invented
+    # after every relation in the file was written. So a writer is never stuck.
     body = _relations(world["project"], "character", "race")
-    assert body["forward"] == []
-    assert body["reverse"] == []
-    assert body["available"] == []
+    assert "connected_to" in {r["id"] for r in body["forward"]}
+
+    ids, project = world["ids"], world["project"]
+    _tie(project, ids["Drizzt Do'Urden"], "connected_to", ids["Drow (Dark Elf)"])
+
+
+def test_but_it_starts_with_no_NAMED_way_to_connect_to_it(world):
+    # Honest rather than broken: the app has never heard of Race and will not
+    # invent a meaning for it. Saying HOW is the writer's to do.
+    body = _relations(world["project"], "character", "race")
+    named = [r for r in body["forward"] if r["id"] != "connected_to"]
+    assert named == []
+    assert [r for r in body["reverse"] if r["id"] != "connected_to"] == []
+    assert [r for r in body["available"] if r["id"] != "connected_to"] == []
 
 
 def test_the_writer_names_the_connection_and_it_works_at_once(world):

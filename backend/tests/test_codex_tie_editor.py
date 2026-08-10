@@ -130,9 +130,21 @@ def test_a_relation_says_what_the_other_end_reads_as(project):
     assert governs["inverse_label"] == "governed by"
 
 
-def test_a_pair_with_nothing_between_them_says_so_plainly(project):
+def _named(body, key="forward"):
+    """The relations that say something, excluding the plain one.
+
+    The plain "connected to" runs between anything, so it is present for every
+    pair by design. A test about the NAMED vocabulary has to look past it.
+    """
+    return [r for r in body[key] if r["id"] != "connected_to"]
+
+
+def test_a_pair_with_no_NAMED_connection_still_has_the_plain_one(project):
+    # There is no such thing as two things that cannot be connected. What can
+    # be missing is a word for HOW, and that is a different sentence.
     body = _relations(project, "deity", "character")
-    assert body["forward"] == []
+    assert _named(body) == []
+    assert "connected_to" in {r["id"] for r in body["forward"]}
 
 
 # ── An older project is offered what it is missing ──────────────────────────
@@ -148,7 +160,7 @@ def test_a_world_missing_a_shipped_relation_is_offered_it(project):
     _write_registry(project, registry)
 
     body = _relations(project, "faction", "deity")
-    assert body["forward"] == []
+    assert _named(body) == []
     assert "worships" in {r["id"] for r in body["available"]}
 
 

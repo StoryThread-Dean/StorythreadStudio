@@ -23,12 +23,20 @@
 //    and every item in it is true. A flat list of every relation in the world
 //    would make the writer do that filtering in their head.
 //
-// 3. "NOTHING FITS" IS NEVER A DEAD END. It has two honest answers: the pair
+// 3. A CONNECTION IS ALLOWED TO BE UNTYPED, and that is the default. Requiring
+//    a relation before two things can be joined gets the order of work wrong:
+//    a writer knows Drizzt and Guenhwyvar belong together long before they want
+//    to argue with themselves about whether that is a bond, a friendship or
+//    ownership. Made to choose in that moment they will pick badly or stop. So
+//    "just connected" sits at the top, on its own, and everything else is an
+//    improvement to a connection that already exists.
+//
+// 4. "NOTHING ELSE FITS" IS NEVER A DEAD END. Two more honest answers: the pair
 //    may need turning around, or the vocabulary is genuinely short and the
 //    writer should name the connection themselves. Both are offered here,
 //    because a screen that shrugs is a screen that stops being opened.
 //
-// 4. READ FROM THE END YOU ARE STANDING AT. An incoming "mentored by" reads as
+// 5. READ FROM THE END YOU ARE STANDING AT. An incoming "mentored by" reads as
 //    "mentor of" from the other side. Showing the stored direction would make
 //    the writer translate every line in their head.
 
@@ -67,6 +75,8 @@ interface Relation {
   inverse_label: string;
   /** True when it runs the other way, so the pair has to be turned around. */
   flipped: boolean;
+  /** Runs between any two kinds. There is one, and it is the plain one. */
+  universal?: boolean;
 }
 
 interface TieEditorProps {
@@ -167,6 +177,17 @@ export function TieEditor({
 
   async function connect(relation: Relation) {
     if (!other) return;
+    // An older project may not have the plain connection at all, since
+    // types.json is the writer's file and is never modified behind their back.
+    // Adopting it is silent here on purpose: "just connect them" should not
+    // turn into a lecture about vocabulary.
+    if (relation.universal && !options?.forward.some(r => r.id === relation.id)) {
+      await fetch(`${API_BASE}/api/codex/relation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_path: projectPath, adopt: relation.id }),
+      }).catch(() => undefined);
+    }
     setBusy(true);
     setError(null);
     setWarnings([]);
@@ -271,10 +292,16 @@ export function TieEditor({
     }
   }
 
+  // The plain connection is the default and belongs on its own. Everything
+  // else is a way of saying more about one.
+  const plain = options?.forward.find(r => r.universal)
+    ?? options?.available.find(r => r.universal);
+  const typed = (options?.forward ?? []).filter(r => !r.universal);
+
   const nothingFits = other && options
-    && options.forward.length === 0
+    && typed.length === 0
     && options.reverse.length === 0
-    && options.available.length === 0;
+    && options.available.filter(r => !r.universal).length === 0;
 
   return (
     <div
@@ -474,7 +501,30 @@ export function TieEditor({
                     </div>
                   ) : (
                     <>
-                      {options.forward.map(rel => (
+                      {/* The plain one, first and on its own. Saying more about
+                          a connection is an improvement to one that already
+                          exists, never a toll gate in front of making it. */}
+                      {plain && (
+                        <button
+                          onClick={() => void connect(plain)}
+                          disabled={busy}
+                          className="mb-1.5 flex w-full items-center gap-1.5 rounded border border-emerald-800 bg-emerald-950/30 px-2 py-1.5 text-left text-xs text-text-primary hover:bg-emerald-950/50 disabled:opacity-40"
+                        >
+                          {busy ? <Loader size={11} className="animate-spin" />
+                                : <Link2 size={11} className="text-emerald-300" />}
+                          <span className="flex-1">Just connect them</span>
+                          <span className="text-[10px] text-faint">
+                            say how later
+                          </span>
+                        </button>
+                      )}
+
+                      {typed.length > 0 && (
+                        <p className="mb-0.5 text-[10px] uppercase tracking-wide text-faint">
+                          or say how
+                        </p>
+                      )}
+                      {typed.map(rel => (
                         <RelButton key={rel.id} rel={rel} busy={busy}
                                    from={nodeLabel(thread)} to={nodeLabel(other)}
                                    onPick={() => void connect(rel)} />
@@ -499,12 +549,12 @@ export function TieEditor({
                       {/* Shipped connections this world does not have. types.json
                           is the writer's file and is never modified behind their
                           back, so an older project is OFFERED them. */}
-                      {options.available.length > 0 && (
+                      {options.available.filter(r => !r.universal).length > 0 && (
                         <>
                           <p className="mt-1.5 text-[10px] uppercase tracking-wide text-faint">
                             not in your world yet
                           </p>
-                          {options.available.map(rel => (
+                          {options.available.filter(r => !r.universal).map(rel => (
                             <button
                               key={rel.id}
                               onClick={() => void adopt(rel)}
@@ -523,9 +573,10 @@ export function TieEditor({
 
                       {nothingFits && (
                         <p className="text-[11px] text-text-muted">
-                          Your world has no way to connect a{" "}
+                          Your world has no NAMED way to connect a{" "}
                           {threadTypeEntry(thread.type).term} to a{" "}
-                          {threadTypeEntry(other.type).term} yet.
+                          {threadTypeEntry(other.type).term} yet. A plain
+                          connection still works.
                         </p>
                       )}
 

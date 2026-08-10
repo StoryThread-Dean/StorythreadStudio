@@ -252,8 +252,17 @@ describe("kinds of Thread", () => {
     expect(threadTypeEntry("character", "Characters").term).toBe("Characters");
   });
 
-  it("falls back to the id when no label is given", () => {
-    expect(threadTypeEntry("star_system").term).toBe("star system");
+  it("reads a derived term as a name, not as an id", () => {
+    // "star_system" -> "Star System". A type id shown to a person should read
+    // like a name: this term ends up in dropdowns, headings and sentences, and
+    // lower-casing it there looked like a bug rather than a fallback.
+    expect(threadTypeEntry("star_system").term).toBe("Star System");
+  });
+
+  it("leaves a SUPPLIED label exactly as the writer wrote it", () => {
+    // Their wording, not ours to adjust.
+    expect(threadTypeEntry("star_system", "star systems (minor)").term)
+      .toBe("star systems (minor)");
   });
 });
 

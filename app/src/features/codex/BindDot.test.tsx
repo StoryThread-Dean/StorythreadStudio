@@ -140,11 +140,12 @@ describe("choosing what it is", () => {
     expect(screen.getByText(/nothing to connect this to yet/)).toBeTruthy();
   });
 
-  it("treats standing alone as a real answer, not a failure", async () => {
-    // Some things are genuinely their own entry.
-    const { onClose } = open();
-    await userEvent.click(screen.getByRole("button", { name: /It stands on its own/ }));
-    expect(onClose).toHaveBeenCalled();
+  it("treats being its own thing as a real answer, not a failure", async () => {
+    // Some things are genuinely their own entry -- and usually under a fuller
+    // name than the prose happened to use.
+    open();
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    expect(screen.getByLabelText("What kind")).toBeTruthy();
     expect(posted).toEqual([]);
   });
 
@@ -289,5 +290,130 @@ describe("the refusal", () => {
     await userEvent.click(screen.getByRole("button", { name: /"Lexa" means/ }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(onBound).not.toHaveBeenCalled();
+  });
+});
+
+describe("it is its own thing, under a fuller name", () => {
+  // The flow described in review, in the Ninja Turtles case:
+  //
+  //   "The Manuscript has The Foot being picked up under UNSPUN > Writer
+  //    clicks Create the entry > ... Writer eventually gets to making a new
+  //    Faction, ... types in the name The Foot Clan and then clicks The Foot
+  //    dot from that screen that makes the connection."
+  //
+  // Reached from the dot rather than from a create screen, because the dot is
+  // what the writer is looking at. Same operation, one step.
+
+  const FOOT = node({ entity_id: "e-foot", name: "The Foot", placeholder: true });
+
+  function mockPromote() {
+    posted = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      posted.push({ url, body: init?.body ? JSON.parse(String(init.body)) : {} });
+      if (url.includes("/thread/new")) {
+        return { ok: true,
+                 json: async () => ({ thread: { entity_id: "e-clan" } }) } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ entity_id: "e-clan", name: "The Foot Clan",
+                             display_name: "", aliases: ["The Foot"],
+                             absorbed: ["The Foot"],
+                             removed_placeholder: "The Foot" }),
+      } as Response;
+    }));
+  }
+
+  async function promote(name = "The Foot Clan", kind = "Faction") {
+    mockPromote();
+    const handles = open({ dot: FOOT });
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    await userEvent.selectOptions(screen.getByLabelText("What kind"), kind);
+    const field = screen.getByLabelText("Called what");
+    await userEvent.clear(field);
+    await userEvent.type(field, name);
+    await userEvent.click(screen.getByRole("button", { name: /Make the entry/ }));
+    return handles;
+  }
+
+  it("asks the two questions the writer actually has", async () => {
+    open({ dot: FOOT });
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    expect(screen.getByLabelText("What kind")).toBeTruthy();
+    expect(screen.getByLabelText("Called what")).toBeTruthy();
+  });
+
+  it("starts from the word, so the common case is one click", async () => {
+    open({ dot: FOOT });
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    expect((screen.getByLabelText("Called what") as HTMLInputElement).value)
+      .toBe("The Foot");
+  });
+
+  it("explains that the prose word and the entry name can differ", async () => {
+    open({ dot: FOOT });
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    expect(screen.getByText(/Both find it afterwards/)).toBeTruthy();
+  });
+
+  it("will not act without a kind", async () => {
+    open({ dot: FOOT });
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    expect(screen.getByRole("button", { name: /Make the entry/ })
+      .hasAttribute("disabled")).toBe(true);
+  });
+
+  it("makes the entry with the kind and the fuller name", async () => {
+    await promote();
+    await waitFor(() => expect(posted.some(c => c.url.includes("/thread/new"))).toBe(true));
+    const made = posted.filter(c => c.url.includes("/thread/new"))[0];
+    expect(made.body).toMatchObject({ type: "faction", name: "The Foot Clan" });
+  });
+
+  it("takes the prose word in, so The Foot still finds it", async () => {
+    // The connection completed from both sides in one step, which is the whole
+    // point of doing it from the dot.
+    await promote();
+    await waitFor(() => expect(posted.some(c => c.url.includes("/absorb"))).toBe(true));
+    expect(posted.filter(c => c.url.includes("/absorb"))[0].body)
+      .toMatchObject({ into: "e-clan", from_id: "e-foot" });
+  });
+
+  it("does not absorb when the name is unchanged", async () => {
+    // Absorbing "The Foot" into an entry also called "The Foot" would be a
+    // no-op dressed up as a step.
+    await promote("The Foot");
+    await waitFor(() => expect(posted.some(c => c.url.includes("/thread/new"))).toBe(true));
+    expect(posted.filter(c => c.url.includes("/absorb"))).toEqual([]);
+  });
+
+  it("reports what it did, in the same terms as the other answer", async () => {
+    await promote();
+    await waitFor(() => expect(screen.getByText(/now means/)).toBeTruthy());
+    expect(screen.getByRole("dialog").textContent).toContain("The Foot Clan");
+  });
+
+  it("tells the map to re-read", async () => {
+    const { onBound } = await promote();
+    await waitFor(() => expect(onBound).toHaveBeenCalled());
+  });
+
+  it("can be backed out of", async () => {
+    open({ dot: FOOT });
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByLabelText("Find an entry")).toBeTruthy();
+  });
+
+  it("offers every kind, because a word could be anything", async () => {
+    open({ dot: FOOT });
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    const select = screen.getByLabelText("What kind");
+    const terms = Array.from(select.querySelectorAll("option"))
+      .map(o => o.textContent);
+    expect(terms).toContain("Faction");
+    expect(terms).toContain("Location");
+    expect(terms).toContain("Deity");
   });
 });

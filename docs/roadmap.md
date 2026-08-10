@@ -117,6 +117,41 @@ The label is separate from the name: `display_name` is what the story calls a
 thing, `name` is what it is. Alexandra Langford stays Alexandra Langford while
 the map says Lexa.
 
+#### Connection Types -- the next expansion, deliberately deferred
+
+A connection is currently either plain ("connected to") or one of the named
+relations in `types.json`. The next step, agreed in review, is a small set of
+**types a writer picks from** once a connection exists:
+
+> Family, Friends, Companion, Rival, Enemy, Acquaintance, plus **[Custom]**
+> for the unique ones -- "Summoned by", "Mind connected to".
+
+The order matters and is the whole reason it is deferred. Making a connection
+comes first; saying what KIND of connection it is comes second. A writer knows
+two things belong together long before they want to argue with themselves
+about whether that is a friendship, a bond or ownership, and being made to
+choose in that moment produces either a bad answer or no connection at all.
+
+So the plain connection shipped first, and typing it is an improvement to
+something that already exists rather than a toll gate in front of making it.
+
+Also on this list when it is picked up: a **Connection Type Check**. Some type
+and endpoint combinations will not make sense (a location cannot be somebody's
+Rival), and the writer should be told rather than stopped -- the same
+warn-do-not-refuse stance cardinality already takes.
+
+#### A caution recorded from review, worth keeping
+
+**Do not read a relation out of a proper noun.** "Companions of the Hall" is
+the name the five main characters call themselves; it is not evidence that its
+members are in a "companion of" relation. The Hand and the Foot in Ninja
+Turtles are factions, not body parts. The name is what defines the grouping,
+not the words inside it.
+
+This was an assumption made and corrected during the Tie editor work, and it
+generalises: the writer's manual grouping does the work, and the app takes
+over from there.
+
 **Not built yet:**
 
 1. **The scrubber has to look like a timeline.** Today it is a bare slider

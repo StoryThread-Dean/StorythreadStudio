@@ -28,6 +28,18 @@
 // IS; the label is what the story CALLS her, and losing the first to get the
 // second would be a bad trade.
 //
+// THE OTHER ANSWER: IT IS ITS OWN THING, UNDER A FULLER NAME
+// ----------------------------------------------------------
+// The flow described in review, in the Ninja Turtles case: the manuscript
+// says "The Foot", Weaving makes a placeholder for it, and the writer
+// eventually wants a Faction called "The Foot Clan" that this word belongs
+// to.
+//
+// Reached from the dot rather than from a create screen, because the dot is
+// what the writer is looking at. It creates the entry, gives it the kind, and
+// takes the word in -- so the connection is complete from both sides in one
+// step, and "The Foot" still finds it.
+//
 // WHY THIS HAS TO BE MANUAL
 // -------------------------
 // No scan will infer that "Cult" means the Daughters of Pathicus, or that the
@@ -37,8 +49,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Loader, Search, X } from "lucide-react";
 
-import { TONE_CLASSES, threadTypeEntry } from "./lexicon";
+import { BUILT_IN_TYPES, TONE_CLASSES, threadTypeEntry } from "./lexicon";
 import { absorb, nodeLabel, type GraphNode } from "./api";
+
+const API_BASE = "http://localhost:8000";
+
+/** The kinds an entry can be, from the shared vocabulary so this screen
+ *  offers the same words as the sidebar and the map. */
+const kinds = BUILT_IN_TYPES.map(id => ({ id, term: threadTypeEntry(id).term }))
+  .sort((a, b) => a.term.localeCompare(b.term));
 
 interface BindDotProps {
   projectPath: string;
@@ -60,6 +79,10 @@ export function BindDot({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ label: string; words: string[] } | null>(null);
+  // Making it its own entry: which kind, and under what fuller name.
+  const [promoting, setPromoting] = useState(false);
+  const [kind, setKind] = useState("");
+  const [fullName, setFullName] = useState(dot.name);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -82,6 +105,47 @@ export function BindDot({
         || node.aliases.some(a => a.toLowerCase().includes(term)))
       .sort((a, b) => nodeLabel(a).localeCompare(nodeLabel(b)));
   }, [candidates, dot.entity_id, query]);
+
+  /**
+   * Make this word its own entry, under a name of the writer's choosing.
+   *
+   * Two steps that have to look like one: create the entry, then take the word
+   * into it. "The Foot" becomes a Faction called "The Foot Clan" that still
+   * answers to "The Foot".
+   */
+  async function promote() {
+    const name = fullName.trim();
+    if (!kind || !name) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const made = await fetch(`${API_BASE}/api/codex/thread/new`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_path: projectPath, type: kind, name }),
+      });
+      const body = await made.json();
+      if (!made.ok) {
+        throw new Error(body?.detail?.message ?? "That entry could not be made.");
+      }
+      const created = body.thread.entity_id as string;
+
+      // Only when the writer chose a DIFFERENT name. Absorbing "The Foot" into
+      // an entry also called "The Foot" would be a no-op dressed up as a step.
+      if (name.toLowerCase() !== dot.name.toLowerCase()) {
+        const result = await absorb(projectPath, created, dot.entity_id, false);
+        setDone({ label: result.display_name || result.name,
+                  words: result.aliases });
+      } else {
+        setDone({ label: name, words: [name] });
+      }
+      onBound();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That could not be recorded.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function bind() {
     if (!chosen) return;
@@ -160,6 +224,69 @@ export function BindDot({
               entry changes.
             </p>
 
+            {promoting ? (
+              <div className="px-3 py-3">
+                <p className="text-[11px] text-text-muted">
+                  What kind of thing is it, and what is it really called? The
+                  prose says &ldquo;{dot.name}&rdquo;; the entry can have a
+                  fuller name and still answer to that.
+                </p>
+
+                <label className="mt-2 block text-[11px] text-text-muted">
+                  What kind?
+                </label>
+                <select
+                  value={kind}
+                  onChange={e => setKind(e.target.value)}
+                  aria-label="What kind"
+                  className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                >
+                  <option value="">Choose...</option>
+                  {kinds.map(entry => (
+                    <option key={entry.id} value={entry.id}>{entry.term}</option>
+                  ))}
+                </select>
+
+                <label className="mt-2 block text-[11px] text-text-muted">
+                  Called what?
+                </label>
+                <input
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  aria-label="Called what"
+                  className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                />
+                <p className="mt-1 text-[10px] text-faint">
+                  &ldquo;The Foot&rdquo; in the manuscript, &ldquo;The Foot
+                  Clan&rdquo; as the entry. Both find it afterwards.
+                </p>
+
+                {error && (
+                  <p role="alert" className="mt-2 text-[11px] text-rose-200">
+                    {error}
+                  </p>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => void promote()}
+                    disabled={!kind || !fullName.trim() || busy}
+                    className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                  >
+                    {busy ? <Loader size={11} className="animate-spin" />
+                          : <Check size={11} />}
+                    Make the entry
+                  </button>
+                  <button
+                    onClick={() => setPromoting(false)}
+                    className="rounded border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text-primary"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            ) : (
+            <>
             <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
               <Search size={11} className="shrink-0 text-faint" />
               <input
@@ -252,14 +379,17 @@ export function BindDot({
                   : "Pick an entry"}
               </button>
               {/* Standing on its own is a legitimate answer, not a failure to
-                  bind. Some things really are their own entry. */}
+                  bind -- and usually under a fuller name than the prose
+                  happened to use. */}
               <button
-                onClick={onClose}
+                onClick={() => { setPromoting(true); setChosen(null); }}
                 className="rounded border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text-primary"
               >
-                It stands on its own
+                It is its own thing
               </button>
             </footer>
+            </>
+            )}
           </>
         )}
       </div>

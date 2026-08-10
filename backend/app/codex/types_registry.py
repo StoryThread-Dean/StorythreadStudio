@@ -195,12 +195,17 @@ DEFAULT_TYPES: list[dict] = [
 
 
 def _rel(rid, label, *, inverse=None, symmetric=False, src, dst,
-         cardinality="many", exclusive_group=None) -> dict:
-    return {
+         cardinality="many", exclusive_group=None, universal=False) -> dict:
+    entry = {
         "id": rid, "label": label, "inverse": inverse, "symmetric": symmetric,
         "source_types": list(src), "target_types": list(dst),
         "cardinality": cardinality, "exclusive_group": exclusive_group,
     }
+    if universal:
+        # Runs between ANY two kinds, including ones the writer invents later.
+        # Only written when true, so an ordinary relation's record is unchanged.
+        entry["universal"] = True
+    return entry
 
 
 # NOTE on exclusive_group, which is deliberately EMPTY on married_to.
@@ -210,6 +215,25 @@ def _rel(rid, label, *, inverse=None, symmetric=False, src, dst,
 # stranger arrangements are ordinary in fiction. Exclusivity is something a
 # writer declares about THEIR world, not something the app assumes.
 DEFAULT_RELATIONS: list[dict] = [
+    # ── The plain one, and the one most writers want most of the time ────────
+    #
+    # A CONNECTION IS ALLOWED TO BE UNTYPED. Requiring a relation before two
+    # things can be joined gets the order of work wrong: a writer knows that
+    # Drizzt and Guenhwyvar belong together long before they want to argue with
+    # themselves about whether that is a bond, a friendship or ownership. Made
+    # to choose in that moment they will either pick badly or stop.
+    #
+    # So this exists, it is offered first, and it means exactly what it says.
+    # Saying more about it later is an improvement to a connection that already
+    # exists, not a precondition for making one.
+    #
+    # `universal` is the one place a relation escapes the type check, and it is
+    # data rather than code: the flag lives in types.json like everything else,
+    # so a writer's own relation can be universal too. It has to be, because a
+    # kind invented tomorrow could not be listed in a file written today.
+    _rel("connected_to", "connected to", symmetric=True, universal=True,
+         src=["character", "location"], dst=["character", "location"]),
+
     _rel("mentored_by", "mentored by", inverse="mentor_of",
          src=["character"], dst=["character"]),
     _rel("parent_of", "parent of", inverse="child_of",
@@ -284,6 +308,12 @@ DEFAULT_RELATIONS: list[dict] = [
     # a companion whether they are a person or an animal, and splitting it into
     # "friend of" and "bonded to" would ask the writer to classify a bond the
     # story does not classify.
+    #
+    # NOT derived from the faction called "Companions of the Hall". That is a
+    # proper noun, and the words inside a proper noun mean nothing about how its
+    # members relate -- the Hand and the Foot in Ninja Turtles are not body
+    # parts. Reading a relation out of a name is exactly the assumption this
+    # feature exists to avoid making.
     _rel("companion_of", "companion of", symmetric=True,
          src=["character", "creature"], dst=["character", "creature"]),
     _rel("lives_in", "lives in", inverse="home_of",
@@ -893,6 +923,10 @@ def relation_allows(registry: dict, rel_id: str, source_type: str, target_type: 
     rel = relation_by_id(registry, rel_id)
     if rel is None:
         return False
+    if rel.get("universal"):
+        # A plain connection runs between anything, including a kind the writer
+        # added after this relation was written down.
+        return True
     return (source_type in rel.get("source_types", [])
             and target_type in rel.get("target_types", []))
 
@@ -1011,6 +1045,11 @@ def adopt_relation(project_path: str, rel_id: str) -> dict:
     # into a world with a trimmed type list cannot write something invalid.
     entry["source_types"] = [t for t in entry["source_types"] if t in known]
     entry["target_types"] = [t for t in entry["target_types"] if t in known]
+    if entry.get("universal"):
+        # Its lists are decoration -- it runs between anything -- but the
+        # validator still wants them non-empty and real.
+        entry["source_types"] = entry["source_types"] or sorted(known)[:1]
+        entry["target_types"] = entry["target_types"] or sorted(known)[:1]
     if not entry["source_types"] or not entry["target_types"]:
         raise TypesError(
             f"'{entry['label']}' connects kinds this world does not have.",
@@ -1026,8 +1065,9 @@ def relations_between(registry: dict, src_type: str, dst_type: str) -> list[dict
     """Every recorded connection that can run from one kind to the other."""
     return [
         r for r in registry.get("relations", [])
-        if src_type in r.get("source_types", [])
-        and dst_type in r.get("target_types", [])
+        if r.get("universal")
+        or (src_type in r.get("source_types", [])
+            and dst_type in r.get("target_types", []))
     ]
 
 
@@ -1046,6 +1086,8 @@ def shipped_relations_between(registry: dict, src_type: str,
     return [
         dict(r) for r in DEFAULT_RELATIONS
         if r["id"] not in have
-        and src_type in r["source_types"] and dst_type in r["target_types"]
         and src_type in known and dst_type in known
+        and (r.get("universal")
+             or (src_type in r["source_types"]
+                 and dst_type in r["target_types"]))
     ]

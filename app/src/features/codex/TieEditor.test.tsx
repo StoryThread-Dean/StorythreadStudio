@@ -258,11 +258,14 @@ describe("nothing fits is never a dead end", () => {
     expect(posted("/tie")[0].body.rel).toBe("worships");
   });
 
-  it("says plainly when the world has no way to connect the two", async () => {
+  it("says the world has no NAMED way, and that a plain one still works", async () => {
+    // The wording matters: a plain connection is always available, so
+    // "no way to connect these" would be untrue and discouraging.
     mockApi({ relations: { forward: [], reverse: [], available: [] } });
     await open();
     await chooseOther("Pathicus");
-    expect(screen.getByText(/no way to connect a/)).toBeTruthy();
+    expect(screen.getByText(/no NAMED way to connect/)).toBeTruthy();
+    expect(screen.getByText(/plain connection still works/)).toBeTruthy();
   });
 
   it("always lets the writer name it themselves", async () => {
@@ -426,5 +429,90 @@ describe("naming the other half", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(posted("/tie").length).toBe(1));
     expect(posted("/relation")[0].body.inverse_label).toBe("");
+  });
+});
+
+
+describe("a connection is allowed to be untyped", () => {
+  // From review: "What we should establish for now is, Connection is just
+  // defaulted to connection only. The TYPE of connection can be further
+  // defined and Expanded upon later."
+  //
+  // Requiring a relation first gets the order of work wrong. A writer knows
+  // Drizzt and Guenhwyvar belong together long before they want to argue with
+  // themselves about whether that is a bond, a friendship or ownership.
+
+  const PLAIN = { id: "connected_to", label: "connected to", symmetric: true,
+                  cardinality: "many", inverse_label: "", flipped: false,
+                  universal: true };
+
+  it("offers just connecting them, first", async () => {
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [],
+                           available: [] } });
+    await open();
+    await chooseOther("Pathicus");
+    const buttons = screen.getAllByRole("button").map(b => b.textContent ?? "");
+    const plain = buttons.findIndex(t => t.includes("Just connect them"));
+    const named = buttons.findIndex(t => t.includes("worships"));
+    expect(plain).toBeGreaterThan(-1);
+    expect(plain).toBeLessThan(named);
+  });
+
+  it("says the how can come later, so skipping it is not a loss", async () => {
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [],
+                           available: [] } });
+    await open();
+    await chooseOther("Pathicus");
+    expect(screen.getByText("say how later")).toBeTruthy();
+  });
+
+  it("records it with no relation chosen", async () => {
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await chooseOther("Pathicus");
+    await userEvent.click(screen.getByRole("button", { name: /Just connect them/ }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+    expect(posted("/tie")[0].body.rel).toBe("connected_to");
+  });
+
+  it("separates the plain one from the ways of saying how", async () => {
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [],
+                           available: [] } });
+    await open();
+    await chooseOther("Pathicus");
+    expect(screen.getByText("or say how")).toBeTruthy();
+  });
+
+  it("adopts it quietly when an older project lacks it", async () => {
+    // types.json is the writer's own file, so an older project simply does not
+    // have it. "Just connect them" must not turn into a lecture.
+    mockApi({ relations: { forward: [], reverse: [], available: [PLAIN] } });
+    await open();
+    await chooseOther("Pathicus");
+    await userEvent.click(screen.getByRole("button", { name: /Just connect them/ }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+    expect(posted("/relation")[0].body.adopt).toBe("connected_to");
+  });
+
+  it("does not list the plain one among the ones to adopt", async () => {
+    // It has its own button. Showing it twice would read as two different
+    // things.
+    mockApi({ relations: { forward: [], reverse: [], available: [PLAIN] } });
+    await open();
+    await chooseOther("Pathicus");
+    expect(screen.queryByText(/not in your world yet/)).toBeNull();
+  });
+
+  it("works between kinds nothing named connects", async () => {
+    // The Race case: a kind the app has never heard of, invented after every
+    // relation in the file was written.
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open({ thread: node({ entity_id: "e-drizzt", type: "character",
+                                name: "Drizzt Do'Urden" }),
+                 candidates: [node({ entity_id: "e-drow", type: "race",
+                                     name: "Drow (Dark Elf)" })] });
+    await chooseOther("Drow");
+    await userEvent.click(screen.getByRole("button", { name: /Just connect them/ }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
   });
 });

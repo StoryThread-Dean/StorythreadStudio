@@ -340,26 +340,12 @@ function groupByKind(entries: Entry[]) {
     const lex = threadTypeEntry(type);
     return {
       type,
-      label: plural(titleCase(lex.term)),
+      label: plural(lex.term),
       Icon: lex.Icon,
       tone: TONE_CLASSES[lex.tone].text,
       entries: byType.get(type)!.sort((a, b) => a.name.localeCompare(b.name)),
     };
   });
-}
-
-/**
- * "character" -> "Character".
- *
- * The heading is styled uppercase in CSS, which a test and a screen reader
- * cannot see -- so the capital goes in the TEXT. A type id derived label
- * arrives lower-cased; the sidebar gets a proper label from the registry, and
- * this screen only has the id.
- */
-function titleCase(term: string): string {
-  return term.split(" ")
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
 }
 
 /** "Character" -> "Characters". The sidebar labels are plural, so these are

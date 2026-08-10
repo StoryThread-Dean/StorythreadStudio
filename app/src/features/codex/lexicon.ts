@@ -354,12 +354,22 @@ export function iconByName(name?: string): LucideIcon {
   return (name && ICONS[name]) || CircleDashed;
 }
 
+/** "dark elf" -> "Dark Elf". Applied to derived terms only. */
+function titleCase(text: string): string {
+  return text.split(" ")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 export function threadTypeEntry(
   typeId: string,
   label?: string,
   iconName?: string,
 ): LexEntry {
-  const term = label || typeId.replace(/_/g, " ");
+  // Title-cased when DERIVED from the id, because a type id shown to a person
+  // should read as a name. A supplied label is used exactly as given -- that is
+  // the writer's own wording and not ours to adjust.
+  const term = label || titleCase(typeId.replace(/_/g, " "));
   const known = TYPE_TONES[typeId];
   const Icon = iconByName(iconName ?? DEFAULT_ICON_NAMES[typeId]);
 
