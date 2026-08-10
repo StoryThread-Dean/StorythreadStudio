@@ -31,7 +31,9 @@
 
 import os
 
-from app.codex.types_registry import GROUPS, TypesError, load_registry
+from app.codex.types_registry import (
+    GROUPS, TypesError, load_registry, normalize_group,
+)
 
 # Documents rather than Threads. These live in notes/ as ordinary Markdown
 # and are edited in the editor, not the Weave -- but they belong in the same
@@ -50,12 +52,12 @@ NOTE_SECTIONS = [
 GROUP_LABELS = {
     "notes": "Notes",
     "profiles": "Profiles",
-    "etc": "etc",
+    "other": "Other",
 }
 
-# The order groups appear in. "etc" last because it is the catch-all, and a
-# catch-all above the things it is a catch-all FOR reads as a mistake.
-GROUP_ORDER = ["notes", "profiles", "etc"]
+# The order groups appear in. "Other" last because it is the catch-all, and
+# a catch-all above the things it is a catch-all FOR reads as a mistake.
+GROUP_ORDER = ["notes", "profiles", "other"]
 
 
 def _count_markdown(folder: str) -> int:
@@ -103,7 +105,7 @@ def build_sections(project_path: str, converted: bool) -> dict:
     # ── Threads ──────────────────────────────────────────────────────────
     for entry in registry.get("types", []):
         count = _count_markdown(os.path.join(root, entry.get("folder", "")))
-        group = entry.get("group", "etc")
+        group = normalize_group(entry.get("group"))
         section = {
             "kind": "type",
             "id": entry["id"],
@@ -165,13 +167,26 @@ def build_sections(project_path: str, converted: bool) -> dict:
             })
 
     return {
+        # ALL THREE GROUPS, ALWAYS. They are the navigational skeleton: a
+        # writer opens the Weave, sees Notes, Profiles and Other, and moves
+        # toward whichever matches what they are thinking about. Hiding one
+        # until it had content would mean they never found it -- and would
+        # leave nowhere to click "+ Add New" for the things that belong
+        # there, which is the only route to most of the app.
+        #
+        # The growth this design wants is in the SECTIONS, not the groups.
         "groups": [
-            {"id": name, "label": GROUP_LABELS.get(name, name),
-             "sections": groups.get(name, [])}
+            {
+                "id": name,
+                "label": GROUP_LABELS.get(name, name),
+                "sections": groups.get(name, []),
+                # What "+ Add New" offers from inside this group. The window
+                # shows everything, grouped -- a writer who opened it from
+                # Profiles can still add a Religion -- but it opens pointed
+                # at the group they came from.
+                "available": [a for a in available if a["group"] == name],
+            }
             for name in GROUP_ORDER
-            # An empty group is a heading with nothing under it. "etc" in
-            # particular should not exist until something is in it.
-            if groups.get(name)
         ],
         "available": available,
         "converted": converted,

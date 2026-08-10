@@ -44,13 +44,31 @@ CARDINALITIES = {"one", "many"}
 
 # Where a kind of Thread appears in the sidebar.
 #
-# The tree is grouped rather than flat because a world with fifteen kinds in
-# one list is the flood this redesign exists to prevent. "etc" is not a
-# dumping ground -- it is the honest answer for a kind that is neither a
-# written document nor a profile of something, and a writer can move a
-# section out of it whenever they disagree.
-GROUPS = {"notes", "profiles", "etc"}
-DEFAULT_GROUP = "etc"
+# Three groups, and ALL THREE ARE ALWAYS SHOWN even when empty. They are the
+# navigational skeleton: a writer opening the Weave sees Notes, Profiles and
+# Other, and moves toward whichever matches what they are thinking about.
+# Hiding a group until it has content would mean they never discover it, and
+# would leave nowhere to click "+ Add New" for the things that belong there.
+#
+# It is the SECTIONS INSIDE the groups that grow. That is where the
+# anti-overwhelm rule applies -- see codex/sections.py.
+#
+# "Other" is not a dumping ground. It is the honest answer for a kind that
+# is neither a written document nor a profile of something, and a writer can
+# move a section out of it whenever they disagree.
+GROUPS = {"notes", "profiles", "other"}
+DEFAULT_GROUP = "other"
+
+# Accepted on read only. An early build wrote "etc"; the word on screen is
+# "Other", and a cryptic abbreviation in the writer's own types.json is not
+# something to leave lying around.
+_GROUP_ALIASES = {"etc": "other"}
+
+
+def normalize_group(value) -> str:
+    """A stored group name, mapped to what this build calls it."""
+    group = str(value or DEFAULT_GROUP).strip().lower()
+    return _GROUP_ALIASES.get(group, group)
 
 
 class TypesError(Exception):
@@ -121,23 +139,23 @@ DEFAULT_TYPES: list[dict] = [
      "sections": _sections("overview", "details", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "faction", "label": "Faction", "folder": "factions", "icon": "Flag",
-     "group": "etc", "default_section": False,
+     "group": "other", "default_section": False,
      "sections": _sections("overview", "structure", "goals", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "religion", "label": "Religion", "folder": "religions", "icon": "Sparkles",
-     "group": "etc", "default_section": False,
+     "group": "other", "default_section": False,
      "sections": _sections("overview", "beliefs", "practices", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "object", "label": "Object", "folder": "objects", "icon": "Package",
-     "group": "etc", "default_section": False,
+     "group": "other", "default_section": False,
      "sections": _sections("overview", "appearance", "significance", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "concept", "label": "Concept", "folder": "concepts", "icon": "Lightbulb",
-     "group": "etc", "default_section": False,
+     "group": "other", "default_section": False,
      "sections": _sections("overview", "details", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "event", "label": "Event", "folder": "events", "icon": "CalendarClock",
-     "group": "etc", "default_section": False,
+     "group": "other", "default_section": False,
      "sections": _sections("overview", "what_happened", "consequences", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
 ]
@@ -274,7 +292,7 @@ def validate_registry(data) -> None:
         if "/" in folder or "\\" in folder or ".." in folder:
             raise TypesError("Must be a plain folder name.", f"{path}.folder")
 
-        group = entry.get("group", DEFAULT_GROUP)
+        group = normalize_group(entry.get("group", DEFAULT_GROUP))
         if group not in GROUPS:
             raise TypesError(
                 f"{group!r} is not a sidebar group. Use one of: "
@@ -418,6 +436,64 @@ def seed_registry(folder_path: str) -> dict:
 
 # ── Reading the registry ─────────────────────────────────────────────────────
 
+# Names Windows refuses to use for a file or folder, whatever the extension.
+# A writer naming a kind "Aux" is not doing anything wrong, and the failure
+# would be baffling -- the folder simply cannot be created.
+_WINDOWS_RESERVED = {
+    "con", "prn", "aux", "nul",
+    *(f"com{i}" for i in range(1, 10)),
+    *(f"lpt{i}" for i in range(1, 10)),
+}
+
+# Letters and single spaces. Deliberately narrower than IDENTIFIER_RE, which
+# governs ids the APP writes -- this one governs a name a writer types, and
+# it becomes a folder on their disk.
+_CUSTOM_NAME_RE = re.compile(r"^[A-Za-z]+(?: [A-Za-z]+)*$")
+CUSTOM_NAME_MAX = 32
+
+
+def custom_type_id(label: str) -> tuple[str, str]:
+    """
+    Turn a name a writer typed into (type_id, tidy_label), or refuse.
+
+    Narrow on purpose. This name becomes a FOLDER on the writer's disk, and
+    the ways that goes wrong are all quiet: a digit or a symbol that some
+    tool later chokes on, a trailing space Windows silently strips, a
+    reserved device name that simply cannot be created. Better to say "use
+    letters" up front than to fail at save time with something unreadable.
+
+    Letters and single spaces only. "Royal Household" -> royal_household.
+    """
+    tidy = " ".join(str(label or "").split())
+    if not tidy:
+        raise TypesError("Give this kind a name.", "label")
+    if len(tidy) > CUSTOM_NAME_MAX:
+        raise TypesError(
+            f"That name is too long. Keep it under {CUSTOM_NAME_MAX} characters.",
+            "label",
+        )
+    if any(ch.isdigit() for ch in tidy):
+        raise TypesError(
+            "Use letters only -- no numbers. This name becomes a folder on "
+            "your computer.",
+            "label",
+        )
+    if not _CUSTOM_NAME_RE.match(tidy):
+        raise TypesError(
+            "Use letters and spaces only, with no punctuation or symbols. "
+            "This name becomes a folder on your computer.",
+            "label",
+        )
+
+    type_id = tidy.lower().replace(" ", "_")
+    if type_id in _WINDOWS_RESERVED or type_id.split("_")[0] in _WINDOWS_RESERVED:
+        raise TypesError(
+            f"Windows will not allow a folder called {tidy!r}. Try another name.",
+            "label",
+        )
+    return type_id, tidy.title()
+
+
 def add_type(
     project_path: str,
     type_id: str,
@@ -437,13 +513,16 @@ def add_type(
     Writes to the project's own types.json, seeding it from the defaults
     first if the project has never had one.
     """
-    type_id = _check_identifier(type_id, "id")
+    # The name the writer typed is what governs, because it is what becomes a
+    # folder. The id is derived from it rather than accepted separately, so
+    # there is no way to slip a digit or a symbol past the rule.
+    type_id, label = custom_type_id(label or type_id.replace("_", " "))
+    group = normalize_group(group)
     if group not in GROUPS:
         raise TypesError(
             f"{group!r} is not a sidebar group. Use one of: {', '.join(sorted(GROUPS))}.",
             "group",
         )
-    label = (label or type_id.replace("_", " ").title()).strip()
 
     registry = seed_registry(project_path)
     if type_by_id(registry, type_id) is not None:
@@ -459,10 +538,13 @@ def add_type(
         "folder": folder,
         "icon": icon,
         "group": group,
-        # A kind the writer added on purpose is one they intend to use, so
-        # its section shows from the moment it exists rather than waiting
-        # for a first entry.
-        "default_section": True,
+        # Same rule as every built-in kind: the section appears once it holds
+        # something. Adding a kind is the first half of "choose Government,
+        # write the first one, save" -- and a kind whose entry was never
+        # saved should not leave an empty heading behind. It stays offered
+        # under "+ Add New" until it has an entry, which also means an
+        # abandoned attempt heals itself.
+        "default_section": False,
         "sections": _sections("overview", "details", "notes"),
         "required_fields": ["overview"],
         "custom_fields": [],
