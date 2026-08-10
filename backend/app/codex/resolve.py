@@ -149,11 +149,19 @@ def resolve_facts(
     result = Resolution()
 
     # ── Gather candidates ────────────────────────────────────────────────
-    candidates: list[tuple[tuple[int, int], dict]] = []
+    candidates: list[tuple[tuple[int, int], dict, str]] = []
     for fact in facts:
-        if fact.get("frame", TRUTH) not in frames:
+        # `or TRUTH` rather than a dict default: a fact read from a file or
+        # posted by the API carries frame=None explicitly when it was not
+        # given, and a plain .get(key, default) returns None for that -- which
+        # then matches no frame and silently drops the fact. An objective
+        # statement with no frame written IS the objective truth.
+        frame = str(fact.get("frame") or TRUTH)
+        scope = str(fact.get("ai_scope") or AI_SCOPE_ALWAYS)
+
+        if frame not in frames:
             continue
-        if not _scope_allowed(str(fact.get("ai_scope", AI_SCOPE_ALWAYS)), include_on_request):
+        if not _scope_allowed(scope, include_on_request):
             result.withheld_by_scope += 1
             continue
 
@@ -173,12 +181,12 @@ def resolve_facts(
                 result.withheld_spoilers += 1
                 continue
 
-        candidates.append((ordinal, fact))
+        candidates.append((ordinal, fact, frame))
 
     # ── Latest per (axis, frame), with rule 4 for ties ───────────────────
     grouped: dict[tuple[str, str], list[tuple[tuple[int, int], dict]]] = {}
-    for ordinal, fact in candidates:
-        key = (str(fact.get("axis", "")), str(fact.get("frame", TRUTH)))
+    for ordinal, fact, frame in candidates:
+        key = (str(fact.get("axis", "")), frame)
         grouped.setdefault(key, []).append((ordinal, fact))
 
     for (axis, frame), entries in grouped.items():

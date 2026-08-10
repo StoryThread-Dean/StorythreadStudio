@@ -208,6 +208,26 @@ def test_truth_and_a_belief_can_disagree_at_the_same_moment():
     assert resolution.ambiguities == []      # different frames never collide
 
 
+def test_a_fact_with_no_frame_written_is_objective_truth():
+    # REGRESSION. A fact read from a file or posted by the API carries
+    # frame=None explicitly when none was given, and .get("frame", TRUTH)
+    # returns None for that -- which matched no frame and silently dropped
+    # the fact. Every fact added through the API vanished on resolve.
+    run = [{"id": "f1", "at": "c-aaa/s-a1", "axis": "status", "value": "alive",
+            "frame": None, "revealed_at": None, "ai_scope": None}]
+    assert values(resolve_facts(run, INDEX, "c-ccc")) == ["alive"]
+
+
+def test_a_fact_with_no_ai_scope_written_is_visible():
+    # Same shape of bug on the other switch: an absent ai_scope must read as
+    # "always", not as an unrecognised value to be withheld.
+    run = [{"id": "f1", "at": "c-aaa/s-a1", "axis": "status", "value": "alive",
+            "frame": "truth", "revealed_at": None, "ai_scope": None}]
+    resolution = resolve_facts(run, INDEX, "c-ccc")
+    assert values(resolution) == ["alive"]
+    assert resolution.withheld_by_scope == 0
+
+
 def test_frames_are_entity_ids_so_a_rename_cannot_break_them():
     # Nothing here matches on a display name -- the point of storing the id.
     run = [fact("f1", "c-aaa/s-a1", "belief.x", "v", frame=ELARA)]
