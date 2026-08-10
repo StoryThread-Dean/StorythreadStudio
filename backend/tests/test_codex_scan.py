@@ -111,6 +111,94 @@ def test_being_the_TARGET_of_a_tie_counts_as_connected(tmp_path):
     assert scan(folder, [elara, garrick], REGISTRY).by_kind(STOP_LOOSE) == []
 
 
+# A LOOSE THREAD ASKS A QUESTION, AND SAYS WHAT IT IS NOT ASKING ABOUT.
+#
+# From live testing, on the first of 57 stops:
+#
+#     "LOOSE THREAD - Nothing connects to Alexandra Langford. That's not true.
+#      Alexandra Langford connects to the Character profile Alexandra Langford,
+#      which exists. So from my perspective there is either a glitch or
+#      something isn't right."
+#
+# The writer was right, and so was the stop -- about two different things called
+# "connected". Her name appearing in the prose and finding her entry is
+# automatic and needs nothing from anyone. Her entry relating to any OTHER entry
+# is what was missing. Stating a bare absence sent the writer off to check the
+# half that was already working.
+#
+# The wording below is the fix, and these tests hold it: the stop is a QUESTION,
+# and it says the mentions are already fine before naming what is not.
+
+def test_a_loose_thread_is_phrased_as_a_question(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    result = scan(folder, [_thread("e-1", "Elara")], REGISTRY)
+    stop = result.by_kind(STOP_LOOSE)[0]
+    assert stop.title == "How is Elara connected to the story?"
+
+
+def test_it_never_says_nothing_connects(tmp_path):
+    # The exact sentence that was read as a bug report about the app.
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    stop = scan(folder, [_thread("e-1", "Elara")], REGISTRY).by_kind(STOP_LOOSE)[0]
+    assert "Nothing connects to" not in stop.title
+    assert "Nothing connects to" not in stop.why
+
+
+def test_it_says_the_mentions_already_work(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    stop = scan(folder, [_thread("e-1", "Elara")], REGISTRY).by_kind(STOP_LOOSE)[0]
+    assert "already find this entry" in stop.why
+    assert "needs nothing from you" in stop.why
+
+
+def test_it_counts_the_mentions_as_proof(tmp_path):
+    # A number is what turns reassurance into evidence: the writer can check it.
+    folder = _project(tmp_path, {
+        "01.md": "# One\nElara waited. Later, Elara left.\n",
+        "02.md": "# Two\nElara returned.\n",
+    })
+    stop = scan(folder, [_thread("e-1", "Elara")], REGISTRY).by_kind(STOP_LOOSE)[0]
+    assert stop.detail["mentioned"] == 3
+    assert "3 of them so far" in stop.why
+
+
+def test_a_thread_the_prose_never_names_claims_no_count(tmp_path):
+    # Nothing to reassure about, so the sentence drops the number rather than
+    # boasting of zero mentions.
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    stop = scan(folder, [_thread("e-1", "Elara")], REGISTRY).by_kind(STOP_LOOSE)[0]
+    assert stop.detail["mentioned"] == 0
+    assert "of them so far" not in stop.why
+
+
+def test_it_names_the_entry_so_the_walk_can_show_it(tmp_path):
+    # The walk puts the entry's own icon and name above the question. It reads
+    # both out of detail; without them there is nothing to stand on.
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    stop = scan(folder, [_thread("e-1", "Elara")], REGISTRY).by_kind(STOP_LOOSE)[0]
+    assert stop.detail["name"] == "Elara"
+    assert stop.detail["type"] == "character"
+    assert stop.entity_id == "e-1"
+
+
+def test_counting_mentions_does_not_reread_the_manuscript(tmp_path, monkeypatch):
+    # The count and the prose stops need the same text. Reading each chapter
+    # twice would double the cost of the free pass on a full-length novel.
+    from app.codex import scan as scan_mod
+    reads: list[str] = []
+    real = scan_mod._read_chapter
+
+    def counted(project_path, filename):
+        reads.append(filename)
+        return real(project_path, filename)
+
+    monkeypatch.setattr(scan_mod, "_read_chapter", counted)
+    folder = _project(tmp_path, {"01.md": "# One\nElara waited.\n",
+                                 "02.md": "# Two\nElara left.\n"})
+    scan(folder, [_thread("e-1", "Elara")], REGISTRY)
+    assert sorted(reads) == ["01.md", "02.md"]
+
+
 # ── Snags come through the scan ──────────────────────────────────────────────
 
 def test_a_structural_snag_becomes_a_stop(tmp_path):

@@ -243,7 +243,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_codex_icon_keywords.py` -- TWO cross-language contracts, both read `lexicon.ts` from Python: every icon name the app can store is bundled, and every stop kind `scan.py` can send has words on screen
   - `test_codex_mentions.py` -- an ambiguous mention NEVER silently binds (a bound mention pulls a Thread into AI context, so a wrong bind is invisible); the two things allowed to settle one
   - `test_codex_snags.py` -- the structural checks, and the one deliberately NOT made: a value changing across the book is the feature, not a contradiction
-  - `test_codex_scan.py` -- the free pass; stops re-derived and never stored; a non-UTF-8 chapter skipped and named rather than taking the scan down
+  - `test_codex_scan.py` -- the free pass; stops re-derived and never stored; a non-UTF-8 chapter skipped and named rather than taking the scan down; and the Loose thread wording, which is a question about how an entry relates to OTHER entries and says up front (with a count) that the prose already finding the name is a separate thing that works
   - `test_codex_findings.py` -- a run survives deleting `app.db`; staged-then-discarded comes back; applied and dismissed never do; staleness checked locally with no AI call
   - `test_codex_context.py` -- the amended context rule, one test per obligation; pinned content never pruned and refused rather than truncated
   - `test_codex_weaving_routes.py` -- scan / run ledger / brief end to end; a run id off the wire is not trusted as a path

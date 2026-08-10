@@ -56,7 +56,9 @@ import {
   ArrowLeft, BellOff, Check, CircleHelp, Clock, Loader, Quote, Spool, X,
 } from "lucide-react";
 
-import { STOP_KINDS, TONE_CLASSES, type LexEntry } from "./lexicon";
+import {
+  STOP_KINDS, TONE_CLASSES, threadTypeEntry, type LexEntry, type Tone,
+} from "./lexicon";
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { BindDot } from "./BindDot";
 import { TieEditor } from "./TieEditor";
@@ -76,7 +78,7 @@ const PRIMARY_ACTION: Record<string, string> = {
   frayed: "Open it and fill it in",
   // An empty stub is a different question -- see needsNaming.
   frayed_placeholder: "Say what this is",
-  loose_thread: "Connect it to something",
+  loose_thread: "Choose the connection",
   snag: "Open it and sort it out",
   unplaced: "Open it and place it",
   early_mention: "Open it",
@@ -183,6 +185,21 @@ function needsNaming(stop: Stop): boolean {
 function connectsHere(stop: Stop): boolean {
   if (CONNECT_HERE.has(stop.kind)) return true;
   return stop.kind === "pinned" && Boolean(stop.detail?.has_entry);
+}
+
+/**
+ * The entry a stop is ABOUT, when there is one.
+ *
+ * Shown above the question so the writer starts from something they recognise
+ * -- their own profile, with its own kind's icon -- rather than from a sentence
+ * about it. Requested in exactly those terms: "Physically show the Character
+ * profile Icon (the starting point) and then ask the question."
+ */
+function standingOn(stop: Stop): { name: string; type: string } | null {
+  const name = String(stop.detail?.name ?? "");
+  const type = String(stop.detail?.type ?? "");
+  if (!name || !type || !stop.entity_id) return null;
+  return { name, type };
 }
 
 /** [type, section] an Unwoven answer belongs in. */
@@ -484,6 +501,32 @@ export function WeavingPanel({
             : ""}
         </span>
       </div>
+
+      {/* WHAT THE QUESTION IS ABOUT, shown before the question itself.
+          Reported from live testing: a stop reading "Nothing connects to
+          Alexandra Langford" was read as the app having lost track of a
+          profile that plainly exists. The fix asked for was to start from
+          something the writer recognises -- her own entry, with its own kind's
+          icon -- so the starting point is never in doubt and the question can
+          be about what is missing rather than about what is not. */}
+      {standingOn(stop) && (
+        <p data-testid="standing-on"
+           className="mb-1 flex items-center gap-1.5 text-[11px] text-text-muted">
+          {(() => {
+            const on = standingOn(stop)!;
+            const kind = threadTypeEntry(on.type);
+            const KindIcon = kind.Icon;
+            const tint = TONE_CLASSES[kind.tone as Tone].text;
+            return (
+              <>
+                <KindIcon size={13} className={`shrink-0 ${tint}`} />
+                <span className="font-medium text-text-primary">{on.name}</span>
+                <span className="text-faint">{kind.term}</span>
+              </>
+            );
+          })()}
+        </p>
+      )}
 
       <div className="mt-2 flex items-start gap-2">
         <Icon size={18} className={`mt-0.5 shrink-0 ${tone.text}`} />

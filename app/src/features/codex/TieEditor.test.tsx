@@ -105,7 +105,7 @@ async function open(props: Partial<Parameters<typeof TieEditor>[0]> = {}) {
 async function chooseOther(name: string) {
   await userEvent.click(screen.getByRole("button", { name: /Connect this to something/ }));
   await userEvent.click(screen.getByRole("button", { name: new RegExp("^" + name) }));
-  await waitFor(() => expect(screen.getByText(/How is/)).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
 }
 
 const posted = (fragment: string) =>
@@ -149,9 +149,14 @@ describe("the reported world", () => {
     expect(screen.getByText("The Faith of Pathicus")).toBeTruthy();
   });
 
-  it("says why connections matter when there are none", async () => {
+  it("rules out the OTHER sense of connected before saying what is missing", async () => {
+    // Reported: "Nothing connects to Alexandra Langford. That's not true."
+    // Two things are called connected -- the name finding the entry, which is
+    // automatic, and the entry relating to other entries, which is this. The
+    // empty state has to say the first part is fine or it reads as a fault.
     await open();
-    expect(screen.getByText(/no scan can guess them/)).toBeTruthy();
+    expect(screen.getByText(/already find\s+this entry/)).toBeTruthy();
+    expect(screen.getByText(/No scan can guess that/)).toBeTruthy();
   });
 });
 
@@ -371,6 +376,14 @@ describe("the shell", () => {
     await open();
     expect(screen.getByRole("dialog",
       { name: /Connections for Daughters of Pathicus/ })).toBeTruthy();
+  });
+
+  it("asks the question at the top, from the entry it is asking about", async () => {
+    // The same frame of reference as the walk: the writer can see where they
+    // are standing before being asked what it connects to.
+    await open();
+    expect(screen.getByRole("heading",
+      { name: /How is Daughters of Pathicus connected/ })).toBeTruthy();
   });
 
   it("uses the label the story gives an entry", async () => {
@@ -594,7 +607,7 @@ describe("the other end might not exist yet", () => {
       screen.getByLabelText("What kind of thing is it"), "Faction");
     await userEvent.click(screen.getByRole("button", { name: /Make it/ }));
 
-    await waitFor(() => expect(screen.getByText(/How is/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
     const made = posted("/thread/new")[0];
     expect(made.body).toMatchObject({ type: "faction", name: "The Foot Clan" });
   });
@@ -609,7 +622,7 @@ describe("the other end might not exist yet", () => {
     await userEvent.selectOptions(
       screen.getByLabelText("What kind of thing is it"), "Faction");
     await userEvent.click(screen.getByRole("button", { name: /Make it/ }));
-    await waitFor(() => expect(screen.getByText(/How is/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
 
     await userEvent.click(screen.getByRole("button", { name: /worships/ }));
     await waitFor(() => expect(posted("/tie").length).toBe(1));

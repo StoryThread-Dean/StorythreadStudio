@@ -754,7 +754,7 @@ describe("connecting without leaving the walk", () => {
 
   const lonely = stop({
     kind: "loose_thread", key: "loose|e-alex", entity_id: "e-alex",
-    title: "Nothing connects to Alexandra Langford", quote: "",
+    title: "How is Alexandra Langford connected to the story?", quote: "",
     detail: { name: "Alexandra Langford", type: "character",
               filename: "alexandra-langford.md" },
   });
@@ -762,7 +762,7 @@ describe("connecting without leaving the walk", () => {
   it("says what it will do, rather than promising to open something", async () => {
     mockApi({ stops: [lonely] });
     await start();
-    expect(screen.getByRole("button", { name: /Connect it to something/ }))
+    expect(screen.getByRole("button", { name: /Choose the connection/ }))
       .toBeTruthy();
   });
 
@@ -771,7 +771,7 @@ describe("connecting without leaving the walk", () => {
     const onOpenThread = vi.fn();
     await start({ onOpenThread });
     await userEvent.click(
-      screen.getByRole("button", { name: /Connect it to something/ }));
+      screen.getByRole("button", { name: /Choose the connection/ }));
     expect(await screen.findByTestId("tie-editor")).toBeTruthy();
     expect(onOpenThread).not.toHaveBeenCalled();
   });
@@ -780,7 +780,7 @@ describe("connecting without leaving the walk", () => {
     mockApi({ stops: [lonely] });
     await start();
     await userEvent.click(
-      screen.getByRole("button", { name: /Connect it to something/ }));
+      screen.getByRole("button", { name: /Choose the connection/ }));
     expect(await screen.findByRole("dialog",
       { name: /Connections for Alexandra Langford/ })).toBeTruthy();
   });
@@ -791,11 +791,11 @@ describe("connecting without leaving the walk", () => {
     mockApi({ stops: [lonely, stop({ key: "second", title: "Something else" })] });
     await start();
     await userEvent.click(
-      screen.getByRole("button", { name: /Connect it to something/ }));
+      screen.getByRole("button", { name: /Choose the connection/ }));
     await screen.findByTestId("tie-editor");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
-    expect(await screen.findByText(/Nothing connects to Alexandra Langford/))
+    expect(await screen.findByText(/How is Alexandra Langford connected/))
       .toBeTruthy();
     expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
   });
@@ -805,7 +805,7 @@ describe("connecting without leaving the walk", () => {
     mockApi({ stops: [lonely, stop({ key: "second", title: "Something else" })] });
     await start();
     await userEvent.click(
-      screen.getByRole("button", { name: /Connect it to something/ }));
+      screen.getByRole("button", { name: /Choose the connection/ }));
     await screen.findByTestId("tie-editor");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
@@ -817,11 +817,11 @@ describe("connecting without leaving the walk", () => {
     // own kind can be connected even though it cannot yet be written in.
     mockApi({ stops: [stop({
       kind: "loose_thread", key: "loose|e-drow", entity_id: "e-drow",
-      title: "Nothing connects to Drow", quote: "",
+      title: "How is Drow connected to the story?", quote: "",
       detail: { name: "Drow", type: "race", filename: "drow.md" },
     })] });
     await start();
-    expect(screen.getByRole("button", { name: /Connect it to something/ }))
+    expect(screen.getByRole("button", { name: /Choose the connection/ }))
       .toBeTruthy();
   });
 });
@@ -901,5 +901,80 @@ describe("an empty stub is asked what it IS", () => {
     })] });
     await start();
     expect(screen.getByRole("button", { name: /Say what this is/ })).toBeTruthy();
+  });
+});
+
+describe("the question starts from something the writer recognises", () => {
+  // Reported from live testing, on the first item of 57:
+  //
+  //     "LOOSE THREAD - Nothing connections to Alexandra Langford. That's not
+  //      true. Alexandra Langford connects to the Character profile Alexandra
+  //      Langford... So from my perspective there is either a glitch or
+  //      something isn't right."
+  //
+  // They were right, about a different sense of the word. Two things get called
+  // connected: her name finding her entry, which is automatic and needs nothing,
+  // and her entry relating to OTHER entries, which is what was missing. Stating
+  // an absence invited them to go and check the part that was already fine.
+  //
+  // The fix asked for: show the entry itself -- its own kind's icon and name --
+  // then ask the question.
+
+  const lonely = stop({
+    kind: "loose_thread", key: "loose|e-alex", entity_id: "e-alex",
+    title: "How is Alexandra Langford connected to the story?", quote: "",
+    why: "Mentions of this name in your writing already find this entry -- 43 of them so far -- and that needs nothing from you. What is missing is how it relates to the REST of your world.",
+    detail: { name: "Alexandra Langford", type: "character",
+              filename: "alexandra-langford.md", mentioned: 43 },
+  });
+
+  it("shows the entry it is asking about, by name", async () => {
+    mockApi({ stops: [lonely] });
+    await start();
+    const on = screen.getByTestId("standing-on");
+    expect(on.textContent).toContain("Alexandra Langford");
+  });
+
+  it("says what KIND of thing it is, so the profile is recognisable", async () => {
+    mockApi({ stops: [lonely] });
+    await start();
+    expect(screen.getByTestId("standing-on").textContent).toContain("Character");
+  });
+
+  it("shows it BEFORE the question, not after", async () => {
+    mockApi({ stops: [lonely] });
+    await start();
+    const text = screen.getByTestId("weaving-panel").textContent ?? "";
+    expect(text.indexOf("Alexandra Langford"))
+      .toBeLessThan(text.indexOf("How is Alexandra Langford connected"));
+  });
+
+  it("asks a question rather than reporting an absence", async () => {
+    mockApi({ stops: [lonely] });
+    await start();
+    expect(screen.getByText(/How is Alexandra Langford connected/)).toBeTruthy();
+  });
+
+  it("says the mentions are already fine, with the count as proof", async () => {
+    // The sentence that answers "isn't this already connected?" with "yes,
+    // that part is -- here is what is not".
+    mockApi({ stops: [lonely] });
+    await start();
+    await userEvent.click(screen.getByText("Why am I seeing this?"));
+    expect(screen.getByText(/already find this entry -- 43 of them/)).toBeTruthy();
+  });
+
+  it("labels the action as choosing, not as opening", async () => {
+    mockApi({ stops: [lonely] });
+    await start();
+    expect(screen.getByRole("button", { name: /Choose the connection/ }))
+      .toBeTruthy();
+  });
+
+  it("shows no starting point for a stop that is not about an entry", async () => {
+    // An Unspun name has no entry yet, so there is nothing to stand on.
+    mockApi({ stops: [stop()] });
+    await start();
+    expect(screen.queryByTestId("standing-on")).toBeNull();
   });
 });

@@ -370,9 +370,17 @@ export function TieEditor({
         className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-violet-900 bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <Link2 size={13} className="text-emerald-300" />
-          <h2 className="flex-1 text-xs font-semibold text-text-primary">
-            {nodeLabel(thread)}
+          {/* The entry being connected FROM, with its own kind's icon. The
+              question only makes sense once the writer can see where they are
+              standing. */}
+          {(() => {
+            const kind = threadTypeEntry(thread.type);
+            const KindIcon = kind.Icon;
+            return <KindIcon size={14}
+                             className={`shrink-0 ${TONE_CLASSES[kind.tone].text}`} />;
+          })()}
+          <h2 className="flex-1 truncate text-xs font-semibold text-text-primary">
+            How is {nodeLabel(thread)} connected?
           </h2>
           <button onClick={onClose} aria-label="Close"
                   className="rounded p-1 text-faint hover:text-text-primary">
@@ -388,9 +396,10 @@ export function TieEditor({
             </p>
           ) : ties.length === 0 ? (
             <p className="text-[11px] text-faint">
-              Nothing is connected to this yet. Connections are what turn a list
-              of entries into a world, and no scan can guess them -- only you
-              know that the Daughters worship Pathicus.
+              Nothing yet. Mentions of this name in your writing already find
+              this entry, and that needs nothing from you -- what is missing is
+              how it relates to the rest of your world. No scan can guess that:
+              only you know that the Daughters worship Pathicus.
             </p>
           ) : (
             <ul className="space-y-0.5">
@@ -569,7 +578,8 @@ export function TieEditor({
                 </>
               ) : (
                 <>
-                  <p className="mb-1.5 text-[11px] text-text-muted">
+                  <p data-testid="relation-prompt"
+                     className="mb-1.5 text-[11px] text-text-muted">
                     How is{" "}
                     <span className="text-text-primary">{nodeLabel(thread)}</span>
                     {" "}connected to{" "}

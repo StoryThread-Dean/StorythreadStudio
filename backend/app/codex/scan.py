@@ -197,11 +197,18 @@ def scan(
     wanted = [t for t in threads
               if not request.types or t.get("type") in request.types]
 
+    # The manuscript is read FIRST, and read once, because two different stops
+    # need it: the ones about the prose, and the count of how often an entry is
+    # named -- which is what lets a question about connections say plainly that
+    # the mentions themselves are already fine.
+    chapters, result.unreadable = _read_manuscript(project_path, request)
+    mentioned = _mention_counts(chapters, threads)
+
     result.stops.extend(_thread_stops(wanted, registry, index, request,
-                                      label_for=label_for))
-    manuscript, unreadable = _manuscript_stops(project_path, threads, request, index)
-    result.stops.extend(manuscript)
-    result.unreadable = unreadable
+                                      label_for=label_for,
+                                      mentioned=mentioned))
+    result.stops.extend(_manuscript_stops(project_path, chapters, threads,
+                                          request, index))
     result.stops.extend(_unwoven_stops(threads, request))
     result.stops.extend(_pinned_stops(project_path, threads, request))
 
@@ -315,9 +322,11 @@ def _unwoven_stops(threads: list[dict], request: ScanRequest) -> list[Stop]:
 
 
 def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
-                  request: ScanRequest, *, label_for=None) -> list[Stop]:
+                  request: ScanRequest, *, label_for=None,
+                  mentioned: dict[str, int] | None = None) -> list[Stop]:
     """Everything answerable from the Weave alone -- no manuscript needed."""
     stops: list[Stop] = []
+    mentioned = mentioned or {}
     type_index = {t.get("id"): t for t in registry.get("types", [])}
 
     # A Thread is connected if it owns a Tie OR is the target of one. Only one
@@ -370,14 +379,36 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                 ))
 
         if request.wants(STOP_LOOSE) and entity_id not in connected and not bare:
+            # ASKED AS A QUESTION, FROM SOMETHING THE WRITER RECOGNISES.
+            #
+            # The first wording was "Nothing connects to Alexandra Langford",
+            # and a writer whose Alexandra Langford profile plainly exists read
+            # that as the app having lost track of her:
+            #
+            #     "That's not true. Alexandra Langford connects to the Character
+            #      profile Alexandra Langford. So why is this showing up?"
+            #
+            # They were right, about a different sense of the word. A mention of
+            # her name finding her entry is automatic. A connection between her
+            # entry and ANOTHER entry is what was missing. Stating an absence
+            # invited the writer to check the thing that was already fine.
+            #
+            # So it is a question now, and the walk shows the entry it is asking
+            # ABOUT -- its own kind's icon and name -- so the starting point is
+            # never in doubt.
+            times = mentioned.get(entity_id, 0)
             stops.append(Stop(
                 kind=STOP_LOOSE, entity_id=entity_id,
                 key=_key(STOP_LOOSE, entity_id),
-                title=f"Nothing connects to {name}",
-                why=("No Tie reaches this Thread in either direction. That is "
-                     "fine for something genuinely standalone, and usually "
-                     "means a connection you know about is not written down."),
-                detail=dict(where),
+                title=f"How is {name} connected to the story?",
+                why=("Mentions of this name in your writing already find this "
+                     "entry"
+                     + (f" -- {times} of them so far" if times else "")
+                     + ", and that needs nothing from you. What is missing is "
+                       "how it relates to the REST of your world: who it knows, "
+                       "where it belongs, what it serves or worships. Nothing "
+                       "records any of that yet."),
+                detail={**where, "mentioned": times},
             ))
 
         if request.wants(STOP_SNAG) or request.wants(STOP_UNPLACED):
@@ -449,9 +480,59 @@ def _and_list(items: list[str]) -> str:
 
 # ── Against the manuscript ───────────────────────────────────────────────────
 
-def _manuscript_stops(project_path: str, threads: list[dict],
-                      request: ScanRequest,
-                      index: AnchorIndex) -> tuple[list[Stop], list[str]]:
+def _read_manuscript(project_path: str,
+                     request: ScanRequest) -> tuple[list[tuple[str, str]], list[str]]:
+    """
+    [(chapter id, prose)] in reading order, plus what could not be read.
+
+    Every chapter is read ONCE and kept. A novel's prose is a few megabytes;
+    re-reading every file for each pass that wants it would cost more than
+    holding it.
+    """
+    chapters: list[tuple[str, str]] = []
+    unreadable: list[str] = []
+    for chapter_id, filename in ordered_chapter_ids(project_path):
+        if request.chapter_ids and chapter_id not in request.chapter_ids:
+            continue
+        text = _read_chapter(project_path, filename)
+        if text is None:
+            unreadable.append(filename)
+            continue
+        chapters.append((chapter_id, _strip_chrome(text)))
+    return chapters, unreadable
+
+
+def _mention_counts(chapters: list[tuple[str, str]],
+                    threads: list[dict]) -> dict[str, int]:
+    """
+    {entity_id -> how often the prose names it}, counting BOUND mentions only.
+
+    This exists because of a question asked out loud: "Nothing connects to
+    Alexandra Langford. That's not true. Alexandra Langford connects to the
+    Character profile Alexandra Langford."
+
+    The writer was right and the stop was right -- about two different things.
+    A mention of her name finding her entry is automatic and needs nothing from
+    anyone. What was missing was any connection between her entry and ANY OTHER
+    entry. Counting the mentions lets the question say the first part is already
+    working, with a number as proof, instead of leaving the writer to suspect
+    the app has lost track of her.
+    """
+    if not threads:
+        return {}
+    alias_map = build_alias_map(threads)
+    display = alias_display(threads)
+    counts: dict[str, int] = {}
+    for _chapter_id, prose in chapters:
+        for mention in find_mentions(prose, alias_map, display=display):
+            if mention.bound and mention.entity_id:
+                counts[mention.entity_id] = counts.get(mention.entity_id, 0) + 1
+    return counts
+
+
+def _manuscript_stops(project_path: str, chapters: list[tuple[str, str]],
+                      threads: list[dict], request: ScanRequest,
+                      index: AnchorIndex) -> list[Stop]:
     """
     What the prose says that the Weave does not know.
 
@@ -465,30 +546,15 @@ def _manuscript_stops(project_path: str, threads: list[dict],
     wants_unspun = request.wants(STOP_UNSPUN)
     wants_early = request.wants(STOP_EARLY)
     if not (wants_unspun or wants_early):
-        return [], []
+        return []
 
     alias_map = build_alias_map(threads)
     display = alias_display(threads)
     by_id = {str(t.get("entity_id")): t for t in threads if t.get("entity_id")}
 
     stops: list[Stop] = []
-    unreadable: list[str] = []
     unspun_totals: dict[str, int] = {}
     unspun_first: dict[str, tuple[str, str]] = {}
-
-    # Every chapter is read ONCE and kept, because the evidence pass has to
-    # see the whole book before the counting pass can judge a single word. A
-    # novel's prose is a few megabytes; re-reading every file twice to avoid
-    # holding it would cost more than it saves.
-    chapters: list[tuple[str, str]] = []
-    for chapter_id, filename in ordered_chapter_ids(project_path):
-        if request.chapter_ids and chapter_id not in request.chapter_ids:
-            continue
-        text = _read_chapter(project_path, filename)
-        if text is None:
-            unreadable.append(filename)
-            continue
-        chapters.append((chapter_id, _strip_chrome(text)))
 
     # What the writer's own prose says about which words are names. Built
     # from the manuscript AND from their notes, outline and existing entries:
@@ -565,7 +631,7 @@ def _manuscript_stops(project_path: str, threads: list[dict],
                         "also_written_in": written_in},
             ))
 
-    return stops, unreadable
+    return stops
 
 
 def _unspun_why(name: str, count: int, written_in: list[str],
