@@ -56,10 +56,12 @@ from typing import Callable
 import yaml
 
 RUN_HEADING = "Run"
+FULL_SUMMARY_HEADING = "Full AI Summary"
 
 # Fields a fact may carry. Anything else a writer adds is preserved as-is.
 FACT_KEYS = ("id", "at", "axis", "value", "frame", "revealed_at", "ai_scope", "supersedes")
 TIE_KEYS = ("rel", "target", "at", "until", "frame", "revealed_at", "ai_scope")
+TRAIT_KEYS = ("trait", "description", "importance", "ai_scope")
 
 _SECTION_SPLIT_RE = re.compile(r"^# (.+)$", re.MULTILINE)
 _AI_SUMMARY_RE = re.compile(r"^## AI Summary:.*$", re.MULTILINE)
@@ -140,6 +142,10 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
         "fields": dict(front.get("fields") or {}),
         "created_at": str(front.get("created_at") or ""),
         "updated_at": str(front.get("updated_at") or ""),
+        # Only written when "side" -- same rule the profile format uses, so
+        # a Main character's file stays byte-identical through migration.
+        "character_kind": str(front.get("character_kind") or ""),
+        "full_ai_summary": "",
         "sections": {},
         "ties": [],
         "run": [],
@@ -167,14 +173,38 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
                 thread["run_raw"] = leftover
             continue
 
+        if heading == FULL_SUMMARY_HEADING:
+            thread["full_ai_summary"] = section_body.strip()
+            continue
+
         content, ai_summary = _split_ai_summary(section_body)
-        thread["sections"][_section_id(heading)] = {
+        section_id = _section_id(heading)
+
+        # Trait blocks are a YAML list; ordinary sections are prose. Try the
+        # list, and on ANY doubt keep the text as content -- the tolerance
+        # that stops a hand-edited file from losing a section.
+        trait_blocks: list[dict] = []
+        if _looks_like_trait_list(content):
+            parsed, leftover = _parse_list_block(content, TRAIT_KEYS)
+            if parsed and not leftover.strip():
+                trait_blocks = parsed
+                content = ""
+
+        thread["sections"][section_id] = {
             "heading": heading,
             "content": content,
+            "trait_blocks": trait_blocks,
             "ai_summary": ai_summary,
         }
 
     return thread
+
+
+def _looks_like_trait_list(text: str) -> bool:
+    """Cheap gate before attempting a YAML parse: a trait section starts with
+    '- trait:'. Anything else is prose and must not be run through a parser
+    that might mangle it."""
+    return text.lstrip().startswith("- trait:")
 
 
 def _section_id(heading: str) -> str:
@@ -218,6 +248,8 @@ def render_thread(
     if thread.get("role"):
         lines.append(f"role: {thread['role']}")
     lines.append(f"status: {thread.get('status') or 'active'}")
+    if thread.get("character_kind") == "side":
+        lines.append("character_kind: side")
 
     if thread.get("aliases"):
         lines.append("aliases:")
@@ -254,10 +286,20 @@ def render_thread(
         section = thread["sections"].get(section_id)
         if section is None:
             continue
-        lines.append(f"# {section.get('heading') or section_id.replace('_', ' ').title()}")
+        heading = section.get("heading") or section_id.replace("_", " ").title()
+        lines.append(f"# {heading}")
+        for block in section.get("trait_blocks") or []:
+            lines.append(f"- trait: {block.get('trait', '')}")
+            lines.append(f"  description: {_quote(block.get('description', ''))}")
+            lines.append(f"  importance: {block.get('importance', 'background')}")
+            # Only written when it is not the default, so an ordinary trait
+            # block round-trips exactly as the profile format wrote it.
+            if block.get("ai_scope") and block["ai_scope"] != "always":
+                lines.append(f"  ai_scope: {block['ai_scope']}")
+            lines.append("")
         if section.get("content"):
             lines += [section["content"], ""]
-        lines.append(f"## AI Summary: {section.get('heading') or section_id}")
+        lines.append(f"## AI Summary: {heading}")
         lines += [section.get("ai_summary") or "_Generated on demand. Editable by writer._", ""]
 
     # The Run last: it is the machine-facing part, and a writer opening the
@@ -285,6 +327,10 @@ def render_thread(
         # Preserved verbatim: a Run we could not parse is still the writer's.
         lines.append(thread["run_raw"].strip())
         lines.append("")
+
+    if thread.get("full_ai_summary"):
+        lines.append(f"# {FULL_SUMMARY_HEADING}")
+        lines += [thread["full_ai_summary"], ""]
 
     return "\n".join(lines).rstrip() + "\n"
 
