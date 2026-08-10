@@ -132,6 +132,12 @@ async def put_structure(request: PutStructureRequest):
     for name in request.unassigned:
         _reject_unsafe_filename(name)
 
+    # Chapter ids are NOT part of the payload -- the frontend neither knows
+    # nor needs to know about them -- so carry them across from what is
+    # already stored. Without this, every act reorder would silently mint new
+    # identities and orphan every Weave anchor in the book.
+    existing, _ = load_structure(request.folder_path)
+
     candidate = {
         "acts": [
             {
@@ -142,6 +148,7 @@ async def put_structure(request: PutStructureRequest):
             for act in request.acts
         ],
         "unassigned": list(request.unassigned),
+        "chapter_ids": dict(existing.get("chapter_ids") or {}),
     }
 
     # Heal instead of 400 on stale filenames: the writer may have deleted a
