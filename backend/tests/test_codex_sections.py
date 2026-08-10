@@ -19,7 +19,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.codex.sections import build_sections
+from app.codex.sections import build_sections, create_note
 from app.codex.types_registry import TypesError, add_type, set_type_group
 from app.main import app
 
@@ -99,9 +99,36 @@ def test_everything_else_is_offered_rather_than_hidden(tmp_path):
 def test_a_section_appears_once_it_holds_something(tmp_path):
     folder = _project(tmp_path, profiles=[("factions", ["the-order"])])
     tree = build_sections(folder, converted=False)
-    assert "faction" in _sections(tree, "other")
+    assert "faction" in _sections(tree, "profiles")
     # And stops being offered, because it is now on screen.
     assert "faction" not in _available_ids(tree)
+
+
+# ── What decides which group a kind belongs to ───────────────────────────────
+
+def test_a_profile_is_an_entry_about_something_in_the_world(tmp_path):
+    # The dividing line: am I writing a profile OF something? A Faction, a
+    # Religion, a Government are profiles of a group, a faith and a state --
+    # so they belong beside Character, not in the leftovers.
+    offered = {a["id"]: a["group"]
+               for a in build_sections(_project(tmp_path), converted=False)["available"]}
+    for kind in ("faction", "religion", "government", "deity", "creature", "culture"):
+        assert offered[kind] == "profiles", f"{kind} should be a Profile"
+
+
+def test_notes_are_documents_the_writer_authors(tmp_path):
+    # Prose, in the writer's own voice.
+    offered = {a["id"]: a["group"]
+               for a in build_sections(_project(tmp_path), converted=False)["available"]}
+    for note in ("outline", "style_guide", "brainstorming", "research", "themes"):
+        assert offered[note] == "notes", f"{note} should be a Note"
+
+
+def test_other_holds_only_what_is_genuinely_neither(tmp_path):
+    offered = {a["id"]: a["group"]
+               for a in build_sections(_project(tmp_path), converted=False)["available"]}
+    other = {k for k, group in offered.items() if group == "other"}
+    assert other == {"object", "concept", "event", "language"}
 
 
 def test_a_default_section_shows_even_when_empty(tmp_path):
@@ -193,14 +220,14 @@ def test_a_custom_kind_joins_the_world_like_any_other(tmp_path):
     # exactly like a built-in one -- including waiting for its first entry --
     # which is the whole point of the registry being data rather than code.
     folder = _project(tmp_path)
-    add_type(folder, "", "Government", group="other")
+    add_type(folder, "", "Bloodline", group="other")
     tree = build_sections(folder, converted=False)
-    assert "government" in _available_ids(tree)
+    assert "bloodline" in _available_ids(tree)
 
-    (tmp_path / "MyNovel" / "profiles" / "governments").mkdir(parents=True)
-    (tmp_path / "MyNovel" / "profiles" / "governments" / "the-crown.md").write_text(
+    (tmp_path / "MyNovel" / "profiles" / "bloodlines").mkdir(parents=True)
+    (tmp_path / "MyNovel" / "profiles" / "bloodlines" / "the-crown.md").write_text(
         "# x\n", encoding="utf-8")
-    assert "government" in _sections(build_sections(folder, converted=False), "other")
+    assert "bloodline" in _sections(build_sections(folder, converted=False), "other")
 
 
 def test_a_custom_kind_follows_the_same_rule_as_every_other(tmp_path):
@@ -209,10 +236,10 @@ def test_a_custom_kind_follows_the_same_rule_as_every_other(tmp_path):
     # empty heading behind -- it stays offered under "+ Add New", so an
     # abandoned attempt heals itself rather than littering the sidebar.
     folder = _project(tmp_path)
-    add_type(folder, "deity", "Deity", group="profiles")
+    add_type(folder, "", "Warband", group="profiles")
     tree = build_sections(folder, converted=False)
-    assert "deity" not in _sections(tree, "profiles")
-    assert "deity" in _available_ids(tree)
+    assert "warband" not in _sections(tree, "profiles")
+    assert "warband" in _available_ids(tree)
 
 
 def test_a_custom_kind_can_be_put_in_any_group(tmp_path):
@@ -240,11 +267,11 @@ def test_a_duplicate_kind_is_refused(tmp_path):
 
 def test_a_custom_kind_appears_once_it_has_an_entry(tmp_path):
     folder = _project(tmp_path)
-    add_type(folder, "deity", "Deity", group="profiles")
-    (tmp_path / "MyNovel" / "profiles" / "deitys").mkdir(parents=True)
-    (tmp_path / "MyNovel" / "profiles" / "deitys" / "the-thread.md").write_text(
+    add_type(folder, "", "Warband", group="profiles")
+    (tmp_path / "MyNovel" / "profiles" / "warbands").mkdir(parents=True)
+    (tmp_path / "MyNovel" / "profiles" / "warbands" / "the-thread.md").write_text(
         "# x\n", encoding="utf-8")
-    assert "deity" in _sections(build_sections(folder, converted=False), "profiles")
+    assert "warband" in _sections(build_sections(folder, converted=False), "profiles")
 
 
 # ── A name a writer types becomes a folder on their disk ─────────────────────
@@ -307,6 +334,61 @@ def test_an_unknown_group_is_refused(tmp_path):
 
 # ── Over HTTP ────────────────────────────────────────────────────────────────
 
+# ── The Notes half of "+ Add New" ────────────────────────────────────────────
+# Profiles and Other add a KIND of entry. Notes adds a DOCUMENT, because
+# that is what a note is -- "Dungeon Rules", "Magic Costs", whatever this
+# particular book needs.
+
+def test_a_writer_can_add_a_note_of_their_own(tmp_path):
+    folder = _project(tmp_path)
+    create_note(folder, "Dungeon Rules")
+    tree = build_sections(folder, converted=False)
+    assert "dungeon_rules" in _sections(tree, "notes")
+    assert _sections(tree, "notes")["dungeon_rules"]["label"] == "Dungeon Rules"
+
+
+def test_a_new_note_appears_straight_away(tmp_path):
+    # Seeded with its own heading, so the "appears when it holds something"
+    # rule does not hide the thing the writer just asked for.
+    folder = _project(tmp_path)
+    create_note(folder, "Magic Costs")
+    section = _sections(build_sections(folder, converted=False), "notes")["magic_costs"]
+    assert section["count"] == 1
+
+
+def test_a_note_lands_in_a_file_the_writer_can_open_anywhere(tmp_path):
+    folder = _project(tmp_path)
+    create_note(folder, "Dungeon Rules")
+    path = tmp_path / "MyNovel" / "notes" / "dungeon-rules.md"
+    assert path.is_file()
+    assert path.read_text(encoding="utf-8").startswith("# Dungeon Rules")
+
+
+def test_a_note_name_follows_the_same_rules_as_a_kind(tmp_path):
+    # Both become files on disk, so both get the same guard.
+    folder = _project(tmp_path)
+    with pytest.raises(TypesError, match="no numbers"):
+        create_note(folder, "Chapter 3 Ideas")
+    with pytest.raises(TypesError, match="Windows will not allow"):
+        create_note(folder, "Aux")
+
+
+def test_adding_a_note_that_exists_is_refused(tmp_path):
+    folder = _project(tmp_path)
+    create_note(folder, "Dungeon Rules")
+    with pytest.raises(TypesError, match="already have a note"):
+        create_note(folder, "Dungeon Rules")
+
+
+def test_adding_a_note_over_http_returns_the_new_tree(tmp_path):
+    folder = _project(tmp_path)
+    body = client.post("/api/codex/note", json={
+        "project_path": folder, "label": "Dungeon Rules",
+    }).json()
+    notes = next(g for g in body["groups"] if g["id"] == "notes")
+    assert "dungeon_rules" in {s["id"] for s in notes["sections"]}
+
+
 def test_the_sections_endpoint_returns_all_three_groups(tmp_path):
     folder = _project(tmp_path)
     body = client.get("/api/codex/sections", params={"project_path": folder}).json()
@@ -317,10 +399,10 @@ def test_the_sections_endpoint_returns_all_three_groups(tmp_path):
 def test_adding_a_kind_over_http_offers_it_in_its_group(tmp_path):
     folder = _project(tmp_path)
     body = client.post("/api/codex/type", json={
-        "project_path": folder, "id": "", "label": "Government", "group": "other",
+        "project_path": folder, "id": "", "label": "Bloodline", "group": "other",
     }).json()
     other = next(g for g in body["groups"] if g["id"] == "other")
-    assert "government" in {a["id"] for a in other["available"]}
+    assert "bloodline" in {a["id"] for a in other["available"]}
 
 
 def test_a_bad_custom_name_over_http_says_why_in_plain_words(tmp_path):

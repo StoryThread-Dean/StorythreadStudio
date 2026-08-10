@@ -138,14 +138,36 @@ DEFAULT_TYPES: list[dict] = [
      "group": "profiles", "default_section": True,
      "sections": _sections("overview", "details", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
+    # ── Profiles: an entry ABOUT something in the world ──────────────────
+    # A person, a place, a group, a faith, a government. The test is "am I
+    # writing a profile OF something?" -- which is why a Faction belongs
+    # here beside a Character, and not in the leftovers.
     {"id": "faction", "label": "Faction", "folder": "factions", "icon": "Flag",
-     "group": "other", "default_section": False,
+     "group": "profiles", "default_section": False,
      "sections": _sections("overview", "structure", "goals", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "religion", "label": "Religion", "folder": "religions", "icon": "Sparkles",
-     "group": "other", "default_section": False,
+     "group": "profiles", "default_section": False,
      "sections": _sections("overview", "beliefs", "practices", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
+    {"id": "government", "label": "Government", "folder": "governments", "icon": "Landmark",
+     "group": "profiles", "default_section": False,
+     "sections": _sections("overview", "structure", "laws", "succession", "notes"),
+     "required_fields": ["overview"], "custom_fields": []},
+    {"id": "deity", "label": "Deity", "folder": "deities", "icon": "Sun",
+     "group": "profiles", "default_section": False,
+     "sections": _sections("overview", "domain", "worship", "notes"),
+     "required_fields": ["overview"], "custom_fields": []},
+    {"id": "creature", "label": "Creature", "folder": "creatures", "icon": "PawPrint",
+     "group": "profiles", "default_section": False,
+     "sections": _sections("overview", "appearance", "behaviour", "notes"),
+     "required_fields": ["overview"], "custom_fields": []},
+    {"id": "culture", "label": "Culture", "folder": "cultures", "icon": "Users",
+     "group": "profiles", "default_section": False,
+     "sections": _sections("overview", "customs", "values", "notes"),
+     "required_fields": ["overview"], "custom_fields": []},
+
+    # ── Other: genuinely neither a document nor a profile of something ───
     {"id": "object", "label": "Object", "folder": "objects", "icon": "Package",
      "group": "other", "default_section": False,
      "sections": _sections("overview", "appearance", "significance", "notes"),
@@ -157,6 +179,10 @@ DEFAULT_TYPES: list[dict] = [
     {"id": "event", "label": "Event", "folder": "events", "icon": "CalendarClock",
      "group": "other", "default_section": False,
      "sections": _sections("overview", "what_happened", "consequences", "notes"),
+     "required_fields": ["overview"], "custom_fields": []},
+    {"id": "language", "label": "Language", "folder": "languages", "icon": "Languages",
+     "group": "other", "default_section": False,
+     "sections": _sections("overview", "sound_and_script", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
 ]
 

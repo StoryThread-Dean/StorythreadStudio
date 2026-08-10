@@ -35,9 +35,19 @@ from app.codex.types_registry import (
     GROUPS, TypesError, load_registry, normalize_group,
 )
 
-# Documents rather than Threads. These live in notes/ as ordinary Markdown
-# and are edited in the editor, not the Weave -- but they belong in the same
-# tree, because to a writer they are simply another part of their world.
+# ── Notes: a document the writer AUTHORS ─────────────────────────────────────
+#
+# The dividing line across the three groups, stated once:
+#
+#   Notes     something you WRITE -- an outline, a style guide, brainstorming,
+#             your own "Dungeon Rules". Prose, in your voice.
+#   Profiles  an entry ABOUT something in the world -- a person, a place, a
+#             faction, a faith, a government. A profile OF something.
+#   Other     genuinely neither. Concepts, objects, events, languages.
+#
+# These live in notes/ as ordinary Markdown and are edited in the editor
+# rather than the Weave, but they belong in the same tree: to a writer they
+# are simply another part of their world.
 NOTE_SECTIONS = [
     # Always shown: every project should have somewhere to put a loose
     # thought without adding anything first.
@@ -46,6 +56,12 @@ NOTE_SECTIONS = [
     {"id": "outline", "label": "Outline", "filename": "outline.md",
      "default_section": False},
     {"id": "style_guide", "label": "Style Guide", "filename": "style-guide.md",
+     "default_section": False},
+    {"id": "brainstorming", "label": "Brainstorming", "filename": "brainstorming.md",
+     "default_section": False},
+    {"id": "research", "label": "Research", "filename": "research.md",
+     "default_section": False},
+    {"id": "themes", "label": "Themes", "filename": "themes.md",
      "default_section": False},
 ]
 
@@ -67,6 +83,35 @@ def _count_markdown(folder: str) -> int:
         return sum(1 for n in os.listdir(folder) if n.endswith(".md"))
     except OSError:
         return 0
+
+
+def create_note(project_path: str, label: str) -> dict:
+    """
+    Add a document of the writer's own under Notes -- "Dungeon Rules",
+    "Magic Costs", whatever their book needs.
+
+    The Notes equivalent of adding a kind. Same name rules, for the same
+    reason: this becomes a file on their disk. The section then appears
+    because sections.py discovers anything in notes/, so there is no list to
+    register it in and nothing to keep in step.
+    """
+    from app.codex.types_registry import TypesError, custom_type_id
+
+    type_id, tidy = custom_type_id(label)
+    filename = type_id.replace("_", "-") + ".md"
+
+    notes_dir = os.path.join(project_path, "notes")
+    os.makedirs(notes_dir, exist_ok=True)
+    path = os.path.join(notes_dir, filename)
+    if os.path.isfile(path) and _has_content(path):
+        raise TypesError(f"You already have a note called {tidy!r}.", "label")
+
+    # Seeded with its own heading so the section has content immediately --
+    # otherwise the "appears when it holds something" rule would hide the
+    # thing the writer just asked for.
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# {tidy}\n\n")
+    return {"id": type_id, "label": tidy, "filename": filename}
 
 
 def _has_content(path: str) -> bool:

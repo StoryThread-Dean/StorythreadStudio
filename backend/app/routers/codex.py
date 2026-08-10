@@ -29,7 +29,7 @@ from app.codex.migrate import (
     run_migration,
 )
 from app.codex.resolve import resolve_thread
-from app.codex.sections import build_sections
+from app.codex.sections import build_sections, create_note
 from app.codex.visibility import (
     VISIBLE,
     Lens,
@@ -225,6 +225,29 @@ async def post_type(request: AddTypeRequest):
             "That kind could not be added.",
             str(exc),
         ) from exc
+    return build_sections(project_path, migration_state(project_path) == "done")
+
+
+class AddNoteRequest(BaseModel):
+    project_path: str
+    label: str
+
+
+@router.post("/note")
+async def post_note(request: AddNoteRequest):
+    """
+    Add a document of the writer's own under Notes.
+
+    The Notes half of "+ Add New". Profiles and Other add a KIND of entry;
+    Notes adds a document -- "Dungeon Rules", "Magic Costs" -- because that
+    is what a note is. Same name rules either way, since both become files.
+    """
+    project_path = validate_project_path(request.project_path)
+    try:
+        create_note(project_path, request.label)
+    except TypesError as exc:
+        raise CodexError("type_invalid", "That note could not be added.",
+                         str(exc)) from exc
     return build_sections(project_path, migration_state(project_path) == "done")
 
 
