@@ -615,3 +615,70 @@ describe("something the writer marked themselves", () => {
     expect(screen.getByText(/Marking does not make a connection/)).toBeTruthy();
   });
 });
+
+describe("one entry for a name and its variants", () => {
+  // Reported after a live walkthrough: accepting "Lara Croft", "Lara" and
+  // "Croft" left three entries where the writer meant one. The scan now groups
+  // them into one question, so the panel has to create ONE entry that answers
+  // to all three -- otherwise the writer is back to three by a longer route.
+
+  const grouped = stop({
+    kind: "unspun", key: "unspun|lara croft",
+    title: "'Lara Croft' has no entry, and neither do its other names",
+    why: "You write 'Lara Croft' like a name. Your prose also calls it 'Croft', 'Lara', which look like the same thing, so one entry covers all of them.",
+    quote: "She waited for Lara Croft.",
+    detail: { name: "Lara Croft", count: 16, also: ["Croft", "Lara"] },
+  });
+
+  it("shows every word the one entry will answer to", async () => {
+    // Before the button, not only behind "why am I seeing this?" -- one entry
+    // covering three words is the part a writer would otherwise be surprised
+    // by.
+    mockApi({ stops: [grouped] });
+    await start();
+    expect(screen.getByText("Lara Croft, Croft, Lara")).toBeTruthy();
+  });
+
+  it("creates ONE entry carrying the other names", async () => {
+    mockApi({ stops: [grouped] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+    expect(posted("/thread/new")[0].body).toMatchObject({
+      name: "Lara Croft",
+      aliases: ["Croft", "Lara"],
+    });
+  });
+
+  it("does not make a second entry for a variant", async () => {
+    mockApi({ stops: [grouped] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+  });
+
+  it("says nothing about other names when there are none", async () => {
+    // An ungrouped name should not gain a line saying it answers to itself.
+    mockApi({ stops: [stop()] });
+    await start();
+    expect(screen.queryByText(/One entry, answering to/)).toBeNull();
+  });
+
+  it("still sends an empty list for an ungrouped name", async () => {
+    mockApi({ stops: [stop()] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+    expect(posted("/thread/new")[0].body.aliases).toEqual([]);
+  });
+
+  it("retires the group by its full name, not by a nickname", async () => {
+    // The writer was shown "Lara Croft", so that is what "not a connection"
+    // is about.
+    mockApi({ stops: [grouped] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: "Not a connection" }));
+    await waitFor(() => expect(posted("/run/answer").length).toBe(1));
+    expect(posted("/run/answer")[0].body.retire_phrase).toBe("Lara Croft");
+  });
+});

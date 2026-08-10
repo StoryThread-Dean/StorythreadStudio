@@ -47,8 +47,9 @@ import re
 from dataclasses import dataclass, field
 
 __all__ = [
-    "Mention", "NameEvidence", "NOT_A_NAME", "alias_display",
-    "build_alias_map", "find_mentions", "parse_markup", "unbound_names",
+    "Mention", "NameEvidence", "NameGroup", "NOT_A_NAME", "alias_display",
+    "build_alias_map", "find_mentions", "group_by_containment", "parse_markup",
+    "unbound_names",
 ]
 
 # Words that are never a name however a writer registers them. Shared in
@@ -419,7 +420,12 @@ _NOT_PROPOSED = frozenset({
 
 # Where a capital is REQUIRED by punctuation rather than chosen by the writer.
 _SENTENCE_BREAK_RE = re.compile(r"[.!?…]+[\"'”’)\]]*\s+")
-_LINE_BREAK_RE = re.compile(r"\n\s*")
+# A PARAGRAPH break forces a capital; a soft wrap does not. Writers hard-wrap
+# prose, and treating every newline as a sentence start made a name invisible
+# whenever the line happened to break in front of it -- found by a test whose
+# own fixture wrapped just before "Croft". List and quote markers count too,
+# since the word after one does begin a block.
+_LINE_BREAK_RE = re.compile(r"\n[ \t]*\n\s*|\n\s*[-*>+]\s+")
 _DASH_OPEN_RE = re.compile(r"(?:--+|[–—])\s*")
 _OPEN_QUOTES = "“‘"          # curly open quotes, unambiguous
 
@@ -592,3 +598,82 @@ def unbound_names(
             # being counted for the same three words.
             break
     return {name: n for name, n in sorted(counts.items()) if n >= minimum}
+
+# ── One person, several names ────────────────────────────────────────────────
+#
+# THE MESS THIS PREVENTS
+# ----------------------
+# The scan finds names, and a writer's prose contains several for the same
+# person: "Lara Croft", "Lara", "Croft". Offered as three separate questions,
+# a writer who says yes three times ends up with three entries where they meant
+# one -- and then has to fold them back together by hand.
+#
+# Reported from live testing, and it is worth being precise about the cause: it
+# was never that the app guessed wrongly. It was that it ASKED three times
+# about one thing, and every answer was individually reasonable.
+#
+# So names are grouped before anything is asked. "Lara Croft" is offered once,
+# with "Lara" and "Croft" as words it also answers to.
+#
+# WHAT COUNTS AS THE SAME THING
+# -----------------------------
+# One name's words being a subset of another's. A SUBSET rather than a
+# substring, because "Cambridge Library" is not a run of characters inside
+# "Cambridge Campus Library" but is obviously the same place.
+#
+#     {Cambridge} and {Cambridge, Library} are both inside
+#     {Cambridge, Campus, Library}                    -> one group
+#
+# AND THE CASE THAT MUST NOT GROUP
+# --------------------------------
+# "John" is inside both "John Vale" and "John Thorne", and they are two
+# different men. A short name that fits into more than one group is left
+# STANDALONE rather than folded into whichever came first -- the same refusal
+# to guess between two candidates that binding a mention already makes, and for
+# the same reason: a wrong grouping is invisible once accepted.
+
+@dataclass
+class NameGroup:
+    """One thing, and every name the prose used for it."""
+    primary: str
+    also: list[str] = field(default_factory=list)
+    count: int = 0
+
+    @property
+    def names(self) -> list[str]:
+        return [self.primary] + self.also
+
+
+def _words(name: str) -> frozenset[str]:
+    return frozenset(w for w in name.lower().split() if w)
+
+
+def group_by_containment(counts: dict[str, int]) -> list[NameGroup]:
+    """
+    Fold shorter names into the longer ones they are part of.
+
+    `counts` is {name -> how often}, as unbound_names returns. The result is in
+    a stable order -- most-mentioned first, then alphabetical -- so the same
+    book asks the same questions in the same order twice.
+    """
+    # Longest first, so a group is always founded on the fullest form of a
+    # name. Founding on "Lara" and then meeting "Lara Croft" would make the
+    # writer's entry the nickname.
+    ordered = sorted(counts, key=lambda n: (-len(_words(n)), -len(n), n))
+
+    groups: list[NameGroup] = []
+    for name in ordered:
+        words = _words(name)
+        # Which established groups this could belong to. More than one is the
+        # John case, and means we do not know.
+        homes = [g for g in groups if words < _words(g.primary)]
+        if len(homes) == 1:
+            homes[0].also.append(name)
+            homes[0].count += counts[name]
+        else:
+            groups.append(NameGroup(primary=name, count=counts[name]))
+
+    for group in groups:
+        group.also.sort()
+    groups.sort(key=lambda g: (-g.count, g.primary))
+    return groups

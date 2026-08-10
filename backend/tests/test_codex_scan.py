@@ -418,3 +418,55 @@ def test_the_reason_given_is_the_rule_that_fired(tmp_path):
     folder = _project(tmp_path, {"01.md": _REAL_PROSE})
     stop = scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)[0]
     assert "capitalised where a sentence did not force it" in stop.why
+
+# ── One question per thing, not per name ─────────────────────────────────────
+# Reported after a live walkthrough: accepting "Lara Croft", "Lara" and "Croft"
+# produced three entries where the writer meant one. The fix is upstream of the
+# answer -- ask once.
+
+_MANY_NAMES = """# Chapter One
+
+She waited for Lara Croft. By dawn Lara had not come, and nobody had seen
+Croft since the fire. They said Lara would be back.
+"""
+
+
+def test_one_stop_covers_a_name_and_its_variants(tmp_path):
+    folder = _project(tmp_path, {"01.md": _MANY_NAMES})
+    unspun = scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)
+    assert [s.detail["name"] for s in unspun] == ["Lara Croft"]
+    assert unspun[0].detail["also"] == ["Croft", "Lara"]
+
+
+def test_the_stop_says_it_covers_them_all(tmp_path):
+    # The part a writer would otherwise be surprised by.
+    folder = _project(tmp_path, {"01.md": _MANY_NAMES})
+    stop = scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)[0]
+    assert "one entry covers all of them" in stop.why
+    assert "'Lara'" in stop.why
+
+
+def test_creating_it_once_settles_every_name(tmp_path):
+    # The whole point. Three names, one entry, and none of them comes back.
+    folder = _project(tmp_path, {"01.md": _MANY_NAMES})
+    lara = _thread("e-lara", "Lara Croft", aliases=["Lara", "Croft"])
+    assert scan(folder, [lara], REGISTRY).by_kind(STOP_UNSPUN) == []
+
+
+def test_two_people_sharing_a_first_name_stay_two_questions(tmp_path):
+    # Grouping them would be a wrong answer the writer could not see.
+    folder = _project(tmp_path, {
+        "01.md": "# One\nShe waited for John Vale. John Vale did not come.\n",
+        "02.md": "# Two\nShe waited for John Thorne. John Thorne did not come.\n",
+    })
+    names = {s.detail["name"] for s in scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)}
+    assert names == {"John Vale", "John Thorne"}
+
+
+def test_a_retired_group_stays_retired_when_the_prose_gains_a_variant(tmp_path):
+    # The stop is keyed on the primary alone. Keying it on the whole group
+    # would forget a writer's "not a connection" the moment one more nickname
+    # turned up in the text.
+    folder = _project(tmp_path, {"01.md": _MANY_NAMES})
+    request = ScanRequest(retired={"Lara Croft"})
+    assert scan(folder, [], REGISTRY, request).by_kind(STOP_UNSPUN) == []

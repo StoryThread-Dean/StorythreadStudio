@@ -33,7 +33,8 @@ from dataclasses import dataclass, field
 
 from app.codex.anchors import AnchorIndex
 from app.codex.mentions import (
-    NameEvidence, alias_display, build_alias_map, find_mentions, unbound_names,
+    NameEvidence, alias_display, build_alias_map, find_mentions,
+    group_by_containment, unbound_names,
 )
 from app.codex.snags import Snag, check_facts, check_ties
 from app.codex.visibility import HIDDEN_FUTURE, Lens, thread_visibility
@@ -490,8 +491,12 @@ def _manuscript_stops(project_path: str, threads: list[dict],
             # Counted across the whole book before anything is raised: a name
             # appearing once per chapter in twelve chapters is a character,
             # and per-chapter counting would never notice.
+            # Retirement is NOT applied here. Dropping a retired name before
+            # grouping fragments its group: retiring "Lara Croft" would leave
+            # "Lara" and "Croft" behind to be asked about separately, which
+            # is the opposite of what the writer said. Groups are filtered
+            # below instead.
             for name, count in unbound_names(prose, alias_map, minimum=1,
-                                             ignore=request.retired,
                                              evidence=evidence).items():
                 unspun_totals[name] = unspun_totals.get(name, 0) + count
                 unspun_first.setdefault(name, (chapter_id, prose))
@@ -501,28 +506,54 @@ def _manuscript_stops(project_path: str, threads: list[dict],
                                          chapter_id, index))
 
     if wants_unspun:
-        for name, count in sorted(unspun_totals.items()):
-            if count < 2:
+        # Grouped BEFORE anything is asked. "Lara Croft", "Lara" and "Croft"
+        # are one question, not three -- see group_by_containment for why
+        # asking three times was the actual bug.
+        # GROUPED FIRST, then the frequency floor -- and that order matters.
+        # "Lara Croft" once plus "Lara" twice is one thing mentioned three
+        # times; filtering each name on its own would drop the full name for
+        # being rare and leave the nickname standing alone.
+        retired = {r.lower() for r in request.retired}
+        for group in group_by_containment(unspun_totals):
+            if group.count < 2:
                 continue
+            # "Not a connection" is about the THING, so any of its names
+            # having been retired retires the group. Matching on members as
+            # well as the primary also honours an answer given before grouping
+            # existed, when a nickname could have been what the writer saw.
+            if any(n.lower() in retired for n in group.names):
+                continue
+            name = group.primary
             chapter_id, prose = unspun_first[name]
             position = prose.find(name)
             written_in = sorted(evidence.sources(name))
             stops.append(Stop(
-                kind=STOP_UNSPUN, key=_key(STOP_UNSPUN, name.lower()),
-                title=f"'{name}' has no entry",
+                kind=STOP_UNSPUN,
+                # Keyed on the primary alone. A group that gains a nickname
+                # later must stay the same question, or a writer's "not a
+                # connection" would be forgotten the moment their prose used
+                # one more variant of the name.
+                key=_key(STOP_UNSPUN, name.lower()),
+                title=(f"'{name}' has no entry" if not group.also
+                       else f"'{name}' has no entry, and neither do its "
+                            f"other names"),
                 chapter_id=chapter_id,
                 quote=_sentence_around(prose, position, position + len(name))
                       if position >= 0 else "",
                 evidence_hash=_hash(name),
-                why=_unspun_why(name, count, written_in),
-                detail={"name": name, "count": count,
+                why=_unspun_why(name, group.count, written_in, group.also),
+                detail={"name": name, "count": group.count,
+                        # Every word this one entry should answer to, so
+                        # creating it once settles all of them.
+                        "also": group.also,
                         "also_written_in": written_in},
             ))
 
     return stops, unreadable
 
 
-def _unspun_why(name: str, count: int, written_in: list[str]) -> str:
+def _unspun_why(name: str, count: int, written_in: list[str],
+                also: list[str] | None = None) -> str:
     """
     The rule that fired, in the writer's terms.
 
@@ -535,6 +566,12 @@ def _unspun_why(name: str, count: int, written_in: list[str]) -> str:
     why = (f"You write '{name}' like a name -- capitalised where a sentence "
            f"did not force it -- and it appears {count} times with nothing in "
            f"the Weave answering to it.")
+    if also:
+        # Said out loud, because one entry settling several names is the part a
+        # writer would otherwise be surprised by.
+        words = ", ".join(f"'{w}'" for w in also)
+        why += (f" Your prose also calls it {words}, which look like the same "
+                f"thing, so one entry covers all of them.")
     if written_in:
         where = written_in[0] if len(written_in) == 1 else \
             ", ".join(written_in[:-1]) + " and " + written_in[-1]

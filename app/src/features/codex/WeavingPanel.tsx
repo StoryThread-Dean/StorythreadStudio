@@ -111,6 +111,12 @@ function pinnedAction(stop: Stop): string {
   return stop.detail?.has_entry ? "Open it and connect it" : "Create the entry";
 }
 
+/** The other words a grouped Unspun stop covers: "Lara", "Croft". */
+function alsoCalled(stop: Stop): string[] {
+  const also = stop.detail?.also;
+  return Array.isArray(also) ? also.map(String) : [];
+}
+
 /** [type, section] an Unwoven answer belongs in. */
 function landsIn(stop: Stop): string[] {
   const lands = stop.detail?.lands_as;
@@ -374,6 +380,18 @@ export function WeavingPanel({
         <p className="mt-1 text-[11px] text-text-muted">{stop.why}</p>
       </details>
 
+      {/* One entry covering several words is the part a writer would
+          otherwise be surprised by, so it is shown before the button and not
+          only explained behind "why am I seeing this?". */}
+      {alsoCalled(stop).length > 0 && (
+        <p className="mt-2 text-[11px] text-text-muted">
+          One entry, answering to{" "}
+          <span className="text-text-primary">
+            {[String(stop.detail.name ?? ""), ...alsoCalled(stop)].join(", ")}
+          </span>.
+        </p>
+      )}
+
       {/* Where the answer goes. Without this, "answer it" is an instruction
           with no address -- and an answer that lands nowhere in particular is
           a note, not part of the world. */}
@@ -417,7 +435,12 @@ export function WeavingPanel({
             // named entry with nothing in it, for the writer to fill.
             if (stop.kind === "unspun"
                 || (stop.kind === "pinned" && !stop.detail?.has_entry)) {
-              await createThread(projectPath, String(stop.detail.name ?? ""));
+              // The grouped names come with it. Weaving asked about "Lara
+              // Croft" once rather than three times, so creating it once has
+              // to settle "Lara" and "Croft" too -- otherwise the writer is
+              // back to three entries by a longer route.
+              await createThread(projectPath, String(stop.detail.name ?? ""),
+                                 alsoCalled(stop));
               await apply(projectPath, runId, stop);
             } else if (stop.kind === "unwoven") {
               // Nothing to open and nothing to record: the question stops
@@ -501,11 +524,13 @@ export function WeavingPanel({
  *  overwhelmingly a person, and offering a type picker at this moment turns
  *  a one-click yes into a small form. Getting it wrong costs one edit; being
  *  asked forty times costs the walkthrough. */
-async function createThread(projectPath: string, name: string): Promise<void> {
+async function createThread(projectPath: string, name: string,
+                            aliases: string[] = []): Promise<void> {
   const response = await fetch("http://localhost:8000/api/codex/thread/new", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ project_path: projectPath, type: "character", name }),
+    body: JSON.stringify({ project_path: projectPath, type: "character", name,
+                           aliases }),
   });
   if (!response.ok) {
     const message = (await response.json().catch(() => null))?.detail?.message;

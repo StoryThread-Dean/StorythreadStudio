@@ -168,12 +168,27 @@ End, and the screen-reader role, and the List view being the accessibility
 answer for the map would be undercut by a scrubber that could only be dragged.
 It announces itself as "Chapter 3, Caught in the Rain" rather than as "3".
 
-**Not built yet:**
+**Also built: Unspun asks once per thing, not once per name.** Names are
+grouped before anything is asked, so "Lara Croft", "Lara" and "Croft" are one
+question and creating the entry once settles all three.
 
-1. **Unspun should stop manufacturing the duplicates in the first place.**
-   Absorbing is the cure; the prevention is for Unspun to notice that one
-   candidate is contained in another (Lara / Lara Croft, Cambridge /
-   Cambridge Library) and offer them as one question rather than three.
+Worth being precise about the cause, because it was not a wrong guess: the
+app ASKED three times about one thing, and every answer was individually
+reasonable. The fix is upstream of the answer.
+
+Grouping is by word SUBSET rather than substring -- "Cambridge Library" is not
+a run of characters inside "Cambridge Campus Library" and is obviously the
+same place. And a name that fits into TWO groups is left standalone: "John" is
+inside both "John Vale" and "John Thorne", who are two different men, and a
+wrong grouping is invisible once accepted.
+
+Two things fell out of building it. The frequency floor now applies to the
+GROUP, since "Lara Croft" once plus "Lara" twice is one thing mentioned three
+times. And a soft line wrap no longer counts as forcing a capital -- only a
+paragraph break does -- because writers hard-wrap prose and a name was
+invisible whenever the line happened to break in front of it.
+
+**Not built yet:**
 
 **Also built: the Tie editor.** The reported case can now be recorded in full
 -- the Daughters of Pathicus worship the deity Pathicus, are part of the Faith

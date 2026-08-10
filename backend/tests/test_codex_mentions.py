@@ -11,8 +11,8 @@
 
 from app.codex.mentions import (
     AMBIGUOUS, BOUND, BY_NEARBY_ALIAS, BY_TIE, BY_UNIQUE, BY_WRITER,
-    NameEvidence, alias_display, build_alias_map, find_mentions, parse_markup,
-    unbound_names,
+    NameEvidence, alias_display, build_alias_map, find_mentions,
+    group_by_containment, parse_markup, unbound_names,
 )
 
 
@@ -298,3 +298,87 @@ def test_a_retired_phrase_is_never_raised_again():
         "They rode the Ash Road east. Nobody walks the Ash Road now.",
         aliases, ignore={"Ash Road"})
     assert "Ash Road" not in found
+
+# ── One person, several names ────────────────────────────────────────────────
+# Reported from live testing: accepting "Lara Croft", "Lara" and "Croft" left
+# three entries where the writer meant one.
+#
+# Worth being precise about the cause. The app never guessed wrongly -- it
+# ASKED three times about one thing, and every answer was individually
+# reasonable. So names are grouped before anything is asked.
+
+def _grouped(counts):
+    return {g.primary: g.also for g in group_by_containment(counts)}
+
+
+def test_a_full_name_takes_its_shorter_forms_with_it():
+    # THE case. One question, not three.
+    assert _grouped({"Lara Croft": 4, "Lara": 9, "Croft": 3}) == \
+        {"Lara Croft": ["Croft", "Lara"]}
+
+
+def test_the_group_is_founded_on_the_FULLEST_form(project=None):
+    # Founding it on "Lara" -- which the prose uses most -- would make the
+    # writer's entry the nickname.
+    groups = group_by_containment({"Lara": 40, "Lara Croft": 2})
+    assert groups[0].primary == "Lara Croft"
+
+
+def test_the_counts_add_up_across_the_group():
+    # "Mentioned 16 times" is the true weight of the thing. Reporting 4,
+    # because that is how often the full name appears, understates it.
+    groups = group_by_containment({"Lara Croft": 4, "Lara": 9, "Croft": 3})
+    assert groups[0].count == 16
+
+
+def test_names_group_by_WORDS_not_by_characters():
+    # "Cambridge Library" is not a run of characters inside "Cambridge Campus
+    # Library", and is obviously the same place.
+    assert _grouped({
+        "Cambridge Campus Library": 2, "Cambridge Library": 5,
+        "Cambridge": 8, "Library": 6,
+    }) == {"Cambridge Campus Library": ["Cambridge", "Cambridge Library",
+                                       "Library"]}
+
+
+def test_a_name_that_fits_TWO_groups_is_left_alone():
+    # "John" is inside both "John Vale" and "John Thorne", and they are two
+    # different men. Folding it into whichever came first would be a wrong
+    # grouping that is invisible once accepted -- the same refusal to guess
+    # that binding a mention already makes.
+    grouped = _grouped({"John Vale": 3, "John Thorne": 2, "John": 7})
+    assert grouped == {"John Vale": [], "John Thorne": [], "John": []}
+
+
+def test_unrelated_names_stay_apart():
+    assert _grouped({"Ravensmoor": 4, "Ash Road": 2}) == \
+        {"Ravensmoor": [], "Ash Road": []}
+
+
+def test_two_names_sharing_one_word_do_not_group():
+    # "Ash Road" and "Ash Wood" are two places. Neither contains the other.
+    assert _grouped({"Ash Road": 3, "Ash Wood": 2}) == \
+        {"Ash Road": [], "Ash Wood": []}
+
+
+def test_a_shared_word_that_is_also_its_own_name_is_left_alone():
+    assert _grouped({"Ash Road": 3, "Ash Wood": 2, "Ash": 9})["Ash"] == []
+
+
+def test_the_same_book_asks_the_same_questions_in_the_same_order():
+    counts = {"Lara": 9, "Ravensmoor": 4, "Lara Croft": 4, "Ash Road": 2}
+    first = [g.primary for g in group_by_containment(counts)]
+    second = [g.primary for g in group_by_containment(dict(reversed(list(counts.items()))))]
+    assert first == second
+
+
+def test_the_loudest_group_is_offered_first():
+    # A writer working down the list should meet the thing their book mentions
+    # most before a walk-on part.
+    groups = group_by_containment({"Ash Road": 2, "Lara Croft": 4, "Lara": 9})
+    assert groups[0].primary == "Lara Croft"
+
+
+def test_a_group_lists_every_word_it_answers_to():
+    group = group_by_containment({"Lara Croft": 4, "Lara": 9})[0]
+    assert group.names == ["Lara Croft", "Lara"]

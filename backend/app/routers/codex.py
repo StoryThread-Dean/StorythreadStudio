@@ -1119,10 +1119,26 @@ async def post_scan(body: ScanBody):
     }
 
 
+def _clean_aliases(aliases: list[str], name: str) -> list[str]:
+    """Tidied, de-duplicated, and never repeating the entry's own name."""
+    out: list[str] = []
+    seen = {name.lower()}
+    for alias in aliases or []:
+        text = " ".join(str(alias).split())
+        if text and text.lower() not in seen:
+            seen.add(text.lower())
+            out.append(text)
+    return out
+
+
 class NewThreadBody(BaseModel):
     project_path: str
     type: str
     name: str
+    # Other words the prose uses for the same thing. Weaving groups a name with
+    # its variants before it asks, so creating the entry once settles all of
+    # them -- without this the writer would be back to three entries.
+    aliases: list[str] = []
 
 
 @router.post("/thread/new")
@@ -1164,7 +1180,8 @@ async def post_new_thread(body: NewThreadBody):
         "name": name,
         "filename": filename,
         "status": "active",
-        "aliases": [], "tags": [], "fields": {}, "ties": [], "run": [],
+        "aliases": _clean_aliases(body.aliases, name),
+        "tags": [], "fields": {}, "ties": [], "run": [],
         "sections": {
             section["id"]: {"heading": section["heading"], "content": "",
                             "trait_blocks": [], "ai_summary": ""}
