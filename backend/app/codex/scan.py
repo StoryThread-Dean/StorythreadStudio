@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 
 from app.codex.anchors import AnchorIndex
 from app.codex.mentions import (
-    alias_display, build_alias_map, find_mentions, unbound_names,
+    NameEvidence, alias_display, build_alias_map, find_mentions, unbound_names,
 )
 from app.codex.snags import Snag, check_facts, check_ties
 from app.codex.visibility import HIDDEN_FUTURE, Lens, thread_visibility
@@ -390,6 +390,11 @@ def _manuscript_stops(project_path: str, threads: list[dict],
     unspun_totals: dict[str, int] = {}
     unspun_first: dict[str, tuple[str, str]] = {}
 
+    # Every chapter is read ONCE and kept, because the evidence pass has to
+    # see the whole book before the counting pass can judge a single word. A
+    # novel's prose is a few megabytes; re-reading every file twice to avoid
+    # holding it would cost more than it saves.
+    chapters: list[tuple[str, str]] = []
     for chapter_id, filename in ordered_chapter_ids(project_path):
         if request.chapter_ids and chapter_id not in request.chapter_ids:
             continue
@@ -397,14 +402,28 @@ def _manuscript_stops(project_path: str, threads: list[dict],
         if text is None:
             unreadable.append(filename)
             continue
-        prose = _strip_chrome(text)
+        chapters.append((chapter_id, _strip_chrome(text)))
 
+    # What the writer's own prose says about which words are names. Built
+    # from the manuscript AND from their notes, outline and existing entries:
+    # a name used mid-sentence in the outline is a name in the manuscript
+    # too, and what the writer has already written is a better source of
+    # truth about their world than any guess about grammar.
+    evidence = NameEvidence()
+    if wants_unspun:
+        for _chapter_id, prose in chapters:
+            evidence.observe(prose)
+        for label, text in _writer_vocabulary(project_path, threads):
+            evidence.observe(text, source=label)
+
+    for chapter_id, prose in chapters:
         if wants_unspun:
             # Counted across the whole book before anything is raised: a name
             # appearing once per chapter in twelve chapters is a character,
             # and per-chapter counting would never notice.
             for name, count in unbound_names(prose, alias_map, minimum=1,
-                                             ignore=request.retired).items():
+                                             ignore=request.retired,
+                                             evidence=evidence).items():
                 unspun_totals[name] = unspun_totals.get(name, 0) + count
                 unspun_first.setdefault(name, (chapter_id, prose))
 
@@ -418,6 +437,7 @@ def _manuscript_stops(project_path: str, threads: list[dict],
                 continue
             chapter_id, prose = unspun_first[name]
             position = prose.find(name)
+            written_in = sorted(evidence.sources(name))
             stops.append(Stop(
                 kind=STOP_UNSPUN, key=_key(STOP_UNSPUN, name.lower()),
                 title=f"'{name}' has no entry",
@@ -425,12 +445,81 @@ def _manuscript_stops(project_path: str, threads: list[dict],
                 quote=_sentence_around(prose, position, position + len(name))
                       if position >= 0 else "",
                 evidence_hash=_hash(name),
-                why=(f"It reads like a name and appears {count} times, and "
-                     f"nothing in the Weave answers to it."),
-                detail={"name": name, "count": count},
+                why=_unspun_why(name, count, written_in),
+                detail={"name": name, "count": count,
+                        "also_written_in": written_in},
             ))
 
     return stops, unreadable
+
+
+def _unspun_why(name: str, count: int, written_in: list[str]) -> str:
+    """
+    The rule that fired, in the writer's terms.
+
+    Saying "it appears N times" was the old wording and it was not the
+    reason -- "All" appears hundreds of times. The reason is that the writer
+    capitalised it somewhere punctuation did not require, or never wrote it
+    in lower case at all. Where their notes back that up, that is said too,
+    because it is the strongest argument for making an entry.
+    """
+    why = (f"You write '{name}' like a name -- capitalised where a sentence "
+           f"did not force it -- and it appears {count} times with nothing in "
+           f"the Weave answering to it.")
+    if written_in:
+        where = written_in[0] if len(written_in) == 1 else \
+            ", ".join(written_in[:-1]) + " and " + written_in[-1]
+        why += f" You also use it in your {where}."
+    return why
+
+
+def _writer_vocabulary(project_path: str,
+                       threads: list[dict]) -> list[tuple[str, str]]:
+    """
+    [(where it came from, its prose)] for everything the writer has written
+    OUTSIDE the manuscript.
+
+    Their notes, outline and existing entries are the best available record
+    of which words in this world are names -- they are where a writer lists
+    the factions and spells things out. Reading them makes the manuscript
+    pass better AND lets a stop say "you use this in your outline", which is
+    a far more convincing reason than a frequency count.
+
+    Failures are skipped silently: this is evidence that improves the answer,
+    not data the scan depends on, and one unreadable note must not cost the
+    whole pass.
+    """
+    corpora: list[tuple[str, str]] = []
+
+    notes_dir = os.path.join(project_path, "notes")
+    if os.path.isdir(notes_dir):
+        for name in sorted(os.listdir(notes_dir)):
+            if not name.endswith(".md"):
+                continue
+            try:
+                with open(os.path.join(notes_dir, name), "r",
+                          encoding="utf-8") as f:
+                    corpora.append((_note_label(name), _strip_chrome(f.read())))
+            except (OSError, UnicodeDecodeError):
+                continue
+
+    entries: list[str] = []
+    for thread in threads:
+        for section in (thread.get("sections") or {}).values():
+            content = str(section.get("content") or "").strip()
+            if content:
+                entries.append(content)
+            for block in section.get("trait_blocks") or []:
+                entries.append(str(block.get("description") or ""))
+    if entries:
+        corpora.append(("entries", "\n\n".join(entries)))
+
+    return corpora
+
+
+def _note_label(filename: str) -> str:
+    """'style-guide.md' -> 'style guide', so a stop reads like a sentence."""
+    return filename[:-3].replace("-", " ").replace("_", " ")
 
 
 def _early_mentions(prose: str, alias_map: dict, display: dict,

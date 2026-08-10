@@ -47,8 +47,8 @@ import re
 from dataclasses import dataclass, field
 
 __all__ = [
-    "Mention", "NOT_A_NAME", "alias_display", "build_alias_map",
-    "find_mentions", "parse_markup", "unbound_names",
+    "Mention", "NameEvidence", "NOT_A_NAME", "alias_display",
+    "build_alias_map", "find_mentions", "parse_markup", "unbound_names",
 ]
 
 # Words that are never a name however a writer registers them. Shared in
@@ -336,11 +336,215 @@ def parse_markup(
 
 
 # ── Names with nothing behind them ───────────────────────────────────────────
+#
+# THE PROBLEM THIS SECTION EXISTS TO SOLVE
+# ----------------------------------------
+# English capitalises the first word of every sentence and every line of
+# dialogue. So "a capitalised word" is not evidence of a name at all -- on a
+# real manuscript the naive version produced All, Any, Because, Before, By,
+# Call, Can, Each, Every, Everything, Exactly, For, Plus and dozens more,
+# swamping the handful of genuine names among them.
+#
+# A frequency floor does not fix it. "All" appears far more than twice.
+#
+# WHAT ACTUALLY SEPARATES A NAME FROM A SENTENCE START
+# ----------------------------------------------------
+# ONE piece of evidence, and it is decisive:
+#
+#   THE WORD IS CAPITALISED SOMEWHERE PUNCTUATION DID NOT REQUIRE IT.
+#
+# Mid-sentence, mid-paragraph, not after a full stop, not opening a line of
+# dialogue. Nothing forced that capital -- the writer chose it, and writers
+# capitalise names. Across a whole manuscript a real character is written
+# mid-sentence constantly; "All" and "Because" essentially never are.
+#
+# Evidence is gathered over the WRITER'S WHOLE VOCABULARY -- the manuscript
+# plus their notes, outline and existing entries. A name used mid-sentence in
+# the outline is a name in the manuscript too, and what the writer has already
+# written is a better source of truth about their world than any guess about
+# grammar.
+#
+# A SECOND RULE WAS TRIED AND REMOVED: "never written in lower case anywhere".
+# It was meant to rescue a name that only ever begins sentences. It cannot be
+# made to work without a dictionary -- "bugger", "enough", "curiosity" and
+# "exactly" are no more likely to appear in lower case in a given book than
+# "Garrick" is, so the rule admits exactly the words it was supposed to
+# exclude. A name that appears mid-sentence nowhere in an entire novel is
+# rare enough to be worth missing.
+#
+# The failure direction is deliberate: missing a name costs one stop that
+# could have been offered. Inventing forty costs the walkthrough.
 
-# A capitalised word, or a run of them: "Garrick", "Garrick Vale", "the Vale
-# of Ash" is deliberately not matched -- lower-case connectives would make
-# this fire on the start of every sentence.
-_CANDIDATE_NAME_RE = re.compile(r"\b[A-Z][a-z'’\-]{1,}(?:\s+[A-Z][a-z'’\-]{1,}){0,2}\b")
+# A capitalised word or short run of them, with possessives and names like
+# O'Brien kept whole. Deliberately no lower-case connectives ("Vale of Ash"),
+# because allowing them makes every sentence start a three-word candidate.
+_CANDIDATE_NAME_RE = re.compile(
+    r"\b[A-Z][a-z]{1,}(?:['’][A-Za-z]{1,})?"
+    r"(?:[ ][A-Z][a-z]{1,}(?:['’][A-Za-z]{1,})?){0,2}\b"
+)
+
+# Words never OFFERED as a new entry, however they are capitalised.
+#
+# Deliberately separate from NOT_A_NAME, which refuses an alias outright. This
+# set only suppresses a SUGGESTION: a writer can still have a character called
+# Will, May or Grace, create them by hand, and every mention binds normally
+# from then on. Suggesting "Will" because a sentence began with it is noise;
+# refusing to let somebody name their character Will would be a bug.
+_NOT_PROPOSED = frozenset({
+    "about", "above", "across", "after", "again", "against", "all", "almost",
+    "along", "already", "also", "although", "always", "among", "another",
+    "anything", "anyway", "are", "around", "away", "back", "because",
+    "been", "being", "below", "beside", "besides", "between", "beyond",
+    "can", "could", "did", "does", "doing", "done", "down", "during",
+    "each", "either", "else", "enough", "even", "ever", "every", "except",
+    "few", "finally", "first", "for", "from", "further", "get", "give",
+    "going", "gone", "good", "got", "had", "half", "has", "have", "having",
+    "here", "him", "himself", "hers", "herself", "however", "instead",
+    "into", "its", "itself", "just", "keep", "last", "later", "least",
+    "less", "let", "like", "long", "look", "made", "make", "many", "may",
+    "maybe", "me", "mine", "more", "most", "much", "must", "my", "near",
+    "need", "never", "new", "next", "no", "none", "nor", "not", "now",
+    "of", "off", "often", "old", "once", "only", "or", "other", "others",
+    "our", "ours", "out", "outside", "over", "own", "past", "perhaps",
+    "please", "put", "quite", "rather", "really", "right", "same", "say",
+    "said", "see", "seemed", "several", "shall", "should", "since", "small",
+    "some", "something", "sometimes", "soon", "still", "such", "sure",
+    "take", "tell", "than", "these", "them", "themselves", "though",
+    "through", "thus", "to", "together", "told", "too", "toward",
+    "under", "until", "up", "upon", "us", "used", "very", "want", "was",
+    "way", "well", "were", "whatever", "where", "whether", "which", "while",
+    "whose", "will", "with", "within", "without", "would", "yes", "yet",
+    "your", "yours",
+})
+
+# Where a capital is REQUIRED by punctuation rather than chosen by the writer.
+_SENTENCE_BREAK_RE = re.compile(r"[.!?…]+[\"'”’)\]]*\s+")
+_LINE_BREAK_RE = re.compile(r"\n\s*")
+_DASH_OPEN_RE = re.compile(r"(?:--+|[–—])\s*")
+_OPEN_QUOTES = "“‘"          # curly open quotes, unambiguous
+
+
+def _forced_capitals(text: str) -> set[int]:
+    """
+    Offsets where English requires a capital letter.
+
+    Start of text, after sentence-ending punctuation, after a line break,
+    after a dialogue dash, and the first word inside a quotation. A capital
+    at any of these tells us nothing about whether the word is a name.
+
+    Straight quotes are resolved by PARITY rather than by looking at the
+    character before them, which is the case the obvious version gets wrong:
+    `He said, "Enough!"` and `"Hello," Alexandra said` both have a comma
+    before the quote, and only the first one forces its capital.
+    """
+    n = len(text)
+    forced: set[int] = set()
+
+    def mark(index: int) -> None:
+        while index < n and text[index].isspace():
+            index += 1
+        if index < n:
+            forced.add(index)
+
+    mark(0)
+    for pattern in (_SENTENCE_BREAK_RE, _LINE_BREAK_RE, _DASH_OPEN_RE):
+        for match in pattern.finditer(text):
+            mark(match.end())
+
+    inside = False
+    for index, char in enumerate(text):
+        if char == '"':
+            inside = not inside
+            if inside:
+                mark(index + 1)
+        elif char in _OPEN_QUOTES:
+            mark(index + 1)
+    return forced
+
+
+def _strip_possessive(name: str) -> str:
+    """"Alexandra's" is Alexandra. Reporting the possessive as a separate
+    name asks the writer to create the same character twice."""
+    return re.sub(r"['’][sS]$", "", name)
+
+
+def _candidates(match: re.Match, forced: set[int]) -> list[tuple[str, int]]:
+    """
+    [(name, where it starts)] for one raw match -- sometimes two of them.
+
+    Three things happen here, and the OFFSET is why they happen together.
+
+    POSSESSIVES. "Alexandra's" is Alexandra. Reporting the possessive
+    separately asks the writer to create the same character twice.
+
+    ARTICLES. "The Ash Road" is the Ash Road. Dropping the article rather
+    than the whole candidate is what lets a real name survive an article in
+    front of it, and stops "The" itself ever being offered. Trimming moves
+    the start: judging "forced capital" at the MATCH start would treat every
+    "The Ash Road" at a sentence opening as forced, when in fact "Ash" sits
+    mid-sentence and is exactly the free-standing capital we want.
+
+    A SENTENCE-INITIAL WORD GLUED TO A REAL NAME. This is the one that bites.
+    "Later Alexandra spoke." matches as the two-word candidate "Later
+    Alexandra" -- so the junk word does not merely survive, it SWALLOWS the
+    name and Alexandra is never offered at all. So when a match begins at a
+    forced capital and has more than one word, the tail is offered as a
+    second candidate. Both are then judged on evidence: "Ravensmoor Keep"
+    keeps its full form because that form appears mid-sentence elsewhere,
+    while "Later Alexandra" loses to plain "Alexandra" for the same reason.
+    """
+    text = _strip_possessive(match.group(0))
+    words = text.split()
+    offset = match.start()
+    while words and words[0].lower() in NOT_A_NAME:
+        offset += len(words[0]) + 1
+        words.pop(0)
+    if not words:
+        return []
+
+    out = [(" ".join(words), offset)]
+    if len(words) > 1 and offset in forced:
+        out.append((" ".join(words[1:]), offset + len(words[0]) + 1))
+    return out
+
+
+class NameEvidence:
+    """
+    What the writer's own prose says about which words are names.
+
+    Feed it every corpus you have -- chapters, notes, outline, the prose
+    already inside Threads -- then ask. It is cheap: two regex passes per
+    corpus, no model, no per-name work.
+    """
+
+    def __init__(self) -> None:
+        self._free_standing: dict[str, int] = {}
+        self._sources: dict[str, set[str]] = {}
+
+    def observe(self, text: str, *, source: str = "") -> None:
+        if not text:
+            return
+        forced = _forced_capitals(text)
+        for match in _CANDIDATE_NAME_RE.finditer(text):
+            for name, offset in _candidates(match, forced):
+                if offset in forced:
+                    continue
+                key = name.lower()
+                self._free_standing[key] = self._free_standing.get(key, 0) + 1
+                if source:
+                    self._sources.setdefault(key, set()).add(source)
+
+    def is_a_name(self, name: str) -> bool:
+        """Capitalised somewhere punctuation did not require it."""
+        return bool(self._free_standing.get(name.lower()))
+
+    def free_standing(self, name: str) -> int:
+        return self._free_standing.get(name.lower(), 0)
+
+    def sources(self, name: str) -> set[str]:
+        """Which corpora used it freely -- so a stop can say "you use this in
+        your outline", which is the strongest reason to make an entry."""
+        return self._sources.get(name.lower(), set())
 
 
 def unbound_names(
@@ -349,32 +553,42 @@ def unbound_names(
     *,
     minimum: int = 2,
     ignore: set[str] | None = None,
+    evidence: "NameEvidence | None" = None,
 ) -> dict[str, int]:
     """
     {name -> how often} for capitalised names no Thread answers to.
 
     This is the Unspun stop: somebody or somewhere is in the book with no
-    entry behind it. Three guards keep it from becoming noise:
+    entry behind it. Four guards, in order of how much work they do:
 
-      - a name must appear at least `minimum` times. A one-off capitalised
-        word is usually a sentence start the regex could not rule out, and a
-        genuinely one-off name rarely needs a Thread.
+      - `evidence` decides whether the word is a name at all (see above).
+        Without one, evidence is taken from this text alone, which works but
+        is weaker than passing the writer's whole vocabulary.
+      - a name must appear at least `minimum` times.
       - anything already in the alias map is not unspun by definition.
-      - `ignore` carries the phrases the writer has retired with "not a
+      - `ignore` carries the phrases the writer retired with "not a
         connection", which must never be raised again.
-
-    Sentence-initial words are the known weakness and are handled by the
-    frequency floor rather than by a parts-of-speech guess, which would need
-    a language model to be right and would still be wrong in dialogue.
     """
+    if evidence is None:
+        evidence = NameEvidence()
+        evidence.observe(text)
+
     ignore = {i.lower() for i in (ignore or set())}
+    forced = _forced_capitals(text)
     counts: dict[str, int] = {}
     for match in _CANDIDATE_NAME_RE.finditer(text):
-        name = match.group(0).strip()
-        key = name.lower()
-        if key in alias_map or key in ignore or key in NOT_A_NAME:
-            continue
-        if key.split()[0] in NOT_A_NAME:
-            continue
-        counts[name] = counts.get(name, 0) + 1
+        for name, _offset in _candidates(match, forced):
+            key = name.lower()
+            if key in alias_map or key in ignore or key in NOT_A_NAME:
+                continue
+            if key in _NOT_PROPOSED:
+                continue
+            if not evidence.is_a_name(name):
+                continue
+            counts[name] = counts.get(name, 0) + 1
+            # A match yields at most two candidates and only one of them can
+            # be the writer's name. Taking the first that survives the
+            # evidence test stops "Later Alexandra" and "Alexandra" both
+            # being counted for the same three words.
+            break
     return {name: n for name, n in sorted(counts.items()) if n >= minimum}

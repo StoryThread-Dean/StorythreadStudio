@@ -137,9 +137,12 @@ def test_an_unplaced_fact_is_its_own_kind(tmp_path):
 # ── Unspun ───────────────────────────────────────────────────────────────────
 
 def test_a_repeated_name_with_no_thread_is_unspun(tmp_path):
+    # Both mentions sit MID-SENTENCE. That is the whole rule: the capital was
+    # the writer's choice, not the full stop's. A name that only ever begins
+    # a sentence is indistinguishable from "Because" or "Every".
     folder = _project(tmp_path, {
-        "01.md": "# One\nGarrick rode north.\n",
-        "02.md": "# Two\nGarrick did not return.\n",
+        "01.md": "# One\nShe waited for Garrick.\n",
+        "02.md": "# Two\nBy dawn Garrick had not come.\n",
     })
     result = scan(folder, [_thread("e-1", "Elara")], REGISTRY)
     unspun = result.by_kind(STOP_UNSPUN)
@@ -150,7 +153,8 @@ def test_a_repeated_name_with_no_thread_is_unspun(tmp_path):
 def test_unspun_counts_across_the_whole_book_not_per_chapter(tmp_path):
     # A name appearing once in each of twelve chapters is a character.
     # Per-chapter counting would never notice.
-    chapters = {f"{i:02d}.md": f"# {i}\nGarrick waited.\n" for i in range(1, 4)}
+    chapters = {f"{i:02d}.md": f"# {i}\nShe waited for Garrick.\n"
+                for i in range(1, 4)}
     folder = _project(tmp_path, chapters)
     result = scan(folder, [_thread("e-1", "Elara")], REGISTRY)
     assert result.by_kind(STOP_UNSPUN)[0].detail["count"] == 3
@@ -172,18 +176,18 @@ def test_an_unspun_stop_quotes_the_prose_it_came_from(tmp_path):
     # triggered it. A walkthrough that cannot explain itself trains the
     # writer to click through it.
     folder = _project(tmp_path, {
-        "01.md": "# One\nGarrick rode north through the ash.\n",
-        "02.md": "# Two\nGarrick did not return.\n",
+        "01.md": "# One\nShe rode north with Garrick through the ash.\n",
+        "02.md": "# Two\nBy dawn Garrick had not come.\n",
     })
     stop = scan(folder, [_thread("e-1", "Elara")], REGISTRY).by_kind(STOP_UNSPUN)[0]
-    assert "Garrick rode north" in stop.quote
+    assert "rode north with Garrick" in stop.quote
     assert stop.chapter_id and stop.evidence_hash
 
 
 def test_a_retired_phrase_never_comes_back(tmp_path):
     folder = _project(tmp_path, {
-        "01.md": "# One\nGarrick rode north.\n",
-        "02.md": "# Two\nGarrick did not return.\n",
+        "01.md": "# One\nShe waited for Garrick.\n",
+        "02.md": "# Two\nBy dawn Garrick had not come.\n",
     })
     request = ScanRequest(retired={"Garrick"})
     assert scan(folder, [_thread("e-1", "Elara")], REGISTRY, request) \
@@ -240,8 +244,8 @@ def test_an_ambiguous_name_is_never_accused_of_being_early(tmp_path):
 def test_quick_pass_asks_no_world_building_questions(tmp_path):
     # Problems only. Nothing that asks the writer to invent anything.
     folder = _project(tmp_path, {
-        "01.md": "# One\nGarrick rode north.\n",
-        "02.md": "# Two\nGarrick did not return.\n",
+        "01.md": "# One\nShe waited for Garrick.\n",
+        "02.md": "# Two\nBy dawn Garrick had not come.\n",
     })
     result = scan(folder, [_thread("e-1", "Elara")], REGISTRY,
                   ScanRequest(depth=DEPTH_QUICK))
@@ -266,8 +270,8 @@ def test_scanning_one_type_leaves_the_others_alone(tmp_path):
 
 def test_a_chapter_range_narrows_the_manuscript_pass(tmp_path):
     folder = _project(tmp_path, {
-        "01.md": "# One\nGarrick rode north.\n",
-        "02.md": "# Two\nGarrick did not return.\n",
+        "01.md": "# One\nShe waited for Garrick.\n",
+        "02.md": "# Two\nBy dawn Garrick had not come.\n",
     })
     ids = _chapter_ids(folder)
     result = scan(folder, [_thread("e-1", "Elara")], REGISTRY,
@@ -304,10 +308,113 @@ def test_the_count_is_real(tmp_path):
 
 def test_the_same_book_scans_the_same_way_twice(tmp_path):
     folder = _project(tmp_path, {
-        "01.md": "# One\nGarrick rode north.\n",
-        "02.md": "# Two\nGarrick did not return.\n",
+        "01.md": "# One\nShe waited for Garrick.\n",
+        "02.md": "# Two\nBy dawn Garrick had not come.\n",
     })
     threads = [_thread("e-1", "Elara")]
     first = [s.key for s in scan(folder, threads, REGISTRY).stops]
     second = [s.key for s in scan(folder, threads, REGISTRY).stops]
     assert first == second
+
+
+# ── The noise problem, pinned with the shape of a real manuscript ────────────
+# Reported from a live full walkthrough: 177 stops, of which well over a
+# hundred were words like All, Any, Because, Before, By, Can, Each, Every,
+# Everything, Exactly, For and Plus -- ordinary words that begin sentences.
+# The frequency floor could never have caught them; "All" appears hundreds of
+# times. These tests use prose shaped like the manuscript that produced them.
+
+_REAL_PROSE = """# Chapter One
+
+"Can I ask something? About last night." Alexandra shifted in her chair.
+
+Plus, they were all women. All of them. Another thing entirely. Any of them
+could have said it. Are you certain? Because before the exposure, the
+footsteps were controlled. Curiosity is dangerous, Alexandra's mother had
+said. Every daughter learns that. Everything else is confusion.
+
+"Bugger," she said. "Enough. Exactly the sort of clinical dark nonsense."
+
+For each of them, Alexandra was the one they called. By then Kessler had
+gone, and Kessler would not come back. Fine.
+"""
+
+
+def test_ordinary_words_that_begin_sentences_are_not_offered(tmp_path):
+    folder = _project(tmp_path, {"01.md": _REAL_PROSE})
+    found = {s.detail["name"] for s in
+             scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)}
+    for word in ["All", "Any", "Are", "About", "Another", "Because", "Bugger",
+                 "By", "Can", "Curiosity", "Enough", "Every", "Everything",
+                 "Exactly", "Fine", "For", "Plus"]:
+        assert word not in found, f"{word} should not be offered as a name"
+
+
+def test_the_real_names_survive(tmp_path):
+    # The point of the exercise. Two people, out of a passage that used to
+    # produce eighteen stops.
+    folder = _project(tmp_path, {"01.md": _REAL_PROSE})
+    found = {s.detail["name"] for s in
+             scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)}
+    assert found == {"Alexandra", "Kessler"}
+
+
+def test_a_possessive_is_not_a_second_person(tmp_path):
+    # "Alexandra's" was offered separately from "Alexandra", which asks the
+    # writer to create the same character twice.
+    folder = _project(tmp_path, {"01.md": _REAL_PROSE})
+    found = {s.detail["name"] for s in
+             scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)}
+    assert "Alexandra's" not in found
+
+
+def test_creating_the_entry_settles_every_form_of_the_name(tmp_path):
+    # Including the possessive, which is what made it feel unfinished.
+    folder = _project(tmp_path, {"01.md": _REAL_PROSE})
+    alexandra = _thread("e-a", "Alexandra")
+    found = {s.detail["name"] for s in
+             scan(folder, [alexandra], REGISTRY).by_kind(STOP_UNSPUN)}
+    assert found == {"Kessler"}
+
+
+def test_the_writers_notes_are_read_as_evidence(tmp_path):
+    # The suggestion from the walkthrough: look at what the writer has
+    # already written elsewhere. A name used mid-sentence in the outline is a
+    # name in the manuscript too, even where the manuscript only ever starts
+    # sentences with it.
+    folder = _project(tmp_path, {
+        "01.md": "# One\nRavensmoor was cold.\n",
+        "02.md": "# Two\nRavensmoor was always cold.\n",
+    })
+    assert scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN) == []
+
+    os.makedirs(os.path.join(folder, "notes"), exist_ok=True)
+    with open(os.path.join(folder, "notes", "outline.md"), "w",
+              encoding="utf-8") as f:
+        f.write("The keeper of Ravensmoor is loyal to the house.\n")
+
+    stops = scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)
+    assert [s.detail["name"] for s in stops] == ["Ravensmoor"]
+    # And it SAYS so, because "you use this in your outline" is a far better
+    # reason to make an entry than a frequency count.
+    assert "outline" in stops[0].why
+
+
+def test_existing_entries_count_as_evidence_too(tmp_path):
+    folder = _project(tmp_path, {
+        "01.md": "# One\nRavensmoor was cold.\n",
+        "02.md": "# Two\nRavensmoor was always cold.\n",
+    })
+    keeper = _thread("e-k", "Mira", sections={
+        "overview": {"heading": "Overview", "trait_blocks": [],
+                     "content": "She keeps Ravensmoor for them."}})
+    stops = scan(folder, [keeper], REGISTRY).by_kind(STOP_UNSPUN)
+    assert [s.detail["name"] for s in stops] == ["Ravensmoor"]
+
+
+def test_the_reason_given_is_the_rule_that_fired(tmp_path):
+    # It used to say "appears N times", which was never the reason -- "All"
+    # appears hundreds of times.
+    folder = _project(tmp_path, {"01.md": _REAL_PROSE})
+    stop = scan(folder, [], REGISTRY).by_kind(STOP_UNSPUN)[0]
+    assert "capitalised where a sentence did not force it" in stop.why

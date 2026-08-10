@@ -69,10 +69,15 @@ def project(tmp_path):
     (root / "manuscript").mkdir(parents=True)
     (root / "codex" / "characters").mkdir(parents=True)
     (root / "project.json").write_text(json.dumps({"title": "N"}), encoding="utf-8")
+    # Rhoswen appears MID-SENTENCE both times. A name that only ever begins a
+    # sentence is indistinguishable from "Because" or "Every" and is not
+    # offered -- see codex/mentions.py.
     (root / "manuscript" / "01-a.md").write_text(
-        "# Chapter One\n\nElara waited. Rhoswen watched.\n", encoding="utf-8")
+        "# Chapter One\n\nElara waited while Rhoswen watched.\n",
+        encoding="utf-8")
     (root / "manuscript" / "02-b.md").write_text(
-        "# Chapter Two\n\nRhoswen did not answer.\n", encoding="utf-8")
+        "# Chapter Two\n\nBy dawn Rhoswen had not answered.\n",
+        encoding="utf-8")
 
     chapter_id = ensure_chapter_ids(str(root))["01-a.md"]
     (root / "codex" / "characters" / "elara.md").write_text(

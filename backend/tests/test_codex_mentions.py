@@ -11,7 +11,8 @@
 
 from app.codex.mentions import (
     AMBIGUOUS, BOUND, BY_NEARBY_ALIAS, BY_TIE, BY_UNIQUE, BY_WRITER,
-    alias_display, build_alias_map, find_mentions, parse_markup, unbound_names,
+    NameEvidence, alias_display, build_alias_map, find_mentions, parse_markup,
+    unbound_names,
 )
 
 
@@ -197,15 +198,91 @@ def test_markup_does_not_guess_between_two_johns():
 # ── Names with nothing behind them ───────────────────────────────────────────
 
 def test_a_repeated_unknown_name_is_reported():
+    # Note both mentions sit MID-SENTENCE. That is the whole test: the
+    # capital was the writer's choice, not the full stop's.
     aliases, _ = _world(ELARA)
-    found = unbound_names("Garrick rode north. Garrick did not return.", aliases)
+    found = unbound_names(
+        "She waited for Garrick. By dawn Garrick had not come.", aliases)
     assert found == {"Garrick": 2}
+
+
+def test_a_sentence_start_is_not_a_name():
+    # THE case this rule exists for. On a real manuscript the naive version
+    # produced All, Any, Because, Before, By, Can, Each, Every, For and
+    # dozens more -- swamping the handful of real names among them.
+    aliases, _ = _world(ELARA)
+    text = ("All of them knew. All of them waited. Because it was late. "
+            "Because nobody spoke. Every door was shut. Every window too.")
+    assert unbound_names(text, aliases) == {}
+
+
+def test_a_line_of_dialogue_is_not_a_name():
+    # "Enough" and "Bugger" open speech, which capitalises them for free.
+    aliases, _ = _world(ELARA)
+    text = ('He said, "Enough." She said, "Enough." '
+            '"Bugger," he muttered. "Bugger it all."')
+    assert unbound_names(text, aliases) == {}
+
+
+def test_a_closing_quote_does_not_hide_a_real_name():
+    # `He said, "Enough!"` and `"Hello," Alexandra said` both have a comma
+    # before the quote, and only the first one forces its capital. Deciding
+    # by the character before the quote gets this backwards; parity gets it
+    # right.
+    aliases, _ = _world(ELARA)
+    text = '"Hello," Alexandra said. "Wait," Alexandra called.'
+    assert unbound_names(text, aliases) == {"Alexandra": 2}
+
+
+def test_a_possessive_is_not_a_separate_person():
+    # Reporting "Alexandra's" alongside "Alexandra" asks the writer to create
+    # the same character twice.
+    aliases, _ = _world(ELARA)
+    found = unbound_names(
+        "She took Alexandra's hand. Later Alexandra spoke.", aliases)
+    assert found == {"Alexandra": 2}
+
+
+def test_an_article_is_dropped_rather_than_the_whole_name():
+    aliases, _ = _world(ELARA)
+    found = unbound_names(
+        "They rode the Ash Road east. Nobody walks the Ash Road now.", aliases)
+    assert found == {"Ash Road": 2}
 
 
 def test_a_one_off_capital_is_not_reported():
     # Usually a sentence start the regex could not rule out.
     aliases, _ = _world(ELARA)
     assert unbound_names("Rain fell. Elara waited.", aliases) == {}
+
+
+def test_a_common_word_is_never_offered_even_mid_sentence():
+    # "Will" and "May" are real given names, so they are suppressed as
+    # SUGGESTIONS only -- a writer can still create a character called Will
+    # by hand, and every mention binds normally after that.
+    aliases, _ = _world(ELARA)
+    assert unbound_names("It was her Will and her May.", aliases) == {}
+
+
+def test_the_writers_other_writing_counts_as_evidence():
+    # A name used mid-sentence in the outline is a name in the manuscript
+    # too. Reading what the writer has already written beats any guess about
+    # grammar.
+    aliases, _ = _world(ELARA)
+    evidence = NameEvidence()
+    evidence.observe("The keeper of Ravensmoor is loyal.", source="outline")
+
+    manuscript = "Ravensmoor was cold. Ravensmoor was always cold."
+    assert unbound_names(manuscript, aliases) == {}          # no evidence
+    assert unbound_names(manuscript, aliases, evidence=evidence) ==         {"Ravensmoor": 2}
+
+
+def test_evidence_says_where_it_saw_the_name():
+    # "You also use this in your outline" is a far better reason to make an
+    # entry than a frequency count.
+    evidence = NameEvidence()
+    evidence.observe("The keeper of Ravensmoor is loyal.", source="outline")
+    assert evidence.sources("Ravensmoor") == {"outline"}
 
 
 def test_a_name_that_has_a_thread_is_not_unspun():
@@ -217,6 +294,7 @@ def test_a_retired_phrase_is_never_raised_again():
     # "Not a connection" has to mean permanently, or the walkthrough asks the
     # same dead question every session and stops being worth opening.
     aliases, _ = _world(ELARA)
-    found = unbound_names("The Ash Road ran east. The Ash Road was empty.",
-                          aliases, ignore={"Ash Road"})
+    found = unbound_names(
+        "They rode the Ash Road east. Nobody walks the Ash Road now.",
+        aliases, ignore={"Ash Road"})
     assert "Ash Road" not in found
