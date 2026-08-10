@@ -274,6 +274,22 @@ DEFAULT_RELATIONS: list[dict] = [
          src=["event"], dst=["location"], cardinality="one"),
     _rel("involved", "involved", inverse="involved_in",
          src=["event"], dst=["character", "faction", "religion", "government"]),
+
+    # Checked against a real, densely connected character (Drizzt Do'Urden) and
+    # every one of these was a thing the writer could not say. Creatures had no
+    # vocabulary at all, so a ranger and his panther were two entries with
+    # nothing between them.
+    #
+    # companion_of covers two gaps with one relation on purpose. A companion is
+    # a companion whether they are a person or an animal, and splitting it into
+    # "friend of" and "bonded to" would ask the writer to classify a bond the
+    # story does not classify.
+    _rel("companion_of", "companion of", symmetric=True,
+         src=["character", "creature"], dst=["character", "creature"]),
+    _rel("lives_in", "lives in", inverse="home_of",
+         src=["character", "creature", "culture", "faction"], dst=["location"]),
+    _rel("summons", "summons", inverse="summoned_by",
+         src=["object", "concept", "lore"], dst=["creature", "deity"]),
 ]
 
 

@@ -383,3 +383,48 @@ describe("the shell", () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+
+describe("naming the other half", () => {
+  // From the worked example: clicking the Drow entry and seeing every drow.
+  // A connection called "Race" with no second half reads as "Race (the other
+  // way round)" from that end -- honest, and clumsy enough to be worth asking
+  // one more question about.
+
+  it("offers it, and says it is optional", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await userEvent.click(screen.getByRole("button", { name: /Name it yourself/ }));
+    expect(screen.getByLabelText("The other way round")).toBeTruthy();
+    expect(screen.getByText("optional")).toBeTruthy();
+  });
+
+  it("says what happens without it", async () => {
+    // So skipping it is an informed choice rather than a thing to regret.
+    await open();
+    await chooseOther("Pathicus");
+    await userEvent.click(screen.getByRole("button", { name: /Name it yourself/ }));
+    expect(screen.getByText(/reads awkwardly when you/)).toBeTruthy();
+  });
+
+  it("sends it when given", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await userEvent.click(screen.getByRole("button", { name: /Name it yourself/ }));
+    await userEvent.type(screen.getByLabelText("Connection name"), "Race");
+    await userEvent.type(screen.getByLabelText("The other way round"), "Race of");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(posted("/relation").length).toBe(1));
+    expect(posted("/relation")[0].body.inverse_label).toBe("Race of");
+  });
+
+  it("still works when it is left empty", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await userEvent.click(screen.getByRole("button", { name: /Name it yourself/ }));
+    await userEvent.type(screen.getByLabelText("Connection name"), "Race");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+    expect(posted("/relation")[0].body.inverse_label).toBe("");
+  });
+});

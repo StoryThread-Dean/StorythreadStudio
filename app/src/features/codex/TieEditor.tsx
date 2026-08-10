@@ -96,6 +96,11 @@ export function TieEditor({
   } | null>(null);
   const [naming, setNaming] = useState(false);
   const [newLabel, setNewLabel] = useState("");
+  // What the connection reads as from the OTHER end. Optional, because a
+  // writer in the middle of a thought should not be made to answer two
+  // questions -- but offered, because without it the other end reads as
+  // "Race (the other way round)", which is honest and clumsy.
+  const [newInverse, setNewInverse] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -205,6 +210,7 @@ export function TieEditor({
         body: JSON.stringify({
           project_path: projectPath, label: newLabel,
           source_types: [thread.type], target_types: [other.type],
+          inverse_label: newInverse,
         }),
       });
       const body = await response.json();
@@ -213,6 +219,7 @@ export function TieEditor({
       }
       setNaming(false);
       setNewLabel("");
+      setNewInverse("");
       await connect({ id: body.id, label: body.label, symmetric: false,
                       cardinality: "many", inverse_label: "", flipped: false });
     } catch (e) {
@@ -446,10 +453,23 @@ export function TieEditor({
                           Add
                         </button>
                       </div>
+                      <label className="mt-1.5 block text-[11px] text-text-muted">
+                        And from {nodeLabel(other)} back?{" "}
+                        <span className="text-faint">optional</span>
+                      </label>
+                      <input
+                        value={newInverse}
+                        onChange={e => setNewInverse(e.target.value)}
+                        placeholder="worshipped by"
+                        aria-label="The other way round"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                      />
                       <p className="mt-1 text-[10px] text-faint">
                         It becomes part of your world, so you can use it between
                         any {threadTypeEntry(thread.type).term} and{" "}
-                        {threadTypeEntry(other.type).term} from now on.
+                        {threadTypeEntry(other.type).term} from now on. Without
+                        the second half, this connection reads awkwardly when you
+                        are standing at the other end.
                       </p>
                     </div>
                   ) : (
