@@ -29,6 +29,7 @@ from app.codex.migrate import (
     run_migration,
 )
 from app.codex.resolve import resolve_thread
+from app.codex.sections import build_sections
 from app.codex.visibility import (
     VISIBLE,
     Lens,
@@ -39,9 +40,11 @@ from app.codex.threads import parse_thread, render_thread
 from app.codex.types_registry import (
     SCHEMA_VERSION,
     TypesError,
+    add_type,
     folder_for_type,
     load_registry,
     relation_allows,
+    set_type_group,
     type_by_id,
 )
 from app.db import open_db
@@ -175,6 +178,73 @@ async def get_health(project_path: str = Query(...)):
         "registry_ok": registry_ok,
         "registry_error": registry_error,
     }
+
+
+@router.get("/sections")
+async def get_sections(project_path: str = Query(...)):
+    """
+    The sidebar tree: which sections to show, and what can be added.
+
+    One rule decides it -- a section appears when it holds something, or
+    when it is a default -- and it is applied in codex/sections.py rather
+    than in the frontend, so the answer cannot drift between the nav, the
+    Add New menu and anything else that asks.
+
+    Works before conversion too, counting profiles/ and notes/ directly, so
+    the new sidebar is populated and useful on a project that has never been
+    brought in. Conversion is an offer, not a toll gate.
+    """
+    project_path = validate_project_path(project_path)
+    _registry(project_path)          # refuse early on a broken registry
+    return build_sections(project_path, migration_state(project_path) == "done")
+
+
+class AddTypeRequest(BaseModel):
+    project_path: str
+    id: str
+    label: str = ""
+    group: str = "etc"
+    icon: str = "CircleDashed"
+
+
+@router.post("/type")
+async def post_type(request: AddTypeRequest):
+    """
+    Add a kind of Thread the Weave did not ship with.
+
+    A Government, a Deity, a Bloodline. It behaves exactly like a built-in
+    kind afterwards -- which is the point of keeping the type registry as
+    data rather than as code.
+    """
+    project_path = validate_project_path(request.project_path)
+    try:
+        add_type(project_path, request.id, request.label, request.group, request.icon)
+    except TypesError as exc:
+        raise CodexError(
+            "type_invalid",
+            "That kind could not be added.",
+            str(exc),
+        ) from exc
+    return build_sections(project_path, migration_state(project_path) == "done")
+
+
+class MoveTypeRequest(BaseModel):
+    project_path: str
+    id: str
+    group: str
+
+
+@router.patch("/type/group")
+async def patch_type_group(request: MoveTypeRequest):
+    """Move a section to a different part of the sidebar. A world where
+    Factions belong with the people should be able to say so."""
+    project_path = validate_project_path(request.project_path)
+    try:
+        set_type_group(project_path, request.id, request.group)
+    except TypesError as exc:
+        raise CodexError("type_invalid", "That section could not be moved.",
+                         str(exc)) from exc
+    return build_sections(project_path, migration_state(project_path) == "done")
 
 
 @router.post("/reindex")
