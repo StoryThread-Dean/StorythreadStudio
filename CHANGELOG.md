@@ -3,9 +3,14 @@
 All notable changes to Storythread Studio will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versioning is simple release counting, not semver: the last number bumps by
-one each release (and keeps counting past 9). A middle-number bump is
-reserved for a fundamental change.
+Versioning is not semver. It is a three-tier rule:
+
+- **Tier 3 (`v1.1.x`)** -- enhancements to existing features. No new surface,
+  no migration, reversible.
+- **Tier 2 (`v1.x.0`)** -- additions, like the Audiobook Converter (v1.1.0):
+  a whole new feature area that does not disturb existing data or behaviour.
+- **Tier 1 (`vX.0.0`)** -- major restructuring: a change needing its own
+  dashboard, or one that alters multiple existing features at once.
 
 The release script reads entries under `## [Unreleased]` and moves them
 into a new tagged section when cutting a release. To add a changelog
@@ -17,7 +22,13 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **Model Roles -- one model per KIND of job.** Storythread Studio asks an AI to do very different things, and the models available today are not equally good at all of them. Settings now has a Model Roles section with eight kinds of work -- Critique, Character reasoning, Long-context analysis, Brainstorming, Structural analysis, Research transformation, Prose, and Extraction (cheap mechanical passes) -- and every AI feature in the app declares which kind it is. Assign Claude to Critique and every review pass, chapter summary and importance audit uses it; assign a local model to Prose and Draft, Enhance and Revise use that instead. Each role lists exactly which features it covers, so nothing about the choice is hidden. Roles no feature uses yet say so plainly rather than presenting a picker that silently does nothing. **Leaving everything unassigned behaves exactly as before** -- every role falls back to your Default Model, which is what an upgrading install gets until it changes something.
+- **Local models (Ollama, LM Studio, llama.cpp).** A third AI connection that runs on your own machine: no API key, no per-token cost, and nothing leaves the room. Enter the server address, pick the API style (OpenAI-compatible or Ollama's native one), and Test Connection loads the models you have downloaded. The test tells the three failures apart -- a bad address, nothing listening, or a server answering in the other dialect -- and in the last case names the setting to flip. Reasoning models that write their thinking inline as `<think>...</think>` have it stripped before it reaches you or the conversation history. Local addresses only: loopback, your private network, or a `.local` name. A public address is refused with an explanation, so "Local model" cannot quietly become an undocumented way to connect an arbitrary remote service.
+
 ### Changed
+
+- A role you have explicitly assigned **never silently falls back to a different model.** If it cannot run -- no API key for that service, an unreachable local server, a model the provider does not offer -- the feature refuses and says why, rather than quietly producing work from a model you did not choose. Roles you have *not* assigned still fall through to your Default Model as before; the distinction is deliberate.
+- `GET /api/ai/models` accepts an optional `provider` parameter, so a role pointed at a service other than the active one can list that service's catalog.
 
 ### Fixed
 

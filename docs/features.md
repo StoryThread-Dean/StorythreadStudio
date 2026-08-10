@@ -289,13 +289,49 @@ Per-chapter MP3s with real ID3 titles, one combined MP3, and an M4B with navigab
 
 A modal accessible from the sidebar. Sections:
 
-- **AI Provider** — selector cards, one per connection, each with its own dedicated panel: tailored "How to connect" steps, its own masked API key, and a Test Connection button. Shipped connections: **OpenRouter** (recommended default; hosts the Prompt Caching toggle and the cost-tier slider) and **NanoGPT** (pay-per-prompt, many unmoderated models; no published pricing, so the cost-tier filter is hidden). Both keys stay stored — switching never loses one, and the switch only takes effect on Save, which reloads the model list from the new provider and warns if the saved default model isn't in its catalog. Panels are registry-driven (`providerMeta.ts` + `backend/app/ai/providers.py`), so a future connection (Ollama, LM Studio, llama.cpp, custom URL) is one entry on each side.
+- **AI Provider** — selector cards, one per connection, each with its own dedicated panel: tailored "How to connect" steps, its own masked API key, and a Test Connection button. Shipped connections: **OpenRouter** (recommended default; hosts the Prompt Caching toggle and the cost-tier slider), **NanoGPT** (pay-per-prompt, many unmoderated models; no published pricing, so the cost-tier filter is hidden), and **Local model** (below). Keys stay stored per provider — switching never loses one, and the switch only takes effect on Save, which reloads the model list from the new provider and warns if the saved default model isn't in its catalog. Panels are registry-driven (`providerMeta.ts` + `backend/app/ai/providers.py`), so a future connection is one entry on each side.
+- **Local model** — a runtime on the writer's own machine (Ollama, LM Studio, llama.cpp). No API key and no per-token cost. The panel takes a server address and an **API style** (OpenAI-compatible or Ollama's native one, chosen explicitly rather than guessed); Test Connection distinguishes a bad address, nothing listening, and a server answering in the *other* style — naming the setting to flip in that last case. Replies from local reasoning models have inline `<think>...</think>` traces stripped before the writer or the conversation history sees them. **Only local destinations are accepted**: loopback, private-network addresses, or a `.local` name. A public address is refused with the rule explained, because every local runtime speaks the same API as a hosted one and without that line "Local model" would quietly become an undocumented way to connect any remote service.
 - **Prompt Caching** (inside the OpenRouter panel, default on) — marks the unchanged part of each request (instructions + story context) as cacheable so supported models charge less and respond faster on repeats. Never sent to other providers.
-- **Default model** — model picker populated from the active provider's catalog, with a cost-tier slider on providers that publish pricing
+- **Default model** — model picker populated from the active provider's catalog, with a cost-tier slider on providers that publish pricing. This is what any unassigned role uses.
+- **Model Roles** — one model per KIND of job (see below)
 - **Content mode** — project-level default (`general`, `mature`, `explicit`) overridable per request
 - **Model Routing** — allowlist, blocklist, and per-model content-mode declarations enforced at request time
 - **Theme** — light / dark
 - **Debug options**
+
+## Model Roles
+
+The app asks an AI to do very different things, and the models available today are not equally good at all of them. A **role** is a kind of job. The writer assigns one model to each role, and every AI feature declares which role it belongs to — so assigning a model to Critique points the Smart Advisor, chapter summaries, scene summaries, AI Trim and the importance audit at it in one move.
+
+Eight roles, each listing on screen exactly which features use it:
+
+| Role | Used by |
+|---|---|
+| **Critique** | Smart Advisor pass, Writing Companion review categories, chapter and scene summaries, importance audit, AI Trim |
+| **Character reasoning** | Profile Builder chat, Interview mode, full profile summaries, dialogue speaker analysis |
+| **Brainstorming** | Writing Companion chat |
+| **Structural analysis** | Scene break suggestions |
+| **Prose** | Draft mode, Enhance mode, Revise suggestion |
+| **Extraction** (cheap work) | Usage previews, Generate Overview, section summaries |
+| **Long-context analysis** | *nothing yet* — arrives with the Weave |
+| **Research transformation** | *nothing yet* |
+
+The last two are marked "not used yet" on screen with the reason, rather than presenting a control that silently does nothing.
+
+**The list is collapsed by default** — one line per role: name, the model currently chosen (or "Use Default Model"), and a one-line description that truncates rather than wrapping, so all eight fit on screen at once. Opening a row reveals the full explanation behind "What's this?" (what the job is, why it matters, and what a better model actually buys you there), the features it covers, and the two pickers. Only one row opens at a time, so the list never scrolls itself away. A broken assignment shows a warning icon on the collapsed row, so it is visible without opening anything.
+
+The **From Source** picker greys out services that are not connected yet — no API key, or for a local model no address — and labels them "not connected" rather than hiding them, so what exists and what is merely unconfigured are distinguishable.
+
+The **Model** picker opens with a short **Recommended** group of four to seven models drawn from the curated list and spread across price buckets, each labelled by bucket (Free / Lowest / Pricier / Priority Best) and ordered cheapest first. The bucket name is the whole recommendation — there is nothing further to read. The full catalog follows underneath, with the recommended entries not repeated. Recommendations only appear for providers whose catalog matches the curated ids; elsewhere the group is simply absent.
+
+A role assignment is a **provider and a model together**, not just a model id, so different roles can live on different services — critique on OpenRouter while prose runs on a local model.
+
+Two behaviours matter more than the rest:
+
+- **Leaving a role unassigned is the supported default.** It falls through to the Default Model, exactly as the app behaved before roles existed. An upgrading install changes nothing until the writer changes something.
+- **An assigned role never silently substitutes.** If it cannot run — no key for that service, an unreachable local server, a model the provider does not offer — the feature refuses and says why. Without this, a writer could assign Claude to prose, hit a missing key, and unknowingly have their book drafted by a different model.
+
+Per-book role overrides are supported by the resolver but have no UI yet; today roles are app-wide.
 
 ## Content mode and routing
 

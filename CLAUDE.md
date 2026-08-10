@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Status: shipped.** The current release is **v1.0.8** -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+**Status: shipped.** The current release is **v1.1.0** -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+
+**Versioning is a three-tier rule, not semver.** Tier 3 (`v1.1.x`) = enhancements to existing features. Tier 2 (`v1.x.0`) = additions, like the Audiobook Converter. Tier 1 (`vX.0.0`) = major restructuring -- a change needing its own dashboard, or one that alters multiple existing features at once. Judge the tier by what the RELEASE delivers, not by the size of the programme it belongs to.
 
 The phase history below is the pre-1.0 build record, kept for context. Some items it names were later replaced -- those are marked inline. The biggest post-phase change: structured feedback moved out of the chat panel into the **Smart Advisor** toolbar (inline issue overlays via `POST /api/ai/editor-pass`), and the Writing Companion chat gained **Draft mode** (v1.0.6) and **Enhance mode** (v1.0.7).
 
@@ -158,8 +160,8 @@ npx tsc --noEmit
 # Run frontend tests
 npm run test
 
-# Check TypeScript and lint frontend code
-npm run lint
+# Type check (there is NO `npm run lint` script -- tsc is the frontend gate)
+npx tsc --noEmit
 ```
 
 ---
@@ -188,6 +190,11 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_story_context_fields.py` -- Book Details fields in _build_story_context
   - `test_project_settings_fields.py` -- Book Details persistence, outline word target, ui-state, numeric starter
   - `test_providers.py` -- provider registry + _resolve_model_and_key dispatch (NanoGPT key/model rules)
+  - `test_model_roles.py` -- Model Roles: the eight roles, precedence at all three levels, an unconfigured install resolving identically to before roles existed, and the rule that matters most -- **a configured-but-unusable role reports itself unusable and NEVER substitutes another model**
+  - `test_role_call_sites.py` -- reads the real router source: every AI call site names a known role, none uses the pre-roles signature, and ROLE_INFO's feature lists match what the call sites actually do (a role marked in use with no consumer fails the build)
+  - `test_role_settings_routes.py` -- the roles catalog endpoint + saving assignments (unknown roles/providers dropped, and the response echoes what was really stored)
+  - `test_local_endpoint.py` -- what "Local model" is allowed to mean: loopback/private/.local accepted, public addresses refused with the rule explained, `/v1` normalization per API style
+  - `test_think_blocks.py` -- inline `<think>` reasoning traces stripped from local-model replies before the writer or the conversation history sees them
   - `test_nanogpt_models.py` -- tolerant /models normalization for thin catalogs
   - `test_provider_errors.py` -- provider-templated error translation (NanoGPT messages)
   - `test_settings_routes.py` -- ai_provider / NanoGPT key / prompt_caching over the Settings API
@@ -226,7 +233,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/utils/spellcheck.test.ts` -- spellcheck suggestions
   - `src/utils/buildEditorChatPayload.test.ts` -- Writing Companion payload builder + history persistence (appendTurnToHistory)
   - `src/utils/modelFiltering.test.ts` -- model list filtering + recommended models (provider-aware)
-  - `src/components/settings/ProviderPanel.test.tsx` -- per-provider Settings panels + PROVIDER_META registry
+  - `src/components/settings/ProviderPanel.test.tsx` -- per-provider Settings panels + PROVIDER_META registry (incl. the local entry: no key field, and the note stating the local-only restriction)
+  - `src/components/settings/ModelRolesSection.test.tsx` -- the Model Roles screen: each role names the features it covers, roles nothing uses yet say so, unassigned roles name the Default Model they fall back to, and an assignment that cannot run warns that it will REFUSE rather than substitute
   - `src/data/characterSpines.test.ts` -- Enneagram/archetype canned-content contracts (fiction-first, fill-in hooks, no em dashes)
   - `src/data/traitPools.test.ts` -- trait randomizer: tier replacement semantics, archetype flavor bias, deterministic rolls
   - `src/data/names/fantasyNames.test.ts` -- fantasy name assembly: 12-race roster, deterministic rng, speakability fuzz, phonology disjointness
@@ -335,7 +343,7 @@ Storythread Studio uses a **three-layer local architecture**. No cloud. No sync.
 Two storage systems work together:
 
 - **Markdown files** -- the permanent source of truth. Chapters, profiles, notes, and summaries all live as `.md` files in the project folder. These are human-readable and can be backed up or published to GitHub as-is.
-- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. Stores parsed profile data, app settings, and the model registry cache. Can be rebuilt from Markdown if corrupted or deleted.
+- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. Today it holds exactly one table of Writing Progress events (`progress_event`); profiles are parsed from Markdown on every request and settings live in `~/.storythread/settings.json`, NOT in this database. Anything stored here must be rebuildable from Markdown.
 
 Think of Markdown as the filing cabinet and SQLite as the index cards on your desk -- the cabinet is what matters; the index cards just make lookup faster.
 

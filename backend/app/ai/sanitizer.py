@@ -85,6 +85,44 @@ def sanitize_chat(text: str) -> str:
     return text
 
 
+# Matches an inline reasoning trace and everything inside it, across lines.
+# Non-greedy so two blocks in one reply are removed as two blocks rather
+# than as one span swallowing the useful text between them.
+_THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.DOTALL | re.IGNORECASE)
+# An unterminated opener. See the docstring below for why this is separate.
+_OPEN_THINK_RE = re.compile(r"<think\b[^>]*>.*\Z", re.DOTALL | re.IGNORECASE)
+
+
+def strip_think_blocks(text: str) -> str:
+    """
+    Remove inline <think>...</think> reasoning traces from a reply.
+
+    Local reasoning models (DeepSeek-R1 distills, QwQ, and friends) write
+    their working out into the ordinary response body rather than into a
+    separate field the way hosted services do. Left alone it reaches the
+    writer as the model muttering to itself before answering, and -- worse --
+    gets stored in the conversation history and fed back next turn.
+
+    Two shapes are handled:
+      1. A complete block. Removed outright.
+      2. An opener with no closer, which happens when a reply is cut off by
+         a token limit mid-thought. Everything from the opener onward goes,
+         because it is all reasoning; keeping it would leave the writer
+         staring at half an internal monologue.
+
+    A stray closing tag with no opener is left alone: it is far more likely
+    to be prose about markup than a broken trace.
+
+    Only called when the provider is flagged strip_think_blocks (see
+    ai/providers.py). Hosted models never emit these, so hosted replies are
+    not put through it -- a writer discussing HTML should not have their own
+    example tags eaten.
+    """
+    text = _THINK_BLOCK_RE.sub("", text)
+    text = _OPEN_THINK_RE.sub("", text)
+    return text.strip()
+
+
 def sanitize_dict(data: dict) -> dict:
     """
     Recursively walk a nested dict/list structure and sanitize all string values.

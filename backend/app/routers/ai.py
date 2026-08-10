@@ -17,7 +17,8 @@ from pydantic import BaseModel
 
 from app.settings_store import load_settings
 from app.ai.openrouter import run_completion, run_chat, list_models
-from app.ai.providers import ProviderConfig, OPENROUTER, active_provider
+from app.ai.providers import ProviderConfig, OPENROUTER, PROVIDERS, active_provider, base_url_for
+from app.ai.roles import resolve_role_model, role_api_key
 from app.ai.sanitizer import sanitize
 from app.ai.prompts import (
     build_editor_chat_system_prompt,
@@ -39,6 +40,7 @@ from app.ai.prompts import (
     EDITOR_PASS_SUBCATEGORIES,
     TEMPERATURE_DEFAULTS,
 )
+import dataclasses
 import uuid
 from app.utils.scene_parser import split_into_scenes_with_meta, count_hr_breaks
 from app.progress_store import record_advisor_run
@@ -294,31 +296,57 @@ class ModelInfo(BaseModel):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/models", response_model=list[ModelInfo])
-async def get_models():
+async def get_models(provider: str | None = None):
     """
-    Fetches the current model list from the active AI provider and returns it.
+    Fetches the current model list from an AI provider and returns it.
     The Settings screen uses this to populate the model picker dropdown.
 
-    Requires a valid API key for the active provider to be saved in settings.
+    `provider` names which service to ask; omitted, it is the active one.
+    Model Roles needs the parameter because a role can point somewhere other
+    than the active provider -- prose on a local model while everything else
+    stays on OpenRouter -- and its picker has to list that service's catalog,
+    not the active one's.
+
+    Requires a valid API key for that provider (except local, which has none).
     """
     settings = load_settings()
-    provider = active_provider(settings)
-    api_key = settings.get(provider.api_key_setting, "")
-    if not api_key:
+    chosen = PROVIDERS.get(provider or "") or active_provider(settings)
+    api_key = role_api_key(settings, chosen)
+    if chosen.requires_api_key and not api_key:
         raise HTTPException(
             status_code=400,
-            detail=f"No {provider.label} API key found. Add your key in Settings first."
+            detail=f"No {chosen.label} API key found. Add your key in Settings first."
         )
+    # A local runtime keeps its address in settings rather than in its config.
+    if chosen.endpoint_from_settings:
+        try:
+            chosen = dataclasses.replace(
+                chosen,
+                base_url=base_url_for(chosen, settings),
+                model_list_style=("ollama_tags"
+                                  if settings.get("local_api_style") == "ollama"
+                                  else "openai"),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        models = await list_models(api_key, provider=provider)
+        models = await list_models(api_key, provider=chosen)
         return [ModelInfo(**m) for m in models]
     except httpx.HTTPStatusError as e:
-        raise _provider_exc(e, provider)
+        raise _provider_exc(e, chosen)
     except httpx.RequestError as e:
+        # A local runtime that is simply not running is the common case here,
+        # so say that rather than leaving the writer with a bare network error.
+        if chosen.endpoint_from_settings:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Nothing answered at {chosen.base_url}. Is your local "
+                       f"model server running?"
+            )
         raise HTTPException(
             status_code=503,
-            detail=f"Could not reach {provider.label}: {e}"
+            detail=f"Could not reach {chosen.label}: {e}"
         )
 
 
@@ -701,39 +729,64 @@ def _find_related_relationships(project_path: str, character_name: str) -> list[
 # summaries). Usage previews are shown on demand, not stored.
 
 
-def _resolve_model_and_key(model_id_override: str | None) -> tuple[ProviderConfig, str, str]:
+def _resolve_model_and_key(role: str,
+                           model_id_override: str | None = None
+                           ) -> tuple[ProviderConfig, str, str]:
     """
     Resolve which provider, API key, and model this request should use.
+
     Returns a (provider, api_key, model_id) 3-tuple -- the single dispatch
-    seam every AI endpoint goes through, so switching providers in Settings
-    reroutes ALL AI features at once.
+    seam every AI endpoint goes through. Every caller now declares WHICH
+    KIND OF JOB it is doing (its `role`), so a writer can point critique at
+    one model and prose at another. See app/ai/roles.py for the role list
+    and the full precedence chain.
 
-    Model resolution order: request override (the project's default_model)
-    -> global settings default_model -> the provider's fallback model.
-    NanoGPT has no fallback (its catalog differs from OpenRouter's, so a
-    guessed slug would just 404) -- the writer must pick a model explicitly.
+    `model_id_override` is the project's own default_model, sent by the
+    frontend. It still outranks the global default -- it just sits below an
+    explicit role assignment now, because a writer who assigned a model to
+    "prose" meant that for prose specifically.
 
-    Raises HTTPException 400 if no API key is saved or no model resolves.
+    Raises HTTPException 400 when the job cannot run. Note the deliberate
+    asymmetry inside resolve_role_model: an UNASSIGNED role quietly falls
+    back to the Default Model, but an ASSIGNED role that cannot run raises
+    rather than substituting a different model. Silently swapping the model
+    a writer chose is the one failure this seam must never produce.
     """
     settings = load_settings()
-    provider = active_provider(settings)
-    api_key  = settings.get(provider.api_key_setting, "")
-    if not api_key:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No {provider.label} API key found. Add your key in Settings first."
-        )
-    model_id = (
-        model_id_override
-        or settings.get("default_model", "")
-        or provider.fallback_model
-    )
-    if not model_id:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No model selected. Pick a {provider.label} model in Settings."
-        )
-    return provider, api_key, model_id
+    # The frontend sends the project's default_model as the override, which
+    # is exactly what level 3 of the precedence chain calls it.
+    project = {"default_model": model_id_override} if model_id_override else None
+    selection = resolve_role_model(settings, project, role)
+
+    if not selection["usable"]:
+        raise HTTPException(status_code=400, detail=selection["unusable_reason"])
+
+    provider = PROVIDERS[selection["provider_key"]]
+    # The local provider's address lives in settings rather than in its
+    # config, so fill it in here. dataclasses.replace works on a frozen
+    # dataclass and hands back a copy, which means every downstream reader
+    # of provider.base_url keeps working untouched.
+    if provider.endpoint_from_settings:
+        provider = dataclasses.replace(provider, base_url=base_url_for(provider, settings))
+
+    return provider, role_api_key(settings, provider), selection["model_id"]
+
+
+def _editor_chat_role(category: str) -> str:
+    """
+    Which kind of job is this Writing Companion turn?
+
+    The chat panel does three genuinely different things behind one
+    endpoint, and they want different models: open conversation is
+    brainstorming, Draft and Enhance are prose, and the structured review
+    categories are critique. Mirrors the temperature branch further down --
+    both are asking the same question about the same request.
+    """
+    if category == "chat":
+        return "brainstorm"
+    if category in ("draft", "enhance"):
+        return "prose"
+    return "critique"
 
 
 def _prompt_cache_enabled(provider: ProviderConfig) -> bool:
@@ -803,7 +856,7 @@ async def generate_usage_preview(request: GenerateUsagePreviewRequest):
     It helps the writer understand what their importance setting actually means
     for this specific trait.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("extraction", request.model_id)
 
     system_prompt = generate_usage_preview_prompt()
 
@@ -862,7 +915,7 @@ async def generate_quick_overview(request: QuickOverviewRequest):
     varied result (generation temperature + an explicit vary-your-angle
     instruction in the prompt).
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("extraction", request.model_id)
 
     system_prompt = generate_quick_overview_prompt()
     mode_block = content_mode_instruction(request.content_mode)
@@ -952,7 +1005,7 @@ async def trim_trait(request: TrimTraitRequest):
     AI rewrites the description to land in the "Good" range while keeping
     all the key details the AI needs at that importance level.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("critique", request.model_id)
 
     good_range = _GOOD_RANGES.get(request.importance, "30-80")
 
@@ -990,7 +1043,7 @@ async def audit_importance(request: AuditImportanceRequest):
     For example: a 'background' trait with rich emotional hooks should be 'core',
     or a 'core' trait with a vague one-liner should be fleshed out or downgraded.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("critique", request.model_id)
 
     # Format the trait blocks as a readable list for the AI
     blocks_text = ""
@@ -1044,7 +1097,7 @@ async def generate_section_summary(request: GenerateSectionSummaryRequest):
     Stored under the ## AI Summary: heading. Designed to be concise and
     prompt-efficient so it can be used as context without burning many tokens.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("extraction", request.model_id)
 
     system_prompt = generate_section_summary_prompt()
 
@@ -1079,7 +1132,9 @@ async def generate_full_summary(request: GenerateFullSummaryRequest):
     This is the primary content used when the writer attaches a profile as a
     context chip to an AI assistant request.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    # character_reasoning, not extraction: for characters this weaves in the
+    # relationship files, which is synthesis rather than compression.
+    provider, api_key, model_id = _resolve_model_and_key("character_reasoning", request.model_id)
 
     system_prompt = generate_full_summary_prompt()
 
@@ -1188,7 +1243,7 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
       4. Write the sanitized Markdown to summaries/chapters/<stem>.md
       5. Return the content + filename + model
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("critique", request.model_id)
 
     chapter_text = _read_chapter_text(request.project_path, request.chapter_path)
     stem         = os.path.splitext(os.path.basename(request.chapter_path))[0]
@@ -1299,7 +1354,7 @@ async def generate_scene_summary(request: GenerateSceneSummaryRequest):
       4. Return {title, content, model_used}. The frontend decides whether to
          save (overwrite prompt, preview modal, etc.) via /api/documents/scene-summary.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("critique", request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -1425,7 +1480,7 @@ _VALID_BREAK_SEVERITIES = {"strong", "moderate", "subtle"}
 @router.post("/suggest-scene-breaks", response_model=SuggestSceneBreaksResponse)
 async def suggest_scene_breaks(request: SuggestSceneBreaksRequest):
     """Suggest where to place `---` scene breaks in a chapter (review-only)."""
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("structure", request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -1520,7 +1575,7 @@ async def profile_chat(request: ProfileChatRequest):
     Session-only: no state on the server. Frontend sends full history each turn.
     Writer controls all profile edits -- AI only suggests, never writes directly.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("character_reasoning", request.model_id)
 
     # 1. System prompt = instructions only (no profile content)
     system_prompt = build_profile_chat_system_prompt(
@@ -1775,7 +1830,9 @@ def _build_materials_message(
 @router.post("/editor-chat", response_model=EditorChatResponse)
 async def editor_chat(request: EditorChatRequest):
     """Writing Companion chat endpoint for the main editor panel."""
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    # One endpoint, three kinds of job -- see _editor_chat_role.
+    provider, api_key, model_id = _resolve_model_and_key(
+        _editor_chat_role(request.category), request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -2042,7 +2099,7 @@ async def editor_pass(request: EditorPassRequest):
     frontend renders as clickable highlights. See module-level docstring
     above for the architectural rationale.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    provider, api_key, model_id = _resolve_model_and_key("critique", request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)
@@ -2156,7 +2213,8 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
     modifier. Returns one new suggestion that replaces the old one in the
     issue popover; does not affect any other issue or the manuscript.
     """
-    provider, api_key, model_id = _resolve_model_and_key(request.model_id)
+    # prose: this rewrites the writer's sentence, so it is a writing job.
+    provider, api_key, model_id = _resolve_model_and_key("prose", request.model_id)
 
     settings = load_settings()
     _validate_model_content_mode(settings, model_id, request.content_mode)

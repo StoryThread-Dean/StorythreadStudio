@@ -254,7 +254,7 @@ POST   /arc/save
 
 ### AI — `/api/ai`
 ```
-GET    /models
+GET    /models?provider=       (provider optional; defaults to the active one)
 POST   /editor-chat            (Writing Companion: chat / Draft / Enhance)
 POST   /editor-pass            (Smart Advisor category passes)
 POST   /revise-suggestion
@@ -274,8 +274,44 @@ POST   /generate-scene-summary
 ```
 GET    /
 PUT    /
+GET    /roles                  (the role catalog the Settings screen renders)
 POST   /test-connection
 ```
+
+### Model resolution — which model runs a request
+
+Every AI endpoint goes through one seam, `_resolve_model_and_key(role, model_id_override)`
+in `backend/app/routers/ai.py`, and every call site declares **which kind of job**
+it is doing. The roles and the resolver live in `backend/app/ai/roles.py`.
+
+Precedence, highest first:
+
+1. `project.json` → `model_roles[role]` (supported by the resolver; no UI yet)
+2. settings → `model_roles[role]`
+3. `project.default_model` → settings `default_model` → `provider.fallback_model`
+
+A role assignment is `{provider, model}` rather than a bare model id, because
+different roles may live on different services. That makes the provider a
+**per-request** resolution rather than a global one -- the single structural
+change from the pre-roles design.
+
+`resolve_role_model()` returns one flat, fully-populated payload (the same shape
+whatever the source), modelled on the audiobook's `resolve_narration_selection()`
+for the same stated reason: several surfaces ask this question, and duplicating
+the precedence in TypeScript would let them disagree.
+
+The distinction the payload exists to carry:
+
+- an **unconfigured** role walks the chain above quietly and reports a
+  `fallback_note` saying which Default Model stood in;
+- a **configured** role that cannot run returns `usable: false` with a reason and
+  **is never substituted**. Callers refuse rather than quietly using a different
+  model than the writer chose.
+
+The local provider's address is not in its `ProviderConfig` (it belongs to the
+writer's machine); `base_url_for()` resolves it from settings at request time,
+and `ai/local_endpoint.py` restricts it to loopback / private / `.local`
+destinations.
 
 ### Progress — `/api/progress`
 ```

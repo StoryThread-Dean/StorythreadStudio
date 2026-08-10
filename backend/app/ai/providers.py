@@ -58,6 +58,19 @@ class ProviderConfig:
     # Model used when neither the project nor global settings pick one.
     # None means "no safe guess" -- the user must pick a model explicitly.
     fallback_model: str | None = None
+    # How to fetch this service's model list. "openai" means the standard
+    # GET /models. "ollama_tags" means Ollama's native GET /api/tags, which
+    # returns a different shape entirely. See openrouter.list_models.
+    model_list_style: str = "openai"
+    # Whether replies from this service may contain inline <think>...</think>
+    # reasoning traces that must be stripped before anyone sees them. Local
+    # reasoning models emit these as part of the normal response body; hosted
+    # services keep reasoning in a separate field (see supports_reasoning_param).
+    strip_think_blocks: bool = False
+    # Whether this provider's endpoint is configured by the writer rather
+    # than fixed here. When True, base_url above is empty and the real
+    # address comes from settings via base_url_for() below.
+    endpoint_from_settings: bool = False
 
 
 # --- The two providers shipped today -----------------------------------------
@@ -90,11 +103,32 @@ NANOGPT = ProviderConfig(
     # produce a confusing 404. The user picks a model in Settings instead.
 )
 
+LOCAL = ProviderConfig(
+    key="local",
+    label="Local model",
+    # Empty on purpose: the address lives in settings, because it is the
+    # writer's own machine and we cannot know its port. See base_url_for().
+    base_url="",
+    endpoint_from_settings=True,
+    # No key setting at all. A local server has nothing to bill and nothing
+    # to authenticate; requires_api_key=False makes the header builder skip
+    # Authorization entirely and the Settings panel hide the key field.
+    api_key_setting="",
+    key_hint="Ollama or LM Studio on this machine",
+    requires_api_key=False,
+    # Local reasoning models write their thinking into the reply body.
+    strip_think_blocks=True,
+    # No fallback model, for the same reason NanoGPT has none: we cannot
+    # guess which models a writer has pulled onto their own disk.
+    fallback_model=None,
+)
+
 # Registry keyed by the settings value. Order here drives nothing -- the
 # frontend has its own display order in providerMeta.ts.
 PROVIDERS: dict[str, ProviderConfig] = {
     OPENROUTER.key: OPENROUTER,
     NANOGPT.key:    NANOGPT,
+    LOCAL.key:      LOCAL,
 }
 
 
@@ -106,3 +140,31 @@ def active_provider(settings: dict) -> ProviderConfig:
     ai_provider setting existed.
     """
     return PROVIDERS.get(settings.get("ai_provider", "openrouter"), OPENROUTER)
+
+
+def base_url_for(provider: ProviderConfig, settings: dict) -> str:
+    """
+    The address to send this provider's requests to.
+
+    Hosted providers carry their own fixed base_url. The local provider's
+    address belongs to the writer's machine, so it comes from settings and
+    is normalized for the chosen API style (Ollama's native API and the
+    OpenAI-compatible one live at different paths).
+
+    Raises ValueError with a writer-facing message when a local address is
+    missing or is not actually local -- see ai/local_endpoint.py for why
+    that restriction exists.
+    """
+    if not provider.endpoint_from_settings:
+        return provider.base_url
+
+    from app.ai.local_endpoint import normalize_base_url
+
+    raw = str(settings.get("local_base_url") or "")
+    if not raw.strip():
+        raise ValueError(
+            "No address is set for your local model. Add it in "
+            "Settings > AI Provider."
+        )
+    style = str(settings.get("local_api_style") or "openai")
+    return normalize_base_url(raw, style)

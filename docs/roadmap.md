@@ -55,14 +55,16 @@ Two open items on the Formatting Walkthrough, both raised by walking a real 22,0
 
 Worth building, prioritization not yet committed.
 
-### Local model providers (Ollama / LM Studio / llama.cpp)
+### Local model providers -- MOSTLY SHIPPED (v1.1.1)
 
-Second slice of "Alternative AI providers" — NanoGPT shipped (v1.0.10) and built the provider plumbing this reuses: adding a runtime is one backend `ProviderConfig` (`backend/app/ai/providers.py`) plus one frontend panel entry (`app/src/components/settings/providerMeta.ts`), with `requires_api_key=False` already supported end to end. Research complete: see [`research-multi-provider.md`](research-multi-provider.md). Key facts locked down so far:
+Shipped: the `local` provider entry, address + API-style settings restricted to loopback / private / `.local` destinations (`backend/app/ai/local_endpoint.py`), Ollama's native `GET /api/tags` via `model_list_style`, `<think>` stripping in the sanitizer, and a Test Connection that tells a bad address, a dead server, and a wrong-API-style server apart. See `docs/research-multi-provider.md` for the original research.
 
-- All local runtimes are OpenAI-compatible for chat, with **no auth header** (Ollama `:11434`, LM Studio `:1234`, llama.cpp `:8080`, plus a custom-URL option).
-- **Ollama lists models via its native `GET /api/tags`, not `/v1/models`** — the one runtime-specific code path. Strip the `:latest` suffix for display; if the user overrides the base URL, derive the tags URL by stripping `/v1`.
-- **Local reasoning models** (DeepSeek-R1 distills, Qwen thinking variants) emit their chain-of-thought inline as `<think>...</think>` blocks in the content itself. These MUST be stripped in the sanitizer layer (they'd otherwise show the writer a wall of internal monologue and break every JSON-output endpoint). Optionally, the stripped trace can feed the existing Reasoning toggle UI as the local analog of OpenRouter's `reasoning` field. Full breakdown in the research doc.
-- Ship with a **local connection test**: a deterministic tiny prompt ("Reply with exactly this text: ...") at temperature 0 with a timeout, showing the model's actual reply or the HTTP error. Local servers have no API key to validate, so proving end-to-end generation is the only meaningful health check.
+Still open:
+
+- **A live-reply connection test.** Today's test proves the server is reachable and lists models; it does not prove generation works. The stronger check is a deterministic tiny prompt ("Reply with exactly this text: ...") at temperature 0 with a timeout, showing the model's actual reply.
+- **Feed the stripped `<think>` trace to the Reasoning toggle** as the local analogue of OpenRouter's `reasoning` field. Currently the trace is discarded.
+- **Strip the `:latest` suffix for display** in the model picker.
+- **A `custom` provider** for arbitrary OpenAI-compatible URLs. Deliberately separate from `local`, which refuses non-local addresses on purpose -- see the note in `providerMeta.ts`.
 
 ### User-editable prompt templates (Default + Custom)
 
@@ -136,7 +138,9 @@ A fifth top-level category for cross-passage critique passes that do not fit Rea
 
 ### Task-aware model auto-selection
 
-Routing classifier that picks an eligible model based on assistant type, content size, and content mode rather than always using the project default. Falls back to the default on ambiguity. The classifier sits in front of the existing allowlist and content-mode validation.
+**Partly delivered by Model Roles (v1.1.1)**, which routes by *assistant type* -- every AI call site declares its role and the writer assigns a model per role. What remains is the automatic half: choosing an eligible model based on **content size** and **content mode** rather than only on the kind of job, falling back on ambiguity. That classifier would sit between `resolve_role_model()` and the existing allowlist / content-mode validation.
+
+Also still open from the roles work: **per-book role overrides.** The resolver already implements and tests precedence level 1 (`project.json` → `model_roles[role]`); it has no UI, so today roles are app-wide.
 
 ### Long-context handling: priority pinning + summary swap
 

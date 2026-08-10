@@ -22,7 +22,7 @@ from app.routers import ai
 def _patch_auth(monkeypatch):
     """Make auth/validation permissive so we reach the endpoint body hermetically."""
     monkeypatch.setattr(ai, "_resolve_model_and_key",
-                        lambda mid: (ai.OPENROUTER, "fake-key", mid or "test/model"))
+                        lambda role, mid=None: (ai.OPENROUTER, "fake-key", mid or "test/model"))
     monkeypatch.setattr(ai, "_validate_model_content_mode", lambda *a, **k: None)
     monkeypatch.setattr(ai, "_validate_model_allowed", lambda *a, **k: None)
     monkeypatch.setattr(ai, "_build_story_context", lambda *a, **k: "")

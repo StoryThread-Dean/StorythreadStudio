@@ -30,8 +30,29 @@ import {
 // (see components/settings/providerMeta.ts).
 import { PROVIDER_META, providerMetaById } from "../components/settings/providerMeta";
 import { ProviderPanel } from "../components/settings/ProviderPanel";
+// Model Roles: one model per KIND of job (critique, prose, brainstorming...).
+// The role catalog is fetched from the backend so the jobs shown here cannot
+// drift from the roles the AI call sites actually use.
+import {
+  ModelRolesSection, type RoleAssignment, type RoleInfo,
+} from "../components/settings/ModelRolesSection";
 
 const API_BASE = "http://localhost:8000";
+
+/**
+ * Can this provider actually be used right now?
+ *
+ * "Ready" is not the same as "has a key": a local model needs an address and
+ * no key at all, so asking about keys alone would report it permanently
+ * broken. Model Roles needs this per provider rather than just for the
+ * active one, because a role can point somewhere else entirely.
+ */
+export function providerIsReady(settings: AppSettings | null, providerId: string): boolean {
+  if (!settings) return false;
+  if (providerId === "local")   return Boolean(settings.local_base_url);
+  if (providerId === "nanogpt") return settings.nanogpt_api_key_set;
+  return settings.openrouter_api_key_set;
+}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface SettingsProps {
@@ -75,6 +96,20 @@ export function Settings({ onClose }: SettingsProps) {
   const [modelAllowlist, setModelAllowlist]     = useState("");
   const [modelBlocklist, setModelBlocklist]     = useState("");
   const [modelContentModes, setModelContentModes] = useState("");
+
+  // Model Roles. `roles` is the catalog (what jobs exist); `modelRoles` is
+  // the writer's assignment of a model to each. Catalogs are cached per
+  // provider because a role can point at a service other than the active one
+  // -- prose on a local model while everything else stays on OpenRouter.
+  const [roles, setRoles]                 = useState<RoleInfo[]>([]);
+  const [loadingRoles, setLoadingRoles]   = useState(true);
+  const [modelRoles, setModelRoles]       = useState<Record<string, RoleAssignment>>({});
+  const [modelsByProvider, setModelsByProvider] = useState<Record<string, ModelInfo[]>>({});
+
+  // Local model connection: address + which API shape it speaks. Stored
+  // separately from the hosted providers' keys because it is not a key.
+  const [localBaseUrl, setLocalBaseUrl]   = useState("");
+  const [localApiStyle, setLocalApiStyle] = useState("openai");
 
   // Vault location -- parent folder where new projects/series are auto-placed.
   // The backend resolves an empty string to ~/Documents/Storythread Studio, so we
@@ -205,12 +240,15 @@ export function Settings({ onClose }: SettingsProps) {
         setWritingSkillLevel(data.writing_skill_level ?? "novice");
         setNightOwl((data.day_rollover_hour ?? 0) === 4);
 
-        // Load the model list when the ACTIVE provider has a key saved --
-        // the /models endpoint fetches from whichever provider is active.
-        const activeKeySet = (data.ai_provider ?? "openrouter") === "nanogpt"
-          ? data.nanogpt_api_key_set
-          : data.openrouter_api_key_set;
-        if (activeKeySet) {
+        // Model Roles + the local connection.
+        setModelRoles(data.model_roles ?? {});
+        setLocalBaseUrl(data.local_base_url ?? "");
+        setLocalApiStyle(data.local_api_style ?? "openai");
+        loadRoles();
+
+        // Load the model list when the ACTIVE provider is usable -- the
+        // /models endpoint fetches from whichever provider is active.
+        if (providerIsReady(data, data.ai_provider ?? "openrouter")) {
           fetchModels();
         }
       } catch (err) {
@@ -232,6 +270,42 @@ export function Settings({ onClose }: SettingsProps) {
       setModels(data);
     } catch {
       // Not critical -- user can still manually type a model ID
+    }
+  }, []);
+
+
+  // --- The role catalog: what kinds of job exist ---
+  // Served by the backend rather than listed here, so the jobs on screen and
+  // the roles the AI call sites request cannot drift apart.
+  const loadRoles = useCallback(async () => {
+    setLoadingRoles(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/settings/roles`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setRoles(data.roles ?? []);
+    } catch {
+      // The rest of Settings still works; the roles section says it is empty.
+    } finally {
+      setLoadingRoles(false);
+    }
+  }, []);
+
+
+  // --- A specific provider's catalog, for a role pointed at it ---
+  // Cached per provider: roles usually all sit on one service, so fetching
+  // every provider up front would be several requests nobody asked for. A
+  // failure caches an empty list, which makes the role's picker fall back to
+  // a free-text model id rather than showing an empty dropdown forever.
+  const loadProviderModels = useCallback(async (providerId: string) => {
+    setModelsByProvider(prev => (prev[providerId] ? prev : { ...prev, [providerId]: [] }));
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/models?provider=${encodeURIComponent(providerId)}`);
+      if (!res.ok) return;
+      const data: ModelInfo[] = await res.json();
+      setModelsByProvider(prev => ({ ...prev, [providerId]: data }));
+    } catch {
+      // Leave the empty list in place -- free-text entry still works.
     }
   }, []);
 
@@ -288,6 +362,14 @@ export function Settings({ onClose }: SettingsProps) {
         // and day rollover (0 = midnight default, 4 = Night Owl mode).
         writing_skill_level:  writingSkillLevel,
         day_rollover_hour:    nightOwl ? 4 : 0,
+        // Model Roles. Half-filled rows (a service chosen but no model yet)
+        // are dropped here rather than sent: the backend reads them as unset
+        // anyway, and sending them would echo back a row that vanished.
+        model_roles:          Object.fromEntries(
+          Object.entries(modelRoles).filter(([, a]) => a.provider && a.model)
+        ),
+        local_base_url:       localBaseUrl.trim(),
+        local_api_style:      localApiStyle,
       };
 
       if (apiKeyInput.trim()) {
@@ -303,12 +385,29 @@ export function Settings({ onClose }: SettingsProps) {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Save failed.");
+      if (!res.ok) {
+        // Surface the backend's own message. A rejected local address
+        // explains WHY it was refused (loopback / private / .local only), and
+        // a bare "Save failed" would throw that explanation away and leave
+        // the writer guessing at what to type instead.
+        let detail = "Save failed.";
+        try {
+          const body = await res.json();
+          if (body?.detail) detail = String(body.detail);
+        } catch { /* non-JSON error body -- keep the generic message */ }
+        throw new Error(detail);
+      }
 
       const data: AppSettings = await res.json();
       setSettings(data);
       setApiKeyInput("");
       setNanogptKeyInput("");
+      // Echo the stored roles back rather than keeping local state: the
+      // backend drops entries naming an unknown role or provider, and the
+      // writer should see that immediately instead of a row that looks saved.
+      setModelRoles(data.model_roles ?? {});
+      setLocalBaseUrl(data.local_base_url ?? "");
+      setLocalApiStyle(data.local_api_style ?? "openai");
       // Reflect the resolved vault path back -- the backend substitutes the
       // default when we send "", so this re-fills the input with the real
       // path instead of leaving it blank.
@@ -323,14 +422,15 @@ export function Settings({ onClose }: SettingsProps) {
       // Refetch the model list from the (possibly just-switched) active
       // provider. With no key saved for it, clear the list instead of
       // leaving the previous provider's models on screen.
-      const activeKeySet = (data.ai_provider ?? "openrouter") === "nanogpt"
-        ? data.nanogpt_api_key_set
-        : data.openrouter_api_key_set;
-      if (activeKeySet) {
+      if (providerIsReady(data, data.ai_provider ?? "openrouter")) {
         fetchModels();
       } else {
         setModels([]);
       }
+      // Role pickers may point at other services; drop the cached catalogs so
+      // they reload against whatever was just saved (a newly added key, a
+      // changed local address).
+      setModelsByProvider({});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save settings.");
     } finally {
@@ -347,8 +447,15 @@ export function Settings({ onClose }: SettingsProps) {
 
     // Typing a key implies "save first, then test" -- and handleSave also
     // persists the provider switch, so after this the selected card IS the
-    // active provider.
-    const savedFirst = Boolean(apiKeyInput.trim() || nanogptKeyInput.trim());
+    // active provider. The local connection has no key, so its equivalent of
+    // "typed something" is an address or style that differs from what is
+    // stored: the backend tests what is SAVED, so without this the writer
+    // would edit the address and then test the old one.
+    const localEdited = selectedProvider === "local" && (
+      localBaseUrl.trim() !== (settings?.local_base_url ?? "")
+      || localApiStyle !== (settings?.local_api_style ?? "openai")
+    );
+    const savedFirst = Boolean(apiKeyInput.trim() || nanogptKeyInput.trim() || localEdited);
     if (savedFirst) {
       await handleSave();
     }
@@ -373,7 +480,11 @@ export function Settings({ onClose }: SettingsProps) {
       const data = await res.json();
 
       if (data.ok) {
-        setTestResult({ ok: true, message: `Connected. ${data.model_count} models available.` });
+        // A local server that answers but has nothing loaded is "connected"
+        // and still unusable, so the backend sends an error alongside ok.
+        setTestResult(data.error
+          ? { ok: false, message: data.error }
+          : { ok: true, message: `Connected. ${data.model_count} models available.` });
         // /api/ai/models serves the SAVED provider, so only refetch when the
         // tested provider is (now) the active one -- either it already was,
         // or the save above just made it so.
@@ -490,6 +601,57 @@ export function Settings({ onClose }: SettingsProps) {
                     onTest={handleTest}
                     testResult={testResult}
                   >
+                    {/* The local connection's address lives INSIDE its panel
+                        for the same reason the key fields do: it is what
+                        "connecting" means for this provider. There is no key,
+                        so this is the whole setup. */}
+                    {selectedProvider === "local" && (
+                      <div className="mt-1 space-y-3">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-text-primary">
+                            Server address
+                          </label>
+                          <p className="mb-2 text-xs text-faint">
+                            Where your model is running. Only addresses on this machine
+                            or your local network are accepted.
+                          </p>
+                          <input
+                            value={localBaseUrl}
+                            onChange={e => setLocalBaseUrl(e.target.value)}
+                            placeholder="http://localhost:11434"
+                            aria-label="Local server address"
+                            className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-text-primary">
+                            API style
+                          </label>
+                          <p className="mb-2 text-xs text-faint">
+                            Ollama offers both; LM Studio and llama.cpp use the
+                            OpenAI-compatible one. If you pick wrong, Test Connection
+                            says so and offers to switch.
+                          </p>
+                          <select
+                            value={localApiStyle}
+                            onChange={e => setLocalApiStyle(e.target.value)}
+                            aria-label="Local API style"
+                            className="rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-indigo-500"
+                          >
+                            <option value="openai">OpenAI-compatible</option>
+                            <option value="ollama">Ollama native</option>
+                          </select>
+                        </div>
+                        <button
+                          onClick={handleTest}
+                          disabled={testing || saving}
+                          className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:opacity-50"
+                        >
+                          Test Connection
+                        </button>
+                      </div>
+                    )}
+
                     {/* Prompt Caching lives INSIDE the OpenRouter panel --
                         it's a property of this connection, not a global
                         preference (meta.supportsCaching gates it). */}
@@ -1002,7 +1164,31 @@ export function Settings({ onClose }: SettingsProps) {
               </section>
 
 
-              {/* ── SECTION 4: Model Routing ─────────────────────────────── */}
+              {/* ── SECTION 4: Model Roles ───────────────────────────────── */}
+              {/* Deliberately its own section, above the allow/blocklists:
+                  roles are the everyday control (which model does which job)
+                  while routing below is a guard rail most writers never
+                  touch. */}
+              <section>
+                <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  Model Roles
+                </h3>
+                <ModelRolesSection
+                  roles={roles}
+                  loadingRoles={loadingRoles}
+                  value={modelRoles}
+                  onChange={setModelRoles}
+                  defaultModel={selectedModel}
+                  providerReady={Object.fromEntries(
+                    PROVIDER_META.map(p => [p.id, providerIsReady(settings, p.id)])
+                  )}
+                  modelsByProvider={modelsByProvider}
+                  onNeedModels={loadProviderModels}
+                />
+              </section>
+
+
+              {/* ── SECTION 5: Model Routing ─────────────────────────────── */}
               <section>
                 <h3 className="mb-4 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                   Model Routing
