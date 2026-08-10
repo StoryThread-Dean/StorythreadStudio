@@ -459,7 +459,13 @@ async def get_entity(project_path: str = Query(...), entity_id: str = Query(...)
     project_path = validate_project_path(project_path)
     registry = _registry(project_path)
     row = await _locate(project_path, entity_id)
-    return _read_thread(project_path, registry, row)
+    thread = _read_thread(project_path, registry, row)
+    # The revision the editor opened at, so its save can be refused if somebody
+    # else -- or the writer in another window -- has written since. Without it
+    # a save is a blind overwrite, and the version_conflict check on the way
+    # back in has nothing to compare against.
+    thread["revision"] = codex_store.source_revision(project_path)
+    return thread
 
 
 class SaveThreadRequest(BaseModel):

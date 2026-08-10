@@ -219,10 +219,24 @@ Design notes worth keeping:
   usually a mistake and sometimes a disputed throne. The app records what was
   asked for and says what it noticed.
 
-Also open before release: a Thread editor for the kinds the Profile Builder
-does not cover (factions, governments, religions, concepts, events -- until
-then Weaving says plainly that those stops have nowhere to send the writer),
-and the manual-smoke additions for each milestone.
+**The Thread editor is built.** Every shipped kind the Profile Builder does not
+cover -- factions, religions, governments, deities, creatures, cultures,
+objects, concepts, events, languages -- now has somewhere to be written, and
+Weaving routes to it instead of apologising. Sections come from `types.json`,
+so nothing about the shape of an entry is hardcoded. Manual save throughout:
+unsaved work looks unsaved, leaving is confirmed, and a save that would
+overwrite a newer file is refused with the writer's text still in the buffer.
+
+It also edits the Run, which is what Weaving's Unplaced stops send writers
+there to do -- "when" is a list of the writer's own chapters, and "not placed
+yet" is selectable so the state Weaving is complaining about is visible.
+
+One case is still an honest dead end: a kind the WRITER invented has no
+sections of its own until they give it some, so an editor would open on nothing
+to type in. The walk says so rather than sending them to a blank screen.
+Giving a custom kind its own sections is the remaining piece.
+
+Also open before release: the manual-smoke additions for each milestone.
 
 ### Audiobook Converter -- SHIPPED as v1.1.0 (2026-08-03)
 

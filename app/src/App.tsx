@@ -29,6 +29,12 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { WeaveScreen } from "./features/codex/WeaveScreen";
 import { WeaveNav } from "./features/codex/WeaveNav";
 import { WeavingPanel } from "./features/codex/WeavingPanel";
+import { ThreadEditor } from "./features/codex/ThreadEditor";
+
+/** The four kinds the Profile Builder owns. Everything else in the Weave is
+ *  edited by the Thread editor -- named once so the three places that route on
+ *  it cannot drift apart. */
+const PROFILE_KINDS = ["character", "relationship", "location", "lore"];
 import { OutlinePlanner } from "./screens/OutlinePlanner";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
@@ -125,7 +131,7 @@ function App() {
   // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
   const [currentView, setCurrentView]   = useState<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
-    | "outline_planner" | "weave"
+    | "outline_planner" | "weave" | "thread"
   >("editor");
   // Which Weave section the sidebar shows as active. Kept here rather than
   // inside WeaveNav because opening a section changes the VIEW, and the view
@@ -138,6 +144,10 @@ function App() {
   // Which entry Weaving sent the writer to, so the Profile Builder opens
   // on THAT one rather than on its list. "Open it" has to open it.
   const [profileFilename, setProfileFilename] = useState<string | undefined>();
+  // Which kind of Weave entry the Thread editor has open. The Profile
+  // Builder covers four kinds; everything else in the Weave -- factions,
+  // deities, objects, a writer's own Race -- is edited here.
+  const [threadType, setThreadType] = useState<string | null>(null);
   // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
   // when no writing project is open. Not part of currentView because it
   // never coexists with the editor layout.
@@ -458,7 +468,7 @@ function App() {
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
   const currentViewRef = useRef<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
-    | "outline_planner" | "weave"
+    | "outline_planner" | "weave" | "thread"
   >("editor");
 
   // Keep refs in sync with state on every render.
@@ -2411,13 +2421,14 @@ function App() {
                 return;
               }
               // A kind of entry. The Profile Builder still handles the four
-              // it was built for; anything else is a Weave Thread and opens
-              // there until the Thread editor lands.
-              if (["character", "relationship", "location", "lore"].includes(section.id)) {
+              // it was built for; everything else opens in the Thread editor.
+              if (PROFILE_KINDS.includes(section.id)) {
                 setProfileType(section.id as "character" | "relationship" | "location" | "lore");
                 setCurrentView("profiles");
               } else {
-                setCurrentView("weave");
+                setThreadType(section.id);
+                setProfileFilename(undefined);
+                setCurrentView("thread");
               }
             }}
           />
@@ -2471,7 +2482,20 @@ function App() {
         continuity editing, not prose drafting, so the chat panel would only
         distract.
       */}
-      {currentView === "weave" ? (
+      {currentView === "thread" && threadType ? (
+        // Every Weave kind the Profile Builder does not cover. Rendered like
+        // the Weave itself rather than as a takeover, so the chapter list
+        // stays put -- an entry is something a writer edits WHILE writing.
+        <div className="flex-1 overflow-hidden">
+          <ThreadEditor
+            projectPath={currentProject.root_path}
+            typeId={threadType}
+            initialFilename={profileFilename}
+            onBack={() => setCurrentView("editor")}
+            onDirtyChange={setIsDirty}
+          />
+        </div>
+      ) : currentView === "weave" ? (
         // Rendered here rather than as a full-screen takeover so the left
         // nav stays put: the Weave is something you consult WHILE writing,
         // and losing the chapter list to look at it would make it a
@@ -2745,10 +2769,18 @@ function App() {
               // button is that it opens the thing it names.
               setWeavingOpen(false);
               const kind = target?.type ?? "";
-              if (["character", "relationship", "location", "lore"].includes(kind)) {
+              if (PROFILE_KINDS.includes(kind)) {
                 setProfileType(kind as "character" | "relationship" | "location" | "lore");
                 setProfileFilename(target?.filename || undefined);
                 setCurrentView("profiles");
+                return;
+              }
+              // Every other kind now has somewhere to go. This was the dead
+              // end Weaving used to have to apologise for.
+              if (kind) {
+                setThreadType(kind);
+                setProfileFilename(target?.filename || undefined);
+                setCurrentView("thread");
                 return;
               }
               setProfileFilename(undefined);
@@ -2758,14 +2790,15 @@ function App() {
               // An Unwoven answer belongs in a KIND of entry, not in one
               // that already exists. The four the Profile Builder was made
               // for still open there; everything else opens in the Weave.
-              if (["character", "relationship", "location", "lore"].includes(typeId)) {
+              // No entry to open -- an Unwoven answer has none yet by
+              // definition, so this lands on the list on purpose.
+              setProfileFilename(undefined);
+              if (PROFILE_KINDS.includes(typeId)) {
                 setProfileType(typeId as "character" | "relationship" | "location" | "lore");
-                // No entry to open -- an Unwoven answer has none yet by
-                // definition, so this lands on the list on purpose.
-                setProfileFilename(undefined);
                 setCurrentView("profiles");
               } else {
-                setCurrentView("weave");
+                setThreadType(typeId);
+                setCurrentView("thread");
               }
               // The walk gets out of the way when it sends the writer
               // somewhere. An overlay left open over the thing it just

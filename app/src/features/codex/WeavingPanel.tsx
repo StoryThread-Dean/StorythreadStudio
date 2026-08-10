@@ -79,13 +79,23 @@ function lexFor(kind: string): LexEntry | undefined {
 /**
  * Kinds of entry that have an editor today.
  *
- * The Profile Builder covers four. Everything else in the Weave -- factions,
- * governments, concepts, events -- has no editor yet, and a button that
- * promises to open one leads the writer to a screen that cannot help them.
- * So the walk SAYS SO instead, and offers the answers that still make sense.
- * An honest "not yet" is worth more than a button that goes nowhere.
+ * The Profile Builder covers four; the Thread editor covers the rest of the
+ * shipped kinds. A kind the WRITER invented is deliberately not here: it has
+ * no sections of its own until they give it some, so an editor would open on
+ * nothing. The walk says so instead, and offers the answers that still make
+ * sense -- an honest "not yet" beats a button that goes nowhere.
  */
-const EDITABLE_KINDS = new Set(["character", "relationship", "location", "lore"]);
+const EDITABLE_KINDS = new Set([
+  // The Profile Builder's four...
+  "character", "relationship", "location", "lore",
+  // ...and everything else, now that the Thread editor exists. Kept as a set
+  // rather than "always true" because a writer's own kind is not in it: a
+  // custom kind has no registry sections of its own until they give it some,
+  // and sending them to an editor with nothing to type in would be a worse
+  // dead end than saying so.
+  "faction", "religion", "government", "deity", "creature", "culture",
+  "object", "concept", "event", "language",
+]);
 
 function target(stop: Stop): { type: string; filename: string } {
   return {

@@ -119,7 +119,10 @@ export function TieEditor({
         + `&entity_id=${encodeURIComponent(thread.entity_id)}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body?.detail?.message ?? "Could not read connections.");
-      setTies(body.ties as Tie[]);
+      // Defaulted, not trusted. A response without the key would otherwise
+      // crash the render rather than showing an empty list, and "no
+      // connections" is a perfectly ordinary answer.
+      setTies((body.ties ?? []) as Tie[]);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read connections.");
