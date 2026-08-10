@@ -88,7 +88,12 @@ def test_ties_are_read_with_their_anchor():
     thread = parse_thread(FULL, REGISTRY)
     assert thread["ties"] == [{
         "rel": "mentored_by", "target": "e-77b1e044", "at": "c-aaa/s-a1",
-        "until": None, "frame": None, "revealed_at": None, "ai_scope": None,
+        "until": None,
+        # Normalized on the way in: an unwritten frame IS objective truth and
+        # an unwritten scope IS visible. Leaving these as None let every
+        # consumer decide for itself, and they disagreed -- see
+        # codex/normalize.py.
+        "frame": "truth", "revealed_at": None, "ai_scope": "always",
     }]
 
 
@@ -172,6 +177,22 @@ def test_extra_keys_on_a_fact_are_not_dropped():
     raw = FULL.replace("  ai_scope: always", "  ai_scope: always\n  confidence: 0.8")
     thread = parse_thread(raw, REGISTRY)
     assert thread["run"][0]["confidence"] == 0.8
+
+
+def test_an_author_only_thread_says_so_on_disk_and_survives_a_save():
+    # A scope that cannot be persisted is no protection at all: the Thread
+    # would read as ordinary the moment the file was written back.
+    thread = parse_thread(FULL, REGISTRY)
+    thread["ai_scope"] = "never"
+    rendered = render_thread(thread, REGISTRY)
+    assert "ai_scope: never" in rendered
+    assert parse_thread(rendered, REGISTRY)["ai_scope"] == "never"
+
+
+def test_an_ordinary_thread_writes_no_scope_line():
+    # The default stays invisible, so an ordinary file is as short as it was.
+    assert "ai_scope:" not in render_thread(parse_thread(FULL, REGISTRY), REGISTRY) \
+        .split("---")[1]
 
 
 def test_a_file_with_no_run_reads_as_a_thread_with_no_facts():

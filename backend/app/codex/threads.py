@@ -55,6 +55,8 @@ from typing import Callable
 
 import yaml
 
+from app.codex.normalize import normalize_ai_scope, normalize_fact, normalize_tie
+
 RUN_HEADING = "Run"
 FULL_SUMMARY_HEADING = "Full AI Summary"
 
@@ -137,6 +139,10 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
         "name": str(front.get("name") or ""),
         "role": str(front.get("role") or ""),
         "status": str(front.get("status") or "active"),
+        # Whether AI may see this entry AT ALL. Distinct from a fact's scope:
+        # "never" here means the whole Thread is author-only, however
+        # ordinary its individual facts are.
+        "ai_scope": normalize_ai_scope(front.get("ai_scope")),
         "aliases": [str(a) for a in (front.get("aliases") or []) if a],
         "tags": [str(t) for t in (front.get("tags") or []) if t],
         "fields": dict(front.get("fields") or {}),
@@ -159,7 +165,9 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
                 for k, v in tie.items():
                     if k not in TIE_KEYS:
                         record[k] = v
-                thread["ties"].append(record)
+                # Normalized on the way in, so no consumer downstream has to
+                # decide what an unwritten frame or ai_scope means.
+                thread["ties"].append(normalize_tie(record))
 
     # Sections. re.split with a capture group yields [pre, head1, body1, ...].
     chunks = _SECTION_SPLIT_RE.split(body)
@@ -168,7 +176,8 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
         section_body = chunks[i + 1]
 
         if heading == RUN_HEADING:
-            thread["run"], leftover = _parse_list_block(section_body, FACT_KEYS)
+            facts, leftover = _parse_list_block(section_body, FACT_KEYS)
+            thread["run"] = [normalize_fact(f) for f in facts]
             if leftover.strip():
                 thread["run_raw"] = leftover
             continue
@@ -248,6 +257,12 @@ def render_thread(
     if thread.get("role"):
         lines.append(f"role: {thread['role']}")
     lines.append(f"status: {thread.get('status') or 'active'}")
+    # Only written when it is not the default, so an ordinary Thread's file
+    # stays as short as it was -- but an author-only one says so on disk,
+    # where the writer can see it without opening the app.
+    scope = normalize_ai_scope(thread.get("ai_scope"))
+    if scope != "always":
+        lines.append(f"ai_scope: {scope}")
     if thread.get("character_kind") == "side":
         lines.append("character_kind: side")
 
@@ -268,10 +283,19 @@ def render_thread(
             lines.append(f"  - rel: {tie.get('rel', '')}")
             lines.append(f"    target: {tie.get('target', '')}"
                          f"{_comment_for(tie.get('target'), label_for)}")
-            for key in ("at", "until", "frame", "revealed_at", "ai_scope"):
+            # Defaults are NOT written back. Normalizing on read fills frame
+            # and ai_scope on every tie, so writing them unconditionally would
+            # add two lines to every connection in the book the first time it
+            # was saved -- a diff of pure noise over files that had not
+            # changed in any way the writer would recognise.
+            for key in ("at", "until", "revealed_at"):
                 if tie.get(key):
-                    comment = _comment_for(tie[key], label_for) if key == "frame" else ""
-                    lines.append(f"    {key}: {tie[key]}{comment}")
+                    lines.append(f"    {key}: {tie[key]}")
+            if tie.get("frame") and tie["frame"] != "truth":
+                lines.append(f"    frame: {tie['frame']}"
+                             f"{_comment_for(tie['frame'], label_for)}")
+            if tie.get("ai_scope") and tie["ai_scope"] != "always":
+                lines.append(f"    ai_scope: {tie['ai_scope']}")
 
     if thread.get("created_at"):
         lines.append(f"created_at: {thread['created_at']}")

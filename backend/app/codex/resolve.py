@@ -47,12 +47,18 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.codex.anchors import AnchorIndex
+from app.codex.normalize import (
+    AI_SCOPE_ALWAYS,
+    AI_SCOPE_NEVER,
+    AI_SCOPE_ON_REQUEST,
+    TRUTH,
+    normalize_fact,
+)
 
-TRUTH = "truth"
-
-AI_SCOPE_NEVER = "never"
-AI_SCOPE_ON_REQUEST = "on-request"
-AI_SCOPE_ALWAYS = "always"
+__all__ = [
+    "TRUTH", "AI_SCOPE_ALWAYS", "AI_SCOPE_NEVER", "AI_SCOPE_ON_REQUEST",
+    "Ambiguity", "Resolution", "frames_for", "resolve_facts", "resolve_thread",
+]
 
 
 @dataclass
@@ -149,19 +155,18 @@ def resolve_facts(
     result = Resolution()
 
     # ── Gather candidates ────────────────────────────────────────────────
+    # Normalized here as well as at parse time, because resolve_facts is also
+    # called with hand-built dicts (tests, AI proposals, the walkthrough).
+    # ONE definition of what an unwritten switch means, applied wherever
+    # facts enter -- see codex/normalize.py for the bug that caused.
+    facts = [normalize_fact(f) for f in facts]
+
     candidates: list[tuple[tuple[int, int], dict, str]] = []
     for fact in facts:
-        # `or TRUTH` rather than a dict default: a fact read from a file or
-        # posted by the API carries frame=None explicitly when it was not
-        # given, and a plain .get(key, default) returns None for that -- which
-        # then matches no frame and silently drops the fact. An objective
-        # statement with no frame written IS the objective truth.
-        frame = str(fact.get("frame") or TRUTH)
-        scope = str(fact.get("ai_scope") or AI_SCOPE_ALWAYS)
-
+        frame = fact["frame"]
         if frame not in frames:
             continue
-        if not _scope_allowed(scope, include_on_request):
+        if not _scope_allowed(fact["ai_scope"], include_on_request):
             result.withheld_by_scope += 1
             continue
 

@@ -421,6 +421,58 @@ def test_an_author_only_tie_is_never_drawn(project):
     assert body["edges"] == []
 
 
+def test_a_public_tie_to_an_author_only_thread_is_not_drawn(project):
+    # The generalisation of the secret-Tie bug. An edge asserts three things
+    # at once -- that both ends exist and that they are related -- so judging
+    # only the middle one leaks the other two. A perfectly public marriage to
+    # a character the reader never meets still puts that character on screen.
+    thread = client.get("/api/codex/entity",
+                        params={"project_path": project, "entity_id": "e-garrick"}).json()
+    thread["ai_scope"] = "never"
+    client.post("/api/codex/entity", json={"project_path": project, "thread": thread})
+
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara",
+        "rel": "mentored_by", "dst_id": "e-garrick"})
+
+    body = client.get("/api/codex/graph", params={"project_path": project}).json()
+    assert "e-garrick" not in {n["entity_id"] for n in body["nodes"]}
+    assert body["edges"] == []
+    # Reported, not silent: a map that quietly omits things looks like a
+    # world with less in it than the writer built.
+    assert body["hidden_nodes"] >= 1
+
+
+def test_an_author_only_thread_is_not_a_node_at_all(project):
+    # The graph used to return every Thread unfiltered, so an author-only
+    # entry was drawn whatever its scope said.
+    thread = client.get("/api/codex/entity",
+                        params={"project_path": project, "entity_id": "e-garrick"}).json()
+    thread["ai_scope"] = "never"
+    client.post("/api/codex/entity", json={"project_path": project, "thread": thread})
+
+    body = client.get("/api/codex/graph", params={"project_path": project}).json()
+    names = {n["name"] for n in body["nodes"]}
+    assert "Garrick Vale" not in names
+    assert "Elara Voss" in names
+
+
+def test_the_graph_never_leaves_an_edge_dangling(project):
+    # Whatever is hidden, every edge returned must have both endpoints in the
+    # node list -- a map cannot draw a line to something that is not there.
+    anchor = _chapter_anchor(project)
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "rel": "mentored_by",
+        "dst_id": "e-garrick", "at": anchor})
+
+    for hide in (True, False):
+        body = client.get("/api/codex/graph", params={
+            "project_path": project, "at": anchor, "hide_spoilers": hide}).json()
+        ids = {n["entity_id"] for n in body["nodes"]}
+        for edge in body["edges"]:
+            assert edge["src_id"] in ids and edge["dst_id"] in ids
+
+
 # ── Migration ────────────────────────────────────────────────────────────────
 
 def test_migrate_defaults_to_the_preview(tmp_path):

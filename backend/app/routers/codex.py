@@ -29,6 +29,12 @@ from app.codex.migrate import (
     run_migration,
 )
 from app.codex.resolve import resolve_thread
+from app.codex.visibility import (
+    VISIBLE,
+    Lens,
+    connection_visibility,
+    thread_visibility,
+)
 from app.codex.threads import parse_thread, render_thread
 from app.codex.types_registry import (
     SCHEMA_VERSION,
@@ -487,65 +493,91 @@ async def get_resolve(
 async def get_graph(
     project_path: str = Query(...),
     at: str | None = None,
+    pov: str | None = None,
     hide_spoilers: bool = True,
+    include_on_request: bool = False,
 ):
     """
     Nodes and edges for the map, as of a point in the story.
 
-    A Thread appears once it has been introduced; a Tie is `active` only
-    where it is true at `at`. Everything else is returned but flagged, so the
-    map can draw a not-yet-true connection as a dashed line rather than
-    pretending it does not exist -- the writer is looking at their own future
-    book, not a reader's view.
+    Visibility is decided by codex/visibility.py, the same module resolution
+    uses -- they used to judge it separately and disagreed, which is how a
+    secret connection came to be drawn on a map that was correctly hiding the
+    secret behind it.
+
+    An edge asserts three things at once: that both endpoints exist and that
+    they are related. So the whole connection is judged together and the
+    LEAST visible part governs. A public marriage to a character the reader
+    has not met still gives away that the character is coming.
+
+    Ties that are true LATER are returned with active=false rather than
+    dropped, so the map can draw them as dashed lines -- the writer is
+    looking at their own future book, not a reader's view. That is only for
+    things already revealed; a secret is withheld outright.
     """
     project_path = validate_project_path(project_path)
-    _registry(project_path)
+    registry = _registry(project_path)
     index = AnchorIndex.for_project(project_path)
     now = index.ordinal(at) if at else None
+    lens = Lens.for_pov(at, pov, hide_spoilers=hide_spoilers,
+                        include_on_request=include_on_request)
 
+    # Threads are read in full because visibility needs their anchors: a
+    # Thread is "introduced" at the earliest point anything about it happens.
     rows = await codex_store.entities(project_path)
-    nodes = [
-        {"entity_id": r["entity_id"], "type": r["type"], "name": r["name"]}
-        for r in rows
-    ]
-
-    edges = []
+    threads: dict[str, dict] = {}
     for row in rows:
-        for tie in await codex_store.ties_for(project_path, row["entity_id"]):
-            if tie["incoming"]:
-                continue                      # each edge once, from its owner
-            started = index.ordinal(tie["at"]) if tie["at"] else None
-            ended = index.ordinal(tie["until"]) if tie["until"] else None
-            active = True
-            if now is not None:
-                if started is not None and started > now:
-                    active = False
-                if ended is not None and ended <= now:
-                    active = False
+        try:
+            threads[row["entity_id"]] = _read_thread(project_path, registry, row)
+        except CodexError:
+            continue        # an unreadable Thread costs itself, not the map
 
-            # A Tie the reader has not learned of yet must not be drawn at
-            # all: hiding the secret fact while showing a labelled edge that
-            # announces it would leak exactly what spoiler mode protects.
-            if hide_spoilers and now is not None:
-                revealed = index.ordinal(tie["revealed_at"]) if tie["revealed_at"] else started
-                # An unresolvable reveal point means we do not KNOW when the
-                # reader learns of this connection. Hiding is the only safe
-                # answer -- matching resolve.py, which counts the same case as
-                # withheld rather than assuming it is already public.
-                if tie["revealed_at"] and revealed is None:
-                    continue
-                if revealed is not None and revealed > now:
-                    continue
-            if tie["ai_scope"] == "never":
+    nodes = []
+    hidden_nodes = 0
+    for row in rows:
+        thread = threads.get(row["entity_id"])
+        if thread is None:
+            continue
+        if thread_visibility(thread, index, lens) != VISIBLE:
+            hidden_nodes += 1
+            continue
+        nodes.append({"entity_id": row["entity_id"], "type": row["type"],
+                      "name": row["name"]})
+
+    visible_ids = {n["entity_id"] for n in nodes}
+    edges = []
+    hidden_edges = 0
+    for entity_id, thread in threads.items():
+        for tie in thread.get("ties") or []:
+            target_id = tie.get("target") or ""
+            target = threads.get(target_id)
+            if target is None:
+                continue        # points at something that is not there
+
+            if connection_visibility(tie, thread, target, index, lens) != VISIBLE:
+                hidden_edges += 1
+                continue
+            # Belt and braces: an endpoint that did not make the node list
+            # must never leave a dangling edge for the map to draw.
+            if entity_id not in visible_ids or target_id not in visible_ids:
+                hidden_edges += 1
                 continue
 
+            started = index.ordinal(tie["at"]) if tie.get("at") else None
+            ended = index.ordinal(tie["until"]) if tie.get("until") else None
+            expired = ended is not None and now is not None and ended <= now
+            not_yet = started is not None and now is not None and started > now
+
             edges.append({
-                "src_id": tie["src_id"], "rel": tie["rel"], "dst_id": tie["dst_id"],
-                "active": active, "expired": ended is not None and now is not None
-                and ended <= now,
+                "src_id": entity_id, "rel": tie["rel"], "dst_id": target_id,
+                "active": not (expired or not_yet),
+                "expired": expired,
             })
 
-    return {"nodes": nodes, "edges": edges, "as_of": at}
+    # Reported, not silent: a map that quietly omits things looks like a
+    # world with less in it than the writer built.
+    return {"nodes": nodes, "edges": edges, "as_of": at,
+            "hidden_nodes": hidden_nodes, "hidden_edges": hidden_edges}
 
 
 # ── Migration ────────────────────────────────────────────────────────────────
