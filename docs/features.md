@@ -279,8 +279,11 @@ different: apply, *not a connection* (permanent), *not yet* (comes back), and
 **Nothing about the book is stored.** Stops are re-derived every run, so a Thread
 that gets its Overview filled in stops being Frayed because the condition ended --
 not because a record says it was handled. What IS stored is the writer's answers,
-in `.storythread/weave/runs/`, which is the one thing under `.storythread/` that
-is not a rebuildable cache.
+under `.storythread/weave/`, which is the one place under `.storythread/` that is
+not a rebuildable cache. Permanent answers -- applied, *not a connection*, muted
+kinds, and which John a name meant -- live in `answers.json` **per book**, not per
+session, so "permanently" survives closing the panel. The per-session run files
+beside it are logs of what happened in one sitting.
 
 **Applied means saved.** There is no autosave in this app, so a change accepted
 into an unsaved buffer is *staged*, not applied. Discard the buffer and the

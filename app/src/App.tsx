@@ -2720,17 +2720,20 @@ function App() {
 
 
       {/* ── WEAVING ───────────────────────────────────────────────────────
-          Its own column, beside the Writing Companion rather than replacing
-          it. Weaving is a conversation ABOUT the manuscript -- every stop is
-          judged against the text that triggered it -- so taking the
-          manuscript away to have that conversation would make each decision
-          harder than it needs to be. */}
+          An overlay, not a column. As a third panel it left the writer's own
+          prose as the narrowest thing on screen, between the sidebar and the
+          Writing Companion -- exactly backwards for an app whose rule is
+          that the manuscript is the visual focus. It is also the shape this
+          app already uses for a guided walk (the audiobook's formatting
+          walkthrough), so the interaction is one the writer has met before.
+          The component renders its own backdrop; nothing here reserves
+          space for it. */}
       {weavingOpen && (
-        <aside className="flex w-80 shrink-0 flex-col">
+        <>
           <WeavingPanel
             projectPath={currentProject.root_path}
             onClose={() => setWeavingOpen(false)}
-            onOpenThread={() => setCurrentView("weave")}
+            onOpenThread={() => { setWeavingOpen(false); setCurrentView("weave"); }}
             onOpenKind={typeId => {
               // An Unwoven answer belongs in a KIND of entry, not in one
               // that already exists. The four the Profile Builder was made
@@ -2741,9 +2744,13 @@ function App() {
               } else {
                 setCurrentView("weave");
               }
+              // The walk gets out of the way when it sends the writer
+              // somewhere. An overlay left open over the thing it just
+              // asked them to edit would be its own small joke.
+              setWeavingOpen(false);
             }}
           />
-        </aside>
+        </>
       )}
 
       {/* ── RIGHT PANEL: Writing Companion ────────────────────────────────

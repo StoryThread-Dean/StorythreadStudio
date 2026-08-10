@@ -34,7 +34,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, BellOff, Check, CircleHelp, Clock, Loader, Quote, X,
+  ArrowLeft, BellOff, Check, CircleHelp, Clock, Loader, Quote, Waypoints, X,
 } from "lucide-react";
 
 import { STOP_KINDS, TONE_CLASSES, type LexEntry } from "./lexicon";
@@ -455,18 +455,55 @@ async function createThread(projectPath: string, name: string): Promise<void> {
 }
 
 
+/**
+ * The walkthrough sits OVER the manuscript, not beside it.
+ *
+ * It began as a third column and that was the wrong shape. The editor was
+ * already between a sidebar and the Writing Companion; a third panel left
+ * the writer's own prose as the narrowest thing on screen, which is exactly
+ * backwards for an app whose stated rule is that the writer's text is the
+ * visual focus.
+ *
+ * A dialog is also what this app already does for a guided walk -- the
+ * audiobook's formatting walkthrough is the same shape, so the interaction
+ * is one the writer has already learned. And a stop carries its own quoted
+ * evidence, so the manuscript rarely needs to be visible at the same moment.
+ *
+ * A top bar was the other candidate and loses on room: a stop is a quote
+ * plus a reason plus four choices plus what is left, and squeezing that into
+ * a horizontal strip would either truncate the evidence or push the editor
+ * down the screen on every stop.
+ */
 function Shell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <section data-testid="weaving-panel"
-             className="flex h-full flex-col overflow-y-auto border-l border-border bg-bg-panel p-3">
-      <header className="mb-2 flex items-center gap-2">
-        <h2 className="flex-1 text-xs font-semibold text-text-primary">Weaving</h2>
-        <button onClick={onClose} aria-label="Close Weaving"
-                className="rounded p-1 text-faint hover:text-text-primary">
-          <X size={13} />
-        </button>
-      </header>
-      {children}
-    </section>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <section
+        role="dialog"
+        aria-label="Weaving"
+        data-testid="weaving-panel"
+        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel p-4 shadow-2xl"
+      >
+        <header className="mb-3 flex items-center gap-2">
+          <Waypoints size={14} className="text-violet-300" />
+          <h2 className="flex-1 text-sm font-semibold text-text-primary">Weaving</h2>
+          <button onClick={onClose} aria-label="Close Weaving"
+                  className="rounded p-1 text-faint hover:text-text-primary">
+            <X size={14} />
+          </button>
+        </header>
+        {children}
+      </section>
+    </div>
   );
 }

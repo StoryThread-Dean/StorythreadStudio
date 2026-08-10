@@ -45,9 +45,10 @@ from datetime import datetime, timezone
 __all__ = [
     "STATE_PENDING", "STATE_STAGED", "STATE_APPLIED", "STATE_DEFERRED",
     "STATE_DISMISSED", "STATE_STALE", "SCHEMA_VERSION",
-    "answer", "discard_staged", "list_runs", "load_run", "mute_kind",
-    "new_run", "open_stops", "refresh", "remember_choice", "retire",
-    "run_dir", "save_run",
+    "answer", "book_path", "discard_staged", "empty_book", "is_permanent",
+    "list_runs", "load_book", "load_run", "merge", "mute_kind", "new_run",
+    "open_stops", "refresh", "remember_choice", "retire", "run_dir",
+    "save_book", "save_run",
 ]
 
 SCHEMA_VERSION = 1
@@ -93,6 +94,107 @@ def _now() -> str:
     -- offering the writer the wrong session about half the time.
     """
     return datetime.now(timezone.utc).isoformat()
+
+
+def is_permanent(state: str) -> bool:
+    return state in _PERMANENT
+
+
+# ── The book's permanent record ──────────────────────────────────────────────
+#
+# A SESSION IS NOT THE RIGHT SCOPE FOR "PERMANENTLY".
+#
+# "Not a connection" means never raise this again -- not "not again until you
+# open Weaving tomorrow". The first version kept retirements, mutes and
+# permanent answers inside the run file, so starting a new session silently
+# handed the writer back every question they had already refused. That is the
+# single most annoying thing a walkthrough can do, and it is invisible until
+# somebody comes back a second time.
+#
+# So permanence lives here, once per book, and the run files are session logs
+# on top of it: what was staged, what was deferred, what was seen. Both are
+# under .storythread/weave/ and neither is a cache -- none of it is derivable
+# from anything.
+
+BOOK_FILE = "answers.json"
+
+
+def book_path(project_path: str) -> str:
+    return os.path.join(project_path, ".storythread", "weave", BOOK_FILE)
+
+
+def empty_book() -> dict:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        # Only ever applied and dismissed. Staged and deferred are session
+        # states and belong to a run.
+        "answers": {},
+        "retired": [],
+        "muted_kinds": [],
+        "disambiguations": {},
+    }
+
+
+def load_book(project_path: str) -> dict:
+    """
+    The permanent record. Always returns a usable dict, never None.
+
+    A missing file is the normal state of a book nobody has answered anything
+    in. A corrupt one is treated as empty rather than raising -- losing the
+    record is bad, refusing to open Weaving at all is worse -- but it is NOT
+    overwritten until the writer answers something, so a file that failed to
+    parse because of a transient read is still there to be recovered by hand.
+    """
+    try:
+        with open(book_path(project_path), "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return empty_book()
+    if not isinstance(data, dict):
+        return empty_book()
+    if int(data.get("schema_version") or 0) > SCHEMA_VERSION:
+        return empty_book()
+    book = empty_book()
+    book.update({k: v for k, v in data.items() if k in book})
+    return book
+
+
+def save_book(project_path: str, book: dict) -> str:
+    path = book_path(project_path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    book["updated_at"] = _now()
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(book, f, indent=2)
+    os.replace(tmp, path)
+    return path
+
+
+def merge(book: dict, run: dict | None) -> dict:
+    """
+    The session laid over the permanent record.
+
+    Run states win in general -- a stop deferred five minutes ago is more
+    current than anything. But a PERMANENT answer always wins, or a stop the
+    writer dismissed for good could be resurrected by a stale staged entry
+    and asked again.
+    """
+    run = run or {}
+    answers = dict(run.get("answers") or {})
+    for key, entry in (book.get("answers") or {}).items():
+        if is_permanent(str(entry.get("state") or "")):
+            answers[key] = entry
+    return {
+        "answers": answers,
+        # Retirements accumulate and are never taken back by a new session.
+        "retired": sorted(set(book.get("retired") or [])
+                          | set(run.get("retired") or [])),
+        # Muting is a preference about the book, so the book is authoritative
+        # -- otherwise unmuting in one session would be undone by the next.
+        "muted_kinds": list(book.get("muted_kinds") or []),
+        "disambiguations": {**(book.get("disambiguations") or {}),
+                            **(run.get("disambiguations") or {})},
+    }
 
 
 # ── Making, reading, writing ─────────────────────────────────────────────────

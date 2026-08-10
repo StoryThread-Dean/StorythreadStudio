@@ -351,3 +351,107 @@ def test_an_unknown_type_is_refused(project):
         "project_path": project, "type": "dragon", "name": "Rhoswen",
     })
     assert response.json()["detail"]["code"] == "type_invalid"
+
+
+# ── Permanence outlives the session ──────────────────────────────────────────
+# Reported from live testing: "not a connection" was clicked about fifteen
+# times, and every one of them came back the next session. Permanence was
+# being stored in the RUN, and a new walkthrough starts a new run -- so
+# "permanently" quietly meant "until you close the panel". That is the single
+# most annoying thing a walkthrough can do, and it is invisible until
+# somebody comes back a second time.
+
+def test_a_retired_phrase_survives_a_new_session(project):
+    first = _new_run(project)
+    _answer(project, first["run_id"], retire_phrase="Rhoswen")
+
+    second = _new_run(project)
+    body = _scan(project, run_id=second["run_id"])
+    assert "Rhoswen" not in _named(body, "unspun")
+
+
+def test_a_dismissed_stop_survives_a_new_session(project):
+    first = _new_run(project)
+    key = next(s["key"] for s in _scan(project)["stops"] if s["kind"] == "frayed")
+    _answer(project, first["run_id"], key=key, state="dismissed")
+
+    second = _new_run(project)
+    assert key not in {s["key"] for s in
+                       _scan(project, run_id=second["run_id"])["stops"]}
+
+
+def test_an_applied_stop_survives_a_new_session(project):
+    first = _new_run(project)
+    key = next(s["key"] for s in _scan(project)["stops"] if s["kind"] == "frayed")
+    _answer(project, first["run_id"], key=key, state="applied")
+
+    second = _new_run(project)
+    assert key not in {s["key"] for s in
+                       _scan(project, run_id=second["run_id"])["stops"]}
+
+
+def test_a_muted_kind_survives_a_new_session(project):
+    first = _new_run(project)
+    _answer(project, first["run_id"], mute="frayed")
+    second = _new_run(project)
+    assert "frayed" not in _kinds(_scan(project, run_id=second["run_id"]))
+
+
+def test_unmuting_survives_too_rather_than_being_undone(project):
+    # Muting is a preference about the book, so the book is authoritative --
+    # otherwise unmuting in one session would be silently undone by the next.
+    first = _new_run(project)
+    _answer(project, first["run_id"], mute="frayed")
+    _answer(project, first["run_id"], unmute="frayed")
+    second = _new_run(project)
+    assert "frayed" in _kinds(_scan(project, run_id=second["run_id"]))
+
+
+def test_the_count_before_a_session_starts_reflects_what_was_answered(project):
+    # The setup screen scans with no run open. It has to quote the count that
+    # is actually left, not count things the writer retired months ago.
+    run = _new_run(project)
+    before = _scan(project)["total"]
+    key = next(s["key"] for s in _scan(project)["stops"] if s["kind"] == "frayed")
+    _answer(project, run["run_id"], key=key, state="dismissed")
+
+    assert len(_scan(project)["stops"]) == before - 1
+
+
+def test_a_deferred_stop_is_NOT_made_permanent(project):
+    # "Not yet" is the one that must still come back. Storing it alongside
+    # the permanent answers would turn it into a dismissal the writer never
+    # chose.
+    first = _new_run(project)
+    key = next(s["key"] for s in _scan(project)["stops"] if s["kind"] == "frayed")
+    _answer(project, first["run_id"], key=key, state="deferred")
+
+    second = _new_run(project)
+    assert key in {s["key"] for s in
+                   _scan(project, run_id=second["run_id"])["stops"]}
+
+
+def test_a_staged_stop_is_NOT_made_permanent(project):
+    # Staged means an unsaved buffer. If it were permanent, closing without
+    # saving would lose the edit AND the finding, which is the whole reason
+    # the two-phase contract exists.
+    first = _new_run(project)
+    key = next(s["key"] for s in _scan(project)["stops"] if s["kind"] == "frayed")
+    _answer(project, first["run_id"], key=key, state="staged")
+
+    second = _new_run(project)
+    assert key in {s["key"] for s in
+                   _scan(project, run_id=second["run_id"])["stops"]}
+
+
+def test_deleting_the_run_files_does_not_lose_permanence(project):
+    # Runs are session logs; the book is the record. Losing a log should not
+    # re-ask a question the writer already refused for good.
+    import shutil
+    from app.codex.findings import run_dir
+
+    run = _new_run(project)
+    _answer(project, run["run_id"], retire_phrase="Rhoswen")
+    shutil.rmtree(run_dir(project))
+
+    assert "Rhoswen" not in _named(_scan(project), "unspun")

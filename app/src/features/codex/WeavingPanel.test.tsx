@@ -8,7 +8,9 @@
 //   - "not a connection" and "not yet" are different answers, and stay so
 //   - the one-click action creates an EMPTY entry; it never writes for you
 
-import { render, screen, cleanup, waitFor, within } from "@testing-library/react";
+import {
+  render, screen, cleanup, fireEvent, waitFor, within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -423,5 +425,42 @@ describe("questions your world has not answered", () => {
     await userEvent.click(screen.getByRole("button", { name: /Go and answer it/ }));
     await waitFor(() => expect(screen.getByTestId("weaving-panel")).toBeTruthy());
     expect(posted("/thread/new")).toEqual([]);
+  });
+});
+
+
+describe("where it sits", () => {
+  // It began as a third column, between the sidebar and the Writing
+  // Companion, which left the writer's own prose as the narrowest thing on
+  // screen -- backwards for an app whose rule is that the manuscript is the
+  // visual focus. It is now the same shape as the audiobook's guided walk.
+
+  it("is a dialog over the page, not a panel beside it", async () => {
+    await open();
+    const dialog = screen.getByRole("dialog", { name: "Weaving" });
+    expect(dialog).toBeTruthy();
+    // No width reserved in the layout: it paints its own backdrop.
+    expect(dialog.parentElement?.className).toContain("fixed");
+  });
+
+  it("closes on the backdrop", async () => {
+    const { onClose } = await open();
+    const backdrop = screen.getByRole("dialog", { name: "Weaving" }).parentElement!;
+    await userEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("does not close when the writer clicks inside it", async () => {
+    // Losing a walkthrough mid-session because a click landed on the card
+    // would be its own small betrayal.
+    const { onClose } = await open();
+    await userEvent.click(screen.getByRole("dialog", { name: "Weaving" }));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes on Escape", async () => {
+    const { onClose } = await open();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
   });
 });

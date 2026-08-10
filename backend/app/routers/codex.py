@@ -32,8 +32,9 @@ from app.codex.migrate import (
 )
 from app.codex.context import Budget, assemble, estimate_tokens
 from app.codex.findings import (
-    answer, discard_staged, list_runs, load_run, mute_kind, new_run,
-    open_stops, refresh, remember_choice, retire, save_run,
+    answer, discard_staged, is_permanent, list_runs, load_book, load_run,
+    merge, mute_kind, new_run, open_stops, refresh, remember_choice, retire,
+    save_book, save_run,
 )
 from app.codex.mentions import alias_display, build_alias_map, find_mentions
 from app.codex.resolve import resolve_thread
@@ -842,24 +843,30 @@ async def post_scan(body: ScanBody):
     registry = _registry(project_path)
     await codex_store.ensure_fresh(project_path)
 
+    # The book's permanent record is read WHETHER OR NOT a session is open.
+    # The setup screen scans before a run exists, and it has to quote the
+    # count that is actually left rather than counting things the writer
+    # retired months ago.
     run = load_run(project_path, body.run_id) if body.run_id else None
+    view = merge(load_book(project_path), run)
+
     request = ScanRequest(
         depth=body.depth, types=body.types, chapter_ids=body.chapter_ids,
         kinds=body.kinds,
-        retired=set((run or {}).get("retired") or []),
-        muted_kinds=set((run or {}).get("muted_kinds") or []),
+        retired=set(view["retired"]),
+        muted_kinds=set(view["muted_kinds"]),
     )
 
     threads = codex_store.load_threads(project_path)
     result = scan(project_path, threads, registry, request,
                   label_for=_label_lookup(project_path))
 
-    stops = result.stops
     report = {}
     if run is not None:
-        report = refresh(run, stops)
+        report = refresh(run, result.stops)
         save_run(project_path, run)
-        stops = open_stops(run, stops)
+        view = merge(load_book(project_path), run)
+    stops = open_stops(view, result.stops)
 
     return {
         "run_id": (run or {}).get("run_id"),
@@ -1005,22 +1012,35 @@ async def post_answer(body: AnswerBody):
             body.run_id,
         )
 
+    book = load_book(project_path)
+
     returned = 0
     if body.discard_staged:
         returned = discard_staged(run)
     if body.key and body.state:
         answer(run, body.key, body.state, evidence_hash=body.evidence_hash)
-    if body.retire_phrase:
-        retire(run, body.retire_phrase)
-    if body.mute:
-        mute_kind(run, body.mute)
-    if body.unmute:
-        mute_kind(run, body.unmute, muted=False)
-    if body.alias and body.entity_id:
-        remember_choice(run, body.alias, body.entity_id)
+        # Permanence is written to the BOOK, not to the session. "Not a
+        # connection" has to mean never again, not "never again until you
+        # open Weaving tomorrow".
+        if is_permanent(body.state):
+            answer(book, body.key, body.state, evidence_hash=body.evidence_hash)
+
+    # These are all statements about the book rather than about this sitting,
+    # so they go in both: the book to be obeyed, the run so the session log
+    # says what happened in it.
+    for target in (run, book):
+        if body.retire_phrase:
+            retire(target, body.retire_phrase)
+        if body.mute:
+            mute_kind(target, body.mute)
+        if body.unmute:
+            mute_kind(target, body.unmute, muted=False)
+        if body.alias and body.entity_id:
+            remember_choice(target, body.alias, body.entity_id)
 
     save_run(project_path, run)
-    return {"run": run, "returned": returned}
+    save_book(project_path, book)
+    return {"run": run, "book": book, "returned": returned}
 
 
 # ── Weaving: the brief ───────────────────────────────────────────────────────
