@@ -252,6 +252,28 @@ DEFAULT_RELATIONS: list[dict] = [
          dst=["lore", "religion"]),
     _rel("owns", "owns", inverse="owned_by",
          src=["character", "faction"], dst=["object"]),
+
+    # The kinds beyond characters and factions had almost no vocabulary, which
+    # showed up the moment a real world needed it: a faction that worships a
+    # deity, a religion named after that deity, and the deity itself were three
+    # entries with no way to say how they relate. Each of these exists because
+    # a writer could not express something without it.
+    _rel("worships", "worships", inverse="worshipped_by",
+         src=["character", "faction", "culture", "religion"],
+         dst=["deity", "religion"]),
+    _rel("part_of", "part of", inverse="contains",
+         src=["faction", "religion", "government", "culture"],
+         dst=["faction", "religion", "government", "culture"]),
+    _rel("governs", "governs", inverse="governed_by",
+         src=["government", "faction"], dst=["location"]),
+    _rel("sacred_to", "sacred to",
+         src=["location", "object", "creature"], dst=["religion", "deity"]),
+    _rel("native_to", "native to",
+         src=["creature", "culture"], dst=["location"]),
+    _rel("occurred_at", "happened at",
+         src=["event"], dst=["location"], cardinality="one"),
+    _rel("involved", "involved", inverse="involved_in",
+         src=["event"], dst=["character", "faction", "religion", "government"]),
 ]
 
 
@@ -857,3 +879,157 @@ def relation_allows(registry: dict, rel_id: str, source_type: str, target_type: 
         return False
     return (source_type in rel.get("source_types", [])
             and target_type in rel.get("target_types", []))
+
+
+# ── Connections a writer names themselves ────────────────────────────────────
+# The shipped vocabulary will always be short of somebody's world. A tool for
+# writing invented cultures cannot ship the complete list of ways things in
+# them relate, and pretending otherwise means a writer meets "nothing fits"
+# and has nowhere to go.
+#
+# So relations are addable, exactly as types are, and the checker reads them
+# from the registry rather than from code -- which is why a custom relation
+# works everywhere with no further change.
+
+def relation_id(label: str) -> str:
+    """
+    "Sworn enemy of" -> "sworn_enemy_of".
+
+    Derived rather than asked for. A writer naming a connection is thinking
+    about their world, not about identifiers, and the id only has to be stable
+    and legal.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "_", str(label or "").lower()).strip("_")
+    slug = re.sub(r"^[^a-z]+", "", slug)[:40].rstrip("_")
+    if not slug:
+        raise TypesError("A connection needs a name with letters in it.",
+                         "relations")
+    return slug
+
+
+def add_relation(
+    project_path: str,
+    label: str,
+    source_types: list[str],
+    target_types: list[str],
+    *,
+    symmetric: bool = False,
+    inverse_label: str = "",
+    cardinality: str = "many",
+) -> dict:
+    """
+    Add a way things can connect, and return the saved registry.
+
+    Refuses rather than guesses on every ambiguity: a name that yields no
+    usable id, a duplicate, or a kind this world does not have. The last one
+    matters most -- a relation naming a type that is not there is exactly what
+    the validator rejects, so accepting it would write a file that then fails
+    to load.
+    """
+    registry, _from_file = load_registry(project_path)
+
+    text = " ".join(str(label or "").split())
+    rid = relation_id(text)
+    if relation_by_id(registry, rid) is not None:
+        existing = relation_by_id(registry, rid)
+        raise TypesError(
+            f"This world already has a connection called "
+            f"'{existing.get('label', rid)}'.",
+            "relations",
+        )
+
+    known = {t.get("id") for t in registry.get("types", [])}
+    for kind in list(source_types) + list(target_types):
+        if kind not in known:
+            raise TypesError(
+                f"There is no '{kind}' in this world, so a connection cannot "
+                f"run to or from one.",
+                "relations",
+            )
+    if not source_types or not target_types:
+        raise TypesError(
+            "A connection needs a kind at each end.", "relations")
+
+    inverse = ""
+    if inverse_label.strip() and not symmetric:
+        inverse = relation_id(inverse_label)
+
+    registry["relations"].append({
+        "id": rid,
+        "label": text,
+        "inverse": inverse or None,
+        "symmetric": bool(symmetric),
+        "source_types": list(source_types),
+        "target_types": list(target_types),
+        "cardinality": cardinality if cardinality in ("one", "many") else "many",
+        "exclusive_group": None,
+    })
+    # Validated before it is written, so a bad addition is refused rather than
+    # left on disk for the next read to choke on.
+    validate_registry(registry)
+    _write_registry(project_path, registry)
+    return registry
+
+
+def adopt_relation(project_path: str, rel_id: str) -> dict:
+    """
+    Take one of the connections this build ships with into THIS world.
+
+    Needed because types.json is the writer's own file and is never silently
+    modified. A project converted before a relation was added simply does not
+    have it, and the honest fix is to offer it rather than to reach in and
+    write it. See the recovery rule at the top of this module.
+    """
+    shipped = next((r for r in DEFAULT_RELATIONS if r["id"] == rel_id), None)
+    if shipped is None:
+        raise TypesError(f"'{rel_id}' is not a connection this app ships with.",
+                         "relations")
+
+    registry, _from_file = load_registry(project_path)
+    if relation_by_id(registry, rel_id) is not None:
+        return registry                     # already there; nothing to do
+
+    known = {t.get("id") for t in registry.get("types", [])}
+    entry = dict(shipped)
+    # Narrowed to the kinds this world actually has, so adopting a relation
+    # into a world with a trimmed type list cannot write something invalid.
+    entry["source_types"] = [t for t in entry["source_types"] if t in known]
+    entry["target_types"] = [t for t in entry["target_types"] if t in known]
+    if not entry["source_types"] or not entry["target_types"]:
+        raise TypesError(
+            f"'{entry['label']}' connects kinds this world does not have.",
+            "relations",
+        )
+    registry["relations"].append(entry)
+    validate_registry(registry)
+    _write_registry(project_path, registry)
+    return registry
+
+
+def relations_between(registry: dict, src_type: str, dst_type: str) -> list[dict]:
+    """Every recorded connection that can run from one kind to the other."""
+    return [
+        r for r in registry.get("relations", [])
+        if src_type in r.get("source_types", [])
+        and dst_type in r.get("target_types", [])
+    ]
+
+
+def shipped_relations_between(registry: dict, src_type: str,
+                              dst_type: str) -> list[dict]:
+    """
+    Connections this build ships with that would fit, and that this world does
+    not have yet.
+
+    The point of offering these is that "nothing fits" is usually not true --
+    it means the project was converted before the vocabulary grew. Showing
+    them turns a dead end into a one-click decision the writer makes.
+    """
+    have = {r.get("id") for r in registry.get("relations", [])}
+    known = {t.get("id") for t in registry.get("types", [])}
+    return [
+        dict(r) for r in DEFAULT_RELATIONS
+        if r["id"] not in have
+        and src_type in r["source_types"] and dst_type in r["target_types"]
+        and src_type in known and dst_type in known
+    ]

@@ -41,6 +41,7 @@ from app.codex.findings import (
 from app.codex.mentions import alias_display, build_alias_map, find_mentions
 from app.codex.resolve import resolve_thread
 from app.codex.scan import DEPTH_FULL, ScanRequest, scan
+from app.codex.snags import check_ties
 from app.codex.sections import (
     build_sections, create_note, delete_note, rename_note,
 )
@@ -54,13 +55,18 @@ from app.codex.threads import parse_thread, render_thread
 from app.codex.types_registry import (
     SCHEMA_VERSION,
     TypesError,
+    add_relation,
     add_type,
+    adopt_relation,
     delete_type,
     folder_for_type,
     hide_type,
     load_registry,
     relation_allows,
+    relation_by_id,
+    relations_between,
     rename_type,
+    shipped_relations_between,
     set_type_group,
     show_type,
     type_by_id,
@@ -518,7 +524,135 @@ async def get_ties(project_path: str = Query(...), entity_id: str = Query(...)):
     direction is stored, so incoming edges have to be found too."""
     project_path = validate_project_path(project_path)
     await _locate(project_path, entity_id)
-    return {"ties": await codex_store.ties_for(project_path, entity_id)}
+    registry = _registry(project_path)
+    rows = await codex_store.ties_for(project_path, entity_id)
+
+    # Names and labels, resolved here rather than in every caller. A tie is
+    # stored as three ids, and three ids is not something to show a novelist.
+    known = {e["entity_id"]: e for e in await codex_store.entities(project_path)}
+    threads = {t.get("entity_id"): t for t in codex_store.load_threads(project_path)}
+    label_for = _label_lookup(project_path)
+
+    ties = []
+    for row in rows:
+        other_id = row["src_id"] if row["incoming"] else row["dst_id"]
+        other = threads.get(other_id) or {}
+        rel = relation_by_id(registry, row["rel"]) or {}
+        ties.append({
+            **row,
+            "other_id": other_id,
+            "other_name": (other.get("display_name")
+                           or other.get("name")
+                           or known.get(other_id, {}).get("name", "")
+                           or other_id),
+            "other_type": other.get("type", ""),
+            # Read from THIS end. An incoming "mentored by" reads as "mentor
+            # of" from the other side, and showing the stored direction would
+            # make the writer translate it in their head every time.
+            "reads_as": _tie_wording(rel, row["incoming"]),
+            "at_label": label_for(row["at"]) if row.get("at") else "",
+            "until_label": label_for(row["until"]) if row.get("until") else "",
+        })
+    return {"ties": ties}
+
+
+def _tie_wording(rel: dict, incoming: bool) -> str:
+    """
+    How a connection reads from the end being looked at.
+
+    A symmetric relation reads the same both ways. Otherwise the inverse is
+    used when there is one, and a plain "<- label" when there is not -- which
+    is honest about not knowing the phrase rather than inventing one.
+    """
+    label = rel.get("label") or rel.get("id") or ""
+    if not incoming or rel.get("symmetric"):
+        return label
+    inverse = rel.get("inverse")
+    if inverse:
+        return str(inverse).replace("_", " ")
+    return f"{label} (the other way round)"
+
+
+@router.get("/relations")
+async def get_relations(project_path: str = Query(...),
+                        src_type: str = Query(...),
+                        dst_type: str = Query(...)):
+    """
+    How these two kinds of thing are allowed to connect.
+
+    Returns THREE lists, because "nothing fits" is three different situations
+    and only one of them is a dead end:
+
+      forward   connections that run from src to dst
+      reverse   connections that run the other way, so the editor can offer to
+                turn the pair around rather than making the writer work out
+                that "governed by" is "governs" backwards
+      available connections this build ships with that WOULD fit and that this
+                world does not have. A project converted before the vocabulary
+                grew has none of the newer ones, and types.json is the writer's
+                own file which is never silently modified -- so they are
+                offered rather than added behind their back.
+    """
+    project_path = validate_project_path(project_path)
+    registry = _registry(project_path)
+
+    def render(rel: dict, flipped: bool = False) -> dict:
+        return {
+            "id": rel["id"],
+            "label": rel.get("label", rel["id"]),
+            "symmetric": bool(rel.get("symmetric")),
+            "cardinality": rel.get("cardinality", "many"),
+            # What the OTHER end reads as, when the registry knows. Shown so a
+            # writer can see both halves of what they are recording.
+            "inverse_label": (rel.get("inverse") or "").replace("_", " "),
+            "flipped": flipped,
+        }
+
+    return {
+        "forward": [render(r) for r in relations_between(registry, src_type, dst_type)],
+        "reverse": [render(r, True) for r in relations_between(registry, dst_type, src_type)],
+        "available": [render(r) for r in shipped_relations_between(registry, src_type, dst_type)],
+    }
+
+
+class RelationBody(BaseModel):
+    project_path: str
+    # Either name one this build ships with...
+    adopt: str | None = None
+    # ...or describe your own.
+    label: str = ""
+    source_types: list[str] = []
+    target_types: list[str] = []
+    symmetric: bool = False
+    inverse_label: str = ""
+
+
+@router.post("/relation")
+async def post_relation(body: RelationBody):
+    """
+    Add a way things can connect: one this app ships with, or the writer's own.
+
+    The shipped vocabulary will always be short of somebody's invented world,
+    and a writer who meets "nothing fits" needs somewhere to go other than
+    away. The checker reads relations from the registry rather than from code,
+    so a connection named here works everywhere with no further change.
+    """
+    project_path = validate_project_path(body.project_path)
+    try:
+        if body.adopt:
+            registry = adopt_relation(project_path, body.adopt)
+            rel_id = body.adopt
+        else:
+            registry = add_relation(
+                project_path, body.label, body.source_types, body.target_types,
+                symmetric=body.symmetric, inverse_label=body.inverse_label)
+            from app.codex.types_registry import relation_id
+            rel_id = relation_id(body.label)
+    except TypesError as exc:
+        raise CodexError("type_invalid", str(exc), exc.path or "") from exc
+
+    rel = relation_by_id(registry, rel_id) or {}
+    return {"id": rel_id, "label": rel.get("label", rel_id)}
 
 
 class TieRequest(BaseModel):
@@ -554,6 +688,17 @@ async def post_tie(request: TieRequest):
         )
 
     thread = _read_thread(project_path, registry, source)
+
+    # The same connection twice is not a second fact about the world, and it
+    # would draw two identical edges and count twice against cardinality.
+    for existing in thread.get("ties") or []:
+        if existing.get("rel") == request.rel                 and existing.get("target") == request.dst_id:
+            raise CodexError(
+                "tie_endpoint_invalid",
+                "That connection is already recorded.",
+                f"{request.src_id} {request.rel} {request.dst_id}",
+            )
+
     thread.setdefault("ties", []).append({
         "rel": request.rel, "target": request.dst_id, "at": request.at,
         "until": request.until, "frame": request.frame,
@@ -561,7 +706,20 @@ async def post_tie(request: TieRequest):
     })
     _write_thread(project_path, registry, thread)
     await codex_store.reindex(project_path)
-    return {"created": True}
+
+    # Cardinality and exclusivity are WARNED about, not refused. A relation
+    # marked "one at a time" with two live targets is usually a mistake and is
+    # sometimes a story -- a disputed throne, a marriage nobody has annulled --
+    # and the app is not entitled to decide which. The Snag checker raises it
+    # in the walkthrough either way; this just says so at the moment it happens
+    # rather than leaving the writer to find out later.
+    warnings: list[str] = []
+    index = AnchorIndex.for_project(project_path)
+    for snag in check_ties(request.src_id, thread["ties"], registry, index,
+                           at=request.at, label_for=_label_lookup(project_path)):
+        warnings.append(snag.summary)
+
+    return {"created": True, "warnings": warnings}
 
 
 @router.delete("/tie")

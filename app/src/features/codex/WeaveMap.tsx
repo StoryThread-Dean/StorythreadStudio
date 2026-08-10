@@ -23,7 +23,9 @@
 // it must not be the ONLY way.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Eye, EyeOff, Loader, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle, Eye, EyeOff, Link2, Loader, RotateCcw,
+} from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import {
@@ -38,6 +40,7 @@ import {
   type ChapterAnchor, type GraphNode, type TypeRegistry, type WeaveGraph,
 } from "./api";
 import { BindDot } from "./BindDot";
+import { TieEditor } from "./TieEditor";
 
 /** How far the cursor may travel before a press stops being a click. */
 const DRAG_SLOP = 4;
@@ -67,6 +70,8 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
   const [focus, setFocus] = useState<string | null>(null);
   // The bare dot the writer clicked, waiting to be told what it is.
   const [binding, setBinding] = useState<GraphNode | null>(null);
+  // The established entry whose connections are being edited.
+  const [tying, setTying] = useState<GraphNode | null>(null);
   // Bumped when a word moves, so the map re-reads. A counter rather than a
   // callback because the fetch already lives in an effect and this is the
   // smallest honest way to say "that input changed".
@@ -442,6 +447,16 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
           </svg>
         )}
 
+        {tying && (
+          <TieEditor
+            projectPath={projectPath}
+            thread={tying}
+            candidates={graph?.nodes ?? []}
+            onClose={() => setTying(null)}
+            onChanged={() => setRedraw(n => n + 1)}
+          />
+        )}
+
         {binding && (
           <BindDot
             projectPath={projectPath}
@@ -453,13 +468,28 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
         )}
 
         {focus && (
-          <button
-            type="button"
-            onClick={() => setFocus(null)}
-            className="absolute right-2 top-2 inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
-          >
-            <RotateCcw size={11} /> Show the whole world
-          </button>
+          <div className="absolute right-2 top-2 flex items-center gap-1.5">
+            {/* Offered here because focusing is exactly when a writer is
+                looking at what a thing touches, and noticing what it does
+                not. */}
+            <button
+              type="button"
+              onClick={() => {
+                const node = (graph?.nodes ?? []).find(n => n.entity_id === focus);
+                if (node) setTying(node);
+              }}
+              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            >
+              <Link2 size={11} /> Connections
+            </button>
+            <button
+              type="button"
+              onClick={() => setFocus(null)}
+              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            >
+              <RotateCcw size={11} /> Show the whole world
+            </button>
+          </div>
         )}
       </div>
 

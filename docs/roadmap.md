@@ -131,12 +131,34 @@ the map says Lexa.
    candidate is contained in another (Lara / Lara Croft, Cambridge /
    Cambridge Library) and offer them as one question rather than three.
 
-3. **Cross-kind links the writer can see and no scan can.** The Daughters of
-   Pathicus are a faction; the word Cult means them; Pathicus is a deity; and
-   there is a religion of Pathicus that the faction worships. Four things,
-   three kinds, every link obvious to the writer and invisible to any rule.
-   Absorbing handles the word. The remaining half is a Tie editor, so the
-   faction can be tied to the deity and the religion by hand.
+**Also built: the Tie editor.** The reported case can now be recorded in full
+-- the Daughters of Pathicus worship the deity Pathicus, are part of the Faith
+of Pathicus, and the Faith worships him too. Reached from a focused entry on
+the map.
+
+Two things had to change for that to be possible. The shipped connection
+vocabulary covered characters and factions and almost nothing else, so a
+faction could not worship a deity at all -- seven relations were added for the
+kinds that had none. And a writer can now NAME a connection themselves, because
+a tool for writing invented worlds cannot ship the complete list of ways things
+in them relate. The checker reads relations from `types.json`, so a named one
+works everywhere with no further change.
+
+Design notes worth keeping:
+
+- **The other end first, then how.** A writer thinks "the Daughters and
+  Pathicus" before they think "worships", and the list of relations depends on
+  the pair anyway.
+- **Only what means something between those two kinds**, read from the
+  registry, so the list is short and every item in it is true.
+- **"Nothing fits" is never a dead end.** It has three answers, all offered:
+  turn the pair around, adopt a shipped relation this world lacks (types.json
+  is the writer's file and is never modified behind their back), or name it.
+- **Read from the end you are standing at.** An incoming "part of" shows as
+  "contains", so the writer never translates a direction in their head.
+- **Cardinality warns, it does not refuse.** Two simultaneous seats of power is
+  usually a mistake and sometimes a disputed throne. The app records what was
+  asked for and says what it noticed.
 
 Also open before release: a Thread editor for the kinds the Profile Builder
 does not cover (factions, governments, religions, concepts, events -- until
