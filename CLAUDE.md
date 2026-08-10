@@ -287,6 +287,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/codex/WeaveNav.test.tsx` -- the sidebar: three groups always, sections grow, and a typo'd section can be renamed or removed (a fixed one offers no menu at all)
   - `src/features/codex/GuideBody.test.tsx` / `customName.test.ts` -- the per-group guides, and the custom-name rules
   - `src/features/codex/WeavingPanel.test.tsx` -- the walkthrough: a real count rather than an estimate, every stop shows its evidence and can say why, four DIFFERENT ways to answer, and the one-click action creates an EMPTY entry that is immediately Frayed
+  - `src/features/codex/MigrationPanel.test.tsx` -- consent for the most dangerous button in the programme: the dry run is not optional, the plan is itemised rather than summed, the backup is named BEFORE the button, two clicks with the count repeated, and an interrupted run offers resume or restore rather than guessing
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands

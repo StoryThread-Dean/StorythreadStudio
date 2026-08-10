@@ -16,6 +16,7 @@ import { AlertTriangle, List, Loader, Network, RefreshCw } from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { CONCEPTS } from "./lexicon";
+import { MigrationPanel } from "./MigrationPanel";
 import { WeaveList } from "./WeaveList";
 import { WeaveMap } from "./WeaveMap";
 import { fetchHealth, reindex, type WeaveHealth } from "./api";
@@ -119,10 +120,17 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
           decision from the writer. */}
       {health?.registry_ok === false ? (
         <Broken health={health} />
-      ) : health?.migration_state === "incomplete" ? (
-        <Interrupted />
-      ) : health?.migration_state === "none" ? (
-        <NotConverted />
+      ) : health?.migration_state === "incomplete"
+          || health?.migration_state === "none" ? (
+        // Both states are the same conversation with the writer, and both
+        // used to be a paragraph with nothing to press. The panel does the
+        // dry run, itemises it, and offers the choice -- including resume or
+        // restore when a previous attempt stopped part way.
+        <MigrationPanel
+          projectPath={projectPath}
+          state={health.migration_state}
+          onChanged={() => void check()}
+        />
       ) : (
         <>
           {health?.index_dirty && (
@@ -148,42 +156,6 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
 }
 
 
-function NotConverted() {
-  return (
-    <div className="rounded border border-border bg-bg-primary px-4 py-6">
-      <p className="text-sm text-text-primary">
-        This project has not been brought into the Weave yet.
-      </p>
-      <p className="mt-1 max-w-xl text-xs text-faint">
-        {CONCEPTS.weave.whatsThis}
-      </p>
-      <p className="mt-2 max-w-xl text-xs text-faint">
-        Converting copies your profiles into the Weave and leaves the originals
-        exactly where they are. You will see a full summary of what it intends
-        to do before anything is written.
-      </p>
-    </div>
-  );
-}
-
-
-function Interrupted() {
-  // Never inferred from the presence of the codex folder -- a half-finished
-  // conversion produces that too. The writer chooses; the app does not guess.
-  return (
-    <div className="rounded border border-amber-700/60 bg-amber-950/20 px-4 py-4">
-      <p className="flex items-center gap-2 text-sm text-amber-100">
-        <AlertTriangle size={14} className="text-amber-400/80" />
-        A previous conversion did not finish.
-      </p>
-      <p className="mt-1 max-w-xl text-xs text-amber-200/80">
-        Nothing has been lost: your original profiles were copied before any
-        change was made. You can carry on from where it stopped, or put
-        everything back the way it was.
-      </p>
-    </div>
-  );
-}
 
 
 function Broken({ health }: { health: WeaveHealth }) {

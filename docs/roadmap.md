@@ -39,9 +39,15 @@ with its inspect panel. Automatic Weave context is not reachable from any AI
 feature yet -- `/api/codex/context` builds and returns a brief, and nothing calls
 it -- so the amended context rule is not yet exercised in the running app.
 
-Also open before release: the migration UI (confirm-and-report over the existing
-dry-run endpoint), a Thread editor for the kinds the Profile Builder does not
-cover, and the manual-smoke additions for each milestone.
+The migration UI is now built: the Weave screen runs the dry run on open,
+itemises it folder by folder, names the backup destination before the button,
+and requires a second click that repeats the count and the destination. An
+interrupted run offers resume or restore rather than guessing.
+
+Also open before release: a Thread editor for the kinds the Profile Builder
+does not cover (factions, governments, religions, concepts, events -- until
+then Weaving says plainly that those stops have nowhere to send the writer),
+and the manual-smoke additions for each milestone.
 
 ### Audiobook Converter -- SHIPPED as v1.1.0 (2026-08-03)
 

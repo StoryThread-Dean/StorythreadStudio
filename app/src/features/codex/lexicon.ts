@@ -29,8 +29,8 @@ import {
   Landmark, Languages, Leaf, Lightbulb, Link2, ListTree, Map, MapPin, Moon,
   Mountain, Music, Network, NotebookPen, Package, Paintbrush, PawPrint,
   Pickaxe, Rocket, Scale, ScrollText, Shield, Ship, Skull, Snowflake, Sparkles,
-  Spline, Spool, Star, Sun, Sword, Swords, Tent, Trees, Unlink, User, Users,
-  Wand, Waves, Wheat, Wind, Zap,
+  Scissors, Spline, Spool, Star, Sun, Sword, Swords, Tent, Trees, Unlink,
+  User, Users, Wand, Waves, Wheat, Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -204,7 +204,7 @@ export function guidePlainText(lines: GuideLine[]): string {
 // because the vocabulary was decided in one pass rather than invented twice.
 
 // THE ICONS ARE THE LOOM, DELIBERATELY. Weaving is a Spool, Unspun is a sheaf
-// of unspun fibre, Frayed is strands coming apart, Loose thread is a curve
+// of unspun fibre, Frayed is a sewing implement, Loose thread is a curve
 // with its end hanging free. The first set reached for whatever was nearest --
 // a circuit-board Waypoints for Weaving, a car-dashboard Gauge for Frayed, a
 // power plug for Loose thread -- and a writer reads those as some other app's
@@ -219,7 +219,7 @@ export const STOP_KINDS: Record<string, LexEntry> = {
     + "does not need a profile -- so you can say it is not a real entry and it will never ask again.",
   ),
   "frayed": entry(
-    "frayed", "Frayed", Wind, "amber",
+    "frayed", "Frayed", Scissors, "amber",
     "A Thread too thin to be much use.",
     "It shows you what is missing and offers to fill it from what you have already written.",
     "An entry exists but has almost nothing in it. A Thread with just a name cannot help your AI write the character, and cannot tell you "
