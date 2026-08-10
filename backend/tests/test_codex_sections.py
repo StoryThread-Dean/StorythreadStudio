@@ -20,7 +20,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.codex.sections import build_sections, create_note
-from app.codex.types_registry import TypesError, add_type, set_type_group
+from app.codex.types_registry import (
+    TypesError, add_type, default_registry, set_type_group,
+)
 from app.main import app
 
 client = TestClient(app)
@@ -60,22 +62,30 @@ def _available_ids(tree):
 # ── The rule ─────────────────────────────────────────────────────────────────
 
 def test_a_new_project_shows_only_the_defaults(tmp_path):
-    # Somewhere obvious to start, and nothing else. Nine empty headings would
-    # read as a demand rather than an invitation.
+    # Somewhere obvious to start, and nothing else. A dozen empty headings
+    # would read as a demand rather than an invitation.
     tree = build_sections(_project(tmp_path), converted=False)
-    assert set(_sections(tree, "profiles")) == {"character", "location", "lore"}
     assert set(_sections(tree, "notes")) == {"author_notes"}
-    # Other is EMPTY but still present -- see the next test.
-    assert _sections(tree, "other") == {}
+    assert set(_sections(tree, "profiles")) == {"character", "location", "lore"}
+    assert set(_sections(tree, "other")) == {"event"}
 
 
-def test_all_three_groups_are_always_there_even_when_empty(tmp_path):
+def test_every_group_opens_with_something_in_it(tmp_path):
+    # Not just a heading. Each group starts with at least one familiar kind
+    # a writer can click straight into, so none of the three is a dead end
+    # on day one -- Other especially, whose name gives nothing away.
+    tree = build_sections(_project(tmp_path), converted=False)
+    for group in tree["groups"]:
+        assert group["sections"], f"{group['id']} opens with nothing to click"
+
+
+def test_all_three_groups_are_always_there(tmp_path):
     # The three groups are the navigational skeleton. A writer opens the
     # Weave, sees Notes / Profiles / Other, and moves toward whichever
-    # matches what they are thinking about. Hiding Other until it had
-    # content would mean they never found it -- and would leave nowhere to
-    # click "+ Add New" for everything that belongs there, which is the only
-    # route to most of the app.
+    # matches what they are thinking about. Hiding one until it had content
+    # would mean they never found it -- and would leave nowhere to click
+    # "+ Add New" for everything that belongs there, which is the only route
+    # to most of the app.
     tree = build_sections(_project(tmp_path), converted=False)
     assert _group_ids(tree) == ["notes", "profiles", "other"]
 
@@ -92,8 +102,11 @@ def test_everything_else_is_offered_rather_than_hidden(tmp_path):
     # Not hidden -- waiting. "+ Add New" is where a writer looks for a kind
     # they have not used yet.
     tree = build_sections(_project(tmp_path), converted=False)
-    assert {"faction", "religion", "object", "concept", "event"} <= _available_ids(tree)
-    assert {"outline", "style_guide"} <= _available_ids(tree)
+    assert {"faction", "religion", "object", "concept", "language"} <= _available_ids(tree)
+    assert {"outline", "style_guide", "brainstorming"} <= _available_ids(tree)
+    # ...and a default is NOT offered, because it is already on screen.
+    assert "event" not in _available_ids(tree)
+    assert "character" not in _available_ids(tree)
 
 
 def test_a_section_appears_once_it_holds_something(tmp_path):
@@ -106,18 +119,26 @@ def test_a_section_appears_once_it_holds_something(tmp_path):
 
 # ── What decides which group a kind belongs to ───────────────────────────────
 
+def _kind_groups() -> dict:
+    """Group membership straight from the registry, so these tests describe
+    the classification itself rather than whatever happens to be visible."""
+    return {t["id"]: t["group"] for t in default_registry()["types"]}
+
+
 def test_a_profile_is_an_entry_about_something_in_the_world(tmp_path):
     # The dividing line: am I writing a profile OF something? A Faction, a
     # Religion, a Government are profiles of a group, a faith and a state --
     # so they belong beside Character, not in the leftovers.
-    offered = {a["id"]: a["group"]
-               for a in build_sections(_project(tmp_path), converted=False)["available"]}
-    for kind in ("faction", "religion", "government", "deity", "creature", "culture"):
-        assert offered[kind] == "profiles", f"{kind} should be a Profile"
+    groups = _kind_groups()
+    for kind in ("character", "location", "lore", "relationship", "faction",
+                 "religion", "government", "deity", "creature", "culture"):
+        assert groups[kind] == "profiles", f"{kind} should be a Profile"
 
 
 def test_notes_are_documents_the_writer_authors(tmp_path):
-    # Prose, in the writer's own voice.
+    # Prose, in the writer's own voice -- and they are FILES, not kinds of
+    # entry, which is why they live in NOTE_SECTIONS rather than the type
+    # registry at all.
     offered = {a["id"]: a["group"]
                for a in build_sections(_project(tmp_path), converted=False)["available"]}
     for note in ("outline", "style_guide", "brainstorming", "research", "themes"):
@@ -125,9 +146,8 @@ def test_notes_are_documents_the_writer_authors(tmp_path):
 
 
 def test_other_holds_only_what_is_genuinely_neither(tmp_path):
-    offered = {a["id"]: a["group"]
-               for a in build_sections(_project(tmp_path), converted=False)["available"]}
-    other = {k for k, group in offered.items() if group == "other"}
+    groups = _kind_groups()
+    other = {k for k, group in groups.items() if group == "other"}
     assert other == {"object", "concept", "event", "language"}
 
 

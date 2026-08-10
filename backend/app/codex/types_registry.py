@@ -176,8 +176,13 @@ DEFAULT_TYPES: list[dict] = [
      "group": "other", "default_section": False,
      "sections": _sections("overview", "details", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
+    # Event is Other's default, so that group opens with something familiar
+    # in it rather than as a bare heading. Of the four it is the one a writer
+    # of any book recognises without explanation -- a battle, a wedding, a
+    # coronation -- which makes it the right doorway into a group whose name
+    # gives nothing away.
     {"id": "event", "label": "Event", "folder": "events", "icon": "CalendarClock",
-     "group": "other", "default_section": False,
+     "group": "other", "default_section": True,
      "sections": _sections("overview", "what_happened", "consequences", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "language", "label": "Language", "folder": "languages", "icon": "Languages",
