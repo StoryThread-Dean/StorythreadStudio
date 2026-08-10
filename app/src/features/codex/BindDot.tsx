@@ -49,15 +49,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Loader, Search, X } from "lucide-react";
 
-import { BUILT_IN_TYPES, TONE_CLASSES, threadTypeEntry } from "./lexicon";
+import { TONE_CLASSES, kindChoices, threadTypeEntry } from "./lexicon";
 import { absorb, nodeLabel, type GraphNode } from "./api";
 
 const API_BASE = "http://localhost:8000";
 
-/** The kinds an entry can be, from the shared vocabulary so this screen
- *  offers the same words as the sidebar and the map. */
-const kinds = BUILT_IN_TYPES.map(id => ({ id, term: threadTypeEntry(id).term }))
-  .sort((a, b) => a.term.localeCompare(b.term));
+/** The kinds an entry can be, grouped as the sidebar groups them -- Profiles
+ *  and Other -- so the writer is choosing in the same terms twice rather than
+ *  reading one flat list of fourteen words. */
+const kindGroups = kindChoices();
 
 interface BindDotProps {
   projectPath: string;
@@ -242,8 +242,12 @@ export function BindDot({
                   className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
                 >
                   <option value="">Choose...</option>
-                  {kinds.map(entry => (
-                    <option key={entry.id} value={entry.id}>{entry.term}</option>
+                  {kindGroups.map(group => (
+                    <optgroup key={group.group} label={group.group}>
+                      {group.kinds.map(entry => (
+                        <option key={entry.id} value={entry.id}>{entry.term}</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
 

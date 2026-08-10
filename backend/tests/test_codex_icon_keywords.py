@@ -167,3 +167,36 @@ def test_every_stop_kind_the_scan_sends_has_words_on_screen():
         f"lexicon.ts has no entry for {sorted(missing)}, so those stops would "
         f"appear in the walkthrough with no name and nothing explaining them."
     )
+
+
+def test_every_kinds_sidebar_group_agrees_with_the_frontend():
+    """
+    A THIRD cross-language contract, and the same failure mode as the icons.
+
+    The kind pickers are grouped without fetching the registry, so lexicon.ts
+    keeps its own copy of which group each kind is in. A copy nothing checks is
+    a copy that drifts -- and the way it would show is a Faction appearing
+    under "Other" in one screen and "Profiles" in another, which reads as a bug
+    in the writer's own world rather than in ours.
+    """
+    from app.codex.types_registry import DEFAULT_TYPES
+
+    source = LEXICON.read_text(encoding="utf-8")
+    match = re.search(
+        r'export const TYPE_GROUPS: Record<string, "profiles" \| "other"> = \{(.*?)\n\};',
+        source, re.DOTALL)
+    assert match, "could not find TYPE_GROUPS in lexicon.ts"
+
+    body = re.sub(r"//[^\n]*", "", match.group(1))
+    frontend = dict(re.findall(r'(\w+):\s*"(profiles|other)"', body))
+    backend = {t["id"]: t["group"] for t in DEFAULT_TYPES}
+
+    assert frontend == backend, (
+        "lexicon.ts and the type registry disagree about which sidebar group a "
+        "kind belongs to. Differences: "
+        + ", ".join(
+            f"{k}: registry={backend.get(k)!r} lexicon={frontend.get(k)!r}"
+            for k in sorted(set(backend) | set(frontend))
+            if backend.get(k) != frontend.get(k)
+        )
+    )

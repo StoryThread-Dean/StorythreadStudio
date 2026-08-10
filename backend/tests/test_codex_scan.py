@@ -470,3 +470,55 @@ def test_a_retired_group_stays_retired_when_the_prose_gains_a_variant(tmp_path):
     folder = _project(tmp_path, {"01.md": _MANY_NAMES})
     request = ScanRequest(retired={"Lara Croft"})
     assert scan(folder, [], REGISTRY, request).by_kind(STOP_UNSPUN) == []
+
+
+# ── One question per empty stub ───────────────────────────────────────────────
+# Reported from live testing: a stop reading "Dean is missing Overview" sent the
+# writer to the Profile Builder and stopped. An entry Weaving made from a name
+# has no prose BY DEFINITION, so telling them to go and type is describing a
+# symptom -- and reporting the same stub as both "too thin" and "nothing
+# connects to this" asks them to answer one thing twice.
+
+def _bare(entity_id, name):
+    return _thread(entity_id, name, sections={
+        "overview": {"heading": "Overview", "content": "", "trait_blocks": []}})
+
+
+def test_an_empty_stub_is_not_also_reported_as_unconnected(tmp_path):
+    # Both were true, and neither was the real question.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    result = scan(folder, [_bare("e-dean", "Dean")], REGISTRY)
+    assert result.by_kind(STOP_LOOSE) == []
+    assert len(result.by_kind(STOP_FRAYED)) == 1
+
+
+def test_the_stop_says_it_is_a_stub_so_the_walk_can_ask_what_it_is(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    stop = scan(folder, [_bare("e-dean", "Dean")], REGISTRY).by_kind(STOP_FRAYED)[0]
+    assert stop.detail["placeholder"] is True
+
+
+def test_an_entry_with_writing_is_NOT_a_stub(tmp_path):
+    # It genuinely needs prose typed into it, and the walk should say so.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    thin = _thread("e-mira", "Mira", sections={
+        "overview": {"heading": "Overview", "content": "Someone.",
+                     "trait_blocks": []},
+        "goals": {"heading": "Goals", "content": "", "trait_blocks": []}})
+    registry = {**REGISTRY, "types": [
+        {**REGISTRY["types"][0], "required_fields": ["overview", "goals"],
+         "sections": [{"id": "overview", "heading": "Overview", "trait_blocks": False},
+                      {"id": "goals", "heading": "Goals", "trait_blocks": False}]},
+        REGISTRY["types"][1],
+    ]}
+    stop = scan(folder, [thin], registry).by_kind(STOP_FRAYED)[0]
+    assert stop.detail["placeholder"] is False
+
+
+def test_an_entry_with_a_connection_is_no_longer_a_stub(tmp_path):
+    # A writer who tied it to something has said what it is, even with no prose.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    tied = _bare("e-dean", "Dean")
+    tied["ties"] = [{"rel": "knows", "target": "e-other"}]
+    stop = scan(folder, [tied], REGISTRY).by_kind(STOP_FRAYED)[0]
+    assert stop.detail["placeholder"] is False

@@ -58,6 +58,7 @@ import {
 
 import { STOP_KINDS, TONE_CLASSES, type LexEntry } from "./lexicon";
 import { WhatsThis } from "../../components/learn/WhatsThis";
+import { BindDot } from "./BindDot";
 import { TieEditor } from "./TieEditor";
 import { fetchGraph, type GraphNode } from "./api";
 import {
@@ -73,6 +74,8 @@ import {
 const PRIMARY_ACTION: Record<string, string> = {
   unspun: "Create the entry",
   frayed: "Open it and fill it in",
+  // An empty stub is a different question -- see needsNaming.
+  frayed_placeholder: "Say what this is",
   loose_thread: "Connect it to something",
   snag: "Open it and sort it out",
   unplaced: "Open it and place it",
@@ -130,6 +133,7 @@ function hasSomewhereToGo(stop: Stop): boolean {
   if (stop.kind === "unspun") return true;          // it CREATES the entry
   // Connecting happens in the walk, so it needs an entry to connect FROM and
   // nothing else. A kind with no editor can still be connected to things.
+  if (needsNaming(stop)) return Boolean(stop.entity_id);
   if (connectsHere(stop)) return Boolean(stop.entity_id);
   if (stop.kind === "unwoven") return EDITABLE_KINDS.has(landsIn(stop)[0] ?? "");
   if (stop.kind === "pinned") {
@@ -159,6 +163,22 @@ function alsoCalled(stop: Stop): string[] {
  * them there. A pinned word with an entry is the same question.
  */
 const CONNECT_HERE = new Set(["loose_thread", "untied"]);
+
+/**
+ * An entry Weaving made from a name, with nothing in it yet.
+ *
+ * Reported from live testing: a stop reading "Dean is missing Overview" sent
+ * the writer to the Profile Builder and stopped, and creating something there
+ * had no connection back to Dean. That was the wrong question. An empty stub
+ * does not need prose typed into it -- it needs to be told WHAT IT IS: either
+ * something the writer already has, or its own entry of some kind.
+ *
+ * Which is the same question a bare dot on the map answers, so it is the same
+ * screen. One question, one answer, asked where the writer already is.
+ */
+function needsNaming(stop: Stop): boolean {
+  return stop.kind === "frayed" && Boolean(stop.detail?.placeholder);
+}
 
 function connectsHere(stop: Stop): boolean {
   if (CONNECT_HERE.has(stop.kind)) return true;
@@ -205,6 +225,8 @@ export function WeavingPanel({
   // are not about connections.
   const [connecting, setConnecting] = useState(false);
   const [world, setWorld] = useState<GraphNode[]>([]);
+  // An empty stub, waiting to be told what it is.
+  const [naming, setNaming] = useState(false);
 
   // The scan runs on mount and on every depth change, BEFORE anything is
   // confirmed. That is what makes the count real -- see the header.
@@ -236,6 +258,17 @@ export function WeavingPanel({
     for (const s of stops) tally[s.kind] = (tally[s.kind] ?? 0) + 1;
     return tally;
   }, [stops]);
+
+  /** What there is to point at. Fetched when the writer asks, not on mount:
+   *  most stops are not about other entries. */
+  async function loadWorld() {
+    try {
+      const graph = await fetchGraph(projectPath, { hideSpoilers: false });
+      setWorld(graph.nodes);
+    } catch {
+      setWorld([]);          // the picker says so rather than crashing
+    }
+  }
 
   async function begin() {
     setBusy(true);
@@ -396,6 +429,25 @@ export function WeavingPanel({
   const Icon = lex?.Icon ?? CircleHelp;
   const tone = TONE_CLASSES[lex?.tone ?? "zinc"];
 
+  if (naming && stop) {
+    return (
+      <BindDot
+        projectPath={projectPath}
+        dot={{
+          entity_id: stop.entity_id,
+          type: String(stop.detail?.type ?? ""),
+          name: String(stop.detail?.name ?? ""),
+          display_name: "", aliases: [], placeholder: true,
+        }}
+        candidates={world}
+        // Back to the same stop. The scan re-derives it next pass, so an entry
+        // that has become something stops being asked about on its own.
+        onClose={() => setNaming(false)}
+        onBound={() => { /* re-derived by the next scan */ }}
+      />
+    );
+  }
+
   if (connecting && stop) {
     return (
       <TieEditor
@@ -526,15 +578,15 @@ export function WeavingPanel({
               await createThread(projectPath, String(stop.detail.name ?? ""),
                                  alsoCalled(stop));
               await apply(projectPath, runId, stop);
+            } else if (needsNaming(stop) && stop.entity_id) {
+              // Stays here, and answers the question the writer actually has.
+              await loadWorld();
+              setNaming(true);
+              return false;
             } else if (connectsHere(stop) && stop.entity_id) {
               // Stays here. The walk keeps its place, and a wrong choice is a
               // step back rather than a navigation problem.
-              try {
-                const graph = await fetchGraph(projectPath, { hideSpoilers: false });
-                setWorld(graph.nodes);
-              } catch {
-                setWorld([]);        // the picker says so; it does not crash
-              }
+              await loadWorld();
               setConnecting(true);
               // NOT finished: the connector closes back onto this stop, and the
               // writer moves on when they are done with it.
@@ -554,7 +606,9 @@ export function WeavingPanel({
           {busy ? <Loader size={11} className="animate-spin" /> : <Check size={11} />}
           {stop.kind === "pinned"
             ? pinnedAction(stop)
-            : PRIMARY_ACTION[stop.kind] ?? "Open it"}
+            : needsNaming(stop)
+              ? PRIMARY_ACTION.frayed_placeholder
+              : PRIMARY_ACTION[stop.kind] ?? "Open it"}
         </button>
         )}
 

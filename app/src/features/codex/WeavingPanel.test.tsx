@@ -825,3 +825,81 @@ describe("connecting without leaving the walk", () => {
       .toBeTruthy();
   });
 });
+
+describe("an empty stub is asked what it IS", () => {
+  // Reported from live testing:
+  //
+  //     "FRAYED - Dean is missing Overview. Open it and fill it in clicked >
+  //      Opens to Profile Builder. Full stop. Can't go back, If I create a new
+  //      entry for Dean, there is no visual connection to Dean on the Character
+  //      profile."
+  //
+  // That was the wrong question. An entry Weaving made from a name has no prose
+  // by definition; telling the writer to go and type is describing a symptom.
+  // What they need to say is what it IS -- something they already have, or its
+  // own entry of some kind -- and they need to say it without leaving.
+
+  const bare = stop({
+    kind: "frayed", key: "frayed|e-dean", entity_id: "e-dean",
+    title: "Dean is missing Overview", quote: "",
+    detail: { name: "Dean", type: "character", filename: "dean.md",
+              missing: ["Overview"], placeholder: true },
+  });
+
+  const thin = stop({
+    kind: "frayed", key: "frayed|e-mira", entity_id: "e-mira",
+    title: "Mira Kell is missing Goals", quote: "",
+    detail: { name: "Mira Kell", type: "character", filename: "mira.md",
+              missing: ["Goals"], placeholder: false },
+  });
+
+  it("asks what it is, rather than telling the writer to type", async () => {
+    mockApi({ stops: [bare] });
+    await start();
+    expect(screen.getByRole("button", { name: /Say what this is/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /fill it in/ })).toBeNull();
+  });
+
+  it("answers it here, without opening another screen", async () => {
+    mockApi({ stops: [bare] });
+    const onOpenThread = vi.fn();
+    await start({ onOpenThread });
+    await userEvent.click(screen.getByRole("button", { name: /Say what this is/ }));
+    expect(await screen.findByTestId("bind-dot")).toBeTruthy();
+    expect(onOpenThread).not.toHaveBeenCalled();
+  });
+
+  it("comes back to the same stop when that closes", async () => {
+    mockApi({ stops: [bare, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Say what this is/ }));
+    await screen.findByTestId("bind-dot");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText(/Dean is missing Overview/)).toBeTruthy();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
+  });
+
+  it("still sends the writer to the editor for an entry that HAS writing", async () => {
+    // A partly-filled entry genuinely needs prose typed into it, and there is
+    // nowhere to type in the walk. Pretending otherwise would be a worse lie.
+    mockApi({ stops: [thin] });
+    const onOpenThread = vi.fn();
+    await start({ onOpenThread });
+    await userEvent.click(screen.getByRole("button", { name: /fill it in/ }));
+    await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith(
+      "e-mira", { type: "character", filename: "mira.md" }));
+  });
+
+  it("offers the question for a kind that has no editor at all", async () => {
+    // Saying what something is needs no editor. A writer's own Race can be
+    // named before it can be written in.
+    mockApi({ stops: [stop({
+      kind: "frayed", key: "frayed|e-drow", entity_id: "e-drow",
+      title: "Drow is missing Overview", quote: "",
+      detail: { name: "Drow", type: "race", filename: "drow.md",
+                missing: ["Overview"], placeholder: true },
+    })] });
+    await start();
+    expect(screen.getByRole("button", { name: /Say what this is/ })).toBeTruthy();
+  });
+});

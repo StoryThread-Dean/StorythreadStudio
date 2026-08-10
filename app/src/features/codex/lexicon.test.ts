@@ -12,6 +12,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   BUILT_IN_TYPES,
+  TYPE_GROUPS,
+  kindChoices,
   CONCEPTS,
   GROUP_GUIDES,
   STOP_KINDS,
@@ -276,5 +278,34 @@ describe("looking a term up", () => {
 
   it("returns nothing for a word it does not know", () => {
     expect(lex("nonsense")).toBeUndefined();
+  });
+});
+
+describe("which group each kind belongs to", () => {
+  // Mirrors the registry's own `group` field, duplicated only so a picker can
+  // be grouped without fetching the registry. A Python test reads the backend's
+  // list and fails if the two disagree -- see test_codex_icon_keywords.py.
+
+  it("places every shipped kind", () => {
+    for (const id of BUILT_IN_TYPES) {
+      expect(TYPE_GROUPS[id], id).toBeTruthy();
+    }
+  });
+
+  it("offers them grouped, in the sidebar's order", () => {
+    const groups = kindChoices();
+    expect(groups.map(g => g.group)).toEqual(["Profiles", "Other"]);
+  });
+
+  it("puts every kind in exactly one group", () => {
+    const listed = kindChoices().flatMap(g => g.kinds.map(k => k.id));
+    expect(new Set(listed)).toEqual(new Set(BUILT_IN_TYPES));
+    expect(listed).toHaveLength(BUILT_IN_TYPES.length);
+  });
+
+  it("names them in the app's own words", () => {
+    const profiles = kindChoices()[0].kinds.map(k => k.term);
+    expect(profiles).toContain("Faction");
+    expect(profiles).toContain("Deity");
   });
 });

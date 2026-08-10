@@ -383,3 +383,26 @@ def _section_order(thread: dict, registry: dict | None) -> list[str]:
             known = [s["id"] for s in entry.get("sections", [])]
     extra = [sid for sid in thread.get("sections", {}) if sid not in known]
     return [sid for sid in known if sid in thread.get("sections", {})] + extra
+
+def is_placeholder(thread: dict) -> bool:
+    """
+    Nothing in it yet: no prose, no connections, no dated facts.
+
+    Weaving makes entries like this from names it finds in the prose, so a
+    fresh project is full of them and the writer's job is to say what each one
+    actually IS. That question -- "what is this?" -- is a different question
+    from "this entry is thin" or "nothing connects to this", and asking those
+    two of an empty stub instead is what made the walkthrough feel like it was
+    talking past the writer.
+
+    Derived, never recorded. An entry stops being a placeholder the moment it
+    holds anything.
+    """
+    if thread.get("ties") or thread.get("run"):
+        return False
+    for section in (thread.get("sections") or {}).values():
+        if str(section.get("content") or "").strip():
+            return False
+        if section.get("trait_blocks"):
+            return False
+    return True

@@ -416,4 +416,16 @@ describe("it is its own thing, under a fuller name", () => {
     expect(terms).toContain("Location");
     expect(terms).toContain("Deity");
   });
+
+  it("groups them the way the sidebar groups them", async () => {
+    // Requested as "Chooses from NOTES/PROFILE/OTHER, clicks PROFILE, then
+    // Character". One flat list of fourteen words makes the writer do that
+    // sorting in their head.
+    open({ dot: FOOT });
+    await userEvent.click(screen.getByRole("button", { name: /It is its own thing/ }));
+    const groups = Array.from(
+      screen.getByLabelText("What kind").querySelectorAll("optgroup"),
+    ).map(g => g.getAttribute("label"));
+    expect(groups).toEqual(["Profiles", "Other"]);
+  });
 });

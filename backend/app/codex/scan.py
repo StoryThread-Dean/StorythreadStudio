@@ -37,6 +37,7 @@ from app.codex.mentions import (
     group_by_containment, unbound_names,
 )
 from app.codex.snags import Snag, check_facts, check_ties
+from app.codex.threads import is_placeholder
 from app.codex.visibility import HIDDEN_FUTURE, Lens, thread_visibility
 from app.codex.world_rules import DOMAINS, open_questions
 from app.utils.structure_store import ordered_chapter_ids
@@ -334,6 +335,18 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
         name = thread.get("name") or "(unnamed)"
         if not entity_id:
             continue
+        # AN EMPTY STUB GETS ONE QUESTION, NOT TWO.
+        #
+        # Weaving creates entries from names in the prose, and one of those has
+        # no prose, no connections and no facts by definition. Reporting it as
+        # BOTH "too thin to be useful" AND "nothing connects to this" describes
+        # two symptoms of the same thing and asks the writer to answer it twice
+        # -- and neither wording is the real question, which is simply: what is
+        # this? Is it something you already have, or is it its own thing?
+        #
+        # So the thin stop carries the fact, and the connection stop is left
+        # out entirely until the entry is something.
+        bare = is_placeholder(thread)
         # WHERE the thing lives, carried on every stop about it. Without this
         # the walkthrough can only say "open it" and then switch to some
         # screen, which is not the same thing and reads as a dead end.
@@ -350,10 +363,13 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                     why=("This Thread's type says these are the parts worth "
                          "having, and they are empty. Anything reading it "
                          "later -- you included -- gets very little."),
-                    detail={**where, "missing": sorted(missing)},
+                    detail={**where, "missing": sorted(missing),
+                            # Nothing in it at all, so the walk can ask what it
+                            # IS rather than telling the writer to go and type.
+                            "placeholder": bare},
                 ))
 
-        if request.wants(STOP_LOOSE) and entity_id not in connected:
+        if request.wants(STOP_LOOSE) and entity_id not in connected and not bare:
             stops.append(Stop(
                 kind=STOP_LOOSE, entity_id=entity_id,
                 key=_key(STOP_LOOSE, entity_id),

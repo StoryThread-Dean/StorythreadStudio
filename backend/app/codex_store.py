@@ -30,7 +30,9 @@ import hashlib
 import logging
 import os
 
-from app.codex.threads import parse_thread
+# is_placeholder lives with the Thread it describes; re-exported here
+# because callers already ask the store about entries.
+from app.codex.threads import is_placeholder, parse_thread
 from app.codex.types_registry import TypesError, load_registry
 from app.db import open_db
 
@@ -255,25 +257,6 @@ async def entities(project_path: str, type_id: str | None = None) -> list[dict]:
     ]
 
 
-def is_placeholder(thread: dict) -> bool:
-    """
-    Nothing in it yet: no prose, no connections, no dated facts.
-
-    This is what a bare dot on the map MEANS. Weaving creates entries like
-    this from names it finds in the prose, so a fresh project full of them is
-    the normal starting state -- and the writer's job is to say what each one
-    actually is. An entry stops being a placeholder the moment it holds
-    anything, which is derived rather than recorded, like every other verdict
-    in the Weave.
-    """
-    if thread.get("ties") or thread.get("run"):
-        return False
-    for section in (thread.get("sections") or {}).values():
-        if str(section.get("content") or "").strip():
-            return False
-        if section.get("trait_blocks"):
-            return False
-    return True
 
 
 async def find_by_alias(project_path: str, alias: str) -> list[str]:
@@ -338,3 +321,10 @@ async def ties_for(project_path: str, entity_id: str) -> list[dict]:
          "incoming": r[2] == entity_id and r[0] != entity_id}
         for r in rows
     ]
+
+
+__all__ = [
+    "entities", "ensure_fresh", "facts_for", "find_by_alias",
+    "is_placeholder", "load_threads", "mark_dirty", "read_meta", "reindex",
+    "source_revision", "ties_for",
+]

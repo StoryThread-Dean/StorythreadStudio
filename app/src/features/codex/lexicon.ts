@@ -410,3 +410,33 @@ export const TONE_CLASSES: Record<Tone, { text: string; fill: string; border: st
   violet:  { text: "text-violet-300",  fill: "fill-violet-400",  border: "border-violet-700" },
   zinc:    { text: "text-zinc-300",    fill: "fill-zinc-400",    border: "border-zinc-700" },
 };
+
+/**
+ * Which sidebar group each shipped kind belongs to.
+ *
+ * Mirrors the `group` field in the type registry. Duplicated here only so a
+ * picker can be grouped without fetching the registry first, and pinned by a
+ * test that reads the backend's own list -- a copy nothing checks is a copy
+ * that drifts.
+ */
+export const TYPE_GROUPS: Record<string, "profiles" | "other"> = {
+  character: "profiles", relationship: "profiles", location: "profiles",
+  lore: "profiles", faction: "profiles", religion: "profiles",
+  government: "profiles", deity: "profiles", creature: "profiles",
+  culture: "profiles",
+  object: "other", concept: "other", event: "other", language: "other",
+};
+
+/** The kinds a new entry can be, grouped, in the app's own words. */
+export function kindChoices(): { group: string; kinds: { id: string; term: string }[] }[] {
+  const groups: Record<string, { id: string; term: string }[]> = {
+    profiles: [], other: [],
+  };
+  for (const id of BUILT_IN_TYPES) {
+    groups[TYPE_GROUPS[id] ?? "other"].push({ id, term: threadTypeEntry(id).term });
+  }
+  return [
+    { group: "Profiles", kinds: groups.profiles.sort((a, b) => a.term.localeCompare(b.term)) },
+    { group: "Other", kinds: groups.other.sort((a, b) => a.term.localeCompare(b.term)) },
+  ];
+}

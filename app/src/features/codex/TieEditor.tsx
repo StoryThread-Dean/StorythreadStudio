@@ -53,15 +53,13 @@ import {
   Trash2, X,
 } from "lucide-react";
 
-import { BUILT_IN_TYPES, TONE_CLASSES, threadTypeEntry } from "./lexicon";
+import { TONE_CLASSES, kindChoices, threadTypeEntry } from "./lexicon";
 import { nodeLabel, type GraphNode } from "./api";
 
 const API_BASE = "http://localhost:8000";
 
-/** The kinds a new entry can be, in the same words the rest of the app
- *  uses for them. */
-const KINDS = BUILT_IN_TYPES.map(id => ({ id, term: threadTypeEntry(id).term }))
-  .sort((a, b) => a.term.localeCompare(b.term));
+/** The kinds a new entry can be, grouped as the sidebar groups them. */
+const KIND_GROUPS = kindChoices();
 
 interface Tie {
   src_id: string;
@@ -527,8 +525,12 @@ export function TieEditor({
                         className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
                       >
                         <option value="">Choose...</option>
-                        {KINDS.map(kind => (
-                          <option key={kind.id} value={kind.id}>{kind.term}</option>
+                        {KIND_GROUPS.map(group => (
+                          <optgroup key={group.group} label={group.group}>
+                            {group.kinds.map(kind => (
+                              <option key={kind.id} value={kind.id}>{kind.term}</option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                       <p className="mt-1 text-[10px] text-faint">
