@@ -24,28 +24,16 @@ from __future__ import annotations
 
 import logging
 import re
-from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import AsyncIterator, Awaitable, Callable
 
-import aiosqlite
+# The connection, the path helper and the schema history moved to app/db.py
+# when the Weave started keeping tables in the same file: a version number
+# has to mean "migrations 1..N have run" for the DATABASE, not per feature.
+# Re-exported here so every existing caller and test keeps working unchanged.
+from app.db import get_db_path, open_db  # noqa: F401  (re-export)
 
 log = logging.getLogger(__name__)
-
-
-# ── Paths ─────────────────────────────────────────────────────────────────────
-
-def get_db_path(project_path: str | Path) -> Path:
-    """
-    Return the per-project SQLite path: `<project>/.storythread/app.db`.
-
-    The `.storythread/` directory is the documented cache home (see CLAUDE.md
-    and product-scope.md). Callers should treat its contents as derivable --
-    if app.db is deleted, the next connect() will rebuild a fresh, empty
-    database.
-    """
-    return Path(project_path) / ".storythread" / "app.db"
 
 
 # ── Time helpers ──────────────────────────────────────────────────────────────
@@ -80,109 +68,6 @@ def local_date_for(occurred_at_iso: str, rollover_hour: int = 0) -> str:
     if rollover_hour > 0 and dt.hour < rollover_hour:
         dt = dt - timedelta(days=1)
     return dt.date().isoformat()
-
-
-# ── Migrations ────────────────────────────────────────────────────────────────
-#
-# Each entry in _MIGRATIONS is an async function that takes a connection and
-# applies one schema change. The position in the list IS the version number
-# (1-indexed). Never reorder, edit, or delete entries -- only append.
-
-async def _migration_001_progress_event(db: aiosqlite.Connection) -> None:
-    """
-    First schema version: the `progress_event` table.
-
-    One row per recorded event. Three event types:
-      - 'word_delta'   : a save that changed the word count of a file
-      - 'task_credit'  : a save that earned the file its daily task credit
-      - 'advisor_run'  : a Smart Advisor invocation (used for the special
-                          "default OR all-three categories" credit rule)
-    """
-    await db.execute(
-        """
-        CREATE TABLE progress_event (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_path     TEXT NOT NULL,
-            occurred_at      TEXT NOT NULL,
-            local_date       TEXT NOT NULL,
-            event_type       TEXT NOT NULL,
-            file_relpath     TEXT,
-            word_delta       INTEGER NOT NULL DEFAULT 0,
-            advisor_category TEXT
-        )
-        """
-    )
-    await db.execute(
-        "CREATE INDEX idx_progress_project_date "
-        "ON progress_event(project_path, local_date)"
-    )
-
-
-# Ordered list. Append-only. Version N = _MIGRATIONS[N-1].
-_MIGRATIONS: list[Callable[[aiosqlite.Connection], Awaitable[None]]] = [
-    _migration_001_progress_event,
-]
-
-
-async def _ensure_schema(db: aiosqlite.Connection) -> None:
-    """
-    Run any pending migrations against the open connection.
-
-    Cheap to call on every connect -- the version check is one SELECT and
-    applying zero new migrations is a no-op. Centralizing it here means
-    callers never have to think about migration state.
-    """
-    # The version table itself is bootstrapped here so the very first
-    # connect on a fresh database works without a special case.
-    await db.execute(
-        "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)"
-    )
-
-    cursor = await db.execute("SELECT MAX(version) FROM schema_version")
-    row = await cursor.fetchone()
-    await cursor.close()
-    current = row[0] if row and row[0] is not None else 0
-
-    target = len(_MIGRATIONS)
-    if current >= target:
-        return
-
-    for version in range(current + 1, target + 1):
-        migrate_fn = _MIGRATIONS[version - 1]
-        log.info("applying progress_store migration %d", version)
-        await migrate_fn(db)
-        await db.execute(
-            "INSERT INTO schema_version (version) VALUES (?)", (version,)
-        )
-
-    await db.commit()
-
-
-# ── Public API: opening a connection ──────────────────────────────────────────
-
-@asynccontextmanager
-async def open_db(project_path: str | Path) -> AsyncIterator[aiosqlite.Connection]:
-    """
-    Open (or lazily create) a project's app.db, run any pending migrations,
-    yield the connection, and close it on exit.
-
-    Usage:
-        async with open_db(project_path) as db:
-            await db.execute("INSERT INTO progress_event ...")
-            await db.commit()
-
-    The first call against a new project creates `.storythread/` and the
-    database file. Every call ensures the schema is at the latest version.
-    """
-    db_path = get_db_path(project_path)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    db = await aiosqlite.connect(db_path)
-    try:
-        await _ensure_schema(db)
-        yield db
-    finally:
-        await db.close()
 
 
 # ── Word counting ─────────────────────────────────────────────────────────────
