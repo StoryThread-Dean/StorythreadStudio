@@ -193,62 +193,77 @@ export function guidePlainText(lines: GuideLine[]): string {
 }
 
 // ── What Weaving finds ───────────────────────────────────────────────────────
-// Not used until the walkthrough ships, but defined here so the vocabulary is
-// decided in one pass rather than invented twice.
+// KEYED BY THE WIRE CODE the backend's scan actually sends -- "unspun", not
+// "missing-entity". The two sides used to use different words for the same
+// thing, which reads as harmless right up until a stop arrives with a kind
+// nothing on this side has an entry for and renders as a blank row. A
+// contract test pins that every kind codex/scan.py can produce is in here.
+//
+// Some entries here have no deterministic producer yet (Untied and Unwoven
+// come from the AI and canned passes; Tangle is a grouping). They stay
+// because the vocabulary was decided in one pass rather than invented twice.
 
 export const STOP_KINDS: Record<string, LexEntry> = {
-  "missing-entity": entry(
-    "missing-entity", "Unspun", CircleDashed, "blue",
+  "unspun": entry(
+    "unspun", "Unspun", CircleDashed, "blue",
     "A name in your prose with no Thread behind it.",
     "It offers to make an entry for someone your story already mentions.",
     "Your manuscript refers to a person, place or thing that has no entry in the Weave. That is often fine -- an innkeeper with one line "
     + "does not need a profile -- so you can say it is not a real entry and it will never ask again.",
   ),
-  "thin-entity": entry(
-    "thin-entity", "Frayed", Gauge, "amber",
+  "frayed": entry(
+    "frayed", "Frayed", Gauge, "amber",
     "A Thread too thin to be much use.",
     "It shows you what is missing and offers to fill it from what you have already written.",
     "An entry exists but has almost nothing in it. A Thread with just a name cannot help your AI write the character, and cannot tell you "
     + "anything you did not already know. This points at the gaps, one field at a time.",
   ),
-  "unlinked": entry(
-    "unlinked", "Untied", Unlink, "emerald",
+  "untied": entry(
+    "untied", "Untied", Unlink, "emerald",
     "A connection your writing asserts that nothing records.",
     "It spots relationships in your prose and offers to record them, so the app knows about them too.",
     "Your text says Garrick taught her everything, but no Tie says so. This proposes the connection with the sentence it came from, and lets "
     + "you correct the relationship, flip its direction, or say when it became true before you accept it.",
   ),
-  "undated-fact": entry(
-    "undated-fact", "Unplaced", CalendarOff, "amber",
+  "unplaced": entry(
+    "unplaced", "Unplaced", CalendarOff, "amber",
     "A fact with no point in the story.",
     "It asks where in your book something became true, so the app can tell your AI when it applies.",
     "A fact without a point in the story is true everywhere or nowhere, and the app cannot reason about it. This gathers them into a list so "
     + "you can place the ones that matter and leave the rest.",
   ),
-  "unasked-rule": entry(
-    "unasked-rule", "Unwoven", Compass, "violet",
+  "unwoven": entry(
+    "unwoven", "Unwoven", Compass, "violet",
     "Ground rules of your world you have not worked out yet.",
     "It asks questions about how your world works, and each answer opens the next ones.",
     "How does power pass? What is forbidden, and by whom? Answering one question opens the questions it implies and connects to others in "
     + "different areas -- so a decision about succession reaches into your laws and your religion. Every answer becomes part of the Weave.",
   ),
-  "contradiction": entry(
-    "contradiction", "Snag", AlertTriangle, "rose",
+  "snag": entry(
+    "snag", "Snag", AlertTriangle, "rose",
     "Two things in your world that disagree.",
     "It catches continuity problems, including a character acting on something they do not know yet.",
     "A Snag is two facts that cannot both be true: a status set twice at the same moment, an event referenced before it happens, or a "
     + "character who knows something the story has not told them. Some contradictions are deliberate, and you can mark them so -- the check "
     + "will not raise them again.",
   ),
-  "contradiction-cluster": entry(
-    "contradiction-cluster", "Tangle", GitMerge, "rose",
+  "tangle": entry(
+    "tangle", "Tangle", GitMerge, "rose",
     "Several Snags with one cause behind them.",
     "It shows you the root problem instead of five separate symptoms of it.",
     "When several contradictions share an entry or a fact, they are usually one mistake seen from different angles. A Tangle groups them so "
     + "you fix the cause rather than the symptoms.",
   ),
-  "orphan": entry(
-    "orphan", "Loose thread", Unplug, "zinc",
+  early_mention: entry(
+    "early_mention", "Told early", Clock, "amber",
+    "Something named in your book before the reader is meant to meet it.",
+    "It catches a name that slipped into an earlier chapter than the one that introduces it.",
+    "Everything you have anchored about this Thread happens later than the chapter that names it, so the map hides it at that point in the "
+    + "book while your prose says it out loud. Either the mention is early, or the anchors are -- both are worth knowing, and only you can "
+    + "say which. It can only happen on Threads you have actually dated, so it never nags a world you have not anchored yet.",
+  ),
+  "loose_thread": entry(
+    "loose_thread", "Loose thread", Unplug, "zinc",
     "A Thread nothing connects to.",
     "It points out entries that are not part of your world yet, and what each would need to be.",
     "An entry with no Ties and no mentions is floating free. Sometimes that is right -- something you have planned but not used -- and "

@@ -137,3 +137,33 @@ def test_the_keyword_list_is_worth_having():
     from app.codex.icon_keywords import KEYWORD_ICONS
     assert len(KEYWORD_ICONS) > 150
     assert len(known_icon_names()) > 25
+
+
+# ── The other cross-language contract: the walkthrough's vocabulary ──────────
+
+def test_every_stop_kind_the_scan_sends_has_words_on_screen():
+    """
+    A stop kind with no Lexicon entry renders as a blank row.
+
+    Same failure as the icons above, and same reason nothing else catches it:
+    Python decides what to send, TypeScript decides what to say, and only a
+    test that reads both notices when one moves. The app's own doctrine says
+    a term that can appear on screen with nothing explaining it fails the
+    build -- this is where that is enforced for Weaving.
+    """
+    from app.codex.scan import STOP_KINDS
+
+    source = LEXICON.read_text(encoding="utf-8")
+    match = re.search(r"export const STOP_KINDS: Record<string, LexEntry> = \{(.*?)\n\};",
+                      source, re.DOTALL)
+    assert match, "could not find the STOP_KINDS map in lexicon.ts"
+    # Keys are written either bare or quoted; both are valid TypeScript and
+    # both appear in that file.
+    keys = set(re.findall(r'^\s{2}"?([a-z_][a-z0-9_-]*)"?:\s*entry\(',
+                          match.group(1), re.MULTILINE))
+
+    missing = set(STOP_KINDS) - keys
+    assert not missing, (
+        f"lexicon.ts has no entry for {sorted(missing)}, so those stops would "
+        f"appear in the walkthrough with no name and nothing explaining them."
+    )

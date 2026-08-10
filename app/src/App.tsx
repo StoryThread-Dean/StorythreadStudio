@@ -28,6 +28,7 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 // sidebar. This file only knows how to show it.
 import { WeaveScreen } from "./features/codex/WeaveScreen";
 import { WeaveNav } from "./features/codex/WeaveNav";
+import { WeavingPanel } from "./features/codex/WeavingPanel";
 import { OutlinePlanner } from "./screens/OutlinePlanner";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
@@ -130,6 +131,10 @@ function App() {
   // inside WeaveNav because opening a section changes the VIEW, and the view
   // lives in this file.
   const [weaveSection, setWeaveSection] = useState<string | null>(null);
+  // Weaving opens as a right-hand panel rather than a screen: it is a
+  // conversation ABOUT the book, and taking the book away to have it would
+  // make every stop harder to judge.
+  const [weavingOpen, setWeavingOpen] = useState(false);
   // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
   // when no writing project is open. Not part of currentView because it
   // never coexists with the editor layout.
@@ -2392,6 +2397,7 @@ function App() {
             projectPath={currentProject.root_path}
             activeSection={weaveSection}
             onOpenWeave={() => setCurrentView("weave")}
+            onOpenWeaving={() => setWeavingOpen(true)}
             onOpenSection={section => {
               setWeaveSection(section.id);
               if (section.kind === "note") {
@@ -2712,6 +2718,22 @@ function App() {
         </div>
       </main>
 
+
+      {/* ── WEAVING ───────────────────────────────────────────────────────
+          Its own column, beside the Writing Companion rather than replacing
+          it. Weaving is a conversation ABOUT the manuscript -- every stop is
+          judged against the text that triggered it -- so taking the
+          manuscript away to have that conversation would make each decision
+          harder than it needs to be. */}
+      {weavingOpen && (
+        <aside className="flex w-80 shrink-0 flex-col">
+          <WeavingPanel
+            projectPath={currentProject.root_path}
+            onClose={() => setWeavingOpen(false)}
+            onOpenThread={() => setCurrentView("weave")}
+          />
+        </aside>
+      )}
 
       {/* ── RIGHT PANEL: Writing Companion ────────────────────────────────
           Width is toggleable (compact / wide) via the resizer pinned to the

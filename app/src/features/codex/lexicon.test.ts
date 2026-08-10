@@ -176,22 +176,31 @@ describe("the guide behind each group's What's this?", () => {
 
 
 describe("the words Weaving will use", () => {
-  it("covers every kind of thing the walkthrough can find", () => {
-    // Defined before the walkthrough ships, so the vocabulary is decided in
-    // one pass rather than invented twice.
-    const kinds = [
-      "missing-entity", "thin-entity", "unlinked", "undated-fact",
-      "unasked-rule", "contradiction", "contradiction-cluster", "orphan",
+  it("has an entry for every kind the scan can actually send", () => {
+    // KEYED BY THE WIRE CODE. The two sides used to use different words for
+    // the same thing, which reads as harmless right up until a stop arrives
+    // with a kind nothing here has an entry for and renders as a blank row.
+    // These are the codes in backend/app/codex/scan.py.
+    const fromTheScan = [
+      "unspun", "frayed", "unplaced", "loose_thread", "snag", "early_mention",
     ];
-    for (const kind of kinds) {
+    for (const kind of fromTheScan) {
+      expect(STOP_KINDS[kind], `no entry for ${kind}`).toBeTruthy();
+    }
+  });
+
+  it("keeps the words for the passes that do not run deterministically", () => {
+    // Untied and Unwoven come from the AI and canned passes; Tangle is a
+    // grouping. Decided in one pass rather than invented twice later.
+    for (const kind of ["untied", "unwoven", "tangle"]) {
       expect(STOP_KINDS[kind], `no entry for ${kind}`).toBeTruthy();
     }
   });
 
   it("gives each of them the writer-facing name, not the code", () => {
-    expect(STOP_KINDS["orphan"].term).toBe("Loose thread");
-    expect(STOP_KINDS["contradiction"].term).toBe("Snag");
-    expect(STOP_KINDS["missing-entity"].term).toBe("Unspun");
+    expect(STOP_KINDS["loose_thread"].term).toBe("Loose thread");
+    expect(STOP_KINDS["snag"].term).toBe("Snag");
+    expect(STOP_KINDS["unspun"].term).toBe("Unspun");
   });
 });
 
@@ -253,7 +262,7 @@ describe("looking a term up", () => {
   it("finds concepts and stop kinds in one namespace", () => {
     // The UI does not care which list a word came from.
     expect(lex("codex")?.term).toBe("the Weave");
-    expect(lex("orphan")?.term).toBe("Loose thread");
+    expect(lex("loose_thread")?.term).toBe("Loose thread");
   });
 
   it("returns nothing for a word it does not know", () => {

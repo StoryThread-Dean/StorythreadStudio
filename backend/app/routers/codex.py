@@ -15,6 +15,8 @@
 #      functions, not repeated here, so a new route cannot forget it.
 
 import os
+import re
+import uuid
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -870,6 +872,63 @@ async def post_scan(body: ScanBody):
         "unreadable": result.unreadable,
         "resumed": report,
     }
+
+
+class NewThreadBody(BaseModel):
+    project_path: str
+    type: str
+    name: str
+
+
+@router.post("/thread/new")
+async def post_new_thread(body: NewThreadBody):
+    """
+    Create an empty Thread from a name -- what "Unspun" offers in one click.
+
+    The id and the filename are minted HERE rather than by the caller. They
+    are conventions (`e-` plus twelve hex digits; a slugged filename that
+    cannot collide), and a second implementation of a convention is a
+    convention that drifts. The frontend sends a name and gets back an entry.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+
+    name = " ".join(str(body.name or "").split())
+    if not name:
+        raise CodexError("type_invalid", "An entry needs a name.")
+    type_entry = type_by_id(registry, body.type)
+    if type_entry is None:
+        raise CodexError("type_invalid",
+                         f"'{body.type}' is not one of this world's types.")
+
+    folder = os.path.join(project_path, "codex", type_entry["folder"])
+    os.makedirs(folder, exist_ok=True)
+    stem = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "entry"
+    filename = f"{stem}.md"
+    # A second Garrick gets garrick-2.md rather than overwriting the first.
+    # Silently replacing an existing entry would be the one irreversible
+    # thing this button could do.
+    n = 2
+    while os.path.exists(os.path.join(folder, filename)):
+        filename = f"{stem}-{n}.md"
+        n += 1
+
+    thread = {
+        "type": type_entry["id"],
+        "entity_id": "e-" + uuid.uuid4().hex[:12],
+        "name": name,
+        "filename": filename,
+        "status": "active",
+        "aliases": [], "tags": [], "fields": {}, "ties": [], "run": [],
+        "sections": {
+            section["id"]: {"heading": section["heading"], "content": "",
+                            "trait_blocks": [], "ai_summary": ""}
+            for section in type_entry.get("sections", [])
+        },
+    }
+    _write_thread(project_path, registry, thread)
+    await codex_store.reindex(project_path)
+    return {"thread": thread}
 
 
 # ── Weaving: the run ledger ──────────────────────────────────────────────────

@@ -262,3 +262,87 @@ def test_a_belief_is_only_reached_through_its_own_pov(project):
     hers = _context(project, pov="e-elara")["brief"]
     assert "Believes her father died." not in neutral
     assert "(believed) Believes her father died." in hers
+
+
+# ── One click from a name in the prose ───────────────────────────────────────
+
+def test_creating_an_entry_from_a_name_mints_its_own_id_and_file(project):
+    # The id and filename are conventions, and a second implementation of a
+    # convention is a convention that drifts. The frontend sends a name.
+    body = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Rhoswen",
+    }).json()["thread"]
+    assert body["entity_id"].startswith("e-")
+    assert body["filename"] == "rhoswen.md"
+    assert body["name"] == "Rhoswen"
+
+
+def test_what_it_creates_is_EMPTY(project):
+    # The one-click action in the walkthrough creates a named entry with
+    # nothing in it. The app does not write the writer's characters.
+    body = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Rhoswen",
+    }).json()["thread"]
+    assert all(not s["content"] for s in body["sections"].values())
+
+
+def test_a_second_entry_of_the_same_name_does_not_overwrite_the_first(project):
+    # Silently replacing an existing entry would be the one irreversible
+    # thing this button could do.
+    first = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Rhoswen",
+    }).json()["thread"]
+    second = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Rhoswen",
+    }).json()["thread"]
+    assert first["filename"] != second["filename"]
+    assert first["entity_id"] != second["entity_id"]
+
+
+def test_a_new_entry_is_in_the_weave_immediately(project):
+    client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Rhoswen",
+    })
+    listed = client.get("/api/codex/list",
+                        params={"project_path": project}).json()["threads"]
+    assert "Rhoswen" in {t["name"] for t in listed}
+
+
+def _named(body, kind):
+    return {s["detail"].get("name") for s in body["stops"] if s["kind"] == kind}
+
+
+def test_creating_it_settles_the_stop_that_asked_for_it(project):
+    # Rhoswen was Unspun. Once she has an entry the condition is gone, and
+    # the scan says so on its own -- nothing had to record that it was
+    # handled. That is the whole reason stops are never stored.
+    assert "Rhoswen" in _named(_scan(project), "unspun")
+
+    client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Rhoswen",
+    })
+    assert "Rhoswen" not in _named(_scan(project), "unspun")
+
+
+def test_an_empty_new_entry_immediately_becomes_the_next_question(project):
+    # And this is the honest other half: an entry with nothing in it is
+    # Frayed, so the walkthrough now asks her to be written rather than
+    # created. One click did not finish the job and does not pretend to.
+    client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Rhoswen",
+    })
+    assert "Rhoswen" in _named(_scan(project), "frayed")
+
+
+def test_an_entry_needs_a_name(project):
+    response = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "   ",
+    })
+    assert response.json()["detail"]["code"] == "type_invalid"
+
+
+def test_an_unknown_type_is_refused(project):
+    response = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "dragon", "name": "Rhoswen",
+    })
+    assert response.json()["detail"]["code"] == "type_invalid"
