@@ -29,15 +29,40 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  ChevronDown, ChevronRight, Loader, Network, Plus, Waypoints,
+  ChevronDown, ChevronRight, Loader, MoreHorizontal, Network, Plus, Waypoints,
 } from "lucide-react";
 
 import { CONCEPTS, TONE_CLASSES, threadTypeEntry } from "./lexicon";
 import { AddNewDialog } from "./AddNewDialog";
+import { SectionMenu } from "./SectionMenu";
 import {
-  addNote, addType, fetchSections, showType,
+  addNote, addType, deleteSection, fetchSections, renameSection, showType,
   type AvailableEntry, type SectionEntry, type SectionsTree,
 } from "./api";
+
+/** Which target a rename or removal names: a kind has an id, a note is a
+ *  file. Keeping this in one place stops the two callers disagreeing. */
+function targetOf(section: SectionEntry): { id?: string; filename?: string } {
+  return section.kind === "note"
+    ? { filename: section.filename }
+    : { id: section.id };
+}
+
+/**
+ * Sections the app itself depends on, which have no menu.
+ *
+ * The Profile Builder, the migration and profiles.py all name these
+ * directly, so they can be relabelled but never removed. Offering a button
+ * that always refuses teaches nothing; leaving it off is the honest shape.
+ */
+const FIXED_SECTIONS = new Set([
+  "character", "relationship", "location", "lore",
+  "author_notes", "outline", "style_guide",
+]);
+
+function isFixed(section: SectionEntry): boolean {
+  return FIXED_SECTIONS.has(section.id);
+}
 
 interface WeaveNavProps {
   projectPath: string;
@@ -58,8 +83,11 @@ export function WeaveNav({
   // take in at a glance, which is the point.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState<string | null>(null);
+  const [editing, setEditing] = useState<SectionEntry | null>(null);
   const [busy, setBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [movedTo, setMovedTo] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +112,21 @@ export function WeaveNav({
       // Kept in the dialog rather than closing it -- a refused name is
       // something to correct, not to start over.
       setAddError(e instanceof Error ? e.message : "That could not be added.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function edit(action: () => Promise<SectionsTree>) {
+    setBusy(true);
+    setEditError(null);
+    try {
+      setTree(await action());
+      setEditing(null);
+    } catch (e) {
+      // Held open. The commonest failure here is "this section still holds
+      // four entries", which is something to act on rather than a dead end.
+      setEditError(e instanceof Error ? e.message : "That could not be changed.");
     } finally {
       setBusy(false);
     }
@@ -158,22 +201,39 @@ export function WeaveNav({
                   const Icon = lex.Icon;
                   const active = activeSection === section.id;
                   return (
-                    <button
+                    <div
                       key={`${section.kind}-${section.id}`}
-                      onClick={() => onOpenSection(section)}
-                      title={lex.short}
-                      className={`flex w-full items-center gap-1.5 py-1 pl-8 pr-3 text-left text-[11px] ${
-                        active
-                          ? "bg-bg-surface text-text-primary"
-                          : "text-text-muted hover:text-text-primary"
+                      className={`group/row flex w-full items-center pl-8 pr-1 ${
+                        active ? "bg-bg-surface" : ""
                       }`}
                     >
-                      <Icon size={11} className={TONE_CLASSES[lex.tone].text} />
-                      <span className="flex-1 truncate">{section.label}</span>
-                      {section.count > 0 && (
-                        <span className="text-faint">{section.count}</span>
+                      <button
+                        onClick={() => onOpenSection(section)}
+                        title={lex.short}
+                        className={`flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[11px] ${
+                          active ? "text-text-primary" : "text-text-muted hover:text-text-primary"
+                        }`}
+                      >
+                        <Icon size={11} className={TONE_CLASSES[lex.tone].text} />
+                        <span className="flex-1 truncate">{section.label}</span>
+                        {section.count > 0 && (
+                          <span className="text-faint">{section.count}</span>
+                        )}
+                      </button>
+                      {/* Only for sections the writer can actually change.
+                          Offering a button that always refuses is a worse
+                          answer than not offering one -- Characters is part
+                          of the app and cannot be removed. */}
+                      {!isFixed(section) && (
+                        <button
+                          onClick={() => { setEditing(section); setEditError(null); }}
+                          aria-label={`${section.label} settings`}
+                          className="ml-1 shrink-0 rounded p-0.5 text-faint opacity-0 transition-opacity hover:text-text-primary focus:opacity-100 group-hover/row:opacity-100"
+                        >
+                          <MoreHorizontal size={11} />
+                        </button>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -181,6 +241,31 @@ export function WeaveNav({
           </div>
         );
       })}
+
+      {editing && (
+        <SectionMenu
+          section={editing}
+          busy={busy}
+          error={editError}
+          onClose={() => { setEditing(null); setEditError(null); }}
+          onRename={label => void edit(
+            () => renameSection(projectPath, targetOf(editing), label))}
+          onRemove={() => void edit(
+            async () => {
+              const result = await deleteSection(projectPath, targetOf(editing));
+              // Where a note went, said out loud. A delete that silently
+              // keeps a copy is as dishonest as one that silently does not.
+              if (result.moved_to) setMovedTo(result.moved_to);
+              return result;
+            })}
+        />
+      )}
+
+      {movedTo && (
+        <p className="px-3 py-1 text-[11px] text-faint">
+          Moved to <span className="text-text-muted">{movedTo}</span>.
+        </p>
+      )}
 
       {adding && tree && (
         <AddNewDialog

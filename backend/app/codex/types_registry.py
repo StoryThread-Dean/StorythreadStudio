@@ -652,6 +652,143 @@ def hide_type(project_path: str, type_id: str) -> dict:
     return registry
 
 
+def count_entries(project_path: str, folder: str) -> int:
+    """How many entries a kind's folder holds, in either layout."""
+    total = 0
+    for root in ("codex", "profiles"):
+        path = os.path.join(project_path, root, folder)
+        if os.path.isdir(path):
+            try:
+                total += sum(1 for n in os.listdir(path) if n.endswith(".md"))
+            except OSError:
+                pass
+    return total
+
+
+def rename_type(project_path: str, type_id: str, label: str) -> dict:
+    """
+    Fix a name. "Magic Sysstem" becomes "Magic System".
+
+    A typo in a section name is permanent-feeling in a way it has no right to
+    be, so this moves everything with it: the folder on disk, the `type:`
+    line in every entry already written, and the registry itself. Nothing the
+    writer wrote is touched beyond that one line.
+
+    A shipped kind can be relabelled but keeps its id, because its id is what
+    the app's own code refers to. A kind the WRITER added gets a new id and
+    folder to match, since nothing else knows its old name.
+    """
+    registry = seed_registry(project_path)
+    entry = type_by_id(registry, type_id)
+    if entry is None:
+        raise TypesError(f"This world has no kind called {type_id!r}.", "id")
+
+    new_id, tidy = custom_type_id(label)
+    new_label = pluralize(tidy)
+
+    # A shipped kind keeps its identity: profiles.py, the migration and the
+    # Profile Builder all name "character" directly. Renaming the label is
+    # fine; renaming the id would strand them.
+    shipped = type_id in {t["id"] for t in DEFAULT_TYPES}
+    if shipped or new_id == type_id:
+        entry["label"] = new_label
+        _write_registry(project_path, registry)
+        return registry
+
+    if type_by_id(registry, new_id) is not None:
+        raise TypesError(f"This world already has a kind called {new_id!r}.", "label")
+
+    old_folder = entry.get("folder", "")
+    new_folder = pluralize(new_id)
+    if any(t.get("folder") == new_folder for t in registry["types"] if t is not entry):
+        raise TypesError(f"The folder {new_folder!r} is already in use.", "folder")
+
+    # Move the entries with the name. Both layouts, because a project may not
+    # have been converted yet.
+    for root in ("codex", "profiles"):
+        source = os.path.join(project_path, root, old_folder)
+        if not os.path.isdir(source):
+            continue
+        target = os.path.join(project_path, root, new_folder)
+        os.rename(source, target)
+        _retype_entries(target, type_id, new_id)
+
+    entry["id"] = new_id
+    entry["label"] = new_label
+    entry["folder"] = new_folder
+    _write_registry(project_path, registry)
+    return registry
+
+
+def _retype_entries(folder: str, old_id: str, new_id: str) -> None:
+    """Update the `type:` line in each entry so the files still say what they
+    are. Best-effort per file: one unreadable entry must not abandon the
+    rename half-done."""
+    try:
+        names = [n for n in os.listdir(folder) if n.endswith(".md")]
+    except OSError:
+        return
+    for name in names:
+        path = os.path.join(folder, name)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = f.read()
+            updated = re.sub(rf"^type:\s*{re.escape(old_id)}\s*$",
+                             f"type: {new_id}", raw, count=1, flags=re.MULTILINE)
+            if updated != raw:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(updated)
+        except OSError:
+            continue
+
+
+def delete_type(project_path: str, type_id: str) -> dict:
+    """
+    Remove a kind from this world.
+
+    REFUSES WHILE IT HOLDS ANYTHING, and says how many. Deleting a section
+    that contains a writer's entries would take their work with it, and no
+    confirmation dialog makes that a good idea -- so the app declines and
+    tells them what to do instead. An empty kind vanishes with nothing lost.
+
+    A shipped kind is never deleted, only hidden: it is part of the app, and
+    removing it from one project would mean the app's own code refers to
+    something that is not there. hide_type is the right tool, and the message
+    says so.
+    """
+    registry = seed_registry(project_path)
+    entry = type_by_id(registry, type_id)
+    if entry is None:
+        raise TypesError(f"This world has no kind called {type_id!r}.", "id")
+
+    held = count_entries(project_path, entry.get("folder", ""))
+    if held:
+        raise TypesError(
+            f"{entry.get('label', type_id)} still holds {held} "
+            f"{'entry' if held == 1 else 'entries'}. Delete or move those "
+            f"first, or hide the section instead to keep them.",
+            "id",
+        )
+
+    if type_id in {t["id"] for t in DEFAULT_TYPES}:
+        raise TypesError(
+            f"{entry.get('label', type_id)} is one of the kinds this app ships "
+            f"with, so it cannot be removed. Hide the section instead.",
+            "id",
+        )
+
+    registry["types"] = [t for t in registry["types"] if t.get("id") != type_id]
+    # A relation that pointed at it would now name a type that does not
+    # exist, which the validator refuses -- so drop those too.
+    registry["relations"] = [
+        r for r in registry.get("relations", [])
+        if type_id not in r.get("source_types", [])
+        and type_id not in r.get("target_types", [])
+    ]
+    _write_registry(project_path, registry)
+    return registry
+
+
 def set_type_group(project_path: str, type_id: str, group: str) -> dict:
     """Move a section to a different part of the sidebar. A writer whose
     world puts Factions with the people should be able to say so."""

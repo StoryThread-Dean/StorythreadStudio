@@ -30,6 +30,7 @@
 # gate.
 
 import os
+import re
 
 from app.codex.icon_keywords import icon_for_name
 from app.codex.types_registry import (
@@ -117,6 +118,84 @@ def create_note(project_path: str, label: str) -> dict:
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"# {tidy}\n\n")
     return {"id": type_id, "label": tidy, "filename": filename}
+
+
+def rename_note(project_path: str, filename: str, label: str) -> dict:
+    """
+    Fix a note's name, keeping everything written in it.
+
+    The file moves and its first heading follows, so a note called "Dungeon
+    Rulez" becomes "Dungeon Rules" without the writer retyping a word of it.
+    """
+    from app.codex.types_registry import TypesError, custom_type_id
+
+    new_id, tidy = custom_type_id(label)
+    new_filename = new_id.replace("_", "-") + ".md"
+
+    notes_dir = os.path.join(project_path, "notes")
+    source = os.path.join(notes_dir, filename)
+    if not os.path.isfile(source):
+        raise TypesError(f"There is no note called {filename!r}.", "filename")
+
+    target = os.path.join(notes_dir, new_filename)
+    if os.path.abspath(target) != os.path.abspath(source) and os.path.exists(target):
+        raise TypesError(f"You already have a note called {tidy!r}.", "label")
+
+    try:
+        with open(source, "r", encoding="utf-8") as f:
+            raw = f.read()
+        # The heading is the title the writer sees at the top of the page, so
+        # leaving it saying the old name would be half a rename.
+        updated = re.sub(r"^#\s+.*$", f"# {tidy}", raw, count=1, flags=re.MULTILINE)
+        if not updated.lstrip().startswith("#"):
+            updated = f"# {tidy}\n\n{raw}"
+        with open(source, "w", encoding="utf-8") as f:
+            f.write(updated)
+        if os.path.abspath(target) != os.path.abspath(source):
+            os.rename(source, target)
+    except OSError as exc:
+        raise TypesError(f"That note could not be renamed: {exc}", "filename") from exc
+
+    return {"id": new_id, "label": tidy, "filename": new_filename}
+
+
+def delete_note(project_path: str, filename: str) -> dict:
+    """
+    Remove a note from the sidebar WITHOUT destroying what is in it.
+
+    A note is prose the writer wrote. Unlinking the file would be the one
+    irreversible thing this whole feature does, so instead it moves to
+    notes/trash/ -- out of the tree, still on disk, still theirs. The message
+    says where it went, because a delete that silently keeps a copy is as
+    dishonest as one that silently does not.
+
+    Subfolders are not scanned, so it leaves the sidebar immediately.
+    """
+    from app.codex.types_registry import TypesError
+
+    notes_dir = os.path.join(project_path, "notes")
+    source = os.path.join(notes_dir, filename)
+    if not os.path.isfile(source):
+        raise TypesError(f"There is no note called {filename!r}.", "filename")
+
+    trash = os.path.join(notes_dir, "trash")
+    os.makedirs(trash, exist_ok=True)
+
+    target = os.path.join(trash, filename)
+    # Never overwrite something already in the trash: a writer who deleted
+    # two drafts of the same note should still have both.
+    stem, extension = os.path.splitext(filename)
+    counter = 2
+    while os.path.exists(target):
+        target = os.path.join(trash, f"{stem}-{counter}{extension}")
+        counter += 1
+
+    try:
+        os.rename(source, target)
+    except OSError as exc:
+        raise TypesError(f"That note could not be removed: {exc}", "filename") from exc
+
+    return {"moved_to": os.path.relpath(target, project_path).replace("\\", "/")}
 
 
 def _has_content(path: str) -> bool:

@@ -29,7 +29,9 @@ from app.codex.migrate import (
     run_migration,
 )
 from app.codex.resolve import resolve_thread
-from app.codex.sections import build_sections, create_note
+from app.codex.sections import (
+    build_sections, create_note, delete_note, rename_note,
+)
 from app.codex.visibility import (
     VISIBLE,
     Lens,
@@ -41,10 +43,12 @@ from app.codex.types_registry import (
     SCHEMA_VERSION,
     TypesError,
     add_type,
+    delete_type,
     folder_for_type,
     hide_type,
     load_registry,
     relation_allows,
+    rename_type,
     set_type_group,
     show_type,
     type_by_id,
@@ -279,6 +283,69 @@ async def post_note(request: AddNoteRequest):
         raise CodexError("type_invalid", "That note could not be added.",
                          str(exc)) from exc
     return build_sections(project_path, migration_state(project_path) == "done")
+
+
+class RenameSectionRequest(BaseModel):
+    project_path: str
+    label: str
+    # One of these, depending on what is being renamed: a KIND has an id, a
+    # NOTE is a file.
+    id: str | None = None
+    filename: str | None = None
+
+
+@router.patch("/section")
+async def patch_section(request: RenameSectionRequest):
+    """
+    Fix a section's name. "Magic Sysstem" becomes "Magic System".
+
+    A typo in a name feels permanent in a way it has no right to be, so this
+    moves everything with it: the folder, the `type:` line in entries already
+    written, or -- for a note -- the file and its heading. Nothing the writer
+    wrote changes beyond that.
+    """
+    project_path = validate_project_path(request.project_path)
+    try:
+        if request.filename:
+            rename_note(project_path, request.filename, request.label)
+        elif request.id:
+            rename_type(project_path, request.id, request.label)
+        else:
+            raise TypesError("Nothing was named to rename.", "id")
+    except TypesError as exc:
+        raise CodexError("type_invalid", "That could not be renamed.",
+                         str(exc)) from exc
+    return build_sections(project_path, migration_state(project_path) == "done")
+
+
+@router.delete("/section")
+async def delete_section(project_path: str = Query(...),
+                         id: str | None = None,
+                         filename: str | None = None):
+    """
+    Remove a section.
+
+    The two halves behave differently because what is at stake differs. A
+    KIND holding entries is refused outright with a count -- deleting it
+    would take the writer's work with it, and no confirmation makes that a
+    good idea. A NOTE is prose, so it moves to notes/trash/ rather than being
+    unlinked, and the response says where it went.
+    """
+    project_path = validate_project_path(project_path)
+    try:
+        if filename:
+            moved = delete_note(project_path, filename)
+        elif id:
+            delete_type(project_path, id)
+            moved = {}
+        else:
+            raise TypesError("Nothing was named to remove.", "id")
+    except TypesError as exc:
+        raise CodexError("type_invalid", "That could not be removed.",
+                         str(exc)) from exc
+
+    tree = build_sections(project_path, migration_state(project_path) == "done")
+    return {**tree, **moved}
 
 
 class MoveTypeRequest(BaseModel):

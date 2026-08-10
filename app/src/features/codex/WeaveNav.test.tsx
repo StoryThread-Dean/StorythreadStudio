@@ -71,13 +71,20 @@ function tree(overrides: Record<string, unknown> = {}) {
 }
 
 let posts: { url: string; body: Record<string, unknown> }[] = [];
+/** Every write, with its method -- rename is a PATCH and remove is a DELETE,
+ *  and both need checking. */
+let calls: { url: string; method: string; body: Record<string, unknown> }[] = [];
 
-function mockApi(sections = tree()) {
+function mockApi(sections: Record<string, unknown> = tree()) {
   posts = [];
+  calls = [];
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (init?.method === "POST") {
-      posts.push({ url, body: JSON.parse(String(init.body)) });
+    const method = init?.method ?? "GET";
+    if (method !== "GET") {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      calls.push({ url, method, body });
+      if (method === "POST") posts.push({ url, body });
     }
     return { ok: true, json: async () => sections } as Response;
   }));
@@ -347,6 +354,236 @@ describe("[Custom]", () => {
     await waitFor(() => expect(posts.length).toBe(1));
     expect(posts[0].url).toContain("/note");
     expect(posts[0].body.label).toBe("Dungeon Rules");
+  });
+});
+
+
+describe("fixing a typo", () => {
+  // "Magic Sysstem" is the case this exists for. A typo in a section name
+  // feels permanent in a way it has no right to be, and a writer who cannot
+  // fix it either lives with it or loses whatever is inside it.
+
+  /** A world containing the writer's own additions -- a misspelt kind and a
+   *  misspelt note -- alongside the sections the app itself depends on. */
+  function typoTree(count = 0) {
+    const base = tree();
+    const groups = base.groups.map(group => {
+      if (group.id === "notes") {
+        return { ...group, sections: [...group.sections,
+          { kind: "note", id: "dungeon_rulez", label: "Dungeon Rulez",
+            icon: "FileText", group: "notes", count: 0,
+            default_section: false, filename: "dungeon-rulez.md" }] };
+      }
+      if (group.id === "other") {
+        return { ...group, sections: [...group.sections,
+          { kind: "type", id: "magic_sysstem", label: "Magic Sysstems",
+            icon: "Sparkles", group: "other", count,
+            default_section: false }] };
+      }
+      return group;
+    });
+    return { ...base, groups };
+  }
+
+  async function openMenu(name: string, group: string, count = 0) {
+    mockApi(typoTree(count));
+    await renderNav();
+    await openGroup(group);
+    await userEvent.click(screen.getByRole("button", { name: `${name} settings` }));
+    return screen.getByRole("dialog", { name: `${name} settings` });
+  }
+
+  it("offers no menu on a section the app itself depends on", async () => {
+    // Characters cannot be removed -- profiles.py, the migration and the
+    // Profile Builder all name it directly. Offering a button that always
+    // refuses is a worse answer than not offering one.
+    mockApi(typoTree());
+    await renderNav();
+    await openGroup("Profiles");
+    expect(screen.queryByRole("button", { name: /Character settings/ })).toBeNull();
+  });
+
+  it("offers one on a section the writer added", async () => {
+    mockApi(typoTree());
+    await renderNav();
+    await openGroup("Other");
+    expect(screen.getByRole("button", { name: "Magic Sysstems settings" })).toBeTruthy();
+  });
+
+  it("renames a kind by its id", async () => {
+    const dialog = await openMenu("Magic Sysstems", "Other");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Rename/ }));
+    await userEvent.clear(within(dialog).getByLabelText("New name"));
+    await userEvent.type(within(dialog).getByLabelText("New name"), "Magic System");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].method).toBe("PATCH");
+    expect(calls[0].body).toMatchObject({ id: "magic_sysstem", label: "Magic System" });
+    expect(calls[0].body.filename).toBeUndefined();
+  });
+
+  it("renames a note by its file", async () => {
+    // The asymmetry that matters: a kind IS an id, a note IS a file.
+    const dialog = await openMenu("Dungeon Rulez", "Notes");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Rename/ }));
+    await userEvent.clear(within(dialog).getByLabelText("New name"));
+    await userEvent.type(within(dialog).getByLabelText("New name"), "Dungeon Rules");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].body).toMatchObject({ filename: "dungeon-rulez.md",
+                                          label: "Dungeon Rules" });
+    expect(calls[0].body.id).toBeUndefined();
+  });
+
+  it("holds the old name ready to be corrected", async () => {
+    // Typing the whole thing again to fix one letter is the annoying answer.
+    const dialog = await openMenu("Magic Sysstems", "Other");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Rename/ }));
+    expect((within(dialog).getByLabelText("New name") as HTMLInputElement).value)
+      .toBe("Magic Sysstems");
+  });
+
+  it("refuses a new name the same way it refuses a new one", async () => {
+    // The rules cannot differ between adding and renaming, or a writer could
+    // rename their way into a name the app would not have let them create.
+    const dialog = await openMenu("Magic Sysstems", "Other");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Rename/ }));
+    await userEvent.clear(within(dialog).getByLabelText("New name"));
+    await userEvent.type(within(dialog).getByLabelText("New name"), "System 2");
+    expect(within(dialog).getByRole("alert").textContent).toMatch(/no numbers/);
+    expect(within(dialog).getByRole("button", { name: "Save" })
+      .hasAttribute("disabled")).toBe(true);
+  });
+
+  it("says the entries come with it", async () => {
+    // A rename that quietly moved files would be alarming to notice
+    // afterwards.
+    const dialog = await openMenu("Magic Sysstems", "Other", 4);
+    await userEvent.click(within(dialog).getByRole("button", { name: /Rename/ }));
+    expect(within(dialog).getByText(/All 4 entries come with it/)).toBeTruthy();
+  });
+});
+
+
+describe("removing a section", () => {
+  function typoTree(count = 0) {
+    const base = tree();
+    const groups = base.groups.map(group => {
+      if (group.id === "notes") {
+        return { ...group, sections: [...group.sections,
+          { kind: "note", id: "dungeon_rules", label: "Dungeon Rules",
+            icon: "FileText", group: "notes", count: 0,
+            default_section: false, filename: "dungeon-rules.md" }] };
+      }
+      if (group.id === "other") {
+        return { ...group, sections: [...group.sections,
+          { kind: "type", id: "bloodline", label: "Bloodlines",
+            icon: "Sparkles", group: "other", count, default_section: false }] };
+      }
+      return group;
+    });
+    return { ...base, groups };
+  }
+
+  async function openConfirm(name: string, group: string, count = 0,
+                             sections?: Record<string, unknown>) {
+    mockApi(sections ?? typoTree(count));
+    await renderNav();
+    await openGroup(group);
+    await userEvent.click(screen.getByRole("button", { name: `${name} settings` }));
+    const dialog = screen.getByRole("dialog", { name: `${name} settings` });
+    await userEvent.click(within(dialog).getByRole("button", { name: /Remove it/ }));
+    return dialog;
+  }
+
+  it("asks before removing anything", async () => {
+    const dialog = await openConfirm("Bloodlines", "Other");
+    expect(within(dialog).getByText(/Remove Bloodlines\?/)).toBeTruthy();
+    expect(calls.length).toBe(0);
+  });
+
+  it("lets the writer back out", async () => {
+    const dialog = await openConfirm("Bloodlines", "Other");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Keep it" }));
+    expect(calls.length).toBe(0);
+  });
+
+  it("says it is empty when it is", async () => {
+    const dialog = await openConfirm("Bloodlines", "Other");
+    expect(within(dialog).getByText(/It is empty, so nothing is lost/)).toBeTruthy();
+  });
+
+  it("warns before the click when the section holds writing", async () => {
+    // The backend refuses this outright. Saying so first means the writer
+    // learns the rule rather than meeting an error.
+    const dialog = await openConfirm("Bloodlines", "Other", 2);
+    expect(within(dialog).getByText(/holds 2 entries/)).toBeTruthy();
+    expect(within(dialog).getByText(/will not remove your writing/)).toBeTruthy();
+  });
+
+  it("shows the refusal instead of closing on it", async () => {
+    // The commonest failure here is "this section still holds four entries",
+    // which is something to act on rather than a dead end.
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if ((init?.method ?? "GET") !== "GET") {
+        return {
+          ok: false,
+          json: async () => ({ detail: { code: "type_invalid",
+                                         message: "Bloodlines still holds 2 entries." } }),
+        } as Response;
+      }
+      return { ok: true, json: async () => typoTree(2) } as Response;
+    }));
+    render(<WeaveNav projectPath={PROJECT} onOpenSection={vi.fn()} onOpenWeave={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId("weave-nav")).toBeTruthy());
+    await openGroup("Other");
+    await userEvent.click(screen.getByRole("button", { name: "Bloodlines settings" }));
+    const dialog = screen.getByRole("dialog", { name: "Bloodlines settings" });
+    await userEvent.click(within(dialog).getByRole("button", { name: /Remove it/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() =>
+      expect(within(dialog).getByText(/still holds 2 entries/)).toBeTruthy());
+    expect(screen.getByRole("dialog", { name: "Bloodlines settings" })).toBeTruthy();
+  });
+
+  it("promises a note is kept, and then says where it went", async () => {
+    // A delete that silently keeps a copy is as dishonest as one that
+    // silently does not.
+    mockApi(typoTree());
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        calls.push({ url: String(input), method, body: {} });
+        return { ok: true,
+                 json: async () => ({ ...tree(), moved_to: "notes/trash/dungeon-rules.md" }),
+               } as Response;
+      }
+      return { ok: true, json: async () => typoTree() } as Response;
+    }));
+    render(<WeaveNav projectPath={PROJECT} onOpenSection={vi.fn()} onOpenWeave={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId("weave-nav")).toBeTruthy());
+    await openGroup("Notes");
+    await userEvent.click(screen.getByRole("button", { name: "Dungeon Rules settings" }));
+    const dialog = screen.getByRole("dialog", { name: "Dungeon Rules settings" });
+    await userEvent.click(within(dialog).getByRole("button", { name: /Remove it/ }));
+    expect(within(dialog).getByText(/moves to a trash folder/)).toBeTruthy();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() =>
+      expect(screen.getByText("notes/trash/dungeon-rules.md")).toBeTruthy());
+    expect(calls[0].method).toBe("DELETE");
+  });
+
+  it("names the target in the query, not the body", async () => {
+    // A DELETE carrying a body is the kind of thing a proxy quietly drops.
+    const dialog = await openConfirm("Bloodlines", "Other");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].url).toContain("id=bloodline");
+    expect(calls[0].url).not.toContain("filename=");
   });
 });
 

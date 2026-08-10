@@ -250,6 +250,40 @@ export function addNote(projectPath: string, label: string): Promise<SectionsTre
   });
 }
 
+/**
+ * Fix a section's name. Pass `id` for a kind, `filename` for a note.
+ *
+ * "Magic Sysstem" becomes "Magic System", and everything moves with it --
+ * the folder, the entries already written, or the note's own heading.
+ */
+export function renameSection(
+  projectPath: string,
+  target: { id?: string; filename?: string },
+  label: string,
+): Promise<SectionsTree> {
+  return request("/section", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, label, ...target }),
+  });
+}
+
+/**
+ * Remove a section.
+ *
+ * A KIND holding entries is refused with a count -- the backend will not
+ * delete a writer's work. A NOTE moves to notes/trash/ and the response says
+ * where, which the caller must pass on.
+ */
+export function deleteSection(
+  projectPath: string,
+  target: { id?: string; filename?: string },
+): Promise<SectionsTree & { moved_to?: string }> {
+  return request(`/section?${q({
+    project_path: projectPath, id: target.id, filename: target.filename,
+  })}`, { method: "DELETE" });
+}
+
 export function reindex(projectPath: string): Promise<{ indexed: number }> {
   return request(`/reindex?${q({ project_path: projectPath })}`, { method: "POST" });
 }
