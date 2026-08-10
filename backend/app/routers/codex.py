@@ -28,7 +28,14 @@ from app.codex.migrate import (
     restore_backup,
     run_migration,
 )
+from app.codex.context import Budget, assemble, estimate_tokens
+from app.codex.findings import (
+    answer, discard_staged, list_runs, load_run, mute_kind, new_run,
+    open_stops, refresh, remember_choice, retire, save_run,
+)
+from app.codex.mentions import alias_display, build_alias_map, find_mentions
 from app.codex.resolve import resolve_thread
+from app.codex.scan import DEPTH_FULL, ScanRequest, scan
 from app.codex.sections import (
     build_sections, create_note, delete_note, rename_note,
 )
@@ -804,3 +811,223 @@ async def post_restore(project_path: str = Query(...)):
     """Undo an interrupted conversion, putting profiles/ back as it was."""
     project_path = validate_project_path(project_path)
     return restore_backup(project_path)
+
+
+# ── Weaving: the scan ────────────────────────────────────────────────────────
+
+class ScanBody(BaseModel):
+    project_path: str
+    depth: str = DEPTH_FULL
+    types: list[str] = []
+    chapter_ids: list[str] = []
+    kinds: list[str] = []
+    # Answers carried in from a run, so the scan can leave out what the writer
+    # has already retired or muted.
+    run_id: str | None = None
+
+
+@router.post("/scan")
+async def post_scan(body: ScanBody):
+    """
+    Everything findable without asking a model anything.
+
+    NO ROLE, NO MODEL, NO COST. This is the free pass, and it runs before any
+    button that spends is offered -- which is what lets the walkthrough tell
+    the writer a REAL number ("this found 340 stops") rather than an estimate
+    that turns out wrong two hours in.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+    await codex_store.ensure_fresh(project_path)
+
+    run = load_run(project_path, body.run_id) if body.run_id else None
+    request = ScanRequest(
+        depth=body.depth, types=body.types, chapter_ids=body.chapter_ids,
+        kinds=body.kinds,
+        retired=set((run or {}).get("retired") or []),
+        muted_kinds=set((run or {}).get("muted_kinds") or []),
+    )
+
+    threads = codex_store.load_threads(project_path)
+    result = scan(project_path, threads, registry, request,
+                  label_for=_label_lookup(project_path))
+
+    stops = result.stops
+    report = {}
+    if run is not None:
+        report = refresh(run, stops)
+        save_run(project_path, run)
+        stops = open_stops(run, stops)
+
+    return {
+        "run_id": (run or {}).get("run_id"),
+        "stops": [s.as_dict() for s in stops],
+        "counts": result.counts,
+        # The total BEFORE the writer's answers were applied, so "12 of 340"
+        # means something. Reporting only what is left would make a long
+        # session look like it had barely started.
+        "total": len(result.stops),
+        "unreadable": result.unreadable,
+        "resumed": report,
+    }
+
+
+# ── Weaving: the run ledger ──────────────────────────────────────────────────
+
+@router.get("/runs")
+async def get_runs(project_path: str = Query(...)):
+    """Past sessions, newest first, for "carry on where you left off"."""
+    return {"runs": list_runs(validate_project_path(project_path))}
+
+
+class NewRunBody(BaseModel):
+    project_path: str
+    depth: str = DEPTH_FULL
+    types: list[str] = []
+    chapter_ids: list[str] = []
+
+
+@router.post("/run")
+async def post_run(body: NewRunBody):
+    """Start a session. Written immediately so a crash cannot lose the fact
+    that one was started."""
+    project_path = validate_project_path(body.project_path)
+    run = new_run(body.depth, types=body.types, chapter_ids=body.chapter_ids)
+    save_run(project_path, run)
+    return run
+
+
+@router.get("/run")
+async def get_run(project_path: str = Query(...), run_id: str = Query(...)):
+    run = load_run(validate_project_path(project_path), run_id)
+    if run is None:
+        raise CodexError(
+            "run_not_found",
+            "That Weaving session could not be read. Starting a new one "
+            "loses nothing you applied and saved.",
+            run_id,
+        )
+    return run
+
+
+class AnswerBody(BaseModel):
+    project_path: str
+    run_id: str
+    # One of: a stop answered, a phrase retired, a kind muted, a name settled.
+    key: str | None = None
+    state: str | None = None
+    evidence_hash: str = ""
+    retire_phrase: str | None = None
+    mute: str | None = None
+    unmute: str | None = None
+    alias: str | None = None
+    entity_id: str | None = None
+    # The writer discarded an unsaved buffer; everything staged comes back.
+    discard_staged: bool = False
+
+
+@router.post("/run/answer")
+async def post_answer(body: AnswerBody):
+    """
+    Record what the writer did. One endpoint, because every one of these is
+    the same operation -- write a fact about the writer and save the file.
+
+    The two-phase contract lives here: `state: "staged"` means an unsaved
+    buffer, `"applied"` means the Thread file was written. A caller that
+    reports "applied" before the save has landed breaks the promise that a
+    discarded edit comes back as a question.
+    """
+    project_path = validate_project_path(body.project_path)
+    run = load_run(project_path, body.run_id)
+    if run is None:
+        raise CodexError(
+            "run_not_found",
+            "That Weaving session could not be read.",
+            body.run_id,
+        )
+
+    returned = 0
+    if body.discard_staged:
+        returned = discard_staged(run)
+    if body.key and body.state:
+        answer(run, body.key, body.state, evidence_hash=body.evidence_hash)
+    if body.retire_phrase:
+        retire(run, body.retire_phrase)
+    if body.mute:
+        mute_kind(run, body.mute)
+    if body.unmute:
+        mute_kind(run, body.unmute, muted=False)
+    if body.alias and body.entity_id:
+        remember_choice(run, body.alias, body.entity_id)
+
+    save_run(project_path, run)
+    return {"run": run, "returned": returned}
+
+
+# ── Weaving: the brief ───────────────────────────────────────────────────────
+
+class ContextBody(BaseModel):
+    project_path: str
+    at: str | None = None
+    pov: str | None = None
+    text: str = ""
+    # Budget inputs. The caller knows its own model and its own prompt; this
+    # endpoint refuses to guess at either.
+    model_context_limit: int = 32_000
+    output_reserve: int = 4_000
+    system_prompt_tokens: int = 0
+    fixed_request_overhead: int = 0
+    pinned_tokens: int = 0
+    # The four controls the product rule obliges.
+    pinned: list[str] = []
+    exclude_ids: list[str] = []
+    exclude_types: list[str] = []
+    enabled: bool = True
+    include_on_request: bool = False
+
+
+@router.post("/context")
+async def post_context(body: ContextBody):
+    """
+    What WOULD be sent, assembled and handed back.
+
+    THIS ENDPOINT TRANSMITS NOTHING. It builds the brief and returns it, so
+    the writer can read it, remove Threads from it, or turn it off. Something
+    the writer initiated is what sends it, later and elsewhere. That is the
+    product rule, not an implementation detail.
+    """
+    project_path = validate_project_path(body.project_path)
+    await codex_store.ensure_fresh(project_path)
+    threads = codex_store.load_threads(project_path)
+    index = AnchorIndex.for_project(project_path)
+
+    # Which Threads the text names. Ambiguous mentions are NOT included: a
+    # guess here is how the wrong character's beliefs reach the model with
+    # nobody able to see it happen.
+    mentioned: set[str] = set()
+    if body.text:
+        alias_map = build_alias_map(threads)
+        for mention in find_mentions(body.text, alias_map,
+                                     display=alias_display(threads)):
+            if mention.bound and mention.entity_id:
+                mentioned.add(mention.entity_id)
+
+    budget = Budget(
+        model_context_limit=body.model_context_limit,
+        output_reserve=body.output_reserve,
+        system_prompt_tokens=body.system_prompt_tokens,
+        user_text_tokens=estimate_tokens(body.text),
+        fixed_request_overhead=body.fixed_request_overhead,
+        pinned_tokens=body.pinned_tokens,
+    )
+
+    brief = assemble(
+        threads, index, at=body.at, budget=budget, pov=body.pov,
+        mentioned=mentioned, pinned=set(body.pinned),
+        exclude_ids=set(body.exclude_ids),
+        exclude_types=set(body.exclude_types),
+        enabled=body.enabled, include_on_request=body.include_on_request,
+    )
+    payload = brief.as_dict()
+    payload["mentioned"] = sorted(mentioned)
+    return payload
