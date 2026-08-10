@@ -10,7 +10,43 @@ For shipped releases see [`../CHANGELOG.md`](../CHANGELOG.md).
 
 Committed work for the near-term roadmap.
 
-### Audiobook Converter -- the v1.1.0 feature
+### The Weave -- the v2.0.0 feature
+
+One linked, time-aware world model, replacing the four hardcoded profile folders.
+What is built so far is described in [`features.md`](features.md) and
+[`architecture.md`](architecture.md).
+
+Tier 1, judged by the three clauses: a new major surface (the map), changed AI
+context behaviour across every existing feature, and a one-time migration of
+source-of-truth files. The Audiobook Converter is the calibration point -- a
+comparable size, shipped as tier 2 -- but it ADDED a workspace without touching
+existing data or existing behaviour, and that difference in kind is what makes
+this one tier 1.
+
+Delivery is one long-lived branch with three milestones, merged to `main` as a
+single release. Nothing ships piecemeal, because a writer who migrates halfway
+through cannot easily go back.
+
+| Milestone | Contents | State |
+|---|---|---|
+| M1 | Data layer, `types.json`, anchors, the graph index, migration | built |
+| M2 | The Weave map, the anchor scrubber, the list view | built |
+| M3 | Weaving: the deterministic scan, the findings ledger, context assembly, the walkthrough, Unwoven | built |
+
+**Still open in M3:** the AI passes (Untied proposals, semantic Snags, expanding
+an Unwoven answer), and wiring the assembled brief into the Writing Companion
+with its inspect panel. Automatic Weave context is not reachable from any AI
+feature yet -- `/api/codex/context` builds and returns a brief, and nothing calls
+it -- so the amended context rule is not yet exercised in the running app.
+
+Also open before release: the migration UI (confirm-and-report over the existing
+dry-run endpoint), a Thread editor for the kinds the Profile Builder does not
+cover, and the manual-smoke additions for each milestone.
+
+### Audiobook Converter -- SHIPPED as v1.1.0 (2026-08-03)
+
+*Kept in this section for its open follow-ups only. The feature itself is
+described in [`features.md`](features.md); stages A-G are built and released.*
 
 A standalone workspace inside Storythread Studio that converts a manuscript (DOCX / EPUB / Markdown / TXT, or an existing Storythread project) into chapter MP3s, a combined MP3, and an M4B audiobook. Full specification: [`audiobook-converter-spec.md`](audiobook-converter-spec.md) (reviewed and revised 2026-07-28).
 

@@ -56,6 +56,9 @@ const PRIMARY_ACTION: Record<string, string> = {
   snag: "Open it and sort it out",
   unplaced: "Open it and place it",
   early_mention: "Open it",
+  // Unwoven has no Thread to open -- the answer does not exist yet. This
+  // takes the writer to the KIND of entry it belongs in.
+  unwoven: "Go and answer it",
 };
 
 const DEPTHS: { id: Depth; label: string; blurb: string }[] = [
@@ -69,14 +72,25 @@ function lexFor(kind: string): LexEntry | undefined {
   return STOP_KINDS[kind];
 }
 
+/** [type, section] an Unwoven answer belongs in. */
+function landsIn(stop: Stop): string[] {
+  const lands = stop.detail?.lands_as;
+  return Array.isArray(lands) ? lands.map(String) : [];
+}
+
 interface WeavingPanelProps {
   projectPath: string;
   onClose: () => void;
   /** Take the writer to a Thread. The walk gets out of the way. */
   onOpenThread?: (entityId: string) => void;
+  /** Take the writer to a KIND of entry -- where an Unwoven answer belongs,
+   *  which has no Thread yet by definition. */
+  onOpenKind?: (typeId: string) => void;
 }
 
-export function WeavingPanel({ projectPath, onClose, onOpenThread }: WeavingPanelProps) {
+export function WeavingPanel({
+  projectPath, onClose, onOpenThread, onOpenKind,
+}: WeavingPanelProps) {
   const [depth, setDepth] = useState<Depth>("full");
   const [scanning, setScanning] = useState(true);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -314,6 +328,30 @@ export function WeavingPanel({ projectPath, onClose, onOpenThread }: WeavingPane
         <p className="mt-1 text-[11px] text-text-muted">{stop.why}</p>
       </details>
 
+      {/* Where the answer goes. Without this, "answer it" is an instruction
+          with no address -- and an answer that lands nowhere in particular is
+          a note, not part of the world. */}
+      {stop.kind === "unwoven" && (
+        <div className="mt-2 space-y-1 text-[11px] text-faint">
+          <p>
+            Your answer belongs in{" "}
+            <span className="text-text-muted">
+              {landsIn(stop).map(part => part.replace(/_/g, " ")).join(" > ")}
+            </span>.
+          </p>
+          {Array.isArray(stop.detail.touches) && stop.detail.touches.length > 0 && (
+            // A world is a web. Saying what else this reaches is the thing
+            // that stops it feeling like a form.
+            <p>
+              This also touches something you have already decided:{" "}
+              <span className="text-text-muted">
+                {String((stop.detail.touches as string[])[0])}
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
       {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
 
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -325,6 +363,11 @@ export function WeavingPanel({ projectPath, onClose, onOpenThread }: WeavingPane
             if (stop.kind === "unspun") {
               await createThread(projectPath, String(stop.detail.name ?? ""));
               await apply(projectPath, runId, stop);
+            } else if (stop.kind === "unwoven") {
+              // Nothing to open and nothing to record: the question stops
+              // being asked when its answer is written, because the scan
+              // works that out fresh every time.
+              onOpenKind?.(landsIn(stop)[0]);
             } else if (stop.entity_id) {
               onOpenThread?.(stop.entity_id);
             }

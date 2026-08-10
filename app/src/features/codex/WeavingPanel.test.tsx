@@ -360,3 +360,68 @@ describe("what is left to do", () => {
     expect(within(rail).getByText(/Loose thread 1/)).toBeTruthy();
   });
 });
+
+
+describe("questions your world has not answered", () => {
+  const unwoven = {
+    kind: "unwoven",
+    key: "unwoven|gov_succession",
+    title: "When the person in charge dies, how is the next one decided?",
+    why: "You answered: \"Who actually holds power here, and how did they get it?\" -- which raises this. Succession is where politics turns into plot.",
+    entity_id: "", chapter_id: "", quote: "", evidence_hash: "",
+    detail: {
+      question_id: "gov_succession", domain: "governance",
+      domain_label: "Power and who holds it",
+      lands_as: ["government", "succession"],
+      touches: ["What is the worst thing a person can be accused of here?"],
+      depth: 2,
+    },
+  };
+
+  it("asks the question rather than reporting a problem", async () => {
+    // The one stop kind that is not about a mistake.
+    mockApi({ stops: [unwoven] });
+    await start();
+    expect(screen.getByText(/how is the next one decided/)).toBeTruthy();
+  });
+
+  it("says what raised it", async () => {
+    // A question arriving with no reason behind it is what makes
+    // worldbuilding prompts feel like homework.
+    mockApi({ stops: [unwoven] });
+    await start();
+    await userEvent.click(screen.getByText("Why am I seeing this?"));
+    expect(screen.getByText(/which raises this/)).toBeTruthy();
+  });
+
+  it("says where the answer belongs", async () => {
+    // "Answer it" with no address is an instruction to write a note, and a
+    // note is not part of the world.
+    mockApi({ stops: [unwoven] });
+    await start();
+    expect(screen.getByText(/government > succession/)).toBeTruthy();
+  });
+
+  it("says what else the answer reaches into", async () => {
+    // A world is a web. This is what stops it feeling like a form.
+    mockApi({ stops: [unwoven] });
+    await start();
+    expect(screen.getByText(/worst thing a person can be accused of/)).toBeTruthy();
+  });
+
+  it("takes the writer to the kind of entry it belongs in", async () => {
+    mockApi({ stops: [unwoven] });
+    const onOpenKind = vi.fn();
+    await start({ onOpenKind });
+    await userEvent.click(screen.getByRole("button", { name: /Go and answer it/ }));
+    await waitFor(() => expect(onOpenKind).toHaveBeenCalledWith("government"));
+  });
+
+  it("creates nothing, because the answer does not exist yet", async () => {
+    mockApi({ stops: [unwoven] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Go and answer it/ }));
+    await waitFor(() => expect(screen.getByTestId("weaving-panel")).toBeTruthy());
+    expect(posted("/thread/new")).toEqual([]);
+  });
+});

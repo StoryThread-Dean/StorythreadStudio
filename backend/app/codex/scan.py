@@ -37,6 +37,7 @@ from app.codex.mentions import (
 )
 from app.codex.snags import Snag, check_facts, check_ties
 from app.codex.visibility import HIDDEN_FUTURE, Lens, thread_visibility
+from app.codex.world_rules import DOMAINS, open_questions
 from app.utils.structure_store import ordered_chapter_ids
 
 __all__ = [
@@ -54,9 +55,10 @@ STOP_UNPLACED = "unplaced"          # a fact with no point in the story
 STOP_LOOSE = "loose_thread"         # a Thread nothing connects to
 STOP_SNAG = "snag"                  # two facts that disagree
 STOP_EARLY = "early_mention"        # named before the reader is meant to know
+STOP_UNWOVEN = "unwoven"            # ground rules not worked out yet
 
 STOP_KINDS = (STOP_UNSPUN, STOP_FRAYED, STOP_UNPLACED, STOP_LOOSE,
-              STOP_SNAG, STOP_EARLY)
+              STOP_SNAG, STOP_EARLY, STOP_UNWOVEN)
 
 # How much of this the writer wants in one sitting. The scan is the same
 # work either way; depth decides what survives into the walk.
@@ -194,12 +196,56 @@ def scan(
     manuscript, unreadable = _manuscript_stops(project_path, threads, request, index)
     result.stops.extend(manuscript)
     result.unreadable = unreadable
+    result.stops.extend(_unwoven_stops(threads, request))
 
     counts: dict[str, int] = {kind: 0 for kind in STOP_KINDS}
     for stop in result.stops:
         counts[stop.kind] = counts.get(stop.kind, 0) + 1
     result.counts = counts
     return result
+
+
+def _unwoven_stops(threads: list[dict], request: ScanRequest) -> list[Stop]:
+    """
+    Ground rules this world has not decided yet.
+
+    The one stop kind that is not about a mistake -- everything else finds
+    something wrong, this finds something absent. It is excluded from the
+    quick pass for exactly that reason: "problems only" means nothing that
+    asks the writer to invent anything.
+
+    Depth follows the session. A full weave reaches the branches; anything
+    else stays on the trunk, because a writer who has not decided how power
+    passes should not be asked what stops the heirs being murdered.
+    """
+    if not request.wants(STOP_UNWOVEN):
+        return []
+
+    max_depth = 3 if request.depth == DEPTH_FULL else 1
+    stops: list[Stop] = []
+    for item in open_questions(threads, max_depth=max_depth):
+        question = item.question
+        if question.id in request.retired:
+            continue
+        # "You said X, which raises this." A question arriving with no reason
+        # behind it is what makes worldbuilding prompts feel like homework.
+        why = question.why
+        if item.because:
+            why = (f"You answered: \"{item.because[0]}\" -- which raises this. "
+                   + why)
+        stops.append(Stop(
+            kind=STOP_UNWOVEN, key=_key(STOP_UNWOVEN, question.id),
+            title=question.prompt, why=why,
+            detail={
+                "question_id": question.id,
+                "domain": question.domain,
+                "domain_label": DOMAINS.get(question.domain, question.domain),
+                "lands_as": list(question.lands_as),
+                "touches": item.touches,
+                "depth": question.depth,
+            },
+        ))
+    return stops
 
 
 def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,

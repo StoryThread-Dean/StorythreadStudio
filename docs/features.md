@@ -219,6 +219,109 @@ Two export modes, both run from `POST /api/export/full-manuscript` and `POST /ap
 - **Full manuscript** — combines chapters in order into a single file in `exports/`. Optional flags append chapter summaries, scene summaries, notes, and profiles as `#` appendices.
 - **Manual snapshot** — dated folder under `exports/snapshot-YYYY-MM-DD/` mirroring the project layout, with the same opt-in toggles for summaries, notes, and profiles.
 
+## The Weave
+
+*In development on `feature/the-weave`, for v2.0.0. Not in a shipped release yet.*
+
+The Weave is one linked, time-aware world model. Every character, place, faction,
+object and idea is a **Thread**; the connections between them are **Ties**; and a
+Thread's **Run** records how it changes across the story.
+
+The Run is the point of the whole thing. A profile today describes one unchanging
+person from page one to the last page, which is wrong: a heroine who spends
+fourteen chapters believing her father died in a raid is a different person in
+chapter fifteen. Ask the Weave about chapter seven and you get the belief; ask
+about chapter fifteen and you get the truth.
+
+Three switches on every fact and every Tie decide what is visible:
+
+| Switch | Question it answers |
+|---|---|
+| `frame` | Whose truth is this? Objective, or something one character believes |
+| `revealed_at` | When does the reader learn it? Later than the point being written = spoiler |
+| `ai_scope` | May AI see it at all? never / on request / always |
+
+Together they cover author-only secrets, hidden motives, misinformation,
+unreliable narration and layered-world premises with one mechanism -- and they
+apply to Ties as well as facts, so spoiler mode cannot hide a secret while drawing
+a large labelled edge that gives it away.
+
+Threads are ordinary Markdown files under `codex/`, so copying the project folder
+takes the whole world model with it.
+
+### Weaving
+
+A guided session that reads the manuscript and the Weave together and walks the
+writer through what it found, one decision at a time.
+
+**It scans before it asks, and the scan is free.** No model, no role, no cost --
+just arithmetic over the book and the world. That is what lets it say "this found
+340 things to look at, which is many sessions of work" and mean it, instead of
+quoting an estimate that turns out wrong two hours in.
+
+What it can find without spending anything:
+
+| | |
+|---|---|
+| **Unspun** | a name in the prose with no entry behind it |
+| **Frayed** | an entry too thin to be useful |
+| **Loose thread** | an entry nothing connects to |
+| **Snag** | two facts that disagree, or a supersession that cannot be right |
+| **Unplaced** | a fact with no point in the story, so it never takes effect |
+| **Told early** | something named in a chapter where the map would be hiding it |
+| **Unwoven** | ground rules of the world that have not been decided yet |
+
+Every stop shows the text that triggered it and answers **"why am I seeing
+this?"** with the rule that fired. Four ways to answer, and they are deliberately
+different: apply, *not a connection* (permanent), *not yet* (comes back), and
+*never ask* about this kind (reversible).
+
+**Nothing about the book is stored.** Stops are re-derived every run, so a Thread
+that gets its Overview filled in stops being Frayed because the condition ended --
+not because a record says it was handled. What IS stored is the writer's answers,
+in `.storythread/weave/runs/`, which is the one thing under `.storythread/` that
+is not a rebuildable cache.
+
+**Applied means saved.** There is no autosave in this app, so a change accepted
+into an unsaved buffer is *staged*, not applied. Discard the buffer and the
+finding comes back as a question rather than sitting in the ledger claiming to be
+done.
+
+The one one-click action creates an **empty** entry from a name the writer already
+wrote -- and that entry is immediately Frayed, so the walk then asks for it to be
+written. The app does not write the writer's characters.
+
+### Unwoven, and why it is a root system
+
+Unwoven is the only stop that is not about a mistake. It asks the questions a
+world has not answered -- how power passes, what magic costs and who pays, what
+the worst thing a person can be accused of is.
+
+What keeps it from being a chore is that answers open consequences and reach
+across domains. *"Succession is decided by single combat"* opens *"what stops
+every heir being murdered in childhood?"* and touches the law (*is kinslaying
+prosecuted?*) and the faith (*does it sanctify this?*). A child question is never
+asked before its parent is answered, and every question says where its answer
+belongs, so it becomes part of the world rather than another pile of notes.
+
+### Context assembly
+
+When an AI feature runs at a point in the story, the app can assemble a brief from
+the Weave as of that point. The budget subtracts every other claim on the window
+by name -- room for the reply, the system prompt, the writer's own text,
+scaffolding, anything pinned by hand -- so what is left is what the Weave may
+actually spend, and the panel can show where the window went instead of an
+unexplained "context full".
+
+Pinned content is never the thing that gets dropped, everything dropped is
+reported, and pinned content that cannot fit is **refused rather than truncated**:
+half a character profile reads as a whole one and the model has no way to tell.
+
+Per the locked context rule in `docs/product-scope.md`, the writer can inspect the
+brief, remove individual Threads, exclude whole categories, and switch automatic
+Weave context off entirely -- which returns the app to manual chips only. Nothing
+is sent until the writer starts an AI action.
+
 ## Audiobook Converter
 
 A standalone workspace that turns a finished manuscript into an audiobook: per-chapter MP3s, a combined MP3, and an M4B with chapter marks. Reached from Project Home. Each audiobook is its own folder; the source manuscript is copied in and never modified.

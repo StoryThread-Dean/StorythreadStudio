@@ -2731,6 +2731,17 @@ function App() {
             projectPath={currentProject.root_path}
             onClose={() => setWeavingOpen(false)}
             onOpenThread={() => setCurrentView("weave")}
+            onOpenKind={typeId => {
+              // An Unwoven answer belongs in a KIND of entry, not in one
+              // that already exists. The four the Profile Builder was made
+              // for still open there; everything else opens in the Weave.
+              if (["character", "relationship", "location", "lore"].includes(typeId)) {
+                setProfileType(typeId as "character" | "relationship" | "location" | "lore");
+                setCurrentView("profiles");
+              } else {
+                setCurrentView("weave");
+              }
+            }}
           />
         </aside>
       )}

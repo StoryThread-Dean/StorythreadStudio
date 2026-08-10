@@ -225,6 +225,24 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_audiobook_speakers.py` -- the cast + [voice:NAME] spans (spec 27): span parsing and its three failure modes, voice change as a hard segment boundary, name-to-voice resolution, recasting requeues only that character
   - `test_audiobook_speaker_analysis.py` -- the AI speaker pass (spec 27.3): a proposal that does not quote the source character for character is DROPPED, overlap/ordering rules, prompt guardrails, and the endpoint writing nothing
   - `test_audiobook_storage.py` -- storage measurement + cleanup (spec 25): per-category sizes, orphan detection by leftover, nothing irreversible pre-checked, deleted audio resets its segment records, export-only state, retention migration
+  - **The Weave** (`feature/the-weave`, for v2.0.0):
+  - `test_codex_types.py` -- the type registry: validation, and that an invalid `types.json` is NEVER silently repaired over the writer's customization
+  - `test_codex_anchors.py` -- anchors as ids, ordinals computed never stored, a scene-less anchor valid everywhere
+  - `test_codex_resolve.py` -- the heart: effective sets, derived supersession, same-anchor ambiguity is a Snag rather than an ordering, frames survive a rename, `ai_scope: never` unreachable
+  - `test_codex_visibility.py` -- one set of rules for facts AND Ties; an edge is only as visible as the least visible thing it touches
+  - `test_codex_threads.py` -- Thread round trip; nothing a hand-edited file contains is ever dropped
+  - `test_codex_store.py` -- index health: a failed write marks dirty, a dirty index rebuilds before serving, an out-of-band edit is caught by the revision fingerprint
+  - `test_codex_sections.py` / `test_codex_edit_delete.py` -- the sidebar growth rule; renaming a kind brings its entries, deleting one that holds entries is REFUSED with a count, a deleted note goes to trash
+  - `test_codex_migration.py` -- dry run writes nothing, idempotent, marker only on success, an interrupted run offers resume or restore
+  - `test_codex_routes.py` -- the HTTP surface, including that every refusal the router raises comes from the closed set of codes in `app/codex/errors.py`
+  - `test_codex_icon_keywords.py` -- TWO cross-language contracts, both read `lexicon.ts` from Python: every icon name the app can store is bundled, and every stop kind `scan.py` can send has words on screen
+  - `test_codex_mentions.py` -- an ambiguous mention NEVER silently binds (a bound mention pulls a Thread into AI context, so a wrong bind is invisible); the two things allowed to settle one
+  - `test_codex_snags.py` -- the structural checks, and the one deliberately NOT made: a value changing across the book is the feature, not a contradiction
+  - `test_codex_scan.py` -- the free pass; stops re-derived and never stored; a non-UTF-8 chapter skipped and named rather than taking the scan down
+  - `test_codex_findings.py` -- a run survives deleting `app.db`; staged-then-discarded comes back; applied and dismissed never do; staleness checked locally with no AI call
+  - `test_codex_context.py` -- the amended context rule, one test per obligation; pinned content never pruned and refused rather than truncated
+  - `test_codex_weaving_routes.py` -- scan / run ledger / brief end to end; a run id off the wire is not trusted as a path
+  - `test_world_rules.py` -- the Unwoven corpus: every unlock and crosslink resolves, a crosslink always leaves its domain, every answer lands somewhere the app understands
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
@@ -262,6 +280,13 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/audiobook/CastPanel.test.tsx` -- the workbench: help stays closed until asked, voices fold once a cast exists, Pro column only when connected, only this chapter's characters shown, a click lands on the buffer immediately, removal warns with real counts
   - `src/features/audiobook/StorageDialog.test.tsx` -- the delete screen: only free-to-rebuild categories pre-checked, losses stated on the row, the confirm repeats categories + size, cancelling deletes nothing, locked files surfaced
   - `src/features/audiobook/ExportPanel.test.tsx` -- retention after export: keep says nothing, ask shows the size, auto-delete acts and reports it, and only intermediate audio is ever removed
+  - **The Weave**:
+  - `src/features/codex/lexicon.test.ts` -- one vocabulary: every term has an icon, a line and a longer answer, keyed by the WIRE CODE the backend sends
+  - `src/features/codex/layout.test.ts` -- deterministic graph layout: adding a node never moves the others
+  - `src/features/codex/WeaveMap.test.tsx` / `WeaveList.test.tsx` -- scrubbing an anchor, spoiler mode hiding an unrevealed Tie's EDGE, and the list as a peer view rather than a degraded one
+  - `src/features/codex/WeaveNav.test.tsx` -- the sidebar: three groups always, sections grow, and a typo'd section can be renamed or removed (a fixed one offers no menu at all)
+  - `src/features/codex/GuideBody.test.tsx` / `customName.test.ts` -- the per-group guides, and the custom-name rules
+  - `src/features/codex/WeavingPanel.test.tsx` -- the walkthrough: a real count rather than an estimate, every stop shows its evidence and can say why, four DIFFERENT ways to answer, and the one-click action creates an EMPTY entry that is immediately Frayed
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands
@@ -343,7 +368,8 @@ Storythread Studio uses a **three-layer local architecture**. No cloud. No sync.
 Two storage systems work together:
 
 - **Markdown files** -- the permanent source of truth. Chapters, profiles, notes, and summaries all live as `.md` files in the project folder. These are human-readable and can be backed up or published to GitHub as-is.
-- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. Today it holds exactly one table of Writing Progress events (`progress_event`); profiles are parsed from Markdown on every request and settings live in `~/.storythread/settings.json`, NOT in this database. Anything stored here must be rebuildable from Markdown.
+- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. It holds Writing Progress events (`progress_event`) and, on `feature/the-weave`, the Weave's graph index (`codex_entity` / `codex_alias` / `codex_tie` / `codex_fact` / `codex_mention` / `codex_meta`). Settings live in `~/.storythread/settings.json`, NOT in this database. Anything stored here must be rebuildable from Markdown.
+- **The ONE exception under `.storythread/`**: `weave/runs/<run-id>.json` holds what the writer answered during a Weaving session (applied / deferred / retired / muted). That is not derivable from anything, so it is deliberately not in `app.db` -- deleting the cache must never cost the writer answers they already gave.
 
 Think of Markdown as the filing cabinet and SQLite as the index cards on your desk -- the cabinet is what matters; the index cards just make lookup faster.
 
@@ -403,7 +429,8 @@ The app supports three content modes: `general`, `mature`, `explicit`. The proje
 - **Manual save only** -- no autosave. Unsaved changes show a visual indicator. Confirm before closing.
 - **One chapter open at a time** in the editor.
 - **Session-only undo/redo** -- no archival draft history for prose in MVP.
-- **Explicit context attachment** -- AI never has implicit access to the full project. The writer attaches profiles and summaries deliberately as context chips.
+- **Explicitly inspectable and controllable context** -- AI may automatically receive story context relevant to the current point in the story, but the writer must be able to inspect what will be sent, remove individual Threads, exclude categories, and turn automatic Weave context off entirely. **No context is transmitted until the writer initiates an AI action.**
+  - This AMENDS the original rule ("explicit context attachment; AI never has implicit project access"), which the Weave makes untrue -- the app now assembles a brief on the writer's behalf. What is non-negotiable is that they can see it, cut it, and switch it off. Enforced in `backend/app/codex/context.py`; pinned by `backend/tests/test_codex_context.py`.
 - **AI output reviewed before use** -- results show in side panel. Applied by the writer via copy/paste. No auto-apply.
 
 ---

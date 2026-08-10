@@ -47,7 +47,19 @@ A third thing that is *not* a process: `espeak-ng` ships inside the worker's env
 Two storage systems work together:
 
 - **Markdown files** are the permanent source of truth. Chapters, profiles, notes, and summaries live as `.md` files in the project folder. They are human-readable and can be version-controlled or backed up as plain text.
-- **SQLite** (`<project>/.storythread/app.db`) is a fast local cache. It stores parsed profile data, app settings, and the model registry cache. The cache can be rebuilt from Markdown if it is corrupted or deleted.
+- **SQLite** (`<project>/.storythread/app.db`) is a fast local cache. It holds the writing-progress log, the model registry cache, and the Weave's graph index (Threads, Ties, facts and mentions). Every row in it is derivable from Markdown, and deleting the file rebuilds it. It does **not** hold app settings -- those live in `~/.storythread/settings.json`.
+- **Weaving sessions** (`<project>/.storythread/weave/runs/<run-id>.json`) are the one thing under `.storythread/` that is **not** a cache. They record what the writer answered -- applied, deferred, retired, muted -- which is not derivable from anything, and deleting `app.db` must never lose it. Written atomically (tmp + `os.replace`), the same pattern `settings_store` and `structure_store` use.
+
+### The Weave's index, and why it can never serve stale data
+
+"An index failure must never block a save" is right on its own and creates a worse
+bug on its own: the Markdown write succeeds, the index write fails, and the graph
+then answers questions with stale information, confidently. So any write that
+fails to update the index sets `codex_meta.dirty`, and **no read is served while
+that flag is set** -- the next reader rebuilds first. A second mechanism catches
+what no flag could: `indexed_source_revision` fingerprints the `codex/` folder, so
+an out-of-band edit (the writer opening a Thread in another editor, or restoring a
+backup) is detected on the next read whatever the flag says.
 - **SQLite, app-level** (`~/.storythread/names.db`) holds the Name Generator's pools (20 cultures x 5 eras of given names + surnames), seeded at backend startup from JSON shipped inside the app (`backend/app/data/names/`, bundled into the frozen sidecar via `backend.spec` datas). A version stamp triggers reseeding on app updates; deleting the file rebuilds it. Served by `GET /api/names/*`.
 
 Markdown is the filing cabinet; SQLite is the index card on the desk.
@@ -82,13 +94,53 @@ MyNovel/
     scenes/<chapter-stem>/         per-scene summaries (+ optional ## Beats section)
       scene-01.md
       scene-02.md
+  codex/                           the Weave: one linked, time-aware world model
+    types.json                     which kinds of thing this world has, and which
+                                   connections are meaningful between them
+    characters/  relationships/  locations/  lore/
+    factions/  religions/  governments/  deities/  creatures/  cultures/
+    objects/  concepts/  events/
   exports/                         full-manuscript and dated snapshots
   .storythread/                    app cache; safe to delete and rebuild
     app.db
     ui-state.json                  per-book remembered UI state (sidebar collapse etc.)
+    weave/runs/<run-id>.json       Weaving sessions -- NOT a cache, see below
     cache/
     logs/
 ```
+
+### The Weave (`codex/`)
+
+A Thread is one entry -- a character, a place, a faction, an idea -- and it is an
+ordinary Markdown file, so copying the project folder takes the whole world model
+with it. What makes it more than a folder of profiles is that a Thread carries a
+**Run**: a list of facts, each anchored to a point in the story, so the app can
+answer "who was she in chapter seven?" rather than describing one unchanging
+person from page one to the last page.
+
+Three switches sit on every fact and every Tie, and they answer different
+questions:
+
+| Switch | Question |
+|---|---|
+| `frame` | Whose truth is this? `truth`, or an entity id for something a character believes |
+| `revealed_at` | When does the READER learn it? Anything later than the point being written is a spoiler |
+| `ai_scope` | May AI see it at all? `never` / `on-request` / `always` |
+
+Frames are stored as **entity ids, never names**, so renaming a character cannot
+invalidate the epistemic state of the book. The trailing `# Garrick Vale` comment
+beside an id is regenerated on save and carries no authority.
+
+**Anchors** are `c-<chapter id>` or `c-<chapter id>/s-<scene id>`. Ordinals are
+computed on demand and never stored -- the ordering authority stays
+`structure_store.ordered_chapter_filenames()`, so inserting a prologue does not
+silently move every fact in the book one chapter later.
+
+**`types.json` is writer-owned data, not a cache.** An invalid one is reported and
+left byte-for-byte alone, and the Weave opens read-only until it is fixed. This is
+the deliberate OPPOSITE of `structure.json`, which is treated as absent when
+corrupt -- and both are right for their file, because structure.json is derivable
+from the folder and types.json is not.
 
 ### Audiobook workspace layout
 
@@ -326,6 +378,58 @@ POST   /replace                (snapshots touched files first)
 POST   /restore                (undo from the most recent snapshot)
 ```
 
+### Codex (the Weave) — `/api/codex`
+
+Writers see "the Weave"; the code says "codex". Every refusal on this router
+travels as `{code, message, detail}` with a code from a closed set
+(`app/codex/errors.py`), so the frontend branches on a stable identifier rather
+than on message text.
+
+```
+The world
+GET    /types                  the type registry + Tie vocabulary (validated, never repaired)
+GET    /sections               the sidebar tree: what to show, what can be added
+POST   /type  /type/show  /note        add a kind, reveal a shipped kind, add a note
+PATCH  /section                rename a kind or a note (entries move with it)
+DELETE /section                remove one (a kind holding entries is REFUSED with a count)
+GET    /health                 index freshness, migration state, registry validity
+POST   /reindex
+
+Threads and Ties
+GET    /list  /entity  /ties
+POST   /entity  /thread/new    save; create an empty Thread from a name
+DELETE /entity
+POST   /tie                    DELETE /tie
+POST   /fact                   PATCH /fact   DELETE /fact
+
+Time
+GET    /anchors                chapters + scenes with ids, in reading order
+GET    /resolve                a Thread AS OF an anchor
+GET    /graph                  nodes + edges at an anchor, spoiler-aware
+
+Weaving
+POST   /scan                   the free deterministic pass -- no role, no model, no cost
+POST   /context                assembles the brief and RETURNS it; sends nothing
+GET    /runs   POST /run   GET /run   POST /run/answer
+
+Migration
+POST   /migrate                dry_run DEFAULTS TO TRUE
+POST   /migrate/restore
+```
+
+Two properties worth knowing before reading the code:
+
+- **`/scan` is free and always runs first.** It compares the manuscript against
+  the Weave using only arithmetic, so the walkthrough can quote a real count
+  before offering anything that spends. Its findings are **never stored** -- they
+  are re-derived from source and destination state every run, so a Thread that
+  gets its Overview filled in stops being Frayed because the condition ended, not
+  because a record says it was handled.
+- **`/context` transmits nothing.** It builds the brief and hands it back so the
+  writer can inspect it, remove Threads from it, exclude categories, or turn it
+  off entirely. A writer-initiated action does the sending, later and elsewhere.
+  See the context rule in `docs/product-scope.md`.
+
 ### Export — `/api/export`
 ```
 POST   /full-manuscript        (markdown / txt / docx / epub; optional appendix flags)
@@ -397,7 +501,8 @@ Adding a new browser-style runtime requires updating this allowlist.
 | User-authored prose, profiles, notes | Markdown files in the project folder |
 | Generated AI summaries, examples | Designated Markdown fields only |
 | App settings (API key, model picks, allowlists) | `~/.storythread/settings.json` |
-| Parsed profile cache, model registry | Per-project `.storythread/app.db` |
+| Weave graph index, progress log, model registry | Per-project `.storythread/app.db` (rebuildable) |
+| Weaving answers (applied / deferred / retired / muted) | `.storythread/weave/runs/*.json` -- NOT rebuildable, never in app.db |
 | Project state (current chapter, scroll, etc.) | In-memory only; no autosave |
 
 ## AI write boundary
