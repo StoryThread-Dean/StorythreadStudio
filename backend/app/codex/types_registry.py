@@ -586,6 +586,47 @@ def add_type(
     return registry
 
 
+def show_type(project_path: str, type_id: str) -> dict:
+    """
+    Start showing a kind that already exists but is not on screen.
+
+    This is what "+ Add New > Faction" does. Faction is a kind the Weave
+    ships with -- picking it is not CREATING anything, it is saying "I want
+    this section in my sidebar". Routing that through add_type would refuse
+    it as a duplicate, which is technically true and completely unhelpful.
+
+    Setting default_section means "show even while empty", which is exactly
+    what a writer who just asked for the section expects: it appears, and
+    they can put the first entry in it.
+    """
+    registry = seed_registry(project_path)
+    entry = type_by_id(registry, type_id)
+    if entry is None:
+        raise TypesError(f"This world has no kind called {type_id!r}.", "id")
+    entry["default_section"] = True
+    _write_registry(project_path, registry)
+    return registry
+
+
+def hide_type(project_path: str, type_id: str) -> dict:
+    """
+    Stop showing an empty section.
+
+    The way back out. A writer who added Religion and never used it should
+    be able to tidy it away without deleting anything -- and a section that
+    HOLDS something is not hidden by this, because the rule is "appears when
+    it holds something OR is a default" and only the second half is being
+    turned off.
+    """
+    registry = seed_registry(project_path)
+    entry = type_by_id(registry, type_id)
+    if entry is None:
+        raise TypesError(f"This world has no kind called {type_id!r}.", "id")
+    entry["default_section"] = False
+    _write_registry(project_path, registry)
+    return registry
+
+
 def set_type_group(project_path: str, type_id: str, group: str) -> dict:
     """Move a section to a different part of the sidebar. A writer whose
     world puts Factions with the people should be able to say so."""

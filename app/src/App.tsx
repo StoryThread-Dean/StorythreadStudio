@@ -27,6 +27,7 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 // The Weave: a self-contained island under features/codex/, opened from the
 // sidebar. This file only knows how to show it.
 import { WeaveScreen } from "./features/codex/WeaveScreen";
+import { WeaveNav } from "./features/codex/WeaveNav";
 import { OutlinePlanner } from "./screens/OutlinePlanner";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
@@ -55,7 +56,9 @@ import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
 import { NavSection } from "./components/sidebar/NavSection";
-import { NavItem } from "./components/sidebar/NavItem";
+// NavItem is no longer used here: the Notes and Profiles lists it built are
+// now the Weave's own tree (WeaveNav). The component itself stays -- the
+// chapter rows still use it.
 import { ChapterNavRow } from "./components/sidebar/ChapterNavRow";
 import { ActGroup } from "./components/sidebar/ActGroup";
 import { GlobalSearchModal } from "./components/GlobalSearchModal";
@@ -123,6 +126,10 @@ function App() {
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
     | "outline_planner" | "weave"
   >("editor");
+  // Which Weave section the sidebar shows as active. Kept here rather than
+  // inside WeaveNav because opening a section changes the VIEW, and the view
+  // lives in this file.
+  const [weaveSection, setWeaveSection] = useState<string | null>(null);
   // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
   // when no writing project is open. Not part of currentView because it
   // never coexists with the editor layout.
@@ -2371,42 +2378,39 @@ function App() {
             })()}
           </NavSection>
 
-          {/* Notes and Profiles are collapsible; their collapsed state is
-              remembered PER BOOK (useProjectUiState) so a writer who folds
-              Profiles in one project finds it folded there forever after --
-              across restarts and app updates -- while other books keep the
-              default expanded layout. */}
-          <NavSection label="Notes"
-            collapsed={projectUi.uiState.notesCollapsed ?? false}
-            onToggle={() => projectUi.update({
-              notesCollapsed: !(projectUi.uiState.notesCollapsed ?? false),
-            })}>
-            <NavItem label="Outline"     hint="Story structure, targets, and plot beats"
-              active={currentView === "outline_planner"}
-              onClick={() => setCurrentView("outline_planner")} />
-            <NavItem label="Style Guide" hint="Rules for tone, voice, and punctuation"
-              active={currentView === "notes" && currentNote?.filename === "style-guide.md"}
-              onClick={() => loadNote("style-guide.md", "Style Guide", currentProject)} />
-            <NavItem label="The Weave"
-              hint="Your whole world, and when each thing became true"
-              active={currentView === "weave"}
-              onClick={() => setCurrentView("weave")} />
-          </NavSection>
+          {/* The Weave replaces the old flat Notes and Profiles sections.
+              Both are now GROUPS inside it, alongside Other, and each grows
+              as the writer needs it rather than listing every possibility
+              up front. The tree itself is built by the backend from one
+              rule -- a section appears when it holds something, or when it
+              is a default -- so this file does not decide what is in it.
 
-          <NavSection label="Profiles"
-            collapsed={projectUi.uiState.profilesCollapsed ?? false}
-            onToggle={() => projectUi.update({
-              profilesCollapsed: !(projectUi.uiState.profilesCollapsed ?? false),
-            })}>
-            <NavItem label="Characters"    hint="Character profiles and trait blocks"
-              onClick={() => { setProfileType("character");    setCurrentView("profiles"); }} />
-            <NavItem label="Relationships" hint="Relationship profiles and dynamic notes"
-              onClick={() => { setProfileType("relationship"); setCurrentView("profiles"); }} />
-            <NavItem label="Locations"     hint="Location descriptions and atmosphere notes"
-              onClick={() => { setProfileType("location");     setCurrentView("profiles"); }} />
-            <NavItem label="Lore"          hint="World-building rules and history entries"
-              onClick={() => { setProfileType("lore");         setCurrentView("profiles"); }} />
-          </NavSection>
+              Sections still open the screens they always did: a note goes
+              to the editor, a profile kind to the Profile Builder. Only the
+              way a writer FINDS them has changed. */}
+          <WeaveNav
+            projectPath={currentProject.root_path}
+            activeSection={weaveSection}
+            onOpenWeave={() => setCurrentView("weave")}
+            onOpenSection={section => {
+              setWeaveSection(section.id);
+              if (section.kind === "note") {
+                if (section.id === "outline") { setCurrentView("outline_planner"); return; }
+                loadNote(section.filename ?? `${section.id}.md`,
+                         section.label, currentProject);
+                return;
+              }
+              // A kind of entry. The Profile Builder still handles the four
+              // it was built for; anything else is a Weave Thread and opens
+              // there until the Thread editor lands.
+              if (["character", "relationship", "location", "lore"].includes(section.id)) {
+                setProfileType(section.id as "character" | "relationship" | "location" | "lore");
+                setCurrentView("profiles");
+              } else {
+                setCurrentView("weave");
+              }
+            }}
+          />
 
         </nav>
 

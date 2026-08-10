@@ -42,9 +42,11 @@ from app.codex.types_registry import (
     TypesError,
     add_type,
     folder_for_type,
+    hide_type,
     load_registry,
     relation_allows,
     set_type_group,
+    show_type,
     type_by_id,
 )
 from app.db import open_db
@@ -225,6 +227,34 @@ async def post_type(request: AddTypeRequest):
             "That kind could not be added.",
             str(exc),
         ) from exc
+    return build_sections(project_path, migration_state(project_path) == "done")
+
+
+class ShowTypeRequest(BaseModel):
+    project_path: str
+    id: str
+    show: bool = True
+
+
+@router.post("/type/show")
+async def post_show_type(request: ShowTypeRequest):
+    """
+    Start (or stop) showing a kind the Weave already knows.
+
+    "+ Add New > Faction" comes here, not to /type. Faction is a kind that
+    ships with the app -- picking it is not creating anything, it is asking
+    for the section. Sending it to /type would refuse it as a duplicate,
+    which is true and useless.
+    """
+    project_path = validate_project_path(request.project_path)
+    try:
+        if request.show:
+            show_type(project_path, request.id)
+        else:
+            hide_type(project_path, request.id)
+    except TypesError as exc:
+        raise CodexError("type_invalid", "That section could not be changed.",
+                         str(exc)) from exc
     return build_sections(project_path, migration_state(project_path) == "done")
 
 

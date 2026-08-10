@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 
 from app.codex.sections import build_sections, create_note
 from app.codex.types_registry import (
-    TypesError, add_type, default_registry, set_type_group,
+    TypesError, add_type, default_registry, hide_type, set_type_group, show_type,
 )
 from app.main import app
 
@@ -353,6 +353,61 @@ def test_an_unknown_group_is_refused(tmp_path):
 
 
 # ── Over HTTP ────────────────────────────────────────────────────────────────
+
+# ── Picking a preset SHOWS it, it does not create it ─────────────────────────
+
+def test_picking_a_shipped_kind_shows_its_section(tmp_path):
+    # "+ Add New > Faction" is not creating anything: Faction ships with the
+    # app and is simply not on screen. Routing this through add_type would
+    # refuse it as a duplicate, which is true and completely unhelpful.
+    folder = _project(tmp_path)
+    show_type(folder, "faction")
+    tree = build_sections(folder, converted=False)
+    assert "faction" in _sections(tree, "profiles")
+    assert "faction" not in _available_ids(tree)
+
+
+def test_a_shown_section_appears_even_though_it_is_empty(tmp_path):
+    # Which is the point -- the writer asked for it so they can put the
+    # first entry in.
+    folder = _project(tmp_path)
+    show_type(folder, "religion")
+    assert _sections(build_sections(folder, converted=False), "profiles")["religion"]["count"] == 0
+
+
+def test_an_unused_section_can_be_tidied_away_again(tmp_path):
+    folder = _project(tmp_path)
+    show_type(folder, "religion")
+    hide_type(folder, "religion")
+    tree = build_sections(folder, converted=False)
+    assert "religion" not in _sections(tree, "profiles")
+    assert "religion" in _available_ids(tree)
+
+
+def test_hiding_a_section_that_holds_something_does_not_hide_it(tmp_path):
+    # The rule is "appears when it holds something OR is a default". Turning
+    # off the second half must not hide entries the writer has written.
+    folder = _project(tmp_path, profiles=[("religions", ["the-thread"])])
+    hide_type(folder, "religion")
+    assert "religion" in _sections(build_sections(folder, converted=False), "profiles")
+
+
+def test_showing_a_kind_over_http(tmp_path):
+    folder = _project(tmp_path)
+    body = client.post("/api/codex/type/show", json={
+        "project_path": folder, "id": "faction", "show": True,
+    }).json()
+    profiles = next(g for g in body["groups"] if g["id"] == "profiles")
+    assert "faction" in {s["id"] for s in profiles["sections"]}
+
+
+def test_showing_a_kind_that_does_not_exist_is_refused(tmp_path):
+    folder = _project(tmp_path)
+    response = client.post("/api/codex/type/show", json={
+        "project_path": folder, "id": "dragon", "show": True,
+    })
+    assert response.json()["detail"]["code"] == "type_invalid"
+
 
 # ── The Notes half of "+ Add New" ────────────────────────────────────────────
 # Profiles and Other add a KIND of entry. Notes adds a DOCUMENT, because

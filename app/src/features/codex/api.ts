@@ -113,6 +113,43 @@ export interface TypeRegistry {
   }[];
 }
 
+/** One row in the sidebar: a kind of entry, or a note document. */
+export interface SectionEntry {
+  kind: "type" | "note";
+  id: string;
+  label: string;
+  icon: string;
+  group: string;
+  /** How much is in it. 0 means it is showing because it is a default. */
+  count: number;
+  default_section: boolean;
+  filename?: string;
+}
+
+/** Something not on screen yet, offered under "+ Add New". */
+export interface AvailableEntry {
+  kind: "type" | "note";
+  id: string;
+  label: string;
+  icon: string;
+  group: string;
+  filename?: string;
+}
+
+export interface SectionGroup {
+  id: string;
+  label: string;
+  sections: SectionEntry[];
+  /** What "+ Add New" offers from inside this group. */
+  available: AvailableEntry[];
+}
+
+export interface SectionsTree {
+  groups: SectionGroup[];
+  available: AvailableEntry[];
+  converted: boolean;
+}
+
 // ── Calls ────────────────────────────────────────────────────────────────────
 
 const q = (params: Record<string, string | boolean | undefined>) =>
@@ -169,6 +206,48 @@ export function resolveThread(
     hide_spoilers: options.hideSpoilers !== false,
     include_on_request: options.includeOnRequest === true,
   })}`);
+}
+
+export function fetchSections(projectPath: string): Promise<SectionsTree> {
+  return request(`/sections?${q({ project_path: projectPath })}`);
+}
+
+/** Add a KIND of entry -- a Government, a Bloodline. Profiles and Other. */
+export function addType(projectPath: string, label: string, group: string):
+    Promise<SectionsTree> {
+  return request("/type", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    // id is derived from the label server-side, so there is no second route
+    // in that could carry a digit or a symbol past the name rule.
+    body: JSON.stringify({ project_path: projectPath, id: "", label, group }),
+  });
+}
+
+/**
+ * Start showing a kind the Weave already knows.
+ *
+ * What "+ Add New > Faction" does. Faction is not being CREATED -- it ships
+ * with the app and is simply not on screen yet, so picking it asks for the
+ * section. Sending that to addType would be refused as a duplicate.
+ */
+export function showType(projectPath: string, id: string, show = true):
+    Promise<SectionsTree> {
+  return request("/type/show", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, id, show }),
+  });
+}
+
+/** Add a DOCUMENT -- "Dungeon Rules". Notes only, because that is what a
+ *  note is. */
+export function addNote(projectPath: string, label: string): Promise<SectionsTree> {
+  return request("/note", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, label }),
+  });
 }
 
 export function reindex(projectPath: string): Promise<{ indexed: number }> {
