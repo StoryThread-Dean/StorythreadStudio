@@ -978,3 +978,75 @@ describe("the question starts from something the writer recognises", () => {
     expect(screen.queryByTestId("standing-on")).toBeNull();
   });
 });
+
+
+describe("a pair the prose keeps putting together", () => {
+  // The other half of the connection problem. Loose thread asks how ONE entry
+  // relates to the world. Untied points at TWO that keep sharing a scene and
+  // notices that nothing records why -- which is the connection the writer
+  // most likely meant to make and never got round to.
+
+  const pair = stop({
+    kind: "untied", key: "untied|e-1|e-2", entity_id: "e-1",
+    title: "How are Alexandra Langford and Dean connected?",
+    quote: "Alexandra found Dean at the gate.",
+    why: "Your writing puts them in the same scene 7 times, and nothing in the Weave records any connection between them. What that connection IS is yours to say -- sharing a scene could mean anything from family to a feud.",
+    detail: {
+      a: { entity_id: "e-1", name: "Alexandra Langford", type: "character",
+           filename: "alexandra.md" },
+      b: { entity_id: "e-2", name: "Dean", type: "character",
+           filename: "dean.md" },
+      scenes: 7,
+    },
+  });
+
+  it("names both ends in the question", async () => {
+    mockApi({ stops: [pair] });
+    await start();
+    expect(screen.getByText(/How are Alexandra Langford and Dean connected/))
+      .toBeTruthy();
+  });
+
+  it("shows both ends with their own kind icons", async () => {
+    mockApi({ stops: [pair] });
+    await start();
+    const on = screen.getByTestId("standing-on");
+    expect(on.textContent).toContain("Alexandra Langford");
+    expect(on.textContent).toContain("Dean");
+  });
+
+  it("asks how they connect, not whether they do", async () => {
+    // The prose already settled whether. Only the kind of connection is open,
+    // and that is the writer's to name.
+    mockApi({ stops: [pair] });
+    await start();
+    expect(screen.getByRole("button", { name: /Say how they connect/ }))
+      .toBeTruthy();
+  });
+
+  it("shows the count and the sentence it came from", async () => {
+    mockApi({ stops: [pair] });
+    await start();
+    await userEvent.click(screen.getByText("Why am I seeing this?"));
+    expect(screen.getByText(/same scene 7 times/)).toBeTruthy();
+    expect(screen.getByText(/Alexandra found Dean at the gate/)).toBeTruthy();
+  });
+
+  it("answers it in the walk, without opening anything else", async () => {
+    mockApi({ stops: [pair] });
+    const onOpenThread = vi.fn();
+    await start({ onOpenThread });
+    await userEvent.click(screen.getByRole("button", { name: /Say how they connect/ }));
+    expect(await screen.findByRole("dialog",
+      { name: /Connections for Alexandra Langford/ })).toBeTruthy();
+    expect(onOpenThread).not.toHaveBeenCalled();
+  });
+
+  it("opens from the FIRST end, so the second is the one to choose", async () => {
+    mockApi({ stops: [pair] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Say how they connect/ }));
+    expect(await screen.findByRole("heading",
+      { name: /How is Alexandra Langford connected/ })).toBeTruthy();
+  });
+});

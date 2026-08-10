@@ -95,13 +95,23 @@ interface TieEditorProps {
   thread: GraphNode;
   /** Everything else, to connect it to. */
   candidates: GraphNode[];
+  /**
+   * Who the prose keeps putting in the same scene as this entry, strongest
+   * first, straight from the free scan.
+   *
+   * Reported after the first version offered the whole world alphabetically:
+   * "3 profiles and 1 location appear in a list." Asking the question is only
+   * half the job -- the likely answers have to be within reach, and each one
+   * has to say why it is near the top, or it is a guess with better manners.
+   */
+  likely?: { entity_id: string; scenes: number }[];
   onClose: () => void;
   /** Re-read the world, so the map redraws with the new edge. */
   onChanged: () => void;
 }
 
 export function TieEditor({
-  projectPath, thread, candidates, onClose, onChanged,
+  projectPath, thread, candidates, likely, onClose, onChanged,
 }: TieEditorProps) {
   const [ties, setTies] = useState<Tie[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +183,13 @@ export function TieEditor({
     return () => { cancelled = true; };
   }, [projectPath, thread.type, other]);
 
+  /** entity_id -> shared scene count, for ordering and for the row label. */
+  const sharedWith = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of likely ?? []) map.set(row.entity_id, row.scenes);
+    return map;
+  }, [likely]);
+
   const reachable = useMemo(() => {
     const term = query.trim().toLowerCase();
     const connected = new Set((ties ?? []).map(t => t.other_id));
@@ -188,9 +205,15 @@ export function TieEditor({
         // Things not yet connected first: they are what the writer came to do.
         const ca = connected.has(a.entity_id) ? 1 : 0;
         const cb = connected.has(b.entity_id) ? 1 : 0;
-        return ca - cb || nodeLabel(a).localeCompare(nodeLabel(b));
+        if (ca !== cb) return ca - cb;
+        // Then whoever the story keeps putting in the room, most shared
+        // scenes first. This is the whole reason the scan counts them.
+        const sa = sharedWith.get(a.entity_id) ?? 0;
+        const sb = sharedWith.get(b.entity_id) ?? 0;
+        if (sa !== sb) return sb - sa;
+        return nodeLabel(a).localeCompare(nodeLabel(b));
       });
-  }, [candidates, query, thread.entity_id, ties]);
+  }, [candidates, query, thread.entity_id, ties, sharedWith]);
 
   /**
    * Make the other end, then treat it as chosen.
@@ -501,6 +524,15 @@ export function TieEditor({
                             <span className="min-w-0 flex-1 truncate">
                               {nodeLabel(node)}
                             </span>
+                            {/* The evidence, on the row. A suggestion that
+                                cannot show its reasoning is just a guess. */}
+                            {sharedWith.has(node.entity_id) && (
+                              <span className="shrink-0 text-[10px] text-emerald-300">
+                                {sharedWith.get(node.entity_id) === 1
+                                  ? "1 scene together"
+                                  : `${sharedWith.get(node.entity_id)} scenes together`}
+                              </span>
+                            )}
                             <span className="shrink-0 text-[10px] text-faint">
                               {lex.term}
                             </span>

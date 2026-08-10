@@ -113,7 +113,8 @@ def _extract_title(text: str) -> str | None:
     return None
 
 
-def split_into_scenes(chapter_text: str) -> list[str]:
+def split_into_scenes(chapter_text: str, *,
+                      drop_preamble: bool = True) -> list[str]:
     """
     Split chapter Markdown into a list of scene body strings (no metadata).
 
@@ -121,10 +122,12 @@ def split_into_scenes(chapter_text: str) -> list[str]:
     that only need the raw text blocks. New code should prefer the _with_meta
     variant, which returns title, offsets, and index.
     """
-    return [s.text for s in split_into_scenes_with_meta(chapter_text)]
+    return [s.text for s in split_into_scenes_with_meta(
+        chapter_text, drop_preamble=drop_preamble)]
 
 
-def split_into_scenes_with_meta(chapter_text: str) -> list[Scene]:
+def split_into_scenes_with_meta(chapter_text: str, *,
+                                drop_preamble: bool = True) -> list[Scene]:
     """
     Split chapter Markdown into a list of Scene objects with metadata.
 
@@ -151,6 +154,14 @@ def split_into_scenes_with_meta(chapter_text: str) -> list[Scene]:
     before the first HR is short (under _PREAMBLE_WORD_LIMIT words), that
     block is treated as a chapter header / epigraph, not a scene. See the
     comment on _PREAMBLE_WORD_LIMIT above for the reasoning.
+
+    `drop_preamble=False` turns that rule off, and there is a real caller who
+    wants it off. The rule is about what is worth SUMMARISING -- an epigraph is
+    not a scene and summarising it wastes a call. The Weave's co-occurrence
+    pass asks a different question: which entries are named in the same scene.
+    There, dropping a short opening block loses real prose, and losing prose
+    silently means two characters who shared a scene quietly do not. Same text,
+    two honest answers, so the caller says which one it needs.
     """
     lines = chapter_text.splitlines(keepends=True)
     # We need character offsets, not just line indices. Precompute the
@@ -208,7 +219,8 @@ def split_into_scenes_with_meta(chapter_text: str) -> list[Scene]:
         # always a chapter title / epigraph pairing rather than a scene.
         # Drop it so the scene numbering starts at the first actual scene.
         if (
-            span_idx == 0
+            drop_preamble
+            and span_idx == 0
             and len(spans) > 1
             and _word_count(stripped) < _PREAMBLE_WORD_LIMIT
         ):

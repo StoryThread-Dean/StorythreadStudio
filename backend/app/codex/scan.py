@@ -38,6 +38,11 @@ from app.codex.mentions import (
 )
 from app.codex.snags import Snag, check_facts, check_ties
 from app.codex.threads import is_placeholder
+from app.codex.together import (
+    MIN_SHARED_SCENES,
+    Together,
+    shared_scenes,
+)
 from app.codex.visibility import HIDDEN_FUTURE, Lens, thread_visibility
 from app.codex.world_rules import DOMAINS, open_questions
 from app.utils.structure_store import ordered_chapter_ids
@@ -55,13 +60,14 @@ STOP_UNSPUN = "unspun"              # a name in the prose with no Thread
 STOP_FRAYED = "frayed"              # a Thread too thin to be useful
 STOP_UNPLACED = "unplaced"          # a fact with no point in the story
 STOP_LOOSE = "loose_thread"         # a Thread nothing connects to
+STOP_UNTIED = "untied"              # two Threads the prose keeps putting together
 STOP_SNAG = "snag"                  # two facts that disagree
 STOP_EARLY = "early_mention"        # named before the reader is meant to know
 STOP_UNWOVEN = "unwoven"            # ground rules not worked out yet
 STOP_PINNED = "pinned"              # the writer marked this by hand
 
 STOP_KINDS = (STOP_UNSPUN, STOP_FRAYED, STOP_UNPLACED, STOP_LOOSE,
-              STOP_SNAG, STOP_EARLY, STOP_UNWOVEN, STOP_PINNED)
+              STOP_UNTIED, STOP_SNAG, STOP_EARLY, STOP_UNWOVEN, STOP_PINNED)
 
 # How much of this the writer wants in one sitting. The scan is the same
 # work either way; depth decides what survives into the walk.
@@ -73,6 +79,15 @@ DEPTH_QUICK = "quick"
 # the writer to invent anything -- just the things that are already wrong.
 _QUICK_KINDS = frozenset({STOP_SNAG, STOP_LOOSE, STOP_FRAYED, STOP_EARLY,
                           STOP_UNPLACED, STOP_PINNED})
+
+# How many likely answers a connection question offers up front.
+#
+# The list behind the question is every entry in the book, which for a real
+# manuscript is hundreds and, in the writer's words about the first version,
+# meant "3 profiles and 1 location appear in a list" with no sense of which
+# mattered. Six is about as many as reads as a suggestion rather than a menu.
+# The full list stays one click away; this is the shortcut, not a filter.
+_LIKELY_ANSWERS = 6
 
 _HEADING_RE = re.compile(r"^#{1,6} .*$", re.MULTILINE)
 _MARKER_RE = re.compile(r"\[[^\]\n]{1,40}\]")
@@ -203,10 +218,16 @@ def scan(
     # the mentions themselves are already fine.
     chapters, result.unreadable = _read_manuscript(project_path, request)
     mentioned = _mention_counts(chapters, threads)
+    # Who the prose keeps putting in the same scene. Computed once here because
+    # two separate things want it: the Untied stop, and the short list of likely
+    # answers a connection question offers.
+    together = shared_scenes(chapters, threads)
 
     result.stops.extend(_thread_stops(wanted, registry, index, request,
                                       label_for=label_for,
-                                      mentioned=mentioned))
+                                      mentioned=mentioned,
+                                      together=together))
+    result.stops.extend(_untied_stops(together, threads, request))
     result.stops.extend(_manuscript_stops(project_path, chapters, threads,
                                           request, index))
     result.stops.extend(_unwoven_stops(threads, request))
@@ -323,10 +344,13 @@ def _unwoven_stops(threads: list[dict], request: ScanRequest) -> list[Stop]:
 
 def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                   request: ScanRequest, *, label_for=None,
-                  mentioned: dict[str, int] | None = None) -> list[Stop]:
+                  mentioned: dict[str, int] | None = None,
+                  together: list[Together] | None = None) -> list[Stop]:
     """Everything answerable from the Weave alone -- no manuscript needed."""
     stops: list[Stop] = []
     mentioned = mentioned or {}
+    together = together or []
+    names = {str(t.get("entity_id")): t for t in threads if t.get("entity_id")}
     type_index = {t.get("id"): t for t in registry.get("types", [])}
 
     # A Thread is connected if it owns a Tie OR is the target of one. Only one
@@ -408,7 +432,12 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                        "how it relates to the REST of your world: who it knows, "
                        "where it belongs, what it serves or worships. Nothing "
                        "records any of that yet."),
-                detail={**where, "mentioned": times},
+                detail={**where, "mentioned": times,
+                        # THE SHORT LIST, so the question is answerable rather
+                        # than merely askable. Every entry in the book is still
+                        # one click away; these are the ones the prose has
+                        # already put in the room with this one.
+                        "likely": _likely_answers(entity_id, together, names)},
             ))
 
         if request.wants(STOP_SNAG) or request.wants(STOP_UNPLACED):
@@ -418,6 +447,105 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                                 index, label_for=label_for)
             stops.extend(_snag_stops(found, where, request))
 
+    return stops
+
+
+def _likely_answers(entity_id: str, together: list[Together],
+                    names: dict[str, dict]) -> list[dict]:
+    """
+    The entries this one shares most scenes with, strongest first.
+
+    No floor here, deliberately -- unlike the Untied stop, which speaks
+    unprompted and therefore has to earn it. By the time this list is read the
+    writer has already been asked the question, and one shared scene is a
+    genuinely useful thing to be shown when the alternative is an alphabetical
+    list of four hundred entries.
+
+    Each entry says how many scenes it shares, because a suggestion that cannot
+    show its reasoning is just a guess with better manners.
+    """
+    likely: list[dict] = []
+    for pairing in together:
+        if not pairing.touches(entity_id):
+            continue
+        other_id = pairing.other(entity_id)
+        other = names.get(other_id)
+        if not other:
+            continue
+        likely.append({
+            "entity_id": other_id,
+            "name": other.get("name") or "(unnamed)",
+            "type": str(other.get("type") or ""),
+            "scenes": pairing.scenes,
+        })
+        if len(likely) >= _LIKELY_ANSWERS:
+            break
+    return likely
+
+
+def _untied_stops(together: list[Together], threads: list[dict],
+                  request: ScanRequest) -> list[Stop]:
+    """
+    Pairs the prose keeps putting in the same scene with nothing recorded.
+
+    THE FLOOR IS THE WHOLE DESIGN. One shared scene is two strangers passing on
+    a street, and a rule with no floor is exactly what produced 177 junk Unspun
+    entries and the verdict that it "makes this app look amateurish". So this
+    only speaks when the story has said it more than once.
+
+    It proposes a connection, never a KIND of connection. A knight and the
+    dragon he is hunting share a great many scenes; what that relationship IS
+    stays the writer's to name.
+    """
+    if not request.wants(STOP_UNTIED) or not together:
+        return []
+
+    names = {str(t.get("entity_id")): t for t in threads if t.get("entity_id")}
+
+    # Already tied in either direction, so there is nothing to propose. Ties
+    # are stored one way round only, which is why both ends go in.
+    tied: set[tuple[str, str]] = set()
+    for thread in threads:
+        src = str(thread.get("entity_id") or "")
+        for tie in thread.get("ties") or []:
+            dst = str(tie.get("target") or "")
+            if src and dst:
+                tied.add(tuple(sorted([src, dst])))
+
+    stops: list[Stop] = []
+    for pairing in together:
+        if pairing.scenes < MIN_SHARED_SCENES:
+            continue
+        if (pairing.a, pairing.b) in tied:
+            continue
+        a, b = names.get(pairing.a), names.get(pairing.b)
+        if not a or not b:
+            continue
+        a_name = a.get("name") or "(unnamed)"
+        b_name = b.get("name") or "(unnamed)"
+        stops.append(Stop(
+            kind=STOP_UNTIED,
+            entity_id=pairing.a,
+            key=_key(STOP_UNTIED, pairing.a, pairing.b),
+            chapter_id=pairing.first_chapter,
+            quote=pairing.quote,
+            evidence_hash=_hash(pairing.quote),
+            title=f"How are {a_name} and {b_name} connected?",
+            why=(f"Your writing puts them in the same scene "
+                 f"{pairing.scenes} times, and nothing in the Weave records "
+                 f"any connection between them. What that connection IS is "
+                 f"yours to say -- sharing a scene could mean anything from "
+                 f"family to a feud."),
+            detail={
+                "a": {"entity_id": pairing.a, "name": a_name,
+                      "type": str(a.get("type") or ""),
+                      "filename": str(a.get("filename") or "")},
+                "b": {"entity_id": pairing.b, "name": b_name,
+                      "type": str(b.get("type") or ""),
+                      "filename": str(b.get("filename") or "")},
+                "scenes": pairing.scenes,
+            },
+        ))
     return stops
 
 

@@ -16,6 +16,7 @@ import os
 
 from app.codex.scan import (
     DEPTH_QUICK, STOP_EARLY, STOP_FRAYED, STOP_LOOSE, STOP_SNAG, STOP_UNPLACED,
+    STOP_UNTIED,
     STOP_UNSPUN, ScanRequest, scan,
 )
 from app.utils.structure_store import ensure_chapter_ids
@@ -197,6 +198,179 @@ def test_counting_mentions_does_not_reread_the_manuscript(tmp_path, monkeypatch)
                                  "02.md": "# Two\nElara left.\n"})
     scan(folder, [_thread("e-1", "Elara")], REGISTRY)
     assert sorted(reads) == ["01.md", "02.md"]
+
+
+# ── Untied: the connection the prose keeps asserting ─────────────────────────
+#
+# The other half of the connection problem. Loose thread asks how ONE entry
+# relates to the world; Untied points at TWO the story keeps putting in the
+# same room and notices that nothing records why.
+#
+# It speaks unprompted, so it has to earn it. The Unspun pass already showed
+# what a rule with no floor does to a real manuscript -- 177 junk entries, and
+# "it is an annoying problem that makes this app look amateurish".
+
+def _crowd(tmp_path, times: int = 2):
+    chapters = {f"{i:02d}.md": f"# {i}\nElara found Garrick at the well.\n"
+                for i in range(1, times + 1)}
+    return _project(tmp_path, chapters)
+
+
+def test_two_shared_scenes_raise_a_connection_question(tmp_path):
+    folder = _crowd(tmp_path, 2)
+    result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
+                  REGISTRY)
+    stop = result.by_kind(STOP_UNTIED)[0]
+    assert stop.title == "How are Elara and Garrick connected?"
+
+
+def test_one_shared_scene_says_nothing(tmp_path):
+    # Two strangers pass on a street once. The floor is the whole design.
+    folder = _crowd(tmp_path, 1)
+    result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
+                  REGISTRY)
+    assert result.by_kind(STOP_UNTIED) == []
+
+
+def test_it_says_how_many_times_and_quotes_the_first(tmp_path):
+    # A proposal that cannot show its evidence is a guess with better manners.
+    folder = _crowd(tmp_path, 3)
+    stop = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
+                REGISTRY).by_kind(STOP_UNTIED)[0]
+    assert "same scene 3 times" in stop.why
+    assert stop.detail["scenes"] == 3
+    assert "Garrick at the well" in stop.quote
+    assert stop.chapter_id
+
+
+def test_it_does_not_name_the_KIND_of_connection(tmp_path):
+    # Sharing scenes is evidence of a relationship, not of its nature. A knight
+    # and the dragon he is hunting share a great many.
+    folder = _crowd(tmp_path, 4)
+    stop = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
+                REGISTRY).by_kind(STOP_UNTIED)[0]
+    assert "yours to say" in stop.why
+    assert "relation" not in stop.detail
+
+
+def test_a_pair_that_is_already_tied_is_not_proposed(tmp_path):
+    folder = _crowd(tmp_path, 5)
+    elara = _thread("e-1", "Elara", ties=[{"rel": "mentored_by", "target": "e-2"}])
+    result = scan(folder, [elara, _thread("e-2", "Garrick")], REGISTRY)
+    assert result.by_kind(STOP_UNTIED) == []
+
+
+def test_the_tie_counts_from_either_end(tmp_path):
+    # Ties are stored one way round only. Reading one direction would re-propose
+    # every connection the writer has already made.
+    folder = _crowd(tmp_path, 5)
+    garrick = _thread("e-2", "Garrick", ties=[{"rel": "mentor_of", "target": "e-1"}])
+    result = scan(folder, [_thread("e-1", "Elara"), garrick], REGISTRY)
+    assert result.by_kind(STOP_UNTIED) == []
+
+
+def test_both_ends_are_carried_so_the_walk_can_show_them(tmp_path):
+    folder = _crowd(tmp_path, 2)
+    stop = scan(folder, [_thread("e-1", "Elara"),
+                         _thread("e-2", "Garrick", type="location")],
+                REGISTRY).by_kind(STOP_UNTIED)[0]
+    assert stop.detail["a"]["name"] == "Elara"
+    assert stop.detail["b"]["name"] == "Garrick"
+    assert stop.detail["b"]["type"] == "location"
+
+
+def test_it_is_muteable_like_any_other_kind(tmp_path):
+    folder = _crowd(tmp_path, 4)
+    world = [_thread("e-1", "Elara"), _thread("e-2", "Garrick")]
+    result = scan(folder, world, REGISTRY,
+                  ScanRequest(muted_kinds={STOP_UNTIED}))
+    assert result.by_kind(STOP_UNTIED) == []
+
+
+def test_the_quick_pass_leaves_it_out(tmp_path):
+    # Quick = things that are already wrong. A connection not yet written down
+    # is unfinished, not broken, and a writer asking for problems only should
+    # not be handed world-building.
+    folder = _crowd(tmp_path, 6)
+    world = [_thread("e-1", "Elara"), _thread("e-2", "Garrick")]
+    result = scan(folder, world, REGISTRY, ScanRequest(depth=DEPTH_QUICK))
+    assert result.by_kind(STOP_UNTIED) == []
+
+
+def test_it_is_counted_like_every_other_kind(tmp_path):
+    folder = _crowd(tmp_path, 2)
+    result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
+                  REGISTRY)
+    assert result.counts[STOP_UNTIED] == len(result.by_kind(STOP_UNTIED))
+
+
+# ── The short list behind a connection question ──────────────────────────────
+#
+# Reported after the first Loose thread stop: "3 profiles and 1 location appear
+# in a list." Asking a question is only half of it; the answer has to be within
+# reach. The prose already knows who the likely answers are.
+
+def test_a_connection_question_offers_who_shares_scenes(tmp_path):
+    folder = _project(tmp_path, {
+        "01.md": "# One\nElara found Garrick at the well.\n",
+        "02.md": "# Two\nMira watched the road alone.\n",
+    })
+    result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick"),
+                           _thread("e-3", "Mira")], REGISTRY)
+    elara = [s for s in result.by_kind(STOP_LOOSE) if s.entity_id == "e-1"][0]
+    assert [c["name"] for c in elara.detail["likely"]] == ["Garrick"]
+
+
+def test_the_short_list_says_WHY_each_one_is_on_it(tmp_path):
+    folder = _project(tmp_path, {
+        "01.md": "# One\nElara found Garrick.\n",
+        "02.md": "# Two\nElara and Garrick argued.\n",
+    })
+    result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
+                  REGISTRY)
+    elara = [s for s in result.by_kind(STOP_LOOSE) if s.entity_id == "e-1"][0]
+    assert elara.detail["likely"][0]["scenes"] == 2
+
+
+def test_the_strongest_candidate_is_first(tmp_path):
+    folder = _project(tmp_path, {
+        "01.md": "# One\nElara and Mira spoke.\n",
+        "02.md": "# Two\nElara found Garrick.\n",
+        "03.md": "# Three\nElara found Garrick again.\n",
+    })
+    result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick"),
+                           _thread("e-3", "Mira")], REGISTRY)
+    elara = [s for s in result.by_kind(STOP_LOOSE) if s.entity_id == "e-1"][0]
+    assert [c["name"] for c in elara.detail["likely"]] == ["Garrick", "Mira"]
+
+
+def test_the_short_list_has_no_floor(tmp_path):
+    # Unlike the Untied stop. By the time this is read the writer has ALREADY
+    # been asked the question, and one shared scene beats an alphabetical list
+    # of four hundred entries.
+    folder = _project(tmp_path, {"01.md": "# One\nElara found Garrick.\n"})
+    result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
+                  REGISTRY)
+    elara = [s for s in result.by_kind(STOP_LOOSE) if s.entity_id == "e-1"][0]
+    assert len(elara.detail["likely"]) == 1
+
+
+def test_the_short_list_stays_short(tmp_path):
+    # A suggestion, not a menu. The full list is still one click away.
+    crowd = " ".join(f"Name{i}" for i in range(1, 12))
+    folder = _project(tmp_path, {"01.md": f"# One\nElara met {crowd}.\n"})
+    world = [_thread("e-1", "Elara")] + [
+        _thread(f"e-{i}", f"Name{i}") for i in range(1, 12)]
+    result = scan(folder, world, REGISTRY)
+    elara = [s for s in result.by_kind(STOP_LOOSE) if s.entity_id == "e-1"][0]
+    assert len(elara.detail["likely"]) == 6
+
+
+def test_a_name_the_prose_never_shares_a_scene_with_offers_nothing(tmp_path):
+    # An empty short list is an honest answer. The question still stands.
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    result = scan(folder, [_thread("e-1", "Elara")], REGISTRY)
+    assert result.by_kind(STOP_LOOSE)[0].detail["likely"] == []
 
 
 # ── Snags come through the scan ──────────────────────────────────────────────

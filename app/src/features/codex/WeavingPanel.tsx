@@ -79,6 +79,9 @@ const PRIMARY_ACTION: Record<string, string> = {
   // An empty stub is a different question -- see needsNaming.
   frayed_placeholder: "Say what this is",
   loose_thread: "Choose the connection",
+  // Both ends already exist and the prose keeps putting them together. The
+  // only open question is what the connection IS, which is the writer's.
+  untied: "Say how they connect",
   snag: "Open it and sort it out",
   unplaced: "Open it and place it",
   early_mention: "Open it",
@@ -195,11 +198,22 @@ function connectsHere(stop: Stop): boolean {
  * about it. Requested in exactly those terms: "Physically show the Character
  * profile Icon (the starting point) and then ask the question."
  */
-function standingOn(stop: Stop): { name: string; type: string } | null {
+function standingOn(stop: Stop): { name: string; type: string }[] {
+  // Untied is about a PAIR, so both ends are shown. The question names them
+  // too, but a Faction icon beside one and a Character icon beside the other
+  // says in one glance what a sentence has to spell out.
+  if (stop.kind === "untied") {
+    return [stop.detail?.a, stop.detail?.b]
+      .map(end => end as Record<string, unknown> | undefined)
+      .filter(Boolean)
+      .map(end => ({ name: String(end!.name ?? ""),
+                     type: String(end!.type ?? "") }))
+      .filter(end => end.name && end.type);
+  }
   const name = String(stop.detail?.name ?? "");
   const type = String(stop.detail?.type ?? "");
-  if (!name || !type || !stop.entity_id) return null;
-  return { name, type };
+  if (!name || !type || !stop.entity_id) return [];
+  return [{ name, type }];
 }
 
 /** [type, section] an Unwoven answer belongs in. */
@@ -466,16 +480,31 @@ export function WeavingPanel({
   }
 
   if (connecting && stop) {
+    // An Untied stop is about a PAIR, so the entry being connected is its
+    // first end and the second is already the likeliest answer. Every other
+    // connect-here stop is about one entry, and detail carries it directly.
+    const pair = stop.kind === "untied"
+      ? (stop.detail?.a as Record<string, unknown> | undefined)
+      : undefined;
+    const from = pair ?? stop.detail ?? {};
+    const otherEnd = stop.kind === "untied"
+      ? (stop.detail?.b as Record<string, unknown> | undefined)
+      : undefined;
+    const shortList = otherEnd
+      ? [{ entity_id: String(otherEnd.entity_id ?? ""),
+           scenes: Number(stop.detail?.scenes ?? 0) }]
+      : ((stop.detail?.likely as { entity_id: string; scenes: number }[]) ?? []);
     return (
       <TieEditor
         projectPath={projectPath}
         thread={{
-          entity_id: stop.entity_id,
-          type: String(stop.detail?.type ?? ""),
-          name: String(stop.detail?.name ?? ""),
+          entity_id: String(from.entity_id ?? stop.entity_id),
+          type: String(from.type ?? ""),
+          name: String(from.name ?? ""),
           display_name: "", aliases: [], placeholder: false,
         }}
         candidates={world}
+        likely={shortList}
         // Closing comes straight back to the same stop, which is the whole
         // point: the walk never lost its place.
         onClose={() => setConnecting(false)}
@@ -509,22 +538,23 @@ export function WeavingPanel({
           something the writer recognises -- her own entry, with its own kind's
           icon -- so the starting point is never in doubt and the question can
           be about what is missing rather than about what is not. */}
-      {standingOn(stop) && (
+      {standingOn(stop).length > 0 && (
         <p data-testid="standing-on"
            className="mb-1 flex items-center gap-1.5 text-[11px] text-text-muted">
-          {(() => {
-            const on = standingOn(stop)!;
+          {standingOn(stop).map((on, i) => {
             const kind = threadTypeEntry(on.type);
             const KindIcon = kind.Icon;
             const tint = TONE_CLASSES[kind.tone as Tone].text;
             return (
-              <>
+              <span key={`${on.name}-${i}`}
+                    className="flex items-center gap-1.5">
+                {i > 0 && <span className="text-faint">and</span>}
                 <KindIcon size={13} className={`shrink-0 ${tint}`} />
                 <span className="font-medium text-text-primary">{on.name}</span>
                 <span className="text-faint">{kind.term}</span>
-              </>
+              </span>
             );
-          })()}
+          })}
         </p>
       )}
 

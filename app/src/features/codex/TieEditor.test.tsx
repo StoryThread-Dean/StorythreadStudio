@@ -638,3 +638,66 @@ describe("the other end might not exist yet", () => {
     expect(screen.getByLabelText("Find an entry")).toBeTruthy();
   });
 });
+
+
+describe("the likely answers come first", () => {
+  // Reported after the first version offered the whole world alphabetically:
+  //
+  //     "3 profiles and 1 location appear in a list."
+  //
+  // Asking the question is half the job. The prose already knows who the
+  // likely answers are -- it keeps putting them in the same scene -- and that
+  // costs nothing to count. Each row says how many, because a suggestion that
+  // cannot show its reasoning is a guess with better manners.
+
+  it("puts whoever shares most scenes at the top", async () => {
+    await open({ likely: [{ entity_id: "e-pathicus", scenes: 9 },
+                          { entity_id: "e-faith", scenes: 2 }] });
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    const rows = screen.getAllByRole("button")
+      .map(b => b.textContent ?? "")
+      .filter(t => t.includes("scenes together"));
+    expect(rows[0]).toMatch(/Pathicus/);
+    expect(rows[0]).toMatch(/9 scenes together/);
+  });
+
+  it("says how many scenes on the row itself", async () => {
+    await open({ likely: [{ entity_id: "e-faith", scenes: 4 }] });
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    expect(screen.getByRole("button", { name: /4 scenes together/ })).toBeTruthy();
+  });
+
+  it("counts one scene in the singular", async () => {
+    await open({ likely: [{ entity_id: "e-faith", scenes: 1 }] });
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    expect(screen.getByRole("button", { name: /1 scene together/ })).toBeTruthy();
+  });
+
+  it("says nothing about entries the prose never shares a scene with", async () => {
+    // Silence is the honest answer. A "0 scenes together" badge on every other
+    // row would read as a verdict rather than an absence of evidence.
+    await open({ likely: [{ entity_id: "e-faith", scenes: 3 }] });
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    expect(screen.queryByText(/0 scenes together/)).toBeNull();
+  });
+
+  it("still lists everything, so the short list is a shortcut not a filter", async () => {
+    await open({ likely: [{ entity_id: "e-faith", scenes: 3 }] });
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    expect(screen.getByRole("button", { name: /^Pathicus/ })).toBeTruthy();
+  });
+
+  it("works with no short list at all", async () => {
+    // A brand new book has no manuscript to count. The picker is the same
+    // picker, just alphabetical.
+    await open();
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    expect(screen.queryByText(/scenes together/)).toBeNull();
+  });
+});

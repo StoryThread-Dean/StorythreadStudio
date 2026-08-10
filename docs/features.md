@@ -266,6 +266,7 @@ What it can find without spending anything:
 | **Unspun** | a name in the prose with no entry behind it |
 | **Frayed** | an entry too thin to be useful |
 | **Loose thread** | an entry that relates to nothing else in the world |
+| **Untied** | two entries the prose keeps putting in the same scene with nothing recorded between them |
 | **Snag** | two facts that disagree, or a supersession that cannot be right |
 | **Unplaced** | a fact with no point in the story, so it never takes effect |
 | **Told early** | something named in a chapter where the map would be hiding it |
@@ -275,6 +276,19 @@ Every stop shows the text that triggered it and answers **"why am I seeing
 this?"** with the rule that fired. Four ways to answer, and they are deliberately
 different: apply, *not a connection* (permanent), *not yet* (comes back), and
 *never ask* about this kind (reversible).
+
+**The prose already knows who the likely answers are.** Both connection
+questions are backed by the same free count: which entries are named in the same
+**scene**. The scene is the unit deliberately -- a chapter that cuts between two
+locations would otherwise pair up characters who are never in the same room. So
+the picker behind "how is this connected?" leads with the entries the story keeps
+putting in the room, each saying how many scenes it shares, and the full list
+stays one click away. It is a shortcut, not a filter.
+
+**Untied** is the same count speaking unprompted, and it has a floor: two
+strangers pass on a street once, so one shared scene says nothing. It proposes
+that a connection exists and never what the connection IS -- a knight and the
+dragon he is hunting share a great many scenes.
 
 **Two different things get called *connected*, and the walk says which it
 means.** A name in the prose finding its entry is automatic -- it needs nothing
