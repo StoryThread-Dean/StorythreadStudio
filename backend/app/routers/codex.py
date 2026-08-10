@@ -411,16 +411,34 @@ async def get_anchors(project_path: str = Query(...)):
     from app.routers.documents import _title_from_file
     manuscript = os.path.join(project_path, "manuscript")
 
+    # Which act each chapter belongs to. The scrubber draws acts as bands above
+    # the track, so it needs the grouping -- and it has to come from the same
+    # manifest the sidebar reads, or the two would disagree about the shape of
+    # the book.
+    from app.utils.structure_store import load_structure
+    manifest, _exists = load_structure(project_path)
+    act_of: dict[str, dict] = {}
+    for position, act in enumerate(manifest.get("acts") or []):
+        for filename in act.get("chapters") or []:
+            act_of[filename] = {"id": act.get("id", ""),
+                                "title": act.get("title", ""),
+                                "position": position}
+
     chapters = []
     for name in ordered:
         chapter_id = ids.get(name)
         if not chapter_id:
             continue
+        act = act_of.get(name)
         chapters.append({
             "chapter_id": chapter_id,
             "filename": name,
             "title": _title_from_file(os.path.join(manuscript, name), name),
             "anchor": format_anchor(chapter_id),
+            # Empty when the writer has not used acts, which is the ordinary
+            # case for a project that never opened the acts tree.
+            "act_id": (act or {}).get("id", ""),
+            "act_title": (act or {}).get("title", ""),
         })
     return {"chapters": chapters}
 

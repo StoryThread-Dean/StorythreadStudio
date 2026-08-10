@@ -488,3 +488,48 @@ def test_migrate_defaults_to_the_preview(tmp_path):
     body = client.post("/api/codex/migrate", params={"project_path": str(root)}).json()
     assert body["total"] == 1
     assert not os.path.exists(os.path.join(str(root), "codex"))
+
+# ── Acts on the anchor list ──────────────────────────────────────────────────
+# The scrubber draws acts as bands over the chapters they contain, so it needs
+# the grouping. It comes from the SAME manifest the sidebar reads: two sources
+# of truth about the shape of a book would eventually disagree, and the writer
+# would have no way to tell which was lying.
+
+def test_a_chapter_says_which_act_it_is_in(project):
+    from app.utils.structure_store import load_structure, save_structure
+
+    manifest, _ = load_structure(project)
+    manifest["acts"] = [{"id": "a-one", "title": "Act I",
+                         "chapters": ["01-a.md"]}]
+    manifest["unassigned"] = []
+    save_structure(project, manifest)
+
+    chapters = client.get("/api/codex/anchors",
+                          params={"project_path": project}).json()["chapters"]
+    first = next(c for c in chapters if c["filename"] == "01-a.md")
+    assert first["act_id"] == "a-one"
+    assert first["act_title"] == "Act I"
+
+
+def test_a_project_that_never_used_acts_says_nothing_rather_than_guessing(project):
+    # The ordinary case. An invented act name would be worse than none.
+    chapters = client.get("/api/codex/anchors",
+                          params={"project_path": project}).json()["chapters"]
+    assert all(c["act_id"] == "" and c["act_title"] == "" for c in chapters)
+
+
+def test_the_order_is_still_the_reading_order(project):
+    # Acts are extra information ABOUT the list, never a reordering of it --
+    # ordered_chapter_filenames stays the single ordering authority.
+    from app.utils.structure_store import (
+        load_structure, ordered_chapter_filenames, save_structure,
+    )
+    manifest, _ = load_structure(project)
+    manifest["acts"] = [{"id": "a-one", "title": "Act I",
+                         "chapters": ["01-a.md"]}]
+    manifest["unassigned"] = []
+    save_structure(project, manifest)
+
+    chapters = client.get("/api/codex/anchors",
+                          params={"project_path": project}).json()["chapters"]
+    assert [c["filename"] for c in chapters] == ordered_chapter_filenames(project)

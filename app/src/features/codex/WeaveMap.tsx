@@ -40,6 +40,7 @@ import {
   type ChapterAnchor, type GraphNode, type TypeRegistry, type WeaveGraph,
 } from "./api";
 import { BindDot } from "./BindDot";
+import { Scrubber } from "./Scrubber";
 import { TieEditor } from "./TieEditor";
 
 /** How far the cursor may travel before a press stops being a click. */
@@ -315,22 +316,8 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
           {loading && <Loader size={11} className="animate-spin text-faint" />}
         </div>
 
-        {chapters.length > 0 ? (
-          <input
-            type="range"
-            min={-1}
-            max={chapters.length - 1}
-            step={1}
-            value={chapterIndex}
-            onChange={e => setChapterIndex(parseInt(e.target.value, 10))}
-            aria-label="Point in the story"
-            className="w-full accent-violet-500"
-          />
-        ) : (
-          <p className="text-[11px] text-faint">
-            This project has no chapters yet, so there is no story to move through.
-          </p>
-        )}
+        <Scrubber chapters={chapters} value={chapterIndex}
+                  onChange={setChapterIndex} />
 
         <div className="mt-1">
           <WhatsThis label="What does this slider do?">

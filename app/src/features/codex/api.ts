@@ -128,6 +128,10 @@ export interface ChapterAnchor {
   filename: string;
   title: string;
   anchor: string;
+  /** Which act it belongs to. Empty when the writer has not used acts, which
+   *  is the ordinary case for a project that never opened the acts tree. */
+  act_id: string;
+  act_title: string;
 }
 
 export interface WeaveHealth {

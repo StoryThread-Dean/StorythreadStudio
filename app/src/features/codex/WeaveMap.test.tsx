@@ -27,9 +27,12 @@ afterEach(() => {
 
 const CHAPTERS = {
   chapters: [
-    { chapter_id: "c-1", filename: "01.md", title: "The Raid", anchor: "c-1" },
-    { chapter_id: "c-2", filename: "02.md", title: "The Letter", anchor: "c-2" },
-    { chapter_id: "c-3", filename: "03.md", title: "The Return", anchor: "c-3" },
+    { chapter_id: "c-1", filename: "01.md", title: "The Raid", anchor: "c-1",
+      act_id: "a-1", act_title: "Act I" },
+    { chapter_id: "c-2", filename: "02.md", title: "The Letter", anchor: "c-2",
+      act_id: "a-1", act_title: "Act I" },
+    { chapter_id: "c-3", filename: "03.md", title: "The Return", anchor: "c-3",
+      act_id: "a-2", act_title: "Act II" },
   ],
 };
 
@@ -105,9 +108,13 @@ describe("the scrubber", () => {
 
   it("names the chapter it is showing, in words", async () => {
     // A slider whose position you cannot read is a slider you cannot trust.
+    // Scoped to the heading, because the title now also appears on the
+    // scrubber itself -- which is the point of the scrubber.
     await renderMap();
     scrubTo(0);
-    await waitFor(() => expect(screen.getByText(/The Raid/)).toBeTruthy());
+    await waitFor(() => expect(
+      screen.getByText(/Showing your world as of/).textContent,
+    ).toMatch(/The Raid/));
   });
 
   it("asks the backend for that point in the story", async () => {

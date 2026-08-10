@@ -152,16 +152,25 @@ This was an assumption made and corrected during the Tie editor work, and it
 generalises: the writer's manual grouping does the work, and the app takes
 over from there.
 
+**Also built: the scrubber as a timeline.** Act bands over the chapters they
+contain, sized by how much book each act is; a stop on every chapter; and the
+resting chapter's title opened out and word-wrapped while its neighbours
+truncate. That expansion is the cause and effect -- the writer sees the handle
+land ON a chapter rather than inferring it from a colour change elsewhere.
+
+Act grouping comes from the same `structure.json` the sidebar reads. Two
+sources of truth about the shape of a book would eventually disagree, and the
+writer would have no way to tell which was lying.
+
+The drawn track is decoration over a genuine `<input type="range">`, kept
+deliberately: a custom widget would have to reimplement arrow keys, Home and
+End, and the screen-reader role, and the List view being the accessibility
+answer for the map would be undercut by a scrubber that could only be dragged.
+It announces itself as "Chapter 3, Caught in the Rain" rather than as "3".
+
 **Not built yet:**
 
-1. **The scrubber has to look like a timeline.** Today it is a bare slider
-   with a dot, and the only feedback is a chapter title changing colour
-   somewhere else -- so nothing connects the handle to the story. It wants act
-   bands above, a tick per chapter, and the resting chapter's title expanded
-   and word-wrapped while its neighbours truncate. That expansion is the
-   cause-and-effect: the writer sees the handle land ON a chapter.
-
-2. **Unspun should stop manufacturing the duplicates in the first place.**
+1. **Unspun should stop manufacturing the duplicates in the first place.**
    Absorbing is the cure; the prevention is for Unspun to notice that one
    candidate is contained in another (Lara / Lara Croft, Cambridge /
    Cambridge Library) and offer them as one question rather than three.
