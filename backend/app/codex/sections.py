@@ -48,21 +48,25 @@ from app.codex.types_registry import (
 # These live in notes/ as ordinary Markdown and are edited in the editor
 # rather than the Weave, but they belong in the same tree: to a writer they
 # are simply another part of their world.
+# NOTE the labels stay SINGULAR here, unlike the Thread kinds. A Profiles
+# section is a container -- "Characters" holds many -- so its label is
+# plural. A note is ONE document: there is a single Outline, a single Style
+# Guide. Pluralising them would promise a list that does not exist.
 NOTE_SECTIONS = [
     # Always shown: every project should have somewhere to put a loose
     # thought without adding anything first.
     {"id": "author_notes", "label": "Author Notes", "filename": "author-notes.md",
-     "default_section": True},
+     "icon": "NotebookPen", "default_section": True},
     {"id": "outline", "label": "Outline", "filename": "outline.md",
-     "default_section": False},
+     "icon": "ListTree", "default_section": False},
     {"id": "style_guide", "label": "Style Guide", "filename": "style-guide.md",
-     "default_section": False},
+     "icon": "Feather", "default_section": False},
     {"id": "brainstorming", "label": "Brainstorming", "filename": "brainstorming.md",
-     "default_section": False},
+     "icon": "Brain", "default_section": False},
     {"id": "research", "label": "Research", "filename": "research.md",
-     "default_section": False},
+     "icon": "FileSearch", "default_section": False},
     {"id": "themes", "label": "Themes", "filename": "themes.md",
-     "default_section": False},
+     "icon": "Paintbrush", "default_section": False},
 ]
 
 GROUP_LABELS = {
@@ -180,7 +184,7 @@ def build_sections(project_path: str, converted: bool) -> dict:
             "kind": "note",
             "id": note["id"],
             "label": note["label"],
-            "icon": "FileText",
+            "icon": note.get("icon", "FileText"),
             "group": "notes",
             "filename": note["filename"],
             "count": 1 if exists else 0,
@@ -191,7 +195,8 @@ def build_sections(project_path: str, converted: bool) -> dict:
         else:
             available.append({
                 "kind": "note", "id": note["id"], "label": note["label"],
-                "icon": "FileText", "group": "notes", "filename": note["filename"],
+                "icon": note.get("icon", "FileText"), "group": "notes",
+                "filename": note["filename"],
             })
 
     # Anything else the writer has put in notes/ by hand. Their file, their

@@ -106,6 +106,13 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
     for (const t of registry?.types ?? []) map[t.id] = t.label;
     return map;
   }, [registry]);
+  // Icons from the registry, so a kind the writer added shows its own
+  // symbol rather than the generic fallback.
+  const iconNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const t of registry?.types ?? []) map[t.id] = t.icon;
+    return map;
+  }, [registry]);
 
   // What is actually drawn. Budgets are applied here rather than in the
   // renderer so the counts can be REPORTED -- a map that quietly omits
@@ -274,7 +281,8 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
             {view?.nodes.map(node => {
               const point = view.positions[node.entity_id];
               if (!point) return null;
-              const entry = threadTypeEntry(node.type, typeLabels[node.type]);
+              const entry = threadTypeEntry(node.type, typeLabels[node.type],
+                                            iconNames[node.type]);
               const radius = nodeRadius(view.degree[node.entity_id] ?? 0);
               const tone = TONE_CLASSES[entry.tone as Tone];
               const isFocus = focus === node.entity_id;
@@ -322,7 +330,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
       {/* ── Legend, rendered from the Lexicon ───────────────────────────── */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 rounded border border-border bg-bg-primary px-3 py-2">
         {(registry?.types ?? []).map(type => {
-          const entry = threadTypeEntry(type.id, type.label);
+          const entry = threadTypeEntry(type.id, type.label, type.icon);
           const Icon = entry.Icon;
           return (
             <span key={type.id} className="inline-flex items-center gap-1 text-[11px]"

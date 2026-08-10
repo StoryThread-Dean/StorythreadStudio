@@ -96,6 +96,14 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
     return map;
   }, [registry]);
 
+  // Icons come from the registry too, so a kind the writer added shows its
+  // own symbol rather than falling back to a generic one.
+  const iconNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const t of registry?.types ?? []) map[t.id] = t.icon;
+    return map;
+  }, [registry]);
+
   const rows = useMemo(() => {
     if (!graph) return [];
     const degree = degrees(graph.edges);
@@ -225,7 +233,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
           </thead>
           <tbody>
             {rows.map(row => {
-              const entry = threadTypeEntry(row.type, row.label);
+              const entry = threadTypeEntry(row.type, row.label, iconNames[row.type]);
               const Icon = entry.Icon;
               const isOpen = expanded === row.entity_id;
               return (

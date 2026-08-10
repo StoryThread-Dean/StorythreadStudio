@@ -15,6 +15,7 @@ import {
   CONCEPTS,
   STOP_KINDS,
   TONE_CLASSES,
+  iconByName,
   lex,
   threadTypeEntry,
 } from "./lexicon";
@@ -89,8 +90,12 @@ describe("the words Weaving will use", () => {
 
 
 describe("kinds of Thread", () => {
-  it("covers all nine built-in types", () => {
-    expect(BUILT_IN_TYPES).toHaveLength(9);
+  it("describes every kind the app ships with", () => {
+    expect(new Set(BUILT_IN_TYPES)).toEqual(new Set([
+      "character", "relationship", "location", "lore", "faction", "religion",
+      "government", "deity", "creature", "culture",
+      "object", "concept", "event", "language",
+    ]));
     for (const type of BUILT_IN_TYPES) {
       const entry = threadTypeEntry(type);
       expect(entry.Icon).toBeTruthy();
@@ -98,13 +103,37 @@ describe("kinds of Thread", () => {
     }
   });
 
-  it("gives a writer's own custom type an icon and a name too", () => {
+  it("takes its icon from the registry rather than a second list here", () => {
+    // This file used to keep its own list of types, which promptly fell
+    // behind the backend: four kinds were added there and rendered with the
+    // fallback icon, and the contract test missed it because it checked this
+    // file against ITSELF. Icon NAMES now come from the registry.
+    const fromRegistry = threadTypeEntry("government", "Governments", "Landmark");
+    const withoutRegistry = threadTypeEntry("government", "Governments");
+    expect(fromRegistry.Icon).toBe(withoutRegistry.Icon);
+    expect(fromRegistry.Icon).not.toBe(threadTypeEntry("x", "X", "CircleDashed").Icon);
+  });
+
+  it("gives a writer's own kind an icon and a name too", () => {
     // Rendering a blank because we have never heard of it would punish them
     // for using a feature we built.
-    const entry = threadTypeEntry("spaceship", "Spaceship");
-    expect(entry.term).toBe("Spaceship");
+    const entry = threadTypeEntry("spaceship", "Spaceships", "Package");
+    expect(entry.term).toBe("Spaceships");
     expect(entry.Icon).toBeTruthy();
     expect(entry.whatsThis.length).toBeGreaterThan(20);
+  });
+
+  it("degrades to a neutral icon for a name nobody has imported", () => {
+    // A registry naming an icon this build does not bundle must not render
+    // a blank -- the kind still has to be clickable.
+    expect(iconByName("NoSuchIcon")).toBeTruthy();
+    expect(iconByName(undefined)).toBeTruthy();
+  });
+
+  it("names sections as containers, because they hold many", () => {
+    // "Characters", not "Character" -- a writer should see at a glance that
+    // a section holds more than one.
+    expect(threadTypeEntry("character", "Characters").term).toBe("Characters");
   });
 
   it("falls back to the id when no label is given", () => {

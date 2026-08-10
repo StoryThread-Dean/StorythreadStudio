@@ -124,7 +124,7 @@ export function AddNewDialog({
           {current && current.available.length > 0 ? (
             <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
               {current.available.map(entry => {
-                const lex = threadTypeEntry(entry.id, entry.label);
+                const lex = threadTypeEntry(entry.id, entry.label, entry.icon);
                 const Icon = lex.Icon;
                 return (
                   <li key={`${entry.kind}-${entry.id}`}>

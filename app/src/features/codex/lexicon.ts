@@ -22,9 +22,11 @@
 // without a renderer, and nothing here has needed markup.
 
 import {
-  AlertTriangle, BookOpen, CalendarClock, CalendarOff, CircleDashed, Compass,
-  Flag, Gauge, GitMerge, Heart, History, Lightbulb, Link2, MapPin, Network,
-  Package, Sparkles, Unlink, Unplug, User, Waypoints,
+  AlertTriangle, BookOpen, Brain, CalendarClock, CalendarOff, CircleDashed,
+  Compass, Drama, Feather, FileSearch, FileText, Flag, Gauge, GitMerge, Heart,
+  History, Landmark, Languages, Lightbulb, Link2, ListTree, MapPin, Network,
+  NotebookPen, Package, Paintbrush, PawPrint, Sparkles, Sun, Unlink, Unplug,
+  User, Waypoints,
   type LucideIcon,
 } from "lucide-react";
 
@@ -165,33 +167,77 @@ export const STOP_KINDS: Record<string, LexEntry> = {
 // Icons and tones for the nine built-in types. A writer's own custom type
 // falls back to a neutral entry rather than crashing or rendering blank.
 
-const TYPE_ICONS: Record<string, [LucideIcon, Tone, string]> = {
-  character:    [User,          "blue",    "A person in your story."],
-  relationship: [Heart,         "rose",    "How two people stand with each other."],
-  location:     [MapPin,        "emerald", "A place."],
-  lore:         [BookOpen,      "amber",   "History, myth, or background."],
-  faction:      [Flag,          "violet",  "A group with its own interests."],
-  religion:     [Sparkles,      "violet",  "A faith and its practices."],
-  object:       [Package,       "zinc",    "A thing that matters."],
-  concept:      [Lightbulb,     "amber",   "An idea, rule, or force."],
-  event:        [CalendarClock, "rose",    "Something that happened."],
+// WHICH icon a kind uses is decided in ONE place -- the type registry, which
+// stores a name like "Landmark". This map only turns that name into a
+// component, because a bundler cannot tree-shake a dynamic import and lucide
+// ships thousands of icons.
+//
+// That split matters. This file used to keep its OWN list of types, which
+// promptly fell behind the backend: four kinds were added there and rendered
+// with the fallback icon, and the contract test missed it because it checked
+// this file against ITSELF. A name-to-component map cannot drift that way --
+// a kind the registry adds works immediately, and an icon name nobody has
+// imported degrades to the fallback rather than vanishing.
+const ICONS: Record<string, LucideIcon> = {
+  User, Heart, MapPin, BookOpen, Flag, Sparkles, Landmark, Sun, PawPrint,
+  Drama, Package, Lightbulb, CalendarClock, Languages,
+  NotebookPen, ListTree, Feather, Brain, FileSearch, Paintbrush, FileText,
+  CircleDashed,
 };
 
-export function threadTypeEntry(typeId: string, label?: string): LexEntry {
-  const known = TYPE_ICONS[typeId];
+/** Colour and a one-line description per shipped kind. Anything not listed
+ *  gets a neutral tone, which is what a writer's own kind should look like. */
+const TYPE_TONES: Record<string, [Tone, string]> = {
+  character:    ["blue",    "The people in your story."],
+  relationship: ["rose",    "How two people stand with each other."],
+  location:     ["emerald", "The places your story happens in."],
+  lore:         ["amber",   "History, myth, and background."],
+  faction:      ["violet",  "Groups with interests of their own."],
+  religion:     ["violet",  "Faiths and their practices."],
+  government:   ["blue",    "Who holds power, and how it passes."],
+  deity:        ["amber",   "Gods, and what they are gods of."],
+  creature:     ["emerald", "Beasts and other living things."],
+  culture:      ["rose",    "Peoples, and how they live."],
+  object:       ["zinc",    "Things that matter."],
+  concept:      ["amber",   "Ideas, rules, and forces."],
+  event:        ["rose",    "Things that happened."],
+  language:     ["zinc",    "Tongues, scripts, and names."],
+};
+
+/** Fallback icon names for the shipped kinds, so a caller with no registry
+ *  handy still renders the right symbol. */
+const DEFAULT_ICON_NAMES: Record<string, string> = {
+  character: "User", relationship: "Heart", location: "MapPin", lore: "BookOpen",
+  faction: "Flag", religion: "Sparkles", government: "Landmark", deity: "Sun",
+  creature: "PawPrint", culture: "Drama", object: "Package",
+  concept: "Lightbulb", event: "CalendarClock", language: "Languages",
+};
+
+export function iconByName(name?: string): LucideIcon {
+  return (name && ICONS[name]) || CircleDashed;
+}
+
+export function threadTypeEntry(
+  typeId: string,
+  label?: string,
+  iconName?: string,
+): LexEntry {
   const term = label || typeId.replace(/_/g, " ");
+  const known = TYPE_TONES[typeId];
+  const Icon = iconByName(iconName ?? DEFAULT_ICON_NAMES[typeId]);
+
   if (!known) {
-    // A custom type the writer added. It still gets an icon and a name --
-    // rendering a blank because we have never heard of it would punish them
-    // for using a feature we built.
-    return entry(typeId, term, CircleDashed, "zinc",
-      `A ${term} in your world.`,
-      `It holds everything you know about one ${term}.`,
+    // A kind the writer added. It still gets a name and an icon -- rendering
+    // a blank because we have never heard of it would punish them for using
+    // a feature we built.
+    return entry(typeId, term, Icon, "zinc",
+      `${term} in your world.`,
+      "It holds everything you know about each one.",
       `${term} is a kind of entry you added to this world. It behaves like any other Thread: it can carry Ties, a Run, and your own notes.`);
   }
-  const [Icon, tone, short] = known;
+  const [tone, short] = known;
   return entry(typeId, term, Icon, tone, short,
-    `It gathers what you know about one ${term} and what it connects to.`,
+    "It gathers what you know about each one, and what it connects to.",
     CONCEPTS.thread.whatsThis);
 }
 
@@ -203,8 +249,8 @@ export function lex(code: string): LexEntry | undefined {
     ?? Object.values(STOP_KINDS).find(e => e.code === code);
 }
 
-/** The nine built-in Thread types, for the map legend. */
-export const BUILT_IN_TYPES = Object.keys(TYPE_ICONS);
+/** The shipped Thread kinds, for the map legend. */
+export const BUILT_IN_TYPES = Object.keys(TYPE_TONES);
 
 /** Tailwind classes per tone, so colour is decided once. Kept as full class
  *  strings rather than interpolated names -- Tailwind only ships classes it

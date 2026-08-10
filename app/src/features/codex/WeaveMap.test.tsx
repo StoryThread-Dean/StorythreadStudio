@@ -218,7 +218,7 @@ describe("the world itself", () => {
     await renderMap();
     // Rendered from the Lexicon, so the map cannot show a symbol the app
     // has no words for.
-    expect(screen.getAllByTitle(/A person in your story/).length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle(/The people in your story/).length).toBeGreaterThan(0);
   });
 });
 

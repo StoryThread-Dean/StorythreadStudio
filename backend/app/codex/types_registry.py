@@ -107,7 +107,7 @@ def _sections(*names: str) -> list[dict]:
 
 DEFAULT_TYPES: list[dict] = [
     {
-        "id": "character", "label": "Character", "folder": "characters",
+        "id": "character", "label": "Characters", "folder": "characters",
         "icon": "User",
         "sections": [
             {"id": "overview", "heading": "Overview", "trait_blocks": False},
@@ -126,11 +126,11 @@ DEFAULT_TYPES: list[dict] = [
         "group": "profiles",
         "default_section": True,
     },
-    {"id": "relationship", "label": "Relationship", "folder": "relationships",
+    {"id": "relationship", "label": "Relationships", "folder": "relationships",
      "icon": "Heart", "group": "profiles", "default_section": False,
      "sections": _sections("overview", "current_dynamic", "history", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "location", "label": "Location", "folder": "locations", "icon": "MapPin",
+    {"id": "location", "label": "Locations", "folder": "locations", "icon": "MapPin",
      "group": "profiles", "default_section": True,
      "sections": _sections("overview", "appearance", "significance", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
@@ -142,37 +142,37 @@ DEFAULT_TYPES: list[dict] = [
     # A person, a place, a group, a faith, a government. The test is "am I
     # writing a profile OF something?" -- which is why a Faction belongs
     # here beside a Character, and not in the leftovers.
-    {"id": "faction", "label": "Faction", "folder": "factions", "icon": "Flag",
+    {"id": "faction", "label": "Factions", "folder": "factions", "icon": "Flag",
      "group": "profiles", "default_section": False,
      "sections": _sections("overview", "structure", "goals", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "religion", "label": "Religion", "folder": "religions", "icon": "Sparkles",
+    {"id": "religion", "label": "Religions", "folder": "religions", "icon": "Sparkles",
      "group": "profiles", "default_section": False,
      "sections": _sections("overview", "beliefs", "practices", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "government", "label": "Government", "folder": "governments", "icon": "Landmark",
+    {"id": "government", "label": "Governments", "folder": "governments", "icon": "Landmark",
      "group": "profiles", "default_section": False,
      "sections": _sections("overview", "structure", "laws", "succession", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "deity", "label": "Deity", "folder": "deities", "icon": "Sun",
+    {"id": "deity", "label": "Deities", "folder": "deities", "icon": "Sun",
      "group": "profiles", "default_section": False,
      "sections": _sections("overview", "domain", "worship", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "creature", "label": "Creature", "folder": "creatures", "icon": "PawPrint",
+    {"id": "creature", "label": "Creatures", "folder": "creatures", "icon": "PawPrint",
      "group": "profiles", "default_section": False,
      "sections": _sections("overview", "appearance", "behaviour", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "culture", "label": "Culture", "folder": "cultures", "icon": "Users",
+    {"id": "culture", "label": "Cultures", "folder": "cultures", "icon": "Drama",
      "group": "profiles", "default_section": False,
      "sections": _sections("overview", "customs", "values", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
 
     # ── Other: genuinely neither a document nor a profile of something ───
-    {"id": "object", "label": "Object", "folder": "objects", "icon": "Package",
+    {"id": "object", "label": "Objects", "folder": "objects", "icon": "Package",
      "group": "other", "default_section": False,
      "sections": _sections("overview", "appearance", "significance", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "concept", "label": "Concept", "folder": "concepts", "icon": "Lightbulb",
+    {"id": "concept", "label": "Concepts", "folder": "concepts", "icon": "Lightbulb",
      "group": "other", "default_section": False,
      "sections": _sections("overview", "details", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
@@ -181,11 +181,11 @@ DEFAULT_TYPES: list[dict] = [
     # of any book recognises without explanation -- a battle, a wedding, a
     # coronation -- which makes it the right doorway into a group whose name
     # gives nothing away.
-    {"id": "event", "label": "Event", "folder": "events", "icon": "CalendarClock",
+    {"id": "event", "label": "Events", "folder": "events", "icon": "CalendarClock",
      "group": "other", "default_section": True,
      "sections": _sections("overview", "what_happened", "consequences", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "language", "label": "Language", "folder": "languages", "icon": "Languages",
+    {"id": "language", "label": "Languages", "folder": "languages", "icon": "Languages",
      "group": "other", "default_section": False,
      "sections": _sections("overview", "sound_and_script", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
@@ -483,6 +483,24 @@ _CUSTOM_NAME_RE = re.compile(r"^[A-Za-z]+(?: [A-Za-z]+)*$")
 CUSTOM_NAME_MAX = 32
 
 
+def pluralize(word: str) -> str:
+    """
+    A section heading names a container, so it reads as a plural.
+
+    "Characters", not "Character" -- the writer should see at a glance that
+    a section holds many. Enough English to cover what a writer will
+    actually type: Deity -> Deities, Church -> Churches, Bloodline ->
+    Bloodlines. Not a full pluralizer, and it does not need to be; the label
+    is editable and nothing depends on it being grammatically perfect.
+    """
+    lower = word.lower()
+    if lower.endswith("y") and len(word) > 1 and word[-2].lower() not in "aeiou":
+        return word[:-1] + "ies"
+    if lower.endswith(("s", "x", "z", "ch", "sh")):
+        return word + "es"
+    return word + "s"
+
+
 def custom_type_id(label: str) -> tuple[str, str]:
     """
     Turn a name a writer typed into (type_id, tidy_label), or refuse.
@@ -559,13 +577,15 @@ def add_type(
     if type_by_id(registry, type_id) is not None:
         raise TypesError(f"This world already has a kind called {type_id!r}.", "id")
 
-    folder = type_id if type_id.endswith("s") else type_id + "s"
+    folder = pluralize(type_id)
     if any(t.get("folder") == folder for t in registry.get("types", [])):
         raise TypesError(f"The folder {folder!r} is already in use.", "folder")
 
     registry["types"].append({
         "id": type_id,
-        "label": label,
+        # The heading names a container, so it reads as a plural like every
+        # other section: a writer who types "Bloodline" gets "Bloodlines".
+        "label": pluralize(label),
         "folder": folder,
         "icon": icon,
         "group": group,

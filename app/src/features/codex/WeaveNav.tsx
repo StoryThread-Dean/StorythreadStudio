@@ -154,7 +154,7 @@ export function WeaveNav({
                 </button>
 
                 {group.sections.map(section => {
-                  const lex = threadTypeEntry(section.id, section.label);
+                  const lex = threadTypeEntry(section.id, section.label, section.icon);
                   const Icon = lex.Icon;
                   const active = activeSection === section.id;
                   return (
