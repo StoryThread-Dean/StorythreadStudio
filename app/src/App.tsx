@@ -24,6 +24,9 @@ import { ProjectHome } from "./screens/ProjectHome";
 import { AudiobookConverter } from "./features/audiobook/AudiobookConverter";
 import { ReaderMode } from "./screens/ReaderMode";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
+// The Weave: a self-contained island under features/codex/, opened from the
+// sidebar. This file only knows how to show it.
+import { WeaveScreen } from "./features/codex/WeaveScreen";
 import { OutlinePlanner } from "./screens/OutlinePlanner";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
@@ -117,7 +120,8 @@ function App() {
   // it's a completely separate screen; chapter_summary is rendered in the
   // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
   const [currentView, setCurrentView]   = useState<
-    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary" | "outline_planner"
+    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
+    | "outline_planner" | "weave"
   >("editor");
   // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
   // when no writing project is open. Not part of currentView because it
@@ -438,7 +442,8 @@ function App() {
   const currentProjectRef = useRef<ProjectInfo | null>(null);
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
   const currentViewRef = useRef<
-    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary" | "outline_planner"
+    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
+    | "outline_planner" | "weave"
   >("editor");
 
   // Keep refs in sync with state on every render.
@@ -2382,6 +2387,10 @@ function App() {
             <NavItem label="Style Guide" hint="Rules for tone, voice, and punctuation"
               active={currentView === "notes" && currentNote?.filename === "style-guide.md"}
               onClick={() => loadNote("style-guide.md", "Style Guide", currentProject)} />
+            <NavItem label="The Weave"
+              hint="Your whole world, and when each thing became true"
+              active={currentView === "weave"}
+              onClick={() => setCurrentView("weave")} />
           </NavSection>
 
           <NavSection label="Profiles"
@@ -2448,7 +2457,20 @@ function App() {
         continuity editing, not prose drafting, so the chat panel would only
         distract.
       */}
-      {currentView === "outline_planner" ? (
+      {currentView === "weave" ? (
+        // Rendered here rather than as a full-screen takeover so the left
+        // nav stays put: the Weave is something you consult WHILE writing,
+        // and losing the chapter list to look at it would make it a
+        // destination rather than a reference. The feature itself stays an
+        // island in features/codex/ -- this file only knows how to show it.
+        <div className="flex-1 overflow-y-auto">
+          <WeaveScreen
+            projectPath={currentProject.root_path}
+            pinned={projectUi.uiState.weaveNodePositions}
+            onPin={positions => projectUi.update({ weaveNodePositions: positions })}
+          />
+        </div>
+      ) : currentView === "outline_planner" ? (
         <OutlinePlanner
           project={currentProject}
           onBack={() => setCurrentView("editor")}

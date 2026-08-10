@@ -37,6 +37,12 @@ export interface ProjectUiState {
    *  re-picking it every session is a small tax on the one feature that
    *  is supposed to take two seconds. */
   passageCheckVoice?: string;
+  /** Where the writer dragged each Thread on the Weave map, keyed by
+   *  entity_id. Follows the BOOK because the map is a picture of THIS
+   *  world -- and because most of a map's value is remembering where you
+   *  put things, which a per-machine setting would lose on a new laptop.
+   *  Ids rather than names, so a rename never strands a position. */
+  weaveNodePositions?: Record<string, { x: number; y: number }>;
 }
 
 const DEBOUNCE_MS = 800;
