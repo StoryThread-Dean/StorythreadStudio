@@ -144,6 +144,12 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
         # ordinary its individual facts are.
         "ai_scope": normalize_ai_scope(front.get("ai_scope")),
         "aliases": [str(a) for a in (front.get("aliases") or []) if a],
+        # WHAT THE WRITER WANTS TO SEE THIS CALLED, which is not always its
+        # name. Alexandra Langford may be the official name on the profile
+        # while the story, and everyone in it, only ever says Lexa -- so the
+        # map should say Lexa. Empty means "use the name", which is the
+        # ordinary case and writes nothing to the file.
+        "display_name": str(front.get("display_name") or ""),
         "tags": [str(t) for t in (front.get("tags") or []) if t],
         "fields": dict(front.get("fields") or {}),
         "created_at": str(front.get("created_at") or ""),
@@ -266,6 +272,8 @@ def render_thread(
     if thread.get("character_kind") == "side":
         lines.append("character_kind: side")
 
+    if thread.get("display_name") and thread["display_name"] != thread.get("name"):
+        lines.append(f"display_name: {thread['display_name']}")
     if thread.get("aliases"):
         lines.append("aliases:")
         lines += [f"  - {a}" for a in thread["aliases"]]

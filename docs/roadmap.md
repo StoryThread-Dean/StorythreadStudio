@@ -98,7 +98,26 @@ snapped to the cursor), and the cursor was mapped across the whole element
 while the drawing is letterboxed inside its own viewBox (a constant offset in
 one direction, exactly as reported).
 
-**Not built yet, in the order they matter:**
+**Also fixed: a bare dot now means something, and a click binds it.** A dot
+is drawn hollow and dashed when its entry has nothing in it, and filled with
+its kind icon once it does -- so the legend below the map is now a promise the
+map keeps. A single click on a bare dot asks what it is; a click that travels
+more than a few pixels is a drag and opens nothing, which was the reported bug
+(every attempt to reposition a dot also opened something).
+
+**And the word merge is gone, deliberately.** The objection was right: a dot
+for Alexandra Langford disappearing reads as her profile being deleted. What
+actually happens is that a WORD moves -- Alexandra Langford, Alexandra,
+Langford, Lexi, Lexa and Drea all become words she answers to, every mention
+of any of them resolves to her from then on, and the placeholder that was
+standing in for the word stops standing in for anything. The screen says it in
+those terms. An entry with writing in it is REFUSED rather than absorbed.
+
+The label is separate from the name: `display_name` is what the story calls a
+thing, `name` is what it is. Alexandra Langford stays Alexandra Langford while
+the map says Lexa.
+
+**Not built yet:**
 
 1. **The scrubber has to look like a timeline.** Today it is a bare slider
    with a dot, and the only feedback is a chapter title changing colour
@@ -107,24 +126,17 @@ one direction, exactly as reported).
    and word-wrapped while its neighbours truncate. That expansion is the
    cause-and-effect: the writer sees the handle land ON a chapter.
 
-2. **A bare dot should mean UNCONNECTED, and clicking it should bind it.** The
-   type icons currently read as a legend of what a dot becomes. Clicking a dot
-   should offer the list of existing entries to bind it to, and the dot should
-   become that kind's icon the moment it is bound -- rather than navigating
-   away to a screen.
+2. **Unspun should stop manufacturing the duplicates in the first place.**
+   Absorbing is the cure; the prevention is for Unspun to notice that one
+   candidate is contained in another (Lara / Lara Croft, Cambridge /
+   Cambridge Library) and offer them as one question rather than three.
 
-3. **Name variants need folding together, with the writer choosing the
-   primary.** Lara / Croft / Lara Croft are one person; Cambridge / Cambridge
-   Library / Library are one place. The primary is NOT always the full formal
-   name -- Alexandra Langford may be the official name while the story only
-   ever says Lexa, and the map should say Lexa. This needs a merge operation
-   (fold one Thread into another as an alias, repoint its Ties and facts,
-   choose the display name) plus the UI to drive it.
-
-   Note the cause: Unspun offers one entry per name it finds, so accepting
-   Lara, Croft and Lara Croft produced three Threads where the writer meant
-   one. Merging is the cure; the better fix is for Unspun to notice that a
-   candidate is contained in another and offer them together.
+3. **Cross-kind links the writer can see and no scan can.** The Daughters of
+   Pathicus are a faction; the word Cult means them; Pathicus is a deity; and
+   there is a religion of Pathicus that the faction worships. Four things,
+   three kinds, every link obvious to the writer and invisible to any rule.
+   Absorbing handles the word. The remaining half is a Tie editor, so the
+   faction can be tied to the deity and the religion by hand.
 
 Also open before release: a Thread editor for the kinds the Profile Builder
 does not cover (factions, governments, religions, concepts, events -- until

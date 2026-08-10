@@ -59,7 +59,50 @@ export interface ThreadSummary {
 export interface GraphNode {
   entity_id: string;
   type: string;
+  /** What the thing IS -- the official name on its entry. */
   name: string;
+  /** What the story CALLS it, when that differs. Empty means use the name. */
+  display_name: string;
+  /** Every word that means this thing. */
+  aliases: string[];
+  /** An entry Weaving made from a name, with nothing in it yet: a bare dot. */
+  placeholder: boolean;
+}
+
+/** What a node is called on screen: the story's word, or its name. */
+export function nodeLabel(node: { name: string; display_name?: string }): string {
+  return node.display_name || node.name;
+}
+
+/** Take a word into an entry that already exists.
+ *
+ *  NOT a merge. The word moves; a placeholder that no longer stands in for
+ *  anything goes. An entry with writing in it is refused -- see the backend. */
+export function absorb(
+  projectPath: string,
+  into: string,
+  fromId: string,
+  asLabel = false,
+): Promise<{ entity_id: string; name: string; display_name: string;
+             aliases: string[]; absorbed: string[];
+             removed_placeholder: string }> {
+  return request("/absorb", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, into, from_id: fromId,
+                           as_label: asLabel }),
+  });
+}
+
+/** What the map should call an entry. Separate from its name on purpose. */
+export function setLabel(projectPath: string, entityId: string,
+                         displayName: string): Promise<{ display_name: string }> {
+  return request("/label", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, entity_id: entityId,
+                           display_name: displayName }),
+  });
 }
 
 export interface GraphEdge {

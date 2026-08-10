@@ -743,8 +743,21 @@ async def get_graph(
         if thread_visibility(thread, index, lens) != VISIBLE:
             hidden_nodes += 1
             continue
-        nodes.append({"entity_id": row["entity_id"], "type": row["type"],
-                      "name": row["name"]})
+        nodes.append({
+            "entity_id": row["entity_id"],
+            "type": row["type"],
+            "name": row["name"],
+            # What the story calls it, when that differs from what it is.
+            "display_name": thread.get("display_name") or "",
+            # Every word that means this thing. The map shows them on the
+            # entry, because "which names are tied to this?" is the question a
+            # writer is actually asking when they look at a cluster of dots.
+            "aliases": list(thread.get("aliases") or []),
+            # A bare dot: an entry Weaving made from a name, with nothing in it
+            # yet. Derived, never recorded -- it stops being one the moment the
+            # writer puts something in it.
+            "placeholder": codex_store.is_placeholder(thread),
+        })
 
     visible_ids = {n["entity_id"] for n in nodes}
     edges = []
@@ -985,6 +998,147 @@ async def post_new_thread(body: NewThreadBody):
     _write_thread(project_path, registry, thread)
     await codex_store.reindex(project_path)
     return {"thread": thread}
+
+
+class AbsorbBody(BaseModel):
+    project_path: str
+    # The entry that survives -- the writer's real profile.
+    into: str
+    # The placeholder whose WORD is being taken. Its name (and any aliases it
+    # picked up) become aliases of `into`.
+    from_id: str
+    # Optionally make the absorbed word the label on the map. "Lexa" over
+    # "Alexandra Langford" is the case this exists for.
+    as_label: bool = False
+
+
+@router.post("/absorb")
+async def post_absorb(body: AbsorbBody):
+    """
+    Take a word into an entry that already exists.
+
+    ---------------------------------------------------------------------------
+    THIS IS NOT A MERGE, AND THE DIFFERENCE IS THE WHOLE POINT
+    ---------------------------------------------------------------------------
+    Weaving offers one entry per NAME it finds, so a writer who accepts Lara,
+    Croft and Lara Croft ends up with three entries where they meant one
+    person. The obvious repair is "merge B into A", and the word merge is
+    wrong in a way that matters: to a writer, watching a dot for Alexandra
+    Langford disappear reads as their profile being deleted.
+
+    What actually happens is that the WORD moves. "Alexandra Langford",
+    "Alexandra", "Langford", "Lexi", "Lexa" and "Drea" all mean her, so they
+    become names she answers to -- and every mention of any of them, in the
+    manuscript, in other profiles, in relationships and notes, resolves to her
+    from then on. The placeholder that was standing in for the word is no
+    longer standing in for anything, so it goes. Nothing the writer wrote is
+    touched, because a placeholder is by definition a thing with nothing in it.
+
+    WHICH IS ALSO THE REFUSAL. An entry that holds prose, connections or dated
+    facts is NOT a placeholder and is never absorbed -- the app does not move
+    somebody's writing into another file and delete the original on the
+    strength of one click. It says what is in there and stops.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+
+    if body.into == body.from_id:
+        raise CodexError("type_invalid", "An entry cannot absorb itself.")
+
+    target = _read_thread(project_path, registry,
+                          await _locate(project_path, body.into))
+    source = _read_thread(project_path, registry,
+                          await _locate(project_path, body.from_id))
+
+    if not codex_store.is_placeholder(source):
+        raise CodexError(
+            "entity_not_empty",
+            f"'{source.get('name')}' has writing in it, so its word cannot "
+            f"simply be moved. Copy across whatever you want to keep first, "
+            f"or connect the two entries with a Tie instead and leave both.",
+            source.get("filename", ""),
+        )
+
+    # The word, plus anything it had already been told it also means.
+    words = [str(source.get("name") or "")] + list(source.get("aliases") or [])
+    aliases = list(target.get("aliases") or [])
+    known = {a.lower() for a in aliases} | {str(target.get("name") or "").lower()}
+    added: list[str] = []
+    for word in words:
+        word = " ".join(str(word).split())
+        if word and word.lower() not in known:
+            aliases.append(word)
+            known.add(word.lower())
+            added.append(word)
+    target["aliases"] = aliases
+
+    if body.as_label:
+        target["display_name"] = str(source.get("name") or "")
+
+    _write_thread(project_path, registry, target)
+
+    # The placeholder last, so a failure above leaves both entries intact
+    # rather than a word recorded nowhere and a file gone.
+    path = _thread_path(project_path, registry, source["type"], source["filename"])
+    try:
+        os.remove(path)
+    except OSError as exc:
+        raise CodexError(
+            "source_corrupt",
+            "The word was recorded, but the empty placeholder could not be "
+            "removed. It is safe to delete by hand.",
+            str(exc),
+        ) from exc
+
+    await codex_store.reindex(project_path)
+    return {
+        "entity_id": target["entity_id"],
+        "name": target.get("name", ""),
+        "display_name": target.get("display_name", ""),
+        "aliases": target["aliases"],
+        "absorbed": added,
+        "removed_placeholder": source.get("name", ""),
+    }
+
+
+class LabelBody(BaseModel):
+    project_path: str
+    entity_id: str
+    # Empty clears it, which means "go back to using the name".
+    display_name: str = ""
+
+
+@router.patch("/label")
+async def patch_label(body: LabelBody):
+    """
+    What to call an entry on the map, which is not always its name.
+
+    Kept separate from the name because they answer different questions. The
+    name is what the thing IS -- the official name on the profile, the one a
+    writer would put in a wiki. The label is what the story CALLS it. Renaming
+    the entry to Lexa would lose the fact that she is Alexandra Langford; this
+    keeps both and lets the map show the one the reader would recognise.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+    thread = _read_thread(project_path, registry,
+                          await _locate(project_path, body.entity_id))
+
+    label = " ".join(str(body.display_name or "").split())
+    if label:
+        names = {str(thread.get("name") or "").lower()}
+        names |= {str(a).lower() for a in (thread.get("aliases") or [])}
+        if label.lower() not in names:
+            raise CodexError(
+                "type_invalid",
+                f"'{label}' is not one of the names this entry answers to. "
+                f"Add it as a name first, so the map and the text agree.",
+                body.entity_id,
+            )
+    thread["display_name"] = label
+    _write_thread(project_path, registry, thread)
+    await codex_store.reindex(project_path)
+    return {"entity_id": body.entity_id, "display_name": label}
 
 
 # ── Weaving: the run ledger ──────────────────────────────────────────────────

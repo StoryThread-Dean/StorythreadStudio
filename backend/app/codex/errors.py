@@ -39,6 +39,7 @@ CODES = {
     "migration_incomplete",
     "run_not_found",
     "report_not_found",
+    "entity_not_empty",
 }
 
 # Which HTTP status each code travels as. Kept in one table so two routes
@@ -60,6 +61,7 @@ _STATUS = {
     "migration_incomplete": 409,
     "run_not_found": 404,
     "report_not_found": 404,
+    "entity_not_empty": 409,
 }
 
 

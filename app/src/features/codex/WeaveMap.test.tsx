@@ -45,9 +45,12 @@ const TYPES = {
 function graph(overrides: Record<string, unknown> = {}) {
   return {
     nodes: [
-      { entity_id: "e-elara", type: "character", name: "Elara Voss" },
-      { entity_id: "e-garrick", type: "character", name: "Garrick Vale" },
-      { entity_id: "e-moor", type: "location", name: "Ravensmoor" },
+      { entity_id: "e-elara", type: "character", name: "Elara Voss",
+        display_name: "", aliases: [], placeholder: false },
+      { entity_id: "e-garrick", type: "character", name: "Garrick Vale",
+        display_name: "", aliases: [], placeholder: false },
+      { entity_id: "e-moor", type: "location", name: "Ravensmoor",
+        display_name: "", aliases: [], placeholder: false },
     ],
     edges: [
       { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
@@ -257,15 +260,17 @@ describe("failure", () => {
 describe("dragging a Thread", () => {
   // Reported from live testing: "clicking on a dot and dragging it, the icon
   // immediately jumps an inch to the LEFT of the mouse and then follows an
-  // inch away from wherever the mouse is going. Directly left."
+  // inch away from wherever the mouse is going. Directly left." And then:
+  // "Single click = menu, Click + Drag = nothing but dragging it."
   //
-  // Two causes, both real. The svg is letterboxed by its own viewBox, so
-  // mapping the cursor across the full element box is off by exactly the
-  // padding -- constant, and in one direction. And nothing recorded where in
-  // the dot the writer took hold of it, so the centre snapped to the cursor.
+  // Three separate things, all real. Nothing recorded WHERE in the dot the
+  // writer took hold, so the centre snapped to the cursor. The cursor was
+  // mapped across the whole element while the drawing is letterboxed inside
+  // its own viewBox, which is a constant offset in one direction. And a drag
+  // ended with a click, so repositioning a dot also opened something.
 
-  /** An element WIDER than the viewBox's shape, so the drawing is centred with
-   *  blank padding down the left and right -- the reported case. */
+  /** An element with a shape unlike the viewBox's, so the drawing is centred
+   *  with blank padding -- the reported case. */
   function letterbox(el: Element, width = 2000, height = 620) {
     el.getBoundingClientRect = () => ({
       left: 0, top: 0, width, height, right: width, bottom: height,
@@ -273,72 +278,65 @@ describe("dragging a Thread", () => {
     }) as DOMRect;
   }
 
-  async function map() {
+  function positionOf(node: Element): { x: number; y: number } {
+    const [x, y] = /translate\(([-\d.]+) ([-\d.]+)\)/
+      .exec(node.getAttribute("transform")!)!.slice(1).map(Number);
+    return { x, y };
+  }
+
+  function lastPinned(onPin: ReturnType<typeof vi.fn>) {
+    const calls = onPin.mock.calls;
+    return Object.values(calls[calls.length - 1][0])[0] as
+      { x: number; y: number };
+  }
+
+  async function map(width = 2000, height = 620) {
     const onPin = vi.fn();
     await renderMap({ onPin });
     const svg = screen.getByRole("img", { name: /Map of your world/ });
-    letterbox(svg);
-    return { onPin, svg };
+    letterbox(svg, width, height);
+    const node = svg.querySelector("g[transform]")!;
+    return { onPin, svg, node, at: positionOf(node) };
   }
 
-  it("does not move at all until the cursor does", async () => {
+  it("moves nothing at all while the cursor holds still", async () => {
     // The first symptom, exactly: press and the dot leaps away before any
-    // movement. With the grip recorded, pressing and holding still leaves it
-    // precisely where it was.
-    const { onPin, svg } = await map();
-    // A node's position lives on its <g transform>, not on the circle.
-    const node = svg.querySelector("g[transform]")!;
-    const [x, y] = /translate\(([-\d.]+) ([-\d.]+)\)/
-      .exec(node.getAttribute("transform")!)!.slice(1).map(Number);
-    const before = { x, y };
+    // movement. Now a press that does not travel does nothing whatsoever.
+    const { onPin, svg, node } = await map();
     fireEvent.mouseDown(node, { clientX: 1000, clientY: 310 });
     fireEvent.mouseMove(svg, { clientX: 1000, clientY: 310 });
-
-    const after = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
-      { x: number; y: number };
-    expect(after.x).toBeCloseTo(before.x, 0);
-    expect(after.y).toBeCloseTo(before.y, 0);
+    expect(onPin).not.toHaveBeenCalled();
   });
 
-  it("tracks the cursor one for one when the drawing is scaled down", async () => {
-    // The subtler half. The svg is letterboxed by its own viewBox, so screen
-    // pixels and viewBox units are not the same size -- here the element is
-    // half the viewBox's size, so 100px of hand movement is 200 units of map.
-    // Getting this wrong makes the dot drift away from the cursor the further
-    // it is dragged, which is a different complaint from the constant offset
-    // and needs its own arithmetic.
-    const { onPin, svg } = await map();
-    letterbox(svg, 500, 310);
-    const node = svg.querySelector("g[transform]")!;
-    fireEvent.mouseDown(node, { clientX: 100, clientY: 155 });
-    fireEvent.mouseMove(svg, { clientX: 100, clientY: 155 });
-    const first = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
-      { x: number; y: number };
-
-    fireEvent.mouseMove(svg, { clientX: 200, clientY: 155 });
-    const second = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
-      { x: number; y: number };
-
-    expect(second.x - first.x).toBeCloseTo(200, 0);
+  it("ignores a hand tremor rather than treating it as a drag", async () => {
+    // A few pixels of slop, because a hand holding a mouse still moves. Below
+    // it, this is a click that has not finished yet.
+    const { onPin, svg, node } = await map();
+    fireEvent.mouseDown(node, { clientX: 1000, clientY: 310 });
+    fireEvent.mouseMove(svg, { clientX: 1002, clientY: 311 });
+    expect(onPin).not.toHaveBeenCalled();
   });
 
   it("keeps the grip, rather than snapping the centre to the cursor", async () => {
-    // Grab anywhere in the dot, move 100 units right, and the node moves 100
-    // units right. The reported symptom was the opposite: the centre jumped to
-    // the cursor and then trailed it.
-    const { onPin, svg } = await map();
-    const node = svg.querySelector("g[transform]")!;
+    // Grab anywhere in the dot, move it, and it moves by exactly that much.
+    const { onPin, svg, node, at } = await map();
     fireEvent.mouseDown(node, { clientX: 1000, clientY: 310 });
-    fireEvent.mouseMove(svg, { clientX: 1000, clientY: 310 });
-    const first = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
-      { x: number; y: number };
+    fireEvent.mouseMove(svg, { clientX: 1050, clientY: 310 });
+    const moved = lastPinned(onPin);
+    expect(moved.x - at.x).toBeCloseTo(50, 0);
+    expect(moved.y - at.y).toBeCloseTo(0, 0);
+  });
 
-    fireEvent.mouseMove(svg, { clientX: 1100, clientY: 310 });
-    const second = Object.values(onPin.mock.calls[onPin.mock.calls.length - 1][0])[0] as
-      { x: number; y: number };
-
-    expect(second.x - first.x).toBeCloseTo(100, 0);
-    expect(second.y).toBeCloseTo(first.y, 0);
+  it("tracks the cursor one for one when the drawing is scaled down", async () => {
+    // The subtler half. Screen pixels and viewBox units are not the same size
+    // -- here the element is half the viewBox, so 100px of hand movement is
+    // 200 units of map. Getting this wrong makes the dot drift further away
+    // the longer it is dragged, which is a different complaint from the
+    // constant offset and needs its own arithmetic.
+    const { onPin, svg, node, at } = await map(500, 310);
+    fireEvent.mouseDown(node, { clientX: 100, clientY: 155 });
+    fireEvent.mouseMove(svg, { clientX: 200, clientY: 155 });
+    expect(lastPinned(onPin).x - at.x).toBeCloseTo(200, 0);
   });
 
   it("moves nothing until a Thread is taken hold of", async () => {
@@ -348,12 +346,119 @@ describe("dragging a Thread", () => {
   });
 
   it("lets go on mouse up", async () => {
-    const { onPin, svg } = await map();
-    const node = svg.querySelector("g[transform]")!;
+    const { onPin, svg, node } = await map();
     fireEvent.mouseDown(node, { clientX: 1000, clientY: 310 });
     fireEvent.mouseUp(svg);
     onPin.mockClear();
     fireEvent.mouseMove(svg, { clientX: 1200, clientY: 400 });
     expect(onPin).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("a bare dot, and what a click means", () => {
+  // "The dots themselves are ok but by themselves they should represent the
+  // default 'Unconnected' Dot... I see the icons below as a legend of what the
+  // dots will turn into once the connection is made."
+  //
+  // And: "Single click = menu, Click + Drag = nothing but dragging it."
+
+  const WITH_STUB = graph({
+    nodes: [
+      { entity_id: "e-alex", type: "character", name: "Alexandra Langford",
+        display_name: "", aliases: [], placeholder: false },
+      { entity_id: "e-lexa", type: "character", name: "Lexa",
+        display_name: "", aliases: [], placeholder: true },
+    ],
+    edges: [],
+  });
+
+  async function mapWithStub() {
+    mockApi(WITH_STUB);
+    const onPin = vi.fn();
+    render(<WeaveMap projectPath={PROJECT} onPin={onPin} />);
+    await waitFor(() => expect(graphCalls.length).toBeGreaterThan(0));
+    const svg = screen.getByRole("img", { name: /Map of your world/ });
+    svg.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: 1000, height: 620, right: 1000, bottom: 620,
+      x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+    const stub = Array.from(svg.querySelectorAll("g[transform]")).find(
+      g => g.querySelector("title")?.textContent?.includes("Lexa"))!;
+    return { svg, stub, onPin };
+  }
+
+  it("draws a bare dot differently from an established one", async () => {
+    // A map full of hollow dots reads as work to do. A map of filled icons
+    // reads as a world. The difference has to be visible without a legend.
+    const { svg } = await mapWithStub();
+    const dashed = svg.querySelectorAll("circle[stroke-dasharray]");
+    expect(dashed.length).toBe(1);
+  });
+
+  it("says what a bare dot is for, on hover", async () => {
+    const { stub } = await mapWithStub();
+    expect(stub.querySelector("title")?.textContent)
+      .toMatch(/nothing in it yet/);
+  });
+
+  it("opens the menu on a single click", async () => {
+    const { stub } = await mapWithStub();
+    fireEvent.mouseDown(stub, { clientX: 500, clientY: 310 });
+    fireEvent.mouseUp(stub);
+    fireEvent.click(stub);
+    expect(screen.getByTestId("bind-dot")).toBeTruthy();
+  });
+
+  it("opens NOTHING after a drag", async () => {
+    // The reported bug: every attempt to reposition a dot also opened
+    // something. A drag ends with a click event on its way and there is no way
+    // to cancel it, so the only reliable answer is to remember it is not one.
+    const { svg, stub } = await mapWithStub();
+    fireEvent.mouseDown(stub, { clientX: 500, clientY: 310 });
+    fireEvent.mouseMove(svg, { clientX: 600, clientY: 360 });
+    fireEvent.mouseUp(svg);
+    fireEvent.click(stub);
+    expect(screen.queryByTestId("bind-dot")).toBeNull();
+  });
+
+  it("opens the menu again on the click after a drag", async () => {
+    // Suppression is for ONE click, not for the rest of the session.
+    const { svg, stub } = await mapWithStub();
+    fireEvent.mouseDown(stub, { clientX: 500, clientY: 310 });
+    fireEvent.mouseMove(svg, { clientX: 600, clientY: 360 });
+    fireEvent.mouseUp(svg);
+    fireEvent.click(stub);
+
+    fireEvent.mouseDown(stub, { clientX: 600, clientY: 360 });
+    fireEvent.mouseUp(stub);
+    fireEvent.click(stub);
+    expect(screen.getByTestId("bind-dot")).toBeTruthy();
+  });
+
+  it("an established dot still focuses rather than asking what it is", async () => {
+    // It already has an answer. The useful click there is "show me what this
+    // connects to".
+    const { svg } = await mapWithStub();
+    const real = Array.from(svg.querySelectorAll("g[transform]")).find(
+      g => g.querySelector("title")?.textContent?.includes("Alexandra"))!;
+    fireEvent.mouseDown(real, { clientX: 500, clientY: 310 });
+    fireEvent.mouseUp(real);
+    fireEvent.click(real);
+    expect(screen.queryByTestId("bind-dot")).toBeNull();
+    expect(screen.getByRole("button", { name: /Show the whole world/ })).toBeTruthy();
+  });
+
+  it("labels a dot with what the story calls it", async () => {
+    mockApi(graph({
+      nodes: [{ entity_id: "e-alex", type: "character",
+                name: "Alexandra Langford", display_name: "Lexa",
+                aliases: ["Lexa"], placeholder: false }],
+      edges: [],
+    }));
+    await renderMap();
+    const svg = screen.getByRole("img", { name: /Map of your world/ });
+    expect(svg.textContent).toContain("Lexa");
+    expect(svg.textContent).not.toContain("Alexandra Langford");
   });
 });

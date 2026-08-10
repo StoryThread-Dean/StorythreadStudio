@@ -34,9 +34,13 @@ import {
   degrees, layoutNodes, neighborhood, nodeRadius, type Point,
 } from "./layout";
 import {
-  fetchAnchors, fetchGraph, fetchTypes,
-  type ChapterAnchor, type TypeRegistry, type WeaveGraph,
+  fetchAnchors, fetchGraph, fetchTypes, nodeLabel,
+  type ChapterAnchor, type GraphNode, type TypeRegistry, type WeaveGraph,
 } from "./api";
+import { BindDot } from "./BindDot";
+
+/** How far the cursor may travel before a press stops being a click. */
+const DRAG_SLOP = 4;
 
 const WIDTH = 1000;
 const HEIGHT = 620;
@@ -61,6 +65,12 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
   const [chapterIndex, setChapterIndex] = useState(-1);
   const [hideSpoilers, setHideSpoilers] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
+  // The bare dot the writer clicked, waiting to be told what it is.
+  const [binding, setBinding] = useState<GraphNode | null>(null);
+  // Bumped when a word moves, so the map re-reads. A counter rather than a
+  // callback because the fetch already lives in an effect and this is the
+  // smallest honest way to say "that input changed".
+  const [redraw, setRedraw] = useState(0);
 
   const at = chapterIndex >= 0 ? chapters[chapterIndex]?.anchor : undefined;
 
@@ -95,7 +105,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
       }
     })();
     return () => { cancelled = true; };
-  }, [projectPath, at, hideSpoilers]);
+  }, [projectPath, at, hideSpoilers, redraw]);
 
   const typeOrder = useMemo(
     () => (registry?.types ?? []).map(t => t.id),
@@ -167,7 +177,18 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
   //    grabbing a dot near its edge snapped it before it moved at all. A drag
   //    should preserve where in the thing you took hold of it.
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const dragging = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const dragging = useRef<{
+    id: string; dx: number; dy: number;
+    // Where the press landed, and whether the cursor has since travelled far
+    // enough to call it a drag. A press that does not move is a CLICK and must
+    // reach the menu; a press that moves must not. Without this every attempt
+    // to reposition a dot also opened something, which is the reported bug.
+    startX: number; startY: number; moved: boolean;
+  } | null>(null);
+  // Set on mouse-up after a real drag, and read by the click handler that
+  // fires immediately afterwards. React gives no way to cancel that click, so
+  // the only reliable answer is to remember that it is not one.
+  const suppressClick = useRef(false);
 
   /** Cursor position in viewBox coordinates, honouring the letterboxing. */
   function pointAt(event: React.MouseEvent): Point | null {
@@ -203,20 +224,55 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
     const at = view?.positions[entityId];
     // The offset between where the writer grabbed and where the node's centre
     // is, so the node keeps its grip rather than snapping.
-    dragging.current = point && at
-      ? { id: entityId, dx: at.x - point.x, dy: at.y - point.y }
-      : { id: entityId, dx: 0, dy: 0 };
+    dragging.current = {
+      id: entityId,
+      dx: point && at ? at.x - point.x : 0,
+      dy: point && at ? at.y - point.y : 0,
+      startX: event.clientX, startY: event.clientY, moved: false,
+    };
   }
 
   function onMouseMove(event: React.MouseEvent) {
     const grip = dragging.current;
-    if (!grip || !onPin) return;
+    if (!grip) return;
+
+    // A few pixels of slop, because a hand holding a mouse still moves. Below
+    // it, this is a click that has not finished yet.
+    if (!grip.moved
+        && Math.abs(event.clientX - grip.startX) < DRAG_SLOP
+        && Math.abs(event.clientY - grip.startY) < DRAG_SLOP) {
+      return;
+    }
+    grip.moved = true;
+
+    if (!onPin) return;
     const point = pointAt(event);
     if (!point) return;
     onPin({
       ...(pinned ?? {}),
       [grip.id]: { x: point.x + grip.dx, y: point.y + grip.dy },
     });
+  }
+
+  function endDrag() {
+    // A drag ends with a click event on its way. Remember to ignore it.
+    suppressClick.current = dragging.current?.moved === true;
+    dragging.current = null;
+  }
+
+  function onNodeClick(node: GraphNode) {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;                     // that was a drag, not a click
+    }
+    // A BARE DOT is an entry Weaving made from a name, with nothing in it. The
+    // thing to do with one is say what it actually is, so a click opens that
+    // rather than a neighbourhood view of a thing that has no neighbours.
+    if (node.placeholder && onPin !== undefined) {
+      setBinding(node);
+      return;
+    }
+    setFocus(focus === node.entity_id ? null : node.entity_id);
   }
 
   if (error) {
@@ -294,8 +350,8 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
             role="img"
             aria-label="Map of your world"
             onMouseMove={onMouseMove}
-            onMouseUp={() => { dragging.current = null; }}
-            onMouseLeave={() => { dragging.current = null; }}
+            onMouseUp={endDrag}
+            onMouseLeave={endDrag}
           >
             {view?.edges.map((edge, i) => {
               const a = view.positions[edge.src_id];
@@ -331,6 +387,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
               if (!point) return null;
               const entry = threadTypeEntry(node.type, typeLabels[node.type],
                                             iconNames[node.type]);
+              const Icon = entry.Icon;
               const radius = nodeRadius(view.degree[node.entity_id] ?? 0);
               const tone = TONE_CLASSES[entry.tone as Tone];
               const isFocus = focus === node.entity_id;
@@ -340,25 +397,59 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
                   transform={`translate(${point.x} ${point.y})`}
                   className="cursor-pointer"
                   onMouseDown={e => startDrag(e, node.entity_id)}
-                  onClick={() => setFocus(isFocus ? null : node.entity_id)}
+                  onClick={() => onNodeClick(node)}
                   onDoubleClick={() => onOpenThread?.(node.entity_id)}
                 >
-                  <title>{`${node.name} -- ${entry.term}`}</title>
-                  <circle
-                    r={radius}
-                    className={`${tone.fill} ${isFocus ? "stroke-white" : "stroke-zinc-900"}`}
-                    strokeWidth={isFocus ? 2 : 1}
-                  />
+                  <title>
+                    {node.placeholder
+                      ? `${node.name} -- nothing in it yet. Click to say what it is.`
+                      : `${nodeLabel(node)} -- ${entry.term}`}
+                  </title>
+                  {/* A BARE DOT means an entry with nothing in it: hollow and
+                      dashed, so a map full of them reads as work to do rather
+                      than as a finished world. An established entry is filled
+                      and carries its kind's icon -- which is what the legend
+                      below has been promising all along. */}
+                  {node.placeholder ? (
+                    <circle
+                      r={radius}
+                      className={`fill-transparent ${isFocus ? "stroke-white" : "stroke-zinc-500"}`}
+                      strokeWidth={isFocus ? 2 : 1}
+                      strokeDasharray="3 2"
+                    />
+                  ) : (
+                    <>
+                      <circle
+                        r={radius}
+                        className={`${tone.fill} ${isFocus ? "stroke-white" : "stroke-zinc-900"}`}
+                        strokeWidth={isFocus ? 2 : 1}
+                      />
+                      <Icon x={-6} y={-6} width={12} height={12}
+                            className="pointer-events-none fill-none stroke-zinc-950"
+                            strokeWidth={2.2} />
+                    </>
+                  )}
                   <text
                     y={radius + 11} textAnchor="middle"
-                    className="fill-zinc-300 text-[10px]"
+                    className={node.placeholder ? "fill-zinc-500 text-[10px]"
+                                                : "fill-zinc-300 text-[10px]"}
                   >
-                    {node.name}
+                    {nodeLabel(node)}
                   </text>
                 </g>
               );
             })}
           </svg>
+        )}
+
+        {binding && (
+          <BindDot
+            projectPath={projectPath}
+            dot={binding}
+            candidates={graph?.nodes ?? []}
+            onClose={() => setBinding(null)}
+            onBound={() => { setBinding(null); setRedraw(n => n + 1); }}
+          />
         )}
 
         {focus && (
