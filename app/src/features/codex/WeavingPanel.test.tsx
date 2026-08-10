@@ -293,7 +293,8 @@ describe("stops that are not about a name", () => {
   const frayed = stop({
     kind: "frayed", key: "frayed|e-1", entity_id: "e-1",
     title: "Mira Kell is missing Overview", quote: "",
-    detail: { name: "Mira Kell", missing: ["Overview"] },
+    detail: { name: "Mira Kell", type: "character", filename: "mira-kell.md",
+              missing: ["Overview"] },
   });
 
   it("offers to open it rather than to fill it in for you", async () => {
@@ -307,7 +308,10 @@ describe("stops that are not about a name", () => {
     const onOpenThread = vi.fn();
     await start({ onOpenThread });
     await userEvent.click(screen.getByRole("button", { name: /Open it and fill it in/ }));
-    await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith("e-1"));
+    // With the KIND and the FILE, so "open it" opens the entry rather than
+    // landing on a list and leaving the writer to find her again.
+    await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith(
+      "e-1", { type: "character", filename: "mira-kell.md" }));
   });
 
   it("does not create anything for a stop that already has an entry", async () => {
@@ -374,7 +378,7 @@ describe("questions your world has not answered", () => {
     detail: {
       question_id: "gov_succession", domain: "governance",
       domain_label: "Power and who holds it",
-      lands_as: ["government", "succession"],
+      lands_as: ["lore", "details"],
       touches: ["What is the worst thing a person can be accused of here?"],
       depth: 2,
     },
@@ -401,7 +405,7 @@ describe("questions your world has not answered", () => {
     // note is not part of the world.
     mockApi({ stops: [unwoven] });
     await start();
-    expect(screen.getByText(/government > succession/)).toBeTruthy();
+    expect(screen.getByText(/lore > details/)).toBeTruthy();
   });
 
   it("says what else the answer reaches into", async () => {
@@ -416,7 +420,7 @@ describe("questions your world has not answered", () => {
     const onOpenKind = vi.fn();
     await start({ onOpenKind });
     await userEvent.click(screen.getByRole("button", { name: /Go and answer it/ }));
-    await waitFor(() => expect(onOpenKind).toHaveBeenCalledWith("government"));
+    await waitFor(() => expect(onOpenKind).toHaveBeenCalledWith("lore"));
   });
 
   it("creates nothing, because the answer does not exist yet", async () => {
@@ -462,5 +466,58 @@ describe("where it sits", () => {
     const { onClose } = await open();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+
+describe("stops with nowhere to send you", () => {
+  // The Profile Builder covers four kinds. Factions, governments, concepts and
+  // events have no editor yet -- and the first version offered "Open it and
+  // fill it in" anyway, which landed the writer on a screen that could not
+  // help them, with no way back. An honest "not yet" is worth more than a
+  // button that goes nowhere.
+
+  const faction = stop({
+    kind: "frayed", key: "frayed|e-f", entity_id: "e-f",
+    title: "House Vale is missing Overview", quote: "",
+    detail: { name: "House Vale", type: "faction", filename: "house-vale.md",
+              missing: ["Overview"] },
+  });
+
+  it("offers no action rather than one that leads nowhere", async () => {
+    mockApi({ stops: [faction] });
+    await start();
+    expect(screen.queryByRole("button", { name: /Open it/ })).toBeNull();
+  });
+
+  it("says why there is nothing to click", async () => {
+    mockApi({ stops: [faction] });
+    await start();
+    expect(screen.getByText(/no editor for this kind of entry yet/)).toBeTruthy();
+  });
+
+  it("still lets the writer put it off or stop being asked", async () => {
+    mockApi({ stops: [faction] });
+    await start();
+    expect(screen.getByRole("button", { name: /Not yet/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Never ask/ })).toBeTruthy();
+  });
+
+  it("says those answers are remembered", async () => {
+    // They are, now that permanence is per book rather than per session.
+    mockApi({ stops: [faction] });
+    await start();
+    expect(screen.getByText(/both are remembered/)).toBeTruthy();
+  });
+
+  it("an Unwoven answer landing in an unbuilt kind says the same", async () => {
+    mockApi({ stops: [stop({
+      kind: "unwoven", key: "unwoven|gov_power", title: "Who holds power?",
+      why: "Because.", entity_id: "", quote: "",
+      detail: { lands_as: ["government", "overview"], touches: [] },
+    })] });
+    await start();
+    expect(screen.queryByRole("button", { name: /Go and answer it/ })).toBeNull();
+    expect(screen.getByText(/no editor for this kind of entry yet/)).toBeTruthy();
   });
 });

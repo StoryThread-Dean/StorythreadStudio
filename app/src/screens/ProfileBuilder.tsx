@@ -357,12 +357,23 @@ function AutoTextarea({
 interface ProfileBuilderProps {
   project: ProjectInfo;
   initialType: ProfileType;
+  /**
+   * Open straight onto one entry, by its filename.
+   *
+   * Added for Weaving: a stop that says "Alexandra is missing her Overview --
+   * open it and fill it in" has to actually open Alexandra. Landing on the
+   * Characters list and leaving the writer to find her again is not the same
+   * promise, and reads as a dead end.
+   */
+  initialFilename?: string;
   onBack: () => void;
 }
 
 
 // ── ProfileBuilder Component ─────────────────────────────────────────────────
-export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderProps) {
+export function ProfileBuilder({
+  project, initialType, initialFilename, onBack,
+}: ProfileBuilderProps) {
 
   // ── State ────────────────────────────────────────────────────────────────
   const [profileType, setProfileType] = useState<ProfileType>(initialType);
@@ -516,6 +527,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     fetchProfileList(profileType);
   }, [profileType, fetchProfileList]);
 
+
   const loadProfile = useCallback(async (item: ProfileListItem) => {
     setEditorLoading(true);
     setError(null);
@@ -653,6 +665,20 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   useEffect(() => {
     setCurrentMatchIdx(null);
   }, [findQuery, findCaseSens, profile?.filename]);
+
+  // Open the requested entry once the list it lives in has arrived, and only
+  // then -- the list is what carries the item a load needs. Guarded by a ref
+  // so it happens ONCE: without that, every later list refresh would yank the
+  // writer back to the entry they were sent to, discarding whatever they had
+  // moved on to.
+  const openedRequested = useRef(false);
+  useEffect(() => {
+    if (openedRequested.current || !initialFilename) return;
+    const wanted = profileList.find(item => item.filename === initialFilename);
+    if (!wanted) return;
+    openedRequested.current = true;
+    void loadProfile(wanted);
+  }, [initialFilename, profileList, loadProfile]);
 
   // Jump the writer's cursor to one specific match: scroll its field into
   // view, focus it, and select the exact character range. This gives the

@@ -29,7 +29,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  ChevronDown, ChevronRight, Loader, MoreHorizontal, Network, Plus, Waypoints,
+  ChevronDown, ChevronRight, Loader, MoreHorizontal, Network, Plus, Spool,
 } from "lucide-react";
 
 import { CONCEPTS, TONE_CLASSES, threadTypeEntry } from "./lexicon";
@@ -168,7 +168,7 @@ export function WeaveNav({
           : "Weaving is not built yet. It will read what you have written and help you fill this in."}
         className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-[11px] text-text-muted hover:text-violet-300 disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
       >
-        <Waypoints size={11} />
+        <Spool size={12} />
         Weaving...
       </button>
 

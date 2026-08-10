@@ -269,6 +269,11 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
         name = thread.get("name") or "(unnamed)"
         if not entity_id:
             continue
+        # WHERE the thing lives, carried on every stop about it. Without this
+        # the walkthrough can only say "open it" and then switch to some
+        # screen, which is not the same thing and reads as a dead end.
+        where = {"name": name, "type": str(thread.get("type") or ""),
+                 "filename": str(thread.get("filename") or "")}
 
         if request.wants(STOP_FRAYED):
             missing = _missing_required(thread, type_index.get(thread.get("type"), {}))
@@ -280,7 +285,7 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                     why=("This Thread's type says these are the parts worth "
                          "having, and they are empty. Anything reading it "
                          "later -- you included -- gets very little."),
-                    detail={"missing": sorted(missing), "name": name},
+                    detail={**where, "missing": sorted(missing)},
                 ))
 
         if request.wants(STOP_LOOSE) and entity_id not in connected:
@@ -291,7 +296,7 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                 why=("No Tie reaches this Thread in either direction. That is "
                      "fine for something genuinely standalone, and usually "
                      "means a connection you know about is not written down."),
-                detail={"name": name},
+                detail=dict(where),
             ))
 
         if request.wants(STOP_SNAG) or request.wants(STOP_UNPLACED):
@@ -299,12 +304,12 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                                 label_for=label_for)
             found += check_ties(entity_id, thread.get("ties") or [], registry,
                                 index, label_for=label_for)
-            stops.extend(_snag_stops(found, name, request))
+            stops.extend(_snag_stops(found, where, request))
 
     return stops
 
 
-def _snag_stops(snags: list[Snag], name: str, request: ScanRequest) -> list[Stop]:
+def _snag_stops(snags: list[Snag], where: dict, request: ScanRequest) -> list[Stop]:
     """A structural finding becomes a stop, unless its kind is muted."""
     from app.codex.snags import SNAG_UNPLACED
 
@@ -315,11 +320,11 @@ def _snag_stops(snags: list[Snag], name: str, request: ScanRequest) -> list[Stop
             continue
         stops.append(Stop(
             kind=kind, entity_id=snag.entity_id, key=_key(kind, snag.key()),
-            title=f"{name}: {snag.summary}",
+            title=f"{where['name']}: {snag.summary}",
             why=("Found by comparing the Run against itself -- no model was "
                  "asked, and this is the same answer every time."),
-            detail={"snag": snag.kind, "sides": snag.sides, "axis": snag.axis,
-                    "name": name},
+            detail={**where, "snag": snag.kind, "sides": snag.sides,
+                    "axis": snag.axis},
         ))
     return stops
 
@@ -570,7 +575,8 @@ def _early_mentions(prose: str, alias_map: dict, display: dict,
             why=("Everything anchored about this Thread happens later than "
                  "this chapter, so the map hides it here -- yet the prose "
                  "names it. Either the mention is early, or the anchors are."),
-            detail={"name": who},
+            detail={"name": who, "type": str(thread.get("type") or ""),
+                    "filename": str(thread.get("filename") or "")},
         ))
     return stops
 

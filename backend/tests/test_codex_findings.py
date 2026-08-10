@@ -93,7 +93,12 @@ def test_a_run_id_cannot_be_a_path(tmp_path):
     assert load_run(folder, "run-../../x") is None
 
 
-def test_runs_are_listed_newest_first(tmp_path):
+def test_every_run_is_listed_with_its_own_counts(tmp_path):
+    # Deliberately does NOT assert which comes first. Two runs saved in the
+    # same clock tick have identical timestamps -- the Windows wall clock
+    # moves in ~15ms steps -- so there is no true answer, and asserting one
+    # made this test fail about a third of the time. What IS guaranteed is
+    # that every run is there and each one's counts belong to it.
     folder = _project(tmp_path)
     first = new_run("full")
     save_run(folder, first)
@@ -101,9 +106,21 @@ def test_runs_are_listed_newest_first(tmp_path):
     answer(second, "k1", STATE_DEFERRED)
     save_run(folder, second)
 
-    listed = list_runs(folder)
-    assert {r["run_id"] for r in listed} == {first["run_id"], second["run_id"]}
-    assert listed[0]["deferred"] == 1
+    listed = {r["run_id"]: r for r in list_runs(folder)}
+    assert set(listed) == {first["run_id"], second["run_id"]}
+    assert listed[second["run_id"]]["deferred"] == 1
+    assert listed[first["run_id"]]["deferred"] == 0
+
+
+def test_the_order_is_stable_between_reads(tmp_path):
+    # A "carry on where you left off" list that reshuffles is worse than one
+    # in an arbitrary order, because the writer cannot learn it.
+    folder = _project(tmp_path)
+    for _ in range(4):
+        save_run(folder, new_run("full"))
+    once = [r["run_id"] for r in list_runs(folder)]
+    twice = [r["run_id"] for r in list_runs(folder)]
+    assert once == twice
 
 
 def test_an_unwritten_run_leaves_no_folder_behind(tmp_path):

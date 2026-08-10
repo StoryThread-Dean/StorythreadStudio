@@ -11,9 +11,16 @@
 # ---------------------------------------------------------------------------
 # app.db is documented, correctly, as a rebuildable cache -- delete it and
 # nothing is lost. Findings are promised the opposite: never re-bought. Those
-# two contracts cannot both hold for the same file, so findings live in
-# `.storythread/weave/runs/<run-id>.json`, written atomically (tmp +
-# os.replace), the same pattern settings_store and structure_store use.
+# two contracts cannot both hold for the same file, so findings live under
+# `.storythread/weave/` in two files, both written atomically (tmp +
+# os.replace), the same pattern settings_store and structure_store use:
+#
+#   answers.json          the BOOK's permanent record -- applied, dismissed,
+#                         retired phrases, muted kinds, settled names
+#   runs/<run-id>.json    one SITTING -- what was staged, what was deferred
+#
+# The split is not tidiness; see "a session is not the right scope for
+# permanently" below.
 #
 # There is deliberately NO SQLite mirror. A novel's worth of findings is a
 # few hundred records and JSON answers every question this feature asks; a
@@ -87,11 +94,14 @@ def _run_path(project_path: str, run_id: str) -> str:
 
 def _now() -> str:
     """
-    Microsecond precision, deliberately.
+    Full precision, for what that is worth on this platform.
 
-    Whole seconds are not enough: "carry on where you left off" sorts by
-    this, and two runs saved inside the same second would order arbitrarily
-    -- offering the writer the wrong session about half the time.
+    "Carry on where you left off" sorts by this, so whole seconds are not
+    enough. But the wall clock on Windows advances in steps of roughly 15ms
+    however many digits it prints, so two runs saved in the same tick DO get
+    identical timestamps and there is genuinely no answer to which is newer.
+    list_runs breaks that tie stably rather than pretending to know; real
+    sessions are minutes apart, so it never arises outside a test.
     """
     return datetime.now(timezone.utc).isoformat()
 
@@ -292,8 +302,9 @@ def list_runs(project_path: str) -> list[dict]:
             "deferred": sum(1 for a in answers.values()
                             if a.get("state") == STATE_DEFERRED),
         })
-    # run_id as a tiebreak so the list is at least STABLE if two runs ever
-    # do land on the same microsecond. Arbitrary-but-fixed beats shuffling.
+    # run_id as a tiebreak, because two runs CAN share a timestamp -- the
+    # Windows wall clock moves in ~15ms steps. Arbitrary-but-fixed beats a
+    # list that reshuffles between reads.
     runs.sort(key=lambda r: (r["updated_at"], r["run_id"]), reverse=True)
     return runs
 

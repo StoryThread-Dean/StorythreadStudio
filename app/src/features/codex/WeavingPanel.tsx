@@ -34,7 +34,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, BellOff, Check, CircleHelp, Clock, Loader, Quote, Waypoints, X,
+  ArrowLeft, BellOff, Check, CircleHelp, Clock, Loader, Quote, Spool, X,
 } from "lucide-react";
 
 import { STOP_KINDS, TONE_CLASSES, type LexEntry } from "./lexicon";
@@ -72,6 +72,31 @@ function lexFor(kind: string): LexEntry | undefined {
   return STOP_KINDS[kind];
 }
 
+/**
+ * Kinds of entry that have an editor today.
+ *
+ * The Profile Builder covers four. Everything else in the Weave -- factions,
+ * governments, concepts, events -- has no editor yet, and a button that
+ * promises to open one leads the writer to a screen that cannot help them.
+ * So the walk SAYS SO instead, and offers the answers that still make sense.
+ * An honest "not yet" is worth more than a button that goes nowhere.
+ */
+const EDITABLE_KINDS = new Set(["character", "relationship", "location", "lore"]);
+
+function target(stop: Stop): { type: string; filename: string } {
+  return {
+    type: String(stop.detail?.type ?? ""),
+    filename: String(stop.detail?.filename ?? ""),
+  };
+}
+
+/** Whether the primary action can actually take the writer anywhere. */
+function hasSomewhereToGo(stop: Stop): boolean {
+  if (stop.kind === "unspun") return true;          // it CREATES the entry
+  if (stop.kind === "unwoven") return EDITABLE_KINDS.has(landsIn(stop)[0] ?? "");
+  return EDITABLE_KINDS.has(target(stop).type);
+}
+
 /** [type, section] an Unwoven answer belongs in. */
 function landsIn(stop: Stop): string[] {
   const lands = stop.detail?.lands_as;
@@ -81,8 +106,15 @@ function landsIn(stop: Stop): string[] {
 interface WeavingPanelProps {
   projectPath: string;
   onClose: () => void;
-  /** Take the writer to a Thread. The walk gets out of the way. */
-  onOpenThread?: (entityId: string) => void;
+  /**
+   * Take the writer to a Thread. The walk gets out of the way.
+   *
+   * `target` carries the KIND and the FILE, because "open it" has to open the
+   * thing it names. Without them the app can only switch to some screen and
+   * leave the writer to find the entry again, which is a different promise.
+   */
+  onOpenThread?: (entityId: string,
+                  target?: { type: string; filename: string }) => void;
   /** Take the writer to a KIND of entry -- where an Unwoven answer belongs,
    *  which has no Thread yet by definition. */
   onOpenKind?: (typeId: string) => void;
@@ -298,7 +330,7 @@ export function WeavingPanel({
       </div>
 
       <div className="mt-2 flex items-start gap-2">
-        <Icon size={14} className={`mt-0.5 shrink-0 ${tone.text}`} />
+        <Icon size={18} className={`mt-0.5 shrink-0 ${tone.text}`} />
         <div className="min-w-0 flex-1">
           <p className="text-[11px] uppercase tracking-wide text-faint">
             {lex?.term ?? stop.kind}
@@ -354,7 +386,16 @@ export function WeavingPanel({
 
       {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
 
+      {!hasSomewhereToGo(stop) && (
+        <p className="mt-2 rounded border border-border bg-bg-surface px-2 py-1.5 text-[11px] text-text-muted">
+          There is no editor for this kind of entry yet, so there is nowhere
+          for this to send you. You can put it off, or stop being asked --
+          both are remembered.
+        </p>
+      )}
+
       <div className="mt-3 flex flex-wrap gap-1.5">
+        {hasSomewhereToGo(stop) && (
         <button
           onClick={() => void answerAndAdvance(async () => {
             if (!runId) return;
@@ -369,7 +410,7 @@ export function WeavingPanel({
               // works that out fresh every time.
               onOpenKind?.(landsIn(stop)[0]);
             } else if (stop.entity_id) {
-              onOpenThread?.(stop.entity_id);
+              onOpenThread?.(stop.entity_id, target(stop));
             }
           })}
           disabled={busy}
@@ -378,6 +419,7 @@ export function WeavingPanel({
           {busy ? <Loader size={11} className="animate-spin" /> : <Check size={11} />}
           {PRIMARY_ACTION[stop.kind] ?? "Open it"}
         </button>
+        )}
 
         <button
           onClick={() => void answerAndAdvance(() =>
@@ -424,7 +466,7 @@ export function WeavingPanel({
           return (
             <li key={kind} className="flex items-center gap-1 text-[11px] text-faint"
                 title={entry?.short}>
-              <KindIcon size={10}
+              <KindIcon size={12}
                         className={TONE_CLASSES[entry?.tone ?? "zinc"].text} />
               {entry?.term ?? kind} {n}
             </li>
@@ -495,7 +537,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose: () =
         className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel p-4 shadow-2xl"
       >
         <header className="mb-3 flex items-center gap-2">
-          <Waypoints size={14} className="text-violet-300" />
+          <Spool size={15} className="text-violet-300" />
           <h2 className="flex-1 text-sm font-semibold text-text-primary">Weaving</h2>
           <button onClick={onClose} aria-label="Close Weaving"
                   className="rounded p-1 text-faint hover:text-text-primary">

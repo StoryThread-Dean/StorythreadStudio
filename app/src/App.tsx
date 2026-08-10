@@ -135,6 +135,9 @@ function App() {
   // conversation ABOUT the book, and taking the book away to have it would
   // make every stop harder to judge.
   const [weavingOpen, setWeavingOpen] = useState(false);
+  // Which entry Weaving sent the writer to, so the Profile Builder opens
+  // on THAT one rather than on its list. "Open it" has to open it.
+  const [profileFilename, setProfileFilename] = useState<string | undefined>();
   // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
   // when no writing project is open. Not part of currentView because it
   // never coexists with the editor layout.
@@ -2050,6 +2053,7 @@ function App() {
         <ProfileBuilder
           project={currentProject}
           initialType={profileType}
+          initialFilename={profileFilename}
           onBack={() => setCurrentView("editor")}
         />
       </>
@@ -2733,13 +2737,30 @@ function App() {
           <WeavingPanel
             projectPath={currentProject.root_path}
             onClose={() => setWeavingOpen(false)}
-            onOpenThread={() => { setWeavingOpen(false); setCurrentView("weave"); }}
+            onOpenThread={(_entityId, target) => {
+              // Route by WHAT IT IS. The four kinds the Profile Builder was
+              // built for open there, on the actual entry -- the point of the
+              // button is that it opens the thing it names.
+              setWeavingOpen(false);
+              const kind = target?.type ?? "";
+              if (["character", "relationship", "location", "lore"].includes(kind)) {
+                setProfileType(kind as "character" | "relationship" | "location" | "lore");
+                setProfileFilename(target?.filename || undefined);
+                setCurrentView("profiles");
+                return;
+              }
+              setProfileFilename(undefined);
+              setCurrentView("weave");
+            }}
             onOpenKind={typeId => {
               // An Unwoven answer belongs in a KIND of entry, not in one
               // that already exists. The four the Profile Builder was made
               // for still open there; everything else opens in the Weave.
               if (["character", "relationship", "location", "lore"].includes(typeId)) {
                 setProfileType(typeId as "character" | "relationship" | "location" | "lore");
+                // No entry to open -- an Unwoven answer has none yet by
+                // definition, so this lands on the list on purpose.
+                setProfileFilename(undefined);
                 setCurrentView("profiles");
               } else {
                 setCurrentView("weave");

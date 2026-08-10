@@ -25,12 +25,12 @@ import {
   AlertTriangle, Anchor, Atom, Bird, BookOpen, Bot, Brain, Bug, CalendarClock,
   CalendarOff, Castle, Church, CircleDashed, Clock, Cog, Coins, Compass, Crown,
   Drama, Eye, Feather, FileSearch, FileText, Fish, Flag, Flame, FlaskConical,
-  Footprints, Gauge, Gem, Ghost, GitMerge, Hammer, Heart, History, Key,
+  Footprints, Gem, Ghost, GitMerge, Hammer, Heart, History, Key,
   Landmark, Languages, Leaf, Lightbulb, Link2, ListTree, Map, MapPin, Moon,
   Mountain, Music, Network, NotebookPen, Package, Paintbrush, PawPrint,
   Pickaxe, Rocket, Scale, ScrollText, Shield, Ship, Skull, Snowflake, Sparkles,
-  Star, Sun, Sword, Swords, Tent, Trees, Unlink, Unplug, User, Users, Wand,
-  Waves, Waypoints, Wheat, Zap,
+  Spline, Spool, Star, Sun, Sword, Swords, Tent, Trees, Unlink, User, Users,
+  Wand, Waves, Wheat, Wind, Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -93,7 +93,7 @@ export const CONCEPTS: Record<string, LexEntry> = {
     + "you get the truth. Nothing else in the app works this way, and it is the whole reason the Weave exists.",
   ),
   weaving: entry(
-    "walkthrough", "Weaving", Waypoints, "violet",
+    "walkthrough", "Weaving", Spool, "violet",
     "A guided session that helps you fill the Weave in.",
     "It reads what you have written, finds what is missing or contradictory, and walks you through it one decision at a time.",
     "Weaving is optional. It looks at your manuscript and your Weave together and offers you things to decide: a name that has no Thread, "
@@ -203,16 +203,23 @@ export function guidePlainText(lines: GuideLine[]): string {
 // come from the AI and canned passes; Tangle is a grouping). They stay
 // because the vocabulary was decided in one pass rather than invented twice.
 
+// THE ICONS ARE THE LOOM, DELIBERATELY. Weaving is a Spool, Unspun is a sheaf
+// of unspun fibre, Frayed is strands coming apart, Loose thread is a curve
+// with its end hanging free. The first set reached for whatever was nearest --
+// a circuit-board Waypoints for Weaving, a car-dashboard Gauge for Frayed, a
+// power plug for Loose thread -- and a writer reads those as some other app's
+// vocabulary leaking through. The metaphor is the whole point of the feature's
+// name; the icons have to carry it.
 export const STOP_KINDS: Record<string, LexEntry> = {
   "unspun": entry(
-    "unspun", "Unspun", CircleDashed, "blue",
+    "unspun", "Unspun", Wheat, "blue",
     "A name in your prose with no Thread behind it.",
     "It offers to make an entry for someone your story already mentions.",
     "Your manuscript refers to a person, place or thing that has no entry in the Weave. That is often fine -- an innkeeper with one line "
     + "does not need a profile -- so you can say it is not a real entry and it will never ask again.",
   ),
   "frayed": entry(
-    "frayed", "Frayed", Gauge, "amber",
+    "frayed", "Frayed", Wind, "amber",
     "A Thread too thin to be much use.",
     "It shows you what is missing and offers to fill it from what you have already written.",
     "An entry exists but has almost nothing in it. A Thread with just a name cannot help your AI write the character, and cannot tell you "
@@ -263,7 +270,7 @@ export const STOP_KINDS: Record<string, LexEntry> = {
     + "say which. It can only happen on Threads you have actually dated, so it never nags a world you have not anchored yet.",
   ),
   "loose_thread": entry(
-    "loose_thread", "Loose thread", Unplug, "zinc",
+    "loose_thread", "Loose thread", Spline, "zinc",
     "A Thread nothing connects to.",
     "It points out entries that are not part of your world yet, and what each would need to be.",
     "An entry with no Ties and no mentions is floating free. Sometimes that is right -- something you have planned but not used -- and "
