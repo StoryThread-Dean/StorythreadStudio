@@ -16,6 +16,7 @@ import {
   GROUP_GUIDES,
   STOP_KINDS,
   TONE_CLASSES,
+  guidePlainText,
   iconByName,
   lex,
   threadTypeEntry,
@@ -71,34 +72,55 @@ describe("the house punctuation rule", () => {
 
 describe("the guide behind each group's What's this?", () => {
   const GROUPS = ["notes", "profiles", "other"];
+  const flat = (group: string) => guidePlainText(GROUP_GUIDES[group]);
 
   it("has one for all three groups", () => {
     for (const group of GROUPS) {
-      expect(GROUP_GUIDES[group], group).toBeTruthy();
+      expect(GROUP_GUIDES[group]?.length, group).toBeGreaterThan(4);
     }
   });
 
-  it("says what the Weave is before saying what the group is", () => {
-    // A writer meeting one of these for the first time needs the context
-    // before the detail.
+  it("opens with what the Weave is, before the detail", () => {
     for (const group of GROUPS) {
-      expect(GROUP_GUIDES[group].slice(0, 120)).toMatch(/The Weave/);
+      expect(GROUP_GUIDES[group][0].term, group).toBe("The Weave");
     }
   });
 
-  it("names what actually lives in the group", () => {
-    expect(GROUP_GUIDES.notes).toMatch(/Outline/);
-    expect(GROUP_GUIDES.notes).toMatch(/Style Guide/);
-    expect(GROUP_GUIDES.profiles).toMatch(/Factions/);
-    expect(GROUP_GUIDES.profiles).toMatch(/Religions/);
-    expect(GROUP_GUIDES.profiles).toMatch(/Governments/);
-    expect(GROUP_GUIDES.other).toMatch(/Events/);
-    expect(GROUP_GUIDES.other).toMatch(/Languages/);
+  it("names the group on its own line, second", () => {
+    expect(GROUP_GUIDES.notes[1].term).toBe("NOTES");
+    expect(GROUP_GUIDES.profiles[1].term).toBe("PROFILES");
+    expect(GROUP_GUIDES.other[1].term).toBe("OTHER");
+  });
+
+  it("gives each kind its own line rather than burying it in a sentence", () => {
+    // The list is what a writer is actually scanning for. In a paragraph it
+    // is unfindable.
+    const kinds = GROUP_GUIDES.profiles.filter(l => l.indent).map(l => l.term);
+    expect(kinds).toEqual([
+      "Factions", "Religions", "Governments", "Deities", "Creatures",
+      "Cultures", "Relationships",
+    ]);
+  });
+
+  it("leads every kind line with the term, so the eye can run down them", () => {
+    for (const group of GROUPS) {
+      for (const line of GROUP_GUIDES[group].filter(l => l.indent)) {
+        expect(line.term?.trim(), `${group}: ${line.text}`).toBeTruthy();
+      }
+    }
+  });
+
+  it("names what actually lives in each group", () => {
+    expect(flat("notes")).toMatch(/Outline/);
+    expect(flat("notes")).toMatch(/Style Guide/);
+    expect(flat("profiles")).toMatch(/Governments/);
+    expect(flat("other")).toMatch(/Languages/);
   });
 
   it("explains the Custom option too", () => {
     for (const group of GROUPS) {
-      expect(GROUP_GUIDES[group], group).toMatch(/Something else/);
+      expect(GROUP_GUIDES[group].some(l => l.term === "Something else..."), group)
+        .toBe(true);
     }
   });
 
@@ -107,26 +129,47 @@ describe("the guide behind each group's What's this?", () => {
     // filling any of this in worth doing. A form is a chore until you know
     // what the app will DO with it.
     for (const group of GROUPS) {
-      expect(GROUP_GUIDES[group], group).toMatch(/Weaving/);
+      const last = GROUP_GUIDES[group][GROUP_GUIDES[group].length - 1];
+      expect(last.text, group).toMatch(/WEAVING/);
     }
   });
 
   it("keeps the weaving metaphor rather than dropping into jargon", () => {
-    const all = GROUPS.map(g => GROUP_GUIDES[g]).join(" ");
+    const all = GROUPS.map(flat).join(" ");
     expect(all).toMatch(/thread/i);
     expect(all).toMatch(/stitch/i);
   });
 
   it("is long enough to be worth opening, and not a wall", () => {
     for (const group of GROUPS) {
-      expect(GROUP_GUIDES[group].length, group).toBeGreaterThan(400);
-      expect(GROUP_GUIDES[group].length, group).toBeLessThan(2000);
+      expect(flat(group).length, group).toBeGreaterThan(400);
+      expect(flat(group).length, group).toBeLessThan(2600);
+    }
+  });
+
+  it("keeps individual lines short enough to scan", () => {
+    // A "line" that runs to a paragraph is the wall this structure exists
+    // to break up.
+    for (const group of GROUPS) {
+      for (const line of GROUP_GUIDES[group]) {
+        expect(line.text.length, `${group}: ${line.text.slice(0, 40)}`)
+          .toBeLessThan(420);
+      }
     }
   });
 
   it("obeys the house punctuation rule", () => {
     for (const group of GROUPS) {
-      expect(GROUP_GUIDES[group], group).not.toMatch(/[—–]/);
+      expect(flat(group), group).not.toMatch(/[—–]/);
+    }
+  });
+
+  it("closes every emphasis marker it opens", () => {
+    // An odd asterisk would render as a literal one mid-sentence.
+    for (const group of GROUPS) {
+      for (const line of GROUP_GUIDES[group]) {
+        expect((line.text.match(/\*/g) ?? []).length % 2, line.text).toBe(0);
+      }
     }
   });
 });

@@ -228,25 +228,27 @@ describe("+ Add New", () => {
   it("offers the longer answer behind What's this?", async () => {
     const dialog = await openAdd("Profiles");
     await userEvent.click(within(dialog).getByRole("button", { name: /what's this/i }));
+    // Read the whole dialog: each line is its own block with the term in its
+    // own span, which is the layout, so no single element holds a sentence.
+    const text = dialog.textContent ?? "";
     // The context first...
-    expect(within(dialog).getByText(/everything in your world and how it all connects/))
-      .toBeTruthy();
+    expect(text).toMatch(/everything in your world and how it all connects/);
     // ...and what happens next, which is the part that makes filling any of
     // this in worth doing.
-    expect(within(dialog).getByText(/Weaving is the step/)).toBeTruthy();
+    expect(text).toMatch(/WEAVING is the step/);
   });
 
   it("gives each group its own answer, not one generic one", async () => {
     const dialog = await openAdd("Profiles");
     await userEvent.click(within(dialog).getByRole("button", { name: /what's this/i }));
-    expect(within(dialog).getByText(/Factions for groups/)).toBeTruthy();
+    expect(dialog.textContent).toMatch(/Factions for groups/);
 
     // Switching group swaps the explanation and leaves it OPEN. A writer who
     // asked what a group is has asked a question about groups, not about
     // that one group -- collapsing it on every tab would make them ask again.
     await userEvent.click(within(dialog).getByRole("tab", { name: "Notes" }));
-    expect(within(dialog).getByText(/documents in your own voice/)).toBeTruthy();
-    expect(within(dialog).queryByText(/Factions for groups/)).toBeNull();
+    expect(dialog.textContent).toMatch(/documents in your own voice/);
+    expect(dialog.textContent).not.toMatch(/Factions for groups/);
   });
 
   it("SHOWS a shipped kind rather than trying to create it", async () => {

@@ -27,6 +27,7 @@ import { AlertTriangle, Loader, Plus, X } from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { CUSTOM_NAME_MAX, checkCustomName, tidyCustomName } from "./customName";
+import { GuideBody } from "./GuideBody";
 import { GROUP_GUIDES, TONE_CLASSES, threadTypeEntry } from "./lexicon";
 import type { AvailableEntry, SectionsTree } from "./api";
 
@@ -128,7 +129,7 @@ export function AddNewDialog({
               to leave out and the one that makes the rest worth doing. */}
           <div className="mb-3">
             <WhatsThis label="What's this?">
-              {GROUP_GUIDES[current?.id ?? ""] ?? ""}
+              <GuideBody lines={GROUP_GUIDES[current?.id ?? ""] ?? []} />
             </WhatsThis>
           </div>
 
