@@ -38,6 +38,7 @@ CODES = {
     "index_dirty",
     "migration_incomplete",
     "run_not_found",
+    "report_not_found",
 }
 
 # Which HTTP status each code travels as. Kept in one table so two routes
@@ -58,6 +59,7 @@ _STATUS = {
     "index_dirty": 503,
     "migration_incomplete": 409,
     "run_not_found": 404,
+    "report_not_found": 404,
 }
 
 

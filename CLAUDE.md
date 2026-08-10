@@ -234,6 +234,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_codex_store.py` -- index health: a failed write marks dirty, a dirty index rebuilds before serving, an out-of-band edit is caught by the revision fingerprint
   - `test_codex_sections.py` / `test_codex_edit_delete.py` -- the sidebar growth rule; renaming a kind brings its entries, deleting one that holds entries is REFUSED with a count, a deleted note goes to trash
   - `test_codex_migration.py` -- dry run writes nothing, idempotent, marker only on success, an interrupted run offers resume or restore
+  - `test_codex_migration_report.py` -- what a conversion can SAY it did: a per-file manifest that outlives the HTTP response, and a before/after comparison read from the BACKUP (profiles/ may have been edited since), with the one content change it makes surfaced rather than hidden inside a "same" verdict
   - `test_codex_routes.py` -- the HTTP surface, including that every refusal the router raises comes from the closed set of codes in `app/codex/errors.py`
   - `test_codex_icon_keywords.py` -- TWO cross-language contracts, both read `lexicon.ts` from Python: every icon name the app can store is bundled, and every stop kind `scan.py` can send has words on screen
   - `test_codex_mentions.py` -- an ambiguous mention NEVER silently binds (a bound mention pulls a Thread into AI context, so a wrong bind is invisible); the two things allowed to settle one
@@ -288,6 +289,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/codex/GuideBody.test.tsx` / `customName.test.ts` -- the per-group guides, and the custom-name rules
   - `src/features/codex/WeavingPanel.test.tsx` -- the walkthrough: a real count rather than an estimate, every stop shows its evidence and can say why, four DIFFERENT ways to answer, and the one-click action creates an EMPTY entry that is immediately Frayed
   - `src/features/codex/MigrationPanel.test.tsx` -- consent for the most dangerous button in the programme: the dry run is not optional, the plan is itemised rather than summed, the backup is named BEFORE the button, two clicks with the count repeated, and an interrupted run offers resume or restore rather than guessing
+  - `src/features/codex/MigrationResults.test.tsx` -- the account a conversion gives afterwards: every entry listed and grouped by kind (not counted), each one openable as original-vs-converted field by field, "changed" and "missing" kept distinct, and the raw files offered because a table is an interpretation
 - `tests/manual-smoke.md` -- human walks through this before cutting a release. Covers the Tauri-shell flows (file dialogs, the updater, native menus, sidecar lifecycle) that automated tests can't reach today.
 
 ### Test commands

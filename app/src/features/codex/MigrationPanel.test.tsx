@@ -197,15 +197,13 @@ describe("afterwards", () => {
     expect(screen.getByText(/15 entries are now in the Weave/)).toBeTruthy();
   });
 
-  it("says where the copy of the originals is", async () => {
+  it("hands off to the itemised results rather than summing it up", async () => {
+    // The wording of what a conversion did belongs to MigrationResults, which
+    // owns those assertions. What THIS screen is responsible for is handing
+    // over to it instead of reporting a number and stopping.
     await convert();
+    expect(screen.getByTestId("migration-results")).toBeTruthy();
     expect(screen.getByText(/profiles.backup-2026-08-10/)).toBeTruthy();
-    expect(screen.getByText(/Nothing deleted them and nothing will/)).toBeTruthy();
-  });
-
-  it("says the arcs became dated facts", async () => {
-    await convert();
-    expect(screen.getByText(/became dated facts/)).toBeTruthy();
   });
 
   it("repeats the warnings rather than dropping them once it is done", async () => {

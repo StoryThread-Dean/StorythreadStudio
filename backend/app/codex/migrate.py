@@ -240,6 +240,7 @@ def run_migration(project_path: str, resume: bool = False) -> dict:
     registry = default_registry()
 
     converted = 0
+    entries: list[dict] = []
     seen_ids: set[str] = set()
     for group in plan["convert"]:
         source = os.path.join(profiles_root, group["folder"])
@@ -261,6 +262,18 @@ def run_migration(project_path: str, resume: bool = False) -> dict:
             with open(out, "w", encoding="utf-8") as f:
                 f.write(render_thread(thread, registry))
             converted += 1
+            # WHAT went WHERE, one row per file. Without this the writer is
+            # told a number and nothing else, which is exactly the "one button
+            # and something happened" experience this app exists to avoid.
+            entries.append({
+                "type": group["type"],
+                "name": thread.get("name") or name,
+                "entity_id": thread.get("entity_id", ""),
+                "filename": name,
+                "source": f"profiles/{group['folder']}/{name}",
+                "converted_to":
+                    f"codex/{_folder_for(registry, group['type'])}/{name}",
+            })
 
     arcs_absorbed = _absorb_arcs(project_path, registry, warnings)
 
@@ -274,15 +287,53 @@ def run_migration(project_path: str, resume: bool = False) -> dict:
     except OSError:
         pass
 
-    return {
+    report = {
         "status": "migrated",
         "converted": converted,
         "arcs_absorbed": arcs_absorbed,
         "backup_path": backup,
+        "entries": entries,
         "skipped": plan["skipped"],
         "unconvertible": plan["unconvertible"],
         "warnings": warnings,
+        "finished_at": datetime.now(timezone.utc).isoformat(),
     }
+    # Kept on disk, not just returned. "What did that do?" is a question a
+    # writer asks the next day as well as in the moment, and a report that
+    # only exists in one HTTP response cannot answer it.
+    _write_report(project_path, report)
+    return report
+
+
+REPORT_NAME = "migration-report.json"
+
+
+def report_path(project_path: str) -> str:
+    return os.path.join(project_path, ".storythread", "weave", REPORT_NAME)
+
+
+def _write_report(project_path: str, report: dict) -> None:
+    """Best-effort: a report we could not save must not fail a conversion that
+    already succeeded."""
+    try:
+        path = report_path(project_path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        os.replace(tmp, path)
+    except OSError as exc:
+        log.warning("could not write the migration report: %s", exc)
+
+
+def load_report(project_path: str) -> dict | None:
+    """The last conversion's report, or None if there has not been one."""
+    try:
+        with open(report_path(project_path), "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def _folder_for(registry: dict, type_id: str) -> str:
@@ -453,3 +504,132 @@ def restore_backup(project_path: str) -> dict:
         pass
 
     return {"status": "restored", "backup_path": backup}
+
+
+# ── Showing the writer what it did ───────────────────────────────────────────
+# "It converted 5 profiles" is a number, not an account. A writer who cannot
+# see WHAT a conversion did to their own words has to take it on faith, and
+# taking AI-adjacent operations on faith is the habit this whole app is built
+# to break.
+#
+# The original side is read from the BACKUP rather than from profiles/. Both
+# still exist, but the backup is the copy that was actually converted from and
+# nothing can have edited it since. profiles/ could have been touched by the
+# writer in the meantime, which would make the comparison quietly wrong.
+
+_TYPE_TO_FOLDER = {v: k for k, v in FOLDER_TO_TYPE.items()}
+
+
+def compare_migrated(project_path: str, type_id: str, filename: str) -> dict:
+    """
+    One profile, before and after, field by field.
+
+    Raises FileNotFoundError when either side is missing -- the caller turns
+    that into a refusal the writer can act on rather than showing half a
+    comparison as if it were whole.
+    """
+    profiles_folder = _TYPE_TO_FOLDER.get(type_id)
+    if profiles_folder is None:
+        raise ValueError(f"not a converted type: {type_id!r}")
+
+    report = load_report(project_path) or {}
+    backup = report.get("backup_path") or _backup_path(project_path)
+    original_path = os.path.join(backup, profiles_folder, filename)
+
+    registry = default_registry()
+    converted_path = os.path.join(project_path, "codex",
+                                  _folder_for(registry, type_id), filename)
+
+    original_raw = _read(original_path)
+    converted_raw = _read(converted_path)
+
+    before = parse_thread(original_raw)
+    after = parse_thread(converted_raw)
+
+    return {
+        "name": after.get("name") or before.get("name") or filename,
+        "type": type_id,
+        "filename": filename,
+        "original_path": original_path,
+        "converted_path": converted_path,
+        "sections": _compare_sections(before, after),
+        "fields": _compare_fields(before, after),
+        # The raw text of both, so a writer who wants to see the actual files
+        # never has to leave the app to do it.
+        "original_raw": original_raw,
+        "converted_raw": converted_raw,
+    }
+
+
+def _read(path: str) -> str:
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _section_text(section: dict) -> str:
+    """One section flattened for comparison: prose, or its trait blocks."""
+    parts: list[str] = []
+    content = str(section.get("content") or "").strip()
+    if content:
+        parts.append(content)
+    for block in section.get("trait_blocks") or []:
+        line = f"{block.get('trait', '')}: {block.get('description', '')}"
+        importance = block.get("importance")
+        if importance:
+            line += f"  [{importance}]"
+        # The one content change the conversion makes, so it has to be visible
+        # in the comparison rather than hidden inside a "same" verdict.
+        if block.get("ai_scope"):
+            line += f"  [AI: {block['ai_scope']}]"
+        parts.append(line)
+    return "\n".join(parts)
+
+
+def _compare_sections(before: dict, after: dict) -> list[dict]:
+    ids: list[str] = list(before.get("sections") or {})
+    for section_id in (after.get("sections") or {}):
+        if section_id not in ids:
+            ids.append(section_id)
+
+    rows: list[dict] = []
+    for section_id in ids:
+        old = (before.get("sections") or {}).get(section_id) or {}
+        new = (after.get("sections") or {}).get(section_id) or {}
+        old_text = _section_text(old)
+        new_text = _section_text(new)
+        rows.append({
+            "id": section_id,
+            "heading": new.get("heading") or old.get("heading") or section_id,
+            "original": old_text,
+            "converted": new_text,
+            "changed": old_text.strip() != new_text.strip(),
+            # Named separately from "changed" because the two mean different
+            # things to a writer: one is "this was edited", the other is
+            # "this did not come across".
+            "missing": bool(old_text.strip()) and not new_text.strip(),
+        })
+    return rows
+
+
+def _compare_fields(before: dict, after: dict) -> list[dict]:
+    """The frontmatter, including the bits the conversion deliberately adds."""
+    def render(value) -> str:
+        if isinstance(value, list):
+            return ", ".join(str(v) for v in value)
+        if isinstance(value, dict):
+            return ", ".join(f"{k}: {v}" for k, v in value.items())
+        return "" if value is None else str(value)
+
+    rows: list[dict] = []
+    for key, label in (
+        ("name", "Name"), ("type", "Kind"), ("entity_id", "Id"),
+        ("role", "Role"), ("status", "Status"), ("aliases", "Also known as"),
+        ("tags", "Tags"), ("fields", "Extra fields"),
+        ("character_kind", "Character kind"), ("ai_scope", "AI may see"),
+    ):
+        old, new = render(before.get(key)), render(after.get(key))
+        if not old and not new:
+            continue
+        rows.append({"field": label, "original": old, "converted": new,
+                     "changed": old != new})
+    return rows

@@ -25,6 +25,8 @@ from app import codex_store
 from app.codex.anchors import AnchorIndex, format_anchor
 from app.codex.errors import CodexError
 from app.codex.migrate import (
+    compare_migrated,
+    load_report,
     migration_state,
     plan_migration,
     restore_backup,
@@ -807,6 +809,52 @@ async def post_migrate(project_path: str = Query(...), dry_run: bool = True,
     if result.get("status") == "migrated":
         await codex_store.reindex(project_path)
     return result
+
+
+@router.get("/migrate/report")
+async def get_migrate_report(project_path: str = Query(...)):
+    """
+    The last conversion's account of itself, one row per file.
+
+    Kept on disk rather than only returned once, because "what did that
+    actually do?" is a question a writer asks the next day too.
+    """
+    project_path = validate_project_path(project_path)
+    report = load_report(project_path)
+    if report is None:
+        raise CodexError(
+            "report_not_found",
+            "There is no conversion report for this project yet.",
+            project_path,
+        )
+    return report
+
+
+@router.get("/migrate/compare")
+async def get_migrate_compare(project_path: str = Query(...),
+                              type: str = Query(...),
+                              filename: str = Query(...)):
+    """
+    One profile before and after, field by field.
+
+    The original comes from the BACKUP, which is the copy the conversion
+    actually read and which nothing can have edited since.
+    """
+    project_path = validate_project_path(project_path)
+    # The filename arrives over HTTP and is used to build two paths, so it is
+    # contained the same way every other file name in this router is.
+    safe_child(os.path.join(project_path, "codex"), filename)
+    try:
+        return compare_migrated(project_path, type, filename)
+    except ValueError as exc:
+        raise CodexError("type_invalid", str(exc)) from exc
+    except OSError as exc:
+        raise CodexError(
+            "source_corrupt",
+            "One side of that comparison could not be read, so it is not "
+            "being shown as if it were complete.",
+            str(exc),
+        ) from exc
 
 
 @router.post("/migrate/restore")

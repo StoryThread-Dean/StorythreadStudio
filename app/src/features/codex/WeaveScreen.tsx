@@ -12,11 +12,14 @@
 // would be the most confusing thing this feature could do.
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, List, Loader, Network, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle, FileText, List, Loader, Network, RefreshCw,
+} from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { CONCEPTS } from "./lexicon";
 import { MigrationPanel } from "./MigrationPanel";
+import { MigrationResults, type MigrationReport } from "./MigrationResults";
 import { WeaveList } from "./WeaveList";
 import { WeaveMap } from "./WeaveMap";
 import { fetchHealth, reindex, type WeaveHealth } from "./api";
@@ -51,6 +54,18 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
   }, [projectPath]);
 
   useEffect(() => { void check(); }, [check]);
+
+  // A past conversion's account of itself. Fetched quietly: a project that
+  // was never converted simply has none, which is not an error worth showing.
+  const [report, setReport] = useState<MigrationReport | null>(null);
+  const [showReport, setShowReport] = useState(false);
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/codex/migrate/report`
+          + `?project_path=${encodeURIComponent(projectPath)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(body => setReport(body?.entries ? (body as MigrationReport) : null))
+      .catch(() => setReport(null));
+  }, [projectPath]);
 
   async function rebuild() {
     setBusy(true);
@@ -103,6 +118,17 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
           </button>
         </div>
 
+        {report && (
+          <button
+            type="button"
+            onClick={() => setShowReport(v => !v)}
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+          >
+            <FileText size={11} />
+            {showReport ? "Hide the conversion" : "What did the conversion do?"}
+          </button>
+        )}
+
         <div className="ml-auto">
           <WhatsThis label="What is the Weave?">
             {CONCEPTS.weave.whatsThis}
@@ -143,6 +169,12 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
                 <RefreshCw size={10} className={busy ? "animate-spin" : ""} /> Re-read now
               </button>
             </p>
+          )}
+
+          {showReport && report && (
+            <div className="rounded border border-border bg-bg-primary px-4 py-4">
+              <MigrationResults projectPath={projectPath} report={report} />
+            </div>
           )}
 
           {view === "map"

@@ -32,6 +32,8 @@ import {
   AlertTriangle, ArrowRight, Check, FolderInput, Info, Loader, RotateCcw,
 } from "lucide-react";
 
+import { MigrationResults, type MigrationReport } from "./MigrationResults";
+
 const API_BASE = "http://localhost:8000";
 
 interface FolderPlan {
@@ -61,6 +63,8 @@ interface Result {
   backup_path?: string | null;
   warnings?: string[];
   unconvertible?: { folder: string; file?: string; reason: string }[];
+  entries?: { type: string; name: string; entity_id: string; filename: string;
+              source: string; converted_to: string }[];
 }
 
 interface MigrationPanelProps {
@@ -130,67 +134,19 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
     return (
       <div data-testid="migration-report"
            className="rounded border border-border bg-bg-primary px-4 py-4">
-        <p className="flex items-center gap-2 text-sm text-text-primary">
-          <Check size={14} className="text-emerald-400" />
-          {result.status === "restored"
-            ? "Your profiles are back the way they were."
-            : result.status === "already-migrated"
-              ? "This project was already in the Weave. Nothing changed."
-              : `${result.converted ?? 0} ${(result.converted ?? 0) === 1
-                  ? "entry" : "entries"} are now in the Weave.`}
-        </p>
-
-        {result.status === "migrated" && (
-          <ul className="mt-2 space-y-1 text-xs text-text-muted">
-            {(result.arcs_absorbed ?? 0) > 0 && (
-              <li>
-                {result.arcs_absorbed} series arc
-                {result.arcs_absorbed === 1 ? "" : "s"} became dated facts on
-                the entries they belong to.
-              </li>
-            )}
-            {result.backup_path && (
-              <li>
-                Your original profiles were copied to{" "}
-                <span className="text-text-primary">{result.backup_path}</span>{" "}
-                first, and are still there. Nothing deleted them and nothing
-                will.
-              </li>
-            )}
-            <li>
-              Your <span className="text-text-primary">profiles/</span> folder
-              is untouched as well. Delete it yourself when you are satisfied,
-              or leave it.
-            </li>
-          </ul>
-        )}
-
-        {/* Repeated even though they were already on screen. A conversion
-            that quietly dropped something the preview mentioned would be the
-            worst outcome here. */}
-        {(result.warnings?.length ?? 0) > 0 && (
-          <div className="mt-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">
-              Worth knowing
-            </p>
-            <ul className="mt-1 space-y-0.5 text-[11px] text-amber-200/80">
-              {result.warnings!.map(w => <li key={w}>{w}</li>)}
-            </ul>
-          </div>
-        )}
-        {(result.unconvertible?.length ?? 0) > 0 && (
-          <div className="mt-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-200/90">
-              Left alone
-            </p>
-            <ul className="mt-1 space-y-0.5 text-[11px] text-rose-200/80">
-              {result.unconvertible!.map(u => (
-                <li key={`${u.folder}/${u.file ?? ""}`}>
-                  {u.folder}{u.file ? `/${u.file}` : ""} -- {u.reason}
-                </li>
-              ))}
-            </ul>
-          </div>
+        {result.status === "migrated" ? (
+          // ITEMISED, not summed. "It converted 5 profiles" is a number, not
+          // an account, and a writer who cannot see what happened to their own
+          // words has to take the rewrite on faith.
+          <MigrationResults projectPath={projectPath}
+                            report={result as MigrationReport} />
+        ) : (
+          <p className="flex items-center gap-2 text-sm text-text-primary">
+            <Check size={14} className="text-emerald-400" />
+            {result.status === "restored"
+              ? "Your profiles are back the way they were."
+              : "This project was already in the Weave. Nothing changed."}
+          </p>
         )}
       </div>
     );

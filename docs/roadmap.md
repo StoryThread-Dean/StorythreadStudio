@@ -44,6 +44,43 @@ itemises it folder by folder, names the backup destination before the button,
 and requires a second click that repeats the count and the destination. An
 interrupted run offers resume or restore rather than guessing.
 
+#### Pinning a connection by hand (designed, not built)
+
+Weaving will miss things, so the writer needs a way to say "this matters"
+about a word the scan never raised. Requested from live testing, with the
+right instinct already in it: *"just tagging it for potential connection
+might be enough for the walkthrough to then safely pick it up from there."*
+
+That instinct is the design. **The action marks, it does not connect.**
+
+| Problem with connecting directly | Why marking avoids it |
+|---|---|
+| The writer picks the wrong relation or direction | Nothing is recorded except "look at this", so there is nothing to get wrong |
+| There is nothing to connect it to yet | A mark can wait indefinitely; a half-made Tie cannot |
+| It needs the Tie editor, which does not exist | A mark needs no editor at all |
+
+Shape: select a word or phrase (`Kithicor`, `Kithicor Forest`), right-click,
+and under a **Weaving** group choose **Mark for Weaving**. The existing
+context-menu items (thesaurus and the rest) stay exactly where they are. The
+same action works in the manuscript, notes, and entry fields, because the
+writer should not have to remember which surface they are on.
+
+Two rules it must keep:
+
+- **Nothing is written into the manuscript.** No `[[markup]]` in prose -- that
+  is a locked product rule. The mark is stored out of band in
+  `.storythread/weave/answers.json` beside `retired`, as a PHRASE rather than
+  an offset, so it survives the text moving. It is writer input, not derivable
+  from the book, which is exactly what that file is for.
+- **It becomes a stop, not an entry.** The scan emits it like any other stop,
+  so it inherits everything already built: the evidence quote, "why am I
+  seeing this?", the four ways to answer, and the fact that marking something
+  that later gets an entry stops being raised on its own.
+
+Writer-facing name: **Pinned**, with a pin icon. Pinning fabric before you
+stitch it is the same idea in the same vocabulary -- it holds a piece in place
+until the real join is made.
+
 Also open before release: a Thread editor for the kinds the Profile Builder
 does not cover (factions, governments, religions, concepts, events -- until
 then Weaving says plainly that those stops have nowhere to send the writer),
