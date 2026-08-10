@@ -48,6 +48,19 @@ function open(value = BEFORE_THE_BOOK, chapters = BOOK) {
   return { onChange };
 }
 
+/**
+ * The fraction of the track a placed element sits at.
+ *
+ * Positions are written as `calc(8px + <fraction> * (100% - 16px))` -- the same
+ * expression the browser uses for the thumb -- so a test can read the fraction
+ * back out and check the arithmetic without a layout engine.
+ */
+function fractionOf(left: string): number {
+  const match = /calc\(8px \+ ([\d.]+) \* \(100% - 16px\)\)/.exec(left);
+  if (!match) throw new Error(`not a placed position: ${left}`);
+  return Number(match[1]);
+}
+
 const ticks = () => screen.getAllByTestId("scrubber-tick");
 const titles = () => screen.getAllByTestId("scrubber-title");
 const active = (nodes: HTMLElement[]) =>
@@ -78,11 +91,17 @@ describe("it draws the thing it moves through", () => {
 
   it("sizes an act band by how much book it is", async () => {
     // Act I is three chapters of six. A band of equal width would say the
-    // book is evenly divided when it is not.
+    // book is evenly divided when it is not. Read off the placement grid
+    // rather than off flex, because bands are now on the same grid as the
+    // ticks and the handle.
     open();
-    expect(screen.getByTitle("Act I").style.flexGrow).toBe("3");
-    expect(screen.getByTitle("Act II").style.flexGrow).toBe("2");
-    expect(screen.getByTitle("Act III").style.flexGrow).toBe("1");
+    // Contiguous: each band starts where the previous one ended, and ends on
+    // its own last chapter's stop.
+    expect(fractionOf(screen.getByTitle("Act I").style.left)).toBe(0);
+    expect(fractionOf(screen.getByTitle("Act II").style.left))
+      .toBeCloseTo(3 / 6, 5);
+    expect(fractionOf(screen.getByTitle("Act III").style.left))
+      .toBeCloseTo(5 / 6, 5);
   });
 
   it("draws no act row at all when the writer has not used acts", async () => {
@@ -215,5 +234,87 @@ describe("a book with nothing in it", () => {
     open(BEFORE_THE_BOOK, []);
     expect(screen.getByText(/no chapters yet/)).toBeTruthy();
     expect(screen.queryByLabelText("Point in the story")).toBeNull();
+  });
+});
+
+describe("the handle and the ticks share one grid", () => {
+  // Reported after the first version shipped:
+  //
+  //     "the issue is the slider isn't lining up with the dots behind it...
+  //      the (O) indicates where the slider's dot ends up while the -o- part is
+  //      the background positions of each of the chapters"
+  //
+  // A range input's thumb CENTRE travels from half a thumb in to half a thumb
+  // short of the far end, and there are chapters.length + 1 stops rather than
+  // chapters.length. The first version spread ticks edge to edge across N
+  // positions with `justify-between`, which is one stop out and drifts.
+  //
+  // These read the placement expression back out, so the arithmetic is pinned
+  // without needing a layout engine.
+
+  it("insets every tick by half a thumb, as the browser does", async () => {
+    open();
+    for (const tick of ticks()) {
+      expect(tick.style.left).toMatch(/^calc\(8px \+ /);
+      expect(tick.style.left).toMatch(/\(100% - 16px\)\)$/);
+    }
+  });
+
+  it("divides the track by the number of STOPS, not of chapters", async () => {
+    // The off-by-one itself. Six chapters means seven stops, so chapter one
+    // sits at 1/6 of the travel and not at 0.
+    open();
+    const positions = ticks().map(t => fractionOf(t.style.left));
+    expect(positions).toEqual([1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 6 / 6]);
+  });
+
+  it("puts before-the-book at the very start of the travel", async () => {
+    open();
+    expect(fractionOf(screen.getByTestId("scrubber-start").style.left)).toBe(0);
+  });
+
+  it("puts the last chapter at the very end of the travel", async () => {
+    // Where the thumb sits at its maximum. If these disagree the drift is
+    // visible at one end however well the middle lines up.
+    open();
+    const positions = ticks().map(t => fractionOf(t.style.left));
+    expect(positions[positions.length - 1]).toBe(1);
+  });
+
+  it("spaces the stops evenly, whatever the book's length", async () => {
+    cleanup();
+    open(BEFORE_THE_BOOK, [chapter(1, "One"), chapter(2, "Two"),
+                           chapter(3, "Three")]);
+    const positions = ticks().map(t => fractionOf(t.style.left));
+    const gaps = positions.slice(1).map((p, i) => p - positions[i]);
+    for (const gap of gaps) expect(gap).toBeCloseTo(1 / 3, 5);
+  });
+
+  it("marks before-the-book as a stop, and does not count it as a chapter", async () => {
+    // It is a real position the handle rests on, and it is not a chapter --
+    // conflating the two is what made the count wrong in the first place.
+    open();
+    expect(screen.getByTestId("scrubber-start")).toBeTruthy();
+    expect(ticks()).toHaveLength(BOOK.length);
+  });
+
+  it("ends an act band on its last chapter's own stop", async () => {
+    // So the boundary the writer sees is where the handle actually stops,
+    // which is what made the acts look right even when the ticks did not.
+    open();
+    const actOne = screen.getByTitle("Act I");
+    expect(actOne.style.width)
+      .toBe(`calc(${ticks()[2].style.left} - ${actOne.style.left})`);
+  });
+
+  it("leaves no gap between one act and the next", async () => {
+    // A half-step gap crept in while fixing the ticks. Bands describe a
+    // continuous book, and a book has no holes in it. Act I's width is
+    // "where it ends minus where it starts", so the place it ends has to be
+    // exactly where Act II begins.
+    open();
+    const one = screen.getByTitle("Act I");
+    const two = screen.getByTitle("Act II");
+    expect(one.style.width).toBe(`calc(${two.style.left} - ${one.style.left})`);
   });
 });
