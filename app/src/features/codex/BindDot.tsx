@@ -49,6 +49,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Loader, Search, X } from "lucide-react";
 
+import { Explain } from "../../components/learn/Explain";
 import { TONE_CLASSES, kindChoices, threadTypeEntry } from "./lexicon";
 import { absorb, nodeLabel, type GraphNode } from "./api";
 
@@ -291,6 +292,12 @@ export function BindDot({
               </div>
             ) : (
             <>
+            {/* The wording here is load-bearing -- a word is MOVED, never
+                merged or deleted -- so the longer answer has to be reachable
+                rather than assumed. */}
+            <div className="border-b border-border px-3 py-1.5">
+              <Explain of="thread.absorb" />
+            </div>
             <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
               <Search size={11} className="shrink-0 text-faint" />
               <input

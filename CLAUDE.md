@@ -174,6 +174,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
 
 - `backend/tests/` -- pytest + pytest-asyncio. Uses FastAPI's `TestClient` for HTTP-level tests and `async with open_db(tmp_path)` for store-level tests. Test files named `test_*.py`. Current files:
   - `test_db_migrations.py` -- the app.db migration ladder, and the only thing that finds this class of bug: an UPGRADE. Every other test builds its database from scratch, where an ALTER smuggled into an already-applied migration looks perfectly correct -- which is how a real project came to die on `no such column`. Pins that a v2 or v3 database ends up byte-identical to a fresh one, and that each rung runs on the one before it
+  - `test_explain_costs.py` -- does the help text tell the truth about MONEY: Python reads the TypeScript explanation registry, finds each named route's handler, and fails if one that calls `_resolve_model_and_key` is described as free (or the reverse). A "free" claim is a promise about the writer's credit, and the `universal` incident proved a frontend claim about the backend is only as good as something checking it
   - `test_outline_frontmatter.py` -- outline YAML frontmatter parser
   - `test_outline_sections.py` -- outline section parsing / reconstruction (Planner corruption regressions)
   - `test_progress_store.py` -- word counting, night-owl rollover, event recording
@@ -256,6 +257,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
   - `src/components/sidebar/ActGroup.test.tsx` -- acts tree pieces (ActGroup + RowMenu)
   - `src/hooks/useProjectUiState.test.ts` -- per-book UI-state hook (load guard, debounce)
+  - `src/components/learn/Explain.test.tsx` -- the self-explanation contract: every entry answers what / why / necessary / what-it-spends, uses the app's own words rather than the code's, and the screens a writer can get stuck on are read as SOURCE to prove they actually render it (a registry nothing renders is documentation, not help)
   - `src/utils/spellcheck.test.ts` -- spellcheck suggestions
   - `src/utils/buildEditorChatPayload.test.ts` -- Writing Companion payload builder + history persistence (appendTurnToHistory)
   - `src/utils/modelFiltering.test.ts` -- model list filtering + recommended models (provider-aware)
@@ -447,6 +449,7 @@ The app supports three content modes: `general`, `mature`, `explicit`. The proje
 - **Explicitly inspectable and controllable context** -- AI may automatically receive story context relevant to the current point in the story, but the writer must be able to inspect what will be sent, remove individual Threads, exclude categories, and turn automatic Weave context off entirely. **No context is transmitted until the writer initiates an AI action.**
   - This AMENDS the original rule ("explicit context attachment; AI never has implicit project access"), which the Weave makes untrue -- the app now assembles a brief on the writer's behalf. What is non-negotiable is that they can see it, cut it, and switch it off. Enforced in `backend/app/codex/context.py`; pinned by `backend/tests/test_codex_context.py`.
 - **Every step in a walkthrough proposes the next one** -- after any completed action the screen states what happened and offers the next step, with a named exit that says what it does. Finishing a stop ADVANCES the walk; it never dismisses a panel back onto the same stop. Several separately-reported "dead ends" were all this one rule.
+- **Every feature explains itself** -- each screen, panel and popup offers **"What's this?"** and, where an order matters, **"Show me how to do this"**. An explanation must answer four things or it is not one: what it is, **why** it exists or is happening now, whether it is **necessary** (required / recommended / optional), and **what it spends** -- stated even when the answer is nothing, because a model-shaped app trains people to expect a meter running. This is a TYPE, not a habit: `app/src/components/learn/explanations.ts`, rendered by `<Explain of="key" />`. The two rules above are halves of one thing -- flow makes the app ask what is next, this lets it answer how and why and at what cost.
 - **AI output reviewed before use** -- results show in side panel. Applied by the writer via copy/paste. No auto-apply.
 
 ---

@@ -53,6 +53,7 @@ import {
   Trash2, X,
 } from "lucide-react";
 
+import { Explain } from "../../components/learn/Explain";
 import { TONE_CLASSES, kindChoices, threadTypeEntry } from "./lexicon";
 import { nodeLabel, type GraphNode } from "./api";
 
@@ -863,10 +864,16 @@ function relOptionLabel(rel: Relation): string {
                       teaches the rule before any counter has to scold anyone.
                       maxLength comes from the BACKEND, so the box can never be
                       wider than what will actually be kept. */}
-                  <label htmlFor="tie-reason"
-                         className="mb-1 block text-[11px] text-text-muted">
-                    In one line, why?
-                  </label>
+                  {/* The required field, so the help sits with it rather than
+                      in a corner of the screen. Both questions offered: what
+                      this is for, and how to write one. */}
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <label htmlFor="tie-reason"
+                           className="text-[11px] text-text-muted">
+                      In one line, why?
+                    </label>
+                    <Explain of="tie.reason" />
+                  </div>
                   <input
                     id="tie-reason"
                     value={reason}
@@ -935,9 +942,12 @@ function relOptionLabel(rel: Relation): string {
                     </p>
                   ) : naming ? (
                     <div>
-                      <label className="mb-1 block text-[11px] text-text-muted">
-                        What would you call this connection?
-                      </label>
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <label className="text-[11px] text-text-muted">
+                          What would you call this connection?
+                        </label>
+                        <Explain of="tie.own-label" />
+                      </div>
                       <div className="flex items-start gap-2">
                         <input
                           value={newLabel}
@@ -1009,9 +1019,12 @@ function relOptionLabel(rel: Relation): string {
                           unfinished one -- the connection saves as the plain kind
                           and can be labelled on a later pass. The reason line is
                           the required half; this is the queryable half. */}
-                      <p className="mb-1 text-[11px] text-text-muted">
-                        Record it as
-                      </p>
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <p className="text-[11px] text-text-muted">
+                          Record it as
+                        </p>
+                        <Explain of="tie.relation" />
+                      </div>
                       <div className="flex flex-wrap items-center gap-1.5 text-xs">
                         <span className="text-text-primary">{nodeLabel(thread)}</span>
                         <select

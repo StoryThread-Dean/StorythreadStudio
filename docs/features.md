@@ -443,6 +443,28 @@ Alexandra Langford connected to the story?"** -- shown beneath her own entry's
 icon and name, and it opens by saying how many times the prose already found her.
 The number is there to be checked.
 
+**And every step can explain itself.** Beside anything you could reasonably be
+stuck on there is **What's this?** and, where the order matters, **Show me how to
+do this** -- two buttons rather than one, because they are different questions.
+The first is asked while deciding whether to care; the second by someone who has
+already decided. An explanation has to answer four things:
+
+| | |
+|---|---|
+| **What** it is | one line, in the app's own words |
+| **Why** | why it exists, or why it is happening right now |
+| **Necessary?** | required, worth doing, or entirely optional |
+| **What it spends** | stated every time, including when the answer is nothing |
+
+That last row is there because most of this app costs nothing and a
+model-shaped app trains people to expect otherwise. "Free. No AI is called, so
+this costs nothing" is worth the space. Where something does spend, the note says
+*what* -- one call over a chapter reads very differently from a pass over the
+whole book.
+
+The two rules are halves of one thing: the flow makes the app ask what comes
+next, and this lets it answer how, why, and at what cost.
+
 **Every step proposes the next one.** This is a rule the walkthrough is held to,
 not a property of one screen. Completing an action and returning to where you
 started has silently ended the sequence -- so after a connection is recorded the

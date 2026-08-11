@@ -59,6 +59,7 @@ import {
 import {
   STOP_KINDS, TONE_CLASSES, threadTypeEntry, type LexEntry, type Tone,
 } from "./lexicon";
+import { Explain } from "../../components/learn/Explain";
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { BindDot } from "./BindDot";
 import { TieEditor } from "./TieEditor";
@@ -364,8 +365,16 @@ export function WeavingPanel({
           shows you where they do not line up yet. Nothing is changed without
           you choosing it, and you can stop anywhere.
         </p>
+        {/* Before the writer commits to anything: what this is, whether they
+            have to, and what it spends. The last one matters most on a screen
+            whose button says "Start" next to a count in the hundreds. */}
+        <Explain of="weaving.what" block />
 
-        <div className="mt-3 space-y-1.5">
+        <div className="mt-3">
+          <Explain of="weaving.depth" label="Which should I pick?" />
+        </div>
+
+        <div className="mt-1.5 space-y-1.5">
           {DEPTHS.map(option => (
             <button
               key={option.id}
