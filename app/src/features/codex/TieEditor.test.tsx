@@ -184,13 +184,24 @@ describe("only what means something between these two kinds", () => {
     expect(calls.filter(c => c.url.includes("/relations")).length).toBe(1);
   });
 
-  it("does not offer placeholders as an end", async () => {
-    // A placeholder has not been said to BE anything, so connecting to one
-    // records a relationship with a word rather than with a thing.
+  it("DOES offer a bare entry as an end, and says it is bare", async () => {
+    // REVERSED, and the earlier reasoning is worth recording because it was
+    // defensible: a placeholder has not been said to BE anything, so connecting
+    // to one records a relationship with a word rather than with a thing.
+    //
+    // Two things changed. The walk CREATES these on purpose, from names already
+    // in the prose, so the writing can carry on -- so hiding them meant the
+    // entry made thirty seconds ago could not be connected to, which is a dead
+    // end of the app's own making. And the reason line now carries the meaning:
+    // "she is hiding her theft from him" says what he is to her whether or not
+    // his entry has any prose in it.
     await open();
     await userEvent.click(
       screen.getByRole("button", { name: /Connect this to something/ }));
-    expect(screen.queryByRole("button", { name: /^Someone/ })).toBeNull();
+    const row = screen.getByRole("button", { name: /^Someone/ });
+    expect(row).toBeTruthy();
+    // Offered, but not passed off as more than it is.
+    expect(row.textContent).toMatch(/nothing in it yet/);
   });
 
   it("does not offer the entry itself", async () => {
@@ -876,5 +887,102 @@ describe("why they are connected", () => {
     await pickOnly("The Faith");
     expect((screen.getByLabelText("Why they are connected") as HTMLInputElement)
       .value).toBe("");
+  });
+});
+
+describe("finishing the connection", () => {
+  // REPORTED FROM LIVE TESTING, and it stopped the feature dead:
+  //
+  //     "I attempted to connect Alexandra to Lara Croft, I clicked Lara's
+  //      profile, then wrote a brief 'ran into and quickly became friends and
+  //      partners to' and wrote the reverse for Lara to Alexandra. None of the
+  //      options below were clickable, there was no 'accept' or 'save' or any
+  //      means to move foreward."
+  //
+  // Two causes, and every test in this file passed through both of them.
+  //
+  // The first: the editor finds its primary button with `find(r => r.universal)`
+  // and the BACKEND NEVER SENT `universal`. So `plain` was always undefined, no
+  // save button ever rendered, and the fixtures here hid it by setting the flag
+  // themselves -- a mock more generous than the API it stood for. The guard for
+  // that lives in the backend, where the field is: see
+  // test_the_plain_connection_is_marked_as_such in test_codex_routes.py.
+  //
+  // The second is here: the relation rows WERE clickable, but a borderless line
+  // of text reading "Alexandra mentored by Lara Croft" reads as a label, not a
+  // button. And they fired with no reason typed, which the server then refused.
+
+  const PLAIN = { id: "connected_to", label: "connected to", symmetric: true,
+                  cardinality: "many", inverse_label: "", flipped: false,
+                  universal: true };
+
+  async function pickOnly(name: string) {
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: new RegExp("^" + name) }));
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
+  }
+
+  it("gives a way to finish once the reason is written", async () => {
+    // The whole report in one assertion: something to press, and it works.
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "Ran into her and quickly became partners");
+    const save = screen.getByRole("button", { name: /Record it/ });
+    expect(save.hasAttribute("disabled")).toBe(false);
+    await userEvent.click(save);
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+  });
+
+  it("finds the plain option even when the world does not have it yet", async () => {
+    // An older project's types.json predates connected_to, so it arrives under
+    // "available" instead of "forward". Without this fallback the only writers
+    // with a save button would be the ones who started a project this week.
+    mockApi({ relations: { forward: [WORSHIPS], reverse: [],
+                           available: [PLAIN] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"), "Partners");
+    expect(screen.getByRole("button", { name: /Record it/ }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("does not fire a relation the server would refuse", async () => {
+    // Clicking a relation with no reason used to reach the backend and come
+    // back a 400. Refusing locally says the same thing without the round trip.
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    expect(screen.getByRole("button", { name: /worships/ }).hasAttribute("disabled")).toBe(true);
+    expect(posted("/tie").length).toBe(0);
+  });
+
+  it("says what would wake the buttons up", async () => {
+    // A disabled button with no explanation is the dead end the writer hit.
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    expect(screen.getByText(/buttons below wake up/)).toBeTruthy();
+  });
+
+  it("stops saying it once the line is written", async () => {
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"), "Partners");
+    expect(screen.queryByText(/buttons below wake up/)).toBeNull();
+  });
+
+  it("enables the reversed rows too, once there is a reason", async () => {
+    const FLIPPED = { id: "worshipped_by", label: "worshipped by",
+                      symmetric: false, cardinality: "many",
+                      inverse_label: "worships", flipped: true };
+    mockApi({ relations: { forward: [], reverse: [FLIPPED], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    expect(screen.getByRole("button", { name: /worshipped by/ }).hasAttribute("disabled")).toBe(true);
+    await userEvent.type(screen.getByLabelText("Why they are connected"), "They worship him");
+    expect(screen.getByRole("button", { name: /worshipped by/ }).hasAttribute("disabled")).toBe(false);
   });
 });

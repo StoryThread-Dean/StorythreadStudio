@@ -203,9 +203,22 @@ export function TieEditor({
     const connected = new Set((ties ?? []).map(t => t.other_id));
     return candidates
       .filter(node => node.entity_id !== thread.entity_id)
-      // A placeholder has not been said to BE anything yet, so connecting to
-      // one records a relationship with a word rather than with a thing.
-      .filter(node => !node.placeholder)
+      // BARE ENTRIES ARE OFFERED, and that reverses an earlier decision.
+      //
+      // The old reasoning was that a placeholder has not been said to BE
+      // anything yet, so connecting to one records a relationship with a word
+      // rather than with a thing. That was defensible when a connection was
+      // just an edge -- and wrong now, for two reasons.
+      //
+      // The walk CREATES these on purpose, from names already in the prose, so
+      // that the writing can carry on: "Weaving's purpose is to generate
+      // connections. Period." Hiding them means the entry made thirty seconds
+      // ago cannot be connected to, which is a dead end of the app's own making.
+      //
+      // And the reason line now carries the meaning. "She is hiding her theft
+      // from him" says what Dean is to her whether or not Dean's entry has any
+      // prose in it yet. They are marked as bare in the list so the writer is
+      // not misled about what is behind the name.
       .filter(node => !term
         || nodeLabel(node).toLowerCase().includes(term)
         || node.aliases.some(a => a.toLowerCase().includes(term)))
@@ -549,6 +562,14 @@ export function TieEditor({
                             <span className="min-w-0 flex-1 truncate">
                               {nodeLabel(node)}
                             </span>
+                            {/* Offered, but not pretended to be more than it
+                                is: a name the walk made an entry for, with
+                                nothing written in it yet. */}
+                            {node.placeholder && (
+                              <span className="shrink-0 text-[10px] text-violet-300">
+                                nothing in it yet
+                              </span>
+                            )}
                             {/* The evidence, on the row. A suggestion that
                                 cannot show its reasoning is just a guess. */}
                             {sharedWith.has(node.entity_id) && (
@@ -715,6 +736,14 @@ export function TieEditor({
                     </button>
                   )}
 
+                  {!canConnect && (
+                    <p role="status" className="mt-1.5 text-[10px] text-amber-300">
+                      Write that line and the buttons below wake up. A connection
+                      with nothing but two names tells AI less than the prose
+                      already does.
+                    </p>
+                  )}
+
                   <div className="my-2 border-t border-border" />
 
                   {options === null ? (
@@ -785,13 +814,6 @@ export function TieEditor({
                         </button>
                       )}
 
-                      {!canConnect && (
-                        <p className="mb-1.5 text-[10px] text-amber-300">
-                          Write the line above first. A connection with nothing
-                          but two names tells AI less than the prose already
-                          does.
-                        </p>
-                      )}
 
                       {typed.length > 0 && (
                         <p className="mb-0.5 text-[10px] uppercase tracking-wide text-faint">
@@ -800,6 +822,7 @@ export function TieEditor({
                       )}
                       {typed.map(rel => (
                         <RelButton key={rel.id} rel={rel} busy={busy}
+                                   disabled={!canConnect}
                                    from={nodeLabel(thread)} to={nodeLabel(other)}
                                    onPick={() => void connect(rel)} />
                       ))}
@@ -814,6 +837,7 @@ export function TieEditor({
                           </p>
                           {options.reverse.map(rel => (
                             <RelButton key={rel.id} rel={rel} busy={busy}
+                                       disabled={!canConnect}
                                        from={nodeLabel(other)} to={nodeLabel(thread)}
                                        onPick={() => void connect(rel)} />
                           ))}
@@ -832,7 +856,7 @@ export function TieEditor({
                             <button
                               key={rel.id}
                               onClick={() => void adopt(rel)}
-                              disabled={busy}
+                              disabled={busy || !canConnect}
                               className="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-xs text-text-muted hover:bg-bg-surface hover:text-text-primary disabled:opacity-40"
                             >
                               <Plus size={10} className="shrink-0 text-violet-300" />
@@ -881,14 +905,19 @@ export function TieEditor({
 
 
 /** One connection on offer, written as the sentence it will record. */
-function RelButton({ rel, from, to, busy, onPick }: {
-  rel: Relation; from: string; to: string; busy?: boolean; onPick: () => void;
+function RelButton({ rel, from, to, busy, disabled, onPick }: {
+  rel: Relation; from: string; to: string; busy?: boolean; disabled?: boolean;
+  onPick: () => void;
 }) {
+  // A BORDER, because this row IS the save action and did not look like one.
+  // Reported as "none of the options below were clickable" -- they were, but a
+  // borderless line of text reading "Alexandra mentored by Lara Croft" reads as
+  // a label, and the writer was looking for something to press.
   return (
     <button
       onClick={onPick}
-      disabled={busy}
-      className="flex w-full items-baseline gap-1.5 rounded px-1 py-1 text-left text-xs hover:bg-bg-surface disabled:opacity-40"
+      disabled={busy || disabled}
+      className="mb-1 flex w-full items-baseline gap-1.5 rounded border border-border px-2 py-1.5 text-left text-xs hover:border-emerald-800 hover:bg-bg-surface disabled:opacity-40"
     >
       <span className="min-w-0 flex-1 truncate text-text-primary">
         {from} <span className="text-emerald-300">{rel.label}</span> {to}

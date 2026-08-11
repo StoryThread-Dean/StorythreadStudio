@@ -135,9 +135,37 @@ describe("choosing what it is", () => {
     expect(screen.queryByRole("button", { name: /Ravensmoor/ })).toBeNull();
   });
 
-  it("says so when there is nothing to connect to yet", async () => {
+  it("says so when there is nothing to point it at yet", async () => {
     open({ candidates: [STUB, OTHER_STUB] });
-    expect(screen.getByText(/nothing to connect this to yet/)).toBeTruthy();
+    expect(screen.getByText(/no entries to point this at yet/)).toBeTruthy();
+  });
+
+  it("names the way forward instead of leaving a greyed button", async () => {
+    // REPORTED AS A DEAD END:
+    //
+    //     "There is a character referenced that is noted in the manuscript. But
+    //      no profile or entry to link/connect them too. It brings up a search
+    //      feature but the Find Connection never ungreys or becomes clickable."
+    //
+    // The way out was already on screen -- "It is its own thing" -- but it read
+    // as a rejection rather than as the answer, while the only thing that
+    // looked like a next step sat greyed out. Nothing matching is usually the
+    // ANSWER for a name the prose has and the world does not.
+    open({ candidates: [STUB, OTHER_STUB] });
+    expect(screen.getByText(/most likely its own thing/)).toBeTruthy();
+  });
+
+  it("offers that answer as something to click, right there", async () => {
+    open({ candidates: [STUB, OTHER_STUB] });
+    const inline = screen.getAllByRole("button", { name: /It is its own thing/ });
+    expect(inline.length).toBeGreaterThan(1);   // in the message AND the footer
+    await userEvent.click(inline[0]);
+    expect(screen.getByLabelText("What kind")).toBeTruthy();
+  });
+
+  it("says what the greyed button is waiting for", async () => {
+    open();
+    expect(screen.getByRole("button", { name: /Pick an entry above/ })).toBeTruthy();
   });
 
   it("treats being its own thing as a real answer, not a failure", async () => {

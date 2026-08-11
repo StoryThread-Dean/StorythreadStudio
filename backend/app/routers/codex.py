@@ -637,6 +637,19 @@ async def get_relations(project_path: str = Query(...),
             # writer can see both halves of what they are recording.
             "inverse_label": (rel.get("inverse") or "").replace("_", " "),
             "flipped": flipped,
+            # THE PLAIN CONNECTION HAS TO BE IDENTIFIABLE FROM HERE.
+            #
+            # Left out originally, and the cost was the whole feature: the editor
+            # finds its primary "Record it" button with `find(r => r.universal)`,
+            # so without this flag it found nothing, rendered no save button, and
+            # a writer who had typed their reason had no way to finish. Reported
+            # as "none of the options below were clickable, there was no accept
+            # or save or any means to move forward."
+            #
+            # The frontend tests passed throughout, because their fixtures set
+            # `universal` by hand -- a mock more generous than the API it stands
+            # for. test_the_plain_connection_is_marked_as_such is the guard.
+            "universal": bool(rel.get("universal")),
         }
 
     return {

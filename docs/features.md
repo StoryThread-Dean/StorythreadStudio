@@ -406,6 +406,15 @@ The one one-click action creates an **empty** entry from a name the writer alrea
 wrote -- and that entry is immediately Frayed, so the walk then asks for it to be
 written. The app does not write the writer's characters.
 
+**An empty entry can be connected to straight away.** It was excluded at first,
+on the reasoning that something not yet said to BE anything is a word rather than
+a thing -- and that turned out to make the walk dead-end on its own output: the
+entry created thirty seconds ago was missing from the list of things to connect
+to. Since a connection now carries a reason in the writer's words, "she is hiding
+her theft from him" says what he is to her whether or not his entry has prose in
+it yet. Bare entries are offered and marked as bare, so nothing is passed off as
+more than it is.
+
 ### Unwoven, and why it is a root system
 
 Unwoven is the only stop that is not about a mistake. It asks the questions a

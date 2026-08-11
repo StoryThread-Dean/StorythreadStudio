@@ -304,11 +304,31 @@ export function BindDot({
 
             <ul className="min-h-0 flex-1 overflow-y-auto">
               {options.length === 0 ? (
-                <li className="px-3 py-3 text-[11px] text-faint">
-                  {candidates.some(n => !n.placeholder)
-                    ? "Nothing matches that."
-                    : "There is nothing to connect this to yet. Fill in one of "
-                      + "your entries first, and this word can join it."}
+                /* NOTHING MATCHED, WHICH IS USUALLY THE ANSWER RATHER THAN A
+                   PROBLEM. Reported as a dead end: a character named in the
+                   manuscript, no entry anywhere to point the word at, and a
+                   greyed "Pick an entry" button as the only thing on screen
+                   that looked like a next step. The way forward was already
+                   there -- it just read as a rejection rather than an answer,
+                   so it says so now. */
+                <li className="px-3 py-3 text-[11px] text-text-muted">
+                  <p className="mb-1 text-text-primary">
+                    {candidates.some(n => !n.placeholder)
+                      ? "No entry matches that."
+                      : "There are no entries to point this at yet."}
+                  </p>
+                  <p>
+                    Then this is most likely its own thing -- a character,
+                    place or faction the story has that your world does not
+                    record yet. Use{" "}
+                    <button
+                      onClick={() => { setPromoting(true); setChosen(null); }}
+                      className="text-violet-300 underline hover:text-violet-200"
+                    >
+                      It is its own thing
+                    </button>{" "}
+                    below and give it an entry.
+                  </p>
                 </li>
               ) : options.map(node => {
                 const lex = threadTypeEntry(node.type);
@@ -380,7 +400,7 @@ export function BindDot({
                       : <Check size={11} />}
                 {chosen
                   ? `"${dot.name}" means ${nodeLabel(chosen)}`
-                  : "Pick an entry"}
+                  : "Pick an entry above"}
               </button>
               {/* Standing on its own is a legitimate answer, not a failure to
                   bind -- and usually under a fuller name than the prose

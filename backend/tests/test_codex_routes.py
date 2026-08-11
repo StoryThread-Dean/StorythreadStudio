@@ -746,3 +746,69 @@ def test_an_undated_connection_still_draws(project):
     body = client.get("/api/codex/graph", params={"project_path": project}).json()
     assert len(body["edges"]) == 1
     assert body["edges"][0]["active"] is True
+
+
+# ── The plain connection has to be findable from the wire ────────────────────
+#
+# THE BUG THESE GUARD, because it stopped the feature dead and no frontend test
+# caught it:
+#
+#     "I attempted to connect Alexandra to Lara Croft... None of the options
+#      below were clickable, there was no 'accept' or 'save' or any means to
+#      move foreward."
+#
+# The editor finds its primary Record-it button with `find(r => r.universal)`,
+# and this endpoint never sent `universal`. So the button never rendered, for
+# every project, and a writer who had typed their reason had nowhere to go.
+#
+# Every TieEditor test passed throughout, because their fixtures set the flag by
+# hand -- a mock more generous than the API it stood for. The lesson is that a
+# field the client BRANCHES on has to be pinned where it is produced, so these
+# live here rather than there.
+
+def test_the_plain_connection_is_marked_as_such(project):
+    body = client.get("/api/codex/relations",
+                      params={"project_path": project, "src_type": "character",
+                              "dst_type": "character"}).json()
+    plain = [r for r in body["forward"] if r.get("universal")]
+    assert [r["id"] for r in plain] == ["connected_to"]
+
+
+def test_every_relation_says_whether_it_is_the_plain_one(project):
+    # Present on all of them, not only the one that is true -- the client reads
+    # the key, and a missing key is indistinguishable from false until it isn't.
+    body = client.get("/api/codex/relations",
+                      params={"project_path": project, "src_type": "character",
+                              "dst_type": "character"}).json()
+    for key in ("forward", "reverse", "available"):
+        for rel in body[key]:
+            assert "universal" in rel, f"{key}: {rel['id']}"
+
+
+def test_an_older_project_is_still_offered_the_plain_one(project):
+    # types.json is the writer's file and is never rewritten behind them, so a
+    # project converted before the plain connection existed does not have it.
+    # It has to arrive under `available` still MARKED, or the only writers with a
+    # save button would be the ones who started a project this week.
+    import json as _json
+
+    with open(os.path.join(project, "codex", "types.json"), "w",
+              encoding="utf-8") as f:
+        _json.dump({
+            "schema_version": 1,
+            "types": [{"id": "character", "label": "Character",
+                       "folder": "characters", "icon": "User",
+                       "sections": [{"id": "overview", "label": "Overview"}],
+                       "required_fields": ["overview"]}],
+            "relations": [{"id": "mentored_by", "label": "mentored by",
+                           "source_types": ["character"],
+                           "target_types": ["character"],
+                           "cardinality": "many"}],
+        }, f)
+
+    body = client.get("/api/codex/relations",
+                      params={"project_path": project, "src_type": "character",
+                              "dst_type": "character"}).json()
+    assert not any(r.get("universal") for r in body["forward"])
+    offered = [r["id"] for r in body["available"] if r.get("universal")]
+    assert offered == ["connected_to"]
