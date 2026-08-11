@@ -46,12 +46,23 @@ export const NEED_WORDING: Record<Need, string> = {
 /**
  * What pressing the button spends.
  *
- * `free` means no model is called: no money, no waiting on anyone else's server.
- * Most of this app is free and writers assume the opposite, which makes saying
- * so worth the space.
+ * NICE TO HAVE RATHER THAN OBLIGATORY, corrected after the first version made it
+ * mandatory: "The cost part isn't 'required' to mention, just a nice to have. A
+ * quick reminder that what this particular feature is or does either costs to do
+ * or doesn't."
  *
- * `spends` has to carry a note, because "this costs tokens" is not an answer a
- * writer can decide with. Whether it is one small call or a pass over the whole
+ * So an explanation may leave it out and the panel simply says nothing about
+ * money. What is NOT optional is being right when it does speak: claiming free
+ * on something that calls a model spends the writer's credit while promising it
+ * will not, and backend/tests/test_explain_costs.py fails the build over it.
+ * Silence is fine; a wrong answer is not.
+ *
+ * `free` means no model is called: no money, no waiting on anyone else's server.
+ * Most of this app is free and writers assume the opposite, which is why it is
+ * usually worth the one line.
+ *
+ * `spends` carries a note, because "this costs tokens" is not an answer a writer
+ * can decide with. Whether it is one small call or a pass over the whole
  * manuscript is the difference between clicking and thinking about it.
  */
 export type Cost =
@@ -76,7 +87,8 @@ export interface Explains {
    */
   why: string;
   needed: Need;
-  cost: Cost;
+  /** Optional. See the note on Cost: silence is fine, a wrong answer is not. */
+  cost?: Cost;
   /**
    * The steps, for "Show me how to do this".
    *

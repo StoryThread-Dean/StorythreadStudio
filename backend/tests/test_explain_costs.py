@@ -51,6 +51,10 @@ def _entries() -> dict[str, dict]:
             cost = "free"
         elif _COST_SPENDS_RE.search(body):
             cost = "spends"
+        elif "cost:" not in body:
+            # Mentioning cost is optional, so an entry with no cost line at all
+            # is fine and simply makes no claim to check.
+            cost = "silent"
         else:
             cost = "?"
         out[key] = {"endpoint": endpoint.group(1) if endpoint else None,
@@ -90,9 +94,14 @@ def test_the_registry_can_be_read_at_all():
     assert any(e["endpoint"] for e in entries.values())
 
 
-def test_every_cost_is_stated_one_way_or_the_other():
+def test_a_cost_that_IS_stated_is_readable():
+    # Saying nothing about money is allowed -- it was made a nice-to-have rather
+    # than an obligation. What is not allowed is a claim this parser cannot read,
+    # because an unreadable claim silently skips the check below.
     for key, entry in _entries().items():
-        assert entry["cost"] in {"free", "spends"}, f"{key}: cost not readable"
+        assert entry["cost"] in {"free", "spends", "silent"}, (
+            f"{key}: cost is written in a form this test cannot read"
+        )
 
 
 def test_every_named_route_exists():
@@ -108,13 +117,12 @@ def test_a_route_that_calls_a_model_is_never_described_as_free(key):
     """
     THE CHECK THAT MATTERS. Free is a promise about the writer's money.
 
-    Every route reachable from the help panel today is genuinely free -- the
-    Weave's scan is arithmetic over the book and the world, and asks no model
-    anything. This test is written to fail the day that stops being true and the
-    help text has not caught up.
+    Saying nothing about money is fine; saying the wrong thing is not. So an
+    entry that makes no claim is skipped, and one that does is held to it.
     """
     entry = _entries()[key]
-    if not entry["endpoint"]:
+    if not entry["endpoint"] or entry["cost"] == "silent":
+        # No route named, or no claim made. Nothing to be wrong about.
         return
     body = _handler_source(entry["endpoint"])
     assert body is not None, key

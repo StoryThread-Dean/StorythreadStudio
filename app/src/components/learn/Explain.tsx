@@ -118,17 +118,20 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
             <span>{NEED_WORDING[info.needed]}</span>
           </p>
 
-          {/* WHAT IT SPENDS, always, including when the answer is nothing.
-              Most of this app costs nothing and writers assume the opposite --
-              a model-shaped app trains people to expect a meter running. */}
-          <p className="flex items-start gap-1">
-            <Coins size={10} className="mt-0.5 shrink-0 text-amber-300/80" />
-            <span>
-              {info.cost.kind === "free"
-                ? "Free. No AI is called, so this costs nothing."
-                : info.cost.note}
-            </span>
-          </p>
+          {/* WHAT IT SPENDS, when the entry says. A nice-to-have rather than an
+              obligation -- but worth the line more often than not, because most
+              of this app costs nothing and a model-shaped app trains people to
+              expect a meter running. */}
+          {info.cost && (
+            <p className="flex items-start gap-1">
+              <Coins size={10} className="mt-0.5 shrink-0 text-amber-300/80" />
+              <span>
+                {info.cost.kind === "free"
+                  ? "Free. No AI is called, so this costs nothing."
+                  : info.cost.note}
+              </span>
+            </p>
+          )}
 
           {/* The steps, in the same panel under their own heading. They used to
               be a second button; the heading does the same job for none of the

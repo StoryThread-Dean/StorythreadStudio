@@ -47,18 +47,28 @@ describe("every explanation answers all of it", () => {
     }
   });
 
-  it("says what it spends, every time", () => {
-    // Including when the answer is nothing. Most of this app is free and
-    // writers assume the opposite, because a model-shaped app trains people to
-    // expect a meter running.
+  it("is right about money when it mentions it", () => {
+    // Mentioning cost is a nice-to-have, not an obligation -- so this checks the
+    // CLAIM rather than its presence. Silence about money is fine; a wrong
+    // answer spends the writer's credit while promising it will not, which is
+    // what backend/tests/test_explain_costs.py checks against the real route.
     for (const key of EXPLAIN_KEYS) {
       const cost = EXPLAIN[key].cost;
+      if (!cost) continue;
       expect(["free", "spends"], key).toContain(cost.kind);
       if (cost.kind === "spends") {
         // "This costs tokens" is not an answer anyone can decide with.
         expect(cost.note.length, key).toBeGreaterThan(25);
       }
     }
+  });
+
+  it("still says so on everything written so far", () => {
+    // Optional in the type, and worth doing anyway. If a later entry leaves it
+    // out that is allowed -- this is here so dropping it becomes a visible
+    // decision rather than something that quietly erodes.
+    const silent = EXPLAIN_KEYS.filter(k => !EXPLAIN[k].cost);
+    expect(silent).toEqual([]);
   });
 
   it("writes steps as things to DO, in order", () => {
@@ -77,7 +87,7 @@ describe("every explanation answers all of it", () => {
     for (const key of EXPLAIN_KEYS) {
       const entry = EXPLAIN[key];
       const all = [entry.what, entry.why, ...(entry.how ?? []),
-                   entry.cost.kind === "spends" ? entry.cost.note : ""].join(" ");
+                   entry.cost?.kind === "spends" ? entry.cost.note : ""].join(" ");
       expect(all, key).not.toMatch(/[—–]/);
     }
   });
@@ -316,7 +326,7 @@ describe("the rule is applied, not merely available", () => {
     // while telling them it is not -- backend/tests/test_explain_costs.py checks
     // the claim against the route, and this checks the claim is even made.
     for (const key of ["advisor.what", "issue.transform"]) {
-      expect(EXPLAIN[key].cost.kind, key).toBe("spends");
+      expect(EXPLAIN[key].cost?.kind, key).toBe("spends");
     }
   });
 
@@ -325,7 +335,7 @@ describe("the rule is applied, not merely available", () => {
     // are not, and a writer who assumes otherwise avoids the cheapest tools here.
     for (const key of ["quickbuild.what", "spine.what", "names.what",
                        "thesaurus.what"]) {
-      expect(EXPLAIN[key].cost.kind, key).toBe("free");
+      expect(EXPLAIN[key].cost?.kind, key).toBe("free");
     }
   });
 
@@ -333,8 +343,8 @@ describe("the rule is applied, not merely available", () => {
     // Knowing it costs money is only half an answer. The steps have to name the
     // cheaper way of doing the same thing.
     expect(EXPLAIN["advisor.what"].how?.some(s => /[Ss]elect/.test(s))).toBe(true);
-    expect(EXPLAIN["advisor.what"].cost.kind === "spends"
-      && /select/i.test(EXPLAIN["advisor.what"].cost.note)).toBe(true);
+    const cost = EXPLAIN["advisor.what"].cost;
+    expect(cost?.kind === "spends" && /select/i.test(cost.note)).toBe(true);
   });
 
 });

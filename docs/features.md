@@ -455,7 +455,7 @@ down the page. An explanation has to answer four things:
 | **What** it is | one line, in the app's own words |
 | **Why** | why it exists, or why it is happening right now |
 | **Necessary?** | required, worth doing, or entirely optional |
-| **What it spends** | stated every time, including when the answer is nothing |
+| **What it spends** | where it is worth saying, including when the answer is nothing |
 
 Where a feature does spend, the note names the cheaper way of doing the same
 thing. A Smart Advisor pass reads the whole chapter unless something is selected,
@@ -468,8 +468,10 @@ cheat sheets, the name generator and the right-click thesaurus all read like AI
 features and are not. Their text comes from lists that ship with the app. A writer
 who assumes otherwise avoids the cheapest tools in here.
 
-That last row is there because most of this app costs nothing and a
-model-shaped app trains people to expect otherwise. "Free. No AI is called, so
+That last row is a nice-to-have rather than a rule, and worth including more often
+than not, because most of this app costs nothing and a model-shaped app trains
+people to expect otherwise. Silence about money is fine; being wrong about it is
+not, and a build fails over a "free" claim on anything that calls a model. "Free. No AI is called, so
 this costs nothing" is worth the space. Where something does spend, the note says
 *what* -- one call over a chapter reads very differently from a pass over the
 whole book.
