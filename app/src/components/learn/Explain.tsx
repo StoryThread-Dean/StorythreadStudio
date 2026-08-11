@@ -1,22 +1,37 @@
-// components/learn/Explain.tsx -- the two questions every screen must answer
-// =========================================================================
-// "What's this?" and "Show me how to do this", from one registry entry, so a
-// screen cannot offer help that leaves out why it exists, whether it is
-// necessary, or what it spends.
+// components/learn/Explain.tsx -- the help a screen owes, in one control
+// ======================================================================
+// Answers four things the product rule requires -- what this is, why it is
+// happening, whether it is necessary, and what it spends -- plus the steps,
+// when the order matters.
 //
-// Two buttons rather than one, because they are different questions asked at
-// different moments. "What's this?" is asked by someone deciding whether to
-// care. "Show me how" is asked by someone who has already decided and is stuck.
-// Folding them together means the second person reads three paragraphs of
-// justification to find a list of steps.
+// TWO EARLIER MISTAKES, BOTH VISIBLE IN A SCREENSHOT, BOTH FIXED HERE.
 //
-// The old free-form WhatsThis still exists and still works -- it is the right
-// thing for a one-sentence aside next to a checkbox. This is for anything a
-// writer could reasonably be stuck on, and its job is to be impossible to fill
-// in badly.
+// 1. IT WAS TWO BUTTONS. "What's this?" and "Show me how to do this" side by
+//    side, on the theory that they are different questions asked at different
+//    moments. On screen that theory cost about 240px of chrome per use, and two
+//    of them stacked on the Weaving panel read as clutter rather than as help.
+//    Reported as "I'm not sure two What'sThis? and Show me how to do this is
+//    needed."
+//
+//    So it is one trigger and one panel, with the steps inside it under their
+//    own heading. Nothing is lost: somebody who only wants the steps looks down
+//    past four short lines instead of pressing a different button.
+//
+// 2. THE PANEL WAS PART OF THE LAYOUT. Inside the Smart Advisor toolbar --
+//    a wrapping flex row -- opening it grew the row, shoved Readability and
+//    Structure sideways, wrapped Context onto a second line and pushed the
+//    manuscript down the page. A disclosure that rearranges the screen around
+//    it is worse than no disclosure.
+//
+//    So the panel FLOATS: absolutely positioned, out of flow, over whatever is
+//    beneath it. The trigger keeps its place and nothing else moves. This is how
+//    the issue and thesaurus popovers in this app already behave.
+//
+// `compact` exists for toolbars, where even one worded button is too wide: the
+// trigger becomes a single question mark and the panel is unchanged.
 
-import { useState } from "react";
-import { HelpCircle, ListOrdered, Coins, CircleCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { HelpCircle, Coins, CircleCheck, ListOrdered } from "lucide-react";
 
 import { EXPLAIN, NEED_WORDING, type Explains } from "./explanations";
 
@@ -25,53 +40,72 @@ interface ExplainProps {
   of?: string;
   /** Or the entry itself, for something genuinely local to one screen. */
   entry?: Explains;
-  /** Override the first button's wording where the default reads oddly. */
+  /** Override the trigger's wording where the default reads oddly. */
   label?: string;
-  /** Lay the buttons out on their own line rather than inline. */
-  block?: boolean;
+  /**
+   * Icon-only trigger, for a crowded row.
+   *
+   * The words are the better affordance -- nobody has to guess what "What's
+   * this?" does -- so this is for places where they genuinely will not fit,
+   * not a default to reach for.
+   */
+  compact?: boolean;
+  /** Open the panel to the right of the trigger instead of the left. */
+  align?: "left" | "right";
 }
 
-export function Explain({ of, entry, label, block }: ExplainProps) {
-  const [open, setOpen] = useState<"what" | "how" | null>(null);
+export function Explain({ of, entry, label, compact, align = "left" }: ExplainProps) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
   const info = entry ?? (of ? EXPLAIN[of] : undefined);
+
+  // Escape and a click elsewhere both close it. A floating panel that can only
+  // be dismissed by finding the button again is a panel people leave open.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    function onDown(event: MouseEvent) {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown);
+    };
+  }, [open]);
 
   // A missing key is a bug, not something to paper over with an empty box --
   // but it must not take the screen down with it. A contract test catches these
   // before they ship; this is the belt to that braces.
   if (!info) return null;
 
-  const toggle = (which: "what" | "how") =>
-    setOpen(current => (current === which ? null : which));
-
   return (
-    <div className={block ? "mt-1" : "inline-flex flex-col"}>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => toggle("what")}
-          aria-expanded={open === "what"}
-          className="inline-flex shrink-0 items-center gap-1 rounded text-[10px] text-text-muted transition-colors hover:text-blue-300"
+    // relative + inline: the trigger sits in the flow exactly as a word would,
+    // and the panel hangs off it without occupying space.
+    <span ref={wrapRef} className="relative inline-block align-middle">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        aria-label={compact ? (label ?? "What's this?") : undefined}
+        title={compact ? (label ?? "What's this?") : undefined}
+        className="inline-flex shrink-0 items-center gap-1 rounded text-[10px] text-text-muted transition-colors hover:text-blue-300"
+      >
+        <HelpCircle size={compact ? 13 : 11} />
+        {!compact && (label ?? "What's this?")}
+      </button>
+
+      {open && (
+        <div
+          data-testid="explain-panel"
+          role="note"
+          className={`absolute top-full z-50 mt-1 w-[min(30rem,80vw)] space-y-1.5 rounded border border-border bg-bg-panel px-2.5 py-2 text-[10px] leading-relaxed text-text-muted shadow-xl ${
+            align === "right" ? "right-0" : "left-0"
+          }`}
         >
-          <HelpCircle size={11} /> {label ?? "What's this?"}
-        </button>
-
-        {/* Only when there are steps. An empty "show me how" is worse than none:
-            it promises instructions and delivers a shrug. */}
-        {info.how && info.how.length > 0 && (
-          <button
-            type="button"
-            onClick={() => toggle("how")}
-            aria-expanded={open === "how"}
-            className="inline-flex shrink-0 items-center gap-1 rounded text-[10px] text-text-muted transition-colors hover:text-blue-300"
-          >
-            <ListOrdered size={11} /> Show me how to do this
-          </button>
-        )}
-      </div>
-
-      {open === "what" && (
-        <div data-testid="explain-what"
-             className="mt-1 space-y-1.5 rounded border border-border bg-bg-surface/70 px-2 py-1.5 text-[10px] leading-relaxed text-text-muted">
           <p className="text-text-primary">{info.what}</p>
 
           {/* WHY, labelled, because it is the part writers ask for and the part
@@ -95,15 +129,22 @@ export function Explain({ of, entry, label, block }: ExplainProps) {
                 : info.cost.note}
             </span>
           </p>
+
+          {/* The steps, in the same panel under their own heading. They used to
+              be a second button; the heading does the same job for none of the
+              width. */}
+          {info.how && info.how.length > 0 && (
+            <div data-testid="explain-how" className="border-t border-border pt-1.5">
+              <p className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-faint">
+                <ListOrdered size={10} /> How to do this
+              </p>
+              <ol className="list-decimal space-y-0.5 pl-4">
+                {info.how.map(step => <li key={step}>{step}</li>)}
+              </ol>
+            </div>
+          )}
         </div>
       )}
-
-      {open === "how" && info.how && (
-        <ol data-testid="explain-how"
-            className="mt-1 list-decimal space-y-1 rounded border border-border bg-bg-surface/70 py-1.5 pl-6 pr-2 text-[10px] leading-relaxed text-text-muted">
-          {info.how.map(step => <li key={step}>{step}</li>)}
-        </ol>
-      )}
-    </div>
+    </span>
   );
 }

@@ -265,9 +265,12 @@ export const EXPLAIN: Record<string, Explains> = {
     needed: "optional",
     cost: FREE,
     how: [
-      "Pick how much to look at, then press Start.",
-      "Answer each thing it finds, or skip it.",
-      "Stop whenever you like. Your answers are saved as you go.",
+      "Full weave looks at everything. Quick pass shows only what is already "
+        + "wrong, and asks you to invent nothing.",
+      "Press Start. Nothing has been read or changed until you do.",
+      "Answer each thing it finds, or skip it. Skipping is a real answer.",
+      "Stop whenever you like. Your answers are saved as you go, and a new "
+        + "session does not undo anything you already applied.",
     ],
     endpoint: "/api/codex/scan",
   },
@@ -278,19 +281,6 @@ export const EXPLAIN: Record<string, Explains> = {
     needed: "required",
     cost: FREE,
     endpoint: "/api/codex/scan",
-  },
-  "weaving.depth": {
-    what: "How much of your world to go through in one sitting.",
-    why: "A full pass over a finished novel can find hundreds of things. Being "
-      + "able to take a narrow slice is what makes it usable at all.",
-    needed: "recommended",
-    cost: FREE,
-    how: [
-      "Full manuscript looks at everything.",
-      "Quick pass shows only what is already wrong -- no world-building "
-        + "questions.",
-      "Either way you can stop anywhere and your answers keep.",
-    ],
   },
   "weaving.why-seeing": {
     what: "The rule that put this in front of you, and the text that set it off.",

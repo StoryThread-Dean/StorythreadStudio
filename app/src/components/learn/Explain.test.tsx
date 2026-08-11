@@ -119,7 +119,7 @@ describe("what the writer sees", () => {
   it("shows what, why, whether it is needed, and what it costs", async () => {
     render(<Explain entry={LOCAL} />);
     await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
-    const box = screen.getByTestId("explain-what");
+    const box = screen.getByTestId("explain-panel");
     expect(box.textContent).toContain("A thing that does a thing.");
     expect(box.textContent).toContain("Why:");
     expect(box.textContent).toContain(NEED_WORDING.recommended);
@@ -130,7 +130,7 @@ describe("what the writer sees", () => {
     // Silence about money reads as "probably costs something".
     render(<Explain entry={{ ...LOCAL, cost: FREE }} />);
     await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
-    expect(screen.getByTestId("explain-what").textContent)
+    expect(screen.getByTestId("explain-panel").textContent)
       .toMatch(/No AI is called/);
   });
 
@@ -140,34 +140,39 @@ describe("what the writer sees", () => {
       cost: spends("One call over this chapter only, so a few pennies at most."),
     }} />);
     await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
-    expect(screen.getByTestId("explain-what").textContent)
+    expect(screen.getByTestId("explain-panel").textContent)
       .toMatch(/One call over this chapter only/);
   });
 
-  it("offers the steps separately, as their own question", async () => {
-    // Someone who has already decided to do it should not have to read the
-    // justification again to find out how.
+  it("puts the steps in the same panel, under their own heading", async () => {
+    // REPLACED A SECOND BUTTON. "What's this?" and "Show me how to do this" side
+    // by side cost about 240px of chrome per use, and two of them stacked on the
+    // Weaving panel read as clutter -- "I'm not sure two What'sThis? and Show me
+    // how to do this is needed."
+    //
+    // Nothing is lost. Somebody who only wants the steps looks down past four
+    // short lines instead of pressing a different button.
     render(<Explain entry={LOCAL} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: /Show me how to do this/ }));
-    const steps = screen.getByTestId("explain-how");
-    expect(steps.tagName).toBe("OL");
-    expect(steps.querySelectorAll("li")).toHaveLength(2);
-  });
-
-  it("offers no steps button when there are no steps", async () => {
-    // An empty "show me how" promises instructions and delivers a shrug.
-    render(<Explain entry={{ ...LOCAL, how: undefined }} />);
     expect(screen.queryByRole("button", { name: /Show me how/ })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
+    const steps = screen.getByTestId("explain-how");
+    expect(steps.querySelector("ol")).toBeTruthy();
+    expect(steps.querySelectorAll("li")).toHaveLength(2);
+    expect(steps.textContent).toMatch(/How to do this/);
   });
 
-  it("shows one at a time, so neither buries the other", async () => {
+  it("is one control, not two", async () => {
     render(<Explain entry={LOCAL} />);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("says nothing about steps when there are none", async () => {
+    render(<Explain entry={{ ...LOCAL, how: undefined }} />);
     await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
-    await userEvent.click(
-      screen.getByRole("button", { name: /Show me how to do this/ }));
-    expect(screen.queryByTestId("explain-what")).toBeNull();
-    expect(screen.getByTestId("explain-how")).toBeTruthy();
+    expect(screen.queryByTestId("explain-how")).toBeNull();
+    expect(screen.getByTestId("explain-panel").textContent)
+      .not.toMatch(/How to do this/);
   });
 
   it("closes when asked again", async () => {
@@ -175,13 +180,49 @@ describe("what the writer sees", () => {
     const button = screen.getByRole("button", { name: /What's this/ });
     await userEvent.click(button);
     await userEvent.click(button);
-    expect(screen.queryByTestId("explain-what")).toBeNull();
+    expect(screen.queryByTestId("explain-panel")).toBeNull();
+  });
+
+  it("closes on Escape, and on a click elsewhere", async () => {
+    // A floating panel dismissable only by finding its button again is a panel
+    // people leave open over their own manuscript.
+    render(<><Explain entry={LOCAL} /><button>somewhere else</button></>);
+    const button = screen.getByRole("button", { name: /What's this/ });
+
+    await userEvent.click(button);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByTestId("explain-panel")).toBeNull();
+
+    await userEvent.click(button);
+    await userEvent.click(screen.getByRole("button", { name: "somewhere else" }));
+    expect(screen.queryByTestId("explain-panel")).toBeNull();
+  });
+
+  it("does not push the screen around when it opens", async () => {
+    // THE SMART ADVISOR BUG. Inside a wrapping toolbar the old panel grew the
+    // row: it shoved the pass buttons sideways, wrapped Context onto a second
+    // line and pushed the manuscript down. So the panel is out of flow, and the
+    // trigger keeps its place.
+    render(<Explain entry={LOCAL} />);
+    await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
+    expect(screen.getByTestId("explain-panel").className).toMatch(/\babsolute\b/);
+  });
+
+  it("shrinks to an icon where a row is crowded", async () => {
+    // Words are the better affordance, so this is for places they will not fit,
+    // not a default to reach for. It still has to be findable by name.
+    render(<Explain entry={LOCAL} compact />);
+    const button = screen.getByRole("button", { name: /What's this/ });
+    expect(button.textContent).toBe("");
+    await userEvent.click(button);
+    expect(screen.getByTestId("explain-panel").textContent)
+      .toContain("A thing that does a thing.");
   });
 
   it("reads an entry out of the registry by key", async () => {
     render(<Explain of="tie.reason" />);
     await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
-    expect(screen.getByTestId("explain-what").textContent)
+    expect(screen.getByTestId("explain-panel").textContent)
       .toContain(EXPLAIN["tie.reason"].what);
   });
 

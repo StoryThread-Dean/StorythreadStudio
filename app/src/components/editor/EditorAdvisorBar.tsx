@@ -452,8 +452,13 @@ export function EditorAdvisorBar({
       <span className="text-[10px] uppercase tracking-wide text-faint">Smart Advisor</span>
       {/* THE FIRST PLACE IN THIS APP WHERE HELP HAS TO TALK ABOUT MONEY.
           A pass reads the whole chapter unless something is selected, so
-          "select first" is not a tip -- it is the difference in the bill. */}
-      <Explain of="advisor.what" />
+          "select first" is not a tip -- it is the difference in the bill.
+
+          compact because this is a crowded toolbar: worded triggers took enough
+          width to shove the pass buttons along the row. The panel floats, so
+          opening it no longer grows this row and wraps Context onto a second
+          line. */}
+      <Explain of="advisor.what" compact />
 
       <CategoryButton
         category="readability"

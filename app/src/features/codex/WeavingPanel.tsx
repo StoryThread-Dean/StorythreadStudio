@@ -365,16 +365,15 @@ export function WeavingPanel({
           shows you where they do not line up yet. Nothing is changed without
           you choosing it, and you can stop anywhere.
         </p>
-        {/* Before the writer commits to anything: what this is, whether they
-            have to, and what it spends. The last one matters most on a screen
-            whose button says "Start" next to a count in the hundreds. */}
-        <Explain of="weaving.what" block />
-
-        <div className="mt-3">
-          <Explain of="weaving.depth" label="Which should I pick?" />
+        {/* ONE control for this screen. What it is, whether they have to, what
+            it spends, and which depth to pick -- all of which the writer needs
+            before pressing Start next to a count in the hundreds. It used to be
+            two of these stacked, which read as clutter rather than as help. */}
+        <div className="mt-1">
+          <Explain of="weaving.what" />
         </div>
 
-        <div className="mt-1.5 space-y-1.5">
+        <div className="mt-3 space-y-1.5">
           {DEPTHS.map(option => (
             <button
               key={option.id}

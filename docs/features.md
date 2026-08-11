@@ -444,10 +444,11 @@ icon and name, and it opens by saying how many times the prose already found her
 The number is there to be checked.
 
 **And every step can explain itself.** Beside anything you could reasonably be
-stuck on there is **What's this?** and, where the order matters, **Show me how to
-do this** -- two buttons rather than one, because they are different questions.
-The first is asked while deciding whether to care; the second by someone who has
-already decided. An explanation has to answer four things:
+stuck on there is one **What's this?** -- a question mark on its own where a row
+is crowded -- and it opens a panel that floats over the screen rather than
+rearranging it. That last part matters: in the Smart Advisor toolbar an inline
+panel grew the row, shoved the pass buttons sideways and pushed the manuscript
+down the page. An explanation has to answer four things:
 
 | | |
 |---|---|
@@ -472,6 +473,10 @@ model-shaped app trains people to expect otherwise. "Free. No AI is called, so
 this costs nothing" is worth the space. Where something does spend, the note says
 *what* -- one call over a chapter reads very differently from a pass over the
 whole book.
+
+The steps sit in the same panel under a **How to do this** heading. They were a
+second button once; two worded buttons cost about 240px per use and two of them
+stacked on one screen read as clutter rather than as help.
 
 The two rules are halves of one thing: the flow makes the app ask what comes
 next, and this lets it answer how, why, and at what cost.
