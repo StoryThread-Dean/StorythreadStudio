@@ -81,17 +81,60 @@ def normalize_fact(fact: dict) -> dict:
     return out
 
 
+# THE LONGEST A CONNECTION'S REASON MAY BE, AND WHY THERE IS A LIMIT AT ALL.
+#
+# This is arithmetic, not style policing. Every connection's reason goes into
+# the brief the app assembles for AI, so the cost is the cap TIMES the number
+# of connections in scope:
+#
+#     20 connections x ~120 characters  ~=    600 tokens   fits in every brief
+#     20 connections x  4 paragraphs    ~= 20,000 tokens   the edges alone
+#                                                          blow the budget
+#
+# A wordy reason does not merely read badly. It gets PRUNED OUT of the brief,
+# which means the writer did the work and lost the benefit. So the limit is
+# derived from what the brief can afford, and the interface uses a single-line
+# input rather than a textarea -- the shape of the box does the teaching before
+# any character counter has to.
+REASON_LIMIT = 140
+
+
+def normalize_reason(value) -> str:
+    """
+    A connection's reason, forced onto one line and inside the budget.
+
+    Newlines collapse rather than being rejected: a writer who pastes two lines
+    in meant both of them, and silently dropping the second half would be worse
+    than joining them.
+    """
+    text = " ".join(str(value or "").split())
+    return text[:REASON_LIMIT].rstrip()
+
+
 def normalize_tie(tie: dict) -> dict:
     """
-    One Tie, with the same three switches as a fact.
+    One Tie: WHY these two relate, plus the same three switches as a fact.
 
-    Ties carry them for a reason: two characters secretly married, a spy's
-    real allegiance, an alliance the reader learns of in chapter 20. Without
-    these, spoiler mode would hide the secret fact while drawing a labelled
-    edge that announces it.
+    The reason comes first here because it comes first in worth. A relation id
+    is a category the model could mostly have guessed from the prose:
+
+        rel: antagonist_of            -> a label
+        "she is hiding her theft
+         from him"                    -> the scene, the tension, and the thing
+                                        he must not notice
+
+    Ties carry the three switches for their own reason: two characters secretly
+    married, a spy's real allegiance, an alliance the reader learns of in
+    chapter 20. Without them, spoiler mode would hide the secret fact while
+    drawing a labelled edge that announces it.
     """
     out = dict(tie or {})
     out["rel"] = str(out.get("rel") or "").strip()
+    out["reason"] = normalize_reason(out.get("reason"))
+    # What the connection reads as from the OTHER end, when that is not simply
+    # the same sentence backwards. Optional: a writer mid-thought should not be
+    # made to answer twice.
+    out["reason_inverse"] = normalize_reason(out.get("reason_inverse"))
     out["frame"] = _clean(out.get("frame")) or TRUTH
     out["ai_scope"] = normalize_ai_scope(out.get("ai_scope"))
     out["at"] = _clean(out.get("at"))

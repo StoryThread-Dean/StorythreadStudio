@@ -39,6 +39,7 @@ from app.codex.findings import (
     retire, save_book, save_run, unpin,
 )
 from app.codex.mentions import alias_display, build_alias_map, find_mentions
+from app.codex.normalize import REASON_LIMIT, normalize_reason
 from app.codex.resolve import resolve_thread
 from app.codex.scan import DEPTH_FULL, ScanRequest, scan
 from app.codex.snags import check_ties
@@ -173,7 +174,13 @@ async def get_types(project_path: str = Query(...)):
     """The type registry: what kinds of thing this world contains, and which
     connections are meaningful between them."""
     project_path = validate_project_path(project_path)
-    return _registry(project_path)
+    registry = _registry(project_path)
+    # The reason-line limit travels WITH the registry rather than being written
+    # into the frontend a second time. It is derived from what an AI brief can
+    # afford, so if that number ever moves, one place moves and the input box
+    # follows -- instead of the backend silently truncating what the writer was
+    # allowed to type.
+    return {**registry, "reason_limit": REASON_LIMIT}
 
 
 @router.get("/health")
@@ -636,6 +643,11 @@ async def get_relations(project_path: str = Query(...),
         "forward": [render(r) for r in relations_between(registry, src_type, dst_type)],
         "reverse": [render(r, True) for r in relations_between(registry, dst_type, src_type)],
         "available": [render(r) for r in shipped_relations_between(registry, src_type, dst_type)],
+        # Carried here as well as on /types, because this is the request the
+        # editor makes at the moment it draws the reason box. One constant, two
+        # deliveries -- better than the frontend holding its own copy of a
+        # number the backend enforces.
+        "reason_limit": REASON_LIMIT,
     }
 
 
@@ -684,6 +696,10 @@ class TieRequest(BaseModel):
     src_id: str
     rel: str
     dst_id: str
+    # WHY, in the writer's own words, and the one field a connection cannot be
+    # saved without. See post_tie for the argument.
+    reason: str = ""
+    reason_inverse: str = ""
     at: str | None = None
     until: str | None = None
     frame: str | None = None
@@ -701,6 +717,30 @@ async def post_tie(request: TieRequest):
 
     if request.src_id == request.dst_id:
         raise CodexError("tie_endpoint_invalid", "An entry cannot connect to itself.")
+
+    # THE REASON IS REQUIRED, AND THIS IS THE POINT OF THE WHOLE FEATURE.
+    #
+    # The Weave exists so a writer can ask AI for help without pasting profiles
+    # and explaining context. Measured against that, a connection with no reason
+    # is a cost with no benefit:
+    #
+    #     Alexandra -- connected to -- Dean          a name, and nothing else
+    #     Alexandra -- is hiding her theft -- Dean   the scene
+    #
+    # The first spends brief budget to tell the model two people exist near each
+    # other, which it could see from the prose. So the app refuses it rather
+    # than accumulating thousands of edges that make every brief longer and no
+    # smarter. This reverses an earlier "connect now, say why later" decision;
+    # a sentence turned out to be a SMALLER ask than picking a relation from a
+    # list, and it is the half that earns its place.
+    reason = normalize_reason(request.reason)
+    if not reason:
+        raise CodexError(
+            "reason_required",
+            "Say why these two are connected -- one line is enough. This is "
+            "what gets sent to AI when you ask for help, so a connection "
+            "without it costs you budget and tells the model nothing.",
+        )
 
     # The registry decides what is meaningful, not this router -- so a
     # writer's own custom relation works with no code change.
@@ -724,7 +764,10 @@ async def post_tie(request: TieRequest):
             )
 
     thread.setdefault("ties", []).append({
-        "rel": request.rel, "target": request.dst_id, "at": request.at,
+        "rel": request.rel, "target": request.dst_id,
+        "reason": reason,
+        "reason_inverse": normalize_reason(request.reason_inverse),
+        "at": request.at,
         "until": request.until, "frame": request.frame,
         "revealed_at": request.revealed_at, "ai_scope": request.ai_scope,
     })

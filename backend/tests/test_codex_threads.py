@@ -94,6 +94,10 @@ def test_ties_are_read_with_their_anchor():
         # consumer decide for itself, and they disagreed -- see
         # codex/normalize.py.
         "frame": "truth", "revealed_at": None, "ai_scope": "always",
+        # This file predates the reason line, and an old project's connections
+        # must not fail to load for lacking one. Empty, never None -- same
+        # argument as frame and ai_scope above.
+        "reason": "", "reason_inverse": "",
     }]
 
 
@@ -238,3 +242,73 @@ def test_sections_are_written_in_the_registrys_order():
            "# Notes\nLater.\n\n# Overview\nFirst.\n")
     rendered = render_thread(parse_thread(raw, REGISTRY), REGISTRY)
     assert rendered.index("# Overview") < rendered.index("# Notes")
+
+
+# ── WHY two things are connected ─────────────────────────────────────────────
+#
+# The field that changed the Weave's direction. The app could already record
+# that Alexandra and Dean are connected; what it could not record was that she
+# is hiding her theft from him -- and only the second is worth the tokens it
+# costs in an AI brief. A relation id is a category a model could mostly have
+# guessed from the prose. A sentence in the writer's words is the scene.
+
+WITH_REASON = """---
+type: character
+entity_id: e-1
+name: Alexandra Langford
+ties:
+  - rel: connected_to
+    target: e-2
+    reason: "She is hiding her theft from him"
+    reason_inverse: "Does not know she stole from him"
+---
+
+# Overview
+A tall woman.
+"""
+
+
+def test_the_reason_is_read():
+    tie = parse_thread(WITH_REASON, REGISTRY)["ties"][0]
+    assert tie["reason"] == "She is hiding her theft from him"
+
+
+def test_the_other_end_can_read_differently():
+    # "Alexandra is hiding her theft from Dean" does not reverse cleanly -- from
+    # Dean's end it is "does not know she stole from him". Optional, because a
+    # writer mid-thought should not be made to answer twice.
+    tie = parse_thread(WITH_REASON, REGISTRY)["ties"][0]
+    assert tie["reason_inverse"] == "Does not know she stole from him"
+
+
+def test_a_reason_survives_a_round_trip():
+    thread = parse_thread(WITH_REASON, REGISTRY)
+    again = parse_thread(render_thread(thread), REGISTRY)
+    assert again["ties"][0]["reason"] == "She is hiding her theft from him"
+    assert again["ties"][0]["reason_inverse"] == "Does not know she stole from him"
+
+
+def test_prose_punctuation_survives_the_round_trip():
+    # A reason is PROSE, so it will contain the things prose contains: colons,
+    # quotes, and the app's own -- in place of an em dash. Written unquoted, a
+    # colon would end the YAML value early and silently truncate the writer.
+    messy = 'She hides one thing: the "theft" -- and he would fire her'
+    thread = parse_thread(WITH_REASON, REGISTRY)
+    thread["ties"][0]["reason"] = messy
+    again = parse_thread(render_thread(thread), REGISTRY)
+    assert again["ties"][0]["reason"] == messy
+
+
+def test_a_connection_with_no_reason_still_loads():
+    # Every connection made before this field existed. Refusing to load them
+    # would be the app breaking the writer's files to enforce its own new rule.
+    tie = parse_thread(FULL, REGISTRY)["ties"][0]
+    assert tie["reason"] == ""
+
+
+def test_an_empty_reason_is_not_written_back():
+    # Nothing is gained by adding `reason: ""` to every connection in a book the
+    # first time it saves, and a diff of pure noise over unchanged files costs
+    # trust.
+    thread = parse_thread(FULL, REGISTRY)
+    assert "reason:" not in render_thread(thread)

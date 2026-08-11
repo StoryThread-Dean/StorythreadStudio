@@ -144,6 +144,10 @@ async def _migration_002_codex(db: aiosqlite.Connection) -> None:
         )
         """
     )
+    # NOTE: `reason` and `reason_inverse` are added by migration 003 rather
+    # than declared here. Editing this CREATE would give a fresh install a
+    # different table from a migrated one, and then 003 would fail on the
+    # duplicate column -- migrations are append-only for exactly this reason.
     await db.execute("CREATE INDEX idx_codex_tie_src ON codex_tie(src_id)")
     await db.execute("CREATE INDEX idx_codex_tie_dst ON codex_tie(dst_id)")
 
@@ -179,10 +183,33 @@ async def _migration_002_codex(db: aiosqlite.Connection) -> None:
     await db.execute("CREATE INDEX idx_codex_mention_chapter ON codex_mention(chapter_id)")
 
 
+async def _migration_003_tie_reason(db: aiosqlite.Connection) -> None:
+    """
+    WHY two things are connected, in the writer's own words.
+
+    Added because the connection the app could record and the connection worth
+    recording turned out to be different things:
+
+        A -- connected to -- B                  a name in the brief, no more
+        A -- is hiding her theft from -- B      the scene
+
+    Only the second is worth the tokens it costs, so the reason became the one
+    field a connection cannot be saved without.
+
+    ALTER rather than a rebuild: this index is a cache and reindexing would also
+    fill the columns, but a writer's project may hold an index built minutes ago
+    and there is no reason to make them wait for a full re-read of the world to
+    get two columns.
+    """
+    await db.execute("ALTER TABLE codex_tie ADD COLUMN reason TEXT")
+    await db.execute("ALTER TABLE codex_tie ADD COLUMN reason_inverse TEXT")
+
+
 # Ordered list. Append-only. Version N = _MIGRATIONS[N-1].
 _MIGRATIONS: list[Callable[[aiosqlite.Connection], Awaitable[None]]] = [
     _migration_001_progress_event,
     _migration_002_codex,
+    _migration_003_tie_reason,
 ]
 
 

@@ -233,6 +233,41 @@ fourteen chapters believing her father died in a raid is a different person in
 chapter fifteen. Ask the Weave about chapter seven and you get the belief; ask
 about chapter fifteen and you get the truth.
 
+### A connection has to say WHY
+
+The one field a connection cannot be saved without is a single line, in the
+writer's own words, saying why the two are connected. Not the relation label --
+that is optional and can come on a later pass.
+
+The order is deliberate, and it follows from what the Weave is for. The point is
+that a writer can ask AI for help without pasting profiles and explaining
+context. Measured against that:
+
+| Recorded | What AI learns |
+|---|---|
+| `Alexandra -- connected to -- Dean` | that two people exist near each other, which the prose already showed |
+| `Alexandra -- is hiding her theft from -- Dean` | the tension, the stakes, and the thing Dean must not notice |
+
+A relation label like `antagonist_of` is a category a model could mostly have
+guessed. The sentence is the scene. So the app asks for the sentence first and
+**refuses a connection without one**, rather than accumulating thousands of bare
+edges that make every brief longer and no smarter.
+
+**Brevity is arithmetic, not style policing.** The reason goes into the brief
+every time the writer asks for help, multiplied by every connection in scope:
+twenty connections at a line each is affordable; twenty at four paragraphs each
+would spend the whole budget on edges before the chapter is even included. A
+wordy reason does not merely read badly -- it gets **pruned out of the brief**, so
+the writer did the work and lost the benefit. The field is therefore a
+**single-line input rather than a text area** (the shape of the box teaches the
+rule before any counter has to), capped at 140 characters, and the cap is sent by
+the backend so the box can never be wider than what is kept.
+
+A connection may also carry a second line for how it reads from the other end --
+"Alexandra is hiding her theft from Dean" does not reverse cleanly. That one is
+offered, not demanded, because a writer mid-thought should not be made to answer
+twice.
+
 Three switches on every fact and every Tie decide what is visible:
 
 | Switch | Question it answers |

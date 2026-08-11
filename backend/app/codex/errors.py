@@ -28,6 +28,9 @@ CODES = {
     # Something was sent that cannot be accepted.
     "type_invalid",
     "tie_endpoint_invalid",
+    # A connection with no reason. Its own code rather than a generic invalid,
+    # because the frontend has to put the cursor in the right box.
+    "reason_required",
     "relation_not_allowed",
     "duplicate_entity_id",
     "duplicate_fact_id",
@@ -51,6 +54,7 @@ _STATUS = {
     "scene_tombstoned": 404,
     "type_invalid": 400,
     "tie_endpoint_invalid": 400,
+    "reason_required": 400,
     "relation_not_allowed": 400,
     "duplicate_entity_id": 409,
     "duplicate_fact_id": 409,

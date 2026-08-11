@@ -106,6 +106,10 @@ async function chooseOther(name: string) {
   await userEvent.click(screen.getByRole("button", { name: /Connect this to something/ }));
   await userEvent.click(screen.getByRole("button", { name: new RegExp("^" + name) }));
   await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
+  // A reason on every one, because a connection without one records nothing.
+  // Tests about the reason ITSELF do this by hand -- see the reason describe.
+  await userEvent.type(screen.getByLabelText("Why they are connected"),
+                       "She was his last student");
 }
 
 const posted = (fragment: string) =>
@@ -465,25 +469,27 @@ describe("a connection is allowed to be untyped", () => {
     await open();
     await chooseOther("Pathicus");
     const buttons = screen.getAllByRole("button").map(b => b.textContent ?? "");
-    const plain = buttons.findIndex(t => t.includes("Just connect them"));
+    const plain = buttons.findIndex(t => t.includes("Record it"));
     const named = buttons.findIndex(t => t.includes("worships"));
     expect(plain).toBeGreaterThan(-1);
     expect(plain).toBeLessThan(named);
   });
 
-  it("says the how can come later, so skipping it is not a loss", async () => {
+  it("says the LABEL can come later, so skipping it is not a loss", async () => {
+    // What is optional moved. The relation label is the queryable half; the
+    // reason is the useful half, and only one of them can be deferred.
     mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [],
                            available: [] } });
     await open();
     await chooseOther("Pathicus");
-    expect(screen.getByText("say how later")).toBeTruthy();
+    expect(screen.getByText("label it later")).toBeTruthy();
   });
 
   it("records it with no relation chosen", async () => {
     mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
     await open();
     await chooseOther("Pathicus");
-    await userEvent.click(screen.getByRole("button", { name: /Just connect them/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
     await waitFor(() => expect(posted("/tie").length).toBe(1));
     expect(posted("/tie")[0].body.rel).toBe("connected_to");
   });
@@ -493,16 +499,16 @@ describe("a connection is allowed to be untyped", () => {
                            available: [] } });
     await open();
     await chooseOther("Pathicus");
-    expect(screen.getByText("or say how")).toBeTruthy();
+    expect(screen.getByText("or give it a label too")).toBeTruthy();
   });
 
   it("adopts it quietly when an older project lacks it", async () => {
     // types.json is the writer's own file, so an older project simply does not
-    // have it. "Just connect them" must not turn into a lecture.
+    // have it. Recording a connection must not turn into a lecture.
     mockApi({ relations: { forward: [], reverse: [], available: [PLAIN] } });
     await open();
     await chooseOther("Pathicus");
-    await userEvent.click(screen.getByRole("button", { name: /Just connect them/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
     await waitFor(() => expect(posted("/tie").length).toBe(1));
     expect(posted("/relation")[0].body.adopt).toBe("connected_to");
   });
@@ -525,7 +531,7 @@ describe("a connection is allowed to be untyped", () => {
                  candidates: [node({ entity_id: "e-drow", type: "race",
                                      name: "Drow (Dark Elf)" })] });
     await chooseOther("Drow");
-    await userEvent.click(screen.getByRole("button", { name: /Just connect them/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
     await waitFor(() => expect(posted("/tie").length).toBe(1));
   });
 });
@@ -624,6 +630,10 @@ describe("the other end might not exist yet", () => {
     await userEvent.click(screen.getByRole("button", { name: /Make it/ }));
     await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
 
+    // Made on the spot, and still needs a reason -- the point of making it here
+    // was to keep the thought, not to skip the part that reaches AI.
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "The clan they answer to");
     await userEvent.click(screen.getByRole("button", { name: /worships/ }));
     await waitFor(() => expect(posted("/tie").length).toBe(1));
     expect(posted("/tie")[0].body.dst_id).toBe("e-made");
@@ -699,5 +709,172 @@ describe("the likely answers come first", () => {
     await userEvent.click(screen.getByRole("button",
       { name: /Connect this to something/ }));
     expect(screen.queryByText(/scenes together/)).toBeNull();
+  });
+});
+
+describe("why they are connected", () => {
+  // THE FIELD THAT REDIRECTED THE FEATURE.
+  //
+  // The app could already record that two entries are connected. What it could
+  // not record was the only part worth sending to a model:
+  //
+  //     Alexandra -- connected to -- Dean               a name, and nothing else
+  //     Alexandra -- is hiding her theft from -- Dean   the scene
+  //
+  // The Weave exists so a writer can ask AI for help without pasting profiles
+  // and explaining context. Measured against that, a bare edge is a cost with
+  // no benefit -- it spends brief budget to say two people exist near each
+  // other, which the prose already shows. So the reason is required, and it is
+  // asked BEFORE the relation label, which is the half a model could have
+  // guessed.
+
+  const PLAIN = { id: "connected_to", label: "connected to", symmetric: true,
+                  cardinality: "many", inverse_label: "", flipped: false,
+                  universal: true };
+
+  /** Pick an end WITHOUT typing a reason, which the shared helper does. */
+  async function pickOnly(name: string) {
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: new RegExp("^" + name) }));
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
+  }
+
+  it("asks for it before offering any label", async () => {
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    const text = screen.getByTestId("tie-editor").textContent ?? "";
+    expect(text.indexOf("In one line, why?"))
+      .toBeLessThan(text.indexOf("give it a label"));
+  });
+
+  it("records nothing until it is written", async () => {
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
+    expect(posted("/tie").length).toBe(0);
+  });
+
+  it("says WHY it is required, not merely that it is", async () => {
+    // "Required" reads as bureaucracy. The writer needs to know this sentence
+    // is the thing that reaches AI.
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    expect(screen.getByText(/tells AI less than the prose already does/))
+      .toBeTruthy();
+    expect(screen.getByText(/what gets sent to AI when you ask for help/))
+      .toBeTruthy();
+  });
+
+  it("sends it with the connection", async () => {
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "The order they founded to worship him");
+    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+    expect(posted("/tie")[0].body.reason)
+      .toBe("The order they founded to worship him");
+  });
+
+  it("is a single-line input, not a textarea", async () => {
+    // A textarea invites paragraphs. The shape of the box teaches the rule
+    // before any counter has to scold anyone -- and a wordy reason does not
+    // just read badly, it gets pruned out of the brief the writer wanted it in.
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    expect(screen.getByLabelText("Why they are connected").tagName).toBe("INPUT");
+  });
+
+  it("takes its limit from the BACKEND, never a copy of its own", async () => {
+    // A number duplicated in the frontend is how silent truncation ships: the
+    // box lets them type 200 and the server keeps 140.
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [],
+                           reason_limit: 90 } });
+    await open();
+    await pickOnly("Pathicus");
+    expect(screen.getByLabelText("Why they are connected")
+      .getAttribute("maxLength")).toBe("90");
+  });
+
+  it("warns as the room runs out, and not before", async () => {
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [],
+                           reason_limit: 40 } });
+    await open();
+    await pickOnly("Pathicus");
+    const box = screen.getByLabelText("Why they are connected");
+    await userEvent.type(box, "short");
+    expect(screen.queryByText(/left$/)).toBeNull();
+    await userEvent.type(box, "aaaaaaaaaaaaaaaaaaaa");
+    expect(screen.getByText(/left$/)).toBeTruthy();
+  });
+
+  it("offers the other side without demanding it", async () => {
+    // "Alexandra is hiding her theft from Dean" does not reverse cleanly. But a
+    // writer mid-thought should not be made to answer twice, so it is a link
+    // rather than a second required box.
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    expect(screen.queryByLabelText("Why, from the other side")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /reads differently/ }));
+    expect(screen.getByLabelText("Why, from the other side")).toBeTruthy();
+  });
+
+  it("sends the other side when it is given", async () => {
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "They founded the order that worships him");
+    await userEvent.click(screen.getByRole("button", { name: /reads differently/ }));
+    await userEvent.type(screen.getByLabelText("Why, from the other side"),
+                         "The god they were founded to serve");
+    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+    expect(posted("/tie")[0].body.reason_inverse)
+      .toBe("The god they were founded to serve");
+  });
+
+  it("swaps the two reasons when the relation is stored the other way round", async () => {
+    // A flipped relation is stored from the OTHER end. If the reasons did not
+    // travel with it, the connection would read backwards for the rest of the
+    // book.
+    const FLIPPED = { id: "worshipped_by", label: "worshipped by",
+                      symmetric: false, cardinality: "many",
+                      inverse_label: "worships", flipped: true };
+    mockApi({ relations: { forward: [], reverse: [FLIPPED], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "They worship him");
+    await userEvent.click(screen.getByRole("button", { name: /reads differently/ }));
+    await userEvent.type(screen.getByLabelText("Why, from the other side"),
+                         "He is worshipped by them");
+    await userEvent.click(screen.getByRole("button", { name: /worshipped by/ }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+    const body = posted("/tie")[0].body;
+    expect(body.src_id).toBe("e-pathicus");
+    expect(body.reason).toBe("He is worshipped by them");
+    expect(body.reason_inverse).toBe("They worship him");
+  });
+
+  it("starts empty for the next connection", async () => {
+    // A reason left in the box would be recorded against the wrong pair.
+    mockApi({ relations: { forward: [PLAIN], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "The order that worships him");
+    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
+    await waitFor(() => expect(posted("/tie").length).toBe(1));
+    await pickOnly("The Faith");
+    expect((screen.getByLabelText("Why they are connected") as HTMLInputElement)
+      .value).toBe("");
   });
 });

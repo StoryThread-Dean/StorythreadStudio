@@ -219,6 +219,7 @@ def test_a_tie_can_be_created_and_read_back(project):
     response = client.post("/api/codex/tie", json={
         "project_path": project, "src_id": "e-elara",
         "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Trained her from the year she arrived",
     })
     assert response.status_code == 200
     ties = client.get("/api/codex/ties",
@@ -230,6 +231,7 @@ def test_the_other_end_of_a_tie_can_find_it(project):
     client.post("/api/codex/tie", json={
         "project_path": project, "src_id": "e-elara",
         "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Trained her from the year she arrived",
     })
     ties = client.get("/api/codex/ties",
                       params={"project_path": project, "entity_id": "e-garrick"}).json()
@@ -242,6 +244,7 @@ def test_a_relation_that_makes_no_sense_between_two_types_is_refused(project):
     response = client.post("/api/codex/tie", json={
         "project_path": project, "src_id": "e-ravensmoor",
         "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Trained her from the year she arrived",
     })
     assert _code(response) == "relation_not_allowed"
     assert "location" in response.json()["detail"]["message"]
@@ -251,6 +254,7 @@ def test_a_thread_cannot_connect_to_itself(project):
     response = client.post("/api/codex/tie", json={
         "project_path": project, "src_id": "e-elara",
         "rel": "loves", "dst_id": "e-elara",
+        "reason": "Trained her from the year she arrived",
     })
     assert _code(response) == "tie_endpoint_invalid"
 
@@ -259,6 +263,7 @@ def test_a_tie_to_a_thread_that_does_not_exist_is_refused(project):
     response = client.post("/api/codex/tie", json={
         "project_path": project, "src_id": "e-elara",
         "rel": "loves", "dst_id": "e-ghost",
+        "reason": "Trained her from the year she arrived",
     })
     assert _code(response) == "entity_not_found"
 
@@ -383,7 +388,8 @@ def test_resolving_reports_ambiguity_as_a_readable_sentence(project):
 def test_the_graph_returns_nodes_and_edges(project):
     client.post("/api/codex/tie", json={
         "project_path": project, "src_id": "e-elara",
-        "rel": "mentored_by", "dst_id": "e-garrick"})
+        "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Recorded so the connection exists"})
     body = client.get("/api/codex/graph", params={"project_path": project}).json()
     assert len(body["nodes"]) == 3
     assert len(body["edges"]) == 1
@@ -395,7 +401,8 @@ def test_the_graph_draws_each_edge_once(project):
     # copy too would double every line on the map.
     client.post("/api/codex/tie", json={
         "project_path": project, "src_id": "e-elara",
-        "rel": "mentored_by", "dst_id": "e-garrick"})
+        "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Recorded so the connection exists"})
     body = client.get("/api/codex/graph", params={"project_path": project}).json()
     assert len(body["edges"]) == 1
 
@@ -433,7 +440,8 @@ def test_a_public_tie_to_an_author_only_thread_is_not_drawn(project):
 
     client.post("/api/codex/tie", json={
         "project_path": project, "src_id": "e-elara",
-        "rel": "mentored_by", "dst_id": "e-garrick"})
+        "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Recorded so the connection exists"})
 
     body = client.get("/api/codex/graph", params={"project_path": project}).json()
     assert "e-garrick" not in {n["entity_id"] for n in body["nodes"]}
@@ -533,3 +541,108 @@ def test_the_order_is_still_the_reading_order(project):
     chapters = client.get("/api/codex/anchors",
                           params={"project_path": project}).json()["chapters"]
     assert [c["filename"] for c in chapters] == ordered_chapter_filenames(project)
+
+
+# ── A connection with no reason is refused ───────────────────────────────────
+#
+# The rule that redirected the whole feature. The Weave exists so a writer can
+# ask AI for help without pasting profiles and explaining context. Against that
+# measure a bare edge is a cost with no benefit:
+#
+#     Alexandra -- connected to -- Dean               a name, nothing more
+#     Alexandra -- is hiding her theft from -- Dean   the scene
+#
+# So the app refuses the first rather than collecting thousands of them and
+# making every brief longer and no smarter.
+
+def test_a_connection_with_no_reason_is_refused(project):
+    response = client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara",
+        "rel": "mentored_by", "dst_id": "e-garrick",
+    })
+    assert _code(response) == "reason_required"
+
+
+def test_a_reason_of_only_spaces_is_no_reason(project):
+    response = client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara",
+        "rel": "mentored_by", "dst_id": "e-garrick", "reason": "   \n  ",
+    })
+    assert _code(response) == "reason_required"
+
+
+def test_the_refusal_says_why_it_matters_not_just_that_it_is_required(project):
+    # "Reason is required" teaches nothing and reads as bureaucracy. The writer
+    # needs to know this sentence is what gets sent to AI.
+    response = client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara",
+        "rel": "mentored_by", "dst_id": "e-garrick",
+    })
+    message = response.json()["detail"]["message"]
+    assert "one line is enough" in message
+    assert "sent to AI" in message
+
+
+def test_the_reason_comes_back_on_the_connection(project):
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara",
+        "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Taught her everything, then vanished",
+    })
+    ties = client.get("/api/codex/ties",
+                      params={"project_path": project,
+                              "entity_id": "e-elara"}).json()["ties"]
+    assert ties[0]["reason"] == "Taught her everything, then vanished"
+
+
+def test_the_other_end_gets_the_reason_too(project):
+    # Garrick's screen has to be able to say what this connection is, and only
+    # one direction is ever stored.
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara",
+        "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Taught her everything, then vanished",
+        "reason_inverse": "His last student, and the one he regrets",
+    })
+    ties = client.get("/api/codex/ties",
+                      params={"project_path": project,
+                              "entity_id": "e-garrick"}).json()["ties"]
+    assert ties[0]["reason_inverse"] == "His last student, and the one he regrets"
+
+
+def test_a_wordy_reason_is_cut_to_the_budget_rather_than_refused(project):
+    # Refusing it would lose the writer's sentence. The limit is arithmetic --
+    # this line is multiplied by every connection in a brief -- so the honest
+    # move is to keep what fits and let the UI stop them before they get here.
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara",
+        "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "x" * 400,
+    })
+    ties = client.get("/api/codex/ties",
+                      params={"project_path": project,
+                              "entity_id": "e-elara"}).json()["ties"]
+    assert len(ties[0]["reason"]) == 140
+
+
+def test_a_reason_pasted_over_two_lines_becomes_one(project):
+    # A writer who pasted two lines meant both. Dropping the second half would
+    # be worse than joining them.
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara",
+        "rel": "mentored_by", "dst_id": "e-garrick",
+        "reason": "Taught her everything.\nThen vanished.",
+    })
+    ties = client.get("/api/codex/ties",
+                      params={"project_path": project,
+                              "entity_id": "e-elara"}).json()["ties"]
+    assert ties[0]["reason"] == "Taught her everything. Then vanished."
+
+
+def test_the_input_limit_travels_with_the_registry(project):
+    # So the box the writer types in cannot be wider than what the backend will
+    # keep. Duplicating the number in the frontend is how silent truncation
+    # gets shipped.
+    types = client.get("/api/codex/types",
+                       params={"project_path": project}).json()
+    assert types["reason_limit"] == 140

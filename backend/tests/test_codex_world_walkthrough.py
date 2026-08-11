@@ -54,8 +54,12 @@ def _make(project, type_id, name):
 
 
 def _tie(project, src, rel, dst):
+    # A reason on every one, because a connection without one is refused. This
+    # file is about whether a real world can be EXPRESSED, so the reason is
+    # boilerplate here and pinned properly in test_codex_routes.py.
     response = client.post("/api/codex/tie", json={
-        "project_path": project, "src_id": src, "rel": rel, "dst_id": dst})
+        "project_path": project, "src_id": src, "rel": rel, "dst_id": dst,
+        "reason": f"They are connected: {rel}"})
     assert response.status_code == 200, f"{rel}: {response.text}"
     return response.json()
 

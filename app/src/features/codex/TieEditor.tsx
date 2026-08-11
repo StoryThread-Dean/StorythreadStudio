@@ -123,6 +123,9 @@ export function TieEditor({
   const [other, setOther] = useState<GraphNode | null>(null);
   const [options, setOptions] = useState<{
     forward: Relation[]; reverse: Relation[]; available: Relation[];
+    // How long a reason may be. Sent by the backend, which is the thing that
+    // enforces it -- a copy kept here is how silent truncation gets shipped.
+    reason_limit?: number;
   } | null>(null);
   // Making the other end, when it does not exist yet.
   const [making, setMaking] = useState(false);
@@ -135,6 +138,11 @@ export function TieEditor({
   // questions -- but offered, because without it the other end reads as
   // "Race (the other way round)", which is honest and clumsy.
   const [newInverse, setNewInverse] = useState("");
+  // WHY these two relate, and the one thing a connection cannot be saved
+  // without. See the reason box below for the argument.
+  const [reason, setReason] = useState("");
+  const [reasonInverse, setReasonInverse] = useState("");
+  const [showInverse, setShowInverse] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -253,8 +261,14 @@ export function TieEditor({
     }
   }
 
+  /** Nothing can be recorded without a reason -- the backend refuses it too. */
+  const canConnect = reason.trim().length > 0;
+  // The backend enforces this, so the backend states it. The fallback applies
+  // only in the moment before the relations request lands.
+  const reasonLimit = options?.reason_limit ?? 140;
+
   async function connect(relation: Relation) {
-    if (!other) return;
+    if (!other || !canConnect) return;
     // An older project may not have the plain connection at all, since
     // types.json is the writer's file and is never modified behind their back.
     // Adopting it is silent here on purpose: "just connect them" should not
@@ -278,8 +292,14 @@ export function TieEditor({
       const response = await fetch(`${API_BASE}/api/codex/tie`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_path: projectPath, src_id: src,
-                               rel: relation.id, dst_id: dst }),
+        body: JSON.stringify({
+          project_path: projectPath, src_id: src,
+          rel: relation.id, dst_id: dst,
+          // A flipped relation is stored from the other end, so the reasons
+          // have to swap with it or the connection reads backwards.
+          reason: relation.flipped ? reasonInverse.trim() || reason : reason,
+          reason_inverse: relation.flipped ? reason : reasonInverse,
+        }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -289,6 +309,11 @@ export function TieEditor({
       setAdding(false);
       setOther(null);
       setQuery("");
+      // Cleared, because the next connection is a different connection. A
+      // reason left in the box would be recorded against the wrong pair.
+      setReason("");
+      setReasonInverse("");
+      setShowInverse(false);
       await load();
       onChanged();
     } catch (e) {
@@ -618,6 +643,80 @@ export function TieEditor({
                     <span className="text-text-primary">{nodeLabel(other)}</span>?
                   </p>
 
+                  {/* WHY, AND IT COMES FIRST BECAUSE IT IS WORTH THE MOST.
+                      ====================================================
+                      This one sentence outperforms every other field on the
+                      connection, including the relation type:
+
+                        antagonist of              a label the model could
+                                                   mostly have guessed
+                        "she is hiding her theft
+                         from him"                 the scene, the tension, and
+                                                   the thing he must not notice
+
+                      A single-line input rather than a textarea, deliberately.
+                      A textarea invites paragraphs, and the shape of the box
+                      teaches the rule before any counter has to scold anyone.
+                      maxLength comes from the BACKEND, so the box can never be
+                      wider than what will actually be kept. */}
+                  <label htmlFor="tie-reason"
+                         className="mb-1 block text-[11px] text-text-muted">
+                    In one line, why?
+                  </label>
+                  <input
+                    id="tie-reason"
+                    value={reason}
+                    onChange={e => setReason(e.target.value)}
+                    maxLength={reasonLimit}
+                    placeholder="taught her everything, then vanished"
+                    aria-label="Why they are connected"
+                    className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  />
+                  <p className="mt-1 text-[10px] text-faint">
+                    This is what gets sent to AI when you ask for help with a
+                    scene, so it is worth more than the label below -- and it is
+                    why one line is the limit. Every connection in a scene costs
+                    budget, and a wordy one gets left out.
+                    {reason.length > reasonLimit - 25 && (
+                      <span className="ml-1 text-amber-300">
+                        {reasonLimit - reason.length} left
+                      </span>
+                    )}
+                  </p>
+
+                  {/* Offered, not demanded. "Alexandra is hiding her theft from
+                      Dean" does not reverse cleanly -- from his end it is "does
+                      not know she stole from him" -- but a writer in the middle
+                      of a thought should not be made to answer twice. */}
+                  {showInverse ? (
+                    <>
+                      <label htmlFor="tie-reason-inverse"
+                             className="mb-1 mt-1.5 block text-[11px] text-text-muted">
+                        And from {nodeLabel(other)}&apos;s side?{" "}
+                        <span className="text-faint">optional</span>
+                      </label>
+                      <input
+                        id="tie-reason-inverse"
+                        value={reasonInverse}
+                        onChange={e => setReasonInverse(e.target.value)}
+                        maxLength={reasonLimit}
+                        placeholder="does not know she stole from him"
+                        aria-label="Why, from the other side"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                      />
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setShowInverse(true)}
+                      className="mt-1 inline-flex items-center gap-1 text-[10px] text-text-muted hover:text-text-primary"
+                    >
+                      <Plus size={9} /> It reads differently from{" "}
+                      {nodeLabel(other)}&apos;s side
+                    </button>
+                  )}
+
+                  <div className="my-2 border-t border-border" />
+
                   {options === null ? (
                     <p className="flex items-center gap-2 text-[11px] text-text-muted">
                       <Loader size={11} className="animate-spin" /> Looking...
@@ -666,27 +765,37 @@ export function TieEditor({
                     </div>
                   ) : (
                     <>
-                      {/* The plain one, first and on its own. Saying more about
-                          a connection is an improvement to one that already
-                          exists, never a toll gate in front of making it. */}
+                      {/* The plain one, first and on its own. The RELATION is
+                          the optional half now -- it is what makes a connection
+                          queryable and drawable, while the reason above is what
+                          makes it USEFUL. So this records the reason with no
+                          label attached, and a label can come on a later pass. */}
                       {plain && (
                         <button
                           onClick={() => void connect(plain)}
-                          disabled={busy}
+                          disabled={busy || !canConnect}
                           className="mb-1.5 flex w-full items-center gap-1.5 rounded border border-emerald-800 bg-emerald-950/30 px-2 py-1.5 text-left text-xs text-text-primary hover:bg-emerald-950/50 disabled:opacity-40"
                         >
                           {busy ? <Loader size={11} className="animate-spin" />
                                 : <Link2 size={11} className="text-emerald-300" />}
-                          <span className="flex-1">Just connect them</span>
+                          <span className="flex-1">Record it</span>
                           <span className="text-[10px] text-faint">
-                            say how later
+                            label it later
                           </span>
                         </button>
                       )}
 
+                      {!canConnect && (
+                        <p className="mb-1.5 text-[10px] text-amber-300">
+                          Write the line above first. A connection with nothing
+                          but two names tells AI less than the prose already
+                          does.
+                        </p>
+                      )}
+
                       {typed.length > 0 && (
                         <p className="mb-0.5 text-[10px] uppercase tracking-wide text-faint">
-                          or say how
+                          or give it a label too
                         </p>
                       )}
                       {typed.map(rel => (

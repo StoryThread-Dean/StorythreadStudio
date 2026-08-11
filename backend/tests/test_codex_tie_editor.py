@@ -68,6 +68,9 @@ def _relations(project, src, dst):
 
 
 def _tie(project, src, rel, dst, **kw):
+    # A reason by default, because a connection without one is refused -- these
+    # tests are about the RELATION, and the reason is pinned in its own file.
+    kw.setdefault("reason", "Recorded while testing the relation")
     return client.post("/api/codex/tie",
                        json={"project_path": project, "src_id": src,
                              "rel": rel, "dst_id": dst, **kw})

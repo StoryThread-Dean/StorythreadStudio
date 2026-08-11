@@ -62,7 +62,8 @@ FULL_SUMMARY_HEADING = "Full AI Summary"
 
 # Fields a fact may carry. Anything else a writer adds is preserved as-is.
 FACT_KEYS = ("id", "at", "axis", "value", "frame", "revealed_at", "ai_scope", "supersedes")
-TIE_KEYS = ("rel", "target", "at", "until", "frame", "revealed_at", "ai_scope")
+TIE_KEYS = ("rel", "target", "reason", "reason_inverse", "at", "until",
+            "frame", "revealed_at", "ai_scope")
 TRAIT_KEYS = ("trait", "description", "importance", "ai_scope")
 
 _SECTION_SPLIT_RE = re.compile(r"^# (.+)$", re.MULTILINE)
@@ -291,6 +292,13 @@ def render_thread(
             lines.append(f"  - rel: {tie.get('rel', '')}")
             lines.append(f"    target: {tie.get('target', '')}"
                          f"{_comment_for(tie.get('target'), label_for)}")
+            # WHY, in the writer's own words, and the single most valuable
+            # thing on the connection. Quoted because a reason is prose and
+            # will contain colons ("she is hiding one thing: the theft").
+            if tie.get("reason"):
+                lines.append(f'    reason: {_quote(tie["reason"])}')
+            if tie.get("reason_inverse"):
+                lines.append(f'    reason_inverse: {_quote(tie["reason_inverse"])}')
             # Defaults are NOT written back. Normalizing on read fills frame
             # and ai_scope on every tie, so writing them unconditionally would
             # add two lines to every connection in the book the first time it
