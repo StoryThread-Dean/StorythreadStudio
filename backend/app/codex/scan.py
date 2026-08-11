@@ -48,7 +48,10 @@ from app.codex.world_rules import DOMAINS, open_questions
 from app.utils.structure_store import ordered_chapter_ids
 
 __all__ = [
-    "Stop", "STOP_KINDS", "DEPTH_FULL", "DEPTH_TARGETED", "DEPTH_QUICK",
+    "Stop", "STOP_KINDS",
+    "PASSES", "PASS_KINDS", "PASS_WARP", "PASS_WEFT", "PASS_CLOTH",
+    "PASS_UNWOVEN", "kinds_for_pass", "normalize_pass",
+    "DEPTH_FULL", "DEPTH_TARGETED", "DEPTH_QUICK",
     "ScanRequest", "ScanResult", "scan",
 ]
 
@@ -69,16 +72,88 @@ STOP_PINNED = "pinned"              # the writer marked this by hand
 STOP_KINDS = (STOP_UNSPUN, STOP_FRAYED, STOP_UNPLACED, STOP_LOOSE,
               STOP_UNTIED, STOP_SNAG, STOP_EARLY, STOP_UNWOVEN, STOP_PINNED)
 
-# How much of this the writer wants in one sitting. The scan is the same
-# work either way; depth decides what survives into the walk.
-DEPTH_FULL = "full"
-DEPTH_TARGETED = "targeted"
-DEPTH_QUICK = "quick"
+# ── FOUR PASSES, WHICH REPLACED THREE SIZES ─────────────────────────────────
+#
+# What was here before was Full / Targeted / Quick: three amounts of the same
+# thing. The writer replaced it with four DIFFERENT QUESTIONS, which is a much
+# better division, and named them out of the same loom vocabulary as the rest:
+#
+#   Dress the Loom      what is here, and what relates to what
+#   Weave the Chapters  did anything change in this chapter
+#   Read the Cloth      where does the book contradict itself
+#   Unwoven             the ground rules of the world, which is its own job
+#
+# The metaphor carries the dependency, which is why it was chosen: you cannot
+# weave a weft without a warp. Dressing the loom comes first because a chapter
+# pass has nothing to ask about until entries exist and relate to each other.
+#
+# THE ORDERING IS A TEACHING FACT, NOT A LOCK, and that distinction came out of
+# the writer's own earlier point: "the codex is written, expanded, changed,
+# reformed, repurposed, evolving constantly throughout the story's progress."
+# Dressing the loom is therefore NEVER complete, so a global gate would never
+# open. The dependency is local, per pair -- a chapter pass that finds two
+# entries with nothing recorded asks the dress-the-loom question inline rather
+# than sending the writer away.
+#
+# Unwoven is separate on the writer's call: "Unwoven to me sounds like it needs
+# its own pass done separately because its done outside the other two." It is
+# world invention rather than tidying, and mixing it in would bury the
+# connection work under questions about how succession functions.
+PASS_WARP = "warp"          # Dress the Loom
+PASS_WEFT = "weft"          # Weave the Chapters
+PASS_CLOTH = "cloth"        # Read the Cloth
+PASS_UNWOVEN = "unwoven_pass"   # the world's ground rules, on their own
 
-# Quick pass = problems only. No world-building questions, nothing that asks
-# the writer to invent anything -- just the things that are already wrong.
-_QUICK_KINDS = frozenset({STOP_SNAG, STOP_LOOSE, STOP_FRAYED, STOP_EARLY,
-                          STOP_UNPLACED, STOP_PINNED})
+PASSES = (PASS_WARP, PASS_WEFT, PASS_CLOTH, PASS_UNWOVEN)
+
+# Which stops belong to which pass.
+#
+# Every kind appears exactly once, and a contract test enforces that: a kind in
+# two passes gets asked twice, and a kind in none silently stops being findable.
+#
+# Unplaced sits in Read the Cloth on the writer's decision. A fact with no point
+# in the story never takes effect, so it is invisible to everything -- which
+# reads as a review finding ("this is in your world and doing nothing") rather
+# than as setup work.
+PASS_KINDS: dict[str, frozenset[str]] = {
+    # What is here, and what relates to what.
+    PASS_WARP: frozenset({STOP_UNSPUN, STOP_FRAYED, STOP_LOOSE, STOP_PINNED}),
+    # Did anything change here. Scoped to chapters, which is what makes the
+    # anchor free: run it FROM chapter eight and the app already knows when.
+    PASS_WEFT: frozenset({STOP_UNTIED}),
+    # Where the book contradicts itself. A report to read, not a queue to clear.
+    PASS_CLOTH: frozenset({STOP_SNAG, STOP_EARLY, STOP_UNPLACED}),
+    # Its own job.
+    PASS_UNWOVEN: frozenset({STOP_UNWOVEN}),
+}
+
+# The old names, still accepted off the wire so a client mid-update is not
+# broken by a rename. Full became Dress the Loom because that is where a writer
+# starting out belongs; Quick was problems-only, which IS Read the Cloth.
+_LEGACY_PASSES = {"full": PASS_WARP, "targeted": PASS_WARP, "quick": PASS_CLOTH}
+
+# Kept as aliases so nothing importing them breaks in one commit.
+DEPTH_FULL = PASS_WARP
+DEPTH_TARGETED = PASS_WARP
+DEPTH_QUICK = PASS_CLOTH
+
+
+def normalize_pass(name: str | None) -> str:
+    """
+    Which pass was asked for, tolerating the names this used to have.
+
+    An unknown name becomes Dress the Loom rather than an error: a scan is free
+    and read-only, so the friendly failure is to show the writer the first pass
+    rather than refuse to look at their book.
+    """
+    value = str(name or "").strip().lower()
+    if value in PASSES:
+        return value
+    return _LEGACY_PASSES.get(value, PASS_WARP)
+
+
+def kinds_for_pass(name: str) -> frozenset[str]:
+    return PASS_KINDS.get(normalize_pass(name), frozenset())
 
 # How many likely answers a connection question offers up front.
 #
@@ -125,7 +200,10 @@ class Stop:
 @dataclass
 class ScanRequest:
     """What the writer asked for. Everything optional means "all of it"."""
-    depth: str = DEPTH_FULL
+    # Which of the four passes. Still called `depth` on the wire because a
+    # client mid-update should not break over a field rename; normalize_pass
+    # takes the old values too.
+    depth: str = PASS_WARP
     types: list[str] = field(default_factory=list)
     chapter_ids: list[str] = field(default_factory=list)
     kinds: list[str] = field(default_factory=list)
@@ -137,9 +215,16 @@ class ScanRequest:
     pinned: list[dict] = field(default_factory=list)
 
     def wants(self, kind: str) -> bool:
+        """
+        Is this kind of stop wanted in this pass?
+
+        Three filters, narrowest last: the pass decides what the sitting is
+        ABOUT, `kinds` lets a caller narrow further, and `muted_kinds` is the
+        writer saying never ask me this again.
+        """
         if kind in self.muted_kinds:
             return False
-        if self.depth == DEPTH_QUICK and kind not in _QUICK_KINDS:
+        if kind not in kinds_for_pass(self.depth):
             return False
         return not self.kinds or kind in self.kinds
 

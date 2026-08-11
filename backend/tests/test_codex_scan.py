@@ -15,9 +15,21 @@ import json
 import os
 
 from app.codex.scan import (
-    DEPTH_QUICK, STOP_EARLY, STOP_FRAYED, STOP_LOOSE, STOP_SNAG, STOP_UNPLACED,
+    PASS_CLOTH,
+    PASS_UNWOVEN,
+    PASS_WARP,
+    PASS_WEFT,
+    STOP_EARLY,
+    STOP_FRAYED,
+    STOP_KINDS,
+    STOP_LOOSE,
+    STOP_SNAG,
+    STOP_UNPLACED,
+    STOP_UNSPUN,
     STOP_UNTIED,
-    STOP_UNSPUN, ScanRequest, scan,
+    STOP_UNWOVEN,
+    ScanRequest,
+    scan,
 )
 from app.utils.structure_store import ensure_chapter_ids
 
@@ -216,10 +228,20 @@ def _crowd(tmp_path, times: int = 2):
     return _project(tmp_path, chapters)
 
 
+def _weft(**kw) -> ScanRequest:
+    """A Weave the Chapters request, which is the pass Untied belongs to.
+
+    Spelled out in a helper because several of these tests assert an EMPTY
+    result, and an empty result is exactly what a wrong pass produces. Without
+    this they would pass while checking nothing.
+    """
+    return ScanRequest(depth=PASS_WEFT, **kw)
+
+
 def test_two_shared_scenes_raise_a_connection_question(tmp_path):
     folder = _crowd(tmp_path, 2)
     result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
-                  REGISTRY)
+                  REGISTRY, _weft())
     stop = result.by_kind(STOP_UNTIED)[0]
     assert stop.title == "How are Elara and Garrick connected?"
 
@@ -228,7 +250,7 @@ def test_one_shared_scene_says_nothing(tmp_path):
     # Two strangers pass on a street once. The floor is the whole design.
     folder = _crowd(tmp_path, 1)
     result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
-                  REGISTRY)
+                  REGISTRY, _weft())
     assert result.by_kind(STOP_UNTIED) == []
 
 
@@ -236,7 +258,7 @@ def test_it_says_how_many_times_and_quotes_the_first(tmp_path):
     # A proposal that cannot show its evidence is a guess with better manners.
     folder = _crowd(tmp_path, 3)
     stop = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
-                REGISTRY).by_kind(STOP_UNTIED)[0]
+                REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
     assert "same scene 3 times" in stop.why
     assert stop.detail["scenes"] == 3
     assert "Garrick at the well" in stop.quote
@@ -248,7 +270,7 @@ def test_it_does_not_name_the_KIND_of_connection(tmp_path):
     # and the dragon he is hunting share a great many.
     folder = _crowd(tmp_path, 4)
     stop = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
-                REGISTRY).by_kind(STOP_UNTIED)[0]
+                REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
     assert "yours to say" in stop.why
     assert "relation" not in stop.detail
 
@@ -256,7 +278,7 @@ def test_it_does_not_name_the_KIND_of_connection(tmp_path):
 def test_a_pair_that_is_already_tied_is_not_proposed(tmp_path):
     folder = _crowd(tmp_path, 5)
     elara = _thread("e-1", "Elara", ties=[{"rel": "mentored_by", "target": "e-2"}])
-    result = scan(folder, [elara, _thread("e-2", "Garrick")], REGISTRY)
+    result = scan(folder, [elara, _thread("e-2", "Garrick")], REGISTRY, _weft())
     assert result.by_kind(STOP_UNTIED) == []
 
 
@@ -265,7 +287,7 @@ def test_the_tie_counts_from_either_end(tmp_path):
     # every connection the writer has already made.
     folder = _crowd(tmp_path, 5)
     garrick = _thread("e-2", "Garrick", ties=[{"rel": "mentor_of", "target": "e-1"}])
-    result = scan(folder, [_thread("e-1", "Elara"), garrick], REGISTRY)
+    result = scan(folder, [_thread("e-1", "Elara"), garrick], REGISTRY, _weft())
     assert result.by_kind(STOP_UNTIED) == []
 
 
@@ -273,7 +295,7 @@ def test_both_ends_are_carried_so_the_walk_can_show_them(tmp_path):
     folder = _crowd(tmp_path, 2)
     stop = scan(folder, [_thread("e-1", "Elara"),
                          _thread("e-2", "Garrick", type="location")],
-                REGISTRY).by_kind(STOP_UNTIED)[0]
+                REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
     assert stop.detail["a"]["name"] == "Elara"
     assert stop.detail["b"]["name"] == "Garrick"
     assert stop.detail["b"]["type"] == "location"
@@ -282,26 +304,30 @@ def test_both_ends_are_carried_so_the_walk_can_show_them(tmp_path):
 def test_it_is_muteable_like_any_other_kind(tmp_path):
     folder = _crowd(tmp_path, 4)
     world = [_thread("e-1", "Elara"), _thread("e-2", "Garrick")]
-    result = scan(folder, world, REGISTRY,
-                  ScanRequest(muted_kinds={STOP_UNTIED}))
+    result = scan(folder, world, REGISTRY, _weft(muted_kinds={STOP_UNTIED}))
     assert result.by_kind(STOP_UNTIED) == []
 
 
-def test_the_quick_pass_leaves_it_out(tmp_path):
-    # Quick = things that are already wrong. A connection not yet written down
-    # is unfinished, not broken, and a writer asking for problems only should
-    # not be handed world-building.
+def test_reading_the_cloth_leaves_it_out(tmp_path):
+    # Read the Cloth is where the book contradicts itself. A connection not yet
+    # written down is unfinished rather than wrong, so it belongs to the chapter
+    # pass -- a writer who asked what is BROKEN should not be handed
+    # world-building.
     folder = _crowd(tmp_path, 6)
     world = [_thread("e-1", "Elara"), _thread("e-2", "Garrick")]
-    result = scan(folder, world, REGISTRY, ScanRequest(depth=DEPTH_QUICK))
+    result = scan(folder, world, REGISTRY, ScanRequest(depth=PASS_CLOTH))
     assert result.by_kind(STOP_UNTIED) == []
+    # And the same world DOES produce them in the pass that owns them, or the
+    # assertion above is satisfied by an empty scan.
+    assert scan(folder, world, REGISTRY, _weft()).by_kind(STOP_UNTIED) != []
 
 
 def test_it_is_counted_like_every_other_kind(tmp_path):
     folder = _crowd(tmp_path, 2)
     result = scan(folder, [_thread("e-1", "Elara"), _thread("e-2", "Garrick")],
-                  REGISTRY)
+                  REGISTRY, _weft())
     assert result.counts[STOP_UNTIED] == len(result.by_kind(STOP_UNTIED))
+    assert result.counts[STOP_UNTIED] > 0      # or this checks nothing
 
 
 # ── The short list behind a connection question ──────────────────────────────
@@ -382,7 +408,7 @@ def test_a_structural_snag_becomes_a_stop(tmp_path):
         {"id": "f-1", "at": chapter_id, "axis": "eyes", "value": "Green."},
         {"id": "f-2", "at": chapter_id, "axis": "eyes", "value": "Blue."},
     ])
-    result = scan(folder, [elara], REGISTRY)
+    result = scan(folder, [elara], REGISTRY, ScanRequest(depth=PASS_CLOTH))
     assert len(result.by_kind(STOP_SNAG)) == 1
     assert "no model was asked" in result.by_kind(STOP_SNAG)[0].why
 
@@ -393,7 +419,8 @@ def test_an_unplaced_fact_is_its_own_kind(tmp_path):
     folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
     elara = _thread("e-1", "Elara", run=[
         {"id": "f-1", "at": "c-deleted", "axis": "eyes", "value": "Green."}])
-    assert len(scan(folder, [elara], REGISTRY).by_kind(STOP_UNPLACED)) == 1
+    result = scan(folder, [elara], REGISTRY, ScanRequest(depth=PASS_CLOTH))
+    assert len(result.by_kind(STOP_UNPLACED)) == 1
 
 
 # ── Unspun ───────────────────────────────────────────────────────────────────
@@ -470,7 +497,8 @@ def test_a_thread_the_map_would_hide_here_but_the_prose_names(tmp_path):
         {"id": "f-1", "at": late, "axis": "arrival", "value": "Arrives."}])
     elara = _thread("e-1", "Elara", ties=[{"rel": "knows", "target": "e-2"}])
 
-    result = scan(folder, [elara, garrick], REGISTRY)
+    result = scan(folder, [elara, garrick], REGISTRY,
+                  ScanRequest(depth=PASS_CLOTH))
     early = result.by_kind(STOP_EARLY)
     assert [s.entity_id for s in early] == ["e-2"]
     assert early[0].chapter_id == ids["01.md"]
@@ -503,16 +531,59 @@ def test_an_ambiguous_name_is_never_accused_of_being_early(tmp_path):
 
 # ── Scope, depth and honesty about what was skipped ──────────────────────────
 
-def test_quick_pass_asks_no_world_building_questions(tmp_path):
-    # Problems only. Nothing that asks the writer to invent anything.
+def test_each_pass_asks_only_its_own_questions(tmp_path):
+    # WHAT REPLACED FULL / TARGETED / QUICK. Those were three SIZES of one thing;
+    # these are four different questions, so a pass is judged by what it leaves
+    # out as much as by what it finds.
     folder = _project(tmp_path, {
         "01.md": "# One\nShe waited for Garrick.\n",
         "02.md": "# Two\nBy dawn Garrick had not come.\n",
     })
+    world = [_thread("e-1", "Elara")]
+
+    warp = _kinds(scan(folder, world, REGISTRY, ScanRequest(depth=PASS_WARP)))
+    assert STOP_UNSPUN in warp          # a name with no entry is setup work
+    assert STOP_LOOSE in warp           # so is an entry relating to nothing
+    assert STOP_UNWOVEN not in warp     # world invention is its own pass
+
+    cloth = _kinds(scan(folder, world, REGISTRY, ScanRequest(depth=PASS_CLOTH)))
+    assert STOP_UNSPUN not in cloth     # not a contradiction, just unfinished
+    assert STOP_LOOSE not in cloth
+
+    unwoven = _kinds(scan(folder, world, REGISTRY,
+                          ScanRequest(depth=PASS_UNWOVEN)))
+    assert set(unwoven) <= {STOP_UNWOVEN}
+
+
+def test_the_passes_between_them_cover_every_kind_exactly_once():
+    # A kind in two passes gets asked twice; a kind in none silently stops being
+    # findable at all. Neither is discoverable from any single pass's tests.
+    from app.codex.scan import PASS_KINDS, PASSES
+
+    seen: list[str] = []
+    for name in PASSES:
+        seen.extend(PASS_KINDS[name])
+    assert sorted(seen) == sorted(STOP_KINDS), "a kind is duplicated or homeless"
+
+
+def test_an_unknown_pass_shows_the_first_one_rather_than_refusing(tmp_path):
+    # A scan is free and read-only, so the friendly failure is to show the writer
+    # somewhere to start rather than to refuse to look at their book.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
     result = scan(folder, [_thread("e-1", "Elara")], REGISTRY,
-                  ScanRequest(depth=DEPTH_QUICK))
-    assert STOP_UNSPUN not in _kinds(result)
+                  ScanRequest(depth="nonsense"))
     assert STOP_LOOSE in _kinds(result)
+
+
+def test_the_names_this_used_to_have_still_work():
+    # A client mid-update must not break over a rename. "quick" was
+    # problems-only, which IS Read the Cloth.
+    from app.codex.scan import normalize_pass
+
+    assert normalize_pass("full") == PASS_WARP
+    assert normalize_pass("targeted") == PASS_WARP
+    assert normalize_pass("quick") == PASS_CLOTH
+    assert normalize_pass(None) == PASS_WARP
 
 
 def test_a_muted_kind_is_not_scanned_for(tmp_path):

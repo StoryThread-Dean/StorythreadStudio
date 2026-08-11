@@ -159,16 +159,59 @@ describe("before anything starts", () => {
     expect(screen.getByText(/07-chapter.md/)).toBeTruthy();
   });
 
-  it("offers a quick pass that asks nothing of your imagination", async () => {
+  it("offers four passes, which are four different questions", async () => {
+    // WHAT REPLACED FULL / TARGETED / QUICK. Those were three sizes of one
+    // thing, so the only real choice was how long to be there. These ask
+    // different things, and the writer named them out of the loom vocabulary the
+    // rest of the Weave already uses.
     await open();
-    expect(screen.getByText(/Nothing that asks you to invent anything/)).toBeTruthy();
+    for (const label of ["Dress the Loom", "Weave the Chapters",
+                         "Read the Cloth", "Unwoven"]) {
+      expect(screen.getByRole("button", { name: new RegExp(label) }), label)
+        .toBeTruthy();
+    }
   });
 
-  it("rescans when the depth changes, so the count matches the choice", async () => {
+  it("puts them in the order they are worth doing in", async () => {
+    // The metaphor carries the dependency: you cannot weave a weft without a
+    // warp. A chapter pass has nothing to ask about until entries exist.
     await open();
-    await userEvent.click(screen.getByRole("button", { name: /Quick pass/ }));
+    const text = screen.getByTestId("weaving-panel").textContent ?? "";
+    expect(text.indexOf("Dress the Loom"))
+      .toBeLessThan(text.indexOf("Weave the Chapters"));
+    expect(text.indexOf("Weave the Chapters"))
+      .toBeLessThan(text.indexOf("Read the Cloth"));
+  });
+
+  it("says WHEN each one is for, rather than only what it does", async () => {
+    // "Start here" and "then, as you write" teach the order without locking it.
+    await open();
+    expect(screen.getByText("Start here")).toBeTruthy();
+    expect(screen.getByText(/as you write/)).toBeTruthy();
+    expect(screen.getByText(/When you step back/)).toBeTruthy();
+  });
+
+  it("starts on the first one", async () => {
+    await open();
     await waitFor(() =>
-      expect(posted("/scan").some(c => c.body.depth === "quick")).toBe(true));
+      expect(posted("/scan").some(c => c.body.depth === "warp")).toBe(true));
+  });
+
+  it("rescans when the pass changes, so the count matches the choice", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: /Read the Cloth/ }));
+    await waitFor(() =>
+      expect(posted("/scan").some(c => c.body.depth === "cloth")).toBe(true));
+  });
+
+  it("does not offer world invention as part of tidying up", async () => {
+    // Unwoven is its own pass on the writer's call: "it needs its own pass done
+    // separately because its done outside the other two." Mixing it in buries
+    // the connection work under questions about how succession functions.
+    await open();
+    const unwoven = screen.getByRole("button", { name: /Unwoven/ });
+    expect(unwoven.textContent).toMatch(/its own job/);
+    expect(unwoven.textContent).toMatch(/Nothing here is wrong yet/);
   });
 
   it("has nothing to start when the book and the world agree", async () => {

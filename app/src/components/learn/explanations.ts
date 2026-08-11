@@ -270,19 +270,24 @@ export const EXPLAIN: Record<string, Explains> = {
 
   // ── Weaving, the walkthrough ───────────────────────────────────────────────
   "weaving.what": {
-    what: "Weaving reads your book and your world, then walks you through what "
-      + "does not line up yet.",
-    why: "Your world grows while you write, so the two drift apart. Weaving "
-      + "finds the gaps instead of leaving you to remember them.",
+    what: "Four passes over your book and your world, each asking a different "
+      + "question.",
+    why: "Your world grows while you write, so the two drift apart. The passes "
+      + "are separate because tidying up, writing a chapter, checking for "
+      + "contradictions and inventing how a world works are different jobs, and "
+      + "mixing them buries whichever one you came to do.",
     needed: "optional",
     cost: FREE,
     how: [
-      "Full weave looks at everything. Quick pass shows only what is already "
-        + "wrong, and asks you to invent nothing.",
-      "Press Start. Nothing has been read or changed until you do.",
-      "Answer each thing it finds, or skip it. Skipping is a real answer.",
-      "Stop whenever you like. Your answers are saved as you go, and a new "
-        + "session does not undo anything you already applied.",
+      "Dress the Loom first: what is here, and what relates to what. Start "
+        + "there, and come back to it whenever your world grows.",
+      "Weave the Chapters as you write, one chapter at a time: did anything "
+        + "change here?",
+      "Read the Cloth when you step back, to see where the book contradicts "
+        + "itself.",
+      "Unwoven is its own job, any time: the ground rules of your world.",
+      "Answer each thing a pass finds, or skip it. Skipping is a real answer, "
+        + "and your answers save as you go.",
     ],
     endpoint: "/api/codex/scan",
   },

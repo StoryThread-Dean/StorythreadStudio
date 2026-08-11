@@ -239,11 +239,16 @@ def test_a_mark_survives_a_new_session(project):
     assert _pinned_stops(_scan(project, run_id=second["run_id"]))
 
 
-def test_marks_are_in_the_quick_pass(project):
-    # A quick pass is "problems only", and a problem the writer raised
-    # themselves is the most certain problem in the list.
+def test_marks_belong_to_dressing_the_loom(project):
+    # A pin is a phrase the writer pointed at and asked to be reminded about, and
+    # what it needs is an entry or a connection -- which is setup work, not a
+    # contradiction. So it sits with Unspun and Loose thread rather than in Read
+    # the Cloth, even though the old "quick pass" reasoning (a problem the writer
+    # raised themselves is the most certain problem) was fair too. A kind lives in
+    # exactly ONE pass, or it gets asked twice.
     _pin(project, "Kithicor Forest")
-    assert _pinned_stops(_scan(project, depth="quick"))
+    assert _pinned_stops(_scan(project, depth="warp"))
+    assert not _pinned_stops(_scan(project, depth="cloth"))
 
 
 def test_muting_the_kind_silences_marks_too(project):

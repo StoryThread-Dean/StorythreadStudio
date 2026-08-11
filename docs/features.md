@@ -397,6 +397,30 @@ takes the whole world model with it.
 A guided session that reads the manuscript and the Weave together and walks the
 writer through what it found, one decision at a time.
 
+**Four passes, because they are four different questions.** What was here first
+was Full / Targeted / Quick, which is three sizes of one thing -- the only real
+choice was how long to be there. These are named out of the same loom vocabulary
+as the rest of the Weave, and the metaphor carries the dependency deliberately:
+you cannot weave a weft without a warp.
+
+| Pass | When | What it asks |
+|---|---|---|
+| **Dress the Loom** | Start here | What is here, and what relates to what |
+| **Weave the Chapters** | As you write | One chapter at a time: did anything change here? |
+| **Read the Cloth** | When you step back | Where does the book contradict itself? |
+| **Unwoven** | Any time | The ground rules of the world, which is its own job |
+
+**The order is a teaching fact, not a lock.** Dressing the loom is never
+finished -- a world grows for the life of a book -- so a gate would never open.
+Where a later pass needs something an earlier one provides, it asks for it inline
+rather than sending you back. Unwoven is separate because world invention is not
+tidying, and mixing it in buries the connection work under questions about how
+succession functions.
+
+Every kind of finding belongs to exactly one pass. A kind in two gets asked
+twice; a kind in none silently stops being findable -- so a test holds the
+division rather than a convention.
+
 **It scans before it asks, and the scan is free.** No model, no role, no cost --
 just arithmetic over the book and the world. That is what lets it say "this found
 340 things to look at, which is many sessions of work" and mean it, instead of

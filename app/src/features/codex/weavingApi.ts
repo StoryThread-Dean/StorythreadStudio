@@ -51,7 +51,18 @@ function post<T>(path: string, body: unknown): Promise<T> {
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
 /** How much Weaving in one sitting. The scan is the same work either way. */
-export type Depth = "full" | "targeted" | "quick";
+/**
+ * Which of the four passes.
+ *
+ * Still called Depth, and still sent as `depth`, because the field name is on
+ * the wire and a client mid-update should not break over a rename. What changed
+ * is what the values MEAN: these were three sizes of one thing (full, targeted,
+ * quick) and are now four different questions.
+ *
+ * The backend still accepts the old three and maps them: full and targeted to
+ * the warp, quick to the cloth, since "problems only" IS reading the cloth.
+ */
+export type Depth = "warp" | "weft" | "cloth" | "unwoven_pass";
 
 export interface Stop {
   kind: string;

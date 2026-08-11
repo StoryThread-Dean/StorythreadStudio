@@ -95,11 +95,32 @@ const PRIMARY_ACTION: Record<string, string> = {
   pinned: "Create the entry",
 };
 
-const DEPTHS: { id: Depth; label: string; blurb: string }[] = [
-  { id: "full", label: "Full weave",
-    blurb: "Everything, everywhere. Thorough, and long." },
-  { id: "quick", label: "Quick pass",
-    blurb: "Problems only. Nothing that asks you to invent anything." },
+/**
+ * FOUR PASSES, WHICH REPLACED THREE SIZES.
+ *
+ * What was here was Full / Targeted / Quick -- three amounts of the same thing.
+ * These are four different questions, named out of the same loom vocabulary as
+ * the rest of the Weave, and the metaphor carries the dependency on purpose: you
+ * cannot weave a weft without a warp.
+ *
+ * The order on screen IS the recommended order, and that is all it is. Dressing
+ * the loom is never "finished" -- a world grows for the life of a book -- so a
+ * lock would never open. Where a later pass needs something the first one
+ * provides, it asks for it inline rather than sending the writer back here.
+ */
+const DEPTHS: { id: Depth; label: string; blurb: string; step?: string }[] = [
+  { id: "warp", label: "Dress the Loom", step: "Start here",
+    blurb: "What is here, and what relates to what. Names with no entry, "
+      + "entries too thin to be useful, and entries connected to nothing." },
+  { id: "weft", label: "Weave the Chapters", step: "Then, as you write",
+    blurb: "One chapter at a time: did anything change here? Run it from the "
+      + "chapter you are in and the app already knows when." },
+  { id: "cloth", label: "Read the Cloth", step: "When you step back",
+    blurb: "Where the book contradicts itself. Timeline problems, facts that "
+      + "never take effect, and things named before the reader should know." },
+  { id: "unwoven_pass", label: "Unwoven", step: "Any time",
+    blurb: "The ground rules of your world, which is its own job: how power "
+      + "passes, what magic costs, who inherits. Nothing here is wrong yet." },
 ];
 
 function lexFor(kind: string): LexEntry | undefined {
@@ -243,7 +264,7 @@ interface WeavingPanelProps {
 export function WeavingPanel({
   projectPath, onClose, onOpenThread, onOpenKind,
 }: WeavingPanelProps) {
-  const [depth, setDepth] = useState<Depth>("full");
+  const [depth, setDepth] = useState<Depth>("warp");
   const [scanning, setScanning] = useState(true);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -384,8 +405,19 @@ export function WeavingPanel({
                   : "border-border hover:border-text-muted"
               }`}
             >
-              <span className="text-xs font-semibold text-text-primary">
-                {option.label}
+              <span className="flex w-full items-baseline gap-2">
+                <span className="text-xs font-semibold text-text-primary">
+                  {option.label}
+                </span>
+                {/* WHEN this one is for. The order of these four is the order
+                    they are worth doing in, and saying so out loud teaches the
+                    dependency without locking anything: dressing the loom is
+                    never finished, so a gate would never open. */}
+                {option.step && (
+                  <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-violet-300/80">
+                    {option.step}
+                  </span>
+                )}
               </span>
               <span className="text-[11px] text-faint">{option.blurb}</span>
             </button>
