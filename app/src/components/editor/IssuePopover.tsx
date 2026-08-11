@@ -36,6 +36,7 @@ import {
   removeIssueEffect, getIssuesById, type LocatedIssue,
 } from "./issueOverlay";
 import { wordDiff, type DiffSegment } from "./wordDiff";
+import { Explain } from "../../components/learn/Explain";
 
 
 // Backend base URL. Re-declared here rather than imported from App.tsx so
@@ -507,9 +508,20 @@ function IssueCard({
           Hidden for praise entries (no suggestion to revise). */}
       {state.current && (
         <>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">
-            Try a different angle
-          </p>
+          {/* The word-level diff is the whole point of this card and reads as
+              decoration until somebody says so: uncoloured words are yours. */}
+          <div className="mb-1.5">
+            <Explain of="issue.what" label="What am I looking at?" />
+          </div>
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <p className="text-[10px] uppercase tracking-wide text-faint">
+              Try a different angle
+            </p>
+            {/* PER PRESS, and that is the thing to say out loud. Cycling four
+                of these to see what they do is four requests, and nothing else
+                on this card costs anything. */}
+            <Explain of="issue.transform" />
+          </div>
           <div className="mb-2 flex flex-wrap gap-1">
             {MODIFIERS.map(m => {
               const disabled =

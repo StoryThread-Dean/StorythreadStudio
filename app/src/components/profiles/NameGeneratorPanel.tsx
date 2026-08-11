@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dices } from "lucide-react";
 import { FANTASY_RACES, generateFantasyGivenName, generateFantasySurname } from "../../data/names/fantasyNames";
+import { Explain } from "../../components/learn/Explain";
 
 const API_BASE = "http://localhost:8000";
 const DEAL_COUNT = 6;
@@ -217,6 +218,12 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
 
   return (
     <div className="rounded border border-border bg-bg-primary p-3" data-testid="name-generator">
+      {/* Free, local, and it does not look it -- a rolling name list reads like
+          something calling a service. It also has one rule nobody guesses: a
+          first name alone is a valid pick. */}
+      <div className="mb-2">
+        <Explain of="names.what" />
+      </div>
       {loadError && (
         <p className="mb-2 text-[11px] text-amber-400">
           Could not load the name lists from the backend -- fantasy races still work.

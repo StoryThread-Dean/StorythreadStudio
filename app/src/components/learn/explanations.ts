@@ -105,6 +105,157 @@ export interface Explains {
  * this whole map.
  */
 export const EXPLAIN: Record<string, Explains> = {
+  // ── The editor ────────────────────────────────────────────────────────────
+  //
+  // THE FIRST ENTRIES HERE THAT COST MONEY. Everything in the Weave is
+  // arithmetic; these two send your writing to a model. That is exactly why the
+  // cost field is not optional, and why the note has to say what a pass covers
+  // rather than "this uses tokens" -- one chapter and a whole book are the same
+  // sentence and very different bills.
+  "advisor.what": {
+    what: "Three passes over what you are writing: how it reads, how it is "
+      + "built, and whether it fits the rest of your story.",
+    why: "It reviews rather than rewrites. Nothing changes in your chapter "
+      + "until you accept a specific suggestion, so you can run a pass, read "
+      + "it, and throw all of it away.",
+    needed: "optional",
+    cost: spends("One AI request per pass. It reads your selection if you have "
+      + "one, otherwise the whole chapter, so selecting first is much cheaper "
+      + "on a long chapter."),
+    how: [
+      "Select a passage first if you only want that looked at.",
+      "Pick a pass: Readability, Structure or Context.",
+      "Use the arrow beside a pass to narrow it before running, so you are not "
+        + "paying to be told about grammar when you asked about pacing.",
+      "Findings appear as highlights in your text. Click one to read it.",
+    ],
+    endpoint: "/api/ai/editor-pass",
+  },
+  "advisor.scope": {
+    what: "Ticking which kinds of thing a pass should look for.",
+    why: "A pass told to look for everything reports everything, and a long "
+      + "list of small notes buries the one that mattered. Narrowing it also "
+      + "makes the answer shorter and cheaper.",
+    needed: "recommended",
+    cost: FREE,
+    how: [
+      "Untick what you are not working on right now.",
+      "Your choices are remembered for next time.",
+    ],
+  },
+  "issue.what": {
+    what: "One thing the pass noticed, with the rewrite it suggests.",
+    why: "The change is shown word by word against your own sentence, added in "
+      + "green and removed in red, so you can see exactly what it wants to do "
+      + "before agreeing to any of it.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Read the difference. Your words are the ones without colour.",
+      "Accept puts the rewrite into your chapter. Ignore drops just this note.",
+      "Nothing is saved until you save the chapter, as everywhere else.",
+    ],
+  },
+  "issue.transform": {
+    what: "Asking for a different kind of rewrite of the same passage.",
+    why: "The first suggestion is one reading of what your sentence needs. "
+      + "Shorter, more sensory, or a change of tone are different jobs, and "
+      + "asking for one is faster than arguing with the first answer.",
+    needed: "optional",
+    cost: spends("One AI request each time you press one of these, over just "
+      + "this passage. Small, but it is per press, so it adds up if you cycle "
+      + "through them."),
+    how: [
+      "Press a kind of rewrite: Shorten, Expand, Describe, and so on.",
+      "Default puts the original suggestion back, and costs nothing.",
+      "Accept when one of them is right.",
+    ],
+    endpoint: "/api/ai/revise-suggestion",
+  },
+  "thesaurus.what": {
+    what: "Right-click a word for spellings and alternatives.",
+    why: "The editor's red underline comes from the operating system, which "
+      + "will not hand its corrections to the app. So corrections are worked "
+      + "out here instead, and put above the synonyms, because fixing a typo "
+      + "is why most people right-click a word.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Right-click any word in your chapter.",
+      "Click a suggestion to swap it in. Your capitalisation is kept.",
+      "Press Escape to leave the word alone.",
+    ],
+  },
+
+  // ── Profiles ──────────────────────────────────────────────────────────────
+  //
+  // All free, and worth SAYING so. These read like AI features and are not: the
+  // text comes from lists that ship with the app, and a writer who assumes
+  // otherwise avoids the cheapest tools in here.
+  "quickbuild.what": {
+    what: "Rolling options for a side character and clicking the ones that fit.",
+    why: "Most characters in a book need a couple of lines, not a full profile. "
+      + "This is for filling those in quickly without inventing a personality "
+      + "from nothing at nine in the evening.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Pick the part they play in the story.",
+      "Click any option to add it to that section as a new line.",
+      "Roll again for a different set. It works through the whole list before "
+        + "repeating anything.",
+      "Everything it adds is ordinary text you can edit or delete.",
+    ],
+  },
+  "quickbuild.adult": {
+    what: "Turning on adult options for this character.",
+    why: "It REPLACES the ordinary options rather than adding to them, so the "
+      + "list stays the same length. Explicit then replaces those again with a "
+      + "spicier set, mostly written as blanks for you to fill in so the app is "
+      + "suggesting rather than deciding.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Turn it on per character. It is never on by default and never turned on "
+        + "for you by a genre setting.",
+      "Explicit only becomes available once it is on.",
+      "Turn it off to get the ordinary options back.",
+    ],
+  },
+  "spine.what": {
+    what: "Two cheat sheets: a personality pattern and a story role.",
+    why: "A starting point rather than a label. Both insert a few sentences of "
+      + "ordinary text into the profile, written to be argued with -- the point "
+      + "is to have something on the page to react to.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Pick one. The text goes into the profile straight away.",
+      "The dropdown clears itself afterwards, because it is not a field being "
+        + "set -- nothing remembers which one you chose.",
+      "Picking a story role also fills in the Role field and adds a few tags.",
+      "Edit or delete what it inserted like any other text.",
+    ],
+  },
+  "names.what": {
+    what: "Rolling given names and surnames, by culture and era or by fantasy "
+      + "race.",
+    why: "Naming a character you invented thirty seconds ago is the thing most "
+      + "likely to stop you writing. Real-world names come from lists that "
+      + "ship with the app; fantasy ones are assembled from sounds, so there "
+      + "are more of them than any list could hold.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Choose a culture and era, or a fantasy race.",
+      "Click a first name, a surname, or just one of the two. Either alone is "
+        + "a real answer.",
+      "Deal again for six more. It works through the pool before repeating.",
+      "Use this name puts whatever you picked into the Name field.",
+    ],
+    endpoint: "/api/names/pool",
+  },
+
   // ── Weaving, the walkthrough ───────────────────────────────────────────────
   "weaving.what": {
     what: "Weaving reads your book and your world, then walks you through what "

@@ -212,9 +212,11 @@ describe("the rule is applied, not merely available", () => {
   // its whole API mocked, and a test that expensive gets skipped rather than
   // extended when the next screen lands.
 
-  const SOURCES = import.meta.glob("../../features/codex/*.tsx", {
-    query: "?raw", import: "default", eager: true,
-  }) as Record<string, string>;
+  const SOURCES = import.meta.glob(
+    ["../../features/codex/*.tsx", "../../components/editor/*.tsx",
+     "../../components/profiles/*.tsx"],
+    { query: "?raw", import: "default", eager: true },
+  ) as Record<string, string>;
 
   function source(name: string): string {
     const key = Object.keys(SOURCES).find(k => k.endsWith(`/${name}`));
@@ -224,9 +226,15 @@ describe("the rule is applied, not merely available", () => {
 
   /** Screens where a writer has to decide something with consequences. */
   const MUST_EXPLAIN = [
-    "TieEditor.tsx",      // records what gets sent to AI
-    "BindDot.tsx",        // moves a word between entries
-    "WeavingPanel.tsx",   // starts a pass over the whole book
+    "TieEditor.tsx",           // records what gets sent to AI
+    "BindDot.tsx",             // moves a word between entries
+    "WeavingPanel.tsx",        // starts a pass over the whole book
+    "EditorAdvisorBar.tsx",    // SPENDS -- a request over the whole chapter
+    "IssuePopover.tsx",        // SPENDS per press, and rewrites the writer's prose
+    "ThesaurusPopover.tsx",    // replaces the OS menu, so it owes an explanation
+    "QuickBuildPanel.tsx",     // reads like AI, is not, and has adult tiers
+    "NameGeneratorPanel.tsx",  // partial picks are valid and nobody guesses that
+    "SpinePickers.tsx",        // the dropdown clearing itself looks broken
   ];
 
   for (const name of MUST_EXPLAIN) {
@@ -260,4 +268,32 @@ describe("the rule is applied, not merely available", () => {
     expect(help).toBeGreaterThan(-1);
     expect(Math.abs(help - label)).toBeLessThan(400);
   });
+
+  it("says what it spends wherever a screen actually spends", () => {
+    // The two screens in this app that send the writer's prose to a model. If
+    // either ever describes itself as free, the app is spending their credit
+    // while telling them it is not -- backend/tests/test_explain_costs.py checks
+    // the claim against the route, and this checks the claim is even made.
+    for (const key of ["advisor.what", "issue.transform"]) {
+      expect(EXPLAIN[key].cost.kind, key).toBe("spends");
+    }
+  });
+
+  it("says it is free wherever a screen only reads canned lists", () => {
+    // Worth asserting in the other direction. These read like AI features and
+    // are not, and a writer who assumes otherwise avoids the cheapest tools here.
+    for (const key of ["quickbuild.what", "spine.what", "names.what",
+                       "thesaurus.what"]) {
+      expect(EXPLAIN[key].cost.kind, key).toBe("free");
+    }
+  });
+
+  it("tells a spending screen how to spend less", () => {
+    // Knowing it costs money is only half an answer. The steps have to name the
+    // cheaper way of doing the same thing.
+    expect(EXPLAIN["advisor.what"].how?.some(s => /[Ss]elect/.test(s))).toBe(true);
+    expect(EXPLAIN["advisor.what"].cost.kind === "spends"
+      && /select/i.test(EXPLAIN["advisor.what"].cost.note)).toBe(true);
+  });
+
 });

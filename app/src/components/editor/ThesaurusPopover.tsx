@@ -23,7 +23,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Pin } from "lucide-react";
-import { isMisspelled, suggestCorrections } from "../../utils/spellcheck";
+import { isMisspelled, suggestCorrections } from "../../utils/spellcheck";
+import { Explain } from "../../components/learn/Explain";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -273,6 +274,10 @@ export function ThesaurusPopover({
             Thesaurus
           </span>
           <span className="font-medium text-accent truncate">{word}</span>
+          {/* Why this exists rather than the operating system's own menu, which
+              is the first thing a writer wonders when their usual right-click
+              stops appearing. */}
+          <Explain of="thesaurus.what" />
         </div>
 
         {loading ? (

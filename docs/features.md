@@ -456,6 +456,17 @@ already decided. An explanation has to answer four things:
 | **Necessary?** | required, worth doing, or entirely optional |
 | **What it spends** | stated every time, including when the answer is nothing |
 
+Where a feature does spend, the note names the cheaper way of doing the same
+thing. A Smart Advisor pass reads the whole chapter unless something is selected,
+so "select a passage first" is not a tip -- it is the difference in the bill. The
+rewrite modifiers on an issue card cost per press, which is worth knowing before
+cycling through all seven to see what they do.
+
+And the reverse is worth saying too: Quick Build, the personality and story-role
+cheat sheets, the name generator and the right-click thesaurus all read like AI
+features and are not. Their text comes from lists that ship with the app. A writer
+who assumes otherwise avoids the cheapest tools in here.
+
 That last row is there because most of this app costs nothing and a
 model-shaped app trains people to expect otherwise. "Free. No AI is called, so
 this costs nothing" is worth the space. Where something does spend, the note says

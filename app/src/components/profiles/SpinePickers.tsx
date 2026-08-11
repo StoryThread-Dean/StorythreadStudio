@@ -21,6 +21,7 @@ import { HelpCircle } from "lucide-react";
 import {
   ENNEAGRAM_OPTIONS, ARCHETYPE_OPTIONS, spineOptionById, type SpineOption,
 } from "../../data/characterSpines";
+import { Explain } from "../../components/learn/Explain";
 
 interface SpinePickersProps {
   // Called with (traitName, description) -- the caller inserts into the
@@ -103,6 +104,12 @@ export function SpinePickers({ onInsert, onRolePicked }: SpinePickersProps) {
 
   return (
     <div data-testid="spine-pickers">
+      {/* These are cheat sheets, not fields. The dropdown clearing itself after
+          inserting looks broken until you know that, which is exactly the kind
+          of thing "show me how" is for. */}
+      <div className="mb-1.5">
+        <Explain of="spine.what" />
+      </div>
       <div className="flex gap-3">
         <SpineSelect
           label="Personality (Enneagram)"
