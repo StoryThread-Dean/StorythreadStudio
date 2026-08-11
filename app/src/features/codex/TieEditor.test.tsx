@@ -1025,9 +1025,13 @@ describe("why they are connected", () => {
     await pickOnly("Pathicus");
     await userEvent.type(screen.getByLabelText("Why they are connected"),
                          "The order that worships him");
-    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Record it$/ }));
     await waitFor(() => expect(posted("/tie").length).toBe(1));
-    await pickOnly("The Faith");
+    // Through the flow the writer actually walks now: the picker is behind the
+    // "anyone else?" question rather than sitting open.
+    await userEvent.click(screen.getByRole("button", { name: /make another/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^The Faith/ }));
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
     expect((screen.getByLabelText("Why they are connected") as HTMLInputElement)
       .value).toBe("");
   });
@@ -1132,5 +1136,135 @@ describe("finishing the connection", () => {
     await userEvent.type(screen.getByLabelText("Why they are connected"),
                          "They worship him");
     expect(save().hasAttribute("disabled")).toBe(false);
+  });
+});
+
+describe("after recording one, what next", () => {
+  // REPORTED, and the gap it exposes is a RULE rather than a bug:
+  //
+  //     "I made the connection of Alexandra to Lara, wrote in both A -> L, then
+  //      L -> A and even did both from the drop down menus and successfully
+  //      recorded it. It brought me back to the 'How is Alexandra Langford
+  //      connected?' screen with the new entry for: friend of -> Lara Croft. My
+  //      immediate ask and problem now is, Now what? there is nothing to take me
+  //      to the next page. Bringing me back to this page doesn't ask me anything
+  //      or direct me to do something."
+  //
+  // And the rule, given as standing direction: "at all times there needs to be a
+  // process flow that leads the writer to the next step after they do something
+  // or make a decision. Continuous process for this walkthrough."
+  //
+  // A walkthrough is a sequence. Completing an action and then simply returning
+  // has silently ended it. So: say what happened, then ask what is next, with
+  // two named answers -- never one ambiguous Close.
+
+  const PLAIN = { id: "connected_to", label: "connected to", symmetric: true,
+                  cardinality: "many", inverse_label: "", flipped: false,
+                  universal: true, group: "Other" };
+
+  async function recordOne(relId?: string) {
+    await chooseOther("Pathicus");
+    if (relId) await pickRelation(relId);
+    await userEvent.click(screen.getByRole("button", { name: /^Record it$/ }));
+    await waitFor(() => expect(screen.getByTestId("what-next")).toBeTruthy());
+  }
+
+  it("says what was recorded, in the writer's own terms", async () => {
+    // "Recorded" with nothing named reads as a system message rather than as an
+    // account of the writer's own work.
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [], available: [] } });
+    await open();
+    await recordOne("worships");
+    expect(screen.getByTestId("what-next").textContent)
+      .toMatch(/Daughters of Pathicus worships Pathicus/);
+  });
+
+  it("reads it the way the writer chose it, not the way it is stored", async () => {
+    // A flipped relation is stored from the other end. Reporting the storage
+    // direction would describe something they did not do.
+    const CONTAINS = { ...PART_OF, id: "contains", label: "contains",
+                       inverse_label: "part of", flipped: true };
+    mockApi({ relations: { forward: [], available: [], reverse: [CONTAINS] } });
+    await open();
+    await recordOne("contains");
+    expect(screen.getByTestId("what-next").textContent)
+      .toMatch(/Pathicus contains Daughters of Pathicus/);
+  });
+
+  it("asks the question rather than leaving the writer to guess", async () => {
+    await open();
+    await recordOne();
+    expect(screen.getByText(
+      /Would you like Daughters of Pathicus to connect to anyone or anything else/))
+      .toBeTruthy();
+  });
+
+  it("offers making another, and reopens the picker", async () => {
+    await open();
+    await recordOne();
+    await userEvent.click(screen.getByRole("button", { name: /make another/ }));
+    expect(screen.getByLabelText("Find an entry")).toBeTruthy();
+    expect(screen.queryByTestId("what-next")).toBeNull();
+  });
+
+  it("offers being finished, and ADVANCES the walk", async () => {
+    // The half that was missing. Dismissing a panel back onto the same stop is
+    // not the same as moving on, and the writer had no way to move on at all.
+    const onDone = vi.fn();
+    const onClose = vi.fn();
+    await open({ onDone, onClose });
+    await recordOne();
+    await userEvent.click(screen.getByRole("button", { name: /No, I am good/ }));
+    expect(onDone).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("says what being finished WILL DO, inside a walk", async () => {
+    // So leaving is a decision rather than a guess.
+    await open({ onDone: vi.fn() });
+    await recordOne();
+    expect(screen.getByText(/takes you to the next thing in the walk/))
+      .toBeTruthy();
+  });
+
+  it("closes instead when there is no walk to advance", async () => {
+    // Opened from the map there is no next stop, and claiming one would lie.
+    const onClose = vi.fn();
+    await open({ onClose });
+    await recordOne();
+    expect(screen.getByText(/closes this and goes back/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /No, I am good/ }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("does not offer a bare Connect button beside the question", async () => {
+    // Two ways to do the same thing, one of them unlabelled, is how the writer
+    // ended up unsure which control was the next step.
+    await open();
+    await recordOne();
+    expect(screen.queryByRole("button", { name: /Connect this to something/ }))
+      .toBeNull();
+  });
+
+  it("shows nothing of the sort before anything is recorded", async () => {
+    await open();
+    expect(screen.queryByTestId("what-next")).toBeNull();
+    expect(screen.getByRole("button", { name: /Connect this to something/ }))
+      .toBeTruthy();
+  });
+
+  it("lists the new connection alongside the question", async () => {
+    // The receipt says what happened; the list is the standing record. Both,
+    // because the writer asked "now what" while looking at the list.
+    mockApi({ relations: { forward: [PLAIN, WORSHIPS], reverse: [], available: [] },
+              ties: [{ src_id: "e-daughters", dst_id: "e-pathicus",
+                       rel: "worships", incoming: false, other_id: "e-pathicus",
+                       other_name: "Pathicus", other_type: "deity",
+                       reads_as: "worships", at: null, until: null,
+                       at_label: "", until_label: "" }] });
+    await open();
+    await recordOne("worships");
+    expect(screen.getByTestId("what-next")).toBeTruthy();
+    expect(screen.getAllByText("Pathicus").length).toBeGreaterThan(1);
   });
 });

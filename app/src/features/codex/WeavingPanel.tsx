@@ -508,6 +508,15 @@ export function WeavingPanel({
         // Closing comes straight back to the same stop, which is the whole
         // point: the walk never lost its place.
         onClose={() => setConnecting(false)}
+        // FINISHED WITH THIS ENTRY, so the walk moves on. Without this the
+        // writer recorded a connection, landed back on a screen that asked them
+        // nothing, and had no way forward -- "Now what? there is nothing to take
+        // me to the next page."
+        //
+        // The stop is not marked answered: it is RE-DERIVED next scan, and an
+        // entry that now has a connection stops being asked about because the
+        // condition ended. Advancing here only moves the writer along.
+        onDone={() => { setConnecting(false); setAt(i => i + 1); }}
         onChanged={() => { /* the scan re-derives it on the next pass */ }}
       />
     );

@@ -108,12 +108,25 @@ interface TieEditorProps {
    */
   likely?: { entity_id: string; scenes: number }[];
   onClose: () => void;
+  /**
+   * The writer is finished with this entry, so move the walk on.
+   *
+   * Distinct from onClose, which means "back to where I was". A walkthrough is a
+   * sequence, and a screen that completes an action without proposing the next
+   * one silently ends it -- reported as: "I made the connection... My immediate
+   * ask and problem now is, Now what? there is nothing to take me to the next
+   * page."
+   *
+   * Absent when this screen is opened on its own (from the map), where there is
+   * no next stop to advance to and the honest exit is a plain close.
+   */
+  onDone?: () => void;
   /** Re-read the world, so the map redraws with the new edge. */
   onChanged: () => void;
 }
 
 export function TieEditor({
-  projectPath, thread, candidates, likely, onClose, onChanged,
+  projectPath, thread, candidates, likely, onClose, onDone, onChanged,
 }: TieEditorProps) {
   const [ties, setTies] = useState<Tie[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +166,10 @@ export function TieEditor({
   const [pickedInverseRel, setPickedInverseRel] = useState("");
   const [reasonInverse, setReasonInverse] = useState("");
   const [showInverse, setShowInverse] = useState(false);
+  // The connection just recorded, in words. Held so the screen can say what
+  // happened before asking what is next -- "recorded" with nothing named reads
+  // as a system message rather than as an account of the writer's own work.
+  const [justRecorded, setJustRecorded] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -384,6 +401,14 @@ function relOptionLabel(rel: Relation): string {
         throw new Error(body?.detail?.message ?? "That could not be recorded.");
       }
       setWarnings(body.warnings ?? []);
+      // WHAT JUST HAPPENED, in the writer's own terms, and read the way they
+      // chose it -- a flipped relation is stored from the other end, and
+      // reporting the storage direction would describe something they did not
+      // do.
+      const label = relation.flipped
+        ? `${nodeLabel(other)} ${relation.label} ${nodeLabel(thread)}`
+        : `${nodeLabel(thread)} ${relation.label} ${nodeLabel(other)}`;
+      setJustRecorded(label);
       setAdding(false);
       setOther(null);
       setQuery("");
@@ -622,10 +647,65 @@ function relOptionLabel(rel: Relation): string {
             </p>
           )}
 
+          {/* ── WHAT HAPPENED, AND WHAT IS NEXT ──────────────────────────
+              A walkthrough is a sequence. A screen that completes an action and
+              then simply returns has silently ended it -- reported exactly that
+              way: "I made the connection... Now what? there is nothing to take
+              me to the next page. Bringing me back to this page doesn't ask me
+              anything or direct me to do something."
+
+              So the completion is stated, and the next step is asked as a
+              question with two named answers. Both are real: another connection
+              is common, and being finished has to be sayable without hunting for
+              a close button. Never one ambiguous Close. */}
+          {justRecorded && (
+            <div data-testid="what-next"
+                 className="mt-3 rounded border border-emerald-800 bg-emerald-950/20 p-2.5">
+              <p className="flex items-start gap-1.5 text-[11px] text-emerald-200">
+                <Check size={12} className="mt-0.5 shrink-0" />
+                <span>
+                  Recorded:{" "}
+                  <span className="font-medium text-text-primary">
+                    {justRecorded}
+                  </span>
+                </span>
+              </p>
+
+              <p className="mt-2 text-xs text-text-primary">
+                Would you like {nodeLabel(thread)} to connect to anyone or
+                anything else?
+              </p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => { setJustRecorded(null); setAdding(true); }}
+                  className="inline-flex items-center gap-1.5 rounded border border-violet-700 bg-violet-950/40 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-violet-900/50"
+                >
+                  <Plus size={11} className="text-violet-300" />
+                  Yes -- make another connection
+                </button>
+                <button
+                  onClick={() => (onDone ?? onClose)()}
+                  className="inline-flex flex-col items-start rounded border border-border px-2.5 py-1 text-left text-xs text-text-muted hover:border-text-muted hover:text-text-primary"
+                >
+                  <span>No, I am good for now</span>
+                  {/* Says what leaving DOES, so it is a decision rather than a
+                      guess. Different wording out of a walk, because there is
+                      nothing to advance to and claiming otherwise would lie. */}
+                  <span className="text-[10px] text-faint">
+                    {onDone
+                      ? "takes you to the next thing in the walk"
+                      : "closes this and goes back"}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── Adding one ───────────────────────────────────────────── */}
-          {!adding ? (
+          {!adding && !justRecorded ? (
             <button
-              onClick={() => setAdding(true)}
+              onClick={() => { setAdding(true); setJustRecorded(null); }}
               className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-violet-300 hover:text-violet-200"
             >
               <Plus size={11} /> Connect this to something

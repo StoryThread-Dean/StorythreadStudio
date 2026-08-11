@@ -443,6 +443,24 @@ Alexandra Langford connected to the story?"** -- shown beneath her own entry's
 icon and name, and it opens by saying how many times the prose already found her.
 The number is there to be checked.
 
+**Every step proposes the next one.** This is a rule the walkthrough is held to,
+not a property of one screen. Completing an action and returning to where you
+started has silently ended the sequence -- so after a connection is recorded the
+screen says what it recorded and asks:
+
+> Recorded: **Alexandra Langford friend of Lara Croft**
+>
+> Would you like Alexandra Langford to connect to anyone or anything else?
+>
+> **[ Yes -- make another connection ]**  **[ No, I am good for now ]**
+> *takes you to the next thing in the walk*
+
+Two named exits rather than one ambiguous Close, and the exit says what it will
+do. "Finished with this" **advances the walk**; backing out returns to the same
+stop with your place kept. A screen reachable both inside the walk and on its own
+carries both wordings, because there is nothing to advance to from the map and
+claiming otherwise would be a lie.
+
 **Nothing about the book is stored.** Stops are re-derived every run, so a Thread
 that gets its Overview filled in stops being Frayed because the condition ended --
 not because a record says it was handled. What IS stored is the writer's answers,

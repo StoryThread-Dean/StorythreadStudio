@@ -446,6 +446,7 @@ The app supports three content modes: `general`, `mature`, `explicit`. The proje
 - **Session-only undo/redo** -- no archival draft history for prose in MVP.
 - **Explicitly inspectable and controllable context** -- AI may automatically receive story context relevant to the current point in the story, but the writer must be able to inspect what will be sent, remove individual Threads, exclude categories, and turn automatic Weave context off entirely. **No context is transmitted until the writer initiates an AI action.**
   - This AMENDS the original rule ("explicit context attachment; AI never has implicit project access"), which the Weave makes untrue -- the app now assembles a brief on the writer's behalf. What is non-negotiable is that they can see it, cut it, and switch it off. Enforced in `backend/app/codex/context.py`; pinned by `backend/tests/test_codex_context.py`.
+- **Every step in a walkthrough proposes the next one** -- after any completed action the screen states what happened and offers the next step, with a named exit that says what it does. Finishing a stop ADVANCES the walk; it never dismisses a panel back onto the same stop. Several separately-reported "dead ends" were all this one rule.
 - **AI output reviewed before use** -- results show in side panel. Applied by the writer via copy/paste. No auto-apply.
 
 ---

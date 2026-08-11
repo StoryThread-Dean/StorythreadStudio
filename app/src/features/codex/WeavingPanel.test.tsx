@@ -41,6 +41,7 @@ function stop(overrides: Record<string, unknown> = {}) {
 let calls: { url: string; body: Record<string, unknown> }[] = [];
 
 function mockApi(options: {
+  nodes?: Record<string, unknown>[];
   stops?: Record<string, unknown>[];
   total?: number;
   unreadable?: string[];
@@ -55,9 +56,21 @@ function mockApi(options: {
     if (init?.method === "POST") calls.push({ url, body });
 
     if (url.includes("/graph")) {
-      return { ok: true, json: async () => ({ nodes: [], edges: [],
-                                              as_of: null, hidden_nodes: 0,
-                                              hidden_edges: 0 }) } as Response;
+      // The world the Tie editor offers as ends. Empty by default was fine while
+      // no test reached the picker; the one that walks a whole connection needs
+      // something to connect TO.
+      return { ok: true, json: async () => ({
+        nodes: options.nodes ?? [], edges: [],
+        as_of: null, hidden_nodes: 0, hidden_edges: 0,
+      }) } as Response;
+    }
+    if (url.includes("/relations")) {
+      return { ok: true, json: async () => ({
+        forward: [{ id: "connected_to", label: "connected to", symmetric: true,
+                    cardinality: "many", inverse_label: "", flipped: false,
+                    universal: true, group: "Other" }],
+        reverse: [], available: [], reason_limit: 140, groups: ["Other"],
+      }) } as Response;
     }
     if (url.includes("/ties")) {
       return { ok: true, json: async () => ({ ties: [] }) } as Response;
@@ -1048,5 +1061,59 @@ describe("a pair the prose keeps putting together", () => {
     await userEvent.click(screen.getByRole("button", { name: /Say how they connect/ }));
     expect(await screen.findByRole("heading",
       { name: /How is Alexandra Langford connected/ })).toBeTruthy();
+  });
+});
+
+describe("the walk moves on when a connection is finished", () => {
+  // The other half of the report. The editor now asks "anyone or anything
+  // else?", and answering no has to actually advance -- "Clicking takes them
+  // back and advances the Weave Walkthrough."
+
+  const lonely = stop({
+    kind: "loose_thread", key: "loose|e-alex", entity_id: "e-alex",
+    title: "How is Alexandra Langford connected to the story?", quote: "",
+    why: "Mentions of this name already find this entry.",
+    detail: { name: "Alexandra Langford", type: "character",
+              filename: "alexandra.md", mentioned: 12, likely: [] },
+  });
+
+  it("advances to the next stop, rather than sitting on the same one", async () => {
+    // The whole reported gap, walked end to end: record a connection, say you
+    // are finished, and be somewhere new.
+    mockApi({
+      stops: [lonely, stop({ key: "second", title: "Something else" })],
+      nodes: [{ entity_id: "e-garrick", name: "Garrick Vale", type: "character",
+                display_name: "", aliases: [], placeholder: false }],
+    });
+    await start();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
+
+    await userEvent.click(screen.getByRole("button", { name: /Choose the connection/ }));
+    await screen.findByTestId("tie-editor");
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Garrick/ }));
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "Ran into him and became partners");
+    await userEvent.click(screen.getByRole("button", { name: /^Record it$/ }));
+
+    await waitFor(() => expect(screen.getByTestId("what-next")).toBeTruthy());
+    await userEvent.click(screen.getByRole("button", { name: /No, I am good/ }));
+
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/2 of 2/);
+  });
+
+  it("backing out is still backing out, and keeps the writer's place", async () => {
+    // Two exits, and they must not collapse into one: closing means "back to
+    // where I was", finishing means "move me on".
+    mockApi({ stops: [lonely, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Choose the connection/ }));
+    await screen.findByTestId("tie-editor");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText(/How is Alexandra Langford connected/))
+      .toBeTruthy();
   });
 });
