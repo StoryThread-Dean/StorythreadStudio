@@ -173,6 +173,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
 ### Test layout
 
 - `backend/tests/` -- pytest + pytest-asyncio. Uses FastAPI's `TestClient` for HTTP-level tests and `async with open_db(tmp_path)` for store-level tests. Test files named `test_*.py`. Current files:
+  - `test_db_migrations.py` -- the app.db migration ladder, and the only thing that finds this class of bug: an UPGRADE. Every other test builds its database from scratch, where an ALTER smuggled into an already-applied migration looks perfectly correct -- which is how a real project came to die on `no such column`. Pins that a v2 or v3 database ends up byte-identical to a fresh one, and that each rung runs on the one before it
   - `test_outline_frontmatter.py` -- outline YAML frontmatter parser
   - `test_outline_sections.py` -- outline section parsing / reconstruction (Planner corruption regressions)
   - `test_progress_store.py` -- word counting, night-owl rollover, event recording

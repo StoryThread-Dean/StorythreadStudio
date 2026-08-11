@@ -144,10 +144,10 @@ async def _migration_002_codex(db: aiosqlite.Connection) -> None:
         )
         """
     )
-    # NOTE: `reason` and `reason_inverse` are added by migration 003 rather
-    # than declared here. Editing this CREATE would give a fresh install a
-    # different table from a migrated one, and then 003 would fail on the
-    # duplicate column -- migrations are append-only for exactly this reason.
+    # NOTE: `reason`/`reason_inverse` (003) and `rel_inverse` (004) are added by
+    # migration rather than declared here. Editing this CREATE would give a fresh
+    # install a different table from a migrated one, and the migration would then
+    # fail on the duplicate column.
     await db.execute("CREATE INDEX idx_codex_tie_src ON codex_tie(src_id)")
     await db.execute("CREATE INDEX idx_codex_tie_dst ON codex_tie(dst_id)")
 
@@ -203,17 +203,38 @@ async def _migration_003_tie_reason(db: aiosqlite.Connection) -> None:
     """
     await db.execute("ALTER TABLE codex_tie ADD COLUMN reason TEXT")
     await db.execute("ALTER TABLE codex_tie ADD COLUMN reason_inverse TEXT")
-    # The relation as read from the other end, when it differs. "Alexandra
-    # friends of Lara / Lara business partners with Alexandra" -- one connection,
-    # two true descriptions.
+
+
+async def _migration_004_tie_rel_inverse(db: aiosqlite.Connection) -> None:
+    """
+    The relation as read from the OTHER end, when it differs.
+
+    "Alexandra friends of Lara / Lara business partners with Alexandra" -- one
+    connection, two true descriptions, and no derivation produces the second
+    from the first.
+
+    ITS OWN MIGRATION, AND THE REASON IS A BUG THIS CAUSED. This ALTER was first
+    written into 003, which had already run on a real project. An applied
+    migration never runs again, so the column was never added there, and the very
+    next request that read a connection died on "no such column: rel_inverse".
+    That is what the append-only rule in this file's header is FOR, and the whole
+    test suite passed through it because every test builds its database from
+    scratch -- where a rewritten 003 looks perfectly correct.
+    """
     await db.execute("ALTER TABLE codex_tie ADD COLUMN rel_inverse TEXT")
 
 
 # Ordered list. Append-only. Version N = _MIGRATIONS[N-1].
+#
+# APPEND ONLY, and this is not a style preference. Editing an entry that has
+# already run on somebody's machine means their database never gets the change --
+# the version says it is done. Fresh installs look fine, so tests pass, and the
+# only person who finds out is the writer whose project is a version behind.
 _MIGRATIONS: list[Callable[[aiosqlite.Connection], Awaitable[None]]] = [
     _migration_001_progress_event,
     _migration_002_codex,
     _migration_003_tie_reason,
+    _migration_004_tie_rel_inverse,
 ]
 
 
