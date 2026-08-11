@@ -855,3 +855,30 @@ def test_an_entry_with_a_connection_is_no_longer_a_stub(tmp_path):
     tied["ties"] = [{"rel": "knows", "target": "e-other"}]
     stop = scan(folder, [tied], REGISTRY).by_kind(STOP_FRAYED)[0]
     assert stop.detail["placeholder"] is False
+
+
+def test_a_bare_stub_says_where_it_came_from(tmp_path):
+    # The generic frayed wording left a real tester stuck at the first stop:
+    # "I have no idea what this is asking." A stub the walk minted explains its
+    # own origin, and the ask -- a line or two -- instead of describing a type
+    # system.
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    stub = _thread("e-1", "Dean",
+                   sections={"overview": {"heading": "Overview", "content": "",
+                                          "trait_blocks": []}})
+    stop = scan(folder, [stub], REGISTRY).by_kind(STOP_FRAYED)[0]
+    assert "Weaving made this entry from a name in your writing" in stop.why
+    assert "A line or two is enough" in stop.why
+
+
+def test_a_thin_entry_the_writer_wrote_keeps_the_kind_wording(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    thin = _thread("e-1", "Mira",
+                   sections={"overview": {"heading": "Overview",
+                                          "content": "The clockmaker.",
+                                          "trait_blocks": []},
+                             "goals": {"heading": "Goals", "content": "",
+                                       "trait_blocks": []}})
+    stops = scan(folder, [thin], REGISTRY).by_kind(STOP_FRAYED)
+    if stops:                     # only if the registry requires goals
+        assert "Weaving made this entry" not in stops[0].why

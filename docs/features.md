@@ -531,6 +531,13 @@ right **on purpose**, which marks every side deliberate and means it is never
 asked again. Edits keep the fact's identity, so orderings the writer already
 settled cannot silently break.
 
+**Identity is asked once, at creation, and never again.** An entry the walk
+minted arrives with a writer-confirmed name and kind, so a thin one is asked to
+be WRITTEN -- the same fill-in as any other -- not re-identified. The one
+genuine leftover case, a minted word that is really another name for an entry
+that already exists, is a side path inside the fill form, phrased from the
+word's side.
+
 The rule is held structurally, not by discipline: the walkthrough component has
 no navigation callbacks at all, and a test reads its source to keep it that way.
 

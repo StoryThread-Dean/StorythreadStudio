@@ -85,9 +85,11 @@ import {
  *  the writer's later work, elsewhere. */
 const PRIMARY_ACTION: Record<string, string> = {
   unspun: "Create the entry",
+  // Empty or not: an entry's identity was settled when it was CREATED, so the
+  // only open question about a thin one is its contents. There used to be a
+  // separate "Say what this is" for empty stubs, and live testing showed why
+  // that cannot stand -- see the frayed branch below.
   frayed: "Fill it in here",
-  // An empty stub is a different question -- see needsNaming.
-  frayed_placeholder: "Say what this is",
   loose_thread: "Choose the connection",
   // Both ends already exist and the prose keeps putting them together. The
   // only open question is what the connection IS, which is the writer's.
@@ -153,22 +155,6 @@ function alsoCalled(stop: Stop): string[] {
  * them there. A pinned word with an entry is the same question.
  */
 const CONNECT_HERE = new Set(["loose_thread", "untied"]);
-
-/**
- * An entry Weaving made from a name, with nothing in it yet.
- *
- * Reported from live testing: a stop reading "Dean is missing Overview" sent
- * the writer to the Profile Builder and stopped, and creating something there
- * had no connection back to Dean. That was the wrong question. An empty stub
- * does not need prose typed into it -- it needs to be told WHAT IT IS: either
- * something the writer already has, or its own entry of some kind.
- *
- * Which is the same question a bare dot on the map answers, so it is the same
- * screen. One question, one answer, asked where the writer already is.
- */
-function needsNaming(stop: Stop): boolean {
-  return stop.kind === "frayed" && Boolean(stop.detail?.placeholder);
-}
 
 function connectsHere(stop: Stop): boolean {
   if (CONNECT_HERE.has(stop.kind)) return true;
@@ -521,6 +507,18 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         entityId={stop.entity_id}
         missing={Array.isArray(stop.detail?.missing)
           ? (stop.detail.missing as unknown[]).map(String) : []}
+        // The one case where identity IS still open: the word got its own
+        // placeholder but really means an entry that already exists ("Croft"
+        // when Lara Croft has a page). A side path, never the question.
+        wordName={stop.detail?.placeholder
+          ? String(stop.detail?.name ?? "") : undefined}
+        onAbsorbInstead={() => {
+          void (async () => {
+            await loadWorld();
+            setFilling(false);
+            setNaming(true);
+          })();
+        }}
         onClose={() => setFilling(false)}
         onDone={() => {
           setFilling(false);
@@ -723,11 +721,6 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
               await loadWorld();
               setEntering(true);
               return false;
-            } else if (needsNaming(stop) && stop.entity_id) {
-              // Stays here, and answers the question the writer actually has.
-              await loadWorld();
-              setNaming(true);
-              return false;
             } else if (connectsHere(stop) && stop.entity_id) {
               // Stays here. The walk keeps its place, and a wrong choice is a
               // step back rather than a navigation problem.
@@ -735,7 +728,21 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
               setConnecting(true);
               return false;
             } else if (stop.kind === "frayed" && stop.entity_id) {
-              // The missing sections, as text boxes, right here.
+              // The missing sections, as text boxes, right here -- EMPTY STUBS
+              // INCLUDED. There used to be an identity question here first
+              // ("Say what this is"), built when the walk had nowhere to type,
+              // and live testing showed what it does once that reason is gone:
+              //
+              //   "We have established what Dean is, Dean is a Character
+              //    Profile. ... Why is it asking me this? ... I'm literally
+              //    stuck with zero places to go."
+              //
+              // Every answer it offered was wrong for Dean: binding absorbs
+              // him into someone else, and "it is its own thing" would CREATE
+              // A SECOND DEAN. Identity is asked once, at creation, and never
+              // again. The one real leftover case -- this word is actually
+              // another name for an entry I already have -- survives as a
+              // side path inside the fill-in form.
               setFilling(true);
               return false;
             } else if (stop.entity_id) {
@@ -750,9 +757,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           {busy ? <Loader size={11} className="animate-spin" /> : <Check size={11} />}
           {stop.kind === "pinned"
             ? pinnedAction(stop)
-            : needsNaming(stop)
-              ? PRIMARY_ACTION.frayed_placeholder
-              : PRIMARY_ACTION[stop.kind] ?? "Sort it out here"}
+            : PRIMARY_ACTION[stop.kind] ?? "Sort it out here"}
         </button>
 
         <button

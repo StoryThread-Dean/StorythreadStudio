@@ -478,9 +478,18 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                     kind=STOP_FRAYED, entity_id=entity_id,
                     key=_key(STOP_FRAYED, entity_id, ",".join(sorted(missing))),
                     title=f"{name} is missing {_and_list(missing)}",
-                    why=("This Thread's type says these are the parts worth "
-                         "having, and they are empty. Anything reading it "
-                         "later -- you included -- gets very little."),
+                    # A bare stub gets a why that says where it CAME from,
+                    # because the generic wording left a real tester asking
+                    # "What IS this asking me to do?" at the very first stop.
+                    # The entry's identity is settled -- the ask is a line or
+                    # two of writing, and the wording has to say only that.
+                    why=(("Weaving made this entry from a name in your "
+                          "writing, and nothing is written in it yet. A line "
+                          "or two is enough to make it useful.")
+                         if bare else
+                         ("This entry's kind says these are the parts worth "
+                          "having, and they are empty. Anything reading it "
+                          "later -- you included -- gets very little.")),
                     detail={**where, "missing": sorted(missing),
                             # Nothing in it at all, so the walk can ask what it
                             # IS rather than telling the writer to go and type.

@@ -995,18 +995,29 @@ describe("connecting without leaving the walk", () => {
   });
 });
 
-describe("an empty stub is asked what it IS", () => {
-  // Reported from live testing:
+describe("an empty stub is asked to be WRITTEN, never re-identified", () => {
+  // TWO live-testing reports, in order, because the second corrected the fix
+  // for the first.
   //
-  //     "FRAYED - Dean is missing Overview. Open it and fill it in clicked >
-  //      Opens to Profile Builder. Full stop. Can't go back, If I create a new
-  //      entry for Dean, there is no visual connection to Dean on the Character
-  //      profile."
+  // First: "Dean is missing Overview > Open it and fill it in > Opens to
+  // Profile Builder. Full stop. Can't go back." The fix built then was an
+  // identity question -- "Say what this is" -- because the walk had nowhere to
+  // type and identity was the only question it COULD ask.
   //
-  // That was the wrong question. An entry Weaving made from a name has no prose
-  // by definition; telling the writer to go and type is describing a symptom.
-  // What they need to say is what it IS -- something they already have, or its
-  // own entry of some kind -- and they need to say it without leaving.
+  // Then the closed world landed, typing inline became possible, and the same
+  // stop showed what the leftover identity question does to a writer whose
+  // entry already says what it is:
+  //
+  //     "We have established what Dean is, Dean is a Character Profile. ...
+  //      Why is it asking me this? ... Clicking any of those asks me to
+  //      confirm that {profile_name} now refers to Dean. That is NOT what I
+  //      want to do. ... I'm literally stuck with zero places to go."
+  //
+  // Every answer was wrong for Dean: binding absorbs him into someone else,
+  // and "it is its own thing" would have created a SECOND Dean. So: identity
+  // is asked ONCE, at creation, and never again. Frayed means fill it in --
+  // empty or not -- and the one genuine leftover case (the word is another
+  // name for an entry that already exists) is a side path inside the form.
 
   const bare = stop({
     kind: "frayed", key: "frayed|e-dean", entity_id: "e-dean",
@@ -1022,56 +1033,69 @@ describe("an empty stub is asked what it IS", () => {
               missing: ["Goals"], placeholder: false },
   });
 
-  it("asks what it is, rather than telling the writer to type", async () => {
-    mockApi({ stops: [bare] });
+  const deanEntity = {
+    entity_id: "e-dean", type: "character", name: "Dean", filename: "dean.md",
+    revision: "r1", run: [], ties: [],
+    sections: { overview: { heading: "Overview", content: "" } },
+  };
+
+  it("offers to fill it in, exactly like any other thin entry", async () => {
+    mockApi({ stops: [bare], entity: deanEntity });
     await start();
-    expect(screen.getByRole("button", { name: /Say what this is/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /fill it in/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Fill it in here/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Say what this is/ })).toBeNull();
   });
 
-  it("answers it here, without opening another screen", async () => {
-    mockApi({ stops: [bare] });
-    const onOpenThread = vi.fn();
-    await start({ onOpenThread });
-    await userEvent.click(screen.getByRole("button", { name: /Say what this is/ }));
+  it("writes into Dean's own entry, without ever asking what Dean is", async () => {
+    mockApi({ stops: [bare, stop({ key: "second", title: "Something else" })],
+              entity: deanEntity });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    expect(within(dialog).queryByText(/What is/)).toBeNull();
+    await userEvent.type(within(dialog).getByLabelText("Overview"),
+                         "The tester who found every dead end.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Save it/ }));
+    await waitFor(() => expect(posted("/entity").length).toBe(1));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+
+  it("keeps the mistaken-identity case as a side path, from the WORD's side", async () => {
+    // "Croft" getting its own placeholder when Lara Croft has a page is real.
+    // But it is phrased about the WORD, so it cannot read as a question about
+    // an entry whose identity the writer already settled.
+    mockApi({ stops: [bare], entity: deanEntity });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    await userEvent.click(within(dialog).getByRole("button",
+      { name: /is actually another name for an entry I already have/ }));
     expect(await screen.findByTestId("bind-dot")).toBeTruthy();
-    expect(onOpenThread).not.toHaveBeenCalled();
   });
 
-  it("comes back to the same stop when that closes", async () => {
-    mockApi({ stops: [bare, stop({ key: "second", title: "Something else" })] });
-    await start();
-    await userEvent.click(screen.getByRole("button", { name: /Say what this is/ }));
-    await screen.findByTestId("bind-dot");
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(await screen.findByText(/Dean is missing Overview/)).toBeTruthy();
-    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
-  });
-
-  it("gives an entry that HAS writing boxes to type in, right here", async () => {
-    // The earlier version sent these to the editor, reasoning "there is
-    // nowhere to type in the walk". The closed-world rule's answer is to PUT
-    // somewhere to type in the walk -- leaving was the dead end, however good
-    // the destination.
+  it("offers no such side path for an entry the writer wrote themselves", async () => {
+    // Mira was never a minted word. Suggesting her name might "actually mean"
+    // something else is the interrogation this whole describe exists to ban.
     mockApi({ stops: [thin] });
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
-    expect(await screen.findByTestId("quick-fill")).toBeTruthy();
+    const dialog = await screen.findByTestId("quick-fill");
+    expect(within(dialog).queryByRole("button",
+      { name: /is actually another name/ })).toBeNull();
   });
 
-  it("offers the question for a kind that has no editor at all", async () => {
-    // Saying what something is needs no editor. A writer's own Race can be
-    // named before it can be written in.
-    mockApi({ stops: [stop({
-      kind: "frayed", key: "frayed|e-drow", entity_id: "e-drow",
-      title: "Drow is missing Overview", quote: "",
-      detail: { name: "Drow", type: "race", filename: "drow.md",
-                missing: ["Overview"], placeholder: true },
-    })] });
+  it("comes back to the same stop when the form is backed out of", async () => {
+    mockApi({ stops: [bare, stop({ key: "second", title: "Something else" })],
+              entity: deanEntity });
     await start();
-    expect(screen.getByRole("button", { name: /Say what this is/ })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    await screen.findByTestId("quick-fill");
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByText(/Dean is missing Overview/)).toBeTruthy();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
   });
 });
+
 
 describe("the question starts from something the writer recognises", () => {
   // Reported from live testing, on the first item of 57:

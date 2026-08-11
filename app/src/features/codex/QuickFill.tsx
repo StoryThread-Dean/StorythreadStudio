@@ -32,6 +32,17 @@ interface QuickFillProps {
   entityId: string;
   /** The section HEADINGS the stop named as missing (that is what scan sends). */
   missing: string[];
+  /**
+   * Set when this entry began life as a word the walk minted, and only then.
+   *
+   * It unlocks one side path: "this word is actually another name for an entry
+   * I already have" -- the Croft-means-Lara-Croft case. A side path
+   * deliberately, not the question. The entry's identity was settled when it
+   * was created, and re-asking it of a writer who just read "Dean · Character"
+   * on the stop is an interrogation with no right answer.
+   */
+  wordName?: string;
+  onAbsorbInstead?: () => void;
   onClose: () => void;
   /** Saved -- advance the walk. */
   onDone: () => void;
@@ -39,7 +50,9 @@ interface QuickFillProps {
 
 interface Box { id: string; heading: string; text: string }
 
-export function QuickFill({ projectPath, entityId, missing, onClose, onDone }: QuickFillProps) {
+export function QuickFill({
+  projectPath, entityId, missing, wordName, onAbsorbInstead, onClose, onDone,
+}: QuickFillProps) {
   const [thread, setThread] = useState<Record<string, unknown> | null>(null);
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [busy, setBusy] = useState(false);
@@ -172,6 +185,18 @@ export function QuickFill({ projectPath, entityId, missing, onClose, onDone }: Q
 
           {error && (
             <p role="alert" className="mb-2 text-[11px] text-rose-300">{error}</p>
+          )}
+
+          {/* The escape for a mistaken identity, phrased from the WORD's side
+              so it cannot read as a question about the entry. */}
+          {thread && wordName && onAbsorbInstead && (
+            <button
+              onClick={onAbsorbInstead}
+              className="mb-2 block text-[11px] text-violet-300 hover:text-violet-200"
+            >
+              &ldquo;{wordName}&rdquo; is actually another name for an entry I
+              already have
+            </button>
           )}
 
           {thread && (
