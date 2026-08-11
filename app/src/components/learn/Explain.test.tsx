@@ -280,6 +280,9 @@ describe("the rule is applied, not merely available", () => {
     "TieEditor.tsx",           // records what gets sent to AI
     "BindDot.tsx",             // moves a word between entries
     "WeavingPanel.tsx",        // starts a pass over the whole book
+    "QuickEntry.tsx",          // creates a real file in the writer's world
+    "QuickFill.tsx",           // writes into an entry they already have
+    "SnagFixer.tsx",           // deletes and edits facts -- the sharpest tool here
     "EditorAdvisorBar.tsx",    // SPENDS -- a request over the whole chapter
     "IssuePopover.tsx",        // SPENDS per press, and rewrites the writer's prose
     "ThesaurusPopover.tsx",    // replaces the OS menu, so it owes an explanation

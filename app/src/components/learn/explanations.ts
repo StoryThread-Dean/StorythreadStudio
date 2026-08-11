@@ -299,6 +299,53 @@ export const EXPLAIN: Record<string, Explains> = {
     cost: FREE,
     endpoint: "/api/codex/scan",
   },
+  "weaving.quick-entry": {
+    what: "A base-level entry: a name, its kind, and one line to build on.",
+    why: "The Weave builds the framework so the walkthrough can keep moving -- "
+      + "you never leave it to go create something elsewhere. Expanding the "
+      + "entry into a full profile is your later work, from the sidebar, "
+      + "whenever you like.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Check the name, and the kind if it guessed wrong.",
+      "The text box is a starting line, not a commitment. Where it is "
+        + "prefilled, that is your own sentence from the manuscript.",
+      "Create it, then connect it to something or move straight on.",
+    ],
+    endpoint: "/api/codex/thread/new",
+  },
+  "weaving.fill": {
+    what: "The entry's empty sections, right here, as text boxes.",
+    why: "This entry has writing but is missing the parts its kind says are "
+      + "worth having. Filling them here keeps the walkthrough moving -- the "
+      + "full editor is still there for real writing sessions later.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Write into whichever boxes you have something for. Empty boxes change "
+        + "nothing.",
+      "Press Save. If the entry was edited somewhere else meanwhile, the save "
+        + "is refused and your text stays in the boxes.",
+    ],
+    endpoint: "/api/codex/entity",
+  },
+  "weaving.snag-fixer": {
+    what: "The two sides of a disagreement, with ways to settle it in place.",
+    why: "Two recorded facts clash, or a fact has no point in the story, or "
+      + "the prose names something before your world says it exists. All of "
+      + "these are settled here, without opening anything.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Keep the right side, or fix one where it stands -- its text or its "
+        + "chapter.",
+      "Or say both are right ON PURPOSE. Much good fiction contradicts itself "
+        + "deliberately, and marking it so means this is never asked again.",
+      "Not sure yet? Back out -- Not yet keeps it for next time.",
+    ],
+    endpoint: "/api/codex/fact",
+  },
   "weaving.why-seeing": {
     what: "The rule that put this in front of you, and the text that set it off.",
     why: "A walkthrough that cannot explain itself teaches you to click through "

@@ -507,6 +507,33 @@ stacked on one screen read as clutter rather than as help.
 The two rules are halves of one thing: the flow makes the app ask what comes
 next, and this lets it answer how, why, and at what cost.
 
+**The Weave is a closed world.** From the moment the walkthrough opens, the
+writer does not leave it until they are done or they X out -- every path, for
+every kind of finding, resolves inside the popup. Creating an entry, filling a
+thin one in, answering a world question, fixing a contradiction, placing a fact:
+all of it happens in place, and finishing returns to the walkthrough at the next
+stop. This exists because the alternative was tested and reported plainly:
+advancing to another screen -- even a well-built one -- closed the walk behind
+the writer. "Good intentions, terrible execution."
+
+The creation path is **Quick Entry**: a name, a kind, and one starter line. The
+Weave builds base-level entries and connections only -- the framework. Expanding
+them into full profiles is the writer's later work, from the sidebar, in their
+own time. Where the starter line arrives prefilled, it is the writer's own
+sentence from the manuscript. Answering an Unwoven question this way puts the
+answer in the exact section the question tracks, so it stops being asked by
+re-derivation -- and when the world already has an entry of that kind, adding
+the answer to it is offered before creating a second one.
+
+Fixing a contradiction offers all three honest answers: keep one side (the other
+is removed), edit a side in place -- its text or its chapter -- or say both are
+right **on purpose**, which marks every side deliberate and means it is never
+asked again. Edits keep the fact's identity, so orderings the writer already
+settled cannot silently break.
+
+The rule is held structurally, not by discipline: the walkthrough component has
+no navigation callbacks at all, and a test reads its source to keep it that way.
+
 **Every step proposes the next one.** This is a rule the walkthrough is held to,
 not a property of one screen. Completing an action and returning to where you
 started has silently ended the sequence -- so after a connection is recorded the
@@ -524,6 +551,11 @@ do. "Finished with this" **advances the walk**; backing out returns to the same
 stop with your place kept. A screen reachable both inside the walk and on its own
 carries both wordings, because there is nothing to advance to from the map and
 claiming otherwise would be a lie.
+
+**Tangles resolve one Snag at a time for now.** The lexicon's Tangle -- several
+contradictions sharing a cause -- is not yet produced as its own grouped stop;
+each Snag in it arrives individually and settles through the same fixer. Grouping
+them into one stop is a later refinement of the same screen, not a different one.
 
 **Nothing about the book is stored.** Stops are re-derived every run, so a Thread
 that gets its Overview filled in stops being Frayed because the condition ended --

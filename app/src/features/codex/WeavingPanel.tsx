@@ -62,6 +62,9 @@ import {
 import { Explain } from "../../components/learn/Explain";
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { BindDot } from "./BindDot";
+import { QuickEntry } from "./QuickEntry";
+import { QuickFill } from "./QuickFill";
+import { SnagFixer } from "./SnagFixer";
 import { TieEditor } from "./TieEditor";
 import { fetchGraph, type GraphNode } from "./api";
 import {
@@ -71,24 +74,28 @@ import {
 
 /** What the walk offers to DO about each kind, in the writer's words.
  *
- *  Only Unspun has a one-click action, and it creates an EMPTY entry -- the
- *  writer still writes it. Everything else opens the thing, because filling
- *  in a character is writing, and this app does not write. */
+ *  EVERY ONE RESOLVES INSIDE THE POPUP. This is the closed-world rule, given
+ *  as the fundamental thing the interface was missing: "Writer enters a pop-up
+ *  UI that they DO NOT LEAVE AT ANY POINT until the task is done or they X
+ *  out." Advancing to another screen -- even a well-built one -- was reported
+ *  as "good intentions, terrible execution": the walk closed behind the
+ *  writer, and there was no way back to it.
+ *
+ *  The Weave builds BASE-LEVEL entries and connections only. Expanding them is
+ *  the writer's later work, elsewhere. */
 const PRIMARY_ACTION: Record<string, string> = {
   unspun: "Create the entry",
-  frayed: "Open it and fill it in",
+  frayed: "Fill it in here",
   // An empty stub is a different question -- see needsNaming.
   frayed_placeholder: "Say what this is",
   loose_thread: "Choose the connection",
   // Both ends already exist and the prose keeps putting them together. The
   // only open question is what the connection IS, which is the writer's.
   untied: "Say how they connect",
-  snag: "Open it and sort it out",
-  unplaced: "Open it and place it",
-  early_mention: "Open it",
-  // Unwoven has no Thread to open -- the answer does not exist yet. This
-  // takes the writer to the KIND of entry it belongs in.
-  unwoven: "Go and answer it",
+  snag: "Sort it out here",
+  unplaced: "Place it",
+  early_mention: "Decide here",
+  unwoven: "Answer it here",
   // A pin is the writer's own question. If nothing answers to the phrase yet,
   // the useful next step is an entry; if something does, the entry exists and
   // the open question is what it connects to.
@@ -125,50 +132,6 @@ const DEPTHS: { id: Depth; label: string; blurb: string; step?: string }[] = [
 
 function lexFor(kind: string): LexEntry | undefined {
   return STOP_KINDS[kind];
-}
-
-/**
- * Kinds of entry that have an editor today.
- *
- * The Profile Builder covers four; the Thread editor covers the rest of the
- * shipped kinds. A kind the WRITER invented is deliberately not here: it has
- * no sections of its own until they give it some, so an editor would open on
- * nothing. The walk says so instead, and offers the answers that still make
- * sense -- an honest "not yet" beats a button that goes nowhere.
- */
-const EDITABLE_KINDS = new Set([
-  // The Profile Builder's four...
-  "character", "relationship", "location", "lore",
-  // ...and everything else, now that the Thread editor exists. Kept as a set
-  // rather than "always true" because a writer's own kind is not in it: a
-  // custom kind has no registry sections of its own until they give it some,
-  // and sending them to an editor with nothing to type in would be a worse
-  // dead end than saying so.
-  "faction", "religion", "government", "deity", "creature", "culture",
-  "object", "concept", "event", "language",
-]);
-
-function target(stop: Stop): { type: string; filename: string } {
-  return {
-    type: String(stop.detail?.type ?? ""),
-    filename: String(stop.detail?.filename ?? ""),
-  };
-}
-
-/** Whether the primary action can actually take the writer anywhere. */
-function hasSomewhereToGo(stop: Stop): boolean {
-  if (stop.kind === "unspun") return true;          // it CREATES the entry
-  // Connecting happens in the walk, so it needs an entry to connect FROM and
-  // nothing else. A kind with no editor can still be connected to things.
-  if (needsNaming(stop)) return Boolean(stop.entity_id);
-  if (connectsHere(stop)) return Boolean(stop.entity_id);
-  if (stop.kind === "unwoven") return EDITABLE_KINDS.has(landsIn(stop)[0] ?? "");
-  if (stop.kind === "pinned") {
-    // No entry yet: creating one is always available. With an entry, it opens
-    // only if that kind has an editor.
-    return !stop.detail?.has_entry || EDITABLE_KINDS.has(target(stop).type);
-  }
-  return EDITABLE_KINDS.has(target(stop).type);
 }
 
 /** What a Pinned stop offers, which depends on whether it has an entry. */
@@ -244,26 +207,21 @@ function landsIn(stop: Stop): string[] {
   return Array.isArray(lands) ? lands.map(String) : [];
 }
 
+/**
+ * NO NAVIGATION CALLBACKS, ON PURPOSE. The panel used to take two open-this-
+ * elsewhere callbacks, and five of nine stop kinds ended by calling one --
+ * which closed the Weave behind the writer. Removing the props makes leaving
+ * structurally impossible rather than merely avoided: a future branch cannot
+ * navigate away, because there is nothing to call. (A source-read test bans
+ * the old names from this file outright, which is why they are not written
+ * here either.)
+ */
 interface WeavingPanelProps {
   projectPath: string;
   onClose: () => void;
-  /**
-   * Take the writer to a Thread. The walk gets out of the way.
-   *
-   * `target` carries the KIND and the FILE, because "open it" has to open the
-   * thing it names. Without them the app can only switch to some screen and
-   * leave the writer to find the entry again, which is a different promise.
-   */
-  onOpenThread?: (entityId: string,
-                  target?: { type: string; filename: string }) => void;
-  /** Take the writer to a KIND of entry -- where an Unwoven answer belongs,
-   *  which has no Thread yet by definition. */
-  onOpenKind?: (typeId: string) => void;
 }
 
-export function WeavingPanel({
-  projectPath, onClose, onOpenThread, onOpenKind,
-}: WeavingPanelProps) {
+export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   const [depth, setDepth] = useState<Depth>("warp");
   const [scanning, setScanning] = useState(true);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -280,6 +238,12 @@ export function WeavingPanel({
   const [world, setWorld] = useState<GraphNode[]>([]);
   // An empty stub, waiting to be told what it is.
   const [naming, setNaming] = useState(false);
+  // The other three inline resolutions -- creating an entry, filling a thin
+  // one in, sorting out a disagreement. One flag each, same overlay-swap
+  // pattern as naming/connecting above.
+  const [entering, setEntering] = useState(false);
+  const [filling, setFilling] = useState(false);
+  const [fixing, setFixing] = useState(false);
 
   // The scan runs on mount and on every depth change, BEFORE anything is
   // confirmed. That is what makes the count real -- see the header.
@@ -519,6 +483,73 @@ export function WeavingPanel({
     );
   }
 
+  if (entering && stop) {
+    // Quick Entry: the base level, made without leaving. Unwoven fixes the
+    // kind and the section (the question knows where its answer lands);
+    // Unspun brings the name and its own sentence from the manuscript.
+    const unwoven = stop.kind === "unwoven";
+    const lands = landsIn(stop);
+    return (
+      <QuickEntry
+        projectPath={projectPath}
+        name={unwoven ? "" : String(stop.detail?.name ?? "")}
+        aliases={alsoCalled(stop)}
+        kind={unwoven ? (lands[0] ?? "concept") : "character"}
+        kindLocked={unwoven}
+        section={unwoven ? lands[1] : undefined}
+        prefill={unwoven ? undefined : stop.quote || undefined}
+        asking={unwoven ? stop.title : undefined}
+        candidates={world}
+        onClose={() => setEntering(false)}
+        // Finished: record the answer and move on. The ledger is what lets a
+        // created entry never be asked about again even before the next scan.
+        onDone={() => {
+          setEntering(false);
+          void (async () => {
+            if (runId) await apply(projectPath, runId, stop).catch(() => undefined);
+            setAt(i => i + 1);
+          })();
+        }}
+      />
+    );
+  }
+
+  if (filling && stop) {
+    return (
+      <QuickFill
+        projectPath={projectPath}
+        entityId={stop.entity_id}
+        missing={Array.isArray(stop.detail?.missing)
+          ? (stop.detail.missing as unknown[]).map(String) : []}
+        onClose={() => setFilling(false)}
+        onDone={() => {
+          setFilling(false);
+          void (async () => {
+            if (runId) await apply(projectPath, runId, stop).catch(() => undefined);
+            setAt(i => i + 1);
+          })();
+        }}
+      />
+    );
+  }
+
+  if (fixing && stop) {
+    return (
+      <SnagFixer
+        projectPath={projectPath}
+        stop={stop}
+        onClose={() => setFixing(false)}
+        onDone={() => {
+          setFixing(false);
+          void (async () => {
+            if (runId) await apply(projectPath, runId, stop).catch(() => undefined);
+            setAt(i => i + 1);
+          })();
+        }}
+      />
+    );
+  }
+
   if (connecting && stop) {
     // An Untied stop is about a PAIR, so the entry being connected is its
     // first end and the second is already the likeliest answer. Every other
@@ -676,30 +707,22 @@ export function WeavingPanel({
 
       {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
 
-      {!hasSomewhereToGo(stop) && (
-        <p className="mt-2 rounded border border-border bg-bg-surface px-2 py-1.5 text-[11px] text-text-muted">
-          There is no editor for this kind of entry yet, so there is nowhere
-          for this to send you. You can put it off, or stop being asked --
-          both are remembered.
-        </p>
-      )}
-
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {hasSomewhereToGo(stop) && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
         <button
           onClick={() => void answerAndAdvance(async () => {
             if (!runId) return;
-            // Only Unspun writes anything, and what it writes is EMPTY -- a
-            // named entry with nothing in it, for the writer to fill.
+            // EVERY BRANCH RETURNS false: each opens an inline resolution and
+            // the walk keeps its place until the writer finishes there. The
+            // resolutions advance it themselves, through their onDone.
             if (stop.kind === "unspun"
-                || (stop.kind === "pinned" && !stop.detail?.has_entry)) {
-              // The grouped names come with it. Weaving asked about "Lara
-              // Croft" once rather than three times, so creating it once has
-              // to settle "Lara" and "Croft" too -- otherwise the writer is
-              // back to three entries by a longer route.
-              await createThread(projectPath, String(stop.detail.name ?? ""),
-                                 alsoCalled(stop));
-              await apply(projectPath, runId, stop);
+                || (stop.kind === "pinned" && !stop.detail?.has_entry)
+                || stop.kind === "unwoven") {
+              // Quick Entry: name, kind, one starter line -- the base level,
+              // created without leaving. The world is loaded first so the
+              // connect step that follows has something to offer.
+              await loadWorld();
+              setEntering(true);
+              return false;
             } else if (needsNaming(stop) && stop.entity_id) {
               // Stays here, and answers the question the writer actually has.
               await loadWorld();
@@ -710,16 +733,15 @@ export function WeavingPanel({
               // step back rather than a navigation problem.
               await loadWorld();
               setConnecting(true);
-              // NOT finished: the connector closes back onto this stop, and the
-              // writer moves on when they are done with it.
               return false;
-            } else if (stop.kind === "unwoven") {
-              // Nothing to open and nothing to record: the question stops
-              // being asked when its answer is written, because the scan
-              // works that out fresh every time.
-              onOpenKind?.(landsIn(stop)[0]);
+            } else if (stop.kind === "frayed" && stop.entity_id) {
+              // The missing sections, as text boxes, right here.
+              setFilling(true);
+              return false;
             } else if (stop.entity_id) {
-              onOpenThread?.(stop.entity_id, target(stop));
+              // Snag, Unplaced, Early mention: settled in place.
+              setFixing(true);
+              return false;
             }
           })}
           disabled={busy}
@@ -730,9 +752,8 @@ export function WeavingPanel({
             ? pinnedAction(stop)
             : needsNaming(stop)
               ? PRIMARY_ACTION.frayed_placeholder
-              : PRIMARY_ACTION[stop.kind] ?? "Open it"}
+              : PRIMARY_ACTION[stop.kind] ?? "Sort it out here"}
         </button>
-        )}
 
         <button
           onClick={() => void answerAndAdvance(() =>
@@ -788,27 +809,6 @@ export function WeavingPanel({
       </ul>
     </Shell>
   );
-}
-
-
-/** Create an EMPTY character entry from a name in the prose.
- *
- *  Type is fixed to character: a bare capitalised name in a manuscript is
- *  overwhelmingly a person, and offering a type picker at this moment turns
- *  a one-click yes into a small form. Getting it wrong costs one edit; being
- *  asked forty times costs the walkthrough. */
-async function createThread(projectPath: string, name: string,
-                            aliases: string[] = []): Promise<void> {
-  const response = await fetch("http://localhost:8000/api/codex/thread/new", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ project_path: projectPath, type: "character", name,
-                           aliases }),
-  });
-  if (!response.ok) {
-    const message = (await response.json().catch(() => null))?.detail?.message;
-    throw new Error(message || "That entry could not be created.");
-  }
 }
 
 

@@ -61,7 +61,8 @@ RUN_HEADING = "Run"
 FULL_SUMMARY_HEADING = "Full AI Summary"
 
 # Fields a fact may carry. Anything else a writer adds is preserved as-is.
-FACT_KEYS = ("id", "at", "axis", "value", "frame", "revealed_at", "ai_scope", "supersedes")
+FACT_KEYS = ("id", "at", "axis", "value", "frame", "revealed_at", "ai_scope",
+             "supersedes", "intentional")
 TIE_KEYS = ("rel", "rel_inverse", "target", "reason", "reason_inverse",
             "at", "until", "frame", "revealed_at", "ai_scope")
 TRAIT_KEYS = ("trait", "description", "importance", "ai_scope")
@@ -364,6 +365,13 @@ def render_thread(
                 lines.append(f"  ai_scope: {fact['ai_scope']}")
             if fact.get("supersedes"):
                 lines.append(f"  supersedes: {fact['supersedes']}")
+            # A DELIBERATE contradiction, marked so by the writer. Written only
+            # when true -- and it has to be written at all, which it was not:
+            # the flag existed in the schema and the index since the checkers
+            # were built, but the Markdown round trip dropped it. Nothing could
+            # SET it, so nothing noticed the file could not HOLD it.
+            if fact.get("intentional"):
+                lines.append("  intentional: true")
             lines.append("")
     elif thread.get("run_raw"):
         # Preserved verbatim: a Run we could not parse is still the writer's.

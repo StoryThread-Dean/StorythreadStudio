@@ -47,13 +47,49 @@ function mockApi(options: {
   unreadable?: string[];
   runs?: Record<string, unknown>[];
   failWrites?: boolean;
+  /** What GET /entity returns -- the entry QuickFill or the fixer reads. */
+  entity?: Record<string, unknown>;
 } = {}) {
   const stops = options.stops ?? [stop()];
   calls = [];
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const body = init?.body ? JSON.parse(String(init.body)) : {};
-    if (init?.method === "POST") calls.push({ url, body });
+    // Every write is recorded, not only POST -- the fixer PATCHes facts and
+    // DELETEs the losing side of a snag, and a test that cannot see those is
+    // a test of half the flow.
+    if (init?.method && init.method !== "GET") calls.push({ url, body });
+
+    if (url.includes("/types")) {
+      // Enough registry for Quick Entry to know each kind's sections.
+      return { ok: true, json: async () => ({ types: [
+        { id: "character", sections: [{ id: "overview", heading: "Overview" }] },
+        { id: "lore", sections: [{ id: "overview", heading: "Overview" },
+                                 { id: "details", heading: "Details" }] },
+        { id: "government", sections: [{ id: "overview", heading: "Overview" },
+                                       { id: "succession", heading: "Succession" }] },
+        { id: "faction", sections: [{ id: "overview", heading: "Overview" }] },
+      ] }) } as Response;
+    }
+    if (url.includes("/anchors")) {
+      return { ok: true, json: async () => ({ chapters: [
+        { chapter_id: "c-1", filename: "01.md", title: "Chapter One",
+          anchor: "c-1", act_id: null, act_title: "" },
+        { chapter_id: "c-2", filename: "02.md", title: "Chapter Two",
+          anchor: "c-2", act_id: null, act_title: "" },
+      ] }) } as Response;
+    }
+    if (url.includes("/entity") && (!init?.method || init.method === "GET")) {
+      return { ok: true, json: async () => (options.entity ?? {
+        entity_id: "e-1", type: "character", name: "Mira Kell",
+        filename: "mira-kell.md", revision: "r1",
+        run: [], ties: [],
+        sections: {
+          overview: { heading: "Overview", content: "" },
+          goals: { heading: "Goals", content: "Wants the shop." },
+        },
+      }) } as Response;
+    }
 
     if (url.includes("/graph")) {
       // The world the Tie editor offers as ends. Empty by default was fine while
@@ -275,21 +311,53 @@ describe("one stop", () => {
 
 
 describe("the four ways to answer", () => {
-  it("creates an EMPTY entry, and never writes it for you", async () => {
-    // The only one-click action in the whole walk, and what it produces is a
-    // named entry with nothing in it.
+  it("creates the entry INSIDE the walk, with the name already filled", async () => {
+    // Quick Entry: the closed-world rule's creation path. The one-click create
+    // became a one-Accept form -- the name and the evidence sentence arrive
+    // prefilled, so saying yes is still one decision.
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    expect((within(dialog).getByLabelText("Name") as HTMLInputElement).value)
+      .toBe("Garrick");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
     await waitFor(() => expect(posted("/thread/new").length).toBe(1));
     expect(posted("/thread/new")[0].body.name).toBe("Garrick");
   });
 
-  it("records the creation as applied, because the file was written", async () => {
-    // "applied" has to mean SAVED. This one genuinely is.
+  it("prefills the starter line from the writer's own sentence", async () => {
+    // The stop's evidence is the writer's prose, so it is allowed to arrive in
+    // the box -- as a starting point they can edit or clear, never more.
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    const box = within(dialog).getByLabelText("Starter text") as HTMLTextAreaElement;
+    expect(box.value.length).toBeGreaterThan(0);
+    expect(screen.getByText(/Prefilled from your own writing/)).toBeTruthy();
+  });
+
+  it("asks what is next after creating, and advancing records it applied", async () => {
+    // The continuous-flow rule, and "applied" has to mean SAVED -- this one
+    // genuinely is, the file was written.
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /No, I am good/ }));
     await waitFor(() =>
       expect(posted("/run/answer").some(c => c.body.state === "applied")).toBe(true));
+  });
+
+  it("can go straight into connecting the new entry, still inside", async () => {
+    // "Government created ... with connection established" -- the worked
+    // example. The connect step is the same inline connector, not a new place.
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: /choose the connection/ }));
+    expect(await screen.findByTestId("tie-editor")).toBeTruthy();
   });
 
   it("retires the PHRASE when a name is not a connection", async () => {
@@ -361,28 +429,51 @@ describe("stops that are not about a name", () => {
               missing: ["Overview"] },
   });
 
-  it("offers to open it rather than to fill it in for you", async () => {
+  it("offers to fill it in HERE, not to open it elsewhere", async () => {
+    // The old label was "Open it and fill it in", and clicking it closed the
+    // Weave behind the writer -- "good intentions, terrible execution".
     mockApi({ stops: [frayed] });
     await start();
-    expect(screen.getByRole("button", { name: /Open it and fill it in/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Fill it in here/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Open it/ })).toBeNull();
   });
 
-  it("takes the writer to the Thread", async () => {
+  it("shows only the missing sections as boxes, right in the popup", async () => {
     mockApi({ stops: [frayed] });
-    const onOpenThread = vi.fn();
-    await start({ onOpenThread });
-    await userEvent.click(screen.getByRole("button", { name: /Open it and fill it in/ }));
-    // With the KIND and the FILE, so "open it" opens the entry rather than
-    // landing on a list and leaving the writer to find her again.
-    await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith(
-      "e-1", { type: "character", filename: "mira-kell.md" }));
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    // Overview is missing, so it gets a box; Goals has writing, so it does not.
+    expect(within(dialog).getByLabelText("Overview")).toBeTruthy();
+    expect(within(dialog).queryByLabelText("Goals")).toBeNull();
+  });
+
+  it("saves what was typed and moves the walk on", async () => {
+    mockApi({ stops: [frayed, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    await userEvent.type(within(dialog).getByLabelText("Overview"),
+                         "The clockmaker's daughter.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Save it/ }));
+    await waitFor(() => expect(posted("/entity").length).toBe(1));
+    const saved = posted("/entity")[0].body as {
+      thread: { sections: Record<string, { content: string }> };
+      base_revision: string;
+    };
+    expect(saved.thread.sections.overview.content)
+      .toBe("The clockmaker's daughter.");
+    // With the revision it read, so a save cannot clobber an edit made
+    // elsewhere -- same contract as the full editor.
+    expect(saved.base_revision).toBe("r1");
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
   });
 
   it("does not create anything for a stop that already has an entry", async () => {
     mockApi({ stops: [frayed] });
     await start();
-    await userEvent.click(screen.getByRole("button", { name: /Open it and fill it in/ }));
-    await waitFor(() => expect(screen.getByTestId("weaving-panel")).toBeTruthy());
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    await screen.findByTestId("quick-fill");
     expect(posted("/thread/new")).toEqual([]);
   });
 
@@ -479,20 +570,40 @@ describe("questions your world has not answered", () => {
     expect(screen.getByText(/worst thing a person can be accused of/)).toBeTruthy();
   });
 
-  it("takes the writer to the kind of entry it belongs in", async () => {
-    mockApi({ stops: [unwoven] });
-    const onOpenKind = vi.fn();
-    await start({ onOpenKind });
-    await userEvent.click(screen.getByRole("button", { name: /Go and answer it/ }));
-    await waitFor(() => expect(onOpenKind).toHaveBeenCalledWith("lore"));
+  it("answers it HERE: name it, write the answer, and it lands where the question says", async () => {
+    // The worked example, end to end: "Create a government entry > within the
+    // same popup, a new Government entry is created with basic information ...
+    // > Writer gets brought BACK to the walkthrough."
+    mockApi({ stops: [unwoven, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Answer it here/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    // The question is shown, so the writer answers IT rather than a blank form.
+    expect(within(dialog).getByText(unwoven.title as string)).toBeTruthy();
+    await userEvent.type(within(dialog).getByLabelText("Name"), "The Old Law");
+    await userEvent.type(within(dialog).getByLabelText("The answer"),
+                         "Kinslaying is the one unforgivable crime.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+    // The answer lands in the SECTION the question named -- lore > details --
+    // which is exactly what makes the question stop being asked next scan.
+    expect(posted("/thread/new")[0].body).toMatchObject({
+      type: "lore",
+      name: "The Old Law",
+      sections: { details: "Kinslaying is the one unforgivable crime." },
+    });
+    await userEvent.click(await screen.findByRole("button", { name: /No, I am good/ }));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
   });
 
-  it("creates nothing, because the answer does not exist yet", async () => {
+  it("does not let the kind wander from the one the question knows", async () => {
+    // A succession answer filed under Creature is worse than no answer: the
+    // question keeps being asked AND the world gains a wrong entry.
     mockApi({ stops: [unwoven] });
     await start();
-    await userEvent.click(screen.getByRole("button", { name: /Go and answer it/ }));
-    await waitFor(() => expect(screen.getByTestId("weaving-panel")).toBeTruthy());
-    expect(posted("/thread/new")).toEqual([]);
+    await userEvent.click(screen.getByRole("button", { name: /Answer it here/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    expect(within(dialog).queryByLabelText("What kind of thing")).toBeNull();
   });
 });
 
@@ -534,10 +645,13 @@ describe("where it sits", () => {
 });
 
 
-describe("every shipped kind now has somewhere to go", () => {
-  // The dead end this replaces: factions, governments, concepts and events had
-  // no editor, so the walk had to say so. The Thread editor covers them all
-  // now, and these pin that the walk actually routes there.
+describe("every kind resolves inside, including one the writer invented", () => {
+  // TWO dead ends died together here. Shipped kinds without a Profile Builder
+  // page used to route to the Thread editor -- which closed the Weave. And a
+  // custom kind had NOWHERE to route, so the walk apologised: "no editor for
+  // this kind of entry yet". The inline form is registry-driven, so it needs
+  // no editor to exist -- a Race invented this morning fills in the same way a
+  // Faction does.
 
   const faction = stop({
     kind: "frayed", key: "frayed|e-f", entity_id: "e-f",
@@ -546,47 +660,6 @@ describe("every shipped kind now has somewhere to go", () => {
               missing: ["Overview"] },
   });
 
-  it("offers to open a faction, which it could not before", async () => {
-    mockApi({ stops: [faction] });
-    await start();
-    expect(screen.getByRole("button", { name: /Open it and fill it in/ }))
-      .toBeTruthy();
-  });
-
-  it("sends the writer to that faction, by kind and file", async () => {
-    mockApi({ stops: [faction] });
-    const onOpenThread = vi.fn();
-    await start({ onOpenThread });
-    await userEvent.click(screen.getByRole("button", { name: /Open it and fill it in/ }));
-    await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith(
-      "e-f", { type: "faction", filename: "house-vale.md" }));
-  });
-
-  it("no longer apologises for a shipped kind", async () => {
-    mockApi({ stops: [faction] });
-    await start();
-    expect(screen.queryByText(/no editor for this kind of entry yet/)).toBeNull();
-  });
-
-  it("takes an Unwoven answer to the kind it belongs in", async () => {
-    mockApi({ stops: [stop({
-      kind: "unwoven", key: "unwoven|gov_power", title: "Who holds power?",
-      why: "Because.", entity_id: "", quote: "",
-      detail: { lands_as: ["government", "overview"], touches: [] },
-    })] });
-    const onOpenKind = vi.fn();
-    await start({ onOpenKind });
-    await userEvent.click(screen.getByRole("button", { name: /Go and answer it/ }));
-    await waitFor(() => expect(onOpenKind).toHaveBeenCalledWith("government"));
-  });
-});
-
-
-describe("a kind the writer invented", () => {
-  // The one case that IS still a dead end, and honestly so: a custom kind has
-  // no sections of its own until the writer gives it some, so an editor would
-  // open on nothing to type in. Saying so beats sending them to a blank screen.
-
   const race = stop({
     kind: "frayed", key: "frayed|e-r", entity_id: "e-r",
     title: "Drow is missing Overview", quote: "",
@@ -594,30 +667,59 @@ describe("a kind the writer invented", () => {
               missing: ["Overview"] },
   });
 
-  it("offers no action rather than one that leads nowhere", async () => {
-    mockApi({ stops: [race] });
+  it("fills a faction in right here", async () => {
+    mockApi({ stops: [faction],
+              entity: { entity_id: "e-f", type: "faction", name: "House Vale",
+                        filename: "house-vale.md", revision: "r9", run: [],
+                        ties: [],
+                        sections: { overview: { heading: "Overview",
+                                                content: "" } } } });
     await start();
-    expect(screen.queryByRole("button", { name: /Open it/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    await userEvent.type(within(dialog).getByLabelText("Overview"),
+                         "The oldest house in the reach.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Save it/ }));
+    await waitFor(() => expect(posted("/entity").length).toBe(1));
   });
 
-  it("says why there is nothing to click", async () => {
-    mockApi({ stops: [race] });
+  it("fills a kind the writer invented the same way", async () => {
+    // The apology is gone because the reason for it is gone: the form reads
+    // the entry's own sections, so no editor has to exist for the kind.
+    mockApi({ stops: [race],
+              entity: { entity_id: "e-r", type: "race", name: "Drow",
+                        filename: "drow.md", revision: "r2", run: [], ties: [],
+                        sections: { overview: { heading: "Overview",
+                                                content: "" } } } });
     await start();
-    expect(screen.getByText(/no editor for this kind of entry yet/)).toBeTruthy();
+    expect(screen.queryByText(/no editor for this kind of entry yet/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    expect(within(dialog).getByLabelText("Overview")).toBeTruthy();
   });
 
-  it("still lets the writer put it off or stop being asked", async () => {
+  it("still lets the writer put anything off or stop being asked", async () => {
     mockApi({ stops: [race] });
     await start();
     expect(screen.getByRole("button", { name: /Not yet/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Never ask/ })).toBeTruthy();
   });
 
-  it("says those answers are remembered", async () => {
-    // They are, now that permanence is per book rather than per session.
-    mockApi({ stops: [race] });
+  it("answers a Government question in a Government entry", async () => {
+    mockApi({ stops: [stop({
+      kind: "unwoven", key: "unwoven|gov_power", title: "Who holds power?",
+      why: "Because.", entity_id: "", quote: "",
+      detail: { lands_as: ["government", "overview"], touches: [] },
+    })] });
     await start();
-    expect(screen.getByText(/both are remembered/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /Answer it here/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "The Regency");
+    await userEvent.type(within(dialog).getByLabelText("The answer"),
+                         "A council rules between kings.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+    expect(posted("/thread/new")[0].body.type).toBe("government");
   });
 });
 
@@ -660,9 +762,14 @@ describe("something the writer marked themselves", () => {
   });
 
   it("offers to create the entry when nothing answers to it", async () => {
+    // Through the same Quick Entry as everything else -- and a pinned phrase
+    // gets a kind picker, because "Kithicor Forest" being a location is the
+    // writer's call, not a rule's.
     mockApi({ stops: [unknown] });
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
     await waitFor(() => expect(posted("/thread/new").length).toBe(1));
     expect(posted("/thread/new")[0].body.name).toBe("Kithicor Forest");
   });
@@ -756,6 +863,8 @@ describe("one entry for a name and its variants", () => {
     mockApi({ stops: [grouped] });
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
     await waitFor(() => expect(posted("/thread/new").length).toBe(1));
     expect(posted("/thread/new")[0].body).toMatchObject({
       name: "Lara Croft",
@@ -767,6 +876,8 @@ describe("one entry for a name and its variants", () => {
     mockApi({ stops: [grouped] });
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
     await waitFor(() => expect(posted("/thread/new").length).toBe(1));
   });
 
@@ -781,6 +892,8 @@ describe("one entry for a name and its variants", () => {
     mockApi({ stops: [stop()] });
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
     await waitFor(() => expect(posted("/thread/new").length).toBe(1));
     expect(posted("/thread/new")[0].body.aliases).toEqual([]);
   });
@@ -935,15 +1048,15 @@ describe("an empty stub is asked what it IS", () => {
     expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
   });
 
-  it("still sends the writer to the editor for an entry that HAS writing", async () => {
-    // A partly-filled entry genuinely needs prose typed into it, and there is
-    // nowhere to type in the walk. Pretending otherwise would be a worse lie.
+  it("gives an entry that HAS writing boxes to type in, right here", async () => {
+    // The earlier version sent these to the editor, reasoning "there is
+    // nowhere to type in the walk". The closed-world rule's answer is to PUT
+    // somewhere to type in the walk -- leaving was the dead end, however good
+    // the destination.
     mockApi({ stops: [thin] });
-    const onOpenThread = vi.fn();
-    await start({ onOpenThread });
-    await userEvent.click(screen.getByRole("button", { name: /fill it in/ }));
-    await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith(
-      "e-mira", { type: "character", filename: "mira.md" }));
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    expect(await screen.findByTestId("quick-fill")).toBeTruthy();
   });
 
   it("offers the question for a kind that has no editor at all", async () => {
@@ -1158,5 +1271,151 @@ describe("the walk moves on when a connection is finished", () => {
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByText(/How is Alexandra Langford connected/))
       .toBeTruthy();
+  });
+});
+
+
+describe("a disagreement is sorted out inside", () => {
+  // Snag, Unplaced and Early mention used to end with "Open it" and a closed
+  // Weave. The closed-world rule: every one settles here.
+
+  const snag = stop({
+    kind: "snag", key: "snag|e-1|eyes", entity_id: "e-1",
+    title: "Two facts disagree about eyes", quote: "",
+    why: "Both set the same thing at the same point.",
+    detail: { name: "Elara Voss", type: "character", filename: "elara.md",
+              snag: "ambiguous_order", axis: "eyes",
+              sides: [{ id: "f-1", at: "c-1", value: "Green." },
+                      { id: "f-2", at: "c-1", value: "Blue." }] },
+  });
+
+  const unplacedStop = stop({
+    kind: "unplaced", key: "unplaced|e-1|f-9", entity_id: "e-1",
+    title: "A fact never takes effect", quote: "",
+    why: "Nothing says when it became true.",
+    detail: { name: "Elara Voss", type: "character", filename: "elara.md",
+              snag: "unplaced", axis: "scar",
+              sides: [{ id: "f-9", at: null, value: "Carries a scar." }] },
+  });
+
+  it("keeps one side, and the other is removed", async () => {
+    mockApi({ stops: [snag, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    expect(within(dialog).getByText("Green.")).toBeTruthy();
+    expect(within(dialog).getByText("Blue.")).toBeTruthy();
+    await userEvent.click(
+      within(dialog).getAllByRole("button", { name: /Keep this one/ })[0]);
+    // Keeping Green deletes Blue -- and only Blue.
+    await waitFor(() => {
+      const deletes = calls.filter(c => c.url.includes("/fact")
+        && c.url.includes("fact_id=f-2"));
+      expect(deletes.length).toBe(1);
+    });
+    expect(calls.some(c => c.url.includes("fact_id=f-1"))).toBe(false);
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+
+  it("edits a side in place, keeping its id", async () => {
+    // PATCH, not delete-and-recreate: the id is what other facts' supersedes
+    // point at, and losing it can silently break an ordering already settled.
+    mockApi({ stops: [snag] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    await userEvent.click(within(dialog).getByLabelText("Edit Green."));
+    const box = within(dialog).getByLabelText("The corrected text");
+    await userEvent.clear(box);
+    await userEvent.type(box, "Grey.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Save the fix/ }));
+    await waitFor(() => {
+      const patched = posted("/fact").filter(c => c.body.fact_id === "f-1");
+      expect(patched.length).toBe(1);
+      expect((patched[0].body.set as { value: string }).value).toBe("Grey.");
+    });
+  });
+
+  it("lets both stand ON PURPOSE, marked on every side", async () => {
+    // Much good fiction contradicts itself deliberately. Marked on EVERY side,
+    // so neither is free to re-open the same argument against a third fact.
+    mockApi({ stops: [snag] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /Both are right on purpose/ }));
+    await waitFor(() => {
+      const marked = posted("/fact").filter(c =>
+        (c.body.set as { intentional?: boolean } | undefined)?.intentional === true);
+      expect(marked.map(c => c.body.fact_id).sort()).toEqual(["f-1", "f-2"]);
+    });
+  });
+
+  it("places an unplaced fact with a chapter picker", async () => {
+    mockApi({ stops: [unplacedStop] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /^Place it$/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("The chapter it becomes true"), "c-2");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /Place it there/ }));
+    await waitFor(() => {
+      const patched = posted("/fact").filter(c => c.body.fact_id === "f-9");
+      expect((patched[0].body.set as { at: string }).at).toBe("c-2");
+    });
+  });
+
+  it("moves an anchor for an early mention, from the entry's own Run", async () => {
+    // The stop knows the mention; the entry knows which anchor makes it late.
+    mockApi({
+      stops: [stop({
+        kind: "early_mention", key: "early|e-1|c-1", entity_id: "e-1",
+        chapter_id: "c-1",
+        title: "Garrick is named before the Weave says they appear",
+        quote: "Elara thought of Garrick.",
+        why: "Everything anchored happens later.",
+        detail: { name: "Garrick", type: "character", filename: "garrick.md" },
+      })],
+      entity: { entity_id: "e-1", type: "character", name: "Garrick",
+                filename: "garrick.md", revision: "r1", ties: [],
+                run: [{ id: "f-5", at: "c-2", value: "Arrives in the capital." }],
+                sections: {} },
+    });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Decide here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    expect(within(dialog).getByText("Arrives in the capital.")).toBeTruthy();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /Move to Chapter One/ }));
+    await waitFor(() => {
+      const patched = posted("/fact").filter(c => c.body.fact_id === "f-5");
+      expect((patched[0].body.set as { at: string }).at).toBe("c-1");
+    });
+  });
+
+  it("backing out keeps the writer's place", async () => {
+    mockApi({ stops: [snag, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    await screen.findByTestId("snag-fixer");
+    await userEvent.click(screen.getByRole("button", { name: /Back to the stop/ }));
+    expect(await screen.findByText(/Two facts disagree/)).toBeTruthy();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
+  });
+});
+
+
+describe("the closed world, structurally", () => {
+  it("has no way to navigate anywhere -- the props do not exist", async () => {
+    // The rule is held by the TYPE, not by discipline: WeavingPanel takes a
+    // project path and an onClose, and nothing else. A future branch cannot
+    // send the writer away, because there is nothing to call. This test reads
+    // the source so a reintroduced callback fails loudly with the reason.
+    const source = (await import("./WeavingPanel.tsx?raw")).default as string;
+    for (const leak of ["onOpenThread", "onOpenKind", "setCurrentView"]) {
+      expect(source.includes(leak), `WeavingPanel references ${leak}`).toBe(false);
+    }
   });
 });

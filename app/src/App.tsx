@@ -2758,55 +2758,16 @@ function App() {
           walkthrough), so the interaction is one the writer has met before.
           The component renders its own backdrop; nothing here reserves
           space for it. */}
+      {/* The Weave is a CLOSED WORLD: the writer does not leave it until they
+          are done or they X out. It used to take navigation callbacks here and
+          five stop kinds ended by calling one -- creation, filling-in and
+          fixing all happen inside the panel now, so there is nothing to
+          route. */}
       {weavingOpen && (
-        <>
-          <WeavingPanel
-            projectPath={currentProject.root_path}
-            onClose={() => setWeavingOpen(false)}
-            onOpenThread={(_entityId, target) => {
-              // Route by WHAT IT IS. The four kinds the Profile Builder was
-              // built for open there, on the actual entry -- the point of the
-              // button is that it opens the thing it names.
-              setWeavingOpen(false);
-              const kind = target?.type ?? "";
-              if (PROFILE_KINDS.includes(kind)) {
-                setProfileType(kind as "character" | "relationship" | "location" | "lore");
-                setProfileFilename(target?.filename || undefined);
-                setCurrentView("profiles");
-                return;
-              }
-              // Every other kind now has somewhere to go. This was the dead
-              // end Weaving used to have to apologise for.
-              if (kind) {
-                setThreadType(kind);
-                setProfileFilename(target?.filename || undefined);
-                setCurrentView("thread");
-                return;
-              }
-              setProfileFilename(undefined);
-              setCurrentView("weave");
-            }}
-            onOpenKind={typeId => {
-              // An Unwoven answer belongs in a KIND of entry, not in one
-              // that already exists. The four the Profile Builder was made
-              // for still open there; everything else opens in the Weave.
-              // No entry to open -- an Unwoven answer has none yet by
-              // definition, so this lands on the list on purpose.
-              setProfileFilename(undefined);
-              if (PROFILE_KINDS.includes(typeId)) {
-                setProfileType(typeId as "character" | "relationship" | "location" | "lore");
-                setCurrentView("profiles");
-              } else {
-                setThreadType(typeId);
-                setCurrentView("thread");
-              }
-              // The walk gets out of the way when it sends the writer
-              // somewhere. An overlay left open over the thing it just
-              // asked them to edit would be its own small joke.
-              setWeavingOpen(false);
-            }}
-          />
-        </>
+        <WeavingPanel
+          projectPath={currentProject.root_path}
+          onClose={() => setWeavingOpen(false)}
+        />
       )}
 
       {/* ── RIGHT PANEL: Writing Companion ────────────────────────────────

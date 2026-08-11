@@ -922,6 +922,76 @@ async def post_fact(request: FactRequest):
     return {"created": fact["id"]}
 
 
+class PatchFactBody(BaseModel):
+    project_path: str
+    entity_id: str
+    fact_id: str
+    # Only these keys may change. A whitelist rather than a merge, because a
+    # fact's id and axis are its identity -- letting a patch touch them would be
+    # letting it quietly turn one fact into a different one.
+    set: dict
+
+
+# What a patch may touch. `value`, `at` and `revealed_at` are the Snag fixer
+# and the chapter picker; `intentional` is "mark this contradiction deliberate";
+# `supersedes` resolves a same-anchor ambiguity by naming the winner.
+_PATCHABLE = {"value", "at", "revealed_at", "intentional", "supersedes",
+              "frame", "ai_scope"}
+
+
+@router.patch("/fact")
+async def patch_fact(body: PatchFactBody):
+    """
+    Change one fact in place, keeping its id and its position in the Run.
+
+    This exists because the Weave walkthrough resolves everything INSIDE its
+    own popup now, and fixing a Snag means editing one side. Without this the
+    only ways to change a fact were rewriting the whole entry or DELETE + POST,
+    which loses the id -- and the id is what `supersedes` on OTHER facts points
+    at, so losing it can silently break an ordering the writer already settled.
+
+    It is also the only way to set `intentional` on an existing fact. The
+    checkers have skipped deliberate contradictions since they were written
+    (much good fiction contradicts itself on purpose), but nothing could SAY a
+    contradiction was deliberate until now.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+    row = await _locate(project_path, body.entity_id)
+    thread = _read_thread(project_path, registry, row)
+
+    unknown = set(body.set or {}) - _PATCHABLE
+    if unknown:
+        raise CodexError(
+            "type_invalid",
+            f"A fact's {', '.join(sorted(unknown))} cannot be changed this way.",
+        )
+    if not body.set:
+        raise CodexError("type_invalid", "Nothing to change was given.")
+
+    for fact in thread.get("run") or []:
+        if fact.get("id") == body.fact_id:
+            break
+    else:
+        raise CodexError("fact_not_found", "That fact is not on this entry.",
+                         body.fact_id)
+
+    if "at" in body.set:
+        _check_anchor(project_path, body.set["at"])
+    if "revealed_at" in body.set:
+        _check_anchor(project_path, body.set["revealed_at"])
+
+    for key, value in body.set.items():
+        if key == "intentional":
+            fact[key] = bool(value)
+        else:
+            fact[key] = value
+
+    _write_thread(project_path, registry, thread)
+    await codex_store.reindex(project_path)
+    return {"patched": body.fact_id}
+
+
 @router.delete("/fact")
 async def delete_fact(project_path: str = Query(...), entity_id: str = Query(...),
                       fact_id: str = Query(...)):
@@ -1323,6 +1393,12 @@ class NewThreadBody(BaseModel):
     # its variants before it asks, so creating the entry once settles all of
     # them -- without this the writer would be back to three entries.
     aliases: list[str] = []
+    # Starter text, per section id. This is what makes Quick Entry one atomic
+    # call: the Weave creates an entry WITH its basic information -- an Unspun
+    # name's own sentence, or the writer's answer to an Unwoven question landing
+    # in the section that asked for it -- instead of creating an empty file and
+    # racing a second request to fill it.
+    sections: dict[str, str] = {}
 
 
 @router.post("/thread/new")
@@ -1372,6 +1448,19 @@ async def post_new_thread(body: NewThreadBody):
             for section in type_entry.get("sections", [])
         },
     }
+
+    # Starter text lands only in sections the type actually has. Refused by
+    # name rather than dropped: silently discarding the writer's answer to an
+    # Unwoven question would be the worst possible version of "created".
+    for section_id, text in (body.sections or {}).items():
+        if section_id not in thread["sections"]:
+            raise CodexError(
+                "type_invalid",
+                f"A {type_entry['label']} has no '{section_id}' section, so "
+                f"there is nowhere to put that text.",
+            )
+        thread["sections"][section_id]["content"] = str(text or "").strip()
+
     _write_thread(project_path, registry, thread)
     await codex_store.reindex(project_path)
     return {"thread": thread}
