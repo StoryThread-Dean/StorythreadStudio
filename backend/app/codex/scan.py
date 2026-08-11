@@ -436,6 +436,24 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
     mentioned = mentioned or {}
     together = together or []
     names = {str(t.get("entity_id")): t for t in threads if t.get("entity_id")}
+
+    # Two entries sharing a display name make their stops INDISTINGUISHABLE --
+    # which reads as the walk repeating itself. Found the hard way: an old
+    # one-click create and a hand-made profile left two empty Deans, and
+    # "Dean is missing Overview" twice in a row read as "the save did not
+    # work". When a name collides, the filename rides along in the title so
+    # the writer can see there are two.
+    name_tally: dict[str, int] = {}
+    for t in threads:
+        key = str(t.get("name") or "").strip().lower()
+        if key:
+            name_tally[key] = name_tally.get(key, 0) + 1
+
+    def shown_name(thread: dict) -> str:
+        base = thread.get("name") or "(unnamed)"
+        if name_tally.get(str(base).strip().lower(), 0) > 1:
+            return f"{base} ({thread.get('filename') or '?'})"
+        return str(base)
     type_index = {t.get("id"): t for t in registry.get("types", [])}
 
     # A Thread is connected if it owns a Tie OR is the target of one. Only one
@@ -450,7 +468,7 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
 
     for thread in threads:
         entity_id = str(thread.get("entity_id") or "")
-        name = thread.get("name") or "(unnamed)"
+        name = shown_name(thread)
         if not entity_id:
             continue
         # AN EMPTY STUB GETS ONE QUESTION, NOT TWO.

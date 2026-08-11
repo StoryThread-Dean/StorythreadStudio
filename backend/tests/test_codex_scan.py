@@ -882,3 +882,33 @@ def test_a_thin_entry_the_writer_wrote_keeps_the_kind_wording(tmp_path):
     stops = scan(folder, [thin], REGISTRY).by_kind(STOP_FRAYED)
     if stops:                     # only if the registry requires goals
         assert "Weaving made this entry" not in stops[0].why
+
+
+# ── Two entries, one name ─────────────────────────────────────────────────────
+#
+# Found on the first closed-world test: an old one-click create plus a hand-made
+# profile left two empty Deans. Their stops were IDENTICAL -- "Dean is missing
+# Overview" twice in a row -- which read as "the save did not work" and as the
+# walk repeating itself. When names collide, the filename rides along.
+
+def test_stops_about_same_named_entries_are_told_apart(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    empty = {"overview": {"heading": "Overview", "content": "",
+                          "trait_blocks": []}}
+    dean1 = _thread("e-d1", "Dean", filename="dean.md", sections=dict(empty))
+    dean2 = _thread("e-d2", "Dean", filename="dean-2.md", sections=dict(empty))
+    stops = scan(folder, [dean1, dean2], REGISTRY).by_kind(STOP_FRAYED)
+    titles = sorted(s.title for s in stops)
+    assert titles == ["Dean (dean-2.md) is missing Overview",
+                      "Dean (dean.md) is missing Overview"]
+
+
+def test_a_unique_name_carries_no_filename(tmp_path):
+    # The disambiguation is for collisions only. "Elara (elara.md)" on every
+    # stop would be noise answering a question nobody asked.
+    folder = _project(tmp_path, {"01.md": "# One\nRain fell.\n"})
+    lonely = _thread("e-1", "Elara", filename="elara.md",
+                     sections={"overview": {"heading": "Overview",
+                                            "content": "", "trait_blocks": []}})
+    stop = scan(folder, [lonely], REGISTRY).by_kind(STOP_FRAYED)[0]
+    assert stop.title == "Elara is missing Overview"

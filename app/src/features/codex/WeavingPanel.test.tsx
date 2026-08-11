@@ -1443,3 +1443,77 @@ describe("the closed world, structurally", () => {
     }
   });
 });
+
+
+describe("a stale stop tells the truth about NOW", () => {
+  // The walk's list is made at Start and not refreshed mid-walk, so a stop can
+  // be answered before it is shown -- two empty Deans made this real on the
+  // first closed-world test. The writer filled one Dean's Overview, the other
+  // Dean's identical-looking stop came up next, and the form showed a BLANK
+  // box: "no he is not [missing Overview], Dean's overview was JUST finished,
+  // I know I just did it." A blank box over a filled section is worse than
+  // confusing -- retyping would have REPLACED the saved writing.
+
+  const frayedDean = stop({
+    kind: "frayed", key: "frayed|e-dean", entity_id: "e-dean",
+    title: "Dean is missing Overview", quote: "",
+    detail: { name: "Dean", type: "character", filename: "dean.md",
+              missing: ["Overview"], placeholder: true },
+  });
+
+  it("shows a section filled since the scan as DONE, never as a blank box", async () => {
+    mockApi({ stops: [frayedDean],
+              entity: { entity_id: "e-dean", type: "character", name: "Dean",
+                        filename: "dean.md", revision: "r2", run: [], ties: [],
+                        sections: { overview: {
+                          heading: "Overview",
+                          content: "The tester who found every dead end.",
+                        } } } });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    expect(within(dialog).getByText(/Overview already has writing/)).toBeTruthy();
+    expect(within(dialog).getByText(/The tester who found every dead end/))
+      .toBeTruthy();
+    // No box means no way to accidentally replace it.
+    expect(within(dialog).queryByLabelText("Overview")).toBeNull();
+  });
+
+  it("says nothing is left and offers the way on", async () => {
+    mockApi({ stops: [frayedDean,
+                      stop({ key: "second", title: "Something else" })],
+              entity: { entity_id: "e-dean", type: "character", name: "Dean",
+                        filename: "dean.md", revision: "r2", run: [], ties: [],
+                        sections: { overview: {
+                          heading: "Overview", content: "Already written.",
+                        } } } });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    expect(within(dialog).getByText(/Nothing left to do here/)).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: /Carry on/ }));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+
+  it("still offers boxes for the sections that ARE empty", async () => {
+    // Half stale: Overview was filled, Goals was not. One done note, one box.
+    mockApi({ stops: [stop({
+                kind: "frayed", key: "frayed|e-dean|2", entity_id: "e-dean",
+                title: "Dean is missing Overview and Goals", quote: "",
+                detail: { name: "Dean", type: "character", filename: "dean.md",
+                          missing: ["Overview", "Goals"], placeholder: false },
+              })],
+              entity: { entity_id: "e-dean", type: "character", name: "Dean",
+                        filename: "dean.md", revision: "r2", run: [], ties: [],
+                        sections: {
+                          overview: { heading: "Overview", content: "Written." },
+                          goals: { heading: "Goals", content: "" },
+                        } } });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    expect(within(dialog).getByText(/Overview already has writing/)).toBeTruthy();
+    expect(within(dialog).getByLabelText("Goals")).toBeTruthy();
+    expect(within(dialog).queryByLabelText("Overview")).toBeNull();
+  });
+});

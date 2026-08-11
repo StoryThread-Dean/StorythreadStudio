@@ -55,6 +55,9 @@ export function QuickFill({
 }: QuickFillProps) {
   const [thread, setThread] = useState<Record<string, unknown> | null>(null);
   const [boxes, setBoxes] = useState<Box[]>([]);
+  // Sections the stop called missing that have writing NOW -- filled since the
+  // walk's list was made. Shown as done, never re-asked.
+  const [done, setDone] = useState<Box[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,8 +86,26 @@ export function QuickFill({
         if (picked.length === 0) {
           picked = sections.filter(([, s]) => !String(s.content ?? "").trim());
         }
-        setBoxes(picked.map(([id, s]) =>
-          ({ id, heading: String(s.heading ?? id), text: "" })));
+        // THE FORM TELLS THE TRUTH ABOUT NOW, NOT ABOUT SCAN TIME.
+        //
+        // The stop list is fetched when the walk starts and is not refreshed
+        // mid-walk, so a stop can be STALE by the time it is shown -- the
+        // writer may have just filled this section through another stop about
+        // the same entry (two empty Deans made this real on the first test).
+        // The first version showed a BLANK box for a section that already had
+        // writing, which read as "you must do this again" -- and retyping
+        // would have REPLACED the writing they had just saved.
+        //
+        // So sections that already have content are separated out and SHOWN,
+        // never offered as boxes, and a stop whose every section is filled
+        // says so instead of presenting an empty form.
+        setDone(picked
+          .filter(([, s]) => String(s.content ?? "").trim())
+          .map(([id, s]) => ({ id, heading: String(s.heading ?? id),
+                               text: String(s.content ?? "").trim() })));
+        setBoxes(picked
+          .filter(([, s]) => !String(s.content ?? "").trim())
+          .map(([id, s]) => ({ id, heading: String(s.heading ?? id), text: "" })));
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "That entry could not be read.");
@@ -164,6 +185,38 @@ export function QuickFill({
             <p className="flex items-center gap-2 text-[11px] text-text-muted">
               <Loader size={11} className="animate-spin" /> Reading the entry...
             </p>
+          )}
+
+          {/* Already filled since the list was made. Said out loud, with the
+              writing shown, because a walk that re-asks a finished question
+              reads as a broken loop -- which is exactly how it was reported. */}
+          {done.map(box => (
+            <div key={box.id} className="mb-2">
+              <p className="mb-0.5 flex items-center gap-1 text-[11px] text-emerald-300">
+                <Check size={10} /> {box.heading} already has writing
+              </p>
+              <p className="rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted">
+                {box.text}
+              </p>
+            </div>
+          ))}
+
+          {thread && boxes.length === 0 && done.length > 0 && (
+            <div className="mb-2">
+              <p className="mb-2 text-xs text-text-primary">
+                Nothing left to do here -- this was filled in after the walk
+                made its list.
+              </p>
+              <button
+                onClick={onDone}
+                className="inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+              >
+                <span>Carry on</span>
+                <span className="text-[10px] font-normal text-faint">
+                  takes you to the next thing in the walk
+                </span>
+              </button>
+            </div>
           )}
 
           {boxes.map((box, i) => (
