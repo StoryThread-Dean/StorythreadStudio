@@ -812,3 +812,66 @@ def test_an_older_project_is_still_offered_the_plain_one(project):
     assert not any(r.get("universal") for r in body["forward"])
     offered = [r["id"] for r in body["available"] if r.get("universal")]
     assert offered == ["connected_to"]
+
+
+# ── The other end may be a different relation entirely ───────────────────────
+#
+# Requested in these words: "Other way around works the same way because it
+# could be very differently from the perspective of the other character /
+# Alexandra friends of Lara Croft / in reverse / Lara Croft business partners
+# with Alexandra."
+#
+# The registry's `inverse` is a DERIVATION -- mentored_by reads as mentor of --
+# and no derivation could produce "business partners with" from "friend of".
+# Both descriptions are true; they are just true from different ends.
+
+def test_a_connection_can_read_as_a_different_relation_from_the_other_end(project):
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "dst_id": "e-garrick",
+        "rel": "mentored_by", "rel_inverse": "rivals",
+        "reason": "Taught her everything",
+        "reason_inverse": "The student who outgrew him",
+    })
+    garrick = client.get("/api/codex/ties",
+                         params={"project_path": project,
+                                 "entity_id": "e-garrick"}).json()["ties"][0]
+    assert garrick["reads_as"] == "rival of"
+
+
+def test_without_one_it_still_derives_the_inverse(project):
+    # The default, and right almost always -- which is why saying it is optional.
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "dst_id": "e-garrick",
+        "rel": "mentored_by", "reason": "Taught her everything",
+    })
+    garrick = client.get("/api/codex/ties",
+                         params={"project_path": project,
+                                 "entity_id": "e-garrick"}).json()["ties"][0]
+    assert garrick["reads_as"] == "mentor of"
+
+
+def test_the_end_that_owns_it_reads_its_own_relation(project):
+    # The override is about the OTHER end. Elara still mentored-by Garrick.
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "dst_id": "e-garrick",
+        "rel": "mentored_by", "rel_inverse": "rivals",
+        "reason": "Taught her everything",
+    })
+    elara = client.get("/api/codex/ties",
+                       params={"project_path": project,
+                               "entity_id": "e-elara"}).json()["ties"][0]
+    assert elara["reads_as"] == "mentored by"
+
+
+def test_a_reverse_relation_the_registry_does_not_know_is_still_readable(project):
+    # Readable rather than dropped: dropping it would silently substitute the
+    # derived inverse, which is a different statement about the world.
+    client.post("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "dst_id": "e-garrick",
+        "rel": "mentored_by", "rel_inverse": "kept_at_arms_length",
+        "reason": "Taught her everything",
+    })
+    garrick = client.get("/api/codex/ties",
+                         params={"project_path": project,
+                                 "entity_id": "e-garrick"}).json()["ties"][0]
+    assert garrick["reads_as"] == "kept at arms length"

@@ -233,6 +233,61 @@ fourteen chapters believing her father died in a raid is a different person in
 chapter fifteen. Ask the Weave about chapter seven and you get the belief; ask
 about chapter fifteen and you get the truth.
 
+### Saying how, from a grouped list
+
+The relation goes in one dropdown, inside the sentence it records:
+
+```
+Record it as
+Alexandra Langford [ choose from ...  v ]  Lara Croft
+                   | Family
+                   |   parent of
+                   |   sibling of
+                   |   cousin of
+                   | Knows / Known
+                   |   friend of
+                   |   partners with
+                   | Intimate
+                   |   married to (one at a time)
+                   | ...
+                   | Write my own...
+```
+
+It replaced a column of buttons where every button *was* the save action. That
+shape was wrong twice: about seventy relations ship now, which makes a column a
+wall, and a writer looking for something to press could not tell the wall was it.
+One dropdown refines one save button.
+
+**Leaving it at "choose from ..." is a real answer**, not an unfinished one -- the
+connection records as the plain kind and can be labelled on a later pass. The
+reason line is the required half; the relation is the queryable half.
+
+Relations are grouped under **Family · Knows / Known · Intimate · Against · Duty
+and standing · Belonging · Place · Belief · Things and events**, and only the ones
+that mean something between those two kinds of entry are offered. A relation the
+world does not have yet is in the list too and is adopted when chosen -- which is
+not behind the writer's back, because choosing it *is* the request.
+
+Two things ride in an option's label because an option has no second line:
+`(stored the other way)` for a relation that runs from the other end, since the
+writer will see it listed under that entry afterwards and an unexplained flip
+looks like a bug; and `(one at a time)` for cardinality, worth knowing before
+choosing rather than after.
+
+**The other end can be a different relation, not just different wording.**
+Alexandra is *friends of* Lara; Lara is *business partners with* Alexandra. Both
+are true, from different ends, and no derivation produces the second from the
+first. Left unset, the registry's own inverse is used -- `mentored by` reads as
+`mentor of` -- which is right almost always, and is why the override is optional.
+
+**Writing your own** is in the list rather than beside it, so it is found while
+choosing rather than after giving up. It carries a warning that the label becomes
+part of the connection string sent to AI, so plain words a model already knows
+cost less and land better than invented ones. Guidance, not a rule: an invented
+culture may genuinely need a word no model knows, and then the reason line carries
+the meaning. A name the app already knows is not an error -- it is used, adopted,
+or widened to cover the pair in front of you, never refused.
+
 ### A connection changes across the book
 
 A relationship is not a fact of the premise. Three scenarios, all ordinary:

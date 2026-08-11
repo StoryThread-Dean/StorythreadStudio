@@ -54,6 +54,8 @@ from app.codex.visibility import (
 )
 from app.codex.threads import parse_thread, render_thread
 from app.codex.types_registry import (
+    RELATION_GROUPS,
+    widen_relation,
     SCHEMA_VERSION,
     TypesError,
     add_relation,
@@ -580,24 +582,42 @@ async def get_ties(project_path: str = Query(...), entity_id: str = Query(...)):
             # Read from THIS end. An incoming "mentored by" reads as "mentor
             # of" from the other side, and showing the stored direction would
             # make the writer translate it in their head every time.
-            "reads_as": _tie_wording(rel, row["incoming"]),
+            "reads_as": _tie_wording(rel, row["incoming"], registry,
+                                     row.get("rel_inverse", "")),
             "at_label": label_for(row["at"]) if row.get("at") else "",
             "until_label": label_for(row["until"]) if row.get("until") else "",
         })
     return {"ties": ties}
 
 
-def _tie_wording(rel: dict, incoming: bool) -> str:
+def _tie_wording(rel: dict, incoming: bool, registry: dict | None = None,
+                 rel_inverse: str = "") -> str:
     """
     How a connection reads from the end being looked at.
 
-    A symmetric relation reads the same both ways. Otherwise the inverse is
-    used when there is one, and a plain "<- label" when there is not -- which
-    is honest about not knowing the phrase rather than inventing one.
+    Three answers, in order of how much the writer told us:
+
+      1. THE WRITER'S OWN REVERSE RELATION, when they gave one. Asked for as
+         "Alexandra friends of Lara Croft / in reverse / Lara Croft business
+         partners with Alexandra" -- one connection, two true descriptions, and
+         no derivation could have produced the second from the first.
+      2. The registry's inverse. mentored_by reads as mentor of, and that is
+         right almost always, which is why step 1 is optional.
+      3. A plain "<- label" when there is neither, which is honest about not
+         knowing the phrase rather than inventing one.
+
+    A symmetric relation reads the same both ways and skips all of it.
     """
     label = rel.get("label") or rel.get("id") or ""
     if not incoming or rel.get("symmetric"):
         return label
+    if rel_inverse:
+        own = relation_by_id(registry or {}, rel_inverse)
+        if own:
+            return str(own.get("label") or own.get("id") or rel_inverse)
+        # Named but not in the registry -- readable rather than dropped, because
+        # dropping it would silently substitute a different meaning.
+        return str(rel_inverse).replace("_", " ")
     inverse = rel.get("inverse")
     if inverse:
         return str(inverse).replace("_", " ")
@@ -650,6 +670,10 @@ async def get_relations(project_path: str = Query(...),
             # `universal` by hand -- a mock more generous than the API it stands
             # for. test_the_plain_connection_is_marked_as_such is the guard.
             "universal": bool(rel.get("universal")),
+            # The heading the picker files it under. A flat list of seventy
+            # relations is a worse question than no list: the writer reads all
+            # of it to find one item.
+            "group": rel.get("group") or "Other",
         }
 
     return {
@@ -661,6 +685,9 @@ async def get_relations(project_path: str = Query(...),
         # deliveries -- better than the frontend holding its own copy of a
         # number the backend enforces.
         "reason_limit": REASON_LIMIT,
+        # The order the headings are shown in, decided here so the picker does
+        # not sort them alphabetically and put "Against" above "Family".
+        "groups": list(RELATION_GROUPS),
     }
 
 
@@ -687,16 +714,43 @@ async def post_relation(body: RelationBody):
     so a connection named here works everywhere with no further change.
     """
     project_path = validate_project_path(body.project_path)
+    from app.codex.types_registry import DEFAULT_RELATIONS, relation_id
+
     try:
         if body.adopt:
             registry = adopt_relation(project_path, body.adopt)
             rel_id = body.adopt
         else:
-            registry = add_relation(
-                project_path, body.label, body.source_types, body.target_types,
-                symmetric=body.symmetric, inverse_label=body.inverse_label)
-            from app.codex.types_registry import relation_id
+            # A NAME THE APP ALREADY KNOWS IS NOT AN ERROR.
+            #
+            # This used to refuse: "this world already has a connection called
+            # 'friend of'." That was tolerable when the shipped vocabulary was
+            # thirty relations and nearly nothing a writer typed would collide.
+            # It is not tolerable now that it is seventy-odd, because the words
+            # a writer reaches for are exactly the words worth shipping -- so
+            # the more complete the list gets, the more often typing your own
+            # name would hit a wall over a relation you were entitled to have.
+            #
+            # So the label is interpreted rather than merely validated: already
+            # in this world, use it; shipped but not adopted, adopt it; genuinely
+            # new, mint it. Every path ends with a usable relation id.
             rel_id = relation_id(body.label)
+            registry = _registry(project_path)
+            if relation_by_id(registry, rel_id) is not None:
+                # Already theirs. Nothing to write -- except that it may not run
+                # between the two kinds in front of them, which is what
+                # widen_relation settles.
+                registry = widen_relation(project_path, rel_id,
+                                          body.source_types, body.target_types)
+            elif any(r.get("id") == rel_id for r in DEFAULT_RELATIONS):
+                adopt_relation(project_path, rel_id)
+                registry = widen_relation(project_path, rel_id,
+                                          body.source_types, body.target_types)
+            else:
+                registry = add_relation(
+                    project_path, body.label, body.source_types,
+                    body.target_types, symmetric=body.symmetric,
+                    inverse_label=body.inverse_label)
     except TypesError as exc:
         raise CodexError("type_invalid", str(exc), exc.path or "") from exc
 
@@ -713,6 +767,9 @@ class TieRequest(BaseModel):
     # saved without. See post_tie for the argument.
     reason: str = ""
     reason_inverse: str = ""
+    # How it reads from the OTHER end, when that is a different relation and not
+    # merely this one backwards. Optional: the registry's inverse is the default.
+    rel_inverse: str = ""
     at: str | None = None
     until: str | None = None
     frame: str | None = None
@@ -791,6 +848,7 @@ async def post_tie(request: TieRequest):
         "rel": request.rel, "target": request.dst_id,
         "reason": reason,
         "reason_inverse": normalize_reason(request.reason_inverse),
+        "rel_inverse": request.rel_inverse.strip(),
         "at": request.at,
         "until": request.until, "frame": request.frame,
         "revealed_at": request.revealed_at, "ai_scope": request.ai_scope,

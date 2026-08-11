@@ -203,6 +203,10 @@ async def _migration_003_tie_reason(db: aiosqlite.Connection) -> None:
     """
     await db.execute("ALTER TABLE codex_tie ADD COLUMN reason TEXT")
     await db.execute("ALTER TABLE codex_tie ADD COLUMN reason_inverse TEXT")
+    # The relation as read from the other end, when it differs. "Alexandra
+    # friends of Lara / Lara business partners with Alexandra" -- one connection,
+    # two true descriptions.
+    await db.execute("ALTER TABLE codex_tie ADD COLUMN rel_inverse TEXT")
 
 
 # Ordered list. Append-only. Version N = _MIGRATIONS[N-1].

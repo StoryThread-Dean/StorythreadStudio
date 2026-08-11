@@ -97,7 +97,7 @@ def test_ties_are_read_with_their_anchor():
         # This file predates the reason line, and an old project's connections
         # must not fail to load for lacking one. Empty, never None -- same
         # argument as frame and ai_scope above.
-        "reason": "", "reason_inverse": "",
+        "reason": "", "reason_inverse": "", "rel_inverse": "",
     }]
 
 
@@ -312,3 +312,40 @@ def test_an_empty_reason_is_not_written_back():
     # trust.
     thread = parse_thread(FULL, REGISTRY)
     assert "reason:" not in render_thread(thread)
+
+
+def test_the_other_end_can_be_a_DIFFERENT_relation():
+    # Asked for exactly this way: "Alexandra friends of Lara Croft / in reverse /
+    # Lara Croft business partners with Alexandra." The registry's own inverse is
+    # the default; this overrides it for one connection, because a relationship
+    # can genuinely be one thing to one person and another to the other and
+    # neither of them is wrong.
+    md = """---
+type: character
+entity_id: e-1
+name: Alexandra Langford
+ties:
+  - rel: friend_of
+    rel_inverse: partners_with
+    target: e-lara
+    reason: "Ran into her and quickly became friends"
+    reason_inverse: "Was researching a cure and ran into her"
+---
+
+# Overview
+A tall woman.
+"""
+    tie = parse_thread(md, REGISTRY)["ties"][0]
+    assert tie["rel"] == "friend_of"
+    assert tie["rel_inverse"] == "partners_with"
+    again = parse_thread(render_thread(parse_thread(md, REGISTRY)), REGISTRY)
+    assert again["ties"][0]["rel_inverse"] == "partners_with"
+
+
+def test_an_unstated_reverse_relation_stays_empty():
+    # Empty means "use the registry's inverse", which is right almost always.
+    # Writing a default in would make every connection in the book claim the
+    # writer had thought about its reverse.
+    tie = parse_thread(FULL, REGISTRY)["ties"][0]
+    assert tie["rel_inverse"] == ""
+    assert "rel_inverse:" not in render_thread(parse_thread(FULL, REGISTRY))

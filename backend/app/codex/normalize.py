@@ -135,6 +135,15 @@ def normalize_tie(tie: dict) -> dict:
     # the same sentence backwards. Optional: a writer mid-thought should not be
     # made to answer twice.
     out["reason_inverse"] = normalize_reason(out.get("reason_inverse"))
+    # WHAT THE CONNECTION IS FROM THE OTHER END, when that is a different
+    # relation rather than the same one worded backwards.
+    #
+    # Asked for exactly that way: "Alexandra friends of Lara Croft / in reverse /
+    # Lara Croft business partners with Alexandra." The registry's `inverse` is
+    # the DEFAULT (mentored_by reads as mentor_of), and this overrides it per
+    # connection -- because a relationship can genuinely be one thing to one
+    # person and another to the other, and neither of them is wrong.
+    out["rel_inverse"] = str(out.get("rel_inverse") or "").strip()
     out["frame"] = _clean(out.get("frame")) or TRUTH
     out["ai_scope"] = normalize_ai_scope(out.get("ai_scope"))
     out["at"] = _clean(out.get("at"))

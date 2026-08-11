@@ -194,12 +194,43 @@ DEFAULT_TYPES: list[dict] = [
 ]
 
 
+# The headings a writer picks a relation UNDER, in the order they are offered.
+#
+# A flat list of sixty relations is a worse question than no list at all -- the
+# writer reads all of it to find one item. Under a heading they read one heading
+# and four items. So every relation names a group, and the editor renders the
+# picker as one dropdown with these as its sections.
+#
+# The first three names came from the writer, with their own examples in them.
+# The rest exist because their list, extended, kept producing things that were
+# plainly neither family nor friendship nor romance.
+GROUP_FAMILY = "Family"
+GROUP_KNOWS = "Knows / Known"
+GROUP_INTIMATE = "Intimate"
+GROUP_AGAINST = "Against"
+GROUP_DUTY = "Duty and standing"
+GROUP_BELONGING = "Belonging"
+GROUP_PLACE = "Place"
+GROUP_BELIEF = "Belief"
+GROUP_THINGS = "Things and events"
+GROUP_OTHER = "Other"
+
+RELATION_GROUPS = [
+    GROUP_FAMILY, GROUP_KNOWS, GROUP_INTIMATE, GROUP_AGAINST, GROUP_DUTY,
+    GROUP_BELONGING, GROUP_PLACE, GROUP_BELIEF, GROUP_THINGS, GROUP_OTHER,
+]
+
+
 def _rel(rid, label, *, inverse=None, symmetric=False, src, dst,
-         cardinality="many", exclusive_group=None, universal=False) -> dict:
+         cardinality="many", exclusive_group=None, universal=False,
+         group=GROUP_OTHER) -> dict:
     entry = {
         "id": rid, "label": label, "inverse": inverse, "symmetric": symmetric,
         "source_types": list(src), "target_types": list(dst),
         "cardinality": cardinality, "exclusive_group": exclusive_group,
+        # Which heading the picker files it under. Data, like everything else in
+        # this file, so a writer's own relation can join a group.
+        "group": group,
     }
     if universal:
         # Runs between ANY two kinds, including ones the writer invents later.
@@ -235,46 +266,56 @@ DEFAULT_RELATIONS: list[dict] = [
          src=["character", "location"], dst=["character", "location"]),
 
     _rel("mentored_by", "mentored by", inverse="mentor_of",
-         src=["character"], dst=["character"]),
+         src=["character"], dst=["character"], group=GROUP_KNOWS),
     _rel("parent_of", "parent of", inverse="child_of",
-         src=["character"], dst=["character"]),
+         src=["character"], dst=["character"], group=GROUP_FAMILY),
     _rel("sibling_of", "sibling of", symmetric=True,
-         src=["character"], dst=["character"]),
+         src=["character"], dst=["character"], group=GROUP_FAMILY),
     _rel("married_to", "married to", symmetric=True,
-         src=["character"], dst=["character"]),
-    _rel("loves", "loves", src=["character"], dst=["character"]),
+         src=["character"], dst=["character"], group=GROUP_INTIMATE),
+    _rel("loves", "loves", src=["character"], dst=["character"],
+         group=GROUP_INTIMATE),
     _rel("rivals", "rival of", symmetric=True,
-         src=["character"], dst=["character"]),
-    _rel("betrayed", "betrayed", src=["character"], dst=["character"]),
-    _rel("serves", "serves", src=["character"], dst=["character", "faction"]),
-    _rel("member_of", "member of", inverse="has_member",
+         src=["character"], dst=["character"], group=GROUP_AGAINST),
+    _rel("betrayed", "betrayed", inverse="betrayed_by",
+         src=["character"], dst=["character"], group=GROUP_AGAINST),
+    _rel("serves", "serves", inverse="served_by",
+         src=["character"], dst=["character", "faction"],
+         group=GROUP_DUTY),
+    _rel("member_of", "member of", inverse="has_member", group=GROUP_BELONGING,
          src=["character"], dst=["faction", "religion"]),
-    _rel("leads", "leads", inverse="led_by",
+    _rel("leads", "leads", inverse="led_by", group=GROUP_DUTY,
          src=["character"], dst=["faction", "religion"], cardinality="one"),
-    _rel("founded", "founded", inverse="founded_by",
+    _rel("founded", "founded", inverse="founded_by", group=GROUP_BELONGING,
          src=["character"], dst=["faction", "religion", "location"]),
-    _rel("exiled_from", "exiled from",
+    _rel("exiled_from", "exiled from", group=GROUP_BELONGING,
          src=["character"], dst=["location", "faction"]),
-    _rel("born_in", "born in", src=["character"], dst=["location"], cardinality="one"),
-    _rel("rules", "rules", inverse="ruled_by",
+    _rel("born_in", "born in", src=["character"], dst=["location"],
+         cardinality="one", group=GROUP_PLACE),
+    _rel("rules", "rules", inverse="ruled_by", group=GROUP_DUTY,
          src=["character", "faction"], dst=["location"]),
-    _rel("at_war_with", "at war with", symmetric=True,
+    _rel("at_war_with", "at war with", symmetric=True, group=GROUP_AGAINST,
          src=["faction", "religion"], dst=["faction", "religion"]),
-    _rel("allied_with", "allied with", symmetric=True,
+    _rel("allied_with", "allied with", symmetric=True, group=GROUP_BELONGING,
          src=["faction", "religion"], dst=["faction", "religion"]),
-    _rel("vassal_of", "vassal of", inverse="overlord_of",
+    _rel("vassal_of", "vassal of", inverse="overlord_of", group=GROUP_DUTY,
          src=["faction"], dst=["faction"], cardinality="one"),
-    _rel("schism_of", "schism of", src=["faction", "religion"],
+    _rel("schism_of", "schism of", group=GROUP_BELONGING,
+         src=["faction", "religion"],
          dst=["faction", "religion"]),
-    _rel("believes", "believes", src=["character", "faction"],
+    _rel("believes", "believes", group=GROUP_BELIEF,
+         src=["character", "faction"],
          dst=["religion", "lore", "concept"]),
-    _rel("practices", "practices", src=["character", "faction"],
+    _rel("practices", "practices", group=GROUP_BELIEF,
+         src=["character", "faction"],
          dst=["religion", "concept"]),
-    _rel("forbidden_by", "forbidden by", src=["concept", "object", "lore"],
+    _rel("forbidden_by", "forbidden by", group=GROUP_BELIEF,
+         src=["concept", "object", "lore"],
          dst=["religion", "faction"]),
-    _rel("prophesied_in", "prophesied in", src=["character", "event"],
+    _rel("prophesied_in", "prophesied in", group=GROUP_BELIEF,
+         src=["character", "event"],
          dst=["lore", "religion"]),
-    _rel("owns", "owns", inverse="owned_by",
+    _rel("owns", "owns", inverse="owned_by", group=GROUP_THINGS,
          src=["character", "faction"], dst=["object"]),
 
     # The kinds beyond characters and factions had almost no vocabulary, which
@@ -282,21 +323,21 @@ DEFAULT_RELATIONS: list[dict] = [
     # deity, a religion named after that deity, and the deity itself were three
     # entries with no way to say how they relate. Each of these exists because
     # a writer could not express something without it.
-    _rel("worships", "worships", inverse="worshipped_by",
+    _rel("worships", "worships", inverse="worshipped_by", group=GROUP_BELIEF,
          src=["character", "faction", "culture", "religion"],
          dst=["deity", "religion"]),
-    _rel("part_of", "part of", inverse="contains",
+    _rel("part_of", "part of", inverse="contains", group=GROUP_BELONGING,
          src=["faction", "religion", "government", "culture"],
          dst=["faction", "religion", "government", "culture"]),
-    _rel("governs", "governs", inverse="governed_by",
+    _rel("governs", "governs", inverse="governed_by", group=GROUP_DUTY,
          src=["government", "faction"], dst=["location"]),
-    _rel("sacred_to", "sacred to",
+    _rel("sacred_to", "sacred to", group=GROUP_BELIEF,
          src=["location", "object", "creature"], dst=["religion", "deity"]),
-    _rel("native_to", "native to",
+    _rel("native_to", "native to", group=GROUP_PLACE,
          src=["creature", "culture"], dst=["location"]),
-    _rel("occurred_at", "happened at",
+    _rel("occurred_at", "happened at", group=GROUP_THINGS,
          src=["event"], dst=["location"], cardinality="one"),
-    _rel("involved", "involved", inverse="involved_in",
+    _rel("involved", "involved", inverse="involved_in", group=GROUP_THINGS,
          src=["event"], dst=["character", "faction", "religion", "government"]),
 
     # Checked against a real, densely connected character (Drizzt Do'Urden) and
@@ -314,10 +355,121 @@ DEFAULT_RELATIONS: list[dict] = [
     # members relate -- the Hand and the Foot in Ninja Turtles are not body
     # parts. Reading a relation out of a name is exactly the assumption this
     # feature exists to avoid making.
-    _rel("companion_of", "companion of", symmetric=True,
+    _rel("companion_of", "companion of", symmetric=True, group=GROUP_KNOWS,
          src=["character", "creature"], dst=["character", "creature"]),
-    _rel("lives_in", "lives in", inverse="home_of",
+    _rel("lives_in", "lives in", inverse="home_of", group=GROUP_PLACE,
          src=["character", "creature", "culture", "faction"], dst=["location"]),
+
+    # ── The rest of what a writer actually needs to say ─────────────────────
+    #
+    # Asked for as "the list can be larger and more extensive now. Covering the
+    # bases of most relationships." Each one below is a relationship a novel
+    # ordinarily contains and the app previously had no words for -- a childhood
+    # rivalry, an ex, a debt, a cousin.
+    #
+    # Every label is written to read correctly in the sentence the editor shows,
+    # "A <label> B", because that sentence is what the writer is agreeing to.
+    # Where a relation is not symmetric it names its inverse, so the other end
+    # reads right by default without the writer answering twice.
+    #
+    # Kept to relationships, not to grades of one relationship: "friend of" and
+    # "close friend of" is a distinction worth having; five degrees of friendship
+    # would push the work of choosing back onto the writer, which is the problem
+    # a grouped list exists to solve.
+
+    # Family
+    _rel("child_of", "child of", inverse="parent_of", group=GROUP_FAMILY,
+         src=["character"], dst=["character"]),
+    _rel("cousin_of", "cousin of", symmetric=True, group=GROUP_FAMILY,
+         src=["character"], dst=["character"]),
+    _rel("half_sibling_of", "half-sibling of", symmetric=True,
+         group=GROUP_FAMILY, src=["character"], dst=["character"]),
+    _rel("grandparent_of", "grandparent of", inverse="grandchild_of",
+         group=GROUP_FAMILY, src=["character"], dst=["character"]),
+    _rel("adopted_by", "adopted by", inverse="adoptive_parent_of",
+         group=GROUP_FAMILY, src=["character"], dst=["character"]),
+    _rel("raised_by", "raised by", inverse="raised", group=GROUP_FAMILY,
+         src=["character"], dst=["character"]),
+    _rel("guardian_of", "guardian of", inverse="ward_of", group=GROUP_FAMILY,
+         src=["character"], dst=["character"]),
+    _rel("in_law_of", "in-law of", symmetric=True, group=GROUP_FAMILY,
+         src=["character"], dst=["character"]),
+    _rel("ancestor_of", "ancestor of", inverse="descendant_of",
+         group=GROUP_FAMILY, src=["character"], dst=["character"]),
+
+    # Knows / Known
+    _rel("acquaintance_of", "acquaintance of", symmetric=True, group=GROUP_KNOWS,
+         src=["character"], dst=["character"]),
+    _rel("friend_of", "friend of", symmetric=True, group=GROUP_KNOWS,
+         src=["character"], dst=["character"]),
+    _rel("close_friend_of", "close friend of", symmetric=True,
+         group=GROUP_KNOWS, src=["character"], dst=["character"]),
+    _rel("childhood_friend_of", "childhood friend of", symmetric=True,
+         group=GROUP_KNOWS, src=["character"], dst=["character"]),
+    _rel("confidant_of", "confidant of", group=GROUP_KNOWS,
+         src=["character"], dst=["character"]),
+    _rel("partners_with", "partners with", symmetric=True, group=GROUP_KNOWS,
+         src=["character"], dst=["character"]),
+    _rel("colleague_of", "colleague of", symmetric=True, group=GROUP_KNOWS,
+         src=["character"], dst=["character"]),
+    _rel("neighbour_of", "neighbour of", symmetric=True, group=GROUP_KNOWS,
+         src=["character"], dst=["character"]),
+    _rel("student_of", "student of", inverse="teacher_of", group=GROUP_KNOWS,
+         src=["character"], dst=["character"]),
+    _rel("knows_of", "knows of", group=GROUP_KNOWS,
+         src=["character"], dst=["character"]),
+
+    # Intimate
+    _rel("engaged_to", "engaged to", symmetric=True, group=GROUP_INTIMATE,
+         src=["character"], dst=["character"]),
+    _rel("lover_of", "lover of", symmetric=True, group=GROUP_INTIMATE,
+         src=["character"], dst=["character"]),
+    _rel("ex_lover_of", "ex-lover of", symmetric=True, group=GROUP_INTIMATE,
+         src=["character"], dst=["character"]),
+    _rel("courting", "courting", inverse="courted_by", group=GROUP_INTIMATE,
+         src=["character"], dst=["character"]),
+    _rel("friends_with_benefits_with", "friends with benefits with",
+         symmetric=True, group=GROUP_INTIMATE,
+         src=["character"], dst=["character"]),
+    _rel("divorced_from", "divorced from", symmetric=True,
+         group=GROUP_INTIMATE, src=["character"], dst=["character"]),
+    _rel("widowed_by", "widowed by", group=GROUP_INTIMATE,
+         src=["character"], dst=["character"]),
+    _rel("unrequited_love_for", "in unrequited love with",
+         group=GROUP_INTIMATE, src=["character"], dst=["character"]),
+
+    # Against
+    _rel("enemy_of", "enemy of", symmetric=True, group=GROUP_AGAINST,
+         src=["character"], dst=["character"]),
+    _rel("childhood_rival_of", "childhood rival of", symmetric=True,
+         group=GROUP_AGAINST, src=["character"], dst=["character"]),
+    _rel("frenemy_of", "frenemy of", symmetric=True, group=GROUP_AGAINST,
+         src=["character"], dst=["character"]),
+    _rel("feuding_with", "feuding with", symmetric=True, group=GROUP_AGAINST,
+         src=["character", "faction"], dst=["character", "faction"]),
+    _rel("hunting", "hunting", inverse="hunted_by", group=GROUP_AGAINST,
+         src=["character", "creature", "faction"],
+         dst=["character", "creature", "faction"]),
+    _rel("sworn_to_destroy", "sworn to destroy", group=GROUP_AGAINST,
+         src=["character", "faction"],
+         dst=["character", "faction", "religion", "location"]),
+    _rel("distrusts", "distrusts", group=GROUP_AGAINST,
+         src=["character"], dst=["character", "faction"]),
+
+    # Duty and standing
+    _rel("commands", "commands", inverse="commanded_by", group=GROUP_DUTY,
+         src=["character"], dst=["character", "faction"]),
+    _rel("employed_by", "employed by", inverse="employs", group=GROUP_DUTY,
+         src=["character"], dst=["character", "faction"]),
+    _rel("sworn_to", "sworn to", group=GROUP_DUTY,
+         src=["character"], dst=["character", "faction", "religion"]),
+    _rel("owes_a_debt_to", "owes a debt to", group=GROUP_DUTY,
+         src=["character", "faction"], dst=["character", "faction"]),
+    _rel("protects", "protects", inverse="protected_by", group=GROUP_DUTY,
+         src=["character", "faction"], dst=["character", "location", "object"]),
+    _rel("answers_to", "answers to", inverse="answered_to_by",
+         group=GROUP_DUTY, src=["character", "faction"],
+         dst=["character", "faction", "government"]),
     _rel("summons", "summons", inverse="summoned_by",
          src=["object", "concept", "lore"], dst=["creature", "deity"]),
 ]
@@ -955,6 +1107,49 @@ def relation_id(label: str) -> str:
         raise TypesError("A connection needs a name with letters in it.",
                          "relations")
     return slug
+
+
+def widen_relation(project_path: str, rel_id: str,
+                   source_types: list[str], target_types: list[str]) -> dict:
+    """
+    Make an existing relation cover a pair the writer has just asked for.
+
+    Needed because the shipped vocabulary grew. A writer typing their own name
+    for a faction-to-deity connection can now land on a relation that already
+    exists and does NOT run between those two kinds -- "sworn to destroy" ships
+    for characters and factions, not for gods. Before, that produced a refusal
+    for something the writer had explicitly requested, which is the kind of dead
+    end this whole feature exists to remove.
+
+    Only ever WIDENS, and only for the pair asked about. Nothing is removed, no
+    other relation is touched, and a relation that already covers the pair is
+    left byte-identical -- so this cannot quietly reshape a world the writer
+    tuned by hand.
+    """
+    registry, _from_file = load_registry(project_path)
+    relation = relation_by_id(registry, rel_id)
+    if relation is None:
+        raise TypesError(f"There is no connection called '{rel_id}'.", "relations")
+
+    # A universal relation runs between anything already; widening its lists
+    # would imply the lists mean something for it, which they do not.
+    if relation.get("universal"):
+        return registry
+
+    changed = False
+    for key, wanted in (("source_types", source_types),
+                        ("target_types", target_types)):
+        current = list(relation.get(key) or [])
+        for kind in wanted:
+            if kind and kind not in current:
+                current.append(kind)
+                changed = True
+        relation[key] = current
+
+    if not changed:
+        return registry
+    _write_registry(project_path, registry)
+    return registry
 
 
 def add_relation(

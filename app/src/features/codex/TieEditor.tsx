@@ -49,7 +49,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowLeftRight, ArrowRight, Check, Link2, Loader, Plus,
+  AlertTriangle, ArrowRight, Check, Loader, Plus,
   Trash2, X,
 } from "lucide-react";
 
@@ -85,6 +85,8 @@ interface Relation {
   inverse_label: string;
   /** True when it runs the other way, so the pair has to be turned around. */
   flipped: boolean;
+  /** The heading it is filed under in the picker. */
+  group?: string;
   /** Runs between any two kinds. There is one, and it is the plain one. */
   universal?: boolean;
 }
@@ -126,6 +128,9 @@ export function TieEditor({
     // How long a reason may be. Sent by the backend, which is the thing that
     // enforces it -- a copy kept here is how silent truncation gets shipped.
     reason_limit?: number;
+    // The order the headings appear in, decided by the backend so the picker
+    // does not sort them alphabetically and put "Against" above "Family".
+    groups?: string[];
   } | null>(null);
   // Making the other end, when it does not exist yet.
   const [making, setMaking] = useState(false);
@@ -141,6 +146,11 @@ export function TieEditor({
   // WHY these two relate, and the one thing a connection cannot be saved
   // without. See the reason box below for the argument.
   const [reason, setReason] = useState("");
+  // Which relation is picked, from the one dropdown. "" means the writer has not
+  // chosen -- which is a real answer, not an unfinished one: the connection
+  // records as the plain kind and can be labelled on a later pass.
+  const [pickedRel, setPickedRel] = useState("");
+  const [pickedInverseRel, setPickedInverseRel] = useState("");
   const [reasonInverse, setReasonInverse] = useState("");
   const [showInverse, setShowInverse] = useState(false);
 
@@ -191,7 +201,30 @@ export function TieEditor({
     return () => { cancelled = true; };
   }, [projectPath, thread.type, other]);
 
-  /** entity_id -> shared scene count, for ordering and for the row label. */
+  /**
+ * How one relation reads in the dropdown.
+ *
+ * Two things have to fit in an option, because an option cannot carry a second
+ * line the way the old buttons did:
+ *
+ *   "stored the other way"  a relation that runs from the OTHER end. Said out
+ *                           loud because the writer will see the connection
+ *                           listed under the other entry afterwards, and an
+ *                           unexplained flip looks like a bug.
+ *   "one at a time"         cardinality. Worth knowing BEFORE choosing --
+ *                           married_to allows several deliberately, but a
+ *                           relation declared one-at-a-time will raise a Snag.
+ */
+function relOptionLabel(rel: Relation): string {
+  const base = rel.flipped ? (rel.inverse_label || rel.label) : rel.label;
+  const notes = [
+    rel.flipped ? "stored the other way" : "",
+    rel.cardinality === "one" ? "one at a time" : "",
+  ].filter(Boolean);
+  return notes.length ? `${base} (${notes.join(", ")})` : base;
+}
+
+/** entity_id -> shared scene count, for ordering and for the row label. */
   const sharedWith = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of likely ?? []) map.set(row.entity_id, row.scenes);
@@ -280,18 +313,45 @@ export function TieEditor({
   // only in the moment before the relations request lands.
   const reasonLimit = options?.reason_limit ?? 140;
 
-  async function connect(relation: Relation) {
+  /** Record what is on screen: the reason, plus whatever the dropdowns say. */
+  async function record() {
+    const chosen = pickedRel ? relById.get(pickedRel) : plain;
+    if (chosen) await connect(chosen);
+  }
+
+  /**
+   * `justAdded` is passed by nameIt, and has to be a parameter rather than a
+   * lookup: setOptions has not applied yet when this runs, so the relation the
+   * writer just created is invisible in the closure here and would be adopted a
+   * second time. Harmless on the server, which is idempotent -- but two
+   * identical requests are a thing somebody later has to explain.
+   */
+  async function connect(relation: Relation, justAdded = false) {
     if (!other || !canConnect) return;
-    // An older project may not have the plain connection at all, since
-    // types.json is the writer's file and is never modified behind their back.
-    // Adopting it is silent here on purpose: "just connect them" should not
-    // turn into a lecture about vocabulary.
-    if (relation.universal && !options?.forward.some(r => r.id === relation.id)) {
-      await fetch(`${API_BASE}/api/codex/relation`, {
+    // ADOPTED QUIETLY IF THIS WORLD DOES NOT HAVE IT YET.
+    //
+    // types.json is the writer's file and is never modified behind their back --
+    // but choosing a relation from the dropdown IS the request, so there is
+    // nothing behind their back about it. It used to be a separate visible step
+    // ("not in your world yet / add and use"), which made the picker teach the
+    // writer about the app's own vocabulary bookkeeping instead of letting them
+    // say what they meant.
+    const alreadyHere = justAdded
+      || options?.forward.some(r => r.id === relation.id)
+      || options?.reverse.some(r => r.id === relation.id);
+    if (!alreadyHere) {
+      const added = await fetch(`${API_BASE}/api/codex/relation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ project_path: projectPath, adopt: relation.id }),
       }).catch(() => undefined);
+      // A failure here is worth surfacing rather than swallowing: without the
+      // relation, the connection below is refused and the writer would see a
+      // confusing "that is not a connection that can run..." instead.
+      if (added && !added.ok) {
+        setError("That connection could not be added to your world.");
+        return;
+      }
     }
     setBusy(true);
     setError(null);
@@ -312,6 +372,11 @@ export function TieEditor({
           // have to swap with it or the connection reads backwards.
           reason: relation.flipped ? reasonInverse.trim() || reason : reason,
           reason_inverse: relation.flipped ? reason : reasonInverse,
+          // THE OTHER END MAY BE A DIFFERENT RELATION ENTIRELY, not merely the
+          // same one worded backwards. Asked for exactly that way: "Alexandra
+          // friends of Lara Croft / in reverse / Lara Croft business partners
+          // with Alexandra." Left empty, the registry's own inverse is used.
+          rel_inverse: relation.flipped ? pickedRel : pickedInverseRel,
         }),
       });
       const body = await response.json();
@@ -327,6 +392,8 @@ export function TieEditor({
       setReason("");
       setReasonInverse("");
       setShowInverse(false);
+      setPickedRel("");
+      setPickedInverseRel("");
       await load();
       onChanged();
     } catch (e) {
@@ -357,28 +424,21 @@ export function TieEditor({
       setNaming(false);
       setNewLabel("");
       setNewInverse("");
-      await connect({ id: body.id, label: body.label, symmetric: false,
-                      cardinality: "many", inverse_label: "", flipped: false });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That could not be added.");
-      setBusy(false);
-    }
-  }
-
-  async function adopt(relation: Relation) {
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE}/api/codex/relation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_path: projectPath, adopt: relation.id }),
-      });
-      if (!response.ok) {
-        const body = await response.json();
-        throw new Error(body?.detail?.message ?? "That could not be added.");
-      }
-      await connect(relation);
+      const made: Relation = {
+        id: body.id, label: body.label, symmetric: false,
+        cardinality: "many", inverse_label: newInverse, flipped: false,
+        group: "Other",
+      };
+      // It is IN their world now, so it goes in the list of what is. Without
+      // this, connect() cannot find it among the known relations and adopts it
+      // a second time -- harmless on the server, which is idempotent, but a
+      // wasted round trip and a confusing pair of identical requests to read in
+      // a log.
+      setOptions(prev => prev
+        ? { ...prev, forward: [...prev.forward, made] }
+        : prev);
+      setPickedRel(made.id);
+      await connect(made, true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "That could not be added.");
       setBusy(false);
@@ -412,12 +472,55 @@ export function TieEditor({
   // else is a way of saying more about one.
   const plain = options?.forward.find(r => r.universal)
     ?? options?.available.find(r => r.universal);
-  const typed = (options?.forward ?? []).filter(r => !r.universal);
 
-  const nothingFits = other && options
-    && typed.length === 0
-    && options.reverse.length === 0
-    && options.available.filter(r => !r.universal).length === 0;
+  /**
+   * Everything pickable between these two, filed under headings.
+   *
+   * One dropdown instead of a column of buttons, asked for in those terms: it
+   * "serves both a UI landscape issue and makes the writer choose from a list
+   * rather than select from a lot of choices." With seventy-odd relations
+   * shipped, a column of buttons is a wall -- under a heading the writer reads
+   * one heading and four items.
+   *
+   * Three sources merge into it and the writer is not asked to care which:
+   *   forward     already in their world, runs this way
+   *   reverse     runs the other way, so the pair is turned around on save
+   *   available   shipped, not adopted yet -- adopted when chosen, which is not
+   *               behind their back because choosing it IS the request
+   */
+  const grouped = useMemo(() => {
+    if (!options) return [];
+    const all = [
+      ...options.forward.filter(r => !r.universal),
+      ...options.reverse,
+      ...options.available.filter(r => !r.universal),
+    ];
+    const seen = new Set<string>();
+    const byGroup = new Map<string, Relation[]>();
+    for (const rel of all) {
+      // A relation can arrive from two lists (symmetric ones appear forward AND
+      // reverse). First win keeps the un-flipped copy, which is the one that
+      // stores the way round the writer is reading.
+      if (seen.has(rel.id)) continue;
+      seen.add(rel.id);
+      const key = rel.group || "Other";
+      byGroup.set(key, [...(byGroup.get(key) ?? []), rel]);
+    }
+    const order = options.groups ?? [...byGroup.keys()];
+    return order
+      .filter(g => byGroup.has(g))
+      .map(g => ({ group: g, relations: byGroup.get(g)! }));
+  }, [options]);
+
+  const relById = useMemo(() => {
+    const map = new Map<string, Relation>();
+    for (const section of grouped) {
+      for (const rel of section.relations) map.set(rel.id, rel);
+    }
+    return map;
+  }, [grouped]);
+
+  const nothingFits = other && options && grouped.length === 0;
 
   return (
     <div
@@ -791,98 +894,126 @@ export function TieEditor({
                         the second half, this connection reads awkwardly when you
                         are standing at the other end.
                       </p>
+                      {/* WHY THE WORDING MATTERS HERE and not in the reason box:
+                          the label becomes part of the connection string sent to
+                          AI, so plain words a model already understands cost less
+                          and land better than invented ones. Said as guidance,
+                          because a writer's own culture may genuinely need a word
+                          no model knows -- and then the reason line carries the
+                          meaning. */}
+                      <p className="mt-1 text-[10px] text-amber-300/90">
+                        Use words AI already knows where you can -- "blood-sworn
+                        to" reads to a model, "kh'thari of" does not. This label
+                        goes into the connection sent with your writing, so
+                        familiar words keep it short and understood.
+                      </p>
                     </div>
                   ) : (
                     <>
-                      {/* The plain one, first and on its own. The RELATION is
-                          the optional half now -- it is what makes a connection
-                          queryable and drawable, while the reason above is what
-                          makes it USEFUL. So this records the reason with no
-                          label attached, and a label can come on a later pass. */}
-                      {plain && (
-                        <button
-                          onClick={() => void connect(plain)}
-                          disabled={busy || !canConnect}
-                          className="mb-1.5 flex w-full items-center gap-1.5 rounded border border-emerald-800 bg-emerald-950/30 px-2 py-1.5 text-left text-xs text-text-primary hover:bg-emerald-950/50 disabled:opacity-40"
+                      {/* ONE DROPDOWN, INSIDE THE SENTENCE IT RECORDS.
+                          ============================================
+                          Asked for in those terms -- a dropdown defaulting to
+                          "choose from ..." and grouped by kind of relationship,
+                          because it "serves both a UI landscape issue and makes
+                          the writer choose from a list rather than select from a
+                          lot of choices."
+
+                          It replaced a column of buttons where every button WAS
+                          the save action, which was the wrong shape twice over:
+                          seventy-odd relations make a wall, and a writer looking
+                          for something to press could not tell that the wall was
+                          it. Now there is one thing to press, and the dropdown
+                          refines what it records.
+
+                          Leaving it at "choose from ..." is a real answer, not an
+                          unfinished one -- the connection saves as the plain kind
+                          and can be labelled on a later pass. The reason line is
+                          the required half; this is the queryable half. */}
+                      <p className="mb-1 text-[11px] text-text-muted">
+                        Record it as
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                        <span className="text-text-primary">{nodeLabel(thread)}</span>
+                        <select
+                          value={pickedRel}
+                          onChange={e => {
+                            if (e.target.value === "__own__") {
+                              setNaming(true);
+                              return;
+                            }
+                            setPickedRel(e.target.value);
+                          }}
+                          aria-label="How they are connected"
+                          className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
                         >
-                          {busy ? <Loader size={11} className="animate-spin" />
-                                : <Link2 size={11} className="text-emerald-300" />}
-                          <span className="flex-1">Record it</span>
-                          <span className="text-[10px] text-faint">
-                            label it later
-                          </span>
-                        </button>
-                      )}
-
-
-                      {typed.length > 0 && (
-                        <p className="mb-0.5 text-[10px] uppercase tracking-wide text-faint">
-                          or give it a label too
-                        </p>
-                      )}
-                      {typed.map(rel => (
-                        <RelButton key={rel.id} rel={rel} busy={busy}
-                                   disabled={!canConnect}
-                                   from={nodeLabel(thread)} to={nodeLabel(other)}
-                                   onPick={() => void connect(rel)} />
-                      ))}
-
-                      {/* The pair may simply need turning around. Making the
-                          writer work out that "governed by" is "governs"
-                          backwards is work the app can do. */}
-                      {options.reverse.length > 0 && (
-                        <>
-                          <p className="mt-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wide text-faint">
-                            <ArrowLeftRight size={9} /> the other way round
-                          </p>
-                          {options.reverse.map(rel => (
-                            <RelButton key={rel.id} rel={rel} busy={busy}
-                                       disabled={!canConnect}
-                                       from={nodeLabel(other)} to={nodeLabel(thread)}
-                                       onPick={() => void connect(rel)} />
+                          <option value="">choose from ...</option>
+                          {grouped.map(section => (
+                            <optgroup key={section.group} label={section.group}>
+                              {section.relations.map(rel => (
+                                <option key={rel.id} value={rel.id}>
+                                  {relOptionLabel(rel)}
+                                </option>
+                              ))}
+                            </optgroup>
                           ))}
-                        </>
-                      )}
+                          <option value="__own__">Write my own...</option>
+                        </select>
+                        <span className="text-text-primary">{nodeLabel(other)}</span>
+                      </div>
 
-                      {/* Shipped connections this world does not have. types.json
-                          is the writer's file and is never modified behind their
-                          back, so an older project is OFFERED them. */}
-                      {options.available.filter(r => !r.universal).length > 0 && (
-                        <>
-                          <p className="mt-1.5 text-[10px] uppercase tracking-wide text-faint">
-                            not in your world yet
-                          </p>
-                          {options.available.filter(r => !r.universal).map(rel => (
-                            <button
-                              key={rel.id}
-                              onClick={() => void adopt(rel)}
-                              disabled={busy || !canConnect}
-                              className="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-xs text-text-muted hover:bg-bg-surface hover:text-text-primary disabled:opacity-40"
-                            >
-                              <Plus size={10} className="shrink-0 text-violet-300" />
-                              {rel.label}
-                              <span className="text-[10px] text-faint">
-                                add and use
-                              </span>
-                            </button>
-                          ))}
-                        </>
+                      {/* The reverse is its own choice, because it is genuinely
+                          a different statement -- "Alexandra friends of Lara /
+                          Lara business partners with Alexandra". Only shown once
+                          the writer has said the sides read differently, so the
+                          ordinary case stays one question. */}
+                      {showInverse && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="text-text-primary">{nodeLabel(other)}</span>
+                          <select
+                            value={pickedInverseRel}
+                            onChange={e => setPickedInverseRel(e.target.value)}
+                            aria-label="How it reads from the other side"
+                            className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                          >
+                            <option value="">
+                              {pickedRel && relById.get(pickedRel)?.inverse_label
+                                ? `${relById.get(pickedRel)!.inverse_label} (the opposite of your choice)`
+                                : "choose from ..."}
+                            </option>
+                            {grouped.map(section => (
+                              <optgroup key={section.group} label={section.group}>
+                                {section.relations.map(rel => (
+                                  <option key={rel.id} value={rel.id}>
+                                    {rel.flipped
+                                      ? rel.inverse_label || rel.label
+                                      : rel.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                          <span className="text-text-primary">{nodeLabel(thread)}</span>
+                        </div>
                       )}
 
                       {nothingFits && (
-                        <p className="text-[11px] text-text-muted">
+                        <p className="mt-1.5 text-[11px] text-text-muted">
                           Your world has no NAMED way to connect a{" "}
                           {threadTypeEntry(thread.type).term} to a{" "}
-                          {threadTypeEntry(other.type).term} yet. A plain
-                          connection still works.
+                          {threadTypeEntry(other.type).term} yet. Recording it
+                          plain still works, and you can write your own name for
+                          it.
                         </p>
                       )}
 
                       <button
-                        onClick={() => setNaming(true)}
-                        className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-200"
+                        onClick={() => void record()}
+                        disabled={busy || !canConnect}
+                        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded border border-emerald-800 bg-emerald-950/30 px-2 py-1.5 text-xs font-semibold text-text-primary hover:bg-emerald-950/50 disabled:opacity-40"
                       >
-                        <Plus size={11} /> Name it yourself
+                        {busy ? <Loader size={11} className="animate-spin" />
+                              : <Check size={11} className="text-emerald-300" />}
+                        Record it
                       </button>
                     </>
                   )}
@@ -903,28 +1034,3 @@ export function TieEditor({
   );
 }
 
-
-/** One connection on offer, written as the sentence it will record. */
-function RelButton({ rel, from, to, busy, disabled, onPick }: {
-  rel: Relation; from: string; to: string; busy?: boolean; disabled?: boolean;
-  onPick: () => void;
-}) {
-  // A BORDER, because this row IS the save action and did not look like one.
-  // Reported as "none of the options below were clickable" -- they were, but a
-  // borderless line of text reading "Alexandra mentored by Lara Croft" reads as
-  // a label, and the writer was looking for something to press.
-  return (
-    <button
-      onClick={onPick}
-      disabled={busy || disabled}
-      className="mb-1 flex w-full items-baseline gap-1.5 rounded border border-border px-2 py-1.5 text-left text-xs hover:border-emerald-800 hover:bg-bg-surface disabled:opacity-40"
-    >
-      <span className="min-w-0 flex-1 truncate text-text-primary">
-        {from} <span className="text-emerald-300">{rel.label}</span> {to}
-      </span>
-      {rel.cardinality === "one" && (
-        <span className="shrink-0 text-[10px] text-faint">one at a time</span>
-      )}
-    </button>
-  );
-}

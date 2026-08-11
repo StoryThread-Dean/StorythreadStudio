@@ -27,6 +27,7 @@
 #    project rather than written into its file behind its back.
 
 import json
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -211,12 +212,16 @@ def test_a_relation_is_never_offered_for_kinds_this_world_lacks(project):
 def test_a_writer_can_name_a_connection_the_app_never_thought_of(project):
     # The shipped vocabulary will always be short of somebody's world, and a
     # tool for writing invented cultures cannot pretend otherwise.
+    #
+    # The example had to change when the vocabulary grew: this used to say
+    # "Sworn to destroy", which the app now ships, so it stopped demonstrating
+    # anything. Nothing will ever ship a thread-oath.
     body = client.post("/api/codex/relation", json={
-        "project_path": project, "label": "Sworn to destroy",
+        "project_path": project, "label": "Bound by the thread-oath",
         "source_types": ["faction"], "target_types": ["deity"],
     }).json()
-    assert body["id"] == "sworn_to_destroy"
-    assert _tie(project, "e-daughters", "sworn_to_destroy",
+    assert body["id"] == "bound_by_the_thread_oath"
+    assert _tie(project, "e-daughters", "bound_by_the_thread_oath",
                 "e-pathicus").status_code == 200
 
 
@@ -264,8 +269,8 @@ def test_a_custom_connection_can_name_its_other_half(project):
 def test_a_custom_connection_appears_in_what_runs_between_two_kinds(project):
     # The registry decides, not the router. This is what makes a writer's own
     # relation work everywhere with no further change.
-    add_relation(project, "Sworn to destroy", ["faction"], ["deity"])
-    assert "sworn_to_destroy" in {
+    add_relation(project, "Bound by the thread-oath", ["faction"], ["deity"])
+    assert "bound_by_the_thread_oath" in {
         r["id"] for r in relations_between(load_registry(project)[0],
                                            "faction", "deity")}
 
@@ -365,3 +370,102 @@ def test_removing_a_connection_leaves_the_entries_alone(project):
     assert client.get("/api/codex/entity",
                       params={"project_path": project,
                               "entity_id": "e-pathicus"}).status_code == 200
+
+
+# ── Typing a name the app already knows ──────────────────────────────────────
+#
+# A CONSEQUENCE OF A BIGGER VOCABULARY, and it had to be handled or the list
+# getting better would have made the app worse.
+#
+# The shipped relations went from about thirty to about seventy, grouped, so
+# that a writer picks from a short list under a heading instead of reading
+# everything. But the words worth shipping are exactly the words a writer
+# reaches for -- so "write my own" now collides constantly. It used to refuse:
+# "this world already has a connection called 'friend of'." A wall, over a
+# relation they were entitled to have.
+#
+# So a typed label is INTERPRETED rather than merely validated. Every path ends
+# with a relation that works for the pair in front of them.
+
+def test_a_name_this_world_already_has_just_works(project):
+    response = client.post("/api/codex/relation", json={
+        "project_path": project, "label": "Worships",
+        "source_types": ["faction"], "target_types": ["deity"],
+    })
+    assert response.status_code == 200
+    assert response.json()["id"] == "worships"
+
+
+def test_a_shipped_name_this_world_LACKS_is_adopted_rather_than_refused(project):
+    # types.json is the writer's file and is never rewritten behind them, so a
+    # project converted before the vocabulary grew has none of the newer
+    # relations. Typing one by hand should get it, not a lecture.
+    _own_types(project, [{"id": "mentored_by", "label": "mentored by",
+                          "source_types": ["character"],
+                          "target_types": ["character"],
+                          "cardinality": "many"}])
+    assert relation_by_id(load_registry(project)[0], "friend_of") is None
+
+    response = client.post("/api/codex/relation", json={
+        "project_path": project, "label": "friend of",
+        "source_types": ["character"], "target_types": ["character"],
+    })
+    assert response.status_code == 200
+    assert response.json()["id"] == "friend_of"
+    assert relation_by_id(load_registry(project)[0], "friend_of") is not None
+
+
+def test_an_existing_name_is_WIDENED_to_the_pair_that_was_asked_for(project):
+    # "sworn to destroy" ships for characters and factions, not for gods. A
+    # writer typing it for a faction and a deity is asking for that pair, and
+    # refusing them a relation they named is the dead end this avoids.
+    client.post("/api/codex/relation", json={
+        "project_path": project, "label": "Sworn to destroy",
+        "source_types": ["faction"], "target_types": ["deity"],
+    })
+    assert _tie(project, "e-daughters", "sworn_to_destroy",
+                "e-pathicus").status_code == 200
+
+
+def test_widening_only_ADDS(project):
+    # It must never quietly narrow a world the writer tuned by hand.
+    before = {r["id"]: (list(r.get("source_types") or []),
+                        list(r.get("target_types") or []))
+              for r in load_registry(project)[0]["relations"]}
+    client.post("/api/codex/relation", json={
+        "project_path": project, "label": "Sworn to destroy",
+        "source_types": ["faction"], "target_types": ["deity"],
+    })
+    after = {r["id"]: (list(r.get("source_types") or []),
+                       list(r.get("target_types") or []))
+             for r in load_registry(project)[0]["relations"]}
+    for rel_id, (src, dst) in before.items():
+        assert set(src) <= set(after[rel_id][0]), rel_id
+        assert set(dst) <= set(after[rel_id][1]), rel_id
+
+
+def test_a_relation_that_already_covers_the_pair_writes_NOTHING(project):
+    # This project has no types.json at all -- it runs on the shipped defaults,
+    # which is what a project that has never customised anything looks like.
+    # Handing it a types.json it never asked for, over a relation that already
+    # worked, would be a change behind the writer's back in a file the app has
+    # promised not to touch.
+    path = os.path.join(project, "codex", "types.json")
+    assert not os.path.exists(path)
+
+    response = client.post("/api/codex/relation", json={
+        "project_path": project, "label": "Worships",
+        "source_types": ["faction"], "target_types": ["deity"],
+    })
+    assert response.status_code == 200
+    assert not os.path.exists(path)
+
+
+def _own_types(project, relations: list[dict]) -> None:
+    """Give the project its OWN types.json, as a converted one would have."""
+    registry, _ = load_registry(project)
+    registry["relations"] = relations
+    os.makedirs(os.path.join(project, "codex"), exist_ok=True)
+    with open(os.path.join(project, "codex", "types.json"), "w",
+              encoding="utf-8") as f:
+        json.dump(registry, f)

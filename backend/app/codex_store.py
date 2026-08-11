@@ -189,11 +189,12 @@ async def reindex(project_path: str, threads: list[dict] | None = None) -> int:
 
             for tie in thread.get("ties") or []:
                 await db.execute(
-                    "INSERT INTO codex_tie (src_id, rel, dst_id, reason, "
-                    "reason_inverse, at_anchor, until_anchor, frame, "
+                    "INSERT INTO codex_tie (src_id, rel, rel_inverse, dst_id, "
+                    "reason, reason_inverse, at_anchor, until_anchor, frame, "
                     "revealed_at, ai_scope) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (entity_id, tie.get("rel", ""), tie.get("target", ""),
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (entity_id, tie.get("rel", ""), tie.get("rel_inverse", ""),
+                     tie.get("target", ""),
                      tie.get("reason", ""), tie.get("reason_inverse", ""),
                      tie.get("at"), tie.get("until"), tie.get("frame"),
                      tie.get("revealed_at"), tie.get("ai_scope")),
@@ -312,7 +313,7 @@ async def ties_for(project_path: str, entity_id: str) -> list[dict]:
     async with open_db(project_path) as db:
         cursor = await db.execute(
             "SELECT src_id, rel, dst_id, at_anchor, until_anchor, frame, "
-            "revealed_at, ai_scope, reason, reason_inverse "
+            "revealed_at, ai_scope, reason, reason_inverse, rel_inverse "
             "FROM codex_tie WHERE src_id = ? OR dst_id = ?",
             (entity_id, entity_id),
         )
@@ -323,6 +324,7 @@ async def ties_for(project_path: str, entity_id: str) -> list[dict]:
          "frame": r[5], "revealed_at": r[6], "ai_scope": r[7],
          # WHY, which is the part the brief actually spends its budget on.
          "reason": r[8] or "", "reason_inverse": r[9] or "",
+         "rel_inverse": r[10] or "",
          "incoming": r[2] == entity_id and r[0] != entity_id}
         for r in rows
     ]
