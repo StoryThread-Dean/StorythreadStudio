@@ -61,6 +61,14 @@ export function QuickFill({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The parent builds the `missing` array FRESH on every render, so depending
+  // on the array itself would re-run this fetch -- and wipe half-typed boxes
+  // back to empty -- any time the panel re-rendered for an unrelated reason.
+  // What the effect actually depends on is the CONTENT, so the content is the
+  // key. (U+001F is the unit separator: it cannot appear in a heading, so two
+  // different lists can never collide into one key.)
+  const missingKey = missing.join("\u001F");
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -78,7 +86,8 @@ export function QuickFill({
         // Matched case-insensitively, and when nothing matches (a heading was
         // renamed between the scan and now) every empty section is offered --
         // showing too many boxes beats showing a form with nothing to fill.
-        const wanted = new Set(missing.map(m => m.toLowerCase()));
+        const wanted = new Set(
+          missingKey.split("\u001F").filter(Boolean).map(m => m.toLowerCase()));
         const sections = Object.entries(
           (body.sections ?? {}) as Record<string, { heading?: string; content?: string }>);
         let picked = sections.filter(([, s]) =>
@@ -113,7 +122,7 @@ export function QuickFill({
       }
     })();
     return () => { cancelled = true; };
-  }, [projectPath, entityId, missing]);
+  }, [projectPath, entityId, missingKey]);
 
   async function save() {
     if (!thread || busy) return;

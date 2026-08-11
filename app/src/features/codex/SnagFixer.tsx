@@ -255,7 +255,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                   Nothing anchored was found on the entry -- the timing may come
                   from a connection. If the early naming is deliberate
                   foreshadowing, use{" "}
-                  <span className="text-text-primary">Not a connection</span>{" "}
+                  <span className="text-text-primary">It is fine where it is</span>{" "}
                   on the stop and it will not be raised again.
                 </p>
               ) : (

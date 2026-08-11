@@ -15,17 +15,19 @@
 //    is measured rather than estimated. An estimate that turns out wrong two
 //    hours in is how a writer learns not to trust the app.
 //
-// 3. LET THEM SAY NO FOUR DIFFERENT WAYS. "Not a connection" and "not yet"
-//    are not the same answer, and collapsing them means either nagging about
-//    settled things or losing things that were only postponed.
+// 3. LET THEM SAY NO THREE DIFFERENT WAYS. "Never this one" (permanent, in
+//    the kind's own words), "not yet" (comes back), and "never ask about this
+//    kind" (a reversible preference) are not the same answer, and collapsing
+//    them means either nagging about settled things or losing things that
+//    were only postponed.
 //
-// 4. NEVER DO IT FOR THEM. The only one-click action here creates an EMPTY
-//    entry from a name the writer already wrote. Everything else opens the
-//    thing and gets out of the way. Nothing is written by AI, and no stop is
-//    resolved without the writer choosing it.
+// 4. NEVER DO IT FOR THEM. Every resolution is a form the WRITER fills in --
+//    Quick Entry starts from their own sentence, never from generated prose.
+//    Nothing is written by AI, and no stop is resolved without the writer
+//    choosing it.
 //
-// CONNECTING HAPPENS HERE, NOT SOMEWHERE ELSE
-// -------------------------------------------
+// EVERYTHING RESOLVES HERE, NOT SOMEWHERE ELSE (the closed world)
+// ---------------------------------------------------------------
 // Reported from live testing. "Open it and connect it" opened the entry's
 // own page and abandoned the writer there:
 //
@@ -33,23 +35,20 @@
 //      the connection as the correct one. Nothing."
 //
 // Three things were missing and they are one thing really: the walk gave up
-// its place. So a connection is now made INSIDE the walk. Pick the other end
-// here, make it here if it does not exist yet, and carry on to the next stop
-// without ever leaving. Getting it wrong is a step back rather than a
-// navigation problem.
+// its place. So EVERY stop resolves inside the walk -- connections in the
+// inline TieEditor, new entries in Quick Entry, thin ones in Quick Fill,
+// contradictions in the Snag fixer. No stop closes the walk; getting
+// something wrong is a step back rather than a navigation problem. Reopening
+// after an X-out resumes: the answers are kept per book.
 //
-// Stops that genuinely need the writer to go and WRITE -- an entry with an
-// empty Overview -- still send them to the editor, because there is nothing
-// to type in here. Those close the walk on purpose, and reopening it resumes:
-// the answers are kept per book, so nothing is lost by leaving.
-//
-// WHY THERE IS NO "APPLIED" BOOKKEEPING FOR MOST KINDS
-// ----------------------------------------------------
-// Stops are re-derived from the book on every scan and never stored. A
-// Thread whose Overview gets filled in stops being Frayed because the
-// condition ended, not because a record says it was handled. So "open it and
-// go and write" needs no follow-up state at all -- which is exactly why the
-// scan was built to store nothing.
+// WHAT THE "APPLIED" RECORD IS FOR, KIND BY KIND
+// ----------------------------------------------
+// Condition-derived stops (Frayed, Loose, Untied, Snag...) are re-derived
+// from the book on every scan: fill an Overview in and the Frayed stop ends
+// because the CONDITION ended. For those, the applied record only keeps the
+// stop quiet until the next scan can see the fix. A PIN is the exception --
+// it is the writer's own mark, never re-derived away, and recording the
+// apply is what removes it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -105,6 +104,28 @@ const PRIMARY_ACTION: Record<string, string> = {
 };
 
 /**
+ * What "never raise this again" is CALLED, in each kind's own terms.
+ *
+ * One label used to serve all nine kinds -- "Not a connection" -- which on a
+ * Snag permanently retired a CONTRADICTION check under a sentence about
+ * connections, and on an Unwoven question dismissed a piece of the world's
+ * ground rules the same way. The permanence is unchanged (it is the writer's
+ * "Don't ask again", from the original worked example); the words now say what
+ * is actually being declined, so the writer can know what they are turning off.
+ */
+const DISMISS_ACTION: Record<string, string> = {
+  unspun: "Never make this an entry",
+  frayed: "Leave it as it is",
+  loose_thread: "Not a connection",
+  untied: "Not a connection",
+  snag: "Not a problem",
+  unplaced: "Leave it unplaced",
+  early_mention: "It is fine where it is",
+  unwoven: "Never ask this",
+  pinned: "Remove the mark",
+};
+
+/**
  * FOUR PASSES, WHICH REPLACED THREE SIZES.
  *
  * What was here was Full / Targeted / Quick -- three amounts of the same thing.
@@ -136,9 +157,11 @@ function lexFor(kind: string): LexEntry | undefined {
   return STOP_KINDS[kind];
 }
 
-/** What a Pinned stop offers, which depends on whether it has an entry. */
+/** What a Pinned stop offers, which depends on whether it has an entry.
+ *  "Choose the connection" -- nothing is opened elsewhere; the connector is
+ *  inline, like every other resolution in the closed world. */
 function pinnedAction(stop: Stop): string {
-  return stop.detail?.has_entry ? "Open it and connect it" : "Create the entry";
+  return stop.detail?.has_entry ? "Choose the connection" : "Create the entry";
 }
 
 /** The other words a grouped Unspun stop covers: "Lara", "Croft". */
@@ -216,14 +239,22 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   const [at, setAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A quieter channel than error: the writer's WORK landed, but the walk's
+  // own bookkeeping did not. Shown on the next stop, cleared by the next
+  // answer. See recordApplied.
+  const [notice, setNotice] = useState<string | null>(null);
   const [earlier, setEarlier] = useState<RunSummary[]>([]);
   // Connecting happens in the walk, so the walk needs to know what there is
   // to connect to. Fetched once the writer asks, not on mount: most stops
   // are not about connections.
   const [connecting, setConnecting] = useState(false);
   const [world, setWorld] = useState<GraphNode[]>([]);
-  // An empty stub, waiting to be told what it is.
+  // The absorb side path (a minted word turns out to be another name for an
+  // entry that already exists). `naming` shows the dialog; `bound` remembers
+  // that the word actually MOVED, so closing the receipt finishes the stop
+  // instead of returning to a question about an entry that no longer exists.
   const [naming, setNaming] = useState(false);
+  const [bound, setBound] = useState(false);
   // The other three inline resolutions -- creating an entry, filling a thin
   // one in, sorting out a disagreement. One flag each, same overlay-swap
   // pattern as naming/connecting above.
@@ -301,9 +332,30 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
    * Errors keep the stop on screen. Losing the writer's place because a write
    * failed would be its own small betrayal.
    */
+  /**
+   * Record that a stop's work was DONE, and say so if the recording fails.
+   *
+   * The inline resolutions used to end in `.catch(() => undefined)` -- the
+   * writer's save had landed, the ledger write silently had not, and the same
+   * stop came back next session looking like the save never happened. The work
+   * is real either way, so the walk still advances; what cannot happen is the
+   * failure being swallowed. The notice says exactly what state things are in.
+   */
+  async function recordApplied(answered: Stop) {
+    if (!runId) return;
+    try {
+      await apply(projectPath, runId, answered);
+    } catch {
+      setNotice(
+        "Your work is saved, but the walk could not record the answer -- "
+        + "this stop may be asked once more next session.");
+    }
+  }
+
   async function answerAndAdvance(action: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       // Only an explicit false keeps the writer here. Every other answer --
       // including whatever an endpoint happened to return -- means done.
@@ -461,10 +513,21 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           display_name: "", aliases: [], placeholder: true,
         }}
         candidates={world}
-        // Back to the same stop. The scan re-derives it next pass, so an entry
-        // that has become something stops being asked about on its own.
-        onClose={() => setNaming(false)}
-        onBound={() => { /* re-derived by the next scan */ }}
+        // Closing BEFORE anything moved goes back to the same stop. Closing
+        // AFTER the absorb finishes the stop: the placeholder this stop points
+        // at was deleted by the move, so returning to it would show a question
+        // about an entry that no longer exists -- with buttons that 404.
+        onClose={() => {
+          setNaming(false);
+          if (bound) {
+            setBound(false);
+            void (async () => {
+              await recordApplied(stop);
+              setAt(i => i + 1);
+            })();
+          }
+        }}
+        onBound={() => setBound(true)}
       />
     );
   }
@@ -492,7 +555,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         onDone={() => {
           setEntering(false);
           void (async () => {
-            if (runId) await apply(projectPath, runId, stop).catch(() => undefined);
+            await recordApplied(stop);
             setAt(i => i + 1);
           })();
         }}
@@ -523,7 +586,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         onDone={() => {
           setFilling(false);
           void (async () => {
-            if (runId) await apply(projectPath, runId, stop).catch(() => undefined);
+            await recordApplied(stop);
             setAt(i => i + 1);
           })();
         }}
@@ -540,7 +603,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         onDone={() => {
           setFixing(false);
           void (async () => {
-            if (runId) await apply(projectPath, runId, stop).catch(() => undefined);
+            await recordApplied(stop);
             setAt(i => i + 1);
           })();
         }}
@@ -582,10 +645,19 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         // nothing, and had no way forward -- "Now what? there is nothing to take
         // me to the next page."
         //
-        // The stop is not marked answered: it is RE-DERIVED next scan, and an
-        // entry that now has a connection stops being asked about because the
-        // condition ended. Advancing here only moves the writer along.
-        onDone={() => { setConnecting(false); setAt(i => i + 1); }}
+        // Loose and Untied stops are not marked answered: they are RE-DERIVED
+        // next scan, and an entry that now has a connection stops being asked
+        // about because the condition ended. A PIN is different -- it is the
+        // writer's own mark and stays raised until ANSWERED, never re-derived
+        // away. Recording the apply is what unpins it server-side; without it
+        // the same pin returned on every future walk, forever.
+        onDone={() => {
+          setConnecting(false);
+          void (async () => {
+            if (stop.kind === "pinned") await recordApplied(stop);
+            setAt(i => i + 1);
+          })();
+        }}
         onChanged={() => { /* the scan re-derives it on the next pass */ }}
       />
     );
@@ -704,6 +776,11 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       )}
 
       {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
+      {notice && (
+        <p role="status" className="mt-2 text-[11px] text-amber-200/90">
+          {notice}
+        </p>
+      )}
 
             <div className="mt-3 flex flex-wrap gap-1.5">
         <button
@@ -771,7 +848,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           title="Permanently. This will not be raised again."
           className="rounded border border-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
         >
-          {stop.kind === "pinned" ? "Remove the mark" : "Not a connection"}
+          {DISMISS_ACTION[stop.kind] ?? "Never raise this again"}
         </button>
 
         <button

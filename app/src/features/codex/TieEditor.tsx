@@ -334,7 +334,15 @@ function relOptionLabel(rel: Relation): string {
   /** Record what is on screen: the reason, plus whatever the dropdowns say. */
   async function record() {
     const chosen = pickedRel ? relById.get(pickedRel) : plain;
-    if (chosen) await connect(chosen);
+    if (chosen) {
+      await connect(chosen);
+      return;
+    }
+    // No pick and no plain fallback (a world whose types.json predates the
+    // universal relation). Without this, the button pressed and did NOTHING --
+    // no error, no record -- which reads as the app being broken.
+    setError("Pick how they connect from the list, or write your own -- "
+      + "this world has no plain connection to fall back on.");
   }
 
   /**
@@ -430,7 +438,12 @@ function relOptionLabel(rel: Relation): string {
   }
 
   async function nameIt() {
-    if (!other || !newLabel.trim()) return;
+    // canConnect is checked HERE, not just left to connect(): connect() quietly
+    // returns when the reason line is empty, and nameIt's success path used to
+    // end inside that early return with busy still true -- every button in the
+    // dialog dead, no error, no way out but X. The Add button is also gated on
+    // it below, so this is the second lock on the same door.
+    if (!other || !newLabel.trim() || !canConnect) return;
     setBusy(true);
     setError(null);
     try {
@@ -467,6 +480,9 @@ function relOptionLabel(rel: Relation): string {
       await connect(made, true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "That could not be added.");
+    } finally {
+      // Always. connect() clears its own busy, but any path that skips or
+      // leaves connect() early must not leave the dialog locked.
       setBusy(false);
     }
   }
@@ -958,7 +974,12 @@ function relOptionLabel(rel: Relation): string {
                         />
                         <button
                           onClick={() => void nameIt()}
-                          disabled={!newLabel.trim() || busy}
+                          // Gated on the reason line like Record it is: naming a
+                          // relation ends by RECORDING it, and letting the click
+                          // through with no reason soft-locked the whole dialog.
+                          // The amber "write that line" hint above covers this
+                          // button too.
+                          disabled={!newLabel.trim() || busy || !canConnect}
                           className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
                         >
                           {busy ? <Loader size={11} className="animate-spin" />

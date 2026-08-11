@@ -223,8 +223,9 @@ export function defer(projectPath: string, runId: string, stop: Stop) {
                   evidence_hash: stop.evidence_hash });
 }
 
-/** "Not a connection." Permanent, and for a name it retires the PHRASE --
- *  the same word in another chapter must not be asked either. */
+/** The permanent no, worded per kind on screen ("Never make this an entry",
+ *  "Not a problem", ...). For a name it retires the PHRASE -- the same word in
+ *  another chapter must not be asked either. */
 export function dismiss(projectPath: string, runId: string, stop: Stop,
                         phrase?: string) {
   return answer(projectPath, runId, {

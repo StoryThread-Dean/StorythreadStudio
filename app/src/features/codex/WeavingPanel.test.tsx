@@ -15,6 +15,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WeavingPanel } from "./WeavingPanel";
+import { QuickFill } from "./QuickFill";
 
 afterEach(() => {
   cleanup();
@@ -47,6 +48,9 @@ function mockApi(options: {
   unreadable?: string[];
   runs?: Record<string, unknown>[];
   failWrites?: boolean;
+  /** Only the run ledger fails -- the writer's own saves land. This is the
+   *  shape of the real bug it exists for: work saved, answer unrecorded. */
+  failAnswers?: boolean;
   /** What GET /entity returns -- the entry QuickFill or the fixer reads. */
   entity?: Record<string, unknown>;
 } = {}) {
@@ -126,6 +130,21 @@ function mockApi(options: {
     }
     if (url.endsWith("/run")) {
       return { ok: true, json: async () => ({ run_id: "run-abc123abc123" }) } as Response;
+    }
+    if (url.includes("/run/answer") && options.failAnswers) {
+      return {
+        ok: false,
+        json: async () => ({ detail: { code: "unknown",
+                                       message: "The ledger could not be written." } }),
+      } as Response;
+    }
+    if (url.includes("/absorb")) {
+      // What a real absorb returns: the SURVIVING entry, now answering to the
+      // moved word as well.
+      return { ok: true, json: async () => ({
+        entity_id: "e-mira", type: "character", name: "Mira Kell",
+        display_name: "", aliases: ["Dean"],
+      }) } as Response;
     }
     if (options.failWrites) {
       return {
@@ -360,10 +379,13 @@ describe("the four ways to answer", () => {
     expect(await screen.findByTestId("tie-editor")).toBeTruthy();
   });
 
-  it("retires the PHRASE when a name is not a connection", async () => {
-    // The same word in another chapter must not be asked either.
+  it("retires the PHRASE when a name should never become an entry", async () => {
+    // The same word in another chapter must not be asked either. The button
+    // says what it declines in the KIND's terms -- "Not a connection" on an
+    // Unspun name was a sentence about something else entirely.
     await start();
-    await userEvent.click(screen.getByRole("button", { name: "Not a connection" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Never make this an entry" }));
     await waitFor(() => expect(posted("/run/answer").length).toBe(1));
     expect(posted("/run/answer")[0].body).toMatchObject({
       state: "dismissed", retire_phrase: "Garrick",
@@ -480,7 +502,7 @@ describe("stops that are not about a name", () => {
   it("does not retire a phrase for a stop that is not a name", async () => {
     mockApi({ stops: [frayed] });
     await start();
-    await userEvent.click(screen.getByRole("button", { name: "Not a connection" }));
+    await userEvent.click(screen.getByRole("button", { name: "Leave it as it is" }));
     await waitFor(() => expect(posted("/run/answer").length).toBe(1));
     expect(posted("/run/answer")[0].body.retire_phrase).toBeUndefined();
   });
@@ -775,11 +797,14 @@ describe("something the writer marked themselves", () => {
   });
 
   it("asks about the CONNECTION when the entry already exists", async () => {
-    // "Make an entry" is the wrong question once there is one.
+    // "Make an entry" is the wrong question once there is one. And the label
+    // must not promise to OPEN anything -- the connector is inline, like
+    // everything else in the closed world.
     mockApi({ stops: [known] });
     await start();
-    expect(screen.getByRole("button", { name: /Open it and connect it/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Choose the connection/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Create the entry/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Open it/ })).toBeNull();
   });
 
   it("asks what to connect it to WITHOUT leaving the walk", async () => {
@@ -789,7 +814,7 @@ describe("something the writer marked themselves", () => {
     mockApi({ stops: [known] });
     const onOpenThread = vi.fn();
     await start({ onOpenThread });
-    await userEvent.click(screen.getByRole("button", { name: /Open it and connect it/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Choose the connection/ }));
     expect(await screen.findByTestId("tie-editor")).toBeTruthy();
     expect(onOpenThread).not.toHaveBeenCalled();
     expect(posted("/thread/new")).toEqual([]);
@@ -800,7 +825,7 @@ describe("something the writer marked themselves", () => {
     // place in the list.
     mockApi({ stops: [known] });
     await start();
-    await userEvent.click(screen.getByRole("button", { name: /Open it and connect it/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Choose the connection/ }));
     await screen.findByTestId("tie-editor");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByText(/what should this connect to/)).toBeTruthy();
@@ -899,11 +924,11 @@ describe("one entry for a name and its variants", () => {
   });
 
   it("retires the group by its full name, not by a nickname", async () => {
-    // The writer was shown "Lara Croft", so that is what "not a connection"
-    // is about.
+    // The writer was shown "Lara Croft", so that is what their no is about.
     mockApi({ stops: [grouped] });
     await start();
-    await userEvent.click(screen.getByRole("button", { name: "Not a connection" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Never make this an entry" }));
     await waitFor(() => expect(posted("/run/answer").length).toBe(1));
     expect(posted("/run/answer")[0].body.retire_phrase).toBe("Lara Croft");
   });
@@ -1515,5 +1540,297 @@ describe("a stale stop tells the truth about NOW", () => {
     expect(within(dialog).getByText(/Overview already has writing/)).toBeTruthy();
     expect(within(dialog).getByLabelText("Goals")).toBeTruthy();
     expect(within(dialog).queryByLabelText("Overview")).toBeNull();
+  });
+});
+
+
+describe("saying no speaks each kind's own language", () => {
+  // One label used to serve every kind -- "Not a connection" -- and it is a
+  // sentence about connections. On a Snag it permanently retired a
+  // CONTRADICTION check; on an Unwoven question it dismissed a piece of the
+  // world's ground rules; a writer cannot decide what to turn off from a
+  // label about something else. Permanence is unchanged (it is the worked
+  // example's own "Don't ask again?"); the words now say what is declined.
+
+  const cases: [Record<string, unknown>, string][] = [
+    [stop(), "Never make this an entry"],
+    [stop({ kind: "frayed", key: "frayed|e-1", entity_id: "e-1",
+            title: "Mira Kell is missing Overview",
+            detail: { name: "Mira Kell", type: "character",
+                      missing: ["Overview"] } }),
+     "Leave it as it is"],
+    [stop({ kind: "snag", key: "snag|e-1|loyal", entity_id: "e-1",
+            title: "Two versions of who Mira serves",
+            detail: { name: "Mira Kell", type: "character", sides: [] } }),
+     "Not a problem"],
+    [stop({ kind: "unplaced", key: "unplaced|e-1|f-2", entity_id: "e-1",
+            title: "A fact with no place in the book",
+            detail: { name: "Mira Kell", type: "character" } }),
+     "Leave it unplaced"],
+    [stop({ kind: "early_mention", key: "early|e-1|c-1", entity_id: "e-1",
+            title: "Named before the reader should know",
+            detail: { name: "Mira Kell", type: "character" } }),
+     "It is fine where it is"],
+    [stop({ kind: "unwoven", key: "unwoven|succession", entity_id: "",
+            title: "How does succession work?",
+            detail: { lands_as: ["government", "succession"] } }),
+     "Never ask this"],
+  ];
+
+  for (const [which, label] of cases) {
+    it(`offers "${label}" on a ${String(which.kind)} stop`, async () => {
+      mockApi({ stops: [which] });
+      await start();
+      const no = screen.getByRole("button", { name: label });
+      expect(no).toBeTruthy();
+      // Still permanent, and still says so where the writer can see it.
+      expect(no.getAttribute("title")).toMatch(/Permanently/);
+    });
+  }
+
+  it("keeps 'Not a connection' where it really IS one", async () => {
+    mockApi({ stops: [stop({
+      kind: "loose_thread", key: "loose|e-1", entity_id: "e-1",
+      title: "How is Mira Kell connected to the story?",
+      detail: { name: "Mira Kell", type: "character" },
+    })] });
+    await start();
+    expect(screen.getByRole("button", { name: "Not a connection" })).toBeTruthy();
+  });
+});
+
+
+describe("closing after a create still counts the create", () => {
+  // The entry lands on disk the moment Create it succeeds. The first version
+  // treated X as "back to the stop, nothing happened" even THEN -- so the
+  // stop sat there looking unanswered with its create button still live, and
+  // pressing it again made a second copy. Two empty Deans came from this.
+
+  it("records the stop and advances when the receipt is X'd out of", async () => {
+    mockApi({ stops: [stop(), stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await screen.findByRole("button", { name: /No, I am good/ });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(posted("/run/answer")
+      .some(c => c.body.state === "applied" && c.body.key === "unspun|garrick"))
+      .toBe(true));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+
+  it("records and advances from the backdrop too", async () => {
+    mockApi({ stops: [stop(), stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await screen.findByRole("button", { name: /No, I am good/ });
+    fireEvent.click(dialog.parentElement!);
+    await waitFor(() => expect(posted("/run/answer")
+      .some(c => c.body.state === "applied")).toBe(true));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+
+  it("records nothing when closed before anything was made", async () => {
+    // Before the create, X really does mean "back out". The stop must look
+    // exactly as it did.
+    mockApi({ stops: [stop(), stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(await screen.findByText(/'Garrick' has no entry/)).toBeTruthy();
+    expect(posted("/thread/new")).toEqual([]);
+    expect(posted("/run/answer")).toEqual([]);
+  });
+});
+
+
+describe("a pin answered by connecting stops being a pin", () => {
+  // Loose and Untied stops die on their own: the next scan sees the new Tie
+  // and the condition has ended. A pin does NOT -- nothing re-derives it away,
+  // because nothing but the writer made it. The backend removes the mark when
+  // the applied answer's key starts with "pinned|"; before this, the connect
+  // path never recorded an apply at all, so the same pin returned on every
+  // future walk, forever, no matter how many times it was answered.
+
+  const known = stop({
+    kind: "pinned", key: "pinned|lexa", entity_id: "e-lexa",
+    title: "'Lexa' -- what should this connect to?",
+    why: "You marked this yourself.",
+    quote: "Lexa said nothing.",
+    detail: { name: "Lexa", note: "", has_entry: true, type: "character",
+              filename: "alexandra.md" },
+  });
+  const croft = { entity_id: "e-croft", type: "character", name: "Lara Croft",
+                  display_name: "", aliases: [], placeholder: false };
+
+  async function connectLexaToCroft() {
+    await userEvent.click(screen.getByRole("button", { name: /Choose the connection/ }));
+    await screen.findByTestId("tie-editor");
+    await userEvent.click(screen.getByRole("button", { name: /Connect this to something/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Lara Croft/ }));
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "marked while drafting chapter four");
+    await userEvent.click(screen.getByRole("button", { name: /Record it/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /No, I am good/ }));
+  }
+
+  it("records the apply, which is what removes the mark", async () => {
+    mockApi({ stops: [known, stop({ key: "second", title: "Something else" })],
+              nodes: [croft] });
+    await start();
+    await connectLexaToCroft();
+    await waitFor(() => expect(posted("/run/answer")
+      .some(c => c.body.state === "applied" && c.body.key === "pinned|lexa"))
+      .toBe(true));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+
+  it("still leaves a loose thread to re-derivation", async () => {
+    // The contrast that keeps this from creeping: a loose thread needs no
+    // ledger entry, because connecting IS the fix the next scan can see.
+    mockApi({ stops: [stop({
+                kind: "loose_thread", key: "loose|e-lexa", entity_id: "e-lexa",
+                title: "How is Lexa connected to the story?", quote: "",
+                detail: { name: "Lexa", type: "character",
+                          filename: "alexandra.md" },
+              }), stop({ key: "second", title: "Something else" })],
+              nodes: [croft] });
+    await start();
+    await connectLexaToCroft();
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+    expect(posted("/run/answer")).toEqual([]);
+  });
+});
+
+
+describe("the absorb side path finishes the stop", () => {
+  // When the word moves, the placeholder this stop points at is DELETED.
+  // Returning to the stop showed a question about an entry that no longer
+  // exists, with buttons that could only 404 -- and nothing was recorded, so
+  // next session asked again about an id with nothing behind it.
+
+  const bare = stop({
+    kind: "frayed", key: "frayed|e-dean", entity_id: "e-dean",
+    title: "Dean is missing Overview", quote: "",
+    detail: { name: "Dean", type: "character", filename: "dean.md",
+              missing: ["Overview"], placeholder: true },
+  });
+  const deanEntity = {
+    entity_id: "e-dean", type: "character", name: "Dean", filename: "dean.md",
+    revision: "r1", run: [], ties: [],
+    sections: { overview: { heading: "Overview", content: "" } },
+  };
+  const mira = { entity_id: "e-mira", type: "character", name: "Mira Kell",
+                 display_name: "", aliases: [], placeholder: false };
+
+  it("records the stop and advances once the word has moved", async () => {
+    mockApi({ stops: [bare, stop({ key: "second", title: "Something else" })],
+              nodes: [mira], entity: deanEntity });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const fill = await screen.findByTestId("quick-fill");
+    await userEvent.click(within(fill).getByRole("button",
+      { name: /is actually another name/ }));
+    const bind = await screen.findByTestId("bind-dot");
+    await userEvent.click(within(bind).getByRole("button", { name: /Mira Kell/ }));
+    await userEvent.click(within(bind).getByRole("button",
+      { name: /means Mira Kell/ }));
+    await userEvent.click(await within(bind).findByRole("button", { name: "Done" }));
+    await waitFor(() => expect(posted("/run/answer")
+      .some(c => c.body.state === "applied" && c.body.key === "frayed|e-dean"))
+      .toBe(true));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+
+  it("returns to the same stop when the writer backs out unmoved", async () => {
+    mockApi({ stops: [bare], nodes: [mira], entity: deanEntity });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const fill = await screen.findByTestId("quick-fill");
+    await userEvent.click(within(fill).getByRole("button",
+      { name: /is actually another name/ }));
+    const bind = await screen.findByTestId("bind-dot");
+    await userEvent.click(within(bind).getByRole("button", { name: "Close" }));
+    expect(await screen.findByText(/Dean is missing Overview/)).toBeTruthy();
+    expect(posted("/run/answer")).toEqual([]);
+  });
+});
+
+
+describe("a failed answer record is said out loud", () => {
+  // These paths used to end in `.catch(() => undefined)`. The writer's save
+  // had landed, the ledger write silently had not, and the same stop came
+  // back next session looking exactly like the save never happened --
+  // indistinguishable, from the writer's chair, from the broken-loop bug.
+
+  const frayed = stop({
+    kind: "frayed", key: "frayed|e-1", entity_id: "e-1",
+    title: "Mira Kell is missing Overview", quote: "",
+    detail: { name: "Mira Kell", type: "character", filename: "mira-kell.md",
+              missing: ["Overview"] },
+  });
+
+  it("advances (the work is real) and says the record did not land", async () => {
+    mockApi({ stops: [frayed, stop({ key: "second", title: "Something else" })],
+              failAnswers: true });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    await userEvent.type(within(dialog).getByLabelText("Overview"),
+                         "The clockmaker's daughter.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Save it/ }));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+    expect(screen.getByText(/could not record the answer/)).toBeTruthy();
+  });
+
+  it("says nothing when the record lands", async () => {
+    mockApi({ stops: [frayed, stop({ key: "second", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    await userEvent.type(within(dialog).getByLabelText("Overview"), "Written.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Save it/ }));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+    expect(screen.queryByText(/could not record the answer/)).toBeNull();
+  });
+});
+
+
+describe("QuickFill survives the parent re-rendering", () => {
+  // The panel builds the `missing` array fresh on every render. When the
+  // fetch effect depended on the ARRAY, any unrelated parent re-render
+  // re-fetched the entry and reset the boxes -- wiping a half-typed
+  // paragraph back to empty mid-thought. The effect keys on the content now.
+
+  it("keeps half-typed text when missing arrives as a new array, same words", async () => {
+    mockApi();
+    const props = {
+      projectPath: PROJECT, entityId: "e-1",
+      onClose: vi.fn(), onDone: vi.fn(),
+    };
+    const view = render(<QuickFill {...props} missing={["Overview"]} />);
+    const box = await screen.findByLabelText("Overview");
+    await userEvent.type(box, "Half a thought");
+    view.rerender(<QuickFill {...props} missing={["Overview"]} />);
+    expect((screen.getByLabelText("Overview") as HTMLTextAreaElement).value)
+      .toBe("Half a thought");
+  });
+
+  it("does re-fetch when the content genuinely changes", async () => {
+    mockApi();
+    const props = {
+      projectPath: PROJECT, entityId: "e-1",
+      onClose: vi.fn(), onDone: vi.fn(),
+    };
+    const view = render(<QuickFill {...props} missing={["Overview"]} />);
+    await screen.findByLabelText("Overview");
+    const before = (vi.mocked(fetch)).mock.calls.length;
+    view.rerender(<QuickFill {...props} missing={["Overview", "Goals"]} />);
+    await waitFor(() =>
+      expect((vi.mocked(fetch)).mock.calls.length).toBeGreaterThan(before));
   });
 });

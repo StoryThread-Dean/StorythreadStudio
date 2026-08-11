@@ -211,6 +211,18 @@ export function QuickEntry({
     }
   }
 
+  /**
+   * ONCE SOMETHING EXISTS, CLOSING IS FINISHING.
+   *
+   * Before the create, X and the backdrop mean "back to the stop, nothing
+   * made" -- onClose. AFTER the create the entry is on disk whether or not the
+   * writer answers "connect it now?", so backing out has to record the stop as
+   * done and advance. The first version returned to the stop unchanged, where
+   * the create button was still live -- and pressing it again made a SECOND
+   * copy of the same entry. Two empty Deans came from exactly this.
+   */
+  const close = made ? onDone : onClose;
+
   // ── The connect step, inside the same popup ───────────────────────────────
   if (connecting && made) {
     return (
@@ -230,7 +242,7 @@ export function QuickEntry({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       <div
         role="dialog"
@@ -244,7 +256,7 @@ export function QuickEntry({
           <h2 className="flex-1 text-xs font-semibold text-text-primary">
             {made ? `Created: ${nodeLabel(made)}` : `New ${kindEntry.term}`}
           </h2>
-          <button onClick={onClose} aria-label="Close"
+          <button onClick={close} aria-label="Close"
                   className="rounded p-0.5 text-faint hover:text-text-primary">
             <X size={13} />
           </button>

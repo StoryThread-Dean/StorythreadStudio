@@ -362,7 +362,9 @@ export const EXPLAIN: Record<string, Explains> = {
     cost: FREE,
     how: [
       "Answer it to record what you decided.",
-      "Not a connection: never raise this phrase again.",
+      "The permanent no is worded for the kind of stop it is on -- 'Never "
+        + "make this an entry', 'Not a problem', 'Leave it as it is' -- and "
+        + "it is never raised again.",
       "Not yet: it comes back next time.",
       "Never ask: mute this whole kind of question.",
     ],

@@ -1268,3 +1268,72 @@ describe("after recording one, what next", () => {
     expect(screen.getAllByText("Pathicus").length).toBeGreaterThan(1);
   });
 });
+
+
+describe("no path through the dialog can lock it", () => {
+  // Reported shape: "Write my own", type a label, press Add with the reason
+  // line still empty -- and every button in the dialog died. No error, no
+  // spinner that ended, nothing responded; only X escaped. nameIt() set busy
+  // with no finally, and its success path ended inside connect()'s silent
+  // early-return for the missing reason, so busy stayed true forever.
+  //
+  // Two locks on that door now: Add sleeps until the reason line is written
+  // (same gate, same amber hint as Record it), and nameIt clears busy on
+  // every exit. And Record it with nothing to record says WHY instead of
+  // doing nothing.
+
+  async function pickOnly(name: string) {
+    await userEvent.click(screen.getByRole("button",
+      { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: new RegExp("^" + name) }));
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
+  }
+
+  it("keeps Add asleep until the reason line is written", async () => {
+    await open();
+    await pickOnly("Pathicus");
+    await pickRelation("__own__");
+    await userEvent.type(screen.getByLabelText("Connection name"), "worships");
+    const add = screen.getByRole("button", { name: "Add" });
+    expect(add.hasAttribute("disabled")).toBe(true);
+    // The hint that explains the sleep covers this button too.
+    expect(screen.getByText(/buttons below wake up/)).toBeTruthy();
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "the Daughters pray to him");
+    expect(add.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("leaves every button alive after adding the name fails", async () => {
+    // The busy flag has to clear on the error path, or the failure message
+    // arrives on a dead screen.
+    mockApi({ failRelation: "That name cannot be used." });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "the Daughters pray to him");
+    await pickRelation("__own__");
+    await userEvent.type(screen.getByLabelText("Connection name"), "worships");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText(/That name cannot be used/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add" }).hasAttribute("disabled"))
+      .toBe(false);
+  });
+
+  it("says why when Record it has nothing to record", async () => {
+    // A world whose types.json predates the plain connection: no pick, no
+    // universal fallback. The button used to press and do NOTHING -- no
+    // request, no error -- which reads as the app being broken.
+    mockApi({ relations: { forward: [WORSHIPS], reverse: [], available: [] } });
+    await open();
+    await pickOnly("Pathicus");
+    await userEvent.type(screen.getByLabelText("Why they are connected"),
+                         "the Daughters pray to him");
+    await userEvent.click(screen.getByRole("button", { name: /^Record it$/ }));
+    expect(await screen.findByText(/no plain connection to fall back on/))
+      .toBeTruthy();
+    expect(posted("/tie")).toEqual([]);
+    // And the dialog is still alive to act on the advice.
+    expect(screen.getByRole("button", { name: /^Record it$/ })
+      .hasAttribute("disabled")).toBe(false);
+  });
+});
