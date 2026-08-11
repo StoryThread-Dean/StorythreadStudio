@@ -753,14 +753,25 @@ async def post_tie(request: TieRequest):
 
     thread = _read_thread(project_path, registry, source)
 
-    # The same connection twice is not a second fact about the world, and it
-    # would draw two identical edges and count twice against cardinality.
+    # The same connection at the same POINT twice is not a second fact about the
+    # world, and it would draw two identical edges and count twice against
+    # cardinality.
+    #
+    # The anchor is part of that test, and has to be. The pair is an axis now, so
+    # the same relation at a different point is a different thing being said:
+    # they were friends in chapter 2, barely speaking by chapter 5, and friends
+    # again in chapter 9. Refusing the third would make a relationship that
+    # recovers impossible to record.
     for existing in thread.get("ties") or []:
-        if existing.get("rel") == request.rel                 and existing.get("target") == request.dst_id:
+        same_pair = (existing.get("rel") == request.rel
+                     and existing.get("target") == request.dst_id)
+        if same_pair and (existing.get("at") or None) == (request.at or None):
+            where = (f" at {request.at}" if request.at
+                     else " with no point in the story given")
             raise CodexError(
                 "tie_endpoint_invalid",
-                "That connection is already recorded.",
-                f"{request.src_id} {request.rel} {request.dst_id}",
+                f"That connection is already recorded{where}.",
+                f"{request.src_id} {request.rel} {request.dst_id} @ {request.at or '-'}",
             )
 
     thread.setdefault("ties", []).append({
@@ -916,6 +927,32 @@ async def get_resolve(
     return resolved
 
 
+def _edge_rank(edge: dict, ordinal) -> tuple:
+    """
+    Of several states of one connection, which one does the map draw?
+
+    In force beats not yet beats over -- and within each, the one the writer
+    most likely means:
+
+      in force   the LATEST one at or before this point. That is supersession:
+                 "friends" at chapter 4 replaces "acquaintances" at chapter 2.
+      not yet    the EARLIEST one, because the next thing to happen between
+                 these two is the useful thing to draw as a dashed line.
+      over       the latest, so an ended relationship shows how it ended rather
+                 than how it began.
+
+    A None ordinal means undated, which for a connection is "always true" -- so
+    it sorts below every dated state and any dated one supersedes it.
+    """
+    position = ordinal if ordinal is not None else (-1, -1)
+    if edge["active"]:
+        return (2, position)
+    if not edge["expired"]:
+        # Not yet true: earlier is better, so the order is inverted.
+        return (1, tuple(-n for n in position))
+    return (0, position)
+
+
 @router.get("/graph")
 async def get_graph(
     project_path: str = Query(...),
@@ -985,7 +1022,16 @@ async def get_graph(
         })
 
     visible_ids = {n["entity_id"] for n in nodes}
-    edges = []
+    # ONE EDGE PER PAIR, whatever the story does to it.
+    #
+    # A relationship that goes acquaintances -> friends -> real friends is three
+    # STATES of one connection, not three connections. Drawing a line each would
+    # stack three labels on top of each other and make a developing friendship
+    # look like a crowd. So the states are collected per (pair, frame) and the
+    # one that belongs at this point in the story is the one drawn -- the map
+    # shows a single line whose LABEL changes as the writer scrubs, which is what
+    # the scrubber was built for.
+    chosen: dict[tuple[str, str, str], dict] = {}
     hidden_edges = 0
     for entity_id, thread in threads.items():
         for tie in thread.get("ties") or []:
@@ -1008,11 +1054,29 @@ async def get_graph(
             expired = ended is not None and now is not None and ended <= now
             not_yet = started is not None and now is not None and started > now
 
-            edges.append({
+            candidate = {
                 "src_id": entity_id, "rel": tie["rel"], "dst_id": target_id,
+                # WHY, so the map can label the line with something worth
+                # reading instead of a relation id.
+                "reason": tie.get("reason") or "",
                 "active": not (expired or not_yet),
                 "expired": expired,
-            })
+                # The anchor id only. The client already has chapter TITLES
+                # from /anchors and joins on this -- a second source of titles
+                # here would be one more thing that can disagree with the
+                # scrubber, and _label_lookup yields filenames anyway.
+                "at": tie.get("at"),
+            }
+            # A connection is only ever recorded from one end, but the writer's
+            # own belief and the objective truth are separate lines on the map --
+            # she thinks they are friends while he is using her.
+            key = (entity_id, target_id, str(tie.get("frame") or "truth"))
+            prior = chosen.get(key)
+            if prior is None or _edge_rank(candidate, started) > \
+                    _edge_rank(prior, index.ordinal(prior["at"]) if prior["at"] else None):
+                chosen[key] = candidate
+
+    edges = list(chosen.values())
 
     # Reported, not silent: a map that quietly omits things looks like a
     # world with less in it than the writer built.

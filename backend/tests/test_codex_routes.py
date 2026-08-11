@@ -646,3 +646,103 @@ def test_the_input_limit_travels_with_the_registry(project):
     types = client.get("/api/codex/types",
                        params={"project_path": project}).json()
     assert types["reason_limit"] == 140
+
+
+# ── A connection that changes across the book ────────────────────────────────
+#
+# Three ordinary scenarios were given as the test of whether the model could
+# express real relationships:
+#
+#   "Chapter 2 Alexandra meets Dean through Lara = acquaintances. Chapter 4
+#    Alexandra and Dean are friends. Chapter 8 Alexandra saves Deans life
+#    becoming real friends."
+#
+# Only the never-changing one worked. A connection now has states, resolved by
+# the same rule facts follow -- the PAIR is the axis -- and these hold what the
+# HTTP surface has to do differently as a result.
+
+def _state(project, rel, reason, at=None):
+    body = {"project_path": project, "src_id": "e-elara",
+            "rel": rel, "dst_id": "e-garrick", "reason": reason}
+    if at:
+        body["at"] = at
+    return client.post("/api/codex/tie", json=body)
+
+
+def test_the_same_relation_at_a_LATER_point_is_a_new_state(project):
+    # They were friends, drifted, and were friends again. Refusing the third
+    # would make a relationship that recovers impossible to record.
+    anchor = _chapter_anchor(project)
+    assert _state(project, "mentored_by", "Taught her everything").status_code == 200
+    assert _state(project, "mentored_by", "Teaching her again, warier",
+                  at=anchor).status_code == 200
+
+
+def test_the_same_relation_at_the_SAME_point_is_still_a_duplicate(project):
+    anchor = _chapter_anchor(project)
+    _state(project, "mentored_by", "Taught her everything", at=anchor)
+    response = _state(project, "mentored_by", "Said twice by mistake", at=anchor)
+    assert _code(response) == "tie_endpoint_invalid"
+
+
+def test_the_duplicate_refusal_says_WHERE(project):
+    # "Already recorded" is confusing once a connection can be recorded at
+    # several points. The writer needs to know which one collided.
+    _state(project, "mentored_by", "Taught her everything")
+    response = _state(project, "mentored_by", "Again")
+    assert "no point in the story given" in response.json()["detail"]["message"]
+
+
+# ── The map draws one line, not one per state ────────────────────────────────
+
+def test_three_states_of_one_relationship_draw_ONE_edge(project):
+    # Three lines stacked on each other would make a developing friendship look
+    # like a crowd. It is one line whose LABEL changes as the writer scrubs.
+    anchor = _chapter_anchor(project)
+    _state(project, "mentored_by", "Taught her everything")
+    _state(project, "mentored_by", "Teaching her again", at=anchor)
+    body = client.get("/api/codex/graph", params={"project_path": project}).json()
+    assert len(body["edges"]) == 1
+
+
+def test_the_edge_drawn_is_the_one_in_force(project):
+    anchor = _chapter_anchor(project)
+    _state(project, "mentored_by", "Undated, so true from the start")
+    _state(project, "mentored_by", "By this chapter, something else", at=anchor)
+    body = client.get("/api/codex/graph",
+                      params={"project_path": project, "at": anchor}).json()
+    assert body["edges"][0]["reason"] == "By this chapter, something else"
+
+
+def test_an_earlier_point_reads_the_earlier_state(project):
+    # Scrubbing back is the whole feature.
+    anchor = _chapter_anchor(project)
+    _state(project, "mentored_by", "Undated, so true from the start")
+    _state(project, "loves", "Only by this chapter", at=anchor)
+    body = client.get("/api/codex/graph", params={"project_path": project}).json()
+    assert body["edges"][0]["reason"] == "Only by this chapter"
+
+
+def test_the_edge_carries_its_reason_so_the_map_can_label_it(project):
+    _state(project, "mentored_by", "Taught her everything, then vanished")
+    body = client.get("/api/codex/graph", params={"project_path": project}).json()
+    assert body["edges"][0]["reason"] == "Taught her everything, then vanished"
+
+
+def test_the_edge_says_WHEN_by_id_and_leaves_the_wording_to_the_client(project):
+    # The map needs to say "since Chapter 4". It gets the id, and joins on the
+    # chapter TITLES it already holds from /anchors -- a second source of titles
+    # here is one more thing that can disagree with the scrubber.
+    anchor = _chapter_anchor(project)
+    _state(project, "mentored_by", "From here on", at=anchor)
+    body = client.get("/api/codex/graph", params={"project_path": project}).json()
+    assert body["edges"][0]["at"] == anchor
+
+
+def test_an_undated_connection_still_draws(project):
+    # Every connection made before states existed. Treating them as unplaced
+    # would empty the map of every project that already has one.
+    _state(project, "mentored_by", "Simply true of the whole book")
+    body = client.get("/api/codex/graph", params={"project_path": project}).json()
+    assert len(body["edges"]) == 1
+    assert body["edges"][0]["active"] is True

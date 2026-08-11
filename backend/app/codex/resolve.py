@@ -111,6 +111,27 @@ def _scope_allowed(scope: str, include_on_request: bool) -> bool:
     return True
 
 
+# A position below every real one, for something that has always been true.
+#
+# THE ONE PLACE FACTS AND CONNECTIONS DIFFER, and the asymmetry is real rather
+# than convenient:
+#
+#   A fact records a CHANGE -- "she learned her father is alive". A change with
+#   no point in the story is meaningless, so an undated fact is `unplaced` and
+#   never takes effect. That is the Unplaced stop, and it is correct.
+#
+#   A connection records that two things RELATE. "Lara is Lord Benjamin's
+#   daughter" is simply true, for the whole book, and asking a writer to date it
+#   would be asking them to date the premise. So an undated connection is in
+#   force from before the first page -- and any dated state on the same pair
+#   still supersedes it from its own anchor onward, which is how
+#   "acquaintances, then friends at chapter 4" works.
+#
+# It is also every connection that already exists. Treating them as unplaced
+# would empty the map of every project made before states existed.
+_ALWAYS = (-1, -1)
+
+
 def _supersedes_within(group: list[dict]) -> dict | None:
     """
     Of several facts at the same point, which one stands?
@@ -134,6 +155,7 @@ def resolve_facts(
     frames: set[str] | None = None,
     hide_spoilers: bool = True,
     include_on_request: bool = False,
+    undated_is_always: bool = False,
 ) -> Resolution:
     """
     Which facts are in force at `at`?
@@ -149,6 +171,11 @@ def resolve_facts(
         rather than presenting a partial picture as complete;
       - ai_scope "never" is unreachable through this function by any
         combination of arguments. That is the point of it.
+
+    `undated_is_always` is for CONNECTIONS, which resolve through this same
+    function with the other end as their axis. It says an undated record has
+    always been true instead of being unplaced -- see _ALWAYS for why the two
+    kinds of record honestly want different answers. Facts leave it off.
     """
     frames = frames or {TRUTH}
     now = index.ordinal(at) if at else None
@@ -172,16 +199,29 @@ def resolve_facts(
 
         ordinal = index.ordinal(fact.get("at"))
         if ordinal is None:
-            # No position we can trust. Report it rather than assuming it
-            # happened at the start (which would make it true everywhere).
-            result.unplaced.append(fact)
-            continue
+            if undated_is_always and not fact.get("at"):
+                # A connection nobody dated. True for the whole book -- and a
+                # dated state on the same pair still wins from its own anchor.
+                ordinal = _ALWAYS
+            else:
+                # No position we can trust. Report it rather than assuming it
+                # happened at the start (which would make it true everywhere).
+                # Note this also catches an anchor that was WRITTEN and no
+                # longer resolves -- a deleted chapter -- which is a real
+                # problem even for a connection.
+                result.unplaced.append(fact)
+                continue
         if now is not None and ordinal > now:
             continue        # has not happened yet at the point being written
 
         if hide_spoilers:
             revealed = fact.get("revealed_at") or fact.get("at")
             revealed_ordinal = index.ordinal(revealed)
+            if revealed_ordinal is None and undated_is_always and not revealed:
+                # An always-true connection with no stated reveal point is not a
+                # secret. Counting it as one would hide every ordinary
+                # connection in the book from every brief.
+                revealed_ordinal = _ALWAYS
             if revealed_ordinal is None or (now is not None and revealed_ordinal > now):
                 result.withheld_spoilers += 1
                 continue

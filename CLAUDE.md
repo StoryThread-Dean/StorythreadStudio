@@ -229,6 +229,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_codex_types.py` -- the type registry: validation, and that an invalid `types.json` is NEVER silently repaired over the writer's customization
   - `test_codex_anchors.py` -- anchors as ids, ordinals computed never stored, a scene-less anchor valid everywhere
   - `test_codex_resolve.py` -- the heart: effective sets, derived supersession, same-anchor ambiguity is a Snag rather than an ordering, frames survive a rename, `ai_scope: never` unreachable
+  - `test_codex_tie_run.py` -- a connection that CHANGES: the writer's own three scenarios (a friendship deepening, a parentage that never changes, animosity turning to love), the pair as the axis so nothing is closed by hand, and the one place connections differ from facts -- an undated connection is true of the whole book while an undated fact is Unplaced, though a WRITTEN anchor that no longer resolves is still Unplaced for both
   - `test_codex_visibility.py` -- one set of rules for facts AND Ties; an edge is only as visible as the least visible thing it touches
   - `test_codex_threads.py` -- Thread round trip; nothing a hand-edited file contains is ever dropped
   - `test_codex_store.py` -- index health: a failed write marks dirty, a dirty index rebuilds before serving, an out-of-band edit is caught by the revision fingerprint

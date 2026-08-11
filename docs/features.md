@@ -233,6 +233,59 @@ fourteen chapters believing her father died in a raid is a different person in
 chapter fifteen. Ask the Weave about chapter seven and you get the belief; ask
 about chapter fifteen and you get the truth.
 
+### A connection changes across the book
+
+A relationship is not a fact of the premise. Three scenarios, all ordinary:
+
+| | |
+|---|---|
+| Chapter 2 they meet through a friend; chapter 4 they are friends; chapter 8 she saves his life | changes twice |
+| Chapter 1 she is his daughter | never changes |
+| Chapter 7 she is disgusted by him; chapter 8 they work together; chapter 11 they are lovers | changes twice, and reverses |
+
+All three work, because **the pair is an axis**. `(Alexandra, Dean)` is the axis
+and the states are a run on it, so a connection supersedes its own earlier states
+exactly the way a fact does: the latest state at or before the point being read
+is the one in force, and **the writer closes nothing by hand.** Recording
+"friends" at chapter 4 is all it takes -- "acquaintances" stops applying from
+there on, and reading chapter 3 still gives acquaintances.
+
+Two states on one pair at the same chapter with nothing to order them is a
+**Snag**, reported, never silently resolved -- the same rule facts follow, for
+the same reason: a quietly-picked winner would be a relationship the book never
+establishes.
+
+**An undated connection is true of the whole book.** This is the one place
+connections and facts differ, and the asymmetry is real: a fact records a
+*change*, and a change with no point in the story is meaningless, so an undated
+fact is Unplaced. A connection records that two things *relate* -- "she is his
+daughter" is simply true, and asking a writer to date it is asking them to date
+the premise. A dated state still supersedes it from its own chapter onward, so a
+relationship that starts as the premise can still develop. An anchor that was
+written and no longer resolves -- a deleted chapter -- is still Unplaced, because
+that is a real problem rather than a default.
+
+`frame` and `revealed_at` work on a connection's states too, which is what makes
+the hard versions expressible: Alexandra believes they are friends while Dean is
+using her -- two states, one pair, both in force, not a contradiction. And a
+secret marriage stays hidden until its reveal chapter, including the wording of
+whatever it replaced.
+
+**`until` survives for the one thing supersession cannot say.** "They stopped
+being friends and became nothing" is a different statement from "they became
+enemies." Replacement is derived; ending is declared.
+
+**On the map this is one line, not three.** The states of a connection are one
+edge whose label changes as the scrubber moves -- which is what the scrubber was
+built for. Drawing a line per state would make a developing friendship look like
+a crowd.
+
+**A limit worth knowing:** anchors are narrative position, not in-world dates.
+The app knows chapter 11 follows chapter 8 and nothing about the year that passed
+between them. "A year on, and they cannot be apart" is recorded in the writer's
+own words rather than computed, and the app cannot do arithmetic with it. Real
+dates would need a per-world calendar, which is a separate thing.
+
 ### A connection has to say WHY
 
 The one field a connection cannot be saved without is a single line, in the
