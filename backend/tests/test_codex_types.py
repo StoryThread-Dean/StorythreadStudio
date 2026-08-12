@@ -246,3 +246,76 @@ def test_a_relation_knows_which_kinds_of_thing_it_connects():
     # A location cannot be a member of a faction.
     assert relation_allows(registry, "member_of", "location", "faction") is False
     assert relation_allows(registry, "not_a_relation", "character", "faction") is False
+
+
+# ── One kind, one set of sections ───────────────────────────────────────────
+#
+# A section's id is DERIVED FROM ITS HEADING when a file is read. That makes a
+# registry id which disagrees with its own heading a section that can never be
+# found: the editor looks up the declared id, the file produces the derived
+# one, and the writer's words sit on disk looking like they were never saved.
+#
+# It is exactly how two populations of the same kind ended up in one world --
+# entries converted from profiles/ carrying the Profile Builder's headings,
+# and entries created by Weaving carrying the Weave's shorter set. Nothing
+# checked that the two agreed, so nothing said anything.
+
+def test_every_shipped_section_id_matches_its_own_heading():
+    from app.codex.threads import _section_id
+
+    for entry in default_registry()["types"]:
+        for section in entry.get("sections") or []:
+            assert section["id"] == _section_id(section["heading"]), (
+                f"{entry['id']}.{section['id']} would be read back as "
+                f"'{_section_id(section['heading'])}'"
+            )
+
+
+def test_the_kinds_the_profile_builder_edits_carry_its_full_set():
+    # The Profile Builder's sets are canonical: they are what the writer has
+    # actually been filling in. The Weave shipped shorter ones and the two
+    # disagreed; deciding the other way would have meant handing the writer a
+    # thinner page for the same job.
+    expected = {
+        "character": ["overview", "physical_traits", "personality_traits",
+                      "motivations", "voice_notes",
+                      "hidden_and_foreshadowing_traits",
+                      "relationships_overview", "notes"],
+        "location": ["overview", "physical_description", "tone_and_atmosphere",
+                     "historical_significance", "cultural_significance",
+                     "scene_use_notes", "notes"],
+        "lore": ["overview", "rule_or_concept", "what_it_affects",
+                 "what_characters_know", "story_relevance", "notes"],
+        "relationship": ["overview", "history", "current_dynamic",
+                         "hidden_tensions", "emotional_direction", "notes"],
+    }
+    by_id = {t["id"]: t for t in default_registry()["types"]}
+    for type_id, sections in expected.items():
+        assert [s["id"] for s in by_id[type_id]["sections"]] == sections
+
+
+def test_a_file_written_under_an_older_section_name_still_finds_its_home():
+    # The healing path: read normalises, and the canonical heading comes back
+    # with it so the next save writes the new name. No pass to run.
+    from app.codex.threads import parse_thread
+
+    raw = ("---\ntype: location\nentity_id: e-moor\nname: Ravensmoor\n---\n\n"
+           "# Appearance\nCold stone and colder wind.\n")
+    section = parse_thread(raw, default_registry())["sections"]
+    assert "physical_description" in section
+    assert section["physical_description"]["heading"] == "Physical Description"
+    assert "colder wind" in section["physical_description"]["content"]
+
+
+def test_the_two_populations_of_a_kind_agree_after_reading():
+    # An entry converted from profiles/ and one created by Weaving must land
+    # on the SAME keys, or the editor shows one and not the other.
+    from app.codex.threads import parse_thread
+
+    converted = ("---\ntype: character\nentity_id: e-a\nname: A\n---\n\n"
+                 "# Hidden and Foreshadowing Traits\nShe knows.\n")
+    made = ("---\ntype: character\nentity_id: e-b\nname: B\n---\n\n"
+            "# Hidden and Foreshadowing\nHe knows.\n")
+    a = parse_thread(converted, default_registry())["sections"]
+    b = parse_thread(made, default_registry())["sections"]
+    assert set(a) == set(b) == {"hidden_and_foreshadowing_traits"}

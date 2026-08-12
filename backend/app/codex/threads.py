@@ -233,7 +233,7 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
             continue
 
         content, ai_summary = _split_ai_summary(section_body)
-        section_id = _section_id(heading)
+        section_id, heading = _canonical_section(heading)
 
         # Trait blocks are a YAML list; ordinary sections are prose. Try the
         # list, and on ANY doubt keep the text as content -- the tolerance
@@ -271,9 +271,44 @@ def _looks_like_trait_list(text: str) -> bool:
     return text.lstrip().startswith("- trait:")
 
 
+# WHERE AN OLDER SECTION NAME LANDS NOW.
+#
+# A section's id is DERIVED FROM ITS HEADING, so changing what a kind's
+# sections are called silently splits a world in two: entries written before
+# the change keep the old heading and get the old id, and the editor -- which
+# looks up the new one -- shows their content as missing while it sits safely
+# on disk. That is what happened when the Weave shipped a shorter set of
+# sections than the Profile Builder had been using.
+#
+# Normalising on READ rather than rewriting every file is deliberate. A bulk
+# rewrite can fail half way and has to be got exactly right the first time,
+# across worlds nobody has seen; this cannot, and it takes effect the moment
+# the file is opened. The canonical heading is restored with the id, so a file
+# quietly heals the next time the writer saves it -- no pass to run, nothing
+# to schedule, and an untouched file stays byte-identical until then.
+_SECTION_ALIASES: dict[str, tuple[str, str]] = {
+    # character: the heading gained a word.
+    "hidden_and_foreshadowing":
+        ("hidden_and_foreshadowing_traits", "Hidden and Foreshadowing Traits"),
+    # location: the Weave's four became the Profile Builder's seven.
+    "appearance": ("physical_description", "Physical Description"),
+    "significance": ("historical_significance", "Historical Significance"),
+    # lore.
+    "details": ("rule_or_concept", "Rule or Concept"),
+}
+
+
 def _section_id(heading: str) -> str:
     """'Physical Traits' -> 'physical_traits'. Matches the registry's ids."""
     return re.sub(r"[^a-z0-9]+", "_", heading.strip().lower()).strip("_")
+
+
+def _canonical_section(heading: str) -> tuple[str, str]:
+    """The id and heading a section is FILED under, old names included."""
+    section_id = _section_id(heading)
+    if section_id in _SECTION_ALIASES:
+        return _SECTION_ALIASES[section_id]
+    return section_id, heading
 
 
 # ── Writing ──────────────────────────────────────────────────────────────────

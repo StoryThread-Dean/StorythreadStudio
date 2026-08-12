@@ -117,8 +117,8 @@ DEFAULT_TYPES: list[dict] = [
             {"id": "personality_traits", "heading": "Personality Traits", "trait_blocks": True},
             {"id": "motivations", "heading": "Motivations", "trait_blocks": True},
             {"id": "voice_notes", "heading": "Voice Notes", "trait_blocks": True},
-            {"id": "hidden_and_foreshadowing", "heading": "Hidden and Foreshadowing",
-             "trait_blocks": True},
+            {"id": "hidden_and_foreshadowing_traits",
+             "heading": "Hidden and Foreshadowing Traits", "trait_blocks": True},
             {"id": "relationships_overview", "heading": "Relationships Overview",
              "trait_blocks": False},
             {"id": "notes", "heading": "Notes", "trait_blocks": False},
@@ -128,17 +128,32 @@ DEFAULT_TYPES: list[dict] = [
         "group": "profiles",
         "default_section": True,
     },
+    # THE PROFILE BUILDER'S SETS ARE CANONICAL, and these used to be shorter.
+    #
+    # Two populations of the same kind were ending up with different sections:
+    # an entry converted from profiles/ carried the Profile Builder's headings,
+    # while one created by Weaving was seeded from the four words below -- so a
+    # writer had Locations with "Physical Description" and Locations with
+    # "Appearance", and only one of them showed up in the editor.
+    #
+    # The Profile Builder's sets win because they are what the writer has
+    # actually been filling in. Deciding the other way would have meant asking
+    # them to accept a thinner page for the same job.
     {"id": "relationship", "label": "Relationships", "folder": "relationships",
      "icon": "Heart", "group": "profiles", "default_section": False,
-     "sections": _sections("overview", "current_dynamic", "history", "notes"),
+     "sections": _sections("overview", "history", "current_dynamic",
+                           "hidden_tensions", "emotional_direction", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "location", "label": "Locations", "folder": "locations", "icon": "MapPin",
      "group": "profiles", "default_section": True,
-     "sections": _sections("overview", "appearance", "significance", "notes"),
+     "sections": _sections("overview", "physical_description",
+                           "tone_and_atmosphere", "historical_significance",
+                           "cultural_significance", "scene_use_notes", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     {"id": "lore", "label": "Lore", "folder": "lore", "icon": "BookOpen",
      "group": "profiles", "default_section": True,
-     "sections": _sections("overview", "details", "notes"),
+     "sections": _sections("overview", "rule_or_concept", "what_it_affects",
+                           "what_characters_know", "story_relevance", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
     # ── Profiles: an entry ABOUT something in the world ──────────────────
     # A person, a place, a group, a faith, a government. The test is "am I

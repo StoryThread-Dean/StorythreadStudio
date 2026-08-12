@@ -131,7 +131,10 @@ export const SECTION_CONFIGS: Record<ProfileType, SectionConfig[]> = {
     { key: "personality_traits",       heading: "Personality Traits",              hasTraitBlocks: true  },
     { key: "motivations",              heading: "Motivations",                     hasTraitBlocks: true  },
     { key: "voice_notes",              heading: "Voice Notes",                     hasTraitBlocks: true  },
-    { key: "hidden_and_foreshadowing", heading: "Hidden and Foreshadowing Traits", hasTraitBlocks: true  },
+    // The key must be what the backend derives from the HEADING -- section ids
+    // come from headings when a file is read, so a key that disagrees with its
+    // own heading points at a section that will never exist.
+    { key: "hidden_and_foreshadowing_traits", heading: "Hidden and Foreshadowing Traits", hasTraitBlocks: true  },
     { key: "relationships_overview",   heading: "Relationships Overview",          hasTraitBlocks: false },
     { key: "notes",                    heading: "Notes",                           hasTraitBlocks: false },
   ],

@@ -150,7 +150,7 @@ WORLD_RULES: tuple[Question, ...] = (
        "How is guilt decided -- evidence, oath, ordeal, confession?",
        "Every trial scene, every false accusation and every cover-up runs on "
        "this. It also decides whether the truth matters.",
-       ("lore", "details"), depth=2,
+       ("lore", "rule_or_concept"), depth=2,
        crosslinks=["rel_sanction", "mem_records"]),
 
     # ── Economy ─────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ WORLD_RULES: tuple[Question, ...] = (
        "What happens to someone who cannot pay what they owe?",
        "Debt is a plot engine that needs no villain. The answer tells you "
        "how far a desperate character will go.",
-       ("lore", "details"), depth=2,
+       ("lore", "rule_or_concept"), depth=2,
        crosslinks=["law_worst_crime"]),
 
     # ── Religion ────────────────────────────────────────────────────────
@@ -240,13 +240,13 @@ WORLD_RULES: tuple[Question, ...] = (
        "How are partnerships made and unmade, and by whom?",
        "Marriage rules are where love stories meet politics. They also "
        "decide whether leaving is possible.",
-       ("lore", "details"),
+       ("lore", "rule_or_concept"),
        crosslinks=["rel_sanction", "law_enforcement"]),
     _q("kin_inheritance", "kinship",
        "What passes down, and to which of the children?",
        "Inheritance is motive in its purest form, and it is the reason "
        "siblings in fiction are so rarely friends.",
-       ("lore", "details"), depth=2,
+       ("lore", "rule_or_concept"), depth=2,
        crosslinks=["gov_succession", "eco_who_owns"]),
 
     # ── War ─────────────────────────────────────────────────────────────
@@ -261,7 +261,7 @@ WORLD_RULES: tuple[Question, ...] = (
        "What is considered unforgivable even in war?",
        "Every culture draws a line somewhere. Crossing it is one of the "
        "strongest things a character can do.",
-       ("lore", "details"), depth=2,
+       ("lore", "rule_or_concept"), depth=2,
        crosslinks=["law_worst_crime", "rel_sin"]),
 
     # ── Language ────────────────────────────────────────────────────────
@@ -275,13 +275,13 @@ WORLD_RULES: tuple[Question, ...] = (
        "How do people address someone above and below them?",
        "Forms of address carry a whole hierarchy in two syllables, without a "
        "paragraph of explanation.",
-       ("lore", "details"), depth=2,
+       ("lore", "rule_or_concept"), depth=2,
        crosslinks=["gov_power"]),
     _q("lang_tongues", "language",
        "Is there more than one language, and who is excluded by that?",
        "Language is a border people carry with them. Who cannot understand a "
        "scene is often more interesting than who can.",
-       ("lore", "details"),
+       ("lore", "rule_or_concept"),
        crosslinks=["geo_travel"]),
 
     # ── Geography ───────────────────────────────────────────────────────
@@ -296,13 +296,13 @@ WORLD_RULES: tuple[Question, ...] = (
        "What is beyond the edge of the map, and what do people say is there?",
        "What a culture believes about the unknown says more about the "
        "culture than about the unknown.",
-       ("location", "significance"),
+       ("location", "historical_significance"),
        crosslinks=["rel_belief"]),
     _q("geo_news", "geography",
        "How does news travel, and how much does it change on the way?",
        "Whether your characters can know something yet is a plot constraint "
        "you will otherwise break by accident.",
-       ("lore", "details"), depth=2,
+       ("lore", "rule_or_concept"), depth=2,
        crosslinks=["mem_records"]),
 
     # ── Memory ──────────────────────────────────────────────────────────
@@ -316,20 +316,20 @@ WORLD_RULES: tuple[Question, ...] = (
        "What is written down, and who is allowed to read it?",
        "Records decide what can be proven, and literacy decides who can be "
        "lied to.",
-       ("lore", "details"),
+       ("lore", "rule_or_concept"),
        unlocks=["mem_forgotten"],
        crosslinks=["law_proof", "geo_news"]),
     _q("mem_ancestors", "memory",
        "How are the dead remembered, and for how long?",
        "It tells you what a legacy is worth here, which is what most "
        "ambitious characters are actually chasing.",
-       ("lore", "details"),
+       ("lore", "rule_or_concept"),
        crosslinks=["rel_belief"]),
     _q("mem_forgotten", "memory",
        "What has this world forgotten that the reader will learn?",
        "A gap in a world's memory is where a reveal comes from. Deciding it "
        "early means the clues can be there from chapter one.",
-       ("lore", "details"), depth=2),
+       ("lore", "rule_or_concept"), depth=2),
 )
 
 
