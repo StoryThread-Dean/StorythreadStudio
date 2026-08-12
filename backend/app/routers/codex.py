@@ -704,7 +704,21 @@ async def get_ties(project_path: str = Query(...), entity_id: str = Query(...)):
                            or other.get("name")
                            or known.get(other_id, {}).get("name", "")
                            or other_id),
+            # WHAT IT IS, as well as what the story calls it. A profile lists
+            # its connections as "Lexa (Alexandra Langford)" -- the label the
+            # reader meets, and the name on the entry -- and the two are
+            # deliberately different things. Sent separately rather than
+            # composed here, because only the screen knows whether it has
+            # room for both.
+            "other_full_name": (other.get("name")
+                                or known.get(other_id, {}).get("name", "")
+                                or ""),
             "other_type": other.get("type", ""),
+            # WHOSE FILE this connection lives in. A Tie is stored once and
+            # read from both ends, so a writer editing it needs to know where
+            # it actually is -- otherwise "why can I see this on her page but
+            # not find it in her file?" is an unanswerable question.
+            "recorded_on": row["src_id"],
             # Read from THIS end. An incoming "mentored by" reads as "mentor
             # of" from the other side, and showing the stored direction would
             # make the writer translate it in their head every time.

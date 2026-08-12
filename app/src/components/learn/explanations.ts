@@ -291,6 +291,26 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "profile.connections": {
+    what: "Who this is to everything else in your world, and why.",
+    why: "A profile says what someone IS. This says what they are TO people -- "
+      + "which is most of what a scene runs on, and the part the AI is told "
+      + "when you ask for help. The short line you write against a connection "
+      + "('takes care of her needs when the curse flares up') is worth more "
+      + "than the label on it.",
+    needed: "recommended",
+    cost: FREE,
+    how: [
+      "Connect this to something opens the same connect screen the Weave "
+        + "uses: pick the other end, say why in one line, and label it if you "
+        + "want to.",
+      "Chips are the quick read. Expand for what each connection actually is.",
+      "A connection is stored once and read from both ends, so one made here "
+        + "shows on the other one's page too -- the expanded list says which "
+        + "page it is recorded on.",
+    ],
+    endpoint: "/api/codex/ties",
+  },
   "thread.fix-or-remove": {
     what: "Change what kind of thing an entry is, or remove it entirely.",
     why: "Weaving offers Character for a name it finds in your prose, because "
