@@ -59,6 +59,8 @@ function mockApi(options: {
   /** The fact a stale snag argues about is GONE: PATCH and DELETE /fact
    *  refuse with fact_not_found. */
   factsGone?: boolean;
+  /** The type registry cannot be read -- Quick Entry has no section list. */
+  typesDown?: boolean;
 } = {}) {
   const stops = options.stops ?? [stop()];
   calls = [];
@@ -71,6 +73,13 @@ function mockApi(options: {
     if (init?.method && init.method !== "GET") calls.push({ url, body });
 
     if (url.includes("/types")) {
+      if (options.typesDown) {
+        return {
+          ok: false,
+          json: async () => ({ detail: { code: "unknown",
+                                         message: "The registry could not be read." } }),
+        } as Response;
+      }
       // Enough registry for Quick Entry to know each kind's sections.
       return { ok: true, json: async () => ({ types: [
         { id: "character", sections: [{ id: "overview", heading: "Overview" }] },
@@ -215,8 +224,12 @@ describe("before anything starts", () => {
   });
 
   it("warns in hours rather than in units when the list is long", async () => {
-    // "340" is information. "many sessions" is what a writer decides with.
-    mockApi({ stops: [stop()], total: 340 });
+    // "340" is information. "many sessions" is what a writer decides with --
+    // and the measure is what the walk will actually ASK, not the total.
+    mockApi({
+      stops: Array.from({ length: 70 }, (_, i) => stop({ key: `k${i}` })),
+      total: 70,
+    });
     await open();
     expect(screen.getByText(/many sessions of work/)).toBeTruthy();
     expect(screen.getByText(/stop anywhere and come back/)).toBeTruthy();
@@ -2024,5 +2037,116 @@ describe("a dead entry is a way forward, not a dead end", () => {
       .toBeTruthy();
     expect(within(dialog).getByRole("button",
       { name: /Both are right on purpose/ })).toBeTruthy();
+  });
+});
+
+
+describe("the numbers and names shown are the truth", () => {
+  it("counts what the walk will ASK, and says what was settled earlier", async () => {
+    // `total` includes stops answered for good in earlier sessions. Quoting
+    // it inflated the work: "found 40 things" over a walk that would ask one
+    // question and end.
+    mockApi({ stops: [stop()], total: 40 });
+    await open();
+    expect(screen.getByTestId("weaving-count").textContent)
+      .toMatch(/found 1 thing to look at/);
+    expect(screen.getByText(/39 more were answered for good/)).toBeTruthy();
+  });
+
+  it("says so when everything found is already answered, and does not start", async () => {
+    mockApi({ stops: [], total: 5 });
+    await open();
+    expect(screen.getByTestId("weaving-count").textContent)
+      .toMatch(/already been answered/);
+    expect(screen.getByRole("button", { name: "Start" }).hasAttribute("disabled"))
+      .toBe(true);
+  });
+
+  it("a tie snag names the other end, never its raw id", async () => {
+    // "leads e-4f2a91" is not a sentence a writer can decide anything from.
+    mockApi({ stops: [stop({
+      kind: "snag", key: "snag|e-1|leads", entity_id: "e-1",
+      title: "Mira Kell: leads more than one at once",
+      detail: { name: "Mira Kell", type: "character", sides: [
+        { id: "leads:e-4f2a91", rel: "leads", target: "e-4f2a91",
+          target_name: "Garrick" },
+        { id: "leads:e-9c02aa", rel: "leads", target: "e-9c02aa",
+          target_name: "The Guild" },
+      ] },
+    })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    expect(within(dialog).getByText(/leads Garrick/)).toBeTruthy();
+    expect(within(dialog).getByText(/leads The Guild/)).toBeTruthy();
+    expect(within(dialog).queryByText(/e-4f2a91/)).toBeNull();
+  });
+});
+
+
+describe("adding to an existing entry is called what it is", () => {
+  // The receipt used to say "Created: Government" over an entry that had
+  // existed for ten chapters -- which reads as the app having just made a
+  // duplicate, the exact thing the add-to-existing offer exists to avoid.
+
+  const question = stop({
+    kind: "unwoven", key: "unwoven|succession", entity_id: "",
+    title: "How does succession work?", quote: "",
+    detail: { lands_as: ["government", "succession"] },
+  });
+  const crown = { entity_id: "e-crown", type: "government", name: "The Crown",
+                  display_name: "", aliases: [], placeholder: false };
+
+  it("says 'Added to', and that nothing already written was lost", async () => {
+    mockApi({ stops: [question], nodes: [crown],
+              entity: { entity_id: "e-crown", type: "government",
+                        name: "The Crown", filename: "the-crown.md",
+                        revision: "r1", run: [], ties: [],
+                        sections: { succession: { heading: "Succession",
+                                                  content: "" } } } });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Answer it here/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("button", { name: /The Crown/ }));
+    await userEvent.type(within(dialog).getByLabelText("The answer"),
+                         "Decided by single combat.");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Add it/ }));
+    expect(await screen.findByRole("dialog", { name: /Added to: The Crown/ }))
+      .toBeTruthy();
+    expect(screen.getByText(/Everything already written there was kept/))
+      .toBeTruthy();
+    expect(screen.queryByText(/Created:/)).toBeNull();
+  });
+});
+
+
+describe("starter text is never silently dropped", () => {
+  // When the registry cannot be read the text has no section to land in. The
+  // first version quietly created the entry WITHOUT the text: the writer's
+  // words vanished and the receipt said success.
+
+  it("refuses out loud, with the words still in the box", async () => {
+    mockApi({ stops: [stop()], typesDown: true });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    // The evidence sentence is prefilled, so the box is not empty.
+    const box = within(dialog).getByLabelText("Starter text") as HTMLTextAreaElement;
+    expect(box.value.length).toBeGreaterThan(0);
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    expect(await within(dialog).findByText(/nowhere to land/)).toBeTruthy();
+    expect(box.value.length).toBeGreaterThan(0);      // the words survived
+    expect(posted("/thread/new")).toEqual([]);
+  });
+
+  it("clearing the box is the stated way through", async () => {
+    mockApi({ stops: [stop()], typesDown: true });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.clear(within(dialog).getByLabelText("Starter text"));
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+    expect(posted("/thread/new")[0].body.sections).toBeUndefined();
   });
 });

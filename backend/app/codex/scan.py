@@ -428,6 +428,36 @@ def _unwoven_stops(threads: list[dict], request: ScanRequest) -> list[Stop]:
     return stops
 
 
+def _shown_name_teller(threads: list[dict]):
+    """
+    How an entry's name is SHOWN, given that names can collide.
+
+    Two entries sharing a display name make anything about them
+    INDISTINGUISHABLE -- which reads as the walk repeating itself. Found the
+    hard way: an old one-click create and a hand-made profile left two empty
+    Deans, and "Dean is missing Overview" twice in a row read as "the save did
+    not work". When a name collides, the filename rides along so the writer
+    can see there are two. One teller, used by every stop kind that names an
+    entry -- a title that disambiguates while the detail row does not is half
+    a fix.
+    """
+    tally: dict[str, int] = {}
+    for t in threads:
+        key = str(t.get("name") or "").strip().lower()
+        if key:
+            tally[key] = tally.get(key, 0) + 1
+
+    def shown(thread: dict | None) -> str:
+        if not thread:
+            return "(unnamed)"
+        base = thread.get("name") or "(unnamed)"
+        if tally.get(str(base).strip().lower(), 0) > 1:
+            return f"{base} ({thread.get('filename') or '?'})"
+        return str(base)
+
+    return shown
+
+
 def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                   request: ScanRequest, *, label_for=None,
                   mentioned: dict[str, int] | None = None,
@@ -438,23 +468,7 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
     together = together or []
     names = {str(t.get("entity_id")): t for t in threads if t.get("entity_id")}
 
-    # Two entries sharing a display name make their stops INDISTINGUISHABLE --
-    # which reads as the walk repeating itself. Found the hard way: an old
-    # one-click create and a hand-made profile left two empty Deans, and
-    # "Dean is missing Overview" twice in a row read as "the save did not
-    # work". When a name collides, the filename rides along in the title so
-    # the writer can see there are two.
-    name_tally: dict[str, int] = {}
-    for t in threads:
-        key = str(t.get("name") or "").strip().lower()
-        if key:
-            name_tally[key] = name_tally.get(key, 0) + 1
-
-    def shown_name(thread: dict) -> str:
-        base = thread.get("name") or "(unnamed)"
-        if name_tally.get(str(base).strip().lower(), 0) > 1:
-            return f"{base} ({thread.get('filename') or '?'})"
-        return str(base)
+    shown_name = _shown_name_teller(threads)
     type_index = {t.get("id"): t for t in registry.get("types", [])}
 
     # A Thread is connected if it owns a Tie OR is the target of one. Only one
@@ -560,7 +574,8 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                         # than merely askable. Every entry in the book is still
                         # one click away; these are the ones the prose has
                         # already put in the room with this one.
-                        "likely": _likely_answers(entity_id, together, names)},
+                        "likely": _likely_answers(entity_id, together, names,
+                                                  shown=shown_name)},
             ))
 
         if request.wants(STOP_SNAG) or request.wants(STOP_UNPLACED):
@@ -568,13 +583,14 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                                 label_for=label_for)
             found += check_ties(entity_id, thread.get("ties") or [], registry,
                                 index, label_for=label_for)
-            stops.extend(_snag_stops(found, where, request))
+            stops.extend(_snag_stops(found, where, request,
+                                     names=names, shown=shown_name))
 
     return stops
 
 
 def _likely_answers(entity_id: str, together: list[Together],
-                    names: dict[str, dict]) -> list[dict]:
+                    names: dict[str, dict], *, shown=None) -> list[dict]:
     """
     The entries this one shares most scenes with, strongest first.
 
@@ -597,7 +613,9 @@ def _likely_answers(entity_id: str, together: list[Together],
             continue
         likely.append({
             "entity_id": other_id,
-            "name": other.get("name") or "(unnamed)",
+            # Disambiguated like every other shown name -- two same-named
+            # suggestions in one list are one suggestion to the reader.
+            "name": shown(other) if shown else (other.get("name") or "(unnamed)"),
             "type": str(other.get("type") or ""),
             "scenes": pairing.scenes,
         })
@@ -638,6 +656,7 @@ def _untied_stops(together: list[Together], threads: list[dict],
         return []
 
     names = {str(t.get("entity_id")): t for t in threads if t.get("entity_id")}
+    shown = _shown_name_teller(threads)
 
     # Already tied in either direction, so there is nothing to propose. Ties
     # are stored one way round only, which is why both ends go in.
@@ -675,8 +694,8 @@ def _untied_stops(together: list[Together], threads: list[dict],
         else:
             a_id, b_id = pairing.a, pairing.b
 
-        a_name = a.get("name") or "(unnamed)"
-        b_name = b.get("name") or "(unnamed)"
+        a_name = shown(a)
+        b_name = shown(b)
         stops.append(Stop(
             kind=STOP_UNTIED,
             entity_id=a_id,
@@ -703,9 +722,28 @@ def _untied_stops(together: list[Together], threads: list[dict],
     return stops
 
 
-def _snag_stops(snags: list[Snag], where: dict, request: ScanRequest) -> list[Stop]:
+def _snag_stops(snags: list[Snag], where: dict, request: ScanRequest, *,
+                names: dict[str, dict] | None = None,
+                shown=None) -> list[Stop]:
     """A structural finding becomes a stop, unless its kind is muted."""
     from app.codex.snags import SNAG_UNPLACED
+
+    def enriched(sides: list[dict]) -> list[dict]:
+        # A tie-based side carries the other end as a raw entity id, which is
+        # what the fixer used to SHOW -- "leads e-4f2a91" is not a sentence a
+        # writer can decide anything from. The name rides along; the id stays,
+        # because the fixer's delete still needs it.
+        out: list[dict] = []
+        for side in sides:
+            target = str(side.get("target") or "")
+            if target and names is not None:
+                other = names.get(target)
+                out.append({**side,
+                            "target_name": (shown(other) if shown and other
+                                            else target)})
+            else:
+                out.append(side)
+        return out
 
     stops: list[Stop] = []
     for snag in snags:
@@ -717,7 +755,7 @@ def _snag_stops(snags: list[Snag], where: dict, request: ScanRequest) -> list[St
             title=f"{where['name']}: {snag.summary}",
             why=("Found by comparing the Run against itself -- no model was "
                  "asked, and this is the same answer every time."),
-            detail={**where, "snag": snag.kind, "sides": snag.sides,
+            detail={**where, "snag": snag.kind, "sides": enriched(snag.sides),
                     "axis": snag.axis},
         ))
     return stops

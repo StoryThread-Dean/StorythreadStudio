@@ -421,7 +421,13 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
 
   // ── Before anything starts ──────────────────────────────────────────────
   if (!walking) {
+    // The count the writer decides with is what the walk will actually ASK --
+    // `total` includes stops answered for good in earlier sessions, and
+    // quoting it here inflated the work: "This found 40 things" over a walk
+    // that would ask 3 questions and end.
     const total = result?.total ?? 0;
+    const open = stops.length;
+    const settled = Math.max(0, total - open);
     return (
       <Shell onClose={onClose}>
         <p className="text-xs text-text-muted">
@@ -475,9 +481,17 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             ? "Counting..."
             : total === 0
               ? "Nothing to look at. Your world and your book agree."
-              : `This found ${total} ${total === 1 ? "thing" : "things"} to look at.`}
+              : open === 0
+                ? "Everything this pass finds has already been answered."
+                : `This found ${open} ${open === 1 ? "thing" : "things"} to look at.`}
         </p>
-        {!scanning && total > 60 && (
+        {!scanning && open > 0 && settled > 0 && (
+          <p className="mt-1 text-[11px] text-faint">
+            {settled} more {settled === 1 ? "was" : "were"} answered for good
+            in earlier sessions and will not be asked again.
+          </p>
+        )}
+        {!scanning && open > 60 && (
           <p className="mt-1 text-[11px] text-amber-200/90">
             That is many sessions of work. Your answers save as you go, and
             you can stop anywhere and come back.
@@ -505,7 +519,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
 
         <button
           onClick={() => void begin()}
-          disabled={busy || scanning || total === 0}
+          disabled={busy || scanning || open === 0}
           className="mt-3 inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
         >
           {busy ? <Loader size={12} className="animate-spin" /> : null}

@@ -75,6 +75,9 @@ interface Side {
   frame?: string;
   rel?: string;
   target?: string;
+  /** The other end's NAME, sent by the scan alongside the raw id --
+   *  "leads e-4f2a91" is not a sentence a writer can decide anything from. */
+  target_name?: string;
 }
 
 interface SnagFixerProps {
@@ -376,7 +379,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                       className="flex items-center gap-2 rounded border border-border px-2 py-1.5">
                     <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
                       {side.rel ? `${side.rel.replace(/_/g, " ")} ` : ""}
-                      {side.target}
+                      {side.target_name ?? side.target}
                     </span>
                     {side.where && (
                       <span className="shrink-0 text-[10px] text-faint">{side.where}</span>
@@ -384,7 +387,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                     <button
                       onClick={() => void act(() => deleteTie(side))}
                       disabled={busy}
-                      aria-label={`Remove ${side.target}`}
+                      aria-label={`Remove ${side.target_name ?? side.target}`}
                       className="shrink-0 rounded border border-border p-1 text-faint hover:text-rose-300 disabled:opacity-40"
                     >
                       <Trash2 size={11} />

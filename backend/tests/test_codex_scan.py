@@ -1020,3 +1020,49 @@ def test_standing_the_stop_on_the_active_end_never_changes_the_key(tmp_path):
     swapped = scan(folder, mixed, REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
     straight = scan(folder, both, REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
     assert swapped.key == straight.key
+
+
+# ── The names a stop shows are the truth ─────────────────────────────────────
+
+def test_an_untied_stop_disambiguates_a_colliding_name(tmp_path):
+    # The same one-teller rule as Frayed titles: two entries named Dean make
+    # "How are Dean and Elara connected?" unanswerable -- WHICH Dean? The
+    # colliding one carries its filename. The other Dean has an alias the
+    # prose uses, because an ambiguous bare mention never counts as present.
+    folder = _project(tmp_path, {
+        "01.md": "# One\nDeano met Elara at the well.\n",
+        "02.md": "# Two\nDeano met Elara again.\n",
+    })
+    world = [
+        _thread("e-d1", "Dean", aliases=["Deano"], filename="dean.md"),
+        _thread("e-d2", "Dean", filename="dean-2.md"),
+        _thread("e-elara", "Elara"),
+    ]
+    stop = scan(folder, world, REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
+    assert "Dean (dean.md)" in stop.title
+    assert stop.detail["a"]["name"] == "Dean (dean.md)"
+
+
+def test_a_tie_snag_names_the_other_end_not_its_id(tmp_path):
+    # "leads e-4f2a91" is not a sentence a writer can decide anything from.
+    # The raw id stays on the side (the fixer's delete needs it); the NAME is
+    # what gets shown.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    registry = {
+        "types": REGISTRY["types"],
+        "relations": [{"id": "leads", "label": "leads", "inverse": "led_by",
+                       "symmetric": False, "source_types": ["character"],
+                       "target_types": ["character"], "cardinality": "one",
+                       "exclusive_group": None, "group": "Duty and standing"}],
+    }
+    elara = _thread("e-1", "Elara", ties=[
+        {"rel": "leads", "target": "e-2"},
+        {"rel": "leads", "target": "e-3"},
+    ])
+    world = [elara, _thread("e-2", "Garrick"), _thread("e-3", "Mira")]
+    result = scan(folder, world, registry, ScanRequest(depth=PASS_CLOTH))
+    snag = result.by_kind(STOP_SNAG)[0]
+    shown = {s.get("target_name") for s in snag.detail["sides"]}
+    assert shown == {"Garrick", "Mira"}
+    # And the ids are still there for the fixer to act on.
+    assert {s.get("target") for s in snag.detail["sides"]} == {"e-2", "e-3"}

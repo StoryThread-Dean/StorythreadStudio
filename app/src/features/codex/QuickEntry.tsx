@@ -83,6 +83,10 @@ export function QuickEntry({
   const [sections, setSections] = useState<Record<string, RegistrySection[]>>({});
   // The entry just made, which flips the form into the what-next step.
   const [made, setMade] = useState<GraphNode | null>(null);
+  // Whether `made` was APPENDED TO rather than created. The receipt has to
+  // say which -- "Created: Government" over an entry that existed for ten
+  // chapters reads as the app having just made a duplicate.
+  const [appended, setAppended] = useState(false);
   const [connecting, setConnecting] = useState(false);
   // Adding the answer to an entry that already exists (Unwoven only).
   const [addingTo, setAddingTo] = useState<GraphNode | null>(null);
@@ -131,6 +135,18 @@ export function QuickEntry({
 
   async function create() {
     if (!name.trim() || busy) return;
+    // The starter text has an ADDRESS -- a section of the new entry -- and
+    // when the registry could not be read there is no address to send it to.
+    // The first version quietly created the entry WITHOUT the text, which is
+    // the worst of the three options: the writer's words vanished and the
+    // receipt said success. Refusing out loud keeps the words in the box.
+    if (text.trim() && !landing) {
+      setError(
+        "The starter text has nowhere to land -- this kind's sections could "
+        + "not be read. Try again in a moment, or clear the text box to "
+        + "create the entry without it.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -203,6 +219,7 @@ export function QuickEntry({
         throw new Error(body?.detail?.message ?? "That could not be saved.");
       }
       setAddingTo(null);
+      setAppended(true);
       setMade(node);
     } catch (e) {
       setError(e instanceof Error ? e.message : "That could not be saved.");
@@ -246,7 +263,9 @@ export function QuickEntry({
     >
       <div
         role="dialog"
-        aria-label={made ? `Created ${nodeLabel(made)}` : "Quick entry"}
+        aria-label={made
+          ? `${appended ? "Added to" : "Created"}: ${nodeLabel(made)}`
+          : "Quick entry"}
         data-testid="quick-entry"
         className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
       >
@@ -254,7 +273,9 @@ export function QuickEntry({
           <KindIcon size={14}
                     className={`shrink-0 ${TONE_CLASSES[kindEntry.tone].text}`} />
           <h2 className="flex-1 text-xs font-semibold text-text-primary">
-            {made ? `Created: ${nodeLabel(made)}` : `New ${kindEntry.term}`}
+            {made
+              ? `${appended ? "Added to" : "Created"}: ${nodeLabel(made)}`
+              : `New ${kindEntry.term}`}
           </h2>
           <button onClick={close} aria-label="Close"
                   className="rounded p-0.5 text-faint hover:text-text-primary">
@@ -268,11 +289,24 @@ export function QuickEntry({
             <p className="flex items-start gap-1.5 text-[11px] text-emerald-200">
               <Check size={12} className="mt-0.5 shrink-0" />
               <span>
-                <span className="font-medium text-text-primary">
-                  {nodeLabel(made)}
-                </span>{" "}
-                is now a {kindEntry.term} in your world. It is a base to build
-                on -- you can expand it any time from the sidebar.
+                {appended ? (
+                  <>
+                    Your answer was added to{" "}
+                    <span className="font-medium text-text-primary">
+                      {nodeLabel(made)}
+                    </span>
+                    {landing ? ` under ${landing.heading}` : ""}. Everything
+                    already written there was kept.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-text-primary">
+                      {nodeLabel(made)}
+                    </span>{" "}
+                    is now a {kindEntry.term} in your world. It is a base to
+                    build on -- you can expand it any time from the sidebar.
+                  </>
+                )}
               </span>
             </p>
 
