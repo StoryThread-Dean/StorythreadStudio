@@ -224,6 +224,24 @@ async def _migration_004_tie_rel_inverse(db: aiosqlite.Connection) -> None:
     await db.execute("ALTER TABLE codex_tie ADD COLUMN rel_inverse TEXT")
 
 
+async def _migration_005_entity_role_and_kind(db: aiosqlite.Connection) -> None:
+    """
+    What a Thread IS to the story, and which template it uses.
+
+    The Profile Builder needs both to render a list: `role` (protagonist,
+    antagonist, and so on) and `character_kind` ("main" gets the full
+    trait-block editor, "side" gets the simplified one). Both are already in
+    every Thread FILE -- they are parsed and written faithfully -- but the index
+    never stored them, so `/api/codex/list` could not answer either question and
+    the profile list would have rendered every character as an untitled main.
+
+    Recovery task R2.3. A new migration rather than an edit to 002: see the
+    header, and see 004 for what happens when that rule is broken.
+    """
+    await db.execute("ALTER TABLE codex_entity ADD COLUMN role TEXT")
+    await db.execute("ALTER TABLE codex_entity ADD COLUMN character_kind TEXT")
+
+
 # Ordered list. Append-only. Version N = _MIGRATIONS[N-1].
 #
 # APPEND ONLY, and this is not a style preference. Editing an entry that has
@@ -235,6 +253,7 @@ _MIGRATIONS: list[Callable[[aiosqlite.Connection], Awaitable[None]]] = [
     _migration_002_codex,
     _migration_003_tie_reason,
     _migration_004_tie_rel_inverse,
+    _migration_005_entity_role_and_kind,
 ]
 
 

@@ -166,3 +166,63 @@ async def test_each_migration_can_run_on_the_one_before_it(project):
             finally:
                 _MIGRATIONS[:] = original
         assert _version(project) == step
+
+
+# ── 005: role and character_kind on the index (R2.3) ────────────────────────
+#
+# Both were in every Thread FILE from the start and neither was indexed, so
+# /api/codex/list could not say whether a character was a protagonist or a
+# walk-on, or which editor template they use. The Profile Builder needs both to
+# draw a row, so this had to land before it could point at the codex.
+#
+# Tested as an UPGRADE, which is the whole point of this file: an ALTER
+# smuggled into an already-applied migration looks perfectly correct when every
+# test builds its database from scratch.
+
+@pytest.mark.asyncio
+async def test_a_database_at_version_4_gains_role_and_kind(project):
+    await _build_to(project, 4)
+    assert "role" not in _columns(project, "codex_entity")
+
+    async with open_db(project):
+        pass                       # opening runs what is pending
+
+    assert {"role", "character_kind"} <= _columns(project, "codex_entity")
+
+
+@pytest.mark.asyncio
+async def test_a_v4_upgrade_ends_up_identical_to_a_fresh_database(project, tmp_path):
+    await _build_to(project, 4)
+    async with open_db(project):
+        pass
+
+    fresh = tmp_path / "Fresh"
+    (fresh / ".storythread").mkdir(parents=True)
+    async with open_db(str(fresh)):
+        pass
+
+    assert _columns(project, "codex_entity") == _columns(str(fresh), "codex_entity")
+    assert _version(project) == _version(str(fresh))
+
+
+@pytest.mark.asyncio
+async def test_an_existing_row_survives_the_upgrade(project):
+    # Every row in a real project predates these columns. If the ALTER demanded
+    # a value the upgrade would refuse on exactly the projects that matter.
+    import aiosqlite
+
+    await _build_to(project, 4)
+    async with aiosqlite.connect(get_db_path(project)) as db:
+        await db.execute(
+            "INSERT INTO codex_entity (entity_id, type, name, filename) "
+            "VALUES ('e-1', 'character', 'Elara Voss', 'elara.md')")
+        await db.commit()
+
+    async with open_db(project) as db:
+        cursor = await db.execute(
+            "SELECT name, role, character_kind FROM codex_entity")
+        row = await cursor.fetchone()
+        await cursor.close()
+
+    assert row[0] == "Elara Voss"
+    assert row[1] is None and row[2] is None

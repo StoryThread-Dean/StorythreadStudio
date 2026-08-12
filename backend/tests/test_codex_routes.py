@@ -980,3 +980,65 @@ def test_saving_a_section_without_traits_leaves_another_sections_traits_alone(pr
     _save(project, thread, thread.get("revision"))
 
     assert len(_entity(project)["sections"]["overview"]["trait_blocks"]) == 2
+
+
+# ── What a profile LIST needs (R2.3) ────────────────────────────────────────
+
+def test_the_list_says_what_a_character_is_to_the_story(project):
+    # `role` and `character_kind` were in every file and in no index row, so a
+    # profile list would have drawn every character as an untitled main.
+    import os
+    with open(os.path.join(project, "codex", "characters", "lead.md"), "w",
+              encoding="utf-8") as f:
+        f.write("---\ntype: character\nentity_id: e-lead\nname: Mira Kell\n"
+                "role: protagonist\ncharacter_kind: side\n---\n\n"
+                "# Overview\nShe runs the shop.\n")
+
+    threads = client.get("/api/codex/list",
+                         params={"project_path": project}).json()["threads"]
+    mira = next(t for t in threads if t["name"] == "Mira Kell")
+    assert mira["role"] == "protagonist"
+    assert mira["character_kind"] == "side"
+
+
+def test_a_thread_with_neither_reports_empty_rather_than_null(project):
+    # Callers should not have to tell absent from empty.
+    threads = client.get("/api/codex/list",
+                         params={"project_path": project}).json()["threads"]
+    elara = next(t for t in threads if t["name"] == "Elara Voss")
+    assert elara["role"] == ""
+    assert elara["character_kind"] == ""
+
+
+# ── Saving an entry counts towards the writer's day (R2.4) ──────────────────
+#
+# /api/profiles/save has always credited a save to Writing Progress. This route
+# never did, because when it was written only the Weave's own inline forms
+# edited Threads. The moment the Profile Builder points here that becomes a
+# silent regression: the streak and the word count stop moving, with no error.
+
+def test_saving_an_entry_records_a_save_event(project):
+    thread = _entity(project)
+    thread["sections"]["overview"]["content"] = (
+        "A tall woman who has learned to be quiet in doorways.")
+    assert _save(project, thread, thread.get("revision")).status_code == 200
+
+    body = client.get("/api/progress/daily",
+                      params={"project_path": project}).json()
+    assert body["today_words"] > 0
+
+
+def test_the_save_still_succeeds_when_progress_cannot_be_recorded(project, monkeypatch):
+    # Progress is a nicety. Losing the writer's entry because their streak
+    # could not be updated would not be.
+    from app.routers import codex as codex_router
+
+    async def boom(*a, **k):
+        raise RuntimeError("no database today")
+
+    monkeypatch.setattr(codex_router, "record_save_event", boom)
+
+    thread = _entity(project)
+    thread["sections"]["overview"]["content"] = "Still saved."
+    assert _save(project, thread, thread.get("revision")).status_code == 200
+    assert "Still saved." in _entity(project)["sections"]["overview"]["content"]

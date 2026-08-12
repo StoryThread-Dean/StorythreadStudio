@@ -155,10 +155,22 @@ types it is about are edited in a screen with no fact UI.
       memory `profiles-to-codex-plan`; `codex/` wins on conflict).
 - [ ] **R2.2** Reconcile `PROFILE_FOLDERS` / `SECTION_CONFIGS` / `profile.ts`
       into the registry (also closes section C item 5).
-- [ ] **R2.3** Add `role` + `character_kind` to the codex index; extend
-      `NewThreadBody`.
-- [ ] **R2.4** Wire `record_save_event` into `POST /entity` -- otherwise
-      Writing Progress goes dark silently on repoint.
+- [x] **R2.3a** `role` and `character_kind` are indexed. Migration 005 (its
+      own migration, per the append-only rule), written on reindex, and returned
+      by `/api/codex/list`. Both were in every Thread FILE from the start and in
+      no index row, so a profile list would have drawn every character as an
+      untitled main. Tested as an UPGRADE from v4, not a fresh install --
+      including that an existing row survives it, since every row in a real
+      project predates the columns.
+- [ ] **R2.3b** Extend `NewThreadBody` with `role` + `character_kind` so the
+      Profile Builder's create path can set them.
+- [x] **R2.4** `POST /entity` records a save event. `/api/profiles/save` has
+      always credited a save to Writing Progress and this route never did,
+      because when it was written only the Weave's own inline forms edited
+      Threads -- so the moment the Profile Builder points here, the writer's
+      streak and word count would have stopped moving with no error anywhere.
+      Best effort on purpose: losing an entry because a streak could not be
+      updated would be the worse failure, and there is a test for exactly that.
 - [ ] **R2.5** Give characters, relationships, locations and lore a **Run
       editor**, including a `revealed_at` control (gap A9).
       *Done-when:* the spec's opening example can be recorded end to end by a
@@ -292,7 +304,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 9 | 0 |
+| 2 The premise | 10 | 2 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 4 | 0 |
@@ -301,4 +313,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **73** | **18** |
+| **Total** | **74** | **20** |

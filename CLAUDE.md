@@ -32,17 +32,22 @@ its place without relying on memory or conversation history.
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
 > identity and phase 9 AI passes).
-> **Phase 1: 6 of 7 — everything except R1.5b, which is sequenced into Phase 2.**
+> **Phase 1 COMPLETE** except R1.5b, sequenced into Phase 2 by its own ruling.
 > R1.1 `GET /resolve` restored · R1.2 `GET /run` restored and `POST /run/resume`
 > built with Carry on / Start fresh · R1.3 `BriefShape` map above the
 > context-inspect list · R1.4 `weave_brief` kept (spec amendment) · R1.5a the
 > false hidden-trait comment deleted · R1.6 the two teaching registries bound
 > by a contract test.
-> **Next: Phase 2, the premise (BLOCKER).** Characters, relationships,
-> locations and lore are edited in a screen with no fact UI, so the spec's own
-> opening example cannot be recorded. Start at R2.1. R1.5b
-> (`merge_profile_with_arc`) goes when its route goes, alongside R2.1.
-> Branch health: 1582 backend tests, 1117 frontend tests, ruff and tsc clean.
+> **Phase 2 (the premise, BLOCKER): 2 of 10.** Groundwork done first because
+> both halves fail SILENTLY: R2.3a `role` + `character_kind` indexed (migration
+> 005, tested as an upgrade) · R2.4 `POST /entity` records a Writing Progress
+> save event, which it never did.
+> **Next: R2.1** — point the Profile Builder at `codex/`. `codex/` wins on
+> conflict (writer's ruling; test novels only). Then R2.2 collapse
+> `PROFILE_FOLDERS`/`SECTION_CONFIGS` into the registry, R2.5 the Run editor
+> (the actual blocker: the spec's opening example still cannot be recorded),
+> R1.5b when `merge_profile_with_arc`'s route goes.
+> Branch health: 1589 backend tests, 1117 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

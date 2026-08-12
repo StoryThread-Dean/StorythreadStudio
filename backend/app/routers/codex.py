@@ -14,6 +14,7 @@
 #      never be served as current canon. That check is inside the store
 #      functions, not repeated here, so a new route cannot forget it.
 
+import logging
 import os
 import re
 import uuid
@@ -75,8 +76,12 @@ from app.codex.types_registry import (
     type_by_id,
 )
 from app.db import open_db
+from app.progress_store import record_save_event
+from app.settings_store import get_rollover_hour
 from app.utils.paths import safe_child, validate_project_path
 from app.utils.structure_store import ensure_chapter_ids, ordered_chapter_filenames
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/codex", tags=["codex"])
 
@@ -532,8 +537,48 @@ async def save_entity(request: SaveThreadRequest):
             raise CodexError("duplicate_fact_id", "Two facts share an id.", fid)
         seen.add(fid)
 
+    # WHAT THE WRITER JUST DID COUNTS TOWARDS THEIR DAY.
+    #
+    # `/api/profiles/save` has always credited a profile save to Writing
+    # Progress -- the daily task and the word delta. This route never did,
+    # because when it was written the only thing editing Threads was the Weave's
+    # own inline forms and nobody had noticed. The moment the Profile Builder
+    # points here (R2.1) that becomes a silent regression: the writer's streak
+    # and word count stop moving with no error anywhere. Found by reading the
+    # spec against the code rather than by using the app, which could never have
+    # shown it.
+    #
+    # Read the OLD text before overwriting, because a word delta needs both
+    # sides. A failure to read it is not a reason to refuse the save.
+    previous = ""
+    try:
+        path = _thread_path(project_path, registry, thread["type"],
+                            thread["filename"])
+        with open(path, "r", encoding="utf-8") as f:
+            previous = f.read()
+    except OSError:
+        previous = ""          # a new entry has no previous text
+
     _write_thread(project_path, registry, thread)
     await codex_store.reindex(project_path)
+
+    # Best effort, deliberately. Progress is a nicety; losing the writer's
+    # entry because their streak could not be updated would not be.
+    try:
+        folder = folder_for_type(registry, thread["type"]) or thread["type"]
+        with open(_thread_path(project_path, registry, thread["type"],
+                               thread["filename"]), "r", encoding="utf-8") as f:
+            written = f.read()
+        await record_save_event(
+            project_path,
+            f"codex/{folder}/{thread['filename']}",
+            written,
+            previous,
+            rollover_hour=get_rollover_hour(),
+        )
+    except Exception:
+        log.exception("codex: could not record the save event")
+
     return {"saved": True, "revision": codex_store.source_revision(project_path)}
 
 

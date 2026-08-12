@@ -171,11 +171,17 @@ async def reindex(project_path: str, threads: list[dict] | None = None) -> int:
 
             await db.execute(
                 "INSERT OR REPLACE INTO codex_entity "
-                "(entity_id, type, name, filename, status, ai_scope, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(entity_id, type, name, filename, status, ai_scope, "
+                "role, character_kind, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (entity_id, thread.get("type", ""), thread.get("name", ""),
                  thread.get("filename", ""), thread.get("status", ""),
-                 thread.get("ai_scope", ""), thread.get("updated_at", "")),
+                 thread.get("ai_scope", ""),
+                 # Both live in every Thread file already and were simply never
+                 # indexed, so a profile list could not tell a protagonist from
+                 # a walk-on or a main character from a side one.
+                 thread.get("role", ""), thread.get("character_kind", ""),
+                 thread.get("updated_at", "")),
             )
 
             # The name is an alias too -- detection should not have to
@@ -244,7 +250,12 @@ async def ensure_fresh(project_path: str) -> bool:
 
 async def entities(project_path: str, type_id: str | None = None) -> list[dict]:
     await ensure_fresh(project_path)
-    sql = ("SELECT entity_id, type, name, filename, status FROM codex_entity")
+    # `role` and `character_kind` ride along because a profile LIST needs both
+    # to render a row -- which template a character uses, and what they are to
+    # the story. They were in the files and not in the index, so the list could
+    # not tell a protagonist from a walk-on.
+    sql = ("SELECT entity_id, type, name, filename, status, role, "
+           "character_kind FROM codex_entity")
     params: tuple = ()
     if type_id:
         sql += " WHERE type = ?"
@@ -255,7 +266,11 @@ async def entities(project_path: str, type_id: str | None = None) -> list[dict]:
         rows = await cursor.fetchall()
         await cursor.close()
     return [
-        {"entity_id": r[0], "type": r[1], "name": r[2], "filename": r[3], "status": r[4]}
+        {"entity_id": r[0], "type": r[1], "name": r[2], "filename": r[3],
+         "status": r[4],
+         # Defaulted to "": a Thread with no role is ordinary, and callers
+         # should not have to distinguish absent from empty.
+         "role": r[5] or "", "character_kind": r[6] or ""}
         for r in rows
     ]
 
