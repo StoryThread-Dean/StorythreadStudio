@@ -86,8 +86,26 @@ class TypesError(Exception):
 # Seeded into a new project's types.json. After that the file is the writer's;
 # these are never re-applied over it.
 
+# HEADING CASE. `.title()` alone gives "Rule Or Concept" and "Tone And
+# Atmosphere", which is not how English writes a heading -- and worse, it is not
+# what the Profile Builder writes, so the same section came out named two
+# different ways depending on which screen created the entry. The id is derived
+# from the heading by squashing case and punctuation, so fixing the words
+# changes nothing about where anything is filed.
+_SMALL_WORDS = {"a", "an", "and", "as", "at", "by", "for", "in", "of", "on",
+                "or", "the", "to", "with"}
+
+
+def _heading(name: str) -> str:
+    words = name.replace("_", " ").split()
+    return " ".join(
+        word.capitalize() if i == 0 or word not in _SMALL_WORDS else word
+        for i, word in enumerate(words)
+    )
+
+
 def _sections(*names: str) -> list[dict]:
-    return [{"id": n, "heading": n.replace("_", " ").title(), "trait_blocks": False}
+    return [{"id": n, "heading": _heading(n), "trait_blocks": False}
             for n in names]
 
 

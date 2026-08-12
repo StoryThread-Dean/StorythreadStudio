@@ -18,6 +18,7 @@ import logging
 import os
 import re
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -27,6 +28,7 @@ from app.codex.anchors import AnchorIndex, format_anchor
 from app.codex.errors import CodexError
 from app.codex.migrate import (
     compare_migrated,
+    entries_home,
     load_report,
     migration_state,
     plan_migration,
@@ -190,6 +192,16 @@ async def get_types(project_path: str = Query(...)):
     return {**registry, "reason_limit": REASON_LIMIT}
 
 
+def _count_entries(project_path: str, folder: str) -> int:
+    """How many entry files sit in a world folder. Used to say out loud what a
+    screen is not showing, which is the difference between a limitation and a
+    silent omission."""
+    total = 0
+    for _, _, names in os.walk(os.path.join(project_path, folder)):
+        total += sum(1 for name in names if name.endswith(".md"))
+    return total
+
+
 @router.get("/health")
 async def get_health(project_path: str = Query(...)):
     """
@@ -208,9 +220,17 @@ async def get_health(project_path: str = Query(...)):
     except TypesError as exc:
         registry_ok, registry_error = False, str(exc)
 
+    # WHERE THE EDITOR SHOULD LOOK, decided in one place (see entries_home) and
+    # reported rather than re-derived. Plus how much is in the OTHER folder, so
+    # a screen can say "twelve entries live in the Weave and are not shown here"
+    # instead of quietly showing less than the writer has.
+    home = entries_home(project_path)
     return {
         "schema_version": SCHEMA_VERSION,
         "migration_state": migration_state(project_path),
+        "entries_home": home,
+        "elsewhere": _count_entries(project_path,
+                                    "profiles" if home == "codex" else "codex"),
         "index_dirty": meta["dirty"]
         or meta["revision"] != codex_store.source_revision(project_path),
         "registry_ok": registry_ok,
@@ -234,7 +254,7 @@ async def get_sections(project_path: str = Query(...)):
     """
     project_path = validate_project_path(project_path)
     _registry(project_path)          # refuse early on a broken registry
-    return build_sections(project_path, migration_state(project_path) == "done")
+    return build_sections(project_path, entries_home(project_path))
 
 
 class AddTypeRequest(BaseModel):
@@ -263,7 +283,7 @@ async def post_type(request: AddTypeRequest):
             "That kind could not be added.",
             str(exc),
         ) from exc
-    return build_sections(project_path, migration_state(project_path) == "done")
+    return build_sections(project_path, entries_home(project_path))
 
 
 class ShowTypeRequest(BaseModel):
@@ -291,7 +311,7 @@ async def post_show_type(request: ShowTypeRequest):
     except TypesError as exc:
         raise CodexError("type_invalid", "That section could not be changed.",
                          str(exc)) from exc
-    return build_sections(project_path, migration_state(project_path) == "done")
+    return build_sections(project_path, entries_home(project_path))
 
 
 class AddNoteRequest(BaseModel):
@@ -314,7 +334,7 @@ async def post_note(request: AddNoteRequest):
     except TypesError as exc:
         raise CodexError("type_invalid", "That note could not be added.",
                          str(exc)) from exc
-    return build_sections(project_path, migration_state(project_path) == "done")
+    return build_sections(project_path, entries_home(project_path))
 
 
 class RenameSectionRequest(BaseModel):
@@ -347,7 +367,7 @@ async def patch_section(request: RenameSectionRequest):
     except TypesError as exc:
         raise CodexError("type_invalid", "That could not be renamed.",
                          str(exc)) from exc
-    return build_sections(project_path, migration_state(project_path) == "done")
+    return build_sections(project_path, entries_home(project_path))
 
 
 @router.delete("/section")
@@ -376,7 +396,7 @@ async def delete_section(project_path: str = Query(...),
         raise CodexError("type_invalid", "That could not be removed.",
                          str(exc)) from exc
 
-    tree = build_sections(project_path, migration_state(project_path) == "done")
+    tree = build_sections(project_path, entries_home(project_path))
     return {**tree, **moved}
 
 
@@ -399,7 +419,7 @@ async def patch_type_group(request: MoveTypeRequest):
     except TypesError as exc:
         raise CodexError("type_invalid", "That section could not be moved.",
                          str(exc)) from exc
-    return build_sections(project_path, migration_state(project_path) == "done")
+    return build_sections(project_path, entries_home(project_path))
 
 
 @router.post("/reindex")
@@ -558,6 +578,15 @@ async def save_entity(request: SaveThreadRequest):
             previous = f.read()
     except OSError:
         previous = ""          # a new entry has no previous text
+
+    # WHEN, stamped here rather than in _write_thread. Every other writer of a
+    # Thread file -- recording a tie, patching one fact, the conversion itself --
+    # would otherwise restamp files the writer never opened, and conversion
+    # deliberately preserves the dates it found. This is the editor's save, so
+    # this is the one that means "the writer changed this".
+    thread["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if not thread.get("created_at"):
+        thread["created_at"] = thread["updated_at"]
 
     _write_thread(project_path, registry, thread)
     await codex_store.reindex(project_path)
@@ -1597,6 +1626,16 @@ class NewThreadBody(BaseModel):
     project_path: str
     type: str
     name: str
+    # What this thing is TO THE STORY -- protagonist, mentor, rival. Free text
+    # on purpose: a writer's word for a role is theirs, and the Profile
+    # Builder's create form has always asked for it.
+    role: str = ""
+    # Characters only: which template the entry starts from. "main" is the full
+    # trait-block page; "side" is the one-field-per-section page a walk-on
+    # deserves. Sent by the Profile Builder's create form, which is why this
+    # route needed it -- without it every character it made would open as a
+    # Main, and the writer would find the difference only by looking.
+    character_kind: str = ""
     # Other words the prose uses for the same thing. Weaving groups a name with
     # its variants before it asks, so creating the entry once settles all of
     # them -- without this the writer would be back to three entries.
@@ -1642,12 +1681,26 @@ async def post_new_thread(body: NewThreadBody):
         filename = f"{stem}-{n}.md"
         n += 1
 
+    # Both timestamps, because the profile format has always carried them and an
+    # entry created here is the same kind of thing as one created there. A file
+    # with no dates is not a smaller file, it is a file that has forgotten when
+    # the writer started it.
+    now = datetime.now(timezone.utc).isoformat()
+
     thread = {
         "type": type_entry["id"],
         "entity_id": "e-" + uuid.uuid4().hex[:12],
         "name": name,
         "filename": filename,
         "status": "active",
+        "role": " ".join(str(body.role or "").split()),
+        # Only "side" means anything on disk -- render_thread writes nothing for
+        # a Main, which keeps a converted character's file byte-identical.
+        # Anything else the wire offers is not a template this app has.
+        "character_kind": ("side" if str(body.character_kind or "").strip().lower()
+                           == "side" else ""),
+        "created_at": now,
+        "updated_at": now,
         "aliases": _clean_aliases(body.aliases, name),
         "tags": [], "fields": {}, "ties": [], "run": [],
         "sections": {

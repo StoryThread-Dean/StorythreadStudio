@@ -27,27 +27,48 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 17 of 73 tasks done.
+> **LEDGER — last updated 2026-08-12.** 23 of 75 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
 > identity and phase 9 AI passes).
-> **Phase 1 COMPLETE** except R1.5b, sequenced into Phase 2 by its own ruling.
+> **Phase 1 COMPLETE** except R1.5b, which is STILL blocked and for a new
+> reason: R2.1 kept `profiles/` as a live home for unconverted projects, so
+> `merge_profile_with_arc`'s route is still doing the work the ruling was
+> protecting. It goes when `profiles/` stops being a home -- a decision for the
+> writer, not a side effect of a task.
 > R1.1 `GET /resolve` restored · R1.2 `GET /run` restored and `POST /run/resume`
 > built with Carry on / Start fresh · R1.3 `BriefShape` map above the
 > context-inspect list · R1.4 `weave_brief` kept (spec amendment) · R1.5a the
 > false hidden-trait comment deleted · R1.6 the two teaching registries bound
 > by a contract test.
-> **Phase 2 (the premise, BLOCKER): 2 of 10.** Groundwork done first because
+> **Phase 2 (the premise, BLOCKER): 5 of 11.** Groundwork went first because
 > both halves fail SILENTLY: R2.3a `role` + `character_kind` indexed (migration
 > 005, tested as an upgrade) · R2.4 `POST /entity` records a Writing Progress
 > save event, which it never did.
-> **Next: R2.1** — point the Profile Builder at `codex/`. `codex/` wins on
-> conflict (writer's ruling; test novels only). Then R2.2 collapse
-> `PROFILE_FOLDERS`/`SECTION_CONFIGS` into the registry, R2.5 the Run editor
-> (the actual blocker: the spec's opening example still cannot be recorded),
-> R1.5b when `merge_profile_with_arc`'s route goes.
-> Branch health: 1589 backend tests, 1117 frontend tests, ruff and tsc clean.
+> **R2.1 DONE — the Profile Builder no longer knows which folder it reads.** It
+> asks `GET /health`, which reports `entries_home` from the one function that
+> decides (`migrate.py`); every `build_sections` call site asks the same
+> function, so the sidebar's count and the editor's list cannot disagree again
+> (that disagreement was the writer's original 13-vs-12 report). `profiles/`
+> stays live for unconverted projects because conversion is an offer, not a toll
+> gate; where both folders hold work the bigger world wins and the screen SAYS
+> how many entries it is not showing. Two implementations, one interface:
+> `app/src/screens/profileSource.ts`. The load carries the whole Thread through
+> and the save hands it back, so editing an overview cannot delete a character's
+> connections — that test was verified by reinstating the bug.
+> **R2.2a DONE — the three copies of the section list are bound by contract
+> tests** (Python reads `profile.ts`). It found three live bugs, all mine from
+> earlier in this recovery, one destructive: `profiles.py` keyed Hidden and
+> Foreshadowing differently from the form, so the section read empty and a save
+> wrote that emptiness over the writer's hidden traits.
+> **R2.3b DONE** — create carries `role` + `character_kind`.
+> **Next: R2.6** — `_find_related_relationships` still has a hardcoded
+> `profiles/relationships/` path and now fails silently on a converted project.
+> Then R2.5 the Run editor (the real blocker: the spec's opening example still
+> cannot be recorded), R2.2b drive sections from the registry, R2.7 import,
+> R2.8 the six kinds with no editor, R2.9 Relationships.
+> Branch health: 1615 backend tests, 1143 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

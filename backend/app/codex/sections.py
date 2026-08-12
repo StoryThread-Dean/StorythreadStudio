@@ -209,15 +209,26 @@ def _has_content(path: str) -> bool:
         return False
 
 
-def build_sections(project_path: str, converted: bool) -> dict:
+def build_sections(project_path: str, home: str = "profiles") -> dict:
     """
     The sidebar tree: groups, their sections, and what is available to add.
 
-    `converted` decides where Thread counts come from -- codex/ once the
-    project has been brought in, profiles/ before that. Either way the tree
-    looks the same, so the sidebar does not change shape underneath a writer
-    when they convert.
+    `home` is WHICH FOLDER the Thread counts come from -- "codex" or
+    "profiles". Callers get it from `entries_home`, which is the one place that
+    decides, because the count in this tree and the list in the Profile Builder
+    disagreeing is exactly the bug the writer reported: thirteen Characters in
+    the tree, twelve on the map, and twelve of them unopenable.
+
+    Either way the tree looks the same, so the sidebar does not change shape
+    underneath a writer when they convert.
+
+    Note that `home` is NOT the same question as "has this project been
+    converted", and this used to be one parameter doing both jobs. A project
+    with nothing in profiles/ is edited in codex/ while being entirely
+    unconverted, and reporting that as converted would have been a small lie
+    told by the tree.
     """
+    from app.codex.migrate import migration_state
     try:
         registry, _ = load_registry(project_path)
     except TypesError:
@@ -225,7 +236,8 @@ def build_sections(project_path: str, converted: bool) -> dict:
         # means "we cannot describe the tree", not "the tree is empty".
         raise
 
-    root = os.path.join(project_path, "codex" if converted else "profiles")
+    root = os.path.join(project_path,
+                        "codex" if home == "codex" else "profiles")
     notes_dir = os.path.join(project_path, "notes")
 
     groups: dict[str, list[dict]] = {name: [] for name in GROUPS}
@@ -323,5 +335,7 @@ def build_sections(project_path: str, converted: bool) -> dict:
             for name in GROUP_ORDER
         ],
         "available": available,
-        "converted": converted,
+        # The marker in project.json is the only durable statement of this,
+        # so it is read rather than inferred from where the entries live.
+        "converted": migration_state(project_path) == "done",
     }

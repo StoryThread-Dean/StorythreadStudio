@@ -54,7 +54,7 @@ export const IMPORTANCE_HELP: Record<string, ImportanceLevelHelp> = {
         "Their default way of speaking that should appear in most dialogue.\n" +
         "Example: 'Speaks in short, direct sentences. Avoids emotional language.' " +
         "-- this defines how the AI writes their lines.",
-      hidden_and_foreshadowing:
+      hidden_and_foreshadowing_traits:
         "Rarely appropriate as Core. Hidden traits are meant to be subtle or secret. " +
         "Consider Present or Background instead.",
     },
@@ -84,7 +84,7 @@ export const IMPORTANCE_HELP: Record<string, ImportanceLevelHelp> = {
         "Speech patterns that appear often but not in every line.\n" +
         "Example: 'Uses dark humor when under stress' " +
         "-- situational but frequent.",
-      hidden_and_foreshadowing:
+      hidden_and_foreshadowing_traits:
         "Foreshadowing that should subtly appear in scenes.\n" +
         "Example: 'Has recurring nightmares about drowning (foreshadows the flood in Act III)' " +
         "-- the AI weaves this in when natural.",
@@ -115,7 +115,7 @@ export const IMPORTANCE_HELP: Record<string, ImportanceLevelHelp> = {
         "Rare speech patterns that appear in specific emotional states.\n" +
         "Example: 'Slips into her mother's dialect when very tired or emotional' " +
         "-- once or twice per arc, not every scene.",
-      hidden_and_foreshadowing:
+      hidden_and_foreshadowing_traits:
         "Subtle seeds the reader shouldn't consciously notice yet.\n" +
         "Example: 'Avoids touching iron -- never explained why (readers learn in Book 2)' " +
         "-- tiny behavioral detail, not highlighted.",
@@ -146,7 +146,7 @@ export const IMPORTANCE_HELP: Record<string, ImportanceLevelHelp> = {
         "Niche speech abilities used in very specific scenes.\n" +
         "Example: 'Can perfectly mimic her commanding officer's voice' " +
         "-- a party trick or deception tool, not a character voice.",
-      hidden_and_foreshadowing:
+      hidden_and_foreshadowing_traits:
         "Plot hooks the writer hasn't decided to activate yet.\n" +
         "Example: 'May or may not be immune to the plague -- writer undecided' " +
         "-- stored for reference, not sent unless explicitly attached.",
@@ -177,7 +177,7 @@ export const IMPORTANCE_HELP: Record<string, ImportanceLevelHelp> = {
         "Future voice changes driven by plot events.\n" +
         "Example: 'After the trauma in Act III, develops a halting stutter' " +
         "-- the AI shouldn't write the stutter before it happens.",
-      hidden_and_foreshadowing:
+      hidden_and_foreshadowing_traits:
         "Deep spoilers and writer-only planning notes.\n" +
         "Example: 'Is the prophesied Ember King. Reveal planned for final chapter.' " +
         "-- the ultimate Hidden trait.",

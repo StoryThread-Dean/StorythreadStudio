@@ -233,7 +233,7 @@ def test_a_deleted_note_leaves_the_sidebar(tmp_path):
     create_note(folder, "Dungeon Rules")
     delete_note(folder, "dungeon-rules.md")
     assert "dungeon_rules" not in _sections(
-        build_sections(folder, converted=False), "notes")
+        build_sections(folder, home="profiles"), "notes")
 
 
 def test_deleting_two_notes_of_the_same_name_keeps_both(tmp_path):
@@ -252,7 +252,7 @@ def test_the_trash_is_not_scanned_as_notes(tmp_path):
     folder = _project(tmp_path)
     create_note(folder, "Dungeon Rules")
     delete_note(folder, "dungeon-rules.md")
-    sections = _sections(build_sections(folder, converted=False), "notes")
+    sections = _sections(build_sections(folder, home="profiles"), "notes")
     assert not any("trash" in key for key in sections)
 
 

@@ -67,7 +67,15 @@ export interface ProfileSection {
 export type CharacterKind = "main" | "side";
 
 export interface Profile {
-  profile_id: string;
+  /**
+   * The entry's id, whichever folder it lives in.
+   *
+   * Called `profile_id` in a profiles/ file and `entity_id` in a codex/ one.
+   * The screen uses ONE name for it and profileSource.ts does the mapping --
+   * two names for the same thing across one screen is how a load and a save
+   * end up pointed at different entries.
+   */
+  entity_id: string;
   type: ProfileType;
   name: string;
   role: string;              // e.g. "protagonist", "antagonist", "mentor"
@@ -79,6 +87,26 @@ export interface Profile {
   created_at: string;        // ISO datetime string
   updated_at: string;
   character_kind?: CharacterKind;  // characters only; absent/main for non-characters
+  /**
+   * What the file looked like when it was opened (codex/ entries only).
+   *
+   * Sent back with a save so the backend can refuse one that would overwrite
+   * work saved since -- by the writer in another window, or by the Weave
+   * recording a connection. Absent means "do not check", which is what a
+   * profiles/ file has always done.
+   */
+  revision?: string;
+  /**
+   * Everything the Weave's file format holds that this screen does not edit:
+   * aliases, the story's own name for the thing, its connections, and the Run
+   * -- the facts that change across the book.
+   *
+   * Carried through a load and handed straight back on save. Without it, the
+   * first time a writer fixed a typo on a character they would lose every
+   * connection that character had, and nothing would say so. Never rendered,
+   * never edited here; see profileSource.ts.
+   */
+  weave?: Record<string, unknown>;
 }
 
 // Lightweight profile summary for the left-panel list (no sections loaded)
@@ -89,6 +117,12 @@ export interface ProfileListItem {
   role: string;
   status: string;
   character_kind?: CharacterKind;
+  /**
+   * The id a codex/ entry is loaded and deleted by. Absent for a profiles/
+   * file, which is addressed by folder and filename -- the reason the source
+   * layer exists rather than the screen guessing which one it is holding.
+   */
+  entity_id?: string;
 }
 
 

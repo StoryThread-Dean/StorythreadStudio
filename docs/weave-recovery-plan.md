@@ -130,9 +130,13 @@ before anything is built on top of it. Each is gated on its R0.9 ruling.
       trait as `ai_scope: on-request`, which is what actually withholds it. A
       comment promising a writer their private notes are not transmitted is the
       worst kind of wrong.
-- [ ] **R1.5b** Delete `merge_profile_with_arc`. Sequenced per the ruling: it
-      is still called by a live route and is doing real work for un-migrated
-      projects, so it goes when that route goes, alongside R2.1.
+- [ ] **R1.5b** Delete `merge_profile_with_arc`. **Still blocked after R2.1,
+      and the reason changed.** The ruling sequenced it "when that route goes,
+      alongside R2.1" -- but R2.1 kept `profiles/` as a live home for
+      unconverted projects, so the route it belongs to is still doing real work
+      for exactly the projects the ruling was protecting. Recorded rather than
+      quietly skipped. It goes when `profiles/` stops being a home, which is a
+      decision for the writer, not a side effect of a task.
 - [x] **R1.6** Two registries kept and BOUND. `registries.test.ts` is the only
       file that knows about both: an Explain key naming a term must name one
       that exists, an explanation that IS a term's disclosure must use that
@@ -151,10 +155,67 @@ The spec's opening example -- the heroine who believes her father died until
 chapter fifteen -- cannot be recorded through the interface, because the four
 types it is about are edited in a screen with no fact UI.
 
-- [ ] **R2.1** Point the Profile Builder at `codex/` (plan already drafted in
-      memory `profiles-to-codex-plan`; `codex/` wins on conflict).
-- [ ] **R2.2** Reconcile `PROFILE_FOLDERS` / `SECTION_CONFIGS` / `profile.ts`
-      into the registry (also closes section C item 5).
+- [x] **R2.1** The Profile Builder reads and writes wherever this project's
+      entries actually live. It no longer knows which folder that is: it asks
+      `GET /health`, which reports `entries_home` from ONE function
+      (`entries_home` in `migrate.py`), and every `build_sections` call site asks
+      the same function -- so the sidebar's count and the editor's list come from
+      the same folder by construction. That disagreement was the writer's
+      original report: thirteen Characters in the tree, twelve on the map, five
+      openable.
+      The rules, in order, each because getting it wrong hides part of the
+      world: an interrupted conversion reads as `profiles/` (that is what a
+      restore puts back); a converted project is `codex/`; an unconverted project
+      whose `profiles/` holds work stays `profiles/` even if Weaving has made a
+      few `codex/` entries, because hiding thirteen profiles behind three
+      placeholders is the worse failure; anything else is `codex/`, so a new
+      project -- or one where the writer went to the Weave first -- has its
+      entries editable the moment they exist.
+      Rule three leaves a real gap and it is stated out loud rather than papered
+      over: `/health` also reports how many entries are in the OTHER folder, and
+      the screen says "3 entries were made in the Weave and are not shown here",
+      names why, and offers `profile.home` as an Explain. The reverse is
+      deliberately silent -- conversion leaves `profiles/` in place on purpose,
+      so counting it would raise an alarm about files that are meant to be there.
+      Two implementations behind one interface (`app/src/screens/profileSource.ts`),
+      because conversion is an offer rather than a toll gate and a writer who has
+      never opened the Weave must find their profiles where they left them.
+      *The thing that had to not go wrong:* a Thread holds connections, aliases,
+      the story's own name for something, and the Run. This screen edits none of
+      it, so the whole Thread is carried through a load and handed back on save.
+      A save that sent only what the form knows would have deleted a character's
+      connections the first time the writer fixed a typo, with nothing on screen
+      saying so. That is the first test in `profileSource.test.ts`, and it was
+      checked by reinstating the bug.
+      Also: saves carry `base_revision` so a stale save is refused with the
+      writer's text still in the buffer; deletes let the Weave forget the entry
+      so a name still in the prose is asked about again; Import is hidden rather
+      than offered-and-broken (R2.7); `updated_at` is stamped on save and both
+      dates set on create, matching what `/api/profiles/save` has always done.
+- [x] **R2.2a** The three copies of the section list are RECONCILED and
+      BOUND. `backend/tests/test_profile_registry_agreement.py` reads
+      `profile.ts` from Python (the trick `test_explain_costs.py` uses) and fails
+      if the form, `profiles.py` and the registry disagree on any id, heading,
+      trait-block flag or order; `app/src/types/sectionKeys.test.ts` fails if a
+      key is not what its own heading derives to, if Quick Build appends into a
+      section nothing renders, or if a section loses its help.
+      It found three live bugs, all of them mine from earlier in this recovery,
+      and one of them destructive: `profiles.py` still keyed the character page's
+      Hidden and Foreshadowing section as `hidden_and_foreshadowing` while the
+      form asked for `hidden_and_foreshadowing_traits`, so the section read as
+      empty and **the next save wrote that emptiness over the writer's hidden
+      traits**. Quick Build's Hidden row appended into a section nothing
+      rendered, and that section's help had quietly stopped appearing. None of
+      the three raises an error: an empty section looks like one you have not
+      filled in yet.
+      Also corrected here: the registry built headings with `.title()`, giving
+      "Rule Or Concept" and "Tone And Atmosphere" where the Profile Builder
+      writes "Rule or Concept" and "Tone and Atmosphere" -- the same section
+      named two different ways depending on which screen created the entry.
+- [ ] **R2.2b** Drive the form's sections from `GET /api/codex/types` and widen
+      `ProfileType` from a closed union to a string, deleting the duplication
+      rather than testing it. This is what unlocks R2.8 with no per-kind
+      frontend work, and covers kinds a writer invents.
 - [x] **R2.3a** `role` and `character_kind` are indexed. Migration 005 (its
       own migration, per the append-only rule), written on reindex, and returned
       by `/api/codex/list`. Both were in every Thread FILE from the start and in
@@ -162,8 +223,11 @@ types it is about are edited in a screen with no fact UI.
       untitled main. Tested as an UPGRADE from v4, not a fresh install --
       including that an existing row survives it, since every row in a real
       project predates the columns.
-- [ ] **R2.3b** Extend `NewThreadBody` with `role` + `character_kind` so the
-      Profile Builder's create path can set them.
+- [x] **R2.3b** `POST /thread/new` accepts `role` and `character_kind`, so the
+      create form's two questions survive the trip. Without them every character
+      the Profile Builder made would have opened as an untitled Main. Only
+      "side" is written to disk, which is what keeps a converted character's file
+      byte-identical.
 - [x] **R2.4** `POST /entity` records a save event. `/api/profiles/save` has
       always credited a save to Writing Progress and this route never did,
       because when it was written only the Weave's own inline forms edited
@@ -304,7 +368,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 10 | 2 |
+| 2 The premise | 11 | 5 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 4 | 0 |
@@ -313,4 +377,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **74** | **20** |
+| **Total** | **75** | **23** |

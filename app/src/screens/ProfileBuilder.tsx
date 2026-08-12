@@ -18,6 +18,7 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } fr
 import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X } from "lucide-react";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { ChatMarkdown } from "../components/ChatMarkdown";
+import { Explain } from "../components/learn/Explain";
 import type { ProjectInfo } from "../types/project";
 import type {
   Profile,
@@ -48,6 +49,12 @@ import { NameGeneratorPanel } from "../components/profiles/NameGeneratorPanel";
 import { Dices } from "lucide-react";
 import { ROLE_SUGGESTIONS, ARCHETYPE_ROLE_TAGS } from "../data/characterSpines";
 import type { CharacterKind } from "../types/profile";
+// WHERE THIS PROJECT'S ENTRIES LIVE. A converted project keeps them in
+// codex/ and an unconverted one in profiles/; the screen asks rather than
+// assuming, because assuming is what left twelve of the writer's characters
+// with no editable page. See profileSource.ts for the whole story.
+import { fetchEntriesHome, sourceFor } from "./profileSource";
+import type { EntriesHome, ProfileSource } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
 
@@ -378,6 +385,12 @@ export function ProfileBuilder({
   // ── State ────────────────────────────────────────────────────────────────
   const [profileType, setProfileType] = useState<ProfileType>(initialType);
   const [profileList, setProfileList] = useState<ProfileListItem[]>([]);
+  // Which folder this project's entries live in, and how many are in the other
+  // one. `null` means the answer has not arrived yet, which is different from
+  // "profiles" -- loading a list before knowing would read the wrong folder and
+  // show an empty screen for a converted project.
+  const [home, setHome] = useState<EntriesHome | null>(null);
+  const [elsewhere, setElsewhere] = useState(0);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [listLoading, setListLoading] = useState(false);
@@ -501,48 +514,58 @@ export function ProfileBuilder({
 
   // ── Data Operations ──────────────────────────────────────────────────────
 
+  // One question, asked once: which folder. The backend decides it (see
+  // entries_home in the Python) so this screen and the sidebar can never
+  // disagree about how many Characters a project has.
+  useEffect(() => {
+    let cancelled = false;
+    fetchEntriesHome(project.root_path).then(report => {
+      if (cancelled) return;
+      setHome(report.home);
+      setElsewhere(report.elsewhere);
+    });
+    return () => { cancelled = true; };
+  }, [project.root_path]);
+
+  // The reader and writer for that folder. Rebuilt only when the home changes,
+  // so every operation below is pointed at one place for as long as the screen
+  // is open.
+  const source: ProfileSource | null = useMemo(
+    () => (home ? sourceFor(project.root_path, home) : null),
+    [project.root_path, home]
+  );
+
   const fetchProfileList = useCallback(async (type: ProfileType) => {
+    if (!source) return;
     setListLoading(true);
     setError(null);
     setProfile(null);
     setIsDirty(false);
 
     try {
-      const params = new URLSearchParams({ folder_path: project.root_path, type });
-      const res = await fetch(`${API_BASE}/api/profiles/list?${params}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to load profiles.");
-      }
-      setProfileList(await res.json());
+      setProfileList(await source.list(type));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load profiles.");
       setProfileList([]);
     } finally {
       setListLoading(false);
     }
-  }, [project.root_path]);
+  }, [source]);
 
+  // Waits for the home to arrive: `source` is null until then, and fetching
+  // would otherwise read profiles/ for one render and replace it a moment
+  // later, which looks exactly like an empty project.
   useEffect(() => {
     fetchProfileList(profileType);
   }, [profileType, fetchProfileList]);
 
 
   const loadProfile = useCallback(async (item: ProfileListItem) => {
+    if (!source) return;
     setEditorLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        folder_path: project.root_path,
-        type: item.type,
-        filename: item.filename,
-      });
-      const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to load profile.");
-      }
-      setProfile(await res.json());
+      setProfile(await source.load(item));
       setIsDirty(false);
       // Each profile gets its own list of folded-in relationships. Clear the
       // badge from the previously open profile so it doesn't follow the writer
@@ -553,26 +576,16 @@ export function ProfileBuilder({
     } finally {
       setEditorLoading(false);
     }
-  }, [project.root_path]);
+  }, [source]);
 
   const handleSave = useCallback(async () => {
     const p = profileRef.current;
-    if (!p) return;
+    if (!p || !source) return;
     try {
-      const res = await fetch(`${API_BASE}/api/profiles/save`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          folder_path: project.root_path,
-          filename: p.filename,
-          profile: p,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Save failed.");
-      }
-      const saved: Profile = await res.json();
+      // A refused save leaves the writer's text exactly where it is, still
+      // marked unsaved. That is the point of refusing rather than overwriting:
+      // the words are still in the buffer to try again with.
+      const saved: Profile = await source.save(p);
       setProfile(saved);
       setIsDirty(false);
       setError(null);
@@ -598,7 +611,7 @@ export function ProfileBuilder({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save profile.");
     }
-  }, [project.root_path]);
+  }, [source]);
 
 
   // --- Delete a profile ---
@@ -610,21 +623,10 @@ export function ProfileBuilder({
     const ok = window.confirm(
       `Delete "${item.name}"? This removes the profile file from disk and cannot be undone.`
     );
-    if (!ok) return;
+    if (!ok || !source) return;
 
     try {
-      const params = new URLSearchParams({
-        folder_path: project.root_path,
-        type:        item.type,
-        filename:    item.filename,
-      });
-      const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to delete profile.");
-      }
+      await source.remove(item);
       setProfileList(prev => prev.filter(p => p.filename !== item.filename));
       // If the deleted profile was open in the editor, clear the editor view.
       if (profileRef.current?.filename === item.filename) {
@@ -635,7 +637,7 @@ export function ProfileBuilder({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete profile.");
     }
-  }, [project.root_path]);
+  }, [source]);
 
 
   // --- Find & Replace actions ---
@@ -788,27 +790,17 @@ export function ProfileBuilder({
   }, [handleSave, findOpen]);
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !source) return;
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/profiles/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          folder_path: project.root_path,
-          type: profileType,
-          name: newName.trim(),
-          role: newRole.trim(),
-          // Non-characters ignore this server-side; "main" is the default.
-          character_kind: profileType === "character" ? newKind : "main",
-        }),
+      const created: Profile = await source.create({
+        type: profileType,
+        name: newName.trim(),
+        role: newRole.trim(),
+        // Non-characters ignore this; "main" is the default template.
+        characterKind: profileType === "character" ? newKind : "main",
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to create profile.");
-      }
-      const created: Profile = await res.json();
       await fetchProfileList(profileType);
       setProfile(created);
       setIsDirty(false);
@@ -824,6 +816,7 @@ export function ProfileBuilder({
   };
 
   const handleImport = async () => {
+    if (!source) return;
     setError(null);
     const selected = await openFilePicker({
       multiple: false,
@@ -832,19 +825,7 @@ export function ProfileBuilder({
     });
     if (!selected || typeof selected !== "string") return;
     try {
-      const res = await fetch(`${API_BASE}/api/profiles/import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          folder_path: project.root_path,
-          source_path: selected,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Import failed.");
-      }
-      const imported: Profile = await res.json();
+      const imported: Profile = await source.importFile(selected);
       await fetchProfileList("character");
       setProfile(imported);
       setIsDirty(false);
@@ -1293,7 +1274,7 @@ export function ProfileBuilder({
               {PROFILE_TYPE_LABELS[profileType]}
             </p>
             <div className="flex items-center gap-1">
-              {profileType === "character" && (
+              {profileType === "character" && source?.canImport && (
                 <button
                   onClick={handleImport}
                   className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
@@ -1311,6 +1292,31 @@ export function ProfileBuilder({
               </button>
             </div>
           </div>
+
+          {/* WHAT THIS SCREEN IS NOT SHOWING.
+              Only in one direction, on purpose. If entries live in profiles/
+              while the Weave's folder also holds some, those are unreachable
+              from here and the writer should be told with a number. The reverse
+              is not worth saying: after conversion, profiles/ is deliberately
+              left in place as a copy, so counting it would raise an alarm about
+              files that are meant to be there. */}
+          {home === "profiles" && elsewhere > 0 && (
+            <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5">
+              <p className="text-xs text-amber-300">
+                {elsewhere} {elsewhere === 1 ? "entry was" : "entries were"} made
+                in the Weave and {elsewhere === 1 ? "is" : "are"} not shown here.
+              </p>
+              <p className="mt-1 text-xs text-text-muted">
+                This project has not been brought into the Weave yet, so this
+                screen is reading your profiles folder. Bring it in from the
+                Weave to edit everything in one place. Until then, open those
+                entries from the Weave map.
+              </p>
+              <div className="mt-1">
+                <Explain of="profile.home" compact />
+              </div>
+            </div>
+          )}
 
           {listLoading && (
             <p className="text-xs text-faint">Loading...</p>

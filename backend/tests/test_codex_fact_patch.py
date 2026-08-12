@@ -220,3 +220,73 @@ def test_an_answered_unwoven_question_stops_being_asked(project):
 
     after = unwoven_ids()
     assert after < before           # strictly fewer questions, none added
+
+
+# ── What the Profile Builder's create form has always asked for (R2.3b) ──────
+
+def test_a_new_entry_can_be_given_a_role_and_a_template(project):
+    # The create form asks for a role ("protagonist") and, for characters, which
+    # template to start from. This route could not carry either, so every
+    # character the Profile Builder made through it would have opened as an
+    # untitled Main -- and the writer would have found out by looking.
+    response = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Mira Kell",
+        "role": "protagonist", "character_kind": "side",
+    })
+    assert response.status_code == 200
+    entity_id = response.json()["thread"]["entity_id"]
+
+    body = client.get("/api/codex/entity",
+                      params={"project_path": project,
+                              "entity_id": entity_id}).json()
+    assert body["role"] == "protagonist"
+    assert body["character_kind"] == "side"
+
+    # And the list can say so without opening the file, which is what a profile
+    # list actually needs.
+    threads = client.get("/api/codex/list",
+                         params={"project_path": project}).json()["threads"]
+    mira = next(t for t in threads if t["name"] == "Mira Kell")
+    assert (mira["role"], mira["character_kind"]) == ("protagonist", "side")
+
+
+def test_a_main_character_writes_no_template_line(project):
+    # "main" is the default and is deliberately NOT written to disk, which is
+    # what keeps a converted character's file byte-identical to the profile it
+    # came from.
+    response = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Garrick Vale II",
+        "character_kind": "main",
+    })
+    assert response.status_code == 200
+    import os
+    path = os.path.join(project, "codex", "characters",
+                        response.json()["thread"]["filename"])
+    with open(path, encoding="utf-8") as f:
+        assert "character_kind" not in f.read()
+
+
+def test_a_new_entry_knows_when_it_was_made(project):
+    # The profile format has always carried both dates. A file with none is not
+    # a smaller file, it is one that has forgotten when the writer started it.
+    thread = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Wren Ashby",
+    }).json()["thread"]
+    assert thread["created_at"] and thread["updated_at"]
+
+
+def test_saving_an_entry_moves_its_updated_date_and_keeps_its_created_one(project):
+    thread = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "character", "name": "Wren Ashby",
+    }).json()["thread"]
+    created = thread["created_at"]
+
+    thread["sections"]["overview"]["content"] = "She keeps the ledger."
+    assert client.post("/api/codex/entity", json={
+        "project_path": project, "thread": thread}).status_code == 200
+
+    saved = client.get("/api/codex/entity",
+                       params={"project_path": project,
+                               "entity_id": thread["entity_id"]}).json()
+    assert saved["created_at"] == created
+    assert saved["updated_at"] >= created

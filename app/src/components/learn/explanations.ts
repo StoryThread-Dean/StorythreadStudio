@@ -291,6 +291,27 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "profile.home": {
+    what: "Which folder this screen is reading your entries from.",
+    why: "Your world lives in one of two places. Before you bring it into the "
+      + "Weave it sits in your profiles folder, exactly where it always has. "
+      + "After you bring it in, the Weave's own folder is the live one and the "
+      + "profiles folder is left behind as a copy. This screen follows the live "
+      + "one, and the sidebar counts the same folder, so the two can never "
+      + "disagree about how many characters you have.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Nothing to do. This is here to explain a count, not to be set.",
+      "If it says entries were made in the Weave and are not shown here, they "
+        + "are in the Weave's folder while your profiles are still in the old "
+        + "one. Bring your world in from the Weave and everything appears on "
+        + "this screen together.",
+      "Until you do, those entries are still editable -- open them from the "
+        + "Weave map instead.",
+    ],
+    endpoint: "/api/codex/health",
+  },
   "profile.connections": {
     what: "Who this is to everything else in your world, and why.",
     why: "A profile says what someone IS. This says what they are TO people -- "

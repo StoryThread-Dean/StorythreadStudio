@@ -36,7 +36,7 @@ export const QUICK_BUILD_ROWS: { section: TraitSection; label: string; targetSec
   { section: "mannerism", label: "Mannerism", targetSectionKey: "personality_traits" },
   { section: "voice",     label: "Voice",     targetSectionKey: "voice_notes" },
   { section: "want",      label: "Want / Motivation", targetSectionKey: "motivations" },
-  { section: "hidden",    label: "Hidden / Foreshadowing", targetSectionKey: "hidden_and_foreshadowing" },
+  { section: "hidden",    label: "Hidden / Foreshadowing", targetSectionKey: "hidden_and_foreshadowing_traits" },
 ];
 
 interface QuickBuildPanelProps {

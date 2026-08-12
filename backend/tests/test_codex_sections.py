@@ -64,7 +64,7 @@ def _available_ids(tree):
 def test_a_new_project_shows_only_the_defaults(tmp_path):
     # Somewhere obvious to start, and nothing else. A dozen empty headings
     # would read as a demand rather than an invitation.
-    tree = build_sections(_project(tmp_path), converted=False)
+    tree = build_sections(_project(tmp_path), home="profiles")
     assert set(_sections(tree, "notes")) == {"author_notes"}
     assert set(_sections(tree, "profiles")) == {"character", "location", "lore"}
     assert set(_sections(tree, "other")) == {"event"}
@@ -74,7 +74,7 @@ def test_every_group_opens_with_something_in_it(tmp_path):
     # Not just a heading. Each group starts with at least one familiar kind
     # a writer can click straight into, so none of the three is a dead end
     # on day one -- Other especially, whose name gives nothing away.
-    tree = build_sections(_project(tmp_path), converted=False)
+    tree = build_sections(_project(tmp_path), home="profiles")
     for group in tree["groups"]:
         assert group["sections"], f"{group['id']} opens with nothing to click"
 
@@ -86,14 +86,14 @@ def test_all_three_groups_are_always_there(tmp_path):
     # would mean they never found it -- and would leave nowhere to click
     # "+ Add New" for everything that belongs there, which is the only route
     # to most of the app.
-    tree = build_sections(_project(tmp_path), converted=False)
+    tree = build_sections(_project(tmp_path), home="profiles")
     assert _group_ids(tree) == ["notes", "profiles", "other"]
 
 
 def test_every_group_offers_a_way_to_add_to_it(tmp_path):
     # "+ Add New" sits at the top of each group's list, so the empty Other
     # group is an invitation rather than a dead heading.
-    tree = build_sections(_project(tmp_path), converted=False)
+    tree = build_sections(_project(tmp_path), home="profiles")
     for group in tree["groups"]:
         assert group["available"], f"{group['id']} offers nothing to add"
 
@@ -101,7 +101,7 @@ def test_every_group_offers_a_way_to_add_to_it(tmp_path):
 def test_everything_else_is_offered_rather_than_hidden(tmp_path):
     # Not hidden -- waiting. "+ Add New" is where a writer looks for a kind
     # they have not used yet.
-    tree = build_sections(_project(tmp_path), converted=False)
+    tree = build_sections(_project(tmp_path), home="profiles")
     assert {"faction", "religion", "object", "concept", "language"} <= _available_ids(tree)
     assert {"outline", "style_guide", "brainstorming"} <= _available_ids(tree)
     # ...and a default is NOT offered, because it is already on screen.
@@ -111,7 +111,7 @@ def test_everything_else_is_offered_rather_than_hidden(tmp_path):
 
 def test_a_section_appears_once_it_holds_something(tmp_path):
     folder = _project(tmp_path, profiles=[("factions", ["the-order"])])
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "faction" in _sections(tree, "profiles")
     # And stops being offered, because it is now on screen.
     assert "faction" not in _available_ids(tree)
@@ -140,7 +140,7 @@ def test_notes_are_documents_the_writer_authors(tmp_path):
     # entry, which is why they live in NOTE_SECTIONS rather than the type
     # registry at all.
     offered = {a["id"]: a["group"]
-               for a in build_sections(_project(tmp_path), converted=False)["available"]}
+               for a in build_sections(_project(tmp_path), home="profiles")["available"]}
     for note in ("outline", "style_guide", "brainstorming", "research", "themes"):
         assert offered[note] == "notes", f"{note} should be a Note"
 
@@ -152,13 +152,13 @@ def test_other_holds_only_what_is_genuinely_neither(tmp_path):
 
 
 def test_a_default_section_shows_even_when_empty(tmp_path):
-    tree = build_sections(_project(tmp_path), converted=False)
+    tree = build_sections(_project(tmp_path), home="profiles")
     assert _sections(tree, "profiles")["character"]["count"] == 0
 
 
 def test_sections_report_how_much_is_in_them(tmp_path):
     folder = _project(tmp_path, profiles=[("characters", ["a", "b", "c"])])
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert _sections(tree, "profiles")["character"]["count"] == 3
 
 
@@ -172,7 +172,7 @@ def test_an_existing_outline_keeps_its_section(tmp_path):
         ("outline.md", "# Outline\n\nAct one.\n"),
         ("style-guide.md", "# Style\n\nNo em dashes.\n"),
     ])
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert {"author_notes", "outline", "style_guide"} <= set(_sections(tree, "notes"))
     assert "outline" not in _available_ids(tree)
 
@@ -182,7 +182,7 @@ def test_an_empty_scaffolded_outline_does_not_count_as_content(tmp_path):
     # reason to show the section -- that would put every project back to the
     # wall of headings.
     folder = _project(tmp_path, notes=[("outline.md", "   \n\n")])
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "outline" not in _sections(tree, "notes")
     assert "outline" in _available_ids(tree)
 
@@ -191,7 +191,7 @@ def test_a_note_the_writer_added_by_hand_is_discovered(tmp_path):
     # Their file, their section. Pretending it is not there would be worse
     # than an unexpected heading.
     folder = _project(tmp_path, notes=[("world-rules.md", "Rules.\n")])
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "world_rules" in _sections(tree, "notes")
     assert _sections(tree, "notes")["world_rules"]["label"] == "World Rules"
 
@@ -200,17 +200,17 @@ def test_existing_profiles_populate_the_tree_before_conversion(tmp_path):
     # Conversion is an offer, not a toll gate: the new sidebar has to be
     # useful on a project that has never been brought in.
     folder = _project(tmp_path, profiles=[("characters", ["elara", "garrick"])])
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert _sections(tree, "profiles")["character"]["count"] == 2
 
 
 def test_the_tree_looks_the_same_after_conversion(tmp_path):
     # The sidebar must not change shape underneath a writer when they convert.
     before = build_sections(
-        _project(tmp_path / "a", profiles=[("characters", ["elara"])]), converted=False)
+        _project(tmp_path / "a", profiles=[("characters", ["elara"])]), home="profiles")
     after = build_sections(
         _project(tmp_path / "b", profiles=[("characters", ["elara"])], converted=True),
-        converted=True)
+        home="codex")
     assert _group_ids(before) == _group_ids(after)
     assert set(_sections(before, "profiles")) == set(_sections(after, "profiles"))
 
@@ -222,14 +222,14 @@ def test_groups_come_back_in_a_settled_order(tmp_path):
     # as a mistake.
     folder = _project(tmp_path, profiles=[("factions", ["x"])],
                       notes=[("outline.md", "Act one.\n")])
-    assert _group_ids(build_sections(folder, converted=False)) == \
+    assert _group_ids(build_sections(folder, home="profiles")) == \
         ["notes", "profiles", "other"]
 
 
 def test_a_group_is_labelled_in_words_a_writer_reads(tmp_path):
     # "Other", not "etc". The sidebar is the first thing a new writer meets.
     labels = {g["id"]: g["label"]
-              for g in build_sections(_project(tmp_path), converted=False)["groups"]}
+              for g in build_sections(_project(tmp_path), home="profiles")["groups"]}
     assert labels == {"notes": "Notes", "profiles": "Profiles", "other": "Other"}
 
 
@@ -241,13 +241,13 @@ def test_a_custom_kind_joins_the_world_like_any_other(tmp_path):
     # which is the whole point of the registry being data rather than code.
     folder = _project(tmp_path)
     add_type(folder, "", "Bloodline", group="other")
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "bloodline" in _available_ids(tree)
 
     (tmp_path / "MyNovel" / "profiles" / "bloodlines").mkdir(parents=True)
     (tmp_path / "MyNovel" / "profiles" / "bloodlines" / "the-crown.md").write_text(
         "# x\n", encoding="utf-8")
-    assert "bloodline" in _sections(build_sections(folder, converted=False), "other")
+    assert "bloodline" in _sections(build_sections(folder, home="profiles"), "other")
 
 
 def test_a_custom_kind_follows_the_same_rule_as_every_other(tmp_path):
@@ -257,7 +257,7 @@ def test_a_custom_kind_follows_the_same_rule_as_every_other(tmp_path):
     # abandoned attempt heals itself rather than littering the sidebar.
     folder = _project(tmp_path)
     add_type(folder, "", "Warband", group="profiles")
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "warband" not in _sections(tree, "profiles")
     assert "warband" in _available_ids(tree)
 
@@ -266,7 +266,7 @@ def test_a_custom_kind_can_be_put_in_any_group(tmp_path):
     folder = _project(tmp_path)
     add_type(folder, "", "Bloodline", group="profiles")
     offered = {a["id"]: a["group"]
-               for a in build_sections(folder, converted=False)["available"]}
+               for a in build_sections(folder, home="profiles")["available"]}
     assert offered["bloodline"] == "profiles"
 
 
@@ -274,7 +274,7 @@ def test_a_section_can_be_moved_afterwards(tmp_path):
     # A world where Factions belong with the people should be able to say so.
     folder = _project(tmp_path, profiles=[("factions", ["x"])])
     set_type_group(folder, "faction", "profiles")
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "faction" in _sections(tree, "profiles")
     assert "faction" not in _sections(tree, "other")
 
@@ -291,7 +291,7 @@ def test_a_custom_kind_appears_once_it_has_an_entry(tmp_path):
     (tmp_path / "MyNovel" / "profiles" / "warbands").mkdir(parents=True)
     (tmp_path / "MyNovel" / "profiles" / "warbands" / "the-thread.md").write_text(
         "# x\n", encoding="utf-8")
-    assert "warband" in _sections(build_sections(folder, converted=False), "profiles")
+    assert "warband" in _sections(build_sections(folder, home="profiles"), "profiles")
 
 
 # ── A name a writer types becomes a folder on their disk ─────────────────────
@@ -321,7 +321,7 @@ def test_a_windows_reserved_name_is_refused_before_it_can_fail(tmp_path):
 def test_a_two_word_name_becomes_one_tidy_id(tmp_path):
     folder = _project(tmp_path)
     add_type(folder, "", "Royal Household", group="other")
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "royal_household" in _available_ids(tree)
 
 
@@ -343,7 +343,7 @@ def test_the_id_is_derived_from_the_name_not_accepted_separately(tmp_path):
     # folder names safe.
     folder = _project(tmp_path)
     add_type(folder, "ignored_entirely", "Guild", group="other")
-    assert "guild" in _available_ids(build_sections(folder, converted=False))
+    assert "guild" in _available_ids(build_sections(folder, home="profiles"))
 
 
 def test_an_unknown_group_is_refused(tmp_path):
@@ -362,7 +362,7 @@ def test_picking_a_shipped_kind_shows_its_section(tmp_path):
     # refuse it as a duplicate, which is true and completely unhelpful.
     folder = _project(tmp_path)
     show_type(folder, "faction")
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "faction" in _sections(tree, "profiles")
     assert "faction" not in _available_ids(tree)
 
@@ -372,14 +372,14 @@ def test_a_shown_section_appears_even_though_it_is_empty(tmp_path):
     # first entry in.
     folder = _project(tmp_path)
     show_type(folder, "religion")
-    assert _sections(build_sections(folder, converted=False), "profiles")["religion"]["count"] == 0
+    assert _sections(build_sections(folder, home="profiles"), "profiles")["religion"]["count"] == 0
 
 
 def test_an_unused_section_can_be_tidied_away_again(tmp_path):
     folder = _project(tmp_path)
     show_type(folder, "religion")
     hide_type(folder, "religion")
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "religion" not in _sections(tree, "profiles")
     assert "religion" in _available_ids(tree)
 
@@ -389,7 +389,7 @@ def test_hiding_a_section_that_holds_something_does_not_hide_it(tmp_path):
     # off the second half must not hide entries the writer has written.
     folder = _project(tmp_path, profiles=[("religions", ["the-thread"])])
     hide_type(folder, "religion")
-    assert "religion" in _sections(build_sections(folder, converted=False), "profiles")
+    assert "religion" in _sections(build_sections(folder, home="profiles"), "profiles")
 
 
 def test_showing_a_kind_over_http(tmp_path):
@@ -417,7 +417,7 @@ def test_showing_a_kind_that_does_not_exist_is_refused(tmp_path):
 def test_a_writer_can_add_a_note_of_their_own(tmp_path):
     folder = _project(tmp_path)
     create_note(folder, "Dungeon Rules")
-    tree = build_sections(folder, converted=False)
+    tree = build_sections(folder, home="profiles")
     assert "dungeon_rules" in _sections(tree, "notes")
     assert _sections(tree, "notes")["dungeon_rules"]["label"] == "Dungeon Rules"
 
@@ -427,7 +427,7 @@ def test_a_new_note_appears_straight_away(tmp_path):
     # rule does not hide the thing the writer just asked for.
     folder = _project(tmp_path)
     create_note(folder, "Magic Costs")
-    section = _sections(build_sections(folder, converted=False), "notes")["magic_costs"]
+    section = _sections(build_sections(folder, home="profiles"), "notes")["magic_costs"]
     assert section["count"] == 1
 
 

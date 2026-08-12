@@ -50,6 +50,7 @@
 #    save for human readers and carries no weight. Renaming a character
 #    therefore cannot invalidate the epistemic state of the book.
 
+import datetime as _datetime
 import re
 from typing import Callable
 
@@ -192,8 +193,8 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
         "display_name": str(front.get("display_name") or ""),
         "tags": [str(t) for t in (front.get("tags") or []) if t],
         "fields": dict(front.get("fields") or {}),
-        "created_at": str(front.get("created_at") or ""),
-        "updated_at": str(front.get("updated_at") or ""),
+        "created_at": _stamp(front.get("created_at")),
+        "updated_at": _stamp(front.get("updated_at")),
         # Only written when "side" -- same rule the profile format uses, so
         # a Main character's file stays byte-identical through migration.
         "character_kind": str(front.get("character_kind") or ""),
@@ -298,6 +299,22 @@ _SECTION_ALIASES: dict[str, tuple[str, str]] = {
 }
 
 
+def _stamp(value) -> str:
+    """
+    A date, as the ISO string every other layer expects.
+
+    YAML is helpful about dates: an unquoted `2026-08-12T13:01:38+00:00` comes
+    back as a real datetime, and `str()` of one of those puts a SPACE where the
+    T was. So a timestamp written as ISO read back as not-quite-ISO, which is
+    the kind of drift that is invisible until something parses it strictly.
+    Timestamps are quoted on the way out now, and anything already on disk is
+    normalized here on the way in.
+    """
+    if isinstance(value, (_datetime.datetime, _datetime.date)):
+        return value.isoformat()
+    return str(value or "")
+
+
 def _section_id(heading: str) -> str:
     """'Physical Traits' -> 'physical_traits'. Matches the registry's ids."""
     return re.sub(r"[^a-z0-9]+", "_", heading.strip().lower()).strip("_")
@@ -398,10 +415,12 @@ def render_thread(
             if tie.get("ai_scope") and tie["ai_scope"] != "always":
                 lines.append(f"    ai_scope: {tie['ai_scope']}")
 
+    # Quoted, so YAML hands them back as the strings they were written as
+    # rather than as datetimes -- see _stamp.
     if thread.get("created_at"):
-        lines.append(f"created_at: {thread['created_at']}")
+        lines.append(f"created_at: {_quote(_stamp(thread['created_at']))}")
     if thread.get("updated_at"):
-        lines.append(f"updated_at: {thread['updated_at']}")
+        lines.append(f"updated_at: {_quote(_stamp(thread['updated_at']))}")
     lines += ["---", ""]
 
     # Sections, in the registry's declared order where one is available so

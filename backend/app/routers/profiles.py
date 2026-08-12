@@ -62,7 +62,15 @@ SECTION_CONFIGS: dict[str, list[SectionConfig]] = {
         SectionConfig("personality_traits",       "Personality Traits",              True),
         SectionConfig("motivations",              "Motivations",                     True),
         SectionConfig("voice_notes",              "Voice Notes",                     True),
-        SectionConfig("hidden_and_foreshadowing", "Hidden and Foreshadowing Traits", True),
+        # THE KEY MUST BE WHAT THE HEADING DERIVES TO. The Weave reads a
+        # section's id from its heading, so a key that disagrees with its own
+        # heading splits one section into two populations -- and this one did.
+        # The consequence was not cosmetic: the editor looked up
+        # hidden_and_foreshadowing_traits, found nothing, and a save wrote an
+        # empty section over the writer's hidden traits. Pinned by
+        # test_profile_registry_agreement.py so the two cannot part again.
+        SectionConfig("hidden_and_foreshadowing_traits",
+                      "Hidden and Foreshadowing Traits", True),
         SectionConfig("relationships_overview",   "Relationships Overview",          False),
         SectionConfig("notes",                    "Notes",                           False),
     ],

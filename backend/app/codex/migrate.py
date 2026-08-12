@@ -98,6 +98,62 @@ def migration_state(project_path: str) -> str:
     return "none"
 
 
+def _holds_entries(root: str) -> int:
+    """How many entry files are under a world folder, at any depth."""
+    total = 0
+    for _, _, names in os.walk(root):
+        total += sum(1 for n in names if n.endswith(".md"))
+    return total
+
+
+def entries_home(project_path: str) -> str:
+    """
+    WHERE THIS PROJECT'S ENTRIES LIVE: "codex" or "profiles".
+
+    One answer, in one place, because the alternative has already cost the
+    writer a day. The sidebar counted one folder while the Profile Builder read
+    the other, so a converted project showed thirteen Characters in the tree
+    and twelve on the map -- and twelve of the thirteen could not be opened at
+    all. Any surface that needs to know now asks here instead of deciding for
+    itself.
+
+    Note what this is NOT. It does not say whether a project has been
+    converted; `migration_state` is still the only thing that says that, and
+    the marker in project.json is still the only durable statement of it. This
+    answers the narrower question the editor actually has to ask, which is
+    which folder to open.
+
+    The order of the rules is the whole design:
+
+    1. An INTERRUPTED conversion reads as profiles/. The backup a restore puts
+       back is profiles/, so writing into a half-converted codex/ is the one
+       thing that could make that restore lossy.
+    2. A CONVERTED project is codex/. That is what conversion means.
+    3. An UNCONVERTED project whose profiles/ holds work is profiles/, even if
+       codex/ has a few entries Weaving made. Hiding a world of thirteen
+       profiles behind three placeholders would be the worse failure by far,
+       and conversion is an offer rather than a toll gate.
+    4. Anything else is codex/. A project with nothing in profiles/ has nothing
+       to lose and everything to gain: entries Weaving creates are editable in
+       the Profile Builder the moment they exist, which is the handshake the
+       Weave is for.
+
+    Rule 3 leaves a real gap, and it is deliberately left visible rather than
+    papered over: on a project with both, entries Weaving made are edited in
+    the Weave and not here. `GET /health` reports the count in the other home
+    so the screen can say so out loud instead of quietly showing less than the
+    writer has.
+    """
+    state = migration_state(project_path)
+    if state == "incomplete":
+        return "profiles"
+    if state == "done":
+        return "codex"
+    if _holds_entries(os.path.join(project_path, "profiles")):
+        return "profiles"
+    return "codex"
+
+
 # ── Looking before leaping ───────────────────────────────────────────────────
 
 def plan_migration(project_path: str) -> dict:
