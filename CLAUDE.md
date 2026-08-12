@@ -32,13 +32,17 @@ its place without relying on memory or conversation history.
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
 > identity and phase 9 AI passes).
-> **Phase 1: 5 of 7.** Done: R1.1 `GET /resolve` restored · R1.2 `GET /run`
-> restored and `POST /run/resume` built with Carry on / Start fresh · R1.4
-> `weave_brief` kept (spec amendment) · R1.5a the false hidden-trait comment
-> deleted · R1.6 the two teaching registries bound by a contract test.
-> **Next: R1.3** — the small map above the context-inspect list. Then Phase 2
-> (the premise), which also carries R1.5b (`merge_profile_with_arc`).
-> Branch health: 1582 backend tests, 1110 frontend tests, ruff and tsc clean.
+> **Phase 1: 6 of 7 — everything except R1.5b, which is sequenced into Phase 2.**
+> R1.1 `GET /resolve` restored · R1.2 `GET /run` restored and `POST /run/resume`
+> built with Carry on / Start fresh · R1.3 `BriefShape` map above the
+> context-inspect list · R1.4 `weave_brief` kept (spec amendment) · R1.5a the
+> false hidden-trait comment deleted · R1.6 the two teaching registries bound
+> by a contract test.
+> **Next: Phase 2, the premise (BLOCKER).** Characters, relationships,
+> locations and lore are edited in a screen with no fact UI, so the spec's own
+> opening example cannot be recorded. Start at R2.1. R1.5b
+> (`merge_profile_with_arc`) goes when its route goes, alongside R2.1.
+> Branch health: 1582 backend tests, 1117 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

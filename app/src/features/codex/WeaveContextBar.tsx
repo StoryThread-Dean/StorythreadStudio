@@ -10,9 +10,21 @@
 //     entirely. No context is transmitted until the writer initiates an AI
 //     action.
 //
-// Four obligations, four controls on this screen: the list IS the inspection,
-// each row has a remove, each kind has an exclude, and the switch turns the
-// whole thing off and returns the app to attachments only.
+// Four obligations, four controls on this screen: the list carries the
+// inspection, each row has a remove, each kind has an exclude, and the switch
+// turns the whole thing off and returns the app to attachments only.
+//
+// AND A MAP ABOVE THE LIST, because the spec said so and it was right:
+//
+//     "The inspect panel is a small map, not a list: the Threads going into
+//      the brief, drawn with their Ties, at the anchor being written."
+//
+// This shipped as a list alone, with a documented argument about screen space,
+// while the spec was not in the repository to argue back. The list is still the
+// only thing that can carry per-Thread cost, a remove button and the exact
+// words -- but eight names in a column cannot show that Alexandra and Dean are
+// connected while the Guild is attached to nothing, which is the judgement a
+// writer makes in one look. So: both (recovery task R1.3). See BriefShape.
 //
 // NOTHING HERE SENDS ANYTHING. Assembling a brief is a local calculation --
 // POST /api/codex/context reads files and does arithmetic. The brief travels
@@ -30,9 +42,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Globe, Loader, RotateCw, Undo2, X } from "lucide-react";
 
+import { BriefShape } from "./BriefShape";
 import { Explain } from "../../components/learn/Explain";
 import { TONE_CLASSES, threadTypeEntry } from "./lexicon";
-import { fetchAnchors } from "./api";
+import { fetchAnchors, fetchGraph, type GraphEdge } from "./api";
 import { fetchBrief, type Brief } from "./weavingApi";
 
 /** What the writer has decided about automatic world context, per book. */
@@ -74,6 +87,10 @@ export function WeaveContextBar({
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<string | null>(null);
+  // The world's edges, for drawing the brief's shape. Fetched when the panel
+  // is opened rather than on mount: the bar itself needs no map, and most
+  // visits to a chapter never open the panel at all.
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
   // WHETHER "NOW" IS SETTLED YET. Nothing is assembled until it is, and that
   // is a correctness rule rather than a nicety: with no anchor the brief is
   // assembled as of the END of the book, so a writer who opened chapter four
@@ -204,7 +221,19 @@ export function WeaveContextBar({
 
         {!off && (
           <button
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              setOpen(true);
+              // The shape needs the world's Ties. A failure here costs the map
+              // and nothing else -- the list still works, so it is not worth an
+              // error message.
+              // Defaulted, not trusted. A response without the key would
+              // otherwise crash the whole panel on `edges.filter` -- taking
+              // the list and every control down with the decoration.
+              void fetchGraph(projectPath, { at: at ?? undefined,
+                                            hideSpoilers: false })
+                .then(g => setEdges(g.edges ?? []))
+                .catch(() => setEdges([]));
+            }}
             className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary"
           >
             Inspect
@@ -285,7 +314,17 @@ export function WeaveContextBar({
                 </p>
               )}
 
-              {/* ── The list IS the inspection ─────────────────────────── */}
+              {/* ── The SHAPE, then the list ───────────────────────────── */}
+              {threads.length > 0 && (
+                <BriefShape
+                  threads={threads.map(p => ({ entity_id: p.entity_id,
+                                               name: p.name, type: p.type }))}
+                  edges={edges}
+                  asOfLabel={brief?.as_of
+                    ? "where you are writing" : "the end of the book"}
+                />
+              )}
+
               {threads.length === 0 && !busy ? (
                 <p className="mb-2 text-[11px] text-faint">
                   Nothing from your world is being sent. That is ordinary early
@@ -293,7 +332,7 @@ export function WeaveContextBar({
                   they connect to something it names.
                 </p>
               ) : (
-                <ul className="mb-2 space-y-1">
+                <ul className="mb-2 space-y-1" data-testid="brief-threads">
                   {threads.map(piece => {
                     const kind = threadTypeEntry(piece.type);
                     const KindIcon = kind.Icon;

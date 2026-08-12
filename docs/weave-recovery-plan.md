@@ -107,7 +107,16 @@ before anything is built on top of it. Each is gated on its R0.9 ruling.
       kinds were muted, so a writer who closed the app mid-walk met every
       question they had already put off. Six frontend and six backend tests,
       including the fallback for a run list that names a session which is gone.
-- [ ] **R1.3** Context inspect per the R0.9 ruling.
+- [x] **R1.3** Both, per ruling 1. `BriefShape` draws the Threads the brief
+      carries and the Ties BETWEEN them, above the list, deliberately
+      non-interactive -- it answers "does this look like the right corner of my
+      world?", and every action already has a home in the list below. It draws
+      only what the brief carries: a line to a pruned Thread would read as
+      "this is in the brief" about something that is not. A Thread attached to
+      nothing else is drawn hollow and counted in words, because a brief of
+      unconnected entries reads to a model as a list of facts rather than as a
+      world. Seven tests, including that a graph response with no `edges` key
+      cannot take the panel's controls down with the decoration.
 - [x] **R1.4** `weave_brief` kept. Ruling 2 was keep-and-amend, so this is a
       SPEC change with no code: recorded in the amendment block with the
       reasoning (as chips, the automatic brief becomes indistinguishable from
@@ -282,7 +291,7 @@ it, since the spec calls it the reason the frame system exists.
 | Phase | Tasks | Done |
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
-| 1 Undo session damage | 7 | 5 |
+| 1 Undo session damage | 7 | 6 |
 | 2 The premise | 9 | 0 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
@@ -292,4 +301,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **73** | **17** |
+| **Total** | **73** | **18** |

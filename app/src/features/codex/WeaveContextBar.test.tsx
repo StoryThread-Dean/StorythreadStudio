@@ -50,6 +50,12 @@ function mockApi(over: Record<string, unknown> = {}) {
           anchor: "c-4", act_id: null, act_title: "" },
       ] }) } as Response;
     }
+    if (url.includes("/graph")) {
+      return { ok: true, json: async () => ({
+        nodes: [], edges: over.edges ?? [], as_of: null,
+        hidden_nodes: 0, hidden_edges: 0,
+      }) } as Response;
+    }
     if (url.includes("/context")) {
       return { ok: true, json: async () => ({
         brief: "Alexandra Langford (Character)\nis hiding her theft from Dean.",
@@ -125,9 +131,14 @@ describe("inspect what will be sent", () => {
   it("names each Thread and WHY it is there", async () => {
     // A list of names answers "what" and leaves "why on earth" unanswered,
     // which is the question that makes the panel worth opening.
+    //
+    // Scoped to the list: the name is deliberately in TWO places now, because
+    // the map above labels its dots (R1.3). An unscoped query would fail on
+    // the ambiguity and read as a regression.
     const { panel } = await openPanel();
-    expect(within(panel).getByText("Alexandra Langford")).toBeTruthy();
-    expect(within(panel).getByText(/named in what you are writing/)).toBeTruthy();
+    const list = within(panel).getByTestId("brief-threads");
+    expect(within(list).getByText("Alexandra Langford")).toBeTruthy();
+    expect(within(list).getByText(/named in what you are writing/)).toBeTruthy();
   });
 
   it("offers the exact words the AI will get", async () => {
@@ -366,5 +377,106 @@ describe("assembling is not tied to typing", () => {
         onPrefsChange={onPrefsChange} onBriefChange={onBriefChange} />,
     );
     await waitFor(() => expect(contextCalls().length).toBeGreaterThan(1));
+  });
+});
+
+
+describe("the shape of the brief, not only its contents (R1.3)", () => {
+  // The spec was blunt and was overruled by accident: "The inspect panel is a
+  // small map, not a list: the Threads going into the brief, drawn with their
+  // Ties, at the anchor being written." It shipped as a list alone.
+  //
+  // The ruling was BOTH. The list is the only thing that can carry per-Thread
+  // cost, a remove button and the exact words -- but eight names in a column
+  // cannot show that two of them are connected and a third is attached to
+  // nothing, which is the judgement a writer makes in one look.
+
+  const SECOND = {
+    entity_id: "e-dean", name: "Dean", type: "character",
+    tokens: 90, relevance: 1, reason: "connected to someone here",
+    pinned: false, text: "Dean (Character)",
+  };
+
+  it("draws a dot per Thread the brief carries", async () => {
+    mockApi({ threads: [piece(), SECOND] });
+    const { panel } = await openPanel();
+    const shape = within(panel).getByTestId("brief-shape");
+    expect(shape.querySelectorAll("circle").length).toBe(2);
+  });
+
+  it("draws a line for a connection BETWEEN two carried Threads", async () => {
+    mockApi({
+      threads: [piece(), SECOND],
+      edges: [{ src_id: "e-alex", dst_id: "e-dean", rel: "partners_with",
+                active: true, expired: false }],
+    });
+    const { panel } = await openPanel();
+    const shape = within(panel).getByTestId("brief-shape");
+    expect(shape.querySelectorAll("line").length).toBe(1);
+    expect(within(panel).getByText(/1 connection between them/)).toBeTruthy();
+  });
+
+  it("does NOT draw a line to something the brief left out", async () => {
+    // A line to a Thread that was pruned would read as "this is in the brief"
+    // about something that is not -- the opposite of what the panel is for.
+    mockApi({
+      threads: [piece()],
+      edges: [{ src_id: "e-alex", dst_id: "e-not-carried", rel: "knows",
+                active: true, expired: false }],
+    });
+    const { panel } = await openPanel();
+    expect(within(panel).getByTestId("brief-shape")
+      .querySelectorAll("line").length).toBe(0);
+  });
+
+  it("says when nothing in the brief connects to anything else", async () => {
+    // Not an error -- background context is real -- but it is the thing worth
+    // noticing, because such a brief reads to a model as a list of facts
+    // rather than as a world.
+    mockApi({ threads: [piece(), SECOND], edges: [] });
+    const { panel } = await openPanel();
+    expect(within(panel).getByText(/none connected to each other here/))
+      .toBeTruthy();
+  });
+
+  it("says which point in the story it is as of", async () => {
+    mockApi({ threads: [piece()] });
+    const { panel } = await openPanel();
+    expect(within(panel).getByTestId("brief-shape")
+      .getAttribute("aria-label")).toMatch(/as of/);
+  });
+
+  it("shows no map when the brief carries nothing", async () => {
+    mockApi({ threads: [], brief: "", token_estimate: 0 });
+    const { panel } = await openPanel();
+    expect(within(panel).queryByTestId("brief-shape")).toBeNull();
+  });
+
+  it("survives a graph response with no edges key at all", async () => {
+    // Decoration must never be able to take down the controls it sits above.
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/anchors")) {
+        return { ok: true, json: async () => ({ chapters: [] }) } as Response;
+      }
+      if (url.includes("/graph")) {
+        return { ok: true, json: async () => ({}) } as Response;
+      }
+      return { ok: true, json: async () => ({
+        brief: "b", threads: [piece()], omitted: [], token_estimate: 1,
+        as_of: null, enabled: true, refused: false, refusal: "",
+        withheld_spoilers: 0, withheld_by_scope: 0, budget: {}, mentioned: [],
+      }) } as Response;
+    }));
+    render(
+      <WeaveContextBar
+        projectPath={PROJECT} chapterFilename="04.md" text=""
+        pinnedTokens={0} prefs={{}}
+        onPrefsChange={vi.fn()} onBriefChange={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Inspect" }));
+    // The panel and its controls are still there.
+    const panel = await screen.findByTestId("weave-context-panel");
+    expect(within(panel).getByTestId("brief-threads")).toBeTruthy();
   });
 });
