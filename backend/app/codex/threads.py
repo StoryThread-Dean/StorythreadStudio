@@ -96,18 +96,56 @@ def _split_ai_summary(body: str) -> tuple[str, str]:
     return body[:match.start()].strip(), body[match.end():].strip()
 
 
+def _split_leading_list(body: str) -> tuple[str, str]:
+    """
+    Split a leading YAML list off whatever prose follows it.
+
+    A section is allowed to hold trait blocks AND a paragraph -- the profile
+    editor gives every section both -- but YAML cannot: a list followed by a
+    sentence is not one document, and parsing the whole body fails, which
+    used to make the entire section read back as prose. So the list is cut
+    off first, at the first non-blank line in column 1 that does not open a
+    new item, and only that part is handed to the parser.
+
+    Blank lines BETWEEN items belong to the list; blank lines before the
+    prose belong to the prose. Which is why they are buffered rather than
+    decided on sight.
+    """
+    lines = body.split("\n")
+    taken: list[str] = []
+    pending: list[str] = []
+    rest_at = len(lines)
+    for index, line in enumerate(lines):
+        if not line.strip():
+            pending.append(line)
+            continue
+        if line.startswith("- ") or line.startswith((" ", "\t")):
+            taken.extend(pending)          # those blanks were inside the list
+            pending = []
+            taken.append(line)
+            continue
+        rest_at = index - len(pending)     # the prose starts at its own blanks
+        break
+    return "\n".join(taken), "\n".join(lines[rest_at:])
+
+
 def _parse_list_block(body: str, keys: tuple[str, ...]) -> tuple[list[dict], str]:
     """
     Parse a YAML list of records, keeping anything unrecognised.
 
-    Returns (records, leftover_raw). When the block does not parse as a list
-    at all, records is empty and the ENTIRE body comes back as leftover so
-    the caller can round-trip it untouched. Losing a writer's hand-edited
-    Run because of one bad indent would be unforgivable.
+    Returns (records, leftover_raw). Leftover is whatever followed the list --
+    prose a writer put under their trait blocks, kept rather than swallowed.
+    When the block does not parse as a list at all, records is empty and the
+    ENTIRE body comes back as leftover so the caller can round-trip it
+    untouched. Losing a writer's hand-edited Run because of one bad indent
+    would be unforgivable.
     """
-    text = body.strip()
-    if not text:
+    if not body.strip():
         return [], ""
+    text, rest = _split_leading_list(body)
+    text = text.strip()
+    if not text:
+        return [], body
     try:
         loaded = yaml.safe_load(text)
     except yaml.YAMLError:
@@ -125,7 +163,7 @@ def _parse_list_block(body: str, keys: tuple[str, ...]) -> tuple[list[dict], str
             if k not in keys:
                 record[k] = v
         records.append(record)
-    return records, ""
+    return records, rest
 
 
 def parse_thread(raw: str, registry: dict | None = None) -> dict:
@@ -200,12 +238,21 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
         # Trait blocks are a YAML list; ordinary sections are prose. Try the
         # list, and on ANY doubt keep the text as content -- the tolerance
         # that stops a hand-edited file from losing a section.
+        #
+        # A SECTION MAY HOLD BOTH, and it has to: the profile editor's own
+        # model gives every section a prose box AND a trait list, so a writer
+        # who fills in both is doing something ordinary. The first version
+        # required the section to be trait blocks and NOTHING else -- one
+        # trailing sentence under the traits and the whole list read back as
+        # prose, losing every trait's importance while keeping the words, so
+        # nothing looked broken. Now the parsed run of traits is taken and
+        # whatever follows stays as content.
         trait_blocks: list[dict] = []
         if _looks_like_trait_list(content):
             parsed, leftover = _parse_list_block(content, TRAIT_KEYS)
-            if parsed and not leftover.strip():
+            if parsed:
                 trait_blocks = parsed
-                content = ""
+                content = leftover.strip()
 
         thread["sections"][section_id] = {
             "heading": heading,

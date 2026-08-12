@@ -858,3 +858,93 @@ def test_a_reverse_relation_the_registry_does_not_know_is_still_readable(project
                          params={"project_path": project,
                                  "entity_id": "e-garrick"}).json()["ties"][0]
     assert garrick["reads_as"] == "kept at arms length"
+
+
+# ── Trait blocks over the wire ──────────────────────────────────────────────
+#
+# The format keeps trait blocks and a migration test proves the file round
+# trips -- but nothing tested the ROUTE, and the route is what the Profile
+# Builder will use once it points at the codex instead of profiles/. A
+# structured character is the most valuable thing a writer has in this app;
+# "the parser handles it" is not the same claim as "saving it through the API
+# handles it", and the difference is where data goes missing.
+#
+# `ai_scope` is here for a specific reason. Conversion SETS it -- a `hidden`
+# trait becomes `on-request`, which is the whole mechanism behind "drives
+# subtext, never named directly". A client that round trips the other three
+# fields and drops this one silently undoes that on the first save of every
+# converted character, and nothing would look wrong.
+
+def _save(project, thread, base_revision=None):
+    return client.post("/api/codex/entity", json={
+        "project_path": project, "thread": thread,
+        "base_revision": base_revision})
+
+
+def _entity(project, entity_id="e-elara"):
+    return client.get("/api/codex/entity", params={
+        "project_path": project, "entity_id": entity_id}).json()
+
+
+TRAITS = [
+    {"trait": "guarded", "description": "Keeps her own counsel.",
+     "importance": "core"},
+    {"trait": "haunted", "description": "Will not say what she saw.",
+     "importance": "hidden", "ai_scope": "on-request"},
+]
+
+
+def test_trait_blocks_survive_a_save_and_a_read(project):
+    thread = _entity(project)
+    thread["sections"]["overview"]["trait_blocks"] = TRAITS
+    assert _save(project, thread, thread.get("revision")).status_code == 200
+
+    back = _entity(project)["sections"]["overview"]["trait_blocks"]
+    assert [b["trait"] for b in back] == ["guarded", "haunted"]
+    assert [b["description"] for b in back] == [
+        "Keeps her own counsel.", "Will not say what she saw."]
+
+
+def test_importance_survives_it(project):
+    thread = _entity(project)
+    thread["sections"]["overview"]["trait_blocks"] = TRAITS
+    _save(project, thread, thread.get("revision"))
+    back = _entity(project)["sections"]["overview"]["trait_blocks"]
+    assert [b["importance"] for b in back] == ["core", "hidden"]
+
+
+def test_ai_scope_survives_it(project):
+    # The field a client is most likely to drop, and the one that quietly
+    # undoes the conversion when it is dropped.
+    thread = _entity(project)
+    thread["sections"]["overview"]["trait_blocks"] = TRAITS
+    _save(project, thread, thread.get("revision"))
+    back = _entity(project)["sections"]["overview"]["trait_blocks"]
+    assert back[1]["ai_scope"] == "on-request"
+
+
+def test_a_trait_block_section_is_not_flattened_into_prose(project):
+    # The failure mode that loses the STRUCTURE while keeping every word: a
+    # writer would see their traits still there, as one paragraph, with no
+    # importance on any of them.
+    thread = _entity(project)
+    thread["sections"]["overview"]["trait_blocks"] = TRAITS
+    thread["sections"]["overview"]["content"] = ""
+    _save(project, thread, thread.get("revision"))
+
+    section = _entity(project)["sections"]["overview"]
+    assert len(section["trait_blocks"]) == 2
+    assert "guarded" not in (section.get("content") or "")
+
+
+def test_saving_a_section_without_traits_leaves_another_sections_traits_alone(project):
+    thread = _entity(project)
+    thread["sections"]["overview"]["trait_blocks"] = TRAITS
+    _save(project, thread, thread.get("revision"))
+
+    thread = _entity(project)
+    thread["sections"]["notes"] = {"heading": "Notes", "trait_blocks": [],
+                                   "ai_summary": "", "content": "A note."}
+    _save(project, thread, thread.get("revision"))
+
+    assert len(_entity(project)["sections"]["overview"]["trait_blocks"]) == 2

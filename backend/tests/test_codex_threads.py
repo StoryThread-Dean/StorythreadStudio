@@ -349,3 +349,70 @@ def test_an_unstated_reverse_relation_stays_empty():
     tie = parse_thread(FULL, REGISTRY)["ties"][0]
     assert tie["rel_inverse"] == ""
     assert "rel_inverse:" not in render_thread(parse_thread(FULL, REGISTRY))
+
+
+# ── A section may hold trait blocks AND prose ───────────────────────────────
+#
+# The profile editor gives every section a prose box and a trait list, so a
+# writer filling in both is doing something ordinary. YAML cannot: a list
+# followed by a sentence is not one document. The first version parsed the
+# whole section body at once, so ONE trailing line under the traits made the
+# entire list read back as prose -- every trait's importance gone, every word
+# still on screen, nothing looking broken.
+#
+# Found by writing the route-level test that did not exist while pointing the
+# profile editor at this format.
+
+BOTH = """---
+type: character
+entity_id: e-both
+name: Elara Voss
+---
+
+# Overview
+- trait: guarded
+  description: "Keeps her own counsel."
+  importance: core
+
+- trait: haunted
+  description: "Will not say what she saw."
+  importance: hidden
+  ai_scope: on-request
+
+She is taller than her mother was, and says so often.
+
+## AI Summary: Overview
+_Generated on demand._
+"""
+
+
+def test_traits_and_the_paragraph_under_them_both_survive():
+    thread = parse_thread(BOTH, REGISTRY)
+    section = thread["sections"]["overview"]
+    assert [b["trait"] for b in section["trait_blocks"]] == ["guarded", "haunted"]
+    assert "taller than her mother" in section["content"]
+
+
+def test_the_importance_of_each_trait_survives_the_paragraph():
+    # The half that used to disappear silently.
+    section = parse_thread(BOTH, REGISTRY)["sections"]["overview"]
+    assert [b["importance"] for b in section["trait_blocks"]] == ["core", "hidden"]
+    assert section["trait_blocks"][1]["ai_scope"] == "on-request"
+
+
+def test_it_round_trips_through_a_render():
+    once = parse_thread(BOTH, REGISTRY)
+    twice = parse_thread(render_thread(once, REGISTRY), REGISTRY)
+    assert twice["sections"]["overview"]["trait_blocks"] == \
+        once["sections"]["overview"]["trait_blocks"]
+    assert twice["sections"]["overview"]["content"] == \
+        once["sections"]["overview"]["content"]
+
+
+def test_prose_that_merely_starts_with_a_dash_is_still_prose():
+    # The tolerance that stops a hand-edited file losing a section: only a
+    # real "- trait:" opener is treated as a list.
+    raw = BOTH.replace("- trait: guarded", "- she was never guarded")
+    section = parse_thread(raw, REGISTRY)["sections"]["overview"]
+    assert section["trait_blocks"] == []
+    assert "never guarded" in section["content"]

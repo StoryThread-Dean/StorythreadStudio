@@ -37,6 +37,19 @@ export interface TraitBlock {
   trait: string;               // e.g. "observant, punctual, eloquent"
   description: string;         // Human-written description of the trait
   importance: ImportanceLevel; // Controls AI visibility and prompt position
+  /**
+   * Whether the Weave may put this trait in front of a model, and when.
+   *
+   * CARRIED THROUGH RATHER THAN EDITED HERE. The Weave's file format keeps it
+   * per trait, and conversion SETS it: a `hidden` trait becomes
+   * `ai_scope: on-request`, which is the whole mechanism behind "drives
+   * subtext, never named directly". This screen does not offer it as a
+   * control -- but it has to hold it and hand it back, because a save that
+   * dropped the field would silently undo that on the first edit of every
+   * converted character. Optional because profiles written before the Weave
+   * do not carry one, and absent means the default (always).
+   */
+  ai_scope?: "always" | "on-request" | "never";
 }
 
 // One section of a profile (e.g. "Physical Traits", "Overview")
