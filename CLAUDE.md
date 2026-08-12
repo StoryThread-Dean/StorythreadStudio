@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 23 of 75 tasks done.
+> **LEDGER — last updated 2026-08-12.** 24 of 75 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -42,7 +42,7 @@ its place without relying on memory or conversation history.
 > context-inspect list · R1.4 `weave_brief` kept (spec amendment) · R1.5a the
 > false hidden-trait comment deleted · R1.6 the two teaching registries bound
 > by a contract test.
-> **Phase 2 (the premise, BLOCKER): 5 of 11.** Groundwork went first because
+> **Phase 2 (the premise, BLOCKER): 6 of 11.** Groundwork went first because
 > both halves fail SILENTLY: R2.3a `role` + `character_kind` indexed (migration
 > 005, tested as an upgrade) · R2.4 `POST /entity` records a Writing Progress
 > save event, which it never did.
@@ -63,12 +63,17 @@ its place without relying on memory or conversation history.
 > Foreshadowing differently from the form, so the section read empty and a save
 > wrote that emptiness over the writer's hidden traits.
 > **R2.3b DONE** — create carries `role` + `character_kind`.
-> **Next: R2.6** — `_find_related_relationships` still has a hardcoded
-> `profiles/relationships/` path and now fails silently on a converted project.
-> Then R2.5 the Run editor (the real blocker: the spec's opening example still
-> cannot be recorded), R2.2b drive sections from the registry, R2.7 import,
-> R2.8 the six kinds with no editor, R2.9 Relationships.
-> Branch health: 1615 backend tests, 1143 frontend tests, ruff and tsc clean.
+> **R2.6 DONE** — `_find_related_relationships` reads the folder the project
+> actually uses. It was the last hardcoded `profiles/` path in any AI route and
+> the one that could not announce itself: it returns a list, and an empty list
+> is an ordinary answer, so a converted project would have quietly stopped
+> weaving relationships into full summaries. Shipped in Phase 6 with no tests;
+> it has six now.
+> **Next: R2.5** — the Run editor, the real blocker: the spec's opening example
+> (the heroine who believes her father died until chapter fifteen) still cannot
+> be recorded through the interface. Then R2.2b drive sections from the
+> registry, R2.7 import, R2.8 the six kinds with no editor, R2.9 Relationships.
+> Branch health: 1622 backend tests, 1143 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

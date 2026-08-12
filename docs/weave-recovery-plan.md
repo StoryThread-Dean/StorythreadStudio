@@ -239,8 +239,20 @@ types it is about are edited in a screen with no fact UI.
       editor**, including a `revealed_at` control (gap A9).
       *Done-when:* the spec's opening example can be recorded end to end by a
       writer, with a test that does it.
-- [ ] **R2.6** Fix `_find_related_relationships` (hardcoded `profiles/`, fails
-      silently).
+- [x] **R2.6** `_find_related_relationships` reads the folder this project
+      actually uses -- the last hardcoded `profiles/` path in any AI route, and
+      the one that could not announce itself. It returns a LIST, and an empty
+      list is an ordinary result for a character with no relationships written
+      yet, so on a converted project it would simply have stopped finding
+      anything: no error, no warning, just a thinner Full AI Summary for a reason
+      nothing on screen could explain. The folder comes from `entries_home` plus
+      the type registry rather than being spelled a second time, so it follows a
+      renamed Relationships section. Both headings it reads (`Overview`,
+      `Current Dynamic`) are identical in a Thread file and a profile, which is
+      why one reader serves both -- pinned by a test asserting the two produce
+      the same text, so if that ever stops being true this fails instead of the
+      writer noticing their summaries got worse. The behaviour shipped in
+      Phase 6 with no tests at all; it has six now.
 - [ ] **R2.7** Port `POST /api/profiles/import` to codex.
 - [ ] **R2.8** Editors for the six kinds with none (Cultures, Creatures,
       Governments, Factions, Deities, Religions), driven by the registry.
@@ -368,7 +380,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 11 | 5 |
+| 2 The premise | 11 | 6 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 4 | 0 |
@@ -377,4 +389,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **75** | **23** |
+| **Total** | **75** | **24** |

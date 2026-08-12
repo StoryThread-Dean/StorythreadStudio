@@ -666,10 +666,43 @@ def _extract_section(raw: str, heading: str) -> str:
     return body.strip()
 
 
+def _relationship_dir(project_path: str) -> str:
+    """
+    Where this project's relationship entries actually are.
+
+    THE LAST HARDCODED `profiles/` PATH IN ANY AI ROUTE, and the one that could
+    not announce itself: this scan returns a list, an empty list is a perfectly
+    ordinary result for a character with no relationships written yet, so a
+    converted project would simply have stopped weaving relationships into its
+    full summaries with no error and no visible difference except a thinner
+    paragraph.
+
+    One question, one answer: entries_home decides, exactly as the sidebar and
+    the Profile Builder do. The folder name comes from the type registry rather
+    than being spelled here a second time, because a writer can rename the
+    Relationships section and the folder moves with it.
+    """
+    from app.codex.migrate import entries_home
+    from app.codex.types_registry import TypesError, folder_for_type, load_registry
+
+    if entries_home(project_path) != "codex":
+        return os.path.join(project_path, "profiles", "relationships")
+
+    folder = "relationships"
+    try:
+        registry, _ = load_registry(project_path)
+        folder = folder_for_type(registry, "relationship") or folder
+    except TypesError:
+        # A broken registry is reported by the screen that owns it. Here it just
+        # means "use the conventional name" rather than "there are none".
+        pass
+    return os.path.join(project_path, "codex", folder)
+
+
 def _find_related_relationships(project_path: str, character_name: str) -> list[tuple[str, str]]:
     """
-    Scan profiles/relationships/*.md for files that mention the given character
-    and return [(relationship_name, compact_snippet), ...].
+    Scan this project's relationship entries for files that mention the given
+    character and return [(relationship_name, compact_snippet), ...].
 
     Match rule: case-insensitive substring match on the character name anywhere
     in the file. This errs on the side of including near-misses (nicknames,
@@ -677,9 +710,10 @@ def _find_related_relationships(project_path: str, character_name: str) -> list[
 
     Snippet composition: Overview (capped) + Current Dynamic (capped), so the
     AI gets what the character IS to this other party and how things currently
-    stand between them.
+    stand between them. Both headings are the same in a Thread file as in a
+    profile, which is why one reader serves both folders.
     """
-    rel_dir = os.path.join(project_path, "profiles", "relationships")
+    rel_dir = _relationship_dir(project_path)
     if not os.path.isdir(rel_dir):
         return []
 
