@@ -142,9 +142,12 @@ const DEPTHS: { id: Depth; label: string; blurb: string; step?: string }[] = [
   { id: "warp", label: "Dress the Loom", step: "Start here",
     blurb: "What is here, and what relates to what. Names with no entry, "
       + "entries too thin to be useful, and entries connected to nothing." },
+  // The blurb must not promise chapter scoping: the pass reads the whole
+  // book today (nothing sends chapter ids yet). "Run it from the chapter you
+  // are in" described a design, not the build -- see docs/roadmap.
   { id: "weft", label: "Weave the Chapters", step: "Then, as you write",
-    blurb: "One chapter at a time: did anything change here? Run it from the "
-      + "chapter you are in and the app already knows when." },
+    blurb: "Did anything change as you wrote? Pairs your scenes keep putting "
+      + "together that nothing records a connection between yet." },
   { id: "cloth", label: "Read the Cloth", step: "When you step back",
     blurb: "Where the book contradicts itself. Timeline problems, facts that "
       + "never take effect, and things named before the reader should know." },

@@ -1361,3 +1361,22 @@ describe("a failed read ends the spinner", () => {
     expect(screen.queryByText(/Reading connections/)).toBeNull();
   });
 });
+
+
+describe("the reason line is shown back", () => {
+  it("appears under the connection it explains", async () => {
+    // It is the one REQUIRED field -- the writer was made to write it, and
+    // the list used to render reads_as only, as if the app had thrown the
+    // line away the moment it was recorded.
+    mockApi({ ties: [{
+      src_id: "e-daughters", dst_id: "e-pathicus", rel: "worships",
+      incoming: false, other_id: "e-pathicus", other_name: "Pathicus",
+      other_type: "deity", reads_as: "worships",
+      why: "they believe he walks among them",
+      at: null, until: null, at_label: "", until_label: "",
+    }] });
+    await open();
+    expect(await screen.findByText(/they believe he walks among them/))
+      .toBeTruthy();
+  });
+});

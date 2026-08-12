@@ -281,8 +281,8 @@ export const EXPLAIN: Record<string, Explains> = {
     how: [
       "Dress the Loom first: what is here, and what relates to what. Start "
         + "there, and come back to it whenever your world grows.",
-      "Weave the Chapters as you write, one chapter at a time: did anything "
-        + "change here?",
+      "Weave the Chapters as you write: pairs your scenes keep putting "
+        + "together that nothing records a connection between yet.",
       "Read the Cloth when you step back, to see where the book contradicts "
         + "itself.",
       "Unwoven is its own job, any time: the ground rules of your world.",

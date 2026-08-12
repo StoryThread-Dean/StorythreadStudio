@@ -163,9 +163,12 @@ export function WeaveNav({
       <button
         onClick={onOpenWeaving}
         disabled={!onOpenWeaving}
+        // Weaving SHIPPED; the fallback title is only for a mount with no
+        // handler wired (the app always passes one). The old string said
+        // "not built yet", which outlived the build by two redesigns.
         title={onOpenWeaving
           ? CONCEPTS.weaving.short
-          : "Weaving is not built yet. It will read what you have written and help you fill this in."}
+          : "Weaving is not available here."}
         className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-[11px] text-text-muted hover:text-violet-300 disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
       >
         <Spool size={12} />

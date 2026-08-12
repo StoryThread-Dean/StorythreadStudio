@@ -367,7 +367,10 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
                       textAnchor="middle"
                       className="fill-zinc-500 text-[9px]"
                     >
-                      {edge.rel.replace(/_/g, " ")}
+                      {/* The writer's own line where they wrote one -- that
+                          is what the backend sends `reason` FOR. The relation
+                          id is the fallback, not the label. */}
+                      {edge.reason || edge.rel.replace(/_/g, " ")}
                     </text>
                   )}
                 </g>

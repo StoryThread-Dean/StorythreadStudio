@@ -580,3 +580,26 @@ def test_widening_never_touches_a_copy_that_is_already_wide(project):
     assert relation_by_id(before, "owns") == relation_by_id(after, "owns")
     relations = after["relations"]
     assert len([r for r in relations if r["id"] == "owns"]) == 1
+
+
+# ── The reason line comes back, from the end being looked at ─────────────────
+
+def test_the_reason_is_read_from_the_right_end(project):
+    # The one REQUIRED field on a connection was never sent back by /ties, so
+    # no screen could show it and the list read as if it had been thrown away.
+    _tie(project, "e-daughters", "worships", "e-pathicus",
+         reason="they believe he walks among them",
+         reason_inverse="claims them as his chosen")
+    mine = _ties(project, "e-daughters")
+    assert mine[0]["why"] == "they believe he walks among them"
+    theirs = _ties(project, "e-pathicus")
+    assert theirs[0]["why"] == "claims them as his chosen"
+
+
+def test_the_forward_reason_stands_in_when_no_inverse_was_given(project):
+    # A writer in the middle of a thought answers once; the other end must
+    # not read as blank because of it.
+    _tie(project, "e-daughters", "worships", "e-pathicus",
+         reason="they believe he walks among them")
+    theirs = _ties(project, "e-pathicus")
+    assert theirs[0]["why"] == "they believe he walks among them"

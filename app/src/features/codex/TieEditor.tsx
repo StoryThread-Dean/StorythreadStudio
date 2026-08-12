@@ -12,29 +12,30 @@
 // This handles the rest, and there is no version of this feature where the
 // app guesses it.
 //
-// FOUR THINGS THE SCREEN IS BUILT AROUND
-// --------------------------------------
-// 1. THE OTHER END FIRST, THEN HOW. A writer thinks "the Daughters and
-//    Pathicus" before they think "worships". Asking for a relation first means
-//    offering a vocabulary before there is anything to say it about.
+// SIX THINGS THE SCREEN IS BUILT AROUND
+// -------------------------------------
+// 1. THE OTHER END FIRST, THEN WHY, THEN HOW. A writer thinks "the Daughters
+//    and Pathicus" before they think "worships" -- and the REASON LINE is the
+//    one required field, asked before any relation, because "she is hiding
+//    her theft from him" tells AI more than any label could. The relation is
+//    the optional, queryable half.
 //
 // 2. ONLY WHAT MEANS SOMETHING BETWEEN THESE TWO KINDS. The registry knows
 //    which connections run between a faction and a deity, so the list is short
 //    and every item in it is true. A flat list of every relation in the world
 //    would make the writer do that filtering in their head.
 //
-// 3. A CONNECTION IS ALLOWED TO BE UNTYPED, and that is the default. Requiring
-//    a relation before two things can be joined gets the order of work wrong:
-//    a writer knows Drizzt and Guenhwyvar belong together long before they want
-//    to argue with themselves about whether that is a bond, a friendship or
-//    ownership. Made to choose in that moment they will pick badly or stop. So
-//    "just connected" sits at the top, on its own, and everything else is an
-//    improvement to a connection that already exists.
+// 3. A CONNECTION IS ALLOWED TO BE UNTYPED. Requiring a relation gets the
+//    order of work wrong: a writer knows Drizzt and Guenhwyvar belong
+//    together long before they want to argue with themselves about whether
+//    that is a bond, a friendship or ownership. Leaving the dropdown at
+//    "choose from ..." is a real answer -- the connection records as the
+//    plain kind, and a label is an improvement made on a later pass.
 //
-// 4. "NOTHING ELSE FITS" IS NEVER A DEAD END. Two more honest answers: the pair
-//    may need turning around, or the vocabulary is genuinely short and the
-//    writer should name the connection themselves. Both are offered here,
-//    because a screen that shrugs is a screen that stops being opened.
+// 4. "NOTHING ELSE FITS" IS NEVER A DEAD END. Relations that run the other
+//    way are folded into the one dropdown (flipped on save, said out loud in
+//    the option), and the writer can name a connection the app never thought
+//    of. A screen that shrugs is a screen that stops being opened.
 //
 // 5. THE OTHER END MIGHT NOT EXIST YET, AND THAT MUST NOT END THE JOB.
 //    Reported from live testing: "the path to the file doesn't exist
@@ -44,8 +45,9 @@
 //    breath.
 //
 // 6. READ FROM THE END YOU ARE STANDING AT. An incoming "mentored by" reads as
-//    "mentor of" from the other side. Showing the stored direction would make
-//    the writer translate every line in their head.
+//    "mentor of" from the other side -- and the reason line reads from this
+//    end too. Showing the stored direction would make the writer translate
+//    every line in their head.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -72,6 +74,9 @@ interface Tie {
   other_type: string;
   /** How it reads from the end being looked at. */
   reads_as: string;
+  /** The reason line, read from the same end. The one REQUIRED field on a
+   *  connection -- a list that hides it reads as the app throwing it away. */
+  why?: string;
   at: string | null;
   until: string | null;
   at_label: string;
@@ -619,29 +624,39 @@ function relOptionLabel(rel: Relation): string {
                 const Icon = lex.Icon;
                 return (
                   <li key={`${tie.src_id}|${tie.rel}|${tie.dst_id}`}
-                      className="group flex items-center gap-2 rounded px-1 py-1 hover:bg-bg-surface">
-                    <span className="shrink-0 text-[11px] text-emerald-300">
-                      {tie.reads_as}
-                    </span>
-                    <ArrowRight size={10} className="shrink-0 text-faint" />
-                    <Icon size={11}
-                          className={`shrink-0 ${TONE_CLASSES[lex.tone].text}`} />
-                    <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
-                      {tie.other_name}
-                    </span>
-                    {tie.at_label && (
-                      <span className="shrink-0 text-[10px] text-faint">
-                        from {tie.at_label}
+                      className="group rounded px-1 py-1 hover:bg-bg-surface">
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 text-[11px] text-emerald-300">
+                        {tie.reads_as}
                       </span>
+                      <ArrowRight size={10} className="shrink-0 text-faint" />
+                      <Icon size={11}
+                            className={`shrink-0 ${TONE_CLASSES[lex.tone].text}`} />
+                      <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
+                        {tie.other_name}
+                      </span>
+                      {tie.at_label && (
+                        <span className="shrink-0 text-[10px] text-faint">
+                          from {tie.at_label}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => void remove(tie)}
+                        disabled={busy}
+                        aria-label={`Remove ${tie.reads_as} ${tie.other_name}`}
+                        className="shrink-0 rounded p-0.5 text-faint opacity-0 hover:text-rose-300 focus:opacity-100 group-hover:opacity-100 disabled:opacity-30"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                    {/* The writer's own line, shown back. It is the one
+                        REQUIRED field on a connection -- hiding it here made
+                        the list read as if the app had thrown it away. */}
+                    {tie.why && (
+                      <p className="mt-0.5 truncate pl-4 text-[10px] italic text-faint">
+                        {tie.why}
+                      </p>
                     )}
-                    <button
-                      onClick={() => void remove(tie)}
-                      disabled={busy}
-                      aria-label={`Remove ${tie.reads_as} ${tie.other_name}`}
-                      className="shrink-0 rounded p-0.5 text-faint opacity-0 hover:text-rose-300 focus:opacity-100 group-hover:opacity-100 disabled:opacity-30"
-                    >
-                      <Trash2 size={11} />
-                    </button>
                   </li>
                 );
               })}

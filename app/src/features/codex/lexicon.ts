@@ -199,9 +199,12 @@ export function guidePlainText(lines: GuideLine[]): string {
 // nothing on this side has an entry for and renders as a blank row. A
 // contract test pins that every kind codex/scan.py can produce is in here.
 //
-// Some entries here have no deterministic producer yet (Untied and Unwoven
-// come from the AI and canned passes; Tangle is a grouping). They stay
-// because the vocabulary was decided in one pass rather than invented twice.
+// One entry here has no producer yet: Tangle, a grouping of Snags the scan
+// does not emit as its own stop kind. It stays because the vocabulary was
+// decided in one pass rather than invented twice. (Untied and Unwoven used to
+// sit in this note as "from the AI and canned passes" -- both are ordinary
+// deterministic scan producers now: Untied from shared scenes, Unwoven from
+// the world-rules corpus.)
 
 // THE ICONS ARE THE LOOM, DELIBERATELY. Weaving is a Spool, Unspun is a sheaf
 // of unspun fibre, Frayed is a sewing implement, Loose thread is a curve

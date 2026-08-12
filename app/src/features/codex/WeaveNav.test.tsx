@@ -133,11 +133,17 @@ describe("the skeleton", () => {
     expect(screen.getByRole("button", { name: /Weaving/ })).toBeTruthy();
   });
 
-  it("says Weaving is not built yet rather than pretending it works", async () => {
+  it("disables Weaving honestly when nothing is wired to open it", async () => {
+    // This test used to pin the string "Weaving is not built yet" -- which
+    // was TRUE when written and then outlived the build by two redesigns, a
+    // pinned lie the suite kept green. Weaving shipped; the disabled state
+    // survives only for a mount with no handler, and its words must not
+    // claim otherwise.
     await renderNav();
     const weaving = screen.getByRole("button", { name: /Weaving/ });
     expect(weaving.hasAttribute("disabled")).toBe(true);
-    expect(weaving.getAttribute("title")).toMatch(/not built yet/);
+    expect(weaving.getAttribute("title")).toMatch(/not available/);
+    expect(weaving.getAttribute("title")).not.toMatch(/not built/);
   });
 
   it("opens the Weave from its title", async () => {

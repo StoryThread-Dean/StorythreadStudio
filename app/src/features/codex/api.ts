@@ -109,6 +109,9 @@ export interface GraphEdge {
   src_id: string;
   dst_id: string;
   rel: string;
+  /** WHY, in the writer's own words -- sent so the map can label the line
+   *  with something worth reading instead of a relation id. */
+  reason?: string;
   active: boolean;
   expired: boolean;
 }

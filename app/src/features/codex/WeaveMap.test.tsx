@@ -469,3 +469,26 @@ describe("a bare dot, and what a click means", () => {
     expect(svg.textContent).not.toContain("Alexandra Langford");
   });
 });
+
+
+describe("what a line between two dots says", () => {
+  it("uses the writer's reason where they wrote one", async () => {
+    // The backend sends `reason` precisely "so the map can label the line
+    // with something worth reading instead of a relation id" -- and the map
+    // dropped it on arrival for two releases.
+    mockApi(graph({ edges: [
+      { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
+        reason: "taught her everything, then vanished",
+        active: true, expired: false },
+    ] }));
+    await renderMap();
+    expect(screen.getByText("taught her everything, then vanished")).toBeTruthy();
+    expect(screen.queryByText("mentored by")).toBeNull();
+  });
+
+  it("falls back to the relation when no reason was written", async () => {
+    mockApi(graph());
+    await renderMap();
+    expect(screen.getByText("mentored by")).toBeTruthy();
+  });
+});

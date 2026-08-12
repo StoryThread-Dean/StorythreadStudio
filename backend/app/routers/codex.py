@@ -584,6 +584,13 @@ async def get_ties(project_path: str = Query(...), entity_id: str = Query(...)):
             # make the writer translate it in their head every time.
             "reads_as": _tie_wording(rel, row["incoming"], registry,
                                      row.get("rel_inverse", "")),
+            # The reason line, read from this end too. It is the one REQUIRED
+            # field on a connection -- the writer was made to write it -- and
+            # the editor never showed it back, so the list read as if the app
+            # had thrown it away. From the other end the inverse reason wins
+            # when it was given; the forward one stands in otherwise.
+            "why": ((row.get("reason_inverse") or row.get("reason") or "")
+                    if row["incoming"] else (row.get("reason") or "")),
             "at_label": label_for(row["at"]) if row.get("at") else "",
             "until_label": label_for(row["until"]) if row.get("until") else "",
         })
