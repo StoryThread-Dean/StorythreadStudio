@@ -66,6 +66,13 @@ import { SecretsPanel } from "./SecretsPanel";
 // which is where it was, and which meant a writer with no secrets yet had
 // no way in at all.
 import { SubtextGuide } from "./SubtextGuide";
+// THE RUN: how an entry changes across the book. The same editor the Weave's
+// own screen uses, because a fact recorded in either place is the same fact.
+// Until this landed, the four kinds a novelist actually spends their time on
+// had no way to record one -- which is why the story timeline on the Weave map
+// has never had anything to move through.
+import { RunEditor } from "../features/codex/RunEditor";
+import { fetchAnchors, type ChapterAnchor } from "../features/codex/api";
 import type { EntriesHome, ProfileSource } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
@@ -395,6 +402,9 @@ export function ProfileBuilder({
   // show an empty screen for a converted project.
   const [home, setHome] = useState<EntriesHome | null>(null);
   const [elsewhere, setElsewhere] = useState(0);
+  // The writer's own chapters, in order, for every "when" question the Run
+  // asks. Never a date and never a number they have to work out.
+  const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [listLoading, setListLoading] = useState(false);
@@ -544,6 +554,16 @@ export function ProfileBuilder({
       setHome(report.home);
       setElsewhere(report.elsewhere);
     });
+    return () => { cancelled = true; };
+  }, [project.root_path]);
+
+  // Chapters, once per project. Cheap, and the Run editor cannot ask "from
+  // when" without them.
+  useEffect(() => {
+    let cancelled = false;
+    fetchAnchors(project.root_path)
+      .then(body => { if (!cancelled) setChapters(body.chapters ?? []); })
+      .catch(() => { if (!cancelled) setChapters([]); });
     return () => { cancelled = true; };
   }, [project.root_path]);
 
@@ -2118,6 +2138,27 @@ export function ProfileBuilder({
                   </div>
                 );
               })}
+
+              {/* HOW THIS CHANGES ACROSS THE BOOK.
+                  Under the sections, because the sections are what is true
+                  throughout and this is what is true from a point onwards. The
+                  spec's own opening example lives here: a heroine who believes
+                  her father died, from chapter one, with the reader learning
+                  otherwise in chapter fifteen. */}
+              <RunEditor
+                run={profile.run ?? []}
+                chapters={chapters}
+                onChange={next => {
+                  setProfile(prev => (prev ? { ...prev, run: next } : prev));
+                  setIsDirty(true);
+                }}
+                unavailable={home === "profiles"
+                  ? "Facts need this project brought into the Weave first. A "
+                    + "profile file has nowhere to record a chapter, so the app "
+                    + "would take what you typed and lose it. Bring your world "
+                    + "in from the Weave and this fills in here."
+                  : undefined}
+              />
 
               {/* Full AI Summary -- teal card */}
               <div className="mb-6 rounded border border-teal-800/40 bg-teal-950/20 p-4">

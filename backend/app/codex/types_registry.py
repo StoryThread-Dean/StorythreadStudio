@@ -31,6 +31,7 @@ import os
 import re
 
 from app.codex.icon_keywords import icon_for_name
+from app.utils.atomic import replace_atomic
 
 SCHEMA_VERSION = 1
 
@@ -782,7 +783,7 @@ def seed_registry(folder_path: str) -> dict:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(registry, f, indent=2)
-    os.replace(tmp, path)
+    replace_atomic(tmp, path)
     return registry
 
 
@@ -1131,7 +1132,7 @@ def _write_registry(project_path: str, registry: dict) -> None:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(registry, f, indent=2)
-    os.replace(tmp, path)
+    replace_atomic(tmp, path)
 
 
 def type_by_id(registry: dict, type_id: str) -> dict | None:

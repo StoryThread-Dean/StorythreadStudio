@@ -45,6 +45,8 @@
 
 import json
 import os
+
+from app.utils.atomic import replace_atomic
 import re
 import uuid
 from datetime import datetime, timezone
@@ -179,7 +181,7 @@ def save_book(project_path: str, book: dict) -> str:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(book, f, indent=2)
-    os.replace(tmp, path)
+    replace_atomic(tmp, path)
     return path
 
 
@@ -281,7 +283,7 @@ def save_run(project_path: str, run: dict) -> str:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(run, f, indent=2)
-    os.replace(tmp, path)
+    replace_atomic(tmp, path)
     return path
 
 

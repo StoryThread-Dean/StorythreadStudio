@@ -226,6 +226,10 @@ function profileFromThread(thread: WeaveThread): Profile {
     created_at: String(thread.created_at ?? ""),
     updated_at: String(thread.updated_at ?? ""),
     character_kind: (thread.character_kind === "side" ? "side" : "main"),
+    // The Run, editable on screen as of R2.5. Still carried in `weave` as well,
+    // so a screen that does not touch it hands it back untouched -- this field
+    // is what the editor reads and writes, and threadFromProfile prefers it.
+    run: (thread.run ?? []) as Profile["run"],
     // The revision this was opened at, so a save can be refused rather than
     // silently overwriting somebody else's -- or the writer's own work in
     // another window.
@@ -271,6 +275,10 @@ function threadFromProfile(profile: Profile): WeaveThread {
 
   return {
     ...previous,
+    // The edited Run wins over the carried copy. Both exist because the whole
+    // Thread is carried through for everything this screen does NOT edit; the
+    // Run is now one of the things it does.
+    run: profile.run ?? previous.run ?? [],
     type: profile.type,
     entity_id: profile.entity_id,
     name: profile.name,

@@ -80,6 +80,7 @@ from app.codex.types_registry import (
 from app.db import open_db
 from app.progress_store import record_save_event
 from app.settings_store import get_rollover_hour
+from app.utils.atomic import replace_atomic
 from app.utils.paths import safe_child, validate_project_path
 from app.utils.structure_store import ensure_chapter_ids, ordered_chapter_filenames
 
@@ -153,7 +154,7 @@ def _write_thread(project_path: str, registry: dict, thread: dict) -> None:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(render_thread(thread, registry, label_for=labels))
-    os.replace(tmp, path)
+    replace_atomic(tmp, path)
 
 
 def _label_lookup(project_path: str):

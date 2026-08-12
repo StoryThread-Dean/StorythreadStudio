@@ -3,6 +3,8 @@
 // These types mirror the Pydantic models in backend/app/routers/profiles.py.
 // Both sides must agree on the data shape -- if you change one, change the other.
 
+import type { Fact } from "../features/codex/api";
+
 // ── Enums / Literals ─────────────────────────────────────────────────────────
 
 // All profile types supported in Phase 2 MVP
@@ -115,6 +117,19 @@ export interface Profile {
    * profiles/ file has always done.
    */
   revision?: string;
+  /**
+   * HOW THIS ENTRY CHANGES ACROSS THE BOOK. Codex entries only.
+   *
+   * Surfaced as its own field rather than left inside `weave` because it is
+   * edited on screen now: a fact with a chapter attached is what lets the app
+   * say who somebody was in chapter seven. A profiles/ file has no Run in its
+   * format at all, so this is undefined there and the editor says why.
+   *
+   * Uses the Weave's own Fact type rather than re-declaring its fields, since a
+   * shape written down twice is a shape that drifts -- which this recovery has
+   * now found five times.
+   */
+  run?: Fact[];
   /**
    * Everything the Weave's file format holds that this screen does not edit:
    * aliases, the story's own name for the thing, its connections, and the Run

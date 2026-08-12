@@ -20,14 +20,14 @@ step that removes the writer's world from chips, exports and search at once.
 |---|---|
 | `docs/weave-spec.md` | **Source of truth.** The writer's design document |
 | `docs/weave-spec-gaps.md` | Scope addendum: findings, how it happened, what got better |
-| `docs/weave-recovery-plan.md` | **The work ledger.** 72 tasks, ids R0.1-R10.5 |
+| `docs/weave-recovery-plan.md` | **The work ledger.** Ids R0.1-R10.6; the plan's own progress table is the count, since live testing keeps adding tasks |
 
 **Progress is checked off in TWO places, in the same commit: the task's
 checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 34 of 86 tasks done.
+> **LEDGER — last updated 2026-08-12.** 36 of 88 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -42,7 +42,7 @@ its place without relying on memory or conversation history.
 > context-inspect list · R1.4 `weave_brief` kept (spec amendment) · R1.5a the
 > false hidden-trait comment deleted · R1.6 the two teaching registries bound
 > by a contract test.
-> **Phase 2 (the premise, BLOCKER): 16 of 21.** Groundwork went first because
+> **Phase 2 (the premise, BLOCKER): 18 of 22.** Groundwork went first because
 > both halves fail SILENTLY: R2.3a `role` + `character_kind` indexed (migration
 > 005, tested as an upgrade) · R2.4 `POST /entity` records a Writing Progress
 > save event, which it never did.
@@ -121,8 +121,24 @@ its place without relying on memory or conversation history.
 > checking the walkthrough's claims against the code when the writer said "if
 > that is so" rather than affirming them. Two serialisers, one marker, bound by
 > a test that reads `profileFormat.ts` from Python.
-> **Next: R2.5** — the Run editor, the blocker: the spec's opening example still
-> cannot be recorded through the interface. Then R2.2b, R2.7, R2.8, R2.9.
+> **R2.5 DONE — THE BLOCKER IS CLEARED.** The spec's opening example (the heroine
+> who believes her father died until chapter fifteen) can now be recorded end to
+> end, and `test_the_opening_example.py` does it over HTTP. The Run editor was
+> EXTRACTED from `ThreadEditor` rather than copied, so a fact recorded on either
+> screen is the same fact, and `revealed_at` gained the control it had nowhere:
+> "the reader learns this", separate from "from when". That pair is what the
+> story scrubber's spoiler mode moves through, which is why the timeline has
+> never appeared to do anything. Note for future work: a belief is only drawn on
+> when resolving from that character's POV, so the example needs THREE facts --
+> her belief, the truth, and her change of mind on her own frame.
+> **R2.5b** — a full suite run failed once on `os.replace` (WinError 5) and
+> passed twice alone. That is not a flaky test: on Windows a replace fails while
+> a scanner, the indexer, a sync client or the writer's own editor holds the file
+> for a moment, so a writer's Save fails at random with no diagnosable cause.
+> `replace_atomic` retries ~150ms then raises honestly. Applied to the Weave's
+> writes; the other stores are R10.6.
+> **Next: R2.2b, R2.7, R2.8, R2.9**, then Phase 3 (chips, search and exports
+> still cannot find a converted world) and Phase 4 (no way to export the Weave).
 > Branch health: 1641 backend tests, 1184 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)

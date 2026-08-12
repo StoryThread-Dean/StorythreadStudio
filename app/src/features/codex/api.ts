@@ -116,6 +116,33 @@ export interface WeaveGraph {
   hidden_edges: number;
 }
 
+/**
+ * One fact on an entry's Run: something that becomes true at a point in the
+ * book, rather than being true throughout.
+ *
+ * Declared here with the other wire types rather than in the component that
+ * edits it, because three places need it -- the Weave's editor, the Profile
+ * Builder, and the Profile type itself -- and a shape re-declared per consumer
+ * is a shape that drifts.
+ */
+export interface Fact {
+  id: string;
+  /** When it BECOMES true. Empty is a real answer: an unplaced fact. */
+  at?: string | null;
+  /** A short name for the thing that changes, so two facts about it can
+   *  supersede each other. */
+  axis?: string;
+  value?: string;
+  /** True of the world, or believed by one character. */
+  frame?: string | null;
+  /** When the READER learns it. Empty means "as it happens". */
+  revealed_at?: string | null;
+  ai_scope?: string | null;
+  supersedes?: string | null;
+  /** A contradiction the writer marked deliberate. */
+  intentional?: boolean;
+}
+
 export interface ChapterAnchor {
   chapter_id: string;
   filename: string;

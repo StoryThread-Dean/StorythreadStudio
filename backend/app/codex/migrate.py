@@ -25,6 +25,8 @@
 import json
 import logging
 import os
+
+from app.utils.atomic import replace_atomic
 import shutil
 from datetime import datetime, timezone
 
@@ -80,7 +82,7 @@ def _write_marker(project_path: str) -> None:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
-    os.replace(tmp, path)
+    replace_atomic(tmp, path)
 
 
 def migration_state(project_path: str) -> str:
@@ -377,7 +379,7 @@ def _write_report(project_path: str, report: dict) -> None:
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
-        os.replace(tmp, path)
+        replace_atomic(tmp, path)
     except OSError as exc:
         log.warning("could not write the migration report: %s", exc)
 
@@ -528,7 +530,7 @@ def _write_journal(project_path: str, data: dict) -> None:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
-    os.replace(tmp, path)
+    replace_atomic(tmp, path)
 
 
 def read_journal(project_path: str) -> dict | None:

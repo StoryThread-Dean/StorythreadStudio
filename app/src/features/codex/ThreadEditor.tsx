@@ -33,7 +33,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, Check, Link2, Loader, Plus, Save, Trash2,
+  AlertTriangle, ArrowLeft, Check, Link2, Loader, Plus, Save,
 } from "lucide-react";
 
 import { TONE_CLASSES, threadTypeEntry } from "./lexicon";
@@ -42,6 +42,11 @@ import {
   fetchAnchors, fetchThreads, fetchTypes,
   type ChapterAnchor, type GraphNode, type ThreadSummary, type TypeEntry,
 } from "./api";
+// ONE Run editor, shared with the Profile Builder. It used to live in this file,
+// which meant the four kinds a novelist spends their time on -- edited in the
+// Profile Builder -- had no way to record a fact at all. Copying it would have
+// produced two vocabularies for one idea.
+import { RunEditor, RunField, runInputClass, type Fact } from "./RunEditor";
 
 const API_BASE = "http://localhost:8000";
 
@@ -50,16 +55,6 @@ interface Section {
   content: string;
   trait_blocks?: unknown[];
   ai_summary?: string;
-}
-
-interface Fact {
-  id: string;
-  at?: string | null;
-  axis?: string;
-  value?: string;
-  frame?: string | null;
-  revealed_at?: string | null;
-  ai_scope?: string | null;
 }
 
 interface Thread {
@@ -350,24 +345,24 @@ export function ThreadEditor({
 
             {/* ── What it is called ─────────────────────────────────── */}
             <div className="grid gap-2 sm:grid-cols-2">
-              <Field label="Name" hint="What it is. The official one.">
+              <RunField label="Name" hint="What it is. The official one.">
                 <input
                   value={thread.name}
                   onChange={e => edit(d => { d.name = e.target.value; })}
                   aria-label="Name"
-                  className={inputClass}
+                  className={runInputClass}
                 />
-              </Field>
-              <Field label="Shown as"
+              </RunField>
+              <RunField label="Shown as"
                      hint="What the story calls it, if that differs. Leave empty to use the name.">
                 <input
                   value={thread.display_name ?? ""}
                   onChange={e => edit(d => { d.display_name = e.target.value; })}
                   aria-label="Shown as"
-                  className={inputClass}
+                  className={runInputClass}
                 />
-              </Field>
-              <Field label="Also called"
+              </RunField>
+              <RunField label="Also called"
                      hint="One per line. Every one of these finds this entry, anywhere in your writing.">
                 <textarea
                   value={(thread.aliases ?? []).join("\n")}
@@ -377,10 +372,10 @@ export function ThreadEditor({
                   })}
                   aria-label="Also called"
                   rows={3}
-                  className={inputClass}
+                  className={runInputClass}
                 />
-              </Field>
-              <Field label="Tags" hint="One per line.">
+              </RunField>
+              <RunField label="Tags" hint="One per line.">
                 <textarea
                   value={(thread.tags ?? []).join("\n")}
                   onChange={e => edit(d => {
@@ -389,14 +384,14 @@ export function ThreadEditor({
                   })}
                   aria-label="Tags"
                   rows={3}
-                  className={inputClass}
+                  className={runInputClass}
                 />
-              </Field>
+              </RunField>
             </div>
 
             {/* ── The sections this KIND has, from the registry ─────── */}
             {sections.map(section => (
-              <Field key={section.id} label={section.heading}>
+              <RunField key={section.id} label={section.heading}>
                 <textarea
                   value={thread.sections?.[section.id]?.content ?? ""}
                   onChange={e => edit(d => {
@@ -409,13 +404,17 @@ export function ThreadEditor({
                   })}
                   aria-label={section.heading}
                   rows={5}
-                  className={`${inputClass} font-serif`}
+                  className={`${runInputClass} font-serif`}
                 />
-              </Field>
+              </RunField>
             ))}
 
             {/* ── The Run ───────────────────────────────────────────── */}
-            <Run thread={thread} chapters={chapters} edit={edit} />
+            <RunEditor
+              run={thread.run ?? []}
+              chapters={chapters}
+              onChange={next => edit(d => { d.run = next; })}
+            />
           </div>
         )}
       </div>
@@ -438,153 +437,3 @@ export function ThreadEditor({
 }
 
 
-/**
- * How the entry changes across the story.
- *
- * The reason the Weave exists, and the thing Weaving sends writers here to
- * fix: a fact with no point in the story is true everywhere or nowhere, so
- * nothing downstream can reason about it. "When" is a list of the writer's own
- * chapters -- never a date, and never a number they have to work out.
- */
-function Run({ thread, chapters, edit }: {
-  thread: Thread;
-  chapters: ChapterAnchor[];
-  edit: (change: (draft: Thread) => void) => void;
-}) {
-  const run = thread.run ?? [];
-
-  function add() {
-    edit(d => {
-      d.run = [...(d.run ?? []), {
-        // A local id until it is saved. The backend mints one for a fact that
-        // arrives without, so this only has to be unique in the buffer.
-        id: `f-new-${(d.run ?? []).length + 1}`,
-        at: chapters[0]?.anchor ?? "", axis: "", value: "",
-      }];
-    });
-  }
-
-  return (
-    <section className="mt-4 border-t border-border pt-3">
-      <h4 className="text-xs font-semibold text-text-primary">
-        How this changes through the story
-      </h4>
-      <p className="mt-0.5 text-[11px] text-faint">
-        Anything that becomes true at a point in the book rather than being
-        true throughout. This is what lets the app tell your AI who someone was
-        in chapter seven instead of who they end up being.
-      </p>
-
-      {run.length === 0 ? (
-        <p className="mt-2 text-[11px] text-faint">
-          Nothing yet. The sections above are for what is true throughout.
-        </p>
-      ) : (
-        <ul className="mt-2 space-y-2">
-          {run.map((fact, i) => (
-            <li key={fact.id}
-                data-testid="fact"
-                className="rounded border border-border p-2">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Field label="What changes"
-                       hint="A short name for the thing that changes, so two facts about it can replace each other.">
-                  <input
-                    value={fact.axis ?? ""}
-                    onChange={e => edit(d => { d.run![i].axis = e.target.value; })}
-                    aria-label={`What changes ${i + 1}`}
-                    placeholder="belief.father"
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="From when">
-                  <select
-                    value={fact.at ?? ""}
-                    onChange={e => edit(d => { d.run![i].at = e.target.value; })}
-                    aria-label={`From when ${i + 1}`}
-                    className={inputClass}
-                  >
-                    {/* An unplaced fact is a real state and has to be
-                        selectable, or the writer could not see that it IS
-                        unplaced. */}
-                    <option value="">Not placed yet</option>
-                    {chapters.map((chapter, n) => (
-                      <option key={chapter.chapter_id} value={chapter.anchor}>
-                        {n + 1}. {chapter.title}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <Field label="What is true">
-                <textarea
-                  value={fact.value ?? ""}
-                  onChange={e => edit(d => { d.run![i].value = e.target.value; })}
-                  aria-label={`What is true ${i + 1}`}
-                  rows={2}
-                  className={inputClass}
-                />
-              </Field>
-
-              <div className="mt-1 flex flex-wrap items-end gap-2">
-                <Field label="Whose truth"
-                       hint="Leave as true for something that simply is. Name a character for something only they believe.">
-                  <input
-                    value={fact.frame ?? ""}
-                    onChange={e => edit(d => { d.run![i].frame = e.target.value; })}
-                    aria-label={`Whose truth ${i + 1}`}
-                    placeholder="truth"
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="AI may see">
-                  <select
-                    value={fact.ai_scope ?? "always"}
-                    onChange={e => edit(d => { d.run![i].ai_scope = e.target.value; })}
-                    aria-label={`AI may see ${i + 1}`}
-                    className={inputClass}
-                  >
-                    <option value="always">Always</option>
-                    <option value="on-request">Only when asked</option>
-                    <option value="never">Never</option>
-                  </select>
-                </Field>
-                <button
-                  onClick={() => edit(d => { d.run = d.run!.filter((_, n) => n !== i); })}
-                  aria-label={`Remove ${fact.axis || "this"}`}
-                  className="ml-auto rounded p-1 text-faint hover:text-rose-300"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <button
-        onClick={add}
-        className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-violet-300 hover:text-violet-200"
-      >
-        <Plus size={11} /> Something that changes
-      </button>
-    </section>
-  );
-}
-
-
-const inputClass =
-  "w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs "
-  + "text-text-primary outline-none focus:border-indigo-500";
-
-function Field({ label, hint, children }: {
-  label: string; hint?: string; children: React.ReactNode;
-}) {
-  return (
-    <label className="mt-2 block">
-      <span className="block text-[11px] font-medium text-text-muted">{label}</span>
-      {hint && <span className="mb-0.5 block text-[10px] text-faint">{hint}</span>}
-      {children}
-    </label>
-  );
-}

@@ -235,10 +235,35 @@ types it is about are edited in a screen with no fact UI.
       streak and word count would have stopped moving with no error anywhere.
       Best effort on purpose: losing an entry because a streak could not be
       updated would be the worse failure, and there is a test for exactly that.
-- [ ] **R2.5** Give characters, relationships, locations and lore a **Run
-      editor**, including a `revealed_at` control (gap A9).
-      *Done-when:* the spec's opening example can be recorded end to end by a
-      writer, with a test that does it.
+- [x] **R2.5** **THE BLOCKER, CLEARED.** The spec's opening example can be
+      recorded end to end by a writer, and `test_the_opening_example.py` does it
+      through the HTTP surface -- a unit test of the resolver would have passed
+      for the entire time the example was unrecordable.
+      The Run editor was EXTRACTED from `ThreadEditor` rather than copied into
+      the Profile Builder, so a fact recorded on either screen is the same fact.
+      `revealed_at` gained the control it never had anywhere: "the reader learns
+      this", separate from "from when", which is the pair that makes a reveal
+      recordable and is what the story scrubber's spoiler mode moves through.
+      On an unconverted project the editor says why it cannot help rather than
+      taking a chapter and dropping it on save.
+      *What writing the test taught, and it is worth keeping:* the example needs
+      THREE facts, not two. A belief is only drawn on when resolving from that
+      character's viewpoint (`frames_for` returns objective truth alone without a
+      pov), which is correct -- her mistake is not a fact about the world, and a
+      brief for a scene she is not in should not carry it. So her change of mind
+      at chapter fifteen is its own fact on her own frame, and it supersedes the
+      belief by position.
+- [x] **R2.5b** A save that loses a race no longer loses the work. A full suite
+      run failed once on `os.replace` with PermissionError (WinError 5) and
+      passed twice in isolation -- which reads as a flaky test and is not one. On
+      Windows a replace fails while the file is held for a moment by a virus
+      scanner, the search indexer, a sync client or the writer's own editor. That
+      is a writer pressing Save and getting a failure they cannot diagnose,
+      rarely enough never to report and often enough to stop trusting the app.
+      `replace_atomic` retries over about 150ms and then raises honestly, because
+      a save that quietly did not happen is worse than one that says so. Applied
+      to the Weave's own writes, which is where the fault was seen; the other
+      stores are R10.6 rather than being swept up unexamined.
 - [x] **R2.6** `_find_related_relationships` reads the folder this project
       actually uses -- the last hardcoded `profiles/` path in any AI route, and
       the one that could not announce itself. It returns a LIST, and an empty
@@ -545,6 +570,13 @@ it, since the spec calls it the reason the frame system exists.
 - [ ] **R10.4** Walk the spec's Verification section as a manual checklist; add
       shell-dependent flows to `tests/manual-smoke.md`.
 - [ ] **R10.5** `/pre-release` to a RELEASE READY verdict.
+- [ ] **R10.6** Route the remaining atomic writes through `replace_atomic`:
+      `settings_store`, `structure_store` and the audiobook JSON store. R2.5b
+      fixed the Weave's own writes, where the Windows lock failure was actually
+      observed; these are the same one-line change in code this recovery does not
+      own, so they are recorded rather than swept up unexamined. The failure mode
+      is identical -- a save that fails at random with no cause a writer could
+      diagnose.
 
 ---
 
@@ -554,7 +586,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 21 | 16 |
+| 2 The premise | 22 | 18 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -562,5 +594,5 @@ it, since the spec calls it the reason the frame system exists.
 | 7 Scene identity | 4 | 0 |
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
-| 10 Release | 5 | 0 |
-| **Total** | **86** | **34** |
+| 10 Release | 6 | 0 |
+| **Total** | **88** | **36** |
