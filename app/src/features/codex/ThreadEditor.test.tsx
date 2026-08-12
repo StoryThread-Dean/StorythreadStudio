@@ -334,6 +334,20 @@ describe("how the entry changes through the story", () => {
   // The reason the Weave exists. A fact with no point in the story is true
   // everywhere or nowhere, and Weaving sends writers here to place them.
 
+  /**
+   * Open a fact's fields.
+   *
+   * They sit behind a one-line summary now -- the writer's request after
+   * recording three facts on one character: "Only allowing one of these to be
+   * expanded at any given time keeping the landscape clean and less busy."
+   * Scoped inside the fact, because the "What's this?" trigger in the Run
+   * header also carries aria-expanded.
+   */
+  async function openFact(index = 0) {
+    const fact = screen.getAllByTestId("fact")[index];
+    await userEvent.click(within(fact).getByRole("button", { expanded: false }));
+  }
+
   const withFact = entry({
     run: [{ id: "f-1", at: "", axis: "allegiance",
             value: "Sworn to the crown.", ai_scope: "always" }],
@@ -347,6 +361,7 @@ describe("how the entry changes through the story", () => {
   it("offers the writer's own chapters, never a date", async () => {
     mockApi({ thread: withFact });
     await openEntry();
+    await openFact();
     const when = screen.getByLabelText("From when 1");
     const options = Array.from(when.querySelectorAll("option"))
       .map(o => o.textContent);
@@ -359,6 +374,7 @@ describe("how the entry changes through the story", () => {
     // the state Weaving is complaining about.
     mockApi({ thread: withFact });
     await openEntry();
+    await openFact();
     expect((screen.getByLabelText("From when 1") as HTMLSelectElement).value)
       .toBe("");
     expect(within(screen.getByLabelText("From when 1"))
@@ -368,6 +384,7 @@ describe("how the entry changes through the story", () => {
   it("places it, and that is an unsaved change like any other", async () => {
     mockApi({ thread: withFact });
     await openEntry();
+    await openFact();
     await userEvent.selectOptions(screen.getByLabelText("From when 1"), "c-2");
     expect(screen.getByTestId("unsaved")).toBeTruthy();
 
@@ -382,6 +399,10 @@ describe("how the entry changes through the story", () => {
     await userEvent.click(
       screen.getByRole("button", { name: /Something that changes/ }));
     expect(screen.getAllByTestId("fact")).toHaveLength(1);
+    // OPEN ALREADY. Facts collapse to one line each, so a new one arriving
+    // closed would read as "(nothing written yet)" and the button would look
+    // like it had done nothing.
+    expect(screen.getByLabelText("What changes 1")).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: /^Remove/ }));
     expect(screen.queryAllByTestId("fact")).toHaveLength(0);
@@ -390,6 +411,7 @@ describe("how the entry changes through the story", () => {
   it("offers the three AI visibilities in the writer's words", async () => {
     mockApi({ thread: withFact });
     await openEntry();
+    await openFact();
     const scope = screen.getByLabelText("AI may see 1");
     const options = Array.from(scope.querySelectorAll("option"))
       .map(o => o.textContent);

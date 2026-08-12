@@ -31,8 +31,20 @@
 // The third one had no control anywhere until now, on either screen, which is
 // why the spec's own opening example -- the heroine who believes her father died
 // until chapter fifteen -- could not be recorded end to end.
+//
+// ONE OPEN AT A TIME, the rest as single lines. The writer's own words after
+// recording three facts on one character: "seeing how the landscape is becoming
+// very Bulky and busy on the Profiles page ... Truncate it into a Detailed line
+// entry below ... Only allowing one of these to be expanded at any given time
+// keeping the landscape clean and less busy."
+//
+// So a fact reads as one sentence -- when it starts, what is true, whose it is,
+// when the reader learns it -- and opens into the full form when clicked. Six
+// facts is then six lines rather than a screen and a half of controls, and the
+// Run becomes something a writer can scan.
 
-import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
 import type { ChapterAnchor, Fact } from "./api";
@@ -86,9 +98,54 @@ interface RunEditorProps {
   unavailable?: string;
 }
 
+/** A fact as one readable line: when, what, whose, and when the reader learns
+ *  it. The parts a writer scans for, in the order they think about them. */
+export function factSummary(
+  fact: Fact,
+  chapters: ChapterAnchor[],
+  holders: { entity_id: string; name: string }[],
+): string {
+  const chapterName = (anchor: string | null | undefined) => {
+    if (!anchor) return "";
+    const index = chapters.findIndex(c => c.anchor === anchor);
+    return index === -1 ? "" : `${index + 1}. ${chapters[index].title}`;
+  };
+
+  const parts: string[] = [];
+  parts.push(chapterName(fact.at) ? `From ${chapterName(fact.at)}` : "Not placed yet");
+
+  const value = (fact.value ?? "").trim();
+  // Truncated on a word so a line never ends mid-syllable.
+  if (value) {
+    const short = value.length > 70
+      ? value.slice(0, value.lastIndexOf(" ", 70) > 40
+                       ? value.lastIndexOf(" ", 70) : 70) + "..."
+      : value;
+    parts.push(short);
+  } else {
+    parts.push("(nothing written yet)");
+  }
+
+  const frame = fact.frame && fact.frame !== "truth" ? fact.frame : "";
+  if (frame) {
+    const who = holders.find(h => h.entity_id === frame);
+    parts.push(who ? `${who.name} believes it` : "one character believes it");
+  }
+
+  if (fact.revealed_at) {
+    const reveal = chapterName(fact.revealed_at);
+    if (reveal) parts.push(`reader learns it at ${reveal}`);
+  }
+
+  return parts.join(" | ");
+}
+
 export function RunEditor({
   run, chapters, onChange, unavailable, people, self,
 }: RunEditorProps) {
+  // Which fact is open. One at a time, and a new one opens itself -- there is
+  // nothing to read on a fact that has not been written yet.
+  const [openId, setOpenId] = useState<string | null>(null);
   // The entry itself first, then everything else, with no duplicate if it is
   // already in the list.
   const holders = [
@@ -101,14 +158,18 @@ export function RunEditor({
   }
 
   function add() {
+    const id = `f-new-${run.length + 1}`;
     onChange([...run, {
       // A local id until it is saved. The backend mints a real one for a fact
       // that arrives without, so this only has to be unique in the buffer.
-      id: `f-new-${run.length + 1}`,
+      id,
       at: chapters[0]?.anchor ?? "",
       axis: "",
       value: "",
     }]);
+    // Open straight into it. A new fact collapsed to "(nothing written yet)"
+    // would be a button that appeared to do nothing.
+    setOpenId(id);
   }
 
   return (
@@ -136,11 +197,30 @@ export function RunEditor({
               Nothing yet. The sections above are for what is true throughout.
             </p>
           ) : (
-            <ul className="mt-2 space-y-2">
-              {run.map((fact, i) => (
+            <ul className="mt-2 space-y-1">
+              {run.map((fact, i) => {
+                const open = openId === fact.id;
+                return (
                 <li key={fact.id}
                     data-testid="fact"
-                    className="rounded border border-border p-2">
+                    className="rounded border border-border">
+                  {/* THE LINE. What a writer reads when they are not editing:
+                      when it starts, what is true, whose it is, and when the
+                      reader finds out. */}
+                  <button
+                    onClick={() => setOpenId(open ? null : fact.id)}
+                    aria-expanded={open}
+                    className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-[11px] text-text-muted hover:text-text-primary"
+                  >
+                    {open ? <ChevronDown size={11} className="mt-0.5 shrink-0" />
+                          : <ChevronRight size={11} className="mt-0.5 shrink-0" />}
+                    <span className="min-w-0 flex-1">
+                      {factSummary(fact, chapters, holders)}
+                    </span>
+                  </button>
+
+                  {open && (
+                  <div className="border-t border-border px-2 pb-2">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <RunField label="What changes"
                               hint="A short name for the thing that changes, so two facts about it can replace each other.">
@@ -252,8 +332,11 @@ export function RunEditor({
                       <Trash2 size={12} />
                     </button>
                   </div>
+                  </div>
+                  )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
 

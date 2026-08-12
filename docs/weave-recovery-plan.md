@@ -265,6 +265,17 @@ types it is about are edited in a screen with no fact UI.
       and a frame the world no longer recognises is kept and labelled rather than
       reset -- resetting it would turn a character's mistaken belief into a fact
       about the book.
+- [x] **R2.5d** A fact collapses to one line, and one opens at a time. The
+      writer's own words after recording three facts on Alexandra Langford:
+      "seeing how the landscape is becoming very Bulky and busy on the Profiles
+      page ... Truncate it into a Detailed line entry below ... Only allowing one
+      of these to be expanded at any given time keeping the landscape clean and
+      less busy." A fact now reads as when it starts, what is true (truncated on
+      a word), whose it is, and when the reader learns it -- so six facts are six
+      lines rather than a screen and a half of controls. A new fact opens itself,
+      because collapsed it would say "(nothing written yet)" and the button would
+      look like it had done nothing. `factSummary` is exported and tested on its
+      own.
 - [x] **R2.5b** A save that loses a race no longer loses the work. A full suite
       run failed once on `os.replace` with PermissionError (WinError 5) and
       passed twice in isolation -- which reads as a flaky test and is not one. On
@@ -598,7 +609,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 23 | 19 |
+| 2 The premise | 24 | 20 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -607,4 +618,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **89** | **37** |
+| **Total** | **90** | **38** |
