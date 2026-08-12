@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 24 of 75 tasks done.
+> **LEDGER — last updated 2026-08-12.** 27 of 78 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -42,7 +42,7 @@ its place without relying on memory or conversation history.
 > context-inspect list · R1.4 `weave_brief` kept (spec amendment) · R1.5a the
 > false hidden-trait comment deleted · R1.6 the two teaching registries bound
 > by a contract test.
-> **Phase 2 (the premise, BLOCKER): 6 of 11.** Groundwork went first because
+> **Phase 2 (the premise, BLOCKER): 9 of 14.** Groundwork went first because
 > both halves fail SILENTLY: R2.3a `role` + `character_kind` indexed (migration
 > 005, tested as an upgrade) · R2.4 `POST /entity` records a Writing Progress
 > save event, which it never did.
@@ -69,11 +69,25 @@ its place without relying on memory or conversation history.
 > is an ordinary answer, so a converted project would have quietly stopped
 > weaving relationships into full summaries. Shipped in Phase 6 with no tests;
 > it has six now.
+> **R2.10a/b and R2.11 DONE** — from the writer's live test of R2.1, grouped
+> with R2.5 on their instruction. The characters that were previously invisible
+> turned out to be visible in the wrong GROUP, because Weaving could not send a
+> template: Quick Create now asks and **defaults to Side**, and a character can
+> be moved either way from the Profile Builder header (in memory, manual save).
+> Side to Main moves nothing; Main to Side dissolves traits into lines and states
+> the one lossy part first — a `hidden` trait loses `ai_scope: on-request`, the
+> thing that actually withholds it. Latent bug found on the way: a Main page
+> rendered ONLY the trait list, so prose in a trait section was invisible on disk.
+> R2.11: every sidebar row has the menu and the backend says what it may offer
+> (`rename` / `removal`), which fixes the misaligned counts AND deletes another
+> rule the frontend was keeping a second copy of. Renaming a shipped kind was
+> already safe (label only); renaming a built-in NOTE was not, and is now refused
+> with the reason — `notes/outline.md` is read by that path.
 > **Next: R2.5** — the Run editor, the real blocker: the spec's opening example
 > (the heroine who believes her father died until chapter fifteen) still cannot
 > be recorded through the interface. Then R2.2b drive sections from the
 > registry, R2.7 import, R2.8 the six kinds with no editor, R2.9 Relationships.
-> Branch health: 1622 backend tests, 1143 frontend tests, ruff and tsc clean.
+> Branch health: 1633 backend tests, 1165 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

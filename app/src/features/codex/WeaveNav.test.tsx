@@ -32,7 +32,10 @@ function tree(overrides: Record<string, unknown> = {}) {
         id: "notes", label: "Notes",
         sections: [{ kind: "note", id: "author_notes", label: "Author Notes",
                      icon: "FileText", group: "notes", count: 1,
-                     default_section: true, filename: "author-notes.md" }],
+                     default_section: true, filename: "author-notes.md",
+                     // A document the app opens by name: removable, not
+                     // renameable.
+                     shipped: true, rename: "none", removal: "trash" }],
         available: [
           { kind: "note", id: "outline", label: "Outline", icon: "FileText",
             group: "notes", filename: "outline.md" },
@@ -44,9 +47,11 @@ function tree(overrides: Record<string, unknown> = {}) {
         id: "profiles", label: "Profiles",
         sections: [
           { kind: "type", id: "character", label: "Character", icon: "User",
-            group: "profiles", count: 3, default_section: true },
+            group: "profiles", count: 3, default_section: true,
+            shipped: true, rename: "label", removal: "hide" },
           { kind: "type", id: "location", label: "Location", icon: "MapPin",
-            group: "profiles", count: 0, default_section: true },
+            group: "profiles", count: 0, default_section: true,
+            shipped: true, rename: "label", removal: "hide" },
         ],
         available: [
           { kind: "type", id: "faction", label: "Faction", icon: "Flag", group: "profiles" },
@@ -58,7 +63,8 @@ function tree(overrides: Record<string, unknown> = {}) {
         id: "other", label: "Other",
         sections: [{ kind: "type", id: "event", label: "Event",
                      icon: "CalendarClock", group: "other", count: 0,
-                     default_section: true }],
+                     default_section: true,
+                     shipped: true, rename: "label", removal: "hide" }],
         available: [
           { kind: "type", id: "object", label: "Object", icon: "Package", group: "other" },
         ],
@@ -110,6 +116,22 @@ async function openGroup(label: string) {
   await userEvent.click(screen.getByRole("button", { name: label }));
 }
 
+/**
+ * The button that OPENS a section, not the one that opens its menu.
+ *
+ * Every row now has both, so /Character/ matches two things. Filtering by the
+ * settings label rather than by position, because the position is a layout
+ * detail and the label is a promise.
+ */
+function row(name: string): HTMLElement {
+  const found = screen.getAllByRole("button", { name: new RegExp(name) })
+    .filter(b => !(b.getAttribute("aria-label") ?? "").endsWith("settings"));
+  if (found.length !== 1) {
+    throw new Error(`expected one ${name} row, found ${found.length}`);
+  }
+  return found[0];
+}
+
 
 describe("the skeleton", () => {
   it("shows all three groups", async () => {
@@ -158,8 +180,8 @@ describe("what is inside a group", () => {
   it("shows the defaults and nothing else", async () => {
     await renderNav();
     await openGroup("Profiles");
-    expect(screen.getByRole("button", { name: /Character/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Location/ })).toBeTruthy();
+    expect(row("Character")).toBeTruthy();
+    expect(row("Location")).toBeTruthy();
     // Faction exists but is not in use, so it waits under + Add New.
     expect(screen.queryByRole("button", { name: /^Faction/ })).toBeNull();
   });
@@ -187,16 +209,16 @@ describe("what is inside a group", () => {
   it("shows how much is in a section, and stays quiet when empty", async () => {
     await renderNav();
     await openGroup("Profiles");
-    expect(screen.getByRole("button", { name: /Character/ }).textContent).toContain("3");
+    expect(row("Character").textContent).toContain("3");
     // Location is a default with nothing in it -- a "0" would read as a
     // problem rather than as an empty section waiting to be used.
-    expect(screen.getByRole("button", { name: /Location/ }).textContent).not.toContain("0");
+    expect(row("Location").textContent).not.toContain("0");
   });
 
   it("opens a section when clicked", async () => {
     const { onOpenSection } = await renderNav();
     await openGroup("Profiles");
-    await userEvent.click(screen.getByRole("button", { name: /Character/ }));
+    await userEvent.click(row("Character"));
     expect(onOpenSection).toHaveBeenCalledWith(
       expect.objectContaining({ id: "character", kind: "type" }));
   });
@@ -378,13 +400,15 @@ describe("fixing a typo", () => {
         return { ...group, sections: [...group.sections,
           { kind: "note", id: "dungeon_rulez", label: "Dungeon Rulez",
             icon: "FileText", group: "notes", count: 0,
-            default_section: false, filename: "dungeon-rulez.md" }] };
+            default_section: false, filename: "dungeon-rulez.md",
+            shipped: false, rename: "full", removal: "trash" }] };
       }
       if (group.id === "other") {
         return { ...group, sections: [...group.sections,
           { kind: "type", id: "magic_sysstem", label: "Magic Sysstems",
             icon: "Sparkles", group: "other", count,
-            default_section: false }] };
+            default_section: false,
+            shipped: false, rename: "full", removal: "delete" }] };
       }
       return group;
     });
@@ -399,14 +423,62 @@ describe("fixing a typo", () => {
     return screen.getByRole("dialog", { name: `${name} settings` });
   }
 
-  it("offers no menu on a section the app itself depends on", async () => {
-    // Characters cannot be removed -- profiles.py, the migration and the
-    // Profile Builder all name it directly. Offering a button that always
-    // refuses is a worse answer than not offering one.
+  it("offers a menu on every row, including the app's own", async () => {
+    // The writer found this as a cosmetic bug: rows with no menu had nothing
+    // holding the space one occupies, so "Characters 13" sat flush against the
+    // edge while "Factions 2" sat a menu-width in from it. Every row has the
+    // menu now, and what it offers is per row.
     mockApi(typoTree());
     await renderNav();
     await openGroup("Profiles");
-    expect(screen.queryByRole("button", { name: /Character settings/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Character settings" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Location settings" })).toBeTruthy();
+  });
+
+  it("offers a shipped kind a new NAME rather than a new identity", async () => {
+    // Characters can be called anything. Its id and folder cannot move --
+    // profiles.py, the migration and the Profile Builder all name "character"
+    // directly -- so the menu says so instead of implying a full rename.
+    const dialog = await openMenu("Character", "Profiles", 3);
+    await userEvent.click(within(dialog)
+      .getByRole("button", { name: /Change what it is called/ }));
+    expect(within(dialog).getByText(/Only the name changes/)).toBeTruthy();
+    expect(within(dialog).getByText(/folder and everything in it stay/)).toBeTruthy();
+  });
+
+  it("hides a shipped kind instead of deleting part of the app", async () => {
+    const dialog = await openMenu("Location", "Profiles");
+    await userEvent.click(within(dialog)
+      .getByRole("button", { name: /Hide this section/ }));
+    expect(within(dialog).getByText(/bring it back any time from Add New/)).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Hide it" }));
+
+    const hide = calls.find(c => c.url.includes("/type/show"));
+    expect(hide?.body).toMatchObject({ id: "location", show: false });
+    // Nothing was deleted.
+    expect(calls.some(c => c.method === "DELETE")).toBe(false);
+  });
+
+  it("says a section that holds work will stay in the sidebar", async () => {
+    // Hiding turns off "show even when empty". A section shows anyway while it
+    // holds something, and a button that appears to do nothing is worse than
+    // one that explains itself.
+    const dialog = await openMenu("Character", "Profiles", 3);
+    await userEvent.click(within(dialog)
+      .getByRole("button", { name: /Hide this section/ }));
+    expect(within(dialog).getByText(/stays in the sidebar while they are in it/))
+      .toBeTruthy();
+  });
+
+  it("will not offer to rename a document the app opens by name", async () => {
+    // notes/outline.md carries the book's word target in its frontmatter. The
+    // reason is shown rather than the button merely being absent.
+    const dialog = await openMenu("Author Notes", "Notes");
+    expect(within(dialog).queryByRole("button", { name: /Rename|called/ })).toBeNull();
+    expect(within(dialog).getByText(/opens by name, so its name is fixed/))
+      .toBeTruthy();
+    // And the other option survives the refusal.
+    expect(within(dialog).getByRole("button", { name: /Remove it/ })).toBeTruthy();
   });
 
   it("offers one on a section the writer added", async () => {
@@ -481,12 +553,14 @@ describe("removing a section", () => {
         return { ...group, sections: [...group.sections,
           { kind: "note", id: "dungeon_rules", label: "Dungeon Rules",
             icon: "FileText", group: "notes", count: 0,
-            default_section: false, filename: "dungeon-rules.md" }] };
+            default_section: false, filename: "dungeon-rules.md",
+            shipped: false, rename: "full", removal: "trash" }] };
       }
       if (group.id === "other") {
         return { ...group, sections: [...group.sections,
           { kind: "type", id: "bloodline", label: "Bloodlines",
-            icon: "Sparkles", group: "other", count, default_section: false }] };
+            icon: "Sparkles", group: "other", count, default_section: false,
+            shipped: false, rename: "full", removal: "delete" }] };
       }
       return group;
     });

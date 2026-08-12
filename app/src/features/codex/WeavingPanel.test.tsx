@@ -462,6 +462,37 @@ describe("the four ways to answer", () => {
     expect(posted("/thread/new")[0].body.name).toBe("Garrick");
   });
 
+  it("asks how much of a character it is, and starts on Side", async () => {
+    // The writer's report: every character Weaving created arrived as a Main,
+    // "automatically grouped in the Main characters section with no way to move
+    // them to side". Side is the default because a name the prose mentions once
+    // is far more often a shopkeeper than a viewpoint character -- and the two
+    // mistakes do not cost the same. A Side page promoted later loses nothing;
+    // a Main page for a walk-on is six empty trait sections asking to be filled.
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+
+    const side = within(dialog).getByRole("radio", { name: "Side" }) as HTMLInputElement;
+    const main = within(dialog).getByRole("radio", { name: "Main" }) as HTMLInputElement;
+    expect(side.checked).toBe(true);
+    expect(main.checked).toBe(false);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+    expect(posted("/thread/new")[0].body.character_kind).toBe("side");
+  });
+
+  it("sends Main when the writer says this one matters", async () => {
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const dialog = await screen.findByTestId("quick-entry");
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Main" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
+    await waitFor(() => expect(posted("/thread/new").length).toBe(1));
+    expect(posted("/thread/new")[0].body.character_kind).toBe("main");
+  });
+
   it("prefills the starter line from the writer's own sentence", async () => {
     // The stop's evidence is the writer's prose, so it is allowed to arrive in
     // the box -- as a starting point they can edit or clear, never more.

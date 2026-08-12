@@ -291,6 +291,31 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "character.template": {
+    what: "Whether this character gets the full page or the simple one.",
+    why: "Most people in a book are not viewpoint characters. A Main character "
+      + "page gives you six trait sections with an importance level on every "
+      + "trait, which is what you want for someone the story follows and far "
+      + "more than you want for the innkeeper in chapter four. A Side page is "
+      + "one plain box per section, and Quick Build fills it in a few clicks. "
+      + "You are not stuck with the choice -- this is the button that changes "
+      + "it, in either direction, whenever the character turns out to matter "
+      + "more or less than you thought.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Make Side turns every trait you have written into a line of text in the "
+        + "same section. Nothing is deleted.",
+      "A trait marked Hidden is the one thing that changes meaning: a Side "
+        + "character has no Hidden level, so the line starts with \"Hidden:\" "
+        + "and AI can use it like anything else you wrote. The screen says how "
+        + "many before you decide.",
+      "Make Main adds an empty trait list to each section and leaves your text "
+        + "exactly where it is. Move lines into traits whenever you like.",
+      "Nothing is saved until you save, so you can convert, look at the result, "
+        + "and switch profiles to undo it.",
+    ],
+  },
   "profile.home": {
     what: "Which folder this screen is reading your entries from.",
     why: "Your world lives in one of two places. Before you bring it into the "

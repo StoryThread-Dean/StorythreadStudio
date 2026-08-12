@@ -54,6 +54,9 @@ import type { CharacterKind } from "../types/profile";
 // assuming, because assuming is what left twelve of the writer's characters
 // with no editable page. See profileSource.ts for the whole story.
 import { fetchEntriesHome, sourceFor } from "./profileSource";
+// Moving a character between the two pages. A data change, kept out of
+// this file so it can be tested on its own.
+import { convertCharacter, type Conversion } from "./characterTemplate";
 import type { EntriesHome, ProfileSource } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
@@ -423,6 +426,17 @@ export function ProfileBuilder({
   // Generation state -- tracks which field is being AI-generated
   const [generatingField, setGeneratingField] = useState<string | null>(null);
 
+  // MOVING A CHARACTER BETWEEN THE TWO PAGES.
+  //
+  // Held as a pending question rather than done on click, because Main to Side
+  // has one consequence worth stating first: a hidden trait dissolved into
+  // prose loses the thing that kept it out of an AI prompt. `null` means
+  // nothing is being asked.
+  const [templateAsk, setTemplateAsk] = useState<"main" | "side" | null>(null);
+  // What the last conversion actually did, shown afterwards so the writer knows
+  // where their traits went rather than hunting for them.
+  const [templateDid, setTemplateDid] = useState<Conversion | null>(null);
+
   // Phase 6: which standalone relationship profiles were folded into the most
   // recent Full AI Summary generation. Set after a successful character-profile
   // generate-full-summary call; cleared when the writer switches profiles.
@@ -509,6 +523,11 @@ export function ProfileBuilder({
     setBehaviorMode("chat");
     setBehaviorPanelOpen(false);
     setFocusedSection(null);
+    // The account of a template change belongs to the profile it was
+    // about. Following the writer to the next one would be a receipt for
+    // something they are no longer looking at.
+    setTemplateDid(null);
+    setTemplateAsk(null);
   }, [profile?.filename]);
 
 
@@ -603,6 +622,10 @@ export function ProfileBuilder({
           name:   saved.name,
           role:   saved.role,
           status: saved.status,
+          // Which GROUP the row belongs to. Without this a character moved to
+          // Side stayed under Main until the writer switched tabs, which is
+          // exactly the "no way to move them" complaint in another form.
+          character_kind: saved.character_kind ?? next[idx].character_kind,
         };
         // Re-sort so renames move the item to its alphabetical place.
         next.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
@@ -639,6 +662,29 @@ export function ProfileBuilder({
     }
   }, [source]);
 
+
+  /**
+   * Move the open character to the other page.
+   *
+   * IN MEMORY ONLY. Manual save is the product rule and this is no exception --
+   * the profile is marked unsaved and the writer commits it, or switches away
+   * and loses nothing. Converting is therefore free to try.
+   */
+  const applyTemplate = useCallback((to: "main" | "side") => {
+    const current = profileRef.current;
+    if (!current) return;
+    const result = convertCharacter(current, to);
+    setProfile(result.profile);
+    setIsDirty(true);
+    setTemplateAsk(null);
+    setTemplateDid(result);
+    // The left-panel row lives in the other group now. Patched here rather than
+    // refetching, so the writer's unsaved work is not thrown away to move a row.
+    setProfileList(prev => prev.map(item =>
+      item.filename === result.profile.filename
+        ? { ...item, character_kind: to }
+        : item));
+  }, []);
 
   // --- Find & Replace actions ---
   // Section-order helper passed to the walker so match order matches the UI.
@@ -1398,6 +1444,91 @@ export function ProfileBuilder({
       </aside>
 
 
+      {/* WHAT IT WILL DO, BEFORE IT DOES IT. Not a confirmation for its own
+          sake: Main to Side dissolves trait blocks into lines, and a hidden
+          trait stops being hidden. That is worth one sentence first. */}
+      {templateAsk && profile && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={e => { if (e.target === e.currentTarget) setTemplateAsk(null); }}
+        >
+          <div role="dialog" aria-label={`Make ${profile.name} a ${templateAsk} character`}
+               className="w-full max-w-md rounded border border-border bg-bg-panel p-4">
+            <h2 className="mb-2 text-sm font-semibold text-text-primary">
+              Make {profile.name} a {templateAsk === "side" ? "Side" : "Main"} character?
+            </h2>
+            {templateAsk === "side" ? (
+              <div className="space-y-2 text-xs text-text-muted">
+                <p>
+                  The Side page is one plain box per section. Every trait you
+                  have written becomes a line in its own section, so nothing is
+                  lost -- and importance levels go, because a Side character
+                  does not have them.
+                </p>
+                {(() => {
+                  const preview = convertCharacter(profile, "side");
+                  if (preview.dissolved === 0) {
+                    return (
+                      <p className="text-faint">
+                        There are no traits to move, so this only changes the
+                        page.
+                      </p>
+                    );
+                  }
+                  return (
+                    <>
+                      <p className="text-text-primary">
+                        {preview.dissolved} trait
+                        {preview.dissolved === 1 ? "" : "s"} will become
+                        {preview.dissolved === 1 ? " a line" : " lines"} of text.
+                      </p>
+                      {preview.hidden > 0 && (
+                        <p className="rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-amber-200">
+                          {preview.hidden} of {preview.hidden === 1 ? "them is" : "them are"} marked
+                          Hidden. A Side character has no Hidden level, so
+                          {preview.hidden === 1 ? " that line" : " those lines"} will start with
+                          "Hidden:" and AI can use {preview.hidden === 1 ? "it" : "them"} like
+                          anything else you have written. Make them Main again to
+                          get the level back.
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="space-y-2 text-xs text-text-muted">
+                <p>
+                  The Main page adds a trait list to each section, with an
+                  importance level per trait. Everything you have written stays
+                  exactly where it is -- the lists start empty, and you can move
+                  lines into them whenever you like.
+                </p>
+                <p className="text-faint">Nothing is rewritten.</p>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-faint">
+              Nothing is saved until you save, so you can look at the result
+              first.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => applyTemplate(templateAsk)}
+                className="rounded bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-500"
+              >
+                Make {templateAsk === "side" ? "Side" : "Main"}
+              </button>
+              <button
+                onClick={() => setTemplateAsk(null)}
+                className="rounded border border-border px-3 py-1 text-xs text-text-muted hover:text-text-primary"
+              >
+                Leave it as it is
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── CENTER PANEL: Profile Editor ───────────────────────────────── */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
@@ -1411,6 +1542,27 @@ export function ProfileBuilder({
               <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">
                 {PROFILE_TYPE_LABELS[profile.type as ProfileType] ?? profile.type}
               </span>
+            )}
+            {/* WHICH PAGE THIS CHARACTER USES, and the way to change it.
+                Beside the type chip because it is the same kind of fact about
+                the entry, and one click from where the writer notices it is
+                wrong. */}
+            {profile?.type === "character" && (
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">
+                  {isSideCharacter ? "Side" : "Main"}
+                </span>
+                <button
+                  onClick={() => setTemplateAsk(isSideCharacter ? "main" : "side")}
+                  className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+                  title={isSideCharacter
+                    ? "Give this character the full Main page"
+                    : "Move this character to the simpler Side page"}
+                >
+                  Make {isSideCharacter ? "Main" : "Side"}
+                </button>
+                <Explain of="character.template" compact />
+              </div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -1867,6 +2019,51 @@ export function ProfileBuilder({
                   onInsertRoleSummary={(_trait, description) =>
                     appendToSectionContent("personality_traits", description, "\n\n")}
                 />
+              )}
+
+              {/* WHAT JUST HAPPENED, AND WHAT IS NEXT -- the continuous-flow
+                  rule. A page that silently rearranges itself leaves the writer
+                  checking whether their traits are still there; this says where
+                  they went and what is left to do. */}
+              {templateDid && (
+                <div className="mb-6 rounded border border-indigo-700/40 bg-indigo-950/20 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-xs text-text-muted">
+                      <p className="text-text-primary">
+                        {profile.name} is now a{" "}
+                        {isSideCharacter ? "Side" : "Main"} character.
+                      </p>
+                      {templateDid.dissolved > 0 ? (
+                        <p className="mt-1">
+                          {templateDid.dissolved} trait
+                          {templateDid.dissolved === 1 ? "" : "s"} became lines of
+                          text inside the same sections.
+                          {templateDid.hidden > 0 && (
+                            <> The {templateDid.hidden === 1 ? "one" : templateDid.hidden}{" "}
+                            marked Hidden {templateDid.hidden === 1 ? "starts" : "start"} with
+                            "Hidden:" so you can find {templateDid.hidden === 1 ? "it" : "them"} again.</>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="mt-1">
+                          Nothing needed moving. Everything you wrote is where it
+                          was.
+                        </p>
+                      )}
+                      <p className="mt-1 text-amber-300">
+                        Not saved yet -- press Save (or Ctrl+S) to keep it, or
+                        switch profiles to leave it alone.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setTemplateDid(null)}
+                      aria-label="Dismiss"
+                      className="shrink-0 rounded p-0.5 text-faint hover:text-text-primary"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                </div>
               )}
 
               {/* Profile sections. Side characters render every section as a
@@ -2331,7 +2528,33 @@ function ProfileSectionEditor({
 
       {hasTraitBlocks ? (
         <div>
-          {section.trait_blocks.length === 0 && (
+          {/* PROSE IN A TRAIT SECTION IS SHOWN, not hidden.
+              The file format has always allowed a section to hold both a trait
+              list and a paragraph, and three things put text here: a writer
+              hand-editing the Markdown, Quick Build before a character was
+              promoted, and moving a character from Side to Main. Rendering only
+              the list meant that text sat on disk, invisible, and the writer
+              would reasonably conclude it had been eaten. Shown only when there
+              IS something, so an ordinary Main character's page is unchanged. */}
+          {(section.content ?? "").trim() !== "" && (
+            <div className="mb-3">
+              <p className="mb-1 text-xs text-text-muted">
+                Notes in this section
+              </p>
+              <textarea
+                value={section.content}
+                onChange={e => onContentChange(e.target.value)}
+                rows={3}
+                data-pb-field={`section:${sectionKey}:content`}
+                className="w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+              />
+              <p className="mt-1 text-xs text-faint">
+                Written as plain notes rather than as traits. Move any of it into
+                a trait below when you want AI to weigh it.
+              </p>
+            </div>
+          )}
+          {section.trait_blocks.length === 0 && (section.content ?? "").trim() === "" && (
             <p className="mb-2 text-xs text-faint">
               No traits yet. Click "Add Trait" to add one.
             </p>

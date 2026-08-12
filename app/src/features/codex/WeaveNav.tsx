@@ -48,21 +48,20 @@ function targetOf(section: SectionEntry): { id?: string; filename?: string } {
     : { id: section.id };
 }
 
-/**
- * Sections the app itself depends on, which have no menu.
- *
- * The Profile Builder, the migration and profiles.py all name these
- * directly, so they can be relabelled but never removed. Offering a button
- * that always refuses teaches nothing; leaving it off is the honest shape.
- */
-const FIXED_SECTIONS = new Set([
-  "character", "relationship", "location", "lore",
-  "author_notes", "outline", "style_guide",
-]);
-
-function isFixed(section: SectionEntry): boolean {
-  return FIXED_SECTIONS.has(section.id);
-}
+// EVERY ROW GETS THE MENU, and what it offers comes from the backend.
+//
+// There used to be a list here of the sections the app depends on, and they got
+// no menu at all. Two things were wrong with that. It was these rules written
+// down a second time, in the place least able to enforce them. And it was
+// visible: a row with no menu had nothing holding the space a menu occupies, so
+// "Characters 13" sat flush against the edge while "Factions 2" sat a
+// menu-width in from it -- which is how the writer found it.
+//
+// The rules are in backend/app/codex/sections.py now, beside the code that
+// carries them out, and every row sends `rename` and `removal` saying what its
+// own menu may offer. A refusal is still shown as a refusal: a writer told
+// "this holds four entries" learns how the app thinks, where one who finds no
+// button assumes it is impossible.
 
 interface WeaveNavProps {
   projectPath: string;
@@ -223,19 +222,16 @@ export function WeaveNav({
                           <span className="text-faint">{section.count}</span>
                         )}
                       </button>
-                      {/* Only for sections the writer can actually change.
-                          Offering a button that always refuses is a worse
-                          answer than not offering one -- Characters is part
-                          of the app and cannot be removed. */}
-                      {!isFixed(section) && (
-                        <button
-                          onClick={() => { setEditing(section); setEditError(null); }}
-                          aria-label={`${section.label} settings`}
-                          className="ml-1 shrink-0 rounded p-0.5 text-faint opacity-0 transition-opacity hover:text-text-primary focus:opacity-100 group-hover/row:opacity-100"
-                        >
-                          <MoreHorizontal size={11} />
-                        </button>
-                      )}
+                      {/* On every row. It holds its space whether or not it
+                          is showing, which is what keeps the counts in a
+                          column instead of some flush and some indented. */}
+                      <button
+                        onClick={() => { setEditing(section); setEditError(null); }}
+                        aria-label={`${section.label} settings`}
+                        className="ml-1 shrink-0 rounded p-0.5 text-faint opacity-0 transition-opacity hover:text-text-primary focus:opacity-100 group-hover/row:opacity-100"
+                      >
+                        <MoreHorizontal size={11} />
+                      </button>
                     </div>
                   );
                 })}
@@ -255,6 +251,12 @@ export function WeaveNav({
             () => renameSection(projectPath, targetOf(editing), label))}
           onRemove={() => void edit(
             async () => {
+              // HIDING IS NOT DELETING, and a kind the app ships with is only
+              // ever hidden: its section leaves the sidebar and nothing on disk
+              // moves, so "+ Add New" brings it back with everything in it.
+              if (editing.removal === "hide") {
+                return await showType(projectPath, editing.id, false);
+              }
               const result = await deleteSection(projectPath, targetOf(editing));
               // Where a note went, said out loud. A delete that silently
               // keeps a copy is as dishonest as one that silently does not.

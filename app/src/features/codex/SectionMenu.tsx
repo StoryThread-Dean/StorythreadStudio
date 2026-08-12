@@ -16,9 +16,24 @@
 //   impossible, where one who is told WHY learns how the app thinks. A note
 //   is prose, so it is moved to notes/trash/ and the message says where.
 //
-// The menu is not shown for a section the app itself depends on. Characters
-// cannot be removed, and offering a button that always refuses is a worse
-// answer than not offering it.
+// EVERY ROW HAS THIS MENU, and each row says what its own menu may offer --
+// `rename` and `removal` come from the backend, beside the code that enforces
+// them. It used to be absent on the sections the app depends on, which was the
+// same rule written down twice AND the reason the sidebar's counts did not line
+// up: a row with no menu had nothing holding the space one occupies.
+//
+// So the shape is now "offer everything, and be honest about what each thing
+// does":
+//
+//   Characters can be CALLED anything. Its id and folder cannot move, because
+//   the Profile Builder, the migration and profiles.py all name "character"
+//   directly -- so the rename says only the name here changes, and removal
+//   hides the section rather than deleting a part of the app.
+//
+//   The Outline is a document the app opens BY ITS FILENAME (it carries the
+//   book's word target in its frontmatter), so renaming is refused with that
+//   reason rather than silently making the file disappear. Removing it still
+//   works: the words move to notes/trash/.
 
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Loader, Pencil, Trash2, X } from "lucide-react";
@@ -41,6 +56,12 @@ export function SectionMenu({
   const [mode, setMode] = useState<"menu" | "rename" | "confirm">("menu");
   const [name, setName] = useState(section.label);
   const field = useRef<HTMLInputElement | null>(null);
+
+  // What this row allows. Defaulted rather than assumed, so a row from an older
+  // response still renders a working menu instead of an empty one.
+  const rename = section.rename ?? "full";
+  const removal = section.removal ?? "delete";
+  const canRename = rename !== "none";
 
   useEffect(() => {
     if (mode === "rename") field.current?.select();
@@ -80,19 +101,28 @@ export function SectionMenu({
         <div className="px-3 py-3">
           {mode === "menu" && (
             <div className="space-y-1">
-              <button
-                onClick={() => setMode("rename")}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-surface"
-              >
-                <Pencil size={12} className="text-violet-300" />
-                Rename this section
-              </button>
+              {canRename ? (
+                <button
+                  onClick={() => setMode("rename")}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-surface"
+                >
+                  <Pencil size={12} className="text-violet-300" />
+                  {rename === "label" ? "Change what it is called" : "Rename this section"}
+                </button>
+              ) : (
+                /* Said rather than hidden. A missing button teaches nothing;
+                   this teaches how the app is put together. */
+                <p className="rounded bg-bg-surface/60 px-2 py-1.5 text-[11px] text-text-muted">
+                  {section.label} is a document the app opens by name, so its
+                  name is fixed. Everything you write in it is yours.
+                </p>
+              )}
               <button
                 onClick={() => setMode("confirm")}
                 className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-surface"
               >
                 <Trash2 size={12} className="text-rose-400" />
-                Remove it
+                {removal === "hide" ? "Hide this section" : "Remove it"}
               </button>
               <p className="px-2 pt-1 text-[11px] text-faint">
                 {section.count > 0
@@ -139,11 +169,15 @@ export function SectionMenu({
               {/* Said plainly, because a rename that quietly moved files
                   would be alarming to notice afterwards. */}
               <p className="mt-1.5 text-[11px] text-faint">
-                {isNote
-                  ? "Everything written in this note comes with it."
-                  : section.count > 0
-                    ? `All ${section.count} ${section.count === 1 ? "entry" : "entries"} come with it.`
-                    : "Nothing else changes."}
+                {rename === "label"
+                  ? "Only the name changes. This is one of the sections the app "
+                    + "is built around, so its folder and everything in it stay "
+                    + "exactly where they are."
+                  : isNote
+                    ? "Everything written in this note comes with it."
+                    : section.count > 0
+                      ? `All ${section.count} ${section.count === 1 ? "entry" : "entries"} come with it.`
+                      : "Nothing else changes."}
               </p>
             </div>
           )}
@@ -152,18 +186,30 @@ export function SectionMenu({
             <div>
               <p className="flex items-start gap-1.5 text-xs text-text-primary">
                 <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-400/80" />
-                Remove {section.label}?
+                {removal === "hide" ? "Hide" : "Remove"} {section.label}?
               </p>
               <p className="mt-1.5 text-[11px] text-faint">
-                {isNote
-                  ? "The note moves to a trash folder inside notes, so nothing you "
-                    + "wrote is lost. You can put it back by moving the file out again."
-                  : section.count > 0
+                {removal === "hide"
+                  ? section.count > 0
+                    // Hiding turns off "show even when empty". A section with
+                    // entries in it shows because it HOLDS something, so it
+                    // would stay -- and a button that appears to do nothing is
+                    // worse than one that explains itself.
                     ? `This section holds ${section.count} `
-                      + `${section.count === 1 ? "entry" : "entries"}. They have to be `
-                      + "moved or deleted first -- the app will not remove your writing "
-                      + "for you."
-                    : "It is empty, so nothing is lost."}
+                      + `${section.count === 1 ? "entry" : "entries"}, so it stays in `
+                      + "the sidebar while they are in it. Move or delete those "
+                      + "first if you want it gone from this story."
+                    : "It leaves the sidebar. Nothing on disk moves, and you can "
+                      + "bring it back any time from Add New."
+                  : isNote
+                    ? "The note moves to a trash folder inside notes, so nothing you "
+                      + "wrote is lost. You can put it back by moving the file out again."
+                    : section.count > 0
+                      ? `This section holds ${section.count} `
+                        + `${section.count === 1 ? "entry" : "entries"}. They have to be `
+                        + "moved or deleted first -- the app will not remove your writing "
+                        + "for you."
+                      : "It is empty, so nothing is lost."}
               </p>
               <div className="mt-2.5 flex gap-2">
                 <button
@@ -171,7 +217,8 @@ export function SectionMenu({
                   disabled={busy}
                   className="rounded bg-rose-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-600 disabled:opacity-40"
                 >
-                  {busy ? <Loader size={11} className="animate-spin" /> : "Remove"}
+                  {busy ? <Loader size={11} className="animate-spin" />
+                        : removal === "hide" ? "Hide it" : "Remove"}
                 </button>
                 <button
                   onClick={() => setMode("menu")}

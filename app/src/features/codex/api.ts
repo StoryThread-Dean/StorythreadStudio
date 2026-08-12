@@ -164,6 +164,27 @@ export interface SectionEntry {
   count: number;
   default_section: boolean;
   filename?: string;
+  /** Part of the app rather than something the writer added. */
+  shipped: boolean;
+  /**
+   * What a rename would actually do. Decided by the backend, beside the code
+   * that enforces it -- the frontend used to keep its own list of untouchable
+   * sections, which is a rule written down twice.
+   *
+   *   "full"   the name, the folder and the entries move together
+   *   "label"  only what it is called here changes. A shipped kind keeps its
+   *            id and folder because the app's own code names them.
+   *   "none"   the app opens this document BY ITS FILENAME, so its name is not
+   *            the writer's to change. What is inside it is.
+   */
+  rename: "full" | "label" | "none";
+  /**
+   *   "delete" gone from the registry; refused while it holds entries
+   *   "hide"   off the sidebar, nothing on disk touched (reversible from
+   *            "+ Add New")
+   *   "trash"  moved to notes/trash/, so the words survive the decision
+   */
+  removal: "delete" | "hide" | "trash";
 }
 
 /** Something not on screen yet, offered under "+ Add New". */

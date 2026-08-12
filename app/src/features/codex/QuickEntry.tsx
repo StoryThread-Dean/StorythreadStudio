@@ -74,6 +74,22 @@ export function QuickEntry({
 }: QuickEntryProps) {
   const [name, setName] = useState(presetName);
   const [kind, setKind] = useState(presetKind);
+  // MAIN OR SIDE, and it starts on Side.
+  //
+  // Weaving finds a name in the prose and offers to make an entry for it. Every
+  // such entry used to arrive as a Main character -- the full trait-block page
+  // with an importance level per trait -- because the create route could not
+  // carry the template at all. So a book's walk-ons all landed in the Main
+  // group, and the writer reported exactly that: "the side characters are
+  // automatically grouped in the Main characters section with no way to move
+  // them to side."
+  //
+  // Side is the default because of what this button IS. A name the prose
+  // mentions once is far more often a shopkeeper than a viewpoint character,
+  // and the cost of the two mistakes is not symmetrical: a Side page promoted
+  // later loses nothing, while a Main page for a walk-on is six empty trait
+  // sections asking to be filled in.
+  const [characterKind, setCharacterKind] = useState<"main" | "side">("side");
   const [text, setText] = useState(prefill ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +170,12 @@ export function QuickEntry({
         project_path: projectPath, type: kind, name: name.trim(),
         aliases: aliases ?? [],
       };
+      // Only means anything for a character, and the backend ignores it
+      // elsewhere -- sent only where it is true, so a Location's file does not
+      // carry a line about character templates.
+      if (kind === "character") {
+        body.character_kind = characterKind;
+      }
       if (text.trim() && landing) {
         body.sections = { [landing.id]: text.trim() };
       }
@@ -418,6 +440,55 @@ export function QuickEntry({
                   aria-label="Name"
                   className="mb-2 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
                 />
+
+                {/* WHICH PAGE THIS CHARACTER GETS. Characters only, because
+                    nothing else has two templates. Kept above the starter box
+                    so the writer decides the shape before they write into
+                    it. */}
+                {kind === "character" && (
+                  <fieldset className="mb-2">
+                    <legend className="mb-1 text-[11px] text-text-muted">
+                      How much of a character are they?
+                    </legend>
+                    <div className="flex gap-1.5">
+                      {([
+                        { value: "side" as const, label: "Side",
+                          hint: "One page, plain boxes. Right for anyone the "
+                            + "story mentions rather than follows." },
+                        { value: "main" as const, label: "Main",
+                          hint: "The full page: traits, importance levels, "
+                            + "voice notes. Right for a viewpoint character." },
+                      ]).map(option => (
+                        <label
+                          key={option.value}
+                          title={option.hint}
+                          className={`flex-1 cursor-pointer rounded border px-2 py-1.5 text-[11px] ${
+                            characterKind === option.value
+                              ? "border-violet-500 bg-violet-600/15 text-text-primary"
+                              : "border-border text-text-muted hover:border-violet-700"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="qe-character-kind"
+                            value={option.value}
+                            checked={characterKind === option.value}
+                            onChange={() => setCharacterKind(option.value)}
+                            className="sr-only"
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-[11px] text-faint">
+                      {characterKind === "side"
+                        ? "You can make them a Main character later without "
+                          + "losing anything."
+                        : "Six trait sections to fill in. Side is usually the "
+                          + "better start."}
+                    </p>
+                  </fieldset>
+                )}
 
                 {!kindLocked && (
                   <>

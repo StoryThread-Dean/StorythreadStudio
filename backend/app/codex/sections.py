@@ -82,6 +82,43 @@ GROUP_LABELS = {
 GROUP_ORDER = ["notes", "profiles", "other"]
 
 
+# ── WHAT A WRITER MAY DO TO A SECTION ────────────────────────────────────────
+#
+# Every row in the sidebar gets the same menu. It used to be only the ones the
+# writer had added, and the frontend kept its own list of the "fixed" ones --
+# which was both a duplicate of these rules (the kind of duplicate that drifts)
+# and, more visibly, why the counts did not line up: a row with no menu had
+# nothing holding the space the menu occupies, so Characters 13 sat flush
+# against the edge while Factions 2 sat a menu-width in from it.
+#
+# So the menu is on every row, and what it OFFERS is decided here, next to the
+# code that enforces it. Two questions per section:
+#
+#   rename   "full"  the name, the folder and the entries all move together
+#            "label" only what it is called on screen changes. A kind that
+#                    ships with the app keeps its id and folder, because
+#                    profiles.py, the migration and the Profile Builder name
+#                    them directly -- see rename_type, which already worked
+#                    this way.
+#            "none"  the app reads this document BY ITS FILENAME
+#                    (notes/outline.md carries the book's word target in its
+#                    frontmatter), so its name is not the writer's to change.
+#                    What they write inside it is entirely theirs.
+#
+#   removal  "delete" gone from the registry; refused while it holds entries
+#            "hide"   taken off the sidebar, nothing on disk touched. What a
+#                     shipped kind gets, because the app's own code refers to
+#                     it and removing it from one project would strand that.
+#            "trash"  moved to notes/trash/, so the words survive the decision
+#
+# A refusal is still a refusal: the backend declines and says why, and the menu
+# shows that rather than hiding the option. A writer who is told "this holds
+# four entries" learns how the app thinks; one who finds no button assumes it
+# is impossible.
+
+BUILTIN_NOTE_FILES = {note["filename"] for note in NOTE_SECTIONS}
+
+
 def _count_markdown(folder: str) -> int:
     if not os.path.isdir(folder):
         return 0
@@ -128,6 +165,21 @@ def rename_note(project_path: str, filename: str, label: str) -> dict:
     Rulez" becomes "Dungeon Rules" without the writer retyping a word of it.
     """
     from app.codex.types_registry import TypesError, custom_type_id
+
+    # A DOCUMENT THE APP OPENS BY NAME IS NOT THE WRITER'S TO RENAME, and this
+    # is refused here rather than merely left out of the menu. notes/outline.md
+    # carries the book's word target in its frontmatter and is read by that path
+    # in outline_frontmatter.py; renaming it would not be a rename, it would be
+    # a disappearance, with the app quietly starting a fresh empty one. What the
+    # writer puts INSIDE it is entirely theirs, and they can still remove it.
+    if filename in BUILTIN_NOTE_FILES:
+        nice = next(n["label"] for n in NOTE_SECTIONS if n["filename"] == filename)
+        raise TypesError(
+            f"{nice} is a document the app opens by name, so its name is fixed. "
+            f"Everything you write in it is yours, and you can remove the "
+            f"section if you do not use it.",
+            "filename",
+        )
 
     new_id, tidy = custom_type_id(label)
     new_filename = new_id.replace("_", "-") + ".md"
@@ -209,6 +261,14 @@ def _has_content(path: str) -> bool:
         return False
 
 
+def _shipped_type_ids() -> set[str]:
+    """The kinds that come with the app, read from the list that defines them
+    rather than written down a second time here."""
+    from app.codex.types_registry import DEFAULT_TYPES
+
+    return {entry["id"] for entry in DEFAULT_TYPES}
+
+
 def build_sections(project_path: str, home: str = "profiles") -> dict:
     """
     The sidebar tree: groups, their sections, and what is available to add.
@@ -255,6 +315,11 @@ def build_sections(project_path: str, home: str = "profiles") -> dict:
             "group": group,
             "count": count,
             "default_section": bool(entry.get("default_section")),
+            # Ships with the app, so its id is load-bearing: relabel yes,
+            # re-identify no, remove never (hide instead).
+            "shipped": entry["id"] in _shipped_type_ids(),
+            "rename": "label" if entry["id"] in _shipped_type_ids() else "full",
+            "removal": "hide" if entry["id"] in _shipped_type_ids() else "delete",
         }
         if count > 0 or section["default_section"]:
             groups.setdefault(group, []).append(section)
@@ -281,6 +346,11 @@ def build_sections(project_path: str, home: str = "profiles") -> dict:
             "filename": note["filename"],
             "count": 1 if exists else 0,
             "default_section": note["default_section"],
+            "shipped": True,
+            # The app opens this file by name. Renaming it would not be a
+            # rename, it would be a disappearance.
+            "rename": "none",
+            "removal": "trash",
         }
         if exists or note["default_section"]:
             groups["notes"].append(section)
@@ -310,6 +380,10 @@ def build_sections(project_path: str, home: str = "profiles") -> dict:
                 "icon": icon_for_name(label) or "FileText",
                 "group": "notes", "filename": filename,
                 "count": 1, "default_section": False,
+                # Their file, their name for it.
+                "shipped": False,
+                "rename": "full",
+                "removal": "trash",
             })
 
     return {

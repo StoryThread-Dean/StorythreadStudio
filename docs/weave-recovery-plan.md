@@ -260,6 +260,58 @@ types it is about are edited in a screen with no fact UI.
       at, per the recommendation. Nothing can auto-convert them -- the two
       parties were never stored as ids.
 
+**Raised by the writer's live testing of R2.1 (2026-08-12), grouped with R2.5 on
+their instruction ("This can be grouped up with R2.5").** The good news from that
+test: the missing characters now appear and a save on a connected character kept
+its connections. The bad news was a consequence of the good news -- with the
+Weave-made characters finally visible, they were all in the wrong group.
+
+- [x] **R2.10a** Quick Create asks whether a character is Main or Side, and
+      **starts on Side**. Every character Weaving made arrived as a Main because
+      the create route could not carry a template at all (fixed in R2.3b), so a
+      book's walk-ons all landed in the Main group. Side is the default because
+      of what that button IS: a name the prose mentions once is far more often a
+      shopkeeper than a viewpoint character, and the two mistakes do not cost the
+      same -- a Side page promoted later loses nothing, while a Main page for a
+      walk-on is six empty trait sections asking to be filled in.
+- [x] **R2.10b** A character can be moved between the two pages, either way,
+      from the Profile Builder header. In memory, marked unsaved, committed by
+      the writer -- manual save is the product rule and a conversion is not an
+      exception, which also makes it free to try and abandon.
+      *Side to Main moves nothing:* both pages keep their words in the same place
+      in the file, so the trait lists simply start empty. This exposed a latent
+      bug worth its own note: a Main page rendered ONLY the trait list, so prose
+      in a trait section (from a hand-edit, from Quick Build, or from this
+      conversion) sat on disk invisibly. It is now shown whenever there is any,
+      labelled as notes rather than traits.
+      *Main to Side dissolves each trait into a line* ("scarred hands -- From the
+      fire.") appended under whatever prose was already there. The one thing that
+      is genuinely not one-to-one is reported BEFORE the writer commits: a
+      `hidden` trait carries `ai_scope: on-request`, which is the mechanism that
+      actually withholds it from a prompt, so as a plain line it becomes ordinary
+      text. Those lines start with "Hidden:" and the dialog states the count.
+      Sixteen tests, including a round trip asserting no word is lost in either
+      direction.
+- [x] **R2.11** Every row in the Weave sidebar has the three-dot menu, and what
+      it offers is decided by the BACKEND. Reported as cosmetic -- the counts
+      beside Characters and Lore sat flush against the edge while Factions and
+      Deities sat a menu-width in -- and it was really the recovery's recurring
+      bug: the frontend kept its own list of "fixed" sections, a rule written
+      down twice in the place least able to enforce it. A row with no menu had
+      nothing holding the space one occupies, hence the misalignment.
+      Each section now reports `rename` and `removal`, and the writer's own
+      instinct about the risk turned out to be already implemented: `rename_type`
+      has always kept a shipped kind's id and folder and changed only its label,
+      so Characters can be called anything without stranding the code that names
+      it. What was NOT safe is a built-in note -- `notes/outline.md` carries the
+      book's word target in its frontmatter and is read by that path -- so
+      renaming one is now refused with that reason rather than merely left out of
+      the menu, while removing it still works and puts the words in
+      `notes/trash/`. A shipped kind is hidden rather than deleted, and the
+      dialog says that hiding an occupied section will not take it off the
+      sidebar, because a button that appears to do nothing is worse than one that
+      explains itself.
+
 ---
 
 ## Phase 3 -- Migration completeness (gap A4) -- BLOCKER
@@ -380,7 +432,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 11 | 6 |
+| 2 The premise | 14 | 9 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 4 | 0 |
@@ -389,4 +441,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **75** | **24** |
+| **Total** | **78** | **27** |
