@@ -413,6 +413,8 @@ export function ThreadEditor({
             <RunEditor
               run={thread.run ?? []}
               chapters={chapters}
+              people={list.map(t => ({ entity_id: t.entity_id, name: t.name }))}
+              self={{ entity_id: thread.entity_id, name: thread.name }}
               onChange={next => edit(d => { d.run = next; })}
             />
           </div>

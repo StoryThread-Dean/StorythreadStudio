@@ -253,6 +253,18 @@ types it is about are edited in a screen with no fact UI.
       brief for a scene she is not in should not carry it. So her change of mind
       at chapter fifteen is its own fact on her own frame, and it supersedes the
       belief by position.
+- [x] **R2.5c** "Whose truth" is a picker, not a text box. Found by writing the
+      writer's own first-steps instructions: the control was a free-text field
+      hinted "name a character", and a frame is stored as an ENTITY ID. So a
+      writer types "Alexandra Langford", it saves, it looks correct on the page,
+      and it never resolves as her belief because nothing matches that string to
+      her entry. Silent, and the kind of wrong nobody would think to suspect.
+      Now the same rule the chapter pickers follow: the writer chooses from their
+      own entries and the app keeps the id. The entry being edited is offered
+      first, since most beliefs on a character's page are that character's own,
+      and a frame the world no longer recognises is kept and labelled rather than
+      reset -- resetting it would turn a character's mistaken belief into a fact
+      about the book.
 - [x] **R2.5b** A save that loses a race no longer loses the work. A full suite
       run failed once on `os.replace` with PermissionError (WinError 5) and
       passed twice in isolation -- which reads as a flaky test and is not one. On
@@ -586,7 +598,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 22 | 18 |
+| 2 The premise | 23 | 19 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -595,4 +607,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **88** | **36** |
+| **Total** | **89** | **37** |

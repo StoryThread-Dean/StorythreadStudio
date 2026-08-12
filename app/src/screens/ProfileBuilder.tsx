@@ -72,7 +72,7 @@ import { SubtextGuide } from "./SubtextGuide";
 // had no way to record one -- which is why the story timeline on the Weave map
 // has never had anything to move through.
 import { RunEditor } from "../features/codex/RunEditor";
-import { fetchAnchors, type ChapterAnchor } from "../features/codex/api";
+import { fetchAnchors, fetchThreads, type ChapterAnchor } from "../features/codex/api";
 import type { EntriesHome, ProfileSource } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
@@ -405,6 +405,9 @@ export function ProfileBuilder({
   // The writer's own chapters, in order, for every "when" question the Run
   // asks. Never a date and never a number they have to work out.
   const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
+  // Everyone in the world who could hold a belief, so "whose truth" is a choice
+  // rather than an id typed from memory.
+  const [people, setPeople] = useState<{ entity_id: string; name: string }[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [listLoading, setListLoading] = useState(false);
@@ -564,6 +567,13 @@ export function ProfileBuilder({
     fetchAnchors(project.root_path)
       .then(body => { if (!cancelled) setChapters(body.chapters ?? []); })
       .catch(() => { if (!cancelled) setChapters([]); });
+    fetchThreads(project.root_path)
+      .then(body => {
+        if (cancelled) return;
+        setPeople((body.threads ?? [])
+          .map(t => ({ entity_id: t.entity_id, name: t.name })));
+      })
+      .catch(() => { if (!cancelled) setPeople([]); });
     return () => { cancelled = true; };
   }, [project.root_path]);
 
@@ -2148,6 +2158,8 @@ export function ProfileBuilder({
               <RunEditor
                 run={profile.run ?? []}
                 chapters={chapters}
+                people={people}
+                self={{ entity_id: profile.entity_id, name: profile.name }}
                 onChange={next => {
                   setProfile(prev => (prev ? { ...prev, run: next } : prev));
                   setIsDirty(true);

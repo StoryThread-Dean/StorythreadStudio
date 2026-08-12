@@ -83,9 +83,59 @@ describe("recording a fact", () => {
   it("records whose truth it is, so a belief is not made true", () => {
     // The mechanism behind the whole opening example: she believes her father
     // died, and he is alive, and both are recorded without contradicting.
-    show([BELIEF]);
-    expect((screen.getByLabelText("Whose truth 1") as HTMLInputElement).value)
+    show([BELIEF], { self: { entity_id: "e-elara", name: "Elara Voss" } });
+    expect((screen.getByLabelText("Whose truth 1") as HTMLSelectElement).value)
       .toBe("e-elara");
+  });
+
+  it("offers people to choose from, because a frame is an id nobody knows", () => {
+    // THE DEFECT THIS REPLACED. It was a text box hinted "name a character", and
+    // a frame is stored as an entity id -- so a writer types "Alexandra
+    // Langford", it saves, it looks right, and it never resolves as her belief
+    // because nothing matches that string to her entry. Silent, and the kind of
+    // wrong a writer would never think to suspect.
+    show([BELIEF], {
+      self: { entity_id: "e-elara", name: "Elara Voss" },
+      people: [{ entity_id: "e-garrick", name: "Garrick Vale" }],
+    });
+    const whose = screen.getByLabelText("Whose truth 1") as HTMLSelectElement;
+    const options = Array.from(whose.options).map(o => o.textContent);
+    expect(options).toEqual([
+      "True of the world",
+      "Only Elara Voss believes this",
+      "Only Garrick Vale believes this",
+    ]);
+  });
+
+  it("puts the entry being edited first", () => {
+    // Most beliefs on a character's page are that character's own.
+    show([BELIEF], {
+      self: { entity_id: "e-elara", name: "Elara Voss" },
+      people: [{ entity_id: "e-garrick", name: "Garrick Vale" },
+               { entity_id: "e-elara", name: "Elara Voss" }],
+    });
+    const whose = screen.getByLabelText("Whose truth 1") as HTMLSelectElement;
+    const names = Array.from(whose.options).map(o => o.textContent);
+    expect(names[1]).toBe("Only Elara Voss believes this");
+    // And not twice, because she is also in the full list.
+    expect(names.filter(n => n === "Only Elara Voss believes this")).toHaveLength(1);
+  });
+
+  it("defaults to true of the world", () => {
+    show([{ id: "f-1", axis: "location", at: "c-1", value: "The keep burned." }]);
+    expect((screen.getByLabelText("Whose truth 1") as HTMLSelectElement).value)
+      .toBe("truth");
+  });
+
+  it("keeps a frame it does not recognise rather than resetting it", () => {
+    // An entry deleted since, or a hand-edited file. Silently switching it to
+    // "true of the world" would change what the writer recorded -- turning a
+    // character's mistaken belief into a fact about the book.
+    show([{ ...BELIEF, frame: "e-gone" }]);
+    const whose = screen.getByLabelText("Whose truth 1") as HTMLSelectElement;
+    expect(whose.value).toBe("e-gone");
+    expect(Array.from(whose.options).map(o => o.textContent))
+      .toContain("e-gone (not in this world any more)");
   });
 
   it("asks when the READER learns it, separately from when it happens", async () => {

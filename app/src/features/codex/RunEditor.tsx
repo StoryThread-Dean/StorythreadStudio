@@ -59,6 +59,20 @@ export function RunField({ label, hint, children }: {
 interface RunEditorProps {
   run: Fact[];
   chapters: ChapterAnchor[];
+  /**
+   * Who can hold a belief: every entry in the world, so "whose truth" is a
+   * choice rather than an id typed from memory.
+   *
+   * A frame is stored as an entity id. The control used to be a text box with
+   * the hint "name a character", which was quietly wrong in the worst way: a
+   * writer types "Alexandra Langford", it saves, it looks right, and it never
+   * resolves as her belief because nothing matches that string to her entry.
+   * Same rule as the chapter pickers -- the writer chooses, the app keeps the id.
+   */
+  people?: { entity_id: string; name: string }[];
+  /** The entry being edited, offered first: most beliefs on a character's page
+   *  are that character's own. */
+  self?: { entity_id: string; name: string };
   /** The whole list back, so the caller owns its own buffer and its own dirty
    *  tracking. Both screens are manual-save and neither writes from here. */
   onChange: (run: Fact[]) => void;
@@ -72,7 +86,16 @@ interface RunEditorProps {
   unavailable?: string;
 }
 
-export function RunEditor({ run, chapters, onChange, unavailable }: RunEditorProps) {
+export function RunEditor({
+  run, chapters, onChange, unavailable, people, self,
+}: RunEditorProps) {
+  // The entry itself first, then everything else, with no duplicate if it is
+  // already in the list.
+  const holders = [
+    ...(self ? [self] : []),
+    ...(people ?? []).filter(p => p.entity_id !== self?.entity_id),
+  ];
+
   function change(index: number, patch: Partial<Fact>) {
     onChange(run.map((fact, i) => (i === index ? { ...fact, ...patch } : fact)));
   }
@@ -161,14 +184,30 @@ export function RunEditor({ run, chapters, onChange, unavailable }: RunEditorPro
 
                   <div className="grid gap-2 sm:grid-cols-2">
                     <RunField label="Whose truth"
-                              hint="Leave as true for something that simply is. Name a character for something only they believe.">
-                      <input
-                        value={fact.frame ?? ""}
+                              hint="True of the world, or something only one character believes. A belief recorded this way does not make it true.">
+                      <select
+                        value={fact.frame || "truth"}
                         onChange={e => change(i, { frame: e.target.value })}
                         aria-label={`Whose truth ${i + 1}`}
-                        placeholder="truth"
                         className={runInputClass}
-                      />
+                      >
+                        <option value="truth">True of the world</option>
+                        {holders.map(person => (
+                          <option key={person.entity_id} value={person.entity_id}>
+                            Only {person.name} believes this
+                          </option>
+                        ))}
+                        {/* A frame already on the file that is not in the list --
+                            an entry deleted since, or a hand-edit. Shown as-is
+                            rather than silently reset to "true of the world",
+                            which would change what the writer recorded. */}
+                        {fact.frame && fact.frame !== "truth"
+                          && !holders.some(p => p.entity_id === fact.frame) && (
+                          <option value={fact.frame}>
+                            {fact.frame} (not in this world any more)
+                          </option>
+                        )}
+                      </select>
                     </RunField>
                     {/* WHEN THE READER LEARNS IT, which is not when it becomes
                         true and never was. Nothing could set this until now, on
