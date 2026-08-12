@@ -56,6 +56,9 @@ function mockApi(options: {
   warnings?: string[];
   failTie?: string;
   failRelation?: string;
+  /** Reading the connections refuses -- a stale walk stop can open this
+   *  editor on an entity that was absorbed after the scan. */
+  failTiesRead?: string;
 } = {}) {
   calls = [];
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -65,6 +68,13 @@ function mockApi(options: {
     calls.push({ url, method, body });
 
     if (url.includes("/ties")) {
+      if (options.failTiesRead) {
+        return {
+          ok: false,
+          json: async () => ({ detail: { code: "entity_not_found",
+                                         message: options.failTiesRead } }),
+        } as Response;
+      }
       return { ok: true, json: async () => ({ ties: options.ties ?? [] }) } as Response;
     }
     if (url.includes("/relations")) {
@@ -1335,5 +1345,19 @@ describe("no path through the dialog can lock it", () => {
     // And the dialog is still alive to act on the advice.
     expect(screen.getByRole("button", { name: /^Record it$/ })
       .hasAttribute("disabled")).toBe(false);
+  });
+});
+
+
+describe("a failed read ends the spinner", () => {
+  it("shows the refusal instead of 'Reading connections...' forever", async () => {
+    // A stale walk stop can open this editor on an entity absorbed after the
+    // scan. The read refuses -- and the first version left the loading
+    // spinner up permanently underneath the error, which read as a hang.
+    mockApi({ failTiesRead: "That entry is not in this world." });
+    await open();
+    expect(await screen.findByText(/That entry is not in this world/))
+      .toBeTruthy();
+    expect(screen.queryByText(/Reading connections/)).toBeNull();
   });
 });

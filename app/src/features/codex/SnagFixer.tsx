@@ -40,6 +40,33 @@ import type { Stop } from "./weavingApi";
 
 const API_BASE = "http://localhost:8000";
 
+/**
+ * The thing this screen points at is no longer there.
+ *
+ * A stop is a SNAPSHOT from scan time. The writer may have fixed the same
+ * contradiction through the editor, absorbed the entry, or answered another
+ * stop that removed the fact -- and then every action here 404s. That is not
+ * an error to argue with; it means the work is already done, and the screen
+ * should say so and offer the way forward.
+ */
+class GoneError extends Error {}
+
+/** Raise the right thing from a failed response: gone-ness is its own case. */
+async function refusalFrom(response: Response, fallback: string):
+    Promise<Error> {
+  let message = fallback;
+  let code = "";
+  try {
+    const body = await response.json();
+    message = body?.detail?.message ?? fallback;
+    code = String(body?.detail?.code ?? "");
+  } catch {
+    // A non-JSON body -- keep the fallback message.
+  }
+  return code.endsWith("not_found") ? new GoneError(message)
+                                    : new Error(message);
+}
+
 interface Side {
   id?: string;
   at?: string;
@@ -61,6 +88,8 @@ interface SnagFixerProps {
 export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The stop turned out to be STALE: what it points at is already gone.
+  const [gone, setGone] = useState(false);
   const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
   // Which side is being edited, and its draft.
   const [editing, setEditing] = useState<number | null>(null);
@@ -92,10 +121,20 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
         const response = await fetch(
           `${API_BASE}/api/codex/entity?project_path=${encodeURIComponent(projectPath)}`
           + `&entity_id=${encodeURIComponent(stop.entity_id)}`);
-        const body = await response.json();
-        if (!cancelled && response.ok) {
-          setRun(((body.run ?? []) as Side[]).filter(f => f.at));
+        if (cancelled) return;
+        if (!response.ok) {
+          // A refusal used to leave `run` null FOREVER -- the reading spinner
+          // never ended and the screen was a dead end. A missing entry means
+          // the stop is stale; anything else is an error worth reading.
+          const refusal = await refusalFrom(
+            response, "The entry could not be read.");
+          if (refusal instanceof GoneError) setGone(true);
+          else setError(refusal.message);
+          setRun([]);
+          return;
         }
+        const body = await response.json();
+        setRun(((body.run ?? []) as Side[]).filter(f => f.at));
       } catch {
         if (!cancelled) setRun([]);
       }
@@ -121,7 +160,14 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
       await work();
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That could not be recorded.");
+      if (e instanceof GoneError) {
+        // Already resolved somewhere else. Not a failure -- the screen flips
+        // to saying so, with the way forward, instead of stranding the writer
+        // on an error about a fact that no longer exists.
+        setGone(true);
+      } else {
+        setError(e instanceof Error ? e.message : "That could not be recorded.");
+      }
     } finally {
       setBusy(false);
     }
@@ -136,19 +182,25 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                              fact_id: factId, set }),
     });
     if (!response.ok) {
-      const body = await response.json();
-      throw new Error(body?.detail?.message ?? "That could not be changed.");
+      throw await refusalFrom(response, "That could not be changed.");
     }
   }
 
-  async function deleteFact(factId: string) {
+  /**
+   * `missingOk` is for the keep-one loop, which deletes SEVERAL facts: if an
+   * earlier attempt got half-way, the already-deleted ones must read as done
+   * rather than as an error -- otherwise the retry that would finish the job
+   * is the very thing that fails it.
+   */
+  async function deleteFact(factId: string, missingOk = false) {
     const response = await fetch(
       `${API_BASE}/api/codex/fact?project_path=${encodeURIComponent(projectPath)}`
       + `&entity_id=${encodeURIComponent(stop.entity_id)}`
       + `&fact_id=${encodeURIComponent(factId)}`, { method: "DELETE" });
     if (!response.ok) {
-      const body = await response.json();
-      throw new Error(body?.detail?.message ?? "That could not be removed.");
+      const refusal = await refusalFrom(response, "That could not be removed.");
+      if (missingOk && refusal instanceof GoneError) return;
+      throw refusal;
     }
   }
 
@@ -161,8 +213,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
       + `&dst_id=${encodeURIComponent(String(side.target ?? ""))}`,
       { method: "DELETE" });
     if (!response.ok) {
-      const body = await response.json();
-      throw new Error(body?.detail?.message ?? "That could not be removed.");
+      throw await refusalFrom(response, "That could not be removed.");
     }
   }
 
@@ -207,6 +258,33 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           </button>
         </header>
 
+        {gone ? (
+          // ── Already resolved somewhere else ─────────────────────────────
+          // The walk's list is from scan time; this one got fixed since --
+          // through the editor, an absorb, or another stop. Said plainly,
+          // with the way forward, because the first version surfaced it as a
+          // 404 error and left the writer stranded on it.
+          <div className="p-3" data-testid="snag-gone">
+            <p className="text-xs text-text-primary">
+              This was already sorted out somewhere else.
+            </p>
+            <p className="mt-1 text-[11px] text-text-muted">
+              The walk&apos;s list is from when the scan ran, and what this
+              pointed at is no longer there -- fixed through the editor,
+              absorbed, or settled by another stop. The next scan will not
+              raise it again.
+            </p>
+            <button
+              onClick={onDone}
+              className="mt-2 inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+            >
+              <span>Carry on</span>
+              <span className="text-[10px] font-normal text-faint">
+                takes you to the next thing in the walk
+              </span>
+            </button>
+          </div>
+        ) : (
         <div className="p-3">
           <div className="mb-2">
             <Explain of="weaving.snag-fixer" />
@@ -365,21 +443,30 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                         <span className="shrink-0 text-[10px] text-faint">
                           {side.where ?? chapterLabel(side.at)}
                         </span>
-                        <button
-                          onClick={() => void act(async () => {
-                            // Keeping one means the OTHERS go. One at a time,
-                            // so a failure part-way leaves a smaller mess.
-                            for (const other of sides) {
-                              if (other.id !== side.id) {
-                                await deleteFact(String(other.id));
+                        {/* Only when there is something to keep it INSTEAD
+                            of. A one-sided snag has no "other" to remove, so
+                            this button would delete nothing, record the stop
+                            applied, and permanently silence a live problem
+                            while looking like a fix. */}
+                        {sides.length > 1 && (
+                          <button
+                            onClick={() => void act(async () => {
+                              // Keeping one means the OTHERS go. One at a
+                              // time, and already-gone ones count as done, so
+                              // a retry after a half-way failure finishes the
+                              // job instead of tripping over its own progress.
+                              for (const other of sides) {
+                                if (other.id !== side.id) {
+                                  await deleteFact(String(other.id), true);
+                                }
                               }
-                            }
-                          })}
-                          disabled={busy}
-                          className="shrink-0 rounded border border-emerald-800 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
-                        >
-                          Keep this one
-                        </button>
+                            })}
+                            disabled={busy}
+                            className="shrink-0 rounded border border-emerald-800 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
+                          >
+                            Keep this one
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setEditing(i);
@@ -427,6 +514,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
             Back to the stop
           </button>
         </div>
+        )}
       </div>
     </div>
   );

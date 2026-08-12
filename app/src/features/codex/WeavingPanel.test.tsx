@@ -53,6 +53,12 @@ function mockApi(options: {
   failAnswers?: boolean;
   /** What GET /entity returns -- the entry QuickFill or the fixer reads. */
   entity?: Record<string, unknown>;
+  /** The entry a stale stop points at is GONE -- absorbed or deleted since
+   *  the scan. GET /entity refuses with entity_not_found. */
+  entityMissing?: boolean;
+  /** The fact a stale snag argues about is GONE: PATCH and DELETE /fact
+   *  refuse with fact_not_found. */
+  factsGone?: boolean;
 } = {}) {
   const stops = options.stops ?? [stop()];
   calls = [];
@@ -84,6 +90,13 @@ function mockApi(options: {
       ] }) } as Response;
     }
     if (url.includes("/entity") && (!init?.method || init.method === "GET")) {
+      if (options.entityMissing) {
+        return {
+          ok: false,
+          json: async () => ({ detail: { code: "entity_not_found",
+                                         message: "That entry is not in this world." } }),
+        } as Response;
+      }
       return { ok: true, json: async () => (options.entity ?? {
         entity_id: "e-1", type: "character", name: "Mira Kell",
         filename: "mira-kell.md", revision: "r1",
@@ -130,6 +143,14 @@ function mockApi(options: {
     }
     if (url.endsWith("/run")) {
       return { ok: true, json: async () => ({ run_id: "run-abc123abc123" }) } as Response;
+    }
+    if (url.includes("/fact") && options.factsGone
+        && (init?.method === "PATCH" || init?.method === "DELETE")) {
+      return {
+        ok: false,
+        json: async () => ({ detail: { code: "fact_not_found",
+                                       message: "That fact is no longer there." } }),
+      } as Response;
     }
     if (url.includes("/run/answer") && options.failAnswers) {
       return {
@@ -1832,5 +1853,176 @@ describe("QuickFill survives the parent re-rendering", () => {
     view.rerender(<QuickFill {...props} missing={["Overview", "Goals"]} />);
     await waitFor(() =>
       expect((vi.mocked(fetch)).mock.calls.length).toBeGreaterThan(before));
+  });
+});
+
+
+describe("the walk remembers what was answered this sitting", () => {
+  // The stop list is a SNAPSHOT from Start. Before this, the panel forgot
+  // its own session: Back re-showed answered stops as live questions (and
+  // answering again re-fired the write), and "Never ask" muted a kind on the
+  // server while the snapshot kept asking for the rest of the walk.
+
+  it("Back shows a receipt on an answered stop, not the live question", async () => {
+    mockApi({ stops: [stop(), stop({ key: "b", title: "Second thing" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    await screen.findByText("Second thing");
+    await userEvent.click(screen.getByRole("button", { name: /Back/ }));
+    const receipt = await screen.findByTestId("already-answered");
+    expect(receipt.textContent).toMatch(/Not yet/);
+    // The live buttons are gone -- answering twice was the duplicate factory.
+    expect(screen.queryByRole("button", { name: /^Not yet$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Never make this an entry" }))
+      .toBeNull();
+    expect(posted("/run/answer").length).toBe(1);
+  });
+
+  it("Carry on from a receipt returns to the frontier", async () => {
+    mockApi({ stops: [stop(),
+                      stop({ key: "b", title: "Second thing" }),
+                      stop({ key: "c", title: "Third thing" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    await screen.findByText("Second thing");
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    await screen.findByText("Third thing");
+    await userEvent.click(screen.getByRole("button", { name: /Back/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Back/ }));
+    await screen.findByTestId("already-answered");
+    await userEvent.click(screen.getByRole("button", { name: /Carry on/ }));
+    expect(await screen.findByText("Third thing")).toBeTruthy();
+  });
+
+  it("'Never ask' skips the rest of that kind in this sitting too", async () => {
+    // The server already knew; the SNAPSHOT kept asking. A mute the current
+    // walk ignores reads as a button that does not work.
+    mockApi({ stops: [
+      stop(),
+      stop({ key: "unspun|other", title: "'Vesper' has no entry",
+             detail: { name: "Vesper", count: 2 } }),
+      stop({ kind: "frayed", key: "frayed|e-1", entity_id: "e-1",
+             title: "Mira Kell is missing Overview", quote: "",
+             detail: { name: "Mira Kell", type: "character",
+                       missing: ["Overview"] } }),
+    ] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    // Straight past the second unspun stop to the frayed one.
+    expect(await screen.findByText(/Mira Kell is missing Overview/)).toBeTruthy();
+    expect(screen.queryByText(/'Vesper' has no entry/)).toBeNull();
+  });
+
+  it("a walk whose remainder is all muted ends", async () => {
+    mockApi({ stops: [stop(),
+                      stop({ key: "unspun|other", title: "'Vesper' has no entry",
+                             detail: { name: "Vesper", count: 2 } })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    expect(await screen.findByText(/That is everything this pass found/))
+      .toBeTruthy();
+  });
+});
+
+
+describe("a stale stop cannot be silently 'done'", () => {
+  it("a stop pointing at nothing stays put and says why", async () => {
+    // The old fall-through ADVANCED: the button pressed, nothing opened, and
+    // the walk moved on as if something had been done. Now it says what is
+    // wrong and leaves the real answers (Not yet, the permanent no) live.
+    mockApi({ stops: [stop({
+      kind: "snag", key: "snag|ghost", entity_id: "",
+      title: "Two versions of who Mira serves",
+      detail: { name: "Mira Kell", type: "character", sides: [] },
+    }), stop({ key: "b", title: "Second thing" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    expect(await screen.findByText(/no longer in your world/)).toBeTruthy();
+    // Still on the same stop -- nothing was recorded, nothing advanced.
+    expect(screen.getByText(/Two versions of who Mira serves/)).toBeTruthy();
+    expect(posted("/run/answer")).toEqual([]);
+  });
+});
+
+
+describe("a dead entry is a way forward, not a dead end", () => {
+  // Stale stops point at entries that stopped existing mid-walk (absorbed,
+  // deleted, settled elsewhere). Each inline screen used to strand the
+  // writer there: an eternal spinner, an error with no buttons, or a 404 on
+  // every action.
+
+  const frayed = stop({
+    kind: "frayed", key: "frayed|e-old", entity_id: "e-old",
+    title: "Someone is missing Overview", quote: "",
+    detail: { name: "Someone", type: "character", missing: ["Overview"] },
+  });
+
+  it("QuickFill on a missing entry offers Carry on", async () => {
+    mockApi({ stops: [frayed, stop({ key: "b", title: "Second thing" })],
+              entityMissing: true });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const dialog = await screen.findByTestId("quick-fill");
+    await within(dialog).findByRole("alert");
+    await userEvent.click(within(dialog).getByRole("button",
+      { name: /carry on/i }));
+    expect(await screen.findByText("Second thing")).toBeTruthy();
+  });
+
+  it("the early-mention fixer says 'already sorted' instead of spinning", async () => {
+    // The reading spinner used to never end when the entry refused to load.
+    mockApi({ stops: [stop({
+      kind: "early_mention", key: "early|e-old|c-1", entity_id: "e-old",
+      chapter_id: "c-1", title: "Named before the reader should know",
+      detail: { name: "Someone", type: "character" },
+    }), stop({ key: "b", title: "Second thing" })], entityMissing: true });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Decide here/ }));
+    await screen.findByTestId("snag-gone");
+    await userEvent.click(screen.getByRole("button", { name: /Carry on/ }));
+    expect(await screen.findByText("Second thing")).toBeTruthy();
+  });
+
+  it("fixing a fact that is already gone flips to 'already sorted'", async () => {
+    mockApi({ stops: [stop({
+      kind: "snag", key: "snag|e-1|serves", entity_id: "e-1",
+      title: "Two versions of who Mira serves",
+      detail: { name: "Mira Kell", type: "character", sides: [
+        { id: "f-1", value: "Serves the Crown", at: "c-1" },
+        { id: "f-2", value: "Serves the Guild", at: "c-2" },
+      ] },
+    }), stop({ key: "b", title: "Second thing" })], factsGone: true });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    await screen.findByTestId("snag-fixer");
+    await userEvent.click(screen.getByRole("button",
+      { name: /Both are right on purpose/ }));
+    // fact_not_found is not an error to argue with -- the work is done.
+    await screen.findByTestId("snag-gone");
+    await userEvent.click(screen.getByRole("button", { name: /Carry on/ }));
+    expect(await screen.findByText("Second thing")).toBeTruthy();
+  });
+
+  it("a one-sided snag never offers 'Keep this one'", async () => {
+    // With no other side to remove, that button deleted nothing, recorded
+    // the stop applied, and permanently silenced a live problem while
+    // looking like a fix.
+    mockApi({ stops: [stop({
+      kind: "snag", key: "snag|e-1|order", entity_id: "e-1",
+      title: "Mira Kell: two changes land on the same chapter",
+      detail: { name: "Mira Kell", type: "character", sides: [
+        { id: "f-1", value: "Serves the Crown", at: "c-1" },
+      ] },
+    })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    expect(within(dialog).queryByRole("button", { name: /Keep this one/ }))
+      .toBeNull();
+    // The honest answers are still there: fix it in place, or deliberate.
+    expect(within(dialog).getByRole("button", { name: /Edit Serves the Crown/ }))
+      .toBeTruthy();
+    expect(within(dialog).getByRole("button",
+      { name: /Both are right on purpose/ })).toBeTruthy();
   });
 });

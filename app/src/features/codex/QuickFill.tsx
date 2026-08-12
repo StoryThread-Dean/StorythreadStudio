@@ -249,6 +249,31 @@ export function QuickFill({
             <p role="alert" className="mb-2 text-[11px] text-rose-300">{error}</p>
           )}
 
+          {/* The entry could not be read at all -- on a stale stop this
+              usually means it no longer exists (absorbed into another entry,
+              or deleted) since the walk's list was made. There is nothing to
+              fill in, and the old version showed the error with NO way
+              forward but X. */}
+          {error && !thread && (
+            <div className="flex gap-2">
+              <button
+                onClick={onDone}
+                className="inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+              >
+                <span>Nothing to do here -- carry on</span>
+                <span className="text-[10px] font-normal text-faint">
+                  takes you to the next thing in the walk
+                </span>
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded border border-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary"
+              >
+                Back
+              </button>
+            </div>
+          )}
+
           {/* The escape for a mistaken identity, phrased from the WORD's side
               so it cannot read as a question about the entry. */}
           {thread && wordName && onAbsorbInstead && (

@@ -186,6 +186,11 @@ export function TieEditor({
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read connections.");
+      // The spinner must END. Leaving ties null showed "Reading
+      // connections..." forever under the error -- on a stale stop (the
+      // entity absorbed since the walk started) that read as a hang rather
+      // than as the refusal it was.
+      setTies(prev => prev ?? []);
     }
   }, [projectPath, thread.entity_id]);
 

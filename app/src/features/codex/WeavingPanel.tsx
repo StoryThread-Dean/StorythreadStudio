@@ -243,6 +243,14 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   // own bookkeeping did not. Shown on the next stop, cleared by the next
   // answer. See recordApplied.
   const [notice, setNotice] = useState<string | null>(null);
+  // WHAT WAS ANSWERED THIS SITTING, keyed by stop key, holding the label the
+  // writer chose. The stop list is a SNAPSHOT from Start and is never
+  // refetched mid-walk, so the panel itself has to remember -- without this,
+  // Back re-showed answered stops as live questions (answering again re-fired
+  // the write and duplicated the work), and "Never ask" muted a kind on the
+  // server while the snapshot kept asking for the rest of the walk.
+  const [answeredHere, setAnsweredHere] = useState<Record<string, string>>({});
+  const [mutedHere, setMutedHere] = useState<Set<string>>(new Set());
   const [earlier, setEarlier] = useState<RunSummary[]>([]);
   // Connecting happens in the walk, so the walk needs to know what there is
   // to connect to. Fetched once the writer asks, not on mount: most stops
@@ -352,14 +360,47 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     }
   }
 
-  async function answerAndAdvance(action: () => Promise<unknown>) {
+  /**
+   * Remember what was answered and move to the next stop that still NEEDS an
+   * answer. The freshly-answered key (and a freshly-muted kind) ride along as
+   * arguments because React state has not applied yet when this runs.
+   */
+  function recordAnswer(answered: Stop, label: string, mutedKind?: string) {
+    const known = { ...answeredHere, [answered.key]: label };
+    const muted = mutedKind
+      ? new Set([...mutedHere, mutedKind]) : mutedHere;
+    setAnsweredHere(known);
+    if (mutedKind) setMutedHere(muted);
+    let i = at + 1;
+    while (i < stops.length
+           && (known[stops[i].key] || muted.has(stops[i].kind))) {
+      i += 1;
+    }
+    setAt(i);
+  }
+
+  /** Forward from an answered stop the writer walked Back onto: land on the
+   *  next thing still open, which is wherever they were before going back. */
+  function carryOn() {
+    let i = at + 1;
+    while (i < stops.length
+           && (answeredHere[stops[i].key] || mutedHere.has(stops[i].kind))) {
+      i += 1;
+    }
+    setAt(i);
+  }
+
+  async function answerAndAdvance(label: string, action: () => Promise<unknown>,
+                                  mutedKind?: string) {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       // Only an explicit false keeps the writer here. Every other answer --
       // including whatever an endpoint happened to return -- means done.
-      if (await action() !== false) setAt(i => i + 1);
+      if (await action() !== false && stop) {
+        recordAnswer(stop, label, mutedKind);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "That could not be recorded.");
     } finally {
@@ -502,6 +543,15 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   const Icon = lex?.Icon ?? CircleHelp;
   const tone = TONE_CLASSES[lex?.tone ?? "zinc"];
 
+  // Walked Back onto something already answered this sitting. Shown as a
+  // receipt instead of live buttons: re-showing the live question was how an
+  // answer got re-fired and duplicated work -- and it read as the walk having
+  // forgotten what the writer just did.
+  const settledAs = answeredHere[stop.key]
+    ?? (mutedHere.has(stop.kind)
+        ? `Never ask (${lex?.term ?? stop.kind} is turned off)`
+        : null);
+
   if (naming && stop) {
     return (
       <BindDot
@@ -523,7 +573,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             setBound(false);
             void (async () => {
               await recordApplied(stop);
-              setAt(i => i + 1);
+              recordAnswer(stop, "Done here");
             })();
           }
         }}
@@ -556,7 +606,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           setEntering(false);
           void (async () => {
             await recordApplied(stop);
-            setAt(i => i + 1);
+            recordAnswer(stop, "Done here");
           })();
         }}
       />
@@ -587,7 +637,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           setFilling(false);
           void (async () => {
             await recordApplied(stop);
-            setAt(i => i + 1);
+            recordAnswer(stop, "Done here");
           })();
         }}
       />
@@ -604,7 +654,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           setFixing(false);
           void (async () => {
             await recordApplied(stop);
-            setAt(i => i + 1);
+            recordAnswer(stop, "Done here");
           })();
         }}
       />
@@ -655,7 +705,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           setConnecting(false);
           void (async () => {
             if (stop.kind === "pinned") await recordApplied(stop);
-            setAt(i => i + 1);
+            recordAnswer(stop, "Done here");
           })();
         }}
         onChanged={() => { /* the scan re-derives it on the next pass */ }}
@@ -782,10 +832,31 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         </p>
       )}
 
+      {settledAs ? (
+        <div data-testid="already-answered"
+             className="mt-3 rounded border border-emerald-800 bg-emerald-950/20 p-2.5">
+          <p className="flex items-start gap-1.5 text-[11px] text-emerald-200">
+            <Check size={12} className="mt-0.5 shrink-0" />
+            <span>
+              You answered this one this sitting:{" "}
+              <span className="font-medium text-text-primary">{settledAs}</span>.
+            </span>
+          </p>
+          <button
+            onClick={carryOn}
+            className="mt-2 inline-flex flex-col items-start rounded border border-border px-2.5 py-1 text-left text-xs text-text-muted hover:border-text-muted hover:text-text-primary"
+          >
+            <span>Carry on</span>
+            <span className="text-[10px] text-faint">
+              back to the next thing still waiting
+            </span>
+          </button>
+        </div>
+      ) : (
             <div className="mt-3 flex flex-wrap gap-1.5">
         <button
-          onClick={() => void answerAndAdvance(async () => {
-            if (!runId) return;
+          onClick={() => void answerAndAdvance("Done here", async () => {
+            if (!runId) return false;
             // EVERY BRANCH RETURNS false: each opens an inline resolution and
             // the walk keeps its place until the writer finishes there. The
             // resolutions advance it themselves, through their onDone.
@@ -827,6 +898,15 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
               setFixing(true);
               return false;
             }
+            // NOTHING MATCHED. A stale stop can point at an entry that no
+            // longer exists (absorbed, renamed, deleted since the scan). The
+            // old fall-through ADVANCED here -- the button pressed, nothing
+            // opened, and the walk moved on as if something had been done.
+            setError(
+              "This cannot be opened: the entry it points at is no longer in "
+              + "your world -- likely absorbed or removed since the walk "
+              + "started. \"Not yet\" and the permanent no below still work.");
+            return false;
           })}
           disabled={busy}
           className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
@@ -838,7 +918,8 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         </button>
 
         <button
-          onClick={() => void answerAndAdvance(() =>
+          onClick={() => void answerAndAdvance(
+            DISMISS_ACTION[stop.kind] ?? "Never raise this again", () =>
             runId ? dismiss(projectPath, runId, stop,
                             stop.kind === "unspun"
                               ? String(stop.detail.name ?? "")
@@ -852,7 +933,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         </button>
 
         <button
-          onClick={() => void answerAndAdvance(() =>
+          onClick={() => void answerAndAdvance("Not yet", () =>
             runId ? defer(projectPath, runId, stop) : Promise.resolve())}
           disabled={busy}
           title="It comes back next time."
@@ -862,8 +943,13 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         </button>
 
         <button
-          onClick={() => void answerAndAdvance(() =>
-            runId ? muteKind(projectPath, runId, stop.kind) : Promise.resolve())}
+          // The kind rides along so every LATER stop of it is skipped in this
+          // sitting too -- the server already knew, but the stop list is a
+          // snapshot, and a mute the current walk ignores reads as a button
+          // that does not work.
+          onClick={() => void answerAndAdvance("Never ask", () =>
+            runId ? muteKind(projectPath, runId, stop.kind) : Promise.resolve(),
+            stop.kind)}
           disabled={busy}
           title={`Stop showing ${lex?.term ?? stop.kind} at all. You can turn it back on.`}
           className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-xs text-faint hover:text-text-primary disabled:opacity-40"
@@ -871,6 +957,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           <BellOff size={11} /> Never ask
         </button>
       </div>
+      )}
 
       {/* What else is waiting, by kind. Its job is to make the shape of the
           work visible -- "most of this is one kind of problem" is worth
