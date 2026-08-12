@@ -44,6 +44,38 @@ to the Smart Advisor and the other AI tools is the follow-on -- each needs its
 own inspect control before it may receive context automatically, because the
 rule is about what the writer can SEE, not about where the plumbing reaches.
 
+#### Scope after the 2026-08-11 spec audit
+
+A three-pass audit of all 806 lines of `docs/weave-spec.md` against the build
+found the programme substantially off its own specification -- because the spec
+had never been in the repository, so nothing was ever compared to it. Findings:
+`docs/weave-spec-gaps.md`. Repair plan, 72 tasks: `docs/weave-recovery-plan.md`.
+
+**In v2.0.0** (recovery-plan phases 1-6, 8, 10): undo the contradictions
+introduced while the spec was unreferenced; give characters, relationships,
+locations and lore a Run editor so the programme's own opening example can
+actually be recorded; finish the migration (chips, exports, search); Weave
+export and the portability bundle; read notes and the outline as sources, not
+only as corroboration; make Unwoven's branch questions reachable; surface stale
+findings; release hygiene.
+
+**Deferred to v2.1.0:**
+
+- **Scene identity.** `manuscript/scenes.json` is read and never written, so
+  every anchor is chapter-level. Chapter granularity is genuinely useful and no
+  writer has asked for finer, so minting scene ids, LCS re-matching on save and
+  tombstoning move out. Recovery-plan phase 7.
+- **The five AI passes** -- `propose-threads`, `propose-facts`, `propose-ties`,
+  `check-snags`, `expand-unwoven`. None exist; the deterministic half that the
+  spec says should run first is what shipped, and it works. v2.0.0 ships a
+  deterministic Weave and SAYS SO plainly rather than implying otherwise.
+  Recovery-plan phase 9.
+  - **One carve-out to decide before release:** knowledge violation (a
+    character acting on what they cannot yet know) was deferred into
+    `check-snags`, and the spec calls it "the reason the frame system exists".
+    Shipping frames without it is defensible only if the product does not claim
+    the check exists.
+
 Two more, surfaced by the 2026-08-11 head-to-tail sweep and stated in
 `features.md` as not-yet-behaviour so the docs stay honest:
 

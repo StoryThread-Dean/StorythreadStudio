@@ -24,6 +24,110 @@
   Kept verbatim as written. Corrections belong in it, not around it.
 -->
 
+---
+
+# AMENDMENTS -- approved 2026-08-11
+
+Everything below this block is the original document, unchanged. These are the
+decisions taken after `docs/weave-spec-gaps.md` audited all 806 lines against
+the build. Where an amendment and the body disagree, **the amendment wins.**
+
+The rule that produced them: a deviation that is an improvement gets recorded
+HERE, so it stops being silent divergence. A deviation that is damage gets
+repaired in code. Nothing is left as an unexplained difference.
+
+The work these amendments schedule is `docs/weave-recovery-plan.md`.
+
+## A. Build decisions accepted into the spec (R0.8)
+
+Seven places the build improved on this document. Approved; the body is
+superseded on each point.
+
+1. **Four passes, not three sizes.** Full weave / Targeted / Quick pass are
+   replaced by **Dress the Loom** (what is here and what relates to what),
+   **Weave the Chapters** (did anything change), **Read the Cloth** (where the
+   book contradicts itself) and **Unwoven** (the ground rules, its own job).
+   Named by the writer. Every stop kind belongs to exactly one pass, pinned by
+   a contract test. "Targeted" becomes a scope modifier inside a pass rather
+   than a stage of its own.
+2. **The world-rules corpus lives in Python** (`backend/app/codex/world_rules.py`),
+   not `app/src/data/worldRules.ts`. It is scan input, and the scan is Python;
+   shipping it to the frontend to send it back would be a round trip for
+   nothing.
+3. **Anchors are stored as text; ordinals are computed, never stored.** The
+   `at_ord` / `until_ord` / `revealed_ord` columns are deliberately absent --
+   a stored ordinal is a second source of truth for reading order that goes
+   stale the moment a chapter moves.
+4. **Eight role pickers, not nine.** `fallback` is not a pickable role: it is
+   what happens when nothing is picked, and offering it as a choice invites the
+   writer to configure the absence of a configuration.
+5. **`migrate/restore` and `migrate/compare` are kept** -- a reversibility
+   story beyond what this document described, and the migration is the most
+   dangerous button in the programme.
+6. **Agency gating (`ACTIVE_TYPES`) is kept.** Only Characters and Creatures
+   are asked how they connect; Locations, Lore, Factions, Deities, Governments,
+   Religions and Cultures are passive and get connected TO. From live use: "a
+   location wouldn't know anyone or have anything to do with someone." An
+   Untied pair with one active end stands its question on the active end.
+   Writer-overridable per type via `"active": true|false`.
+7. **Five extra built-in types are kept**: government, deity, creature, culture,
+   language.
+
+Also accepted into the spec as intended behaviour, having been proven necessary
+by live testing rather than designed here:
+
+- **The closed world.** From the moment Weaving opens the writer does not leave
+  it until the task is done or they X out. Every stop kind resolves inside the
+  popup. Held structurally: the panel takes no navigation callbacks and a
+  source-read test bans them.
+- **Continuous flow.** After any action the screen states what happened and
+  offers the next step, with a named exit that says what it does. Finishing a
+  stop ADVANCES the walk; it never dismisses a panel back onto the same stop.
+- **The required reason line**, asked BEFORE the relation type, capped to one
+  line by the shape of the input. It outranks the relation for brief quality:
+  `antagonist_of` is a category a model could guess; "she is hiding her theft
+  from him" is the scene.
+- **A connection is an axis.** The pair `(A, B)` is the axis and its states are
+  a run on it, so a friendship that deepens supersedes correctly instead of the
+  writer hand-closing each previous Tie.
+- **Every feature explains itself**: one "What's this?" per surface answering
+  what / why / necessary / what it spends, in a typed registry, with a
+  cross-language test that fails the build over a false "free" claim.
+
+## B. Rulings on contradictions (R0.9)
+
+Ten places the build went against this document. All ten ruled 2026-08-11.
+
+| # | The contradiction | Ruling |
+|---|---|---|
+| 1 | Context inspect built as a list; body says "a small map, not a list" | **BOTH.** A small non-interactive graph of the brief's Threads and their Ties at the anchor, above the list. The map answers "what shape is this"; the list stays the workbench for removal, cost and reading the exact words |
+| 2 | `weave_brief` added as a wire field; body says "chips need no wire change" | **KEEP THE FIELD.** As chips the automatic brief becomes indistinguishable from the writer's deliberate attachments, inherits the Canon/Reference stance meant for their choices, pollutes established-chip dedup, and has nowhere to carry the "as of this point in the story" framing |
+| 3 | `GET /run` and `GET /resolve` deleted as dead code | **RESTORE BOTH.** They looked orphaned because their consumers were never built. `/run` is required for resume; `/resolve` is the only way to ask "who is she as of chapter 7" for a writer rather than for the brief |
+| 4 | Two teaching registries; body wants one | **KEEP TWO, BIND THEM.** A term has an icon and a definition; a screen has a cost, a necessity and steps. One type would give every term a meaningless cost field. A contract test asserts they cannot contradict each other |
+| 5 | `PROFILE_FOLDERS` / `SECTION_CONFIGS` duplicated rather than replaced | **COLLAPSE INTO THE REGISTRY.** The body is right and the drift already shipped as a bug (Locations with "Physical Description" and Locations with "Appearance") |
+| 6 | A parallel Markdown parser; body says the profile parser is "reused nearly whole" | **CONVERGE ON ONE -- THE CODEX PARSER.** Same destination, opposite route: the codex format is a strict superset, so bending the profile parser to it was the wrong direction. Port its legacy-YAML repair across, then delete it once nothing calls it |
+| 7 | Two deletion orders ignored | **CARRY BOTH OUT, SEQUENCED.** The false comment at `profiles.py:125` goes immediately -- it is a lie in the code and the migration exists because it is one. `merge_profile_with_arc` goes when the route that calls it goes |
+| 8 | Unplaced and Loose thread walked one at a time; body wants a multi-select list and "all at once" | **BODY WINS.** Forty unplaced facts should be a tick-list, not forty screens. Folded into one piece of work with the Unwoven domain board, since it is the same interaction |
+| 9 | Frayed fill shows every missing section, with no prose-derived suggestions | **SPLIT.** "From what the prose already says" is right and missing -- build it. "One field at a time" is overruled by the writer: it is the same force-march that ruling 8 removes |
+| 10 | Nine stop kinds where this document's table names five | **KEEP BOTH ADDITIONS, AMEND THE TABLE.** `pinned` (the writer's own mark -- the one stop that is not a rule firing) and `early_mention` |
+
+## C. Defects in this document, corrected
+
+1. The Verification section appeared **twice, byte-identical**. The duplicate is
+   deleted.
+2. The role table lists nine roles including `fallback`, while the `ROLES`
+   literal further down lists eight. Eight is correct -- see amendment A4.
+3. The role feature lists in the table are **intent, not inventory.**
+   `ROLE_INFO` in `backend/app/ai/roles.py` is deliberately narrowed to
+   features that actually have a tagged call site, because
+   `test_role_call_sites.py` fails the build for a role claiming a consumer it
+   does not have. Features named in the table below and not yet tagged --
+   Guide mode, Unwoven question expansion, act/outline/beat passes, Check
+   Consistency, Weave fact and Tie proposals, mention detection -- are
+   scheduled in the recovery plan, not silently dropped.
+
+---
+
 The Weave — a story-aware world model, and Model Roles
 
  Context
@@ -307,7 +411,7 @@ The Weave — a story-aware world model, and Model Roles
  partial-update block ~924).
 
  Frontend — new app/src/components/settings/ModelRolesSection.tsx in screens/Settings.tsx
- (next to Section 4 "Model Routing", line 1005). Nine pickers, each listing which features use this
+ (next to Section 4 "Model Routing", line 1005). Eight pickers, each listing which features use this (AMENDED 2026-08-11: eight, not nine -- `fallback` is not a pickable role; see the amendment block at the top)
  role underneath, each with a WhatsThis explaining what that kind of job is and why a model choice
  matters for it. Add a local entry to PROVIDER_META; ProviderPanel.tsx already hides the key
  field when requiresKey is false. app/src/utils/modelFiltering.ts needs a bypass for local models —
@@ -759,32 +863,6 @@ The Weave — a story-aware world model, and Model Roles
  ai_scope: never unreachable; a POV frame swap changes the brief.
 
  ---
- Verification
-
- Per release:
-
- cd backend;  uv run pytest --no-header -q;  uv run ruff check .
- cd ../app;   npm run test -- --run;  npx tsc --noEmit;  npm run lint
-
- Then /pre-release for a ✅ RELEASE READY verdict.
-
- End to end, by hand (npm run tauri dev from app/):
-
- - v1.1.1 — Assign three roles to three models across two providers. Run Smart Advisor, Draft mode
- and a chapter summary; each reports the model you assigned. Clear all roles; behaviour identical to
- v1.1.0. Point prose at a local Ollama model; Draft works with no key and no <think> leakage.
- - v1.1.2 — Migrate a real project; confirm the backup, that every profile survived, that arcs
- became facts. Record the father example: belief at ch3/s2, truth at ch1 revealed ch14. Open the
- map and drag the scrubber from ch1 to ch20 — Threads and Ties appear as the story introduces them;
- toggle spoilers and the ch14 truth disappears before its anchor. Rename a chapter, reorder acts;
- anchors hold. Insert a scene break mid-chapter; later scene IDs do not shift. Reindex from
- scratch; nothing lost. Export all formats plus JSON and CSV; Ties and Runs survive each.
- - v1.1.3 — Open ch.7, inspect the brief: Elara reads as grieving. Open ch.15: she knows. The ch.14
- reveal never appears in the ch.7 brief. Run a Full weave; the warning states a real count. Apply 15
- findings, close the app, reopen, resume — the rest are there with no AI call. Edit a chapter between
- sessions; affected findings flag stale rather than showing as current. Defer Mentor; re-run; it asks
- again. Fill it in; re-run; it does not. Plant a knowledge violation (a character referencing what
- they cannot know) and confirm the Snag detector catches it.
  Verification
 
  Per release:

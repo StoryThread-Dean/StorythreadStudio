@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## ⛔ CURRENT STATE: the Weave is PAUSED at Phase 0
+## CURRENT STATE: the Weave is in recovery, Phase 1
 
-**Do not write feature code on `feature/the-weave` until Phase 0 of
-`docs/weave-recovery-plan.md` is complete and the writer has signed off.**
+**Work the next unchecked task in `docs/weave-recovery-plan.md`.** Phase 0
+(documents and decisions) is complete and signed off; building is unblocked.
 
 Why: the Weave was built for weeks against a specification that was never in
 the repository (it sat in gitignored `local/updateplan.md`). Nothing was ever
@@ -27,10 +27,14 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-11.** Phase 0: 7 of 12 done (R0.1-R0.7
-> complete; R0.8-R0.12 await writer decisions). Phases 1-10: not started.
-> Branch health at pause: 67 commits, 1573 backend tests, 1098 frontend tests,
-> ruff and tsc clean.
+> **LEDGER — last updated 2026-08-11.** 12 of 72 tasks done.
+> **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
+> contradictions ruled, seven amendments approved, three spec defects fixed,
+> scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
+> identity and phase 9 AI passes).
+> **Phase 1 in progress** (R1.1-R1.6): undo the contradictions introduced while
+> the spec was unreferenced.
+> Branch health: 1573 backend tests, 1098 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

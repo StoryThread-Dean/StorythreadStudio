@@ -1,6 +1,6 @@
 # The Weave: recovery plan
 
-**Status: PHASE 0 -- no feature code is being written.**
+**Status: PHASE 0 COMPLETE (2026-08-11, all decisions approved by the writer). Building Phase 1.**
 
 This plan repairs the gap between `docs/weave-spec.md` (what the Weave is for)
 and the build (what it does). The findings it answers are in
@@ -48,45 +48,46 @@ Task ids (R0.1, R1.2 ...) are stable. Reference them in commit messages.
       *Result 2026-08-11:* 1573 backend, 1098 frontend, ruff clean, tsc clean.
 - [x] **R0.7** Update Claude memory: the standing rule, the plan pointer, and
       the open decisions.
-- [ ] **R0.8** **WRITER SIGN-OFF on the section B amendments.** Seven build
-      decisions that improved on the spec. Approving them means the SPEC gets
-      edited to match, in one commit, and they stop being divergence.
-      *Awaiting decision:*
-      - [ ] four passes (Dress the Loom / Weave the Chapters / Read the Cloth /
-            Unwoven) replace Full / Targeted / Quick
-      - [ ] world-rules corpus in Python rather than `app/src/data/worldRules.ts`
-      - [ ] anchors stored as text; ordinals computed, never stored
-      - [ ] eight role pickers, not nine (`fallback` excluded)
-      - [ ] `migrate/restore` + `migrate/compare` kept
-      - [ ] `ACTIVE_TYPES` agency gating kept
-      - [ ] five extra built-in types kept (government, deity, creature,
-            culture, language)
-      - [ ] the improvements listed in the addendum's "What got BETTER"
-            section are added to the spec as intended behaviour
-- [ ] **R0.9** **WRITER RULINGS on the section C contradictions.** Ten places
-      the build went against the document. Each needs revert / keep-and-amend:
-      - [ ] context inspect: list, or the spec's "small map"?
-      - [ ] `weave_brief` wire field, or ship the brief as chips?
-      - [ ] restore `GET /run` and `GET /resolve`?
-      - [ ] one lexicon or two teaching registries?
-      - [ ] collapse `PROFILE_FOLDERS`/`SECTION_CONFIGS` into the registry?
-      - [ ] one Markdown parser or two dialects?
-      - [ ] carry out the two deletion orders (`merge_profile_with_arc`, the
-            false `profiles.py:125` comment)?
-      - [ ] Unplaced + Loose thread: multi-select lists, or one-at-a-time?
-      - [ ] Frayed fill: one field at a time?
-      - [ ] `pinned` + `early_mention` added to the spec's lexicon table?
-- [ ] **R0.10** Amend `docs/weave-spec.md` to record every approved decision
-      from R0.8 and R0.9, with a dated amendment block. *Done-when:* the spec
-      contains no claim the writer has not either approved or scheduled.
-- [ ] **R0.11** Fix the three spec defects: duplicated Verification section;
-      nine-roles table vs eight-role literal; drifted role feature lists.
-- [ ] **R0.12** Re-scope: assign every Phase 1-9 task to **v2.0.0** or
-      **deferred**, and write the deferred set into `docs/roadmap.md`.
-      *Done-when:* nothing in this plan is unassigned.
+- [x] **R0.8** Section B amendments -- **APPROVED 2026-08-11**, recorded in
+      the spec's amendment block section A.
+      - [x] four passes replace Full / Targeted / Quick
+      - [x] world-rules corpus in Python
+      - [x] anchors stored as text; ordinals computed, never stored
+      - [x] eight role pickers, not nine (`fallback` excluded)
+      - [x] `migrate/restore` + `migrate/compare` kept
+      - [x] `ACTIVE_TYPES` agency gating kept
+      - [x] five extra built-in types kept
+      - [x] the "What got BETTER" improvements added to the spec as intended
+            behaviour (closed world, continuous flow, required reason line,
+            pair-as-axis, self-explanation rule)
+- [x] **R0.9** Section C rulings -- **ALL TEN DECIDED 2026-08-11** ("all ten
+      as recommended"), recorded in the spec's amendment block section B.
+      - [x] 1 context inspect: **BOTH** -- small map above, list below
+      - [x] 2 `weave_brief`: **KEEP THE FIELD**, amend the spec
+      - [x] 3 **RESTORE** `GET /run` and `GET /resolve`
+      - [x] 4 **KEEP TWO** registries, bound by a contract test
+      - [x] 5 **COLLAPSE** into the registry
+      - [x] 6 **CONVERGE ON ONE PARSER** -- the codex one
+      - [x] 7 **CARRY OUT BOTH** deletion orders, sequenced
+      - [x] 8 Unplaced + Loose thread: **BODY WINS** -- batch views
+      - [x] 9 **SPLIT** -- build prose prefill, overrule "one field at a time"
+      - [x] 10 **KEEP** `pinned` + `early_mention`, amend the table
+- [x] **R0.10** Amended `docs/weave-spec.md` with a dated amendment block
+      (sections A, B, C) recording every R0.8 and R0.9 decision. The amendment
+      block states that where it and the body disagree, the amendment wins.
+- [x] **R0.11** Three spec defects fixed: the byte-identical duplicate of the
+      Verification section deleted; "Nine pickers" corrected to eight; the role
+      feature table annotated as INTENT, with the untagged features scheduled
+      rather than silently dropped.
+- [x] **R0.12** Re-scoped. **v2.0.0:** phases 1-6, 8, 10. **Deferred to
+      v2.1.0:** phase 7 (scene identity -- chapter anchors are genuinely
+      useful and nobody has asked for finer) and phase 9 (the five AI passes --
+      v2.0.0 ships a deterministic Weave and says so). Written into
+      `docs/roadmap.md`, including the one carve-out to settle before release:
+      knowledge violation, which the spec calls "the reason the frame system
+      exists".
 
-**Phase 0 exit criterion:** R0.8 through R0.12 complete. Only then does code
-begin.
+**Phase 0 exit criterion:** R0.8 through R0.12 complete. **MET 2026-08-11.**
 
 ---
 
@@ -251,7 +252,7 @@ it, since the spec calls it the reason the frame system exists.
 
 | Phase | Tasks | Done |
 |---|---|---|
-| 0 Stop and record | 12 | 7 |
+| 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 6 | 0 |
 | 2 The premise | 9 | 0 |
 | 3 Migration completeness | 4 | 0 |
@@ -262,4 +263,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **72** | **7** |
+| **Total** | **72** | **12** |
