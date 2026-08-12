@@ -27,16 +27,18 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 14 of 72 tasks done.
+> **LEDGER — last updated 2026-08-12.** 17 of 73 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
 > identity and phase 9 AI passes).
-> **Phase 1 in progress.** R1.1 done (`GET /resolve` restored). R1.2 done
-> (`GET /run` restored, `POST /run/resume` built, Carry on / Start fresh on the
-> start screen). Next: R1.3 context-inspect map, R1.4 spec amendment only,
-> R1.5 deletion orders, R1.6 registry contract test.
-> Branch health: 1582 backend tests, 1104 frontend tests, ruff and tsc clean.
+> **Phase 1: 5 of 7.** Done: R1.1 `GET /resolve` restored · R1.2 `GET /run`
+> restored and `POST /run/resume` built with Carry on / Start fresh · R1.4
+> `weave_brief` kept (spec amendment) · R1.5a the false hidden-trait comment
+> deleted · R1.6 the two teaching registries bound by a contract test.
+> **Next: R1.3** — the small map above the context-inspect list. Then Phase 2
+> (the premise), which also carries R1.5b (`merge_profile_with_arc`).
+> Branch health: 1582 backend tests, 1110 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

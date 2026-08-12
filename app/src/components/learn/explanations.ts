@@ -270,8 +270,8 @@ export const EXPLAIN: Record<string, Explains> = {
 
   // ── Weaving, the walkthrough ───────────────────────────────────────────────
   "weaving.what": {
-    what: "Four passes over your book and your world, each asking a different "
-      + "question.",
+    what: "Weaving: four passes over your book and your world, each asking a "
+      + "different question.",
     why: "Your world grows while you write, so the two drift apart. The passes "
       + "are separate because tidying up, writing a chapter, checking for "
       + "contradictions and inventing how a world works are different jobs, and "
@@ -379,9 +379,9 @@ export const EXPLAIN: Record<string, Explains> = {
   },
   "weaving.fill": {
     what: "The entry's empty sections, right here, as text boxes.",
-    why: "This entry has writing but is missing the parts its kind says are "
-      + "worth having. Filling them here keeps the walkthrough moving -- the "
-      + "full editor is still there for real writing sessions later.",
+    why: "A Frayed entry has writing but is missing the parts its kind says "
+      + "are worth having. Filling them here keeps the walkthrough moving -- "
+      + "the full editor is still there for real writing sessions later.",
     needed: "optional",
     cost: FREE,
     how: [
@@ -393,7 +393,7 @@ export const EXPLAIN: Record<string, Explains> = {
     endpoint: "/api/codex/entity",
   },
   "weaving.snag-fixer": {
-    what: "The two sides of a disagreement, with ways to settle it in place.",
+    what: "The two sides of a Snag, with ways to settle it in place.",
     why: "Two recorded facts clash, or a fact has no point in the story, or "
       + "the prose names something before your world says it exists. All of "
       + "these are settled here, without opening anything.",
@@ -537,7 +537,7 @@ export const EXPLAIN: Record<string, Explains> = {
     endpoint: "/api/codex/entity",
   },
   "thread.run": {
-    what: "How this entry CHANGES as the story goes on.",
+    what: "The Run: how this entry CHANGES as the story goes on.",
     why: "A profile describes one unchanging thing, which is wrong. A heroine "
       + "who believes her father died for fourteen chapters is a different "
       + "person afterwards, and AI should be told whichever is true where you "

@@ -122,9 +122,19 @@ PROFILE_FOLDERS: dict[str, str] = {
 
 VALID_TYPES = set(PROFILE_FOLDERS.keys())
 
-# The five importance levels control how (and whether) a trait is sent to AI.
+# The five importance levels control how -- and how prominently -- a trait
+# reaches AI.
+#
 # Core = always in prompt, highest priority position.
-# Hidden = writer-only notes, never sent to the AI API.
+#
+# Hidden used to be documented here as "writer-only notes, never sent to the AI
+# API", and that was NOT TRUE. Hidden traits were sent like any other; what
+# made them different was only their position and framing in the prompt. The
+# Weave's conversion exists partly because of this: it rewrites every hidden
+# trait as `ai_scope: on-request`, which is the mechanism that actually
+# withholds it. Corrected under recovery task R1.5, on the spec's own
+# instruction to delete the claim -- a comment that promises a writer their
+# private notes are not transmitted is the worst kind of wrong.
 VALID_IMPORTANCE = {"core", "present", "background", "contextual", "hidden"}
 
 

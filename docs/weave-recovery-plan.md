@@ -108,9 +108,31 @@ before anything is built on top of it. Each is gated on its R0.9 ruling.
       question they had already put off. Six frontend and six backend tests,
       including the fallback for a run list that names a session which is gone.
 - [ ] **R1.3** Context inspect per the R0.9 ruling.
-- [ ] **R1.4** `weave_brief` per the R0.9 ruling.
-- [ ] **R1.5** Carry out the two deletion orders.
-- [ ] **R1.6** Teaching registries per the R0.9 ruling.
+- [x] **R1.4** `weave_brief` kept. Ruling 2 was keep-and-amend, so this is a
+      SPEC change with no code: recorded in the amendment block with the
+      reasoning (as chips, the automatic brief becomes indistinguishable from
+      the writer's own attachments, inherits the Canon/Reference stance meant
+      for their choices, pollutes established-chip dedup, and has nowhere to
+      carry the "as of this point in the story" framing).
+- [x] **R1.5a** The false comment at `profiles.py:125` is gone. It claimed
+      hidden traits were "never sent to the AI API", which was untrue -- they
+      were sent like any other, and only their prompt position differed. The
+      Weave's conversion exists partly because of this, rewriting every hidden
+      trait as `ai_scope: on-request`, which is what actually withholds it. A
+      comment promising a writer their private notes are not transmitted is the
+      worst kind of wrong.
+- [ ] **R1.5b** Delete `merge_profile_with_arc`. Sequenced per the ruling: it
+      is still called by a live route and is doing real work for un-migrated
+      projects, so it goes when that route goes, alongside R2.1.
+- [x] **R1.6** Two registries kept and BOUND. `registries.test.ts` is the only
+      file that knows about both: an Explain key naming a term must name one
+      that exists, an explanation that IS a term's disclosure must use that
+      term's own word, every stop kind must have a disclosure somewhere, and the
+      two shapes must stay distinct (a term has an icon and a tone; an
+      explanation has a necessity and a cost -- which is the argument for two
+      registries in one assertion). It found three real drifts on its first run:
+      the explanation of Weaving never said "Weaving", the Frayed fill never
+      said "Frayed", and the Snag fixer never said "Snag".
 
 ---
 
@@ -260,7 +282,7 @@ it, since the spec calls it the reason the frame system exists.
 | Phase | Tasks | Done |
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
-| 1 Undo session damage | 6 | 2 |
+| 1 Undo session damage | 7 | 5 |
 | 2 The premise | 9 | 0 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
@@ -270,4 +292,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **72** | **14** |
+| **Total** | **73** | **17** |
