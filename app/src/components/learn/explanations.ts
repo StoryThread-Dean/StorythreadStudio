@@ -291,6 +291,28 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "thread.fix-or-remove": {
+    what: "Change what kind of thing an entry is, or remove it entirely.",
+    why: "Weaving offers Character for a name it finds in your prose, because "
+      + "most names in prose are people -- so a god, a ship or a house gets "
+      + "filed as a person the first time it is mentioned. Changing the kind "
+      + "keeps everything you wrote; before this, the only fix was to delete "
+      + "the entry and start again.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Pick the right kind and Change it. The name, the writing and every "
+        + "connection stay as they are.",
+      "A connection that no longer makes sense between those kinds is "
+        + "pointed out and kept -- correcting a mistake should not quietly "
+        + "delete your work.",
+      "Remove this entry deletes it and everything in it. Your manuscript is "
+        + "never touched.",
+      "Because the prose still says the name, removing an entry lets Weaving "
+        + "ask about it again rather than staying quiet about it forever.",
+    ],
+    endpoint: "/api/codex/entity/kind",
+  },
   "weave.context": {
     what: "The part of your world the AI is told about, before you ask it "
       + "anything.",

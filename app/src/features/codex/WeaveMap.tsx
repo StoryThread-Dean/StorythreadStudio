@@ -24,7 +24,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Eye, EyeOff, Link2, Loader, RotateCcw,
+  AlertTriangle, Eye, EyeOff, Link2, Loader, RotateCcw, Wrench,
 } from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
@@ -40,6 +40,7 @@ import {
   type ChapterAnchor, type GraphNode, type TypeRegistry, type WeaveGraph,
 } from "./api";
 import { BindDot } from "./BindDot";
+import { EntryTools } from "./EntryTools";
 import { Scrubber } from "./Scrubber";
 import { TieEditor } from "./TieEditor";
 
@@ -73,6 +74,8 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
   const [binding, setBinding] = useState<GraphNode | null>(null);
   // The established entry whose connections are being edited.
   const [tying, setTying] = useState<GraphNode | null>(null);
+  // The entry being corrected: wrong kind, or created by mistake.
+  const [fixing, setFixing] = useState<GraphNode | null>(null);
   // Bumped when a word moves, so the map re-reads. A counter rather than a
   // callback because the fetch already lives in an effect and this is the
   // smallest honest way to say "that input changed".
@@ -254,9 +257,16 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
     if (!onPin) return;
     const point = pointAt(event);
     if (!point) return;
+    // Kept inside the drawing, at the moment it is RECORDED as well as when
+    // it is drawn. The layout clamps too, so a position saved by an older
+    // build still shows -- but storing an off-canvas point would leave a
+    // remembered position that never matches where the dot actually is.
     onPin({
       ...(pinned ?? {}),
-      [grip.id]: { x: point.x + grip.dx, y: point.y + grip.dy },
+      [grip.id]: {
+        x: Math.min(Math.max(point.x + grip.dx, 20), WIDTH - 20),
+        y: Math.min(Math.max(point.y + grip.dy, 20), HEIGHT - 20),
+      },
     });
   }
 
@@ -454,6 +464,28 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
             candidates={graph?.nodes ?? []}
             onClose={() => setBinding(null)}
             onBound={() => { setBinding(null); setRedraw(n => n + 1); }}
+            // The third honest answer: it should not be here at all. A dot
+            // made from a word that turned out to be nothing needs removing,
+            // not identifying -- and the two answers already offered ("it
+            // means this" / "it is its own thing") both insist it is
+            // something.
+            onWrong={() => { setFixing(binding); setBinding(null); }}
+          />
+        )}
+
+        {fixing && (
+          <EntryTools
+            projectPath={projectPath}
+            entry={fixing}
+            onClose={() => setFixing(null)}
+            onChanged={() => setRedraw(n => n + 1)}
+            onDeleted={() => {
+              setFixing(null);
+              // Anything pointing at it has to let go, or the map keeps a
+              // focus ring around a dot that is not there any more.
+              setFocus(null);
+              setRedraw(n => n + 1);
+            }}
           />
         )}
 
@@ -471,6 +503,19 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
               className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
             >
               <Link2 size={11} /> Connections
+            </button>
+            {/* Standing on an entry is also when a writer notices it is the
+                WRONG entry -- filed as a Character when it is a Deity, or
+                created from a word that turned out to be nothing. */}
+            <button
+              type="button"
+              onClick={() => {
+                const node = (graph?.nodes ?? []).find(n => n.entity_id === focus);
+                if (node) setFixing(node);
+              }}
+              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            >
+              <Wrench size={11} /> Fix or remove
             </button>
             <button
               type="button"

@@ -113,7 +113,19 @@ export function layoutNodes(
   for (const node of nodes) {
     const held = pinned[node.entity_id];
     if (held) {
-      positions[node.entity_id] = { x: held.x, y: held.y };
+      // CLAMPED, like a computed position is. A dragged position was taken
+      // verbatim, and the map is drawn in a fixed viewBox inside an
+      // overflow-hidden frame -- so a node dropped past the right or bottom
+      // edge was simply not drawn, and could never be dragged back because
+      // there was nothing on screen to grab. Live testing found it as a
+      // count that disagreed with itself: the sidebar said 13 characters,
+      // the map showed 12, and the missing one was sitting at x = 1119 on a
+      // canvas 1000 wide. Respecting the writer's position does not extend
+      // to respecting one that hides their work.
+      positions[node.entity_id] = {
+        x: clamp(held.x, 20, width - 20),
+        y: clamp(held.y, 20, height - 20),
+      };
       continue;
     }
 

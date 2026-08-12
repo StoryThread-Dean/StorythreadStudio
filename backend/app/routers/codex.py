@@ -536,15 +536,103 @@ async def save_entity(request: SaveThreadRequest):
     return {"saved": True, "revision": codex_store.source_revision(project_path)}
 
 
-# NO UI YET, AND KEPT ON PURPOSE. Removing an entry is the only answer to a
-# duplicate -- two entries with one name, which live testing produced twice --
-# and there is no other path to it anywhere in the app. This is a missing
-# screen, not a dead route; a sweep that deletes it takes the fix with it.
+class KindBody(BaseModel):
+    project_path: str
+    entity_id: str
+    type: str
+
+
+@router.patch("/entity/kind")
+async def patch_entity_kind(body: KindBody):
+    """
+    This is not what I said it was.
+
+    Asked for from live testing, in the writer's own words: "Pathicus was
+    wrongly assumed to be a Character instead of a Deity. I need to be able to
+    change it from there." A wrong kind is easy to create -- Weaving guesses
+    Character for a name in prose, because most names in prose are people --
+    and before this the only fix was to delete the entry and lose everything
+    written in it.
+
+    The FILE MOVES, because a kind is a folder. Everything else survives: the
+    id (so ties and facts keep pointing at it), the name, the aliases, the
+    prose, the Run.
+
+    Ties are NOT torn up. A relation whose kinds no longer match is reported
+    as a warning and left alone -- the same stance cardinality takes. The
+    writer is in the middle of correcting a mistake, and deleting their
+    connections as a side effect of that correction would be a second,
+    larger mistake made on their behalf.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+    row = await _locate(project_path, body.entity_id)
+
+    new_type = str(body.type or "").strip()
+    if folder_for_type(registry, new_type) is None:
+        raise CodexError(
+            "type_invalid",
+            f"There is no '{new_type}' in this world's kinds.",
+            new_type,
+        )
+    if new_type == row["type"]:
+        return {"entity_id": body.entity_id, "type": new_type, "warnings": []}
+
+    thread = _read_thread(project_path, registry, row)
+    old_path = _thread_path(project_path, registry, row["type"], row["filename"])
+
+    thread["type"] = new_type
+    _write_thread(project_path, registry, thread)
+    try:
+        os.remove(old_path)
+    except OSError:
+        # The new file is written; a leftover old one would be read as a
+        # SECOND entry with the same id, so say so rather than reindexing
+        # over the top of it.
+        raise CodexError(
+            "source_corrupt",
+            "The entry was written under its new kind, but the old file could "
+            "not be removed. Delete it by hand before scanning again.",
+            old_path,
+        ) from None
+    await codex_store.reindex(project_path)
+
+    # Which recorded connections no longer make sense between these kinds.
+    # Reported, never enforced -- see the docstring.
+    warnings: list[str] = []
+    for tie in thread.get("ties") or []:
+        relation = relation_by_id(registry, str(tie.get("rel") or ""))
+        if relation is None or relation.get("universal"):
+            continue
+        if new_type not in (relation.get("source_types") or []):
+            warnings.append(
+                f"'{relation.get('label', tie.get('rel'))}' is not something a "
+                f"{new_type} usually does. The connection is kept."
+            )
+    return {"entity_id": body.entity_id, "type": new_type, "warnings": warnings}
+
+
 @router.delete("/entity")
-async def delete_entity(project_path: str = Query(...), entity_id: str = Query(...)):
+async def delete_entity(project_path: str = Query(...), entity_id: str = Query(...),
+                        forget_answers: bool = True):
+    """
+    Remove an entry, and let the world go back to not knowing about it.
+
+    `forget_answers` is the part that is easy to miss and was asked for
+    directly: "This should reset the name connection allowing for Dress the
+    Loom to pick it up again so it can be tagged and connected."
+
+    Deleting the file alone does not do that. The name was probably made into
+    an entry from an Unspun stop, and the ledger remembers that as answered
+    for good -- so the scan would never raise the name again, and the writer
+    would be left with prose full of a word the Weave had quietly agreed to
+    ignore forever. So the entry's own answers go, and its name and aliases
+    come off the retired list: a deleted entry is a question again.
+    """
     project_path = validate_project_path(project_path)
     registry = _registry(project_path)
     row = await _locate(project_path, entity_id)
+    thread = _read_thread(project_path, registry, row)
     path = _thread_path(project_path, registry, row["type"], row["filename"])
     try:
         os.remove(path)
@@ -552,7 +640,39 @@ async def delete_entity(project_path: str = Query(...), entity_id: str = Query(.
         raise CodexError("source_corrupt", "That entry could not be deleted.",
                          str(exc)) from exc
     await codex_store.reindex(project_path)
-    return {"deleted": entity_id}
+
+    forgotten = 0
+    if forget_answers:
+        book = load_book(project_path)
+        names = {str(thread.get("name") or "").strip().lower()}
+        names |= {str(a).strip().lower() for a in (thread.get("aliases") or [])}
+        names.discard("")
+
+        # TWO KINDS OF KEY, and forgetting only one of them does nothing
+        # visible. Most stops are keyed by entity id ("frayed|e-pathicus"),
+        # but the one that matters most here is keyed by NAME
+        # ("unspun|pathicus") -- because when it was answered there was no
+        # entry yet. Clearing the retired phrase alone left that answer
+        # standing, and the name stayed invisible: the exact failure this
+        # whole route exists to prevent, found by the test below.
+        answers = book.get("answers") or {}
+        keep = {
+            key: value for key, value in answers.items()
+            if entity_id not in key
+            and key.split("|", 1)[-1].strip().lower() not in names
+        }
+        forgotten = len(answers) - len(keep)
+        book["answers"] = keep
+
+        # And the NAME goes back to being an open question, which is the
+        # whole point: the prose still says "Pathicus".
+        before = len(book.get("retired") or [])
+        book["retired"] = [p for p in (book.get("retired") or [])
+                           if str(p).strip().lower() not in names]
+        forgotten += before - len(book["retired"])
+        save_book(project_path, book)
+
+    return {"deleted": entity_id, "forgotten": forgotten}
 
 
 # ── Ties ─────────────────────────────────────────────────────────────────────

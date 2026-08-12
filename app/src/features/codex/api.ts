@@ -215,6 +215,38 @@ export function fetchThreads(projectPath: string, type?: string):
   return request(`/list?${q({ project_path: projectPath, type })}`);
 }
 
+/** "This is not what I said it was." Moves the entry to its new kind's
+ *  folder, keeping its id, its name and everything written in it. Connections
+ *  that no longer fit are reported in `warnings`, never torn up. */
+export function setEntityKind(projectPath: string, entityId: string,
+                              type: string):
+    Promise<{ entity_id: string; type: string; warnings: string[] }> {
+  return request("/entity/kind", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, entity_id: entityId,
+                           type }),
+  });
+}
+
+/**
+ * Remove an entry from the world.
+ *
+ * `forgetAnswers` (the default) also lets the WEAVE forget it: answers about
+ * the entry go, and its name comes off the retired list, so a name still in
+ * the prose is asked about again rather than staying invisible forever. Pass
+ * false when deleting a duplicate -- there the survivor answers to the name
+ * and re-raising it would be noise.
+ */
+export function deleteThread(projectPath: string, entityId: string,
+                             forgetAnswers = true):
+    Promise<{ deleted: string; forgotten: number }> {
+  return request(`/entity?${q({
+    project_path: projectPath, entity_id: entityId,
+    forget_answers: forgetAnswers,
+  })}`, { method: "DELETE" });
+}
+
 export function fetchGraph(
   projectPath: string,
   options: { at?: string; pov?: string; hideSpoilers?: boolean } = {},

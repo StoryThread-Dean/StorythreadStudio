@@ -2766,27 +2766,6 @@ function App() {
       </main>
 
 
-      {/* ── WEAVING ───────────────────────────────────────────────────────
-          An overlay, not a column. As a third panel it left the writer's own
-          prose as the narrowest thing on screen, between the sidebar and the
-          Writing Companion -- exactly backwards for an app whose rule is
-          that the manuscript is the visual focus. It is also the shape this
-          app already uses for a guided walk (the audiobook's formatting
-          walkthrough), so the interaction is one the writer has met before.
-          The component renders its own backdrop; nothing here reserves
-          space for it. */}
-      {/* The Weave is a CLOSED WORLD: the writer does not leave it until they
-          are done or they X out. It used to take navigation callbacks here and
-          five stop kinds ended by calling one -- creation, filling-in and
-          fixing all happen inside the panel now, so there is nothing to
-          route. */}
-      {weavingOpen && (
-        <WeavingPanel
-          projectPath={currentProject.root_path}
-          onClose={() => setWeavingOpen(false)}
-        />
-      )}
-
       {/* ── RIGHT PANEL: Writing Companion ────────────────────────────────
           Width is toggleable (compact / wide) via the resizer pinned to the
           left edge; preference persists via localStorage. `relative` so the
@@ -3412,6 +3391,37 @@ function App() {
         </div>
       </aside>
       </>
+      )}
+
+      {/* ── WEAVING ───────────────────────────────────────────────────────
+          An overlay, not a column. As a third panel it left the writer's own
+          prose as the narrowest thing on screen, between the sidebar and the
+          Writing Companion -- exactly backwards for an app whose rule is
+          that the manuscript is the visual focus. It is also the shape this
+          app already uses for a guided walk (the audiobook's formatting
+          walkthrough), so the interaction is one the writer has met before.
+          The component renders its own backdrop; nothing here reserves
+          space for it.
+
+          RENDERED HERE, WITH THE OTHER OVERLAYS, AND THAT POSITION IS THE
+          WHOLE POINT. It used to sit inside the editor arm of the view
+          switch, which meant clicking "Weaving..." from the Weave screen set
+          the state and mounted nothing -- reported as "attempting to go into
+          Weaving does nothing... if I switch to a document, the Weaving
+          interface pops up like I had clicked it then." It was never hung;
+          it simply was not in the tree. An overlay opened from a sidebar
+          that is visible in every view has to live outside every view.
+
+          The Weave is also a CLOSED WORLD: the writer does not leave it
+          until they are done or they X out. It used to take navigation
+          callbacks here and five stop kinds ended by calling one --
+          creation, filling-in and fixing all happen inside the panel now,
+          so there is nothing to route. */}
+      {weavingOpen && currentProject && (
+        <WeavingPanel
+          projectPath={currentProject.root_path}
+          onClose={() => setWeavingOpen(false)}
+        />
       )}
 
       {/* Settings modal -- rendered as an overlay on top of everything */}

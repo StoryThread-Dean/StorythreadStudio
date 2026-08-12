@@ -1501,6 +1501,30 @@ describe("the closed world, structurally", () => {
       expect(source.includes(leak), `WeavingPanel references ${leak}`).toBe(false);
     }
   });
+
+  it("is mounted with the global overlays, not inside one view", async () => {
+    // Reported from live testing: "attempting to go into Weaving does
+    // nothing... if I switch to a document, the Weaving interface pops up
+    // like I had clicked it then." Nothing was hung. The panel was rendered
+    // inside the editor arm of the view switch, so opening it from the Weave
+    // screen set the state and mounted nothing; changing view mounted the arm
+    // and the panel appeared, looking like a delayed click.
+    //
+    // The invariant: an overlay opened from a sidebar visible in EVERY view
+    // has to be rendered outside every view. Pinned by position -- the render
+    // must come after the view switch closes, which is where the other
+    // overlays (Settings and the rest) already live.
+    const app = (await import("../../App.tsx?raw")).default as string;
+    const weaving = app.indexOf("<WeavingPanel");
+    const firstGlobalOverlay = app.indexOf("{showSettings &&");
+    expect(weaving, "App.tsx never renders WeavingPanel").toBeGreaterThan(0);
+    expect(
+      weaving,
+      "WeavingPanel is rendered before the global overlays, which means it "
+      + "sits inside a view branch and will not open from other views",
+    ).toBeGreaterThan(app.indexOf("</aside>\n      </>"));
+    expect(Math.abs(weaving - firstGlobalOverlay)).toBeLessThan(2000);
+  });
 });
 
 

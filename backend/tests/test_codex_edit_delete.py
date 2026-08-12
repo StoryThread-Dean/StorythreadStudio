@@ -304,3 +304,180 @@ def test_renaming_nothing_in_particular_is_refused(tmp_path):
     response = client.patch("/api/codex/section",
                             json={"project_path": folder, "label": "Whatever"})
     assert response.json()["detail"]["code"] == "type_invalid"
+
+
+# ── This is not what I said it was ──────────────────────────────────────────
+#
+# From live testing, in the writer's words: "Pathicus was wrongly assumed to
+# be a Character instead of a Deity. I need to be able to change it from there
+# or delete it altogether because it was made incorrectly. This should reset
+# the name connection allowing for Dress the Loom to pick it up again so it
+# can be tagged and connected."
+#
+# Two capabilities in one report, and the second half is the one easy to get
+# wrong: deleting the FILE is not enough, because the ledger remembers the
+# name as answered for good.
+
+@pytest.fixture
+def world(tmp_path):
+    """A project with Pathicus filed, wrongly, as a character."""
+    root = tmp_path / "MyNovel"
+    (root / "manuscript").mkdir(parents=True)
+    (root / "project.json").write_text(json.dumps({"title": "N"}),
+                                       encoding="utf-8")
+    (root / "manuscript" / "01.md").write_text(
+        "# One\nThe Daughters prayed to Pathicus. Pathicus did not answer.\n",
+        encoding="utf-8")
+    path = root / "codex" / "characters"
+    path.mkdir(parents=True)
+    (path / "pathicus.md").write_text(
+        "---\ntype: character\nentity_id: e-pathicus\nname: Pathicus\n---\n\n"
+        "# Overview\nA god of the deep places.\n", encoding="utf-8")
+    return str(root)
+
+
+def _kind(project, entity_id, type_id):
+    return client.patch("/api/codex/entity/kind", json={
+        "project_path": project, "entity_id": entity_id, "type": type_id})
+
+
+def test_a_wrong_kind_can_be_corrected(world):
+    assert _kind(world, "e-pathicus", "deity").status_code == 200
+    body = client.get("/api/codex/entity", params={
+        "project_path": world, "entity_id": "e-pathicus"}).json()
+    assert body["type"] == "deity"
+
+
+def test_the_file_moves_to_its_new_kinds_folder(world):
+    _kind(world, "e-pathicus", "deity")
+    assert os.path.exists(os.path.join(world, "codex", "deities", "pathicus.md"))
+    # And does NOT linger under the old one -- a leftover would be read as a
+    # second entry with the same id on the next scan.
+    assert not os.path.exists(
+        os.path.join(world, "codex", "characters", "pathicus.md"))
+
+
+def test_everything_written_in_it_survives_the_move(world):
+    # The whole reason this is not "delete it and start again".
+    _kind(world, "e-pathicus", "deity")
+    body = client.get("/api/codex/entity", params={
+        "project_path": world, "entity_id": "e-pathicus"}).json()
+    assert body["entity_id"] == "e-pathicus"          # ties/facts still point here
+    assert body["name"] == "Pathicus"
+    assert "god of the deep places" in body["sections"]["overview"]["content"]
+
+
+def test_a_kind_this_world_does_not_have_is_refused_by_name(world):
+    body = _kind(world, "e-pathicus", "spaceship").json()
+    assert body["detail"]["code"] == "type_invalid"
+    assert "spaceship" in body["detail"]["message"]
+
+
+def test_changing_to_the_same_kind_does_nothing_and_says_so(world):
+    body = _kind(world, "e-pathicus", "character").json()
+    assert body["type"] == "character"
+    assert body["warnings"] == []
+
+
+def test_connections_are_kept_and_the_odd_ones_reported(world):
+    # A writer correcting a mistake must not lose their connections AS A SIDE
+    # EFFECT of the correction -- that would be a second, larger mistake made
+    # on their behalf. So a relation that no longer fits warns and stays.
+    import pathlib
+    factions = pathlib.Path(world) / "codex" / "factions"
+    factions.mkdir(parents=True)
+    (factions / "daughters.md").write_text(
+        "---\ntype: faction\nentity_id: e-daughters\nname: Daughters\n---\n\n"
+        "# Overview\nHers.\n", encoding="utf-8")
+    client.post("/api/codex/tie", json={
+        "project_path": world, "src_id": "e-pathicus", "rel": "member_of",
+        "dst_id": "e-daughters", "reason": "recorded before the kind was fixed"})
+
+    body = _kind(world, "e-pathicus", "deity").json()
+    assert body["warnings"]                            # said out loud
+    assert "kept" in body["warnings"][0]
+    ties = client.get("/api/codex/ties", params={
+        "project_path": world, "entity_id": "e-pathicus"}).json()["ties"]
+    assert len(ties) == 1                              # and still there
+
+
+# ── Deleting resets the question ────────────────────────────────────────────
+
+def _stops(project, **kw):
+    return client.post("/api/codex/scan",
+                       json={"project_path": project, **kw}).json()["stops"]
+
+
+def _unspun(project, name):
+    """Stops offering to MAKE an entry for a name -- not every stop that
+    happens to mention one."""
+    return [s for s in _stops(project)
+            if s["kind"] == "unspun"
+            and s.get("detail", {}).get("name") == name]
+
+
+def test_deleting_an_entry_lets_the_scan_find_the_name_again(world):
+    # THE reported requirement. The name was made into an entry from an Unspun
+    # stop, so the ledger says answered-for-good; deleting the file alone
+    # would leave the prose full of a word the Weave had agreed to ignore
+    # forever.
+    run = client.post("/api/codex/run", json={"project_path": world}).json()
+    client.post("/api/codex/run/answer", json={
+        "project_path": world, "run_id": run["run_id"],
+        "key": "unspun|pathicus", "state": "dismissed",
+        "retire_phrase": "Pathicus"})
+    # Retired: nothing offers to make an entry for the name.
+    assert not _unspun(world, "Pathicus")
+
+    client.delete("/api/codex/entity", params={
+        "project_path": world, "entity_id": "e-pathicus"})
+
+    # ...and now it does again, which is the whole request: the prose still
+    # says Pathicus, so the Weave should be asking about it.
+    assert _unspun(world, "Pathicus")
+
+
+def test_it_forgets_only_answers_about_the_entry_it_deleted(world):
+    run = client.post("/api/codex/run", json={"project_path": world}).json()
+    client.post("/api/codex/run/answer", json={
+        "project_path": world, "run_id": run["run_id"],
+        "key": "frayed|e-pathicus", "state": "applied"})
+    client.post("/api/codex/run/answer", json={
+        "project_path": world, "run_id": run["run_id"],
+        "key": "frayed|e-somebody-else", "state": "applied"})
+
+    client.delete("/api/codex/entity", params={
+        "project_path": world, "entity_id": "e-pathicus"})
+
+    book = json.load(open(os.path.join(world, ".storythread", "weave",
+                                       "answers.json"), encoding="utf-8"))
+    assert "frayed|e-pathicus" not in book["answers"]
+    assert "frayed|e-somebody-else" in book["answers"]
+
+
+def test_the_forgetting_can_be_declined(world):
+    # Deleting a genuine duplicate is the other reason to delete, and there
+    # the writer does NOT want the name raised again -- the survivor answers
+    # to it.
+    run = client.post("/api/codex/run", json={"project_path": world}).json()
+    client.post("/api/codex/run/answer", json={
+        "project_path": world, "run_id": run["run_id"],
+        "key": "unspun|pathicus", "state": "dismissed",
+        "retire_phrase": "Pathicus"})
+
+    client.delete("/api/codex/entity", params={
+        "project_path": world, "entity_id": "e-pathicus",
+        "forget_answers": False})
+
+    assert not _unspun(world, "Pathicus")
+
+
+def test_it_reports_how_much_it_forgot(world):
+    run = client.post("/api/codex/run", json={"project_path": world}).json()
+    client.post("/api/codex/run/answer", json={
+        "project_path": world, "run_id": run["run_id"],
+        "key": "frayed|e-pathicus", "state": "applied"})
+    body = client.delete("/api/codex/entity", params={
+        "project_path": world, "entity_id": "e-pathicus"}).json()
+    assert body["deleted"] == "e-pathicus"
+    assert body["forgotten"] >= 1

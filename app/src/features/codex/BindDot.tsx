@@ -69,10 +69,20 @@ interface BindDotProps {
   onClose: () => void;
   /** Re-read the world after a word moves. */
   onBound: () => void;
+  /**
+   * The third honest answer: this should not be here at all.
+   *
+   * Both answers above insist the dot IS something -- it means an entry you
+   * have, or it is its own thing. A word Weaving turned into an entry that
+   * turned out to be nothing (a place name that was a typo, a word mistaken
+   * for a name) has neither answer, and without this the writer's only way
+   * out was to leave it in their world forever.
+   */
+  onWrong?: () => void;
 }
 
 export function BindDot({
-  projectPath, dot, candidates, onClose, onBound,
+  projectPath, dot, candidates, onClose, onBound, onWrong,
 }: BindDotProps) {
   const [query, setQuery] = useState("");
   const [chosen, setChosen] = useState<GraphNode | null>(null);
@@ -418,6 +428,17 @@ export function BindDot({
               >
                 It is its own thing
               </button>
+              {/* Neither of the above is true for a word that should never
+                  have become an entry. Offered last and quietly: it is the
+                  rarest answer and the only destructive one. */}
+              {onWrong && (
+                <button
+                  onClick={onWrong}
+                  className="ml-auto text-[11px] text-faint hover:text-rose-300"
+                >
+                  It is nothing -- remove it
+                </button>
+              )}
             </footer>
             </>
             )}

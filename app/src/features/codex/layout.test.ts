@@ -218,3 +218,35 @@ describe("degree", () => {
     expect(nodeRadius(500)).toBeLessThanOrEqual(16);
   });
 });
+
+
+describe("a dragged position cannot hide a node", () => {
+  // Found by a count that disagreed with itself: the sidebar said 13
+  // characters and the map showed 12. The missing one was pinned at x = 1119
+  // on a canvas 1000 wide -- drawn outside the viewBox, clipped by the frame,
+  // and impossible to drag back because there was nothing on screen to grab.
+  const nodes = [
+    { entity_id: "e-1", type: "character", name: "Lost",
+      display_name: "", aliases: [], placeholder: false },
+  ];
+
+  it("keeps a position past the right edge inside the drawing", () => {
+    const view = layoutNodes(nodes, { width: 1000, height: 620,
+                                 pinned: { "e-1": { x: 1119, y: 22 } } });
+    expect(view["e-1"].x).toBeLessThanOrEqual(980);
+    expect(view["e-1"].x).toBeGreaterThanOrEqual(20);
+  });
+
+  it("keeps a position past the bottom edge inside the drawing", () => {
+    const view = layoutNodes(nodes, { width: 1000, height: 620,
+                                 pinned: { "e-1": { x: 500, y: 900 } } });
+    expect(view["e-1"].y).toBeLessThanOrEqual(600);
+  });
+
+  it("still respects a position that is actually on the canvas", () => {
+    // The writer put it there on purpose; clamping must not become nudging.
+    const view = layoutNodes(nodes, { width: 1000, height: 620,
+                                 pinned: { "e-1": { x: 640, y: 300 } } });
+    expect(view["e-1"]).toEqual({ x: 640, y: 300 });
+  });
+});
