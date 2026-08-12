@@ -594,10 +594,13 @@ def test_a_muted_kind_is_not_scanned_for(tmp_path):
 
 
 def test_scanning_one_type_leaves_the_others_alone(tmp_path):
+    # Filtered on creatures, not concepts: the filter is what this test is
+    # about, and it has to filter down to a kind the connection walk still
+    # asks about -- a concept is passive now and would never be flagged.
     folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
-    concept = _thread("e-c", "Thread-sight", type="concept")
-    result = scan(folder, [_thread("e-1", "Elara"), concept], REGISTRY,
-                  ScanRequest(types=["concept"]))
+    beast = _thread("e-c", "Guenhwyvar", type="creature")
+    result = scan(folder, [_thread("e-1", "Elara"), beast], REGISTRY,
+                  ScanRequest(types=["creature"]))
     assert {s.entity_id for s in result.by_kind(STOP_LOOSE)} == {"e-c"}
 
 
@@ -912,3 +915,108 @@ def test_a_unique_name_carries_no_filename(tmp_path):
                                             "content": "", "trait_blocks": []}})
     stop = scan(folder, [lonely], REGISTRY).by_kind(STOP_FRAYED)[0]
     assert stop.title == "Elara is missing Overview"
+
+
+# ── Agency: who is asked, and who only gets asked about ─────────────────────
+#
+# From live use, with the example that settled it: "Croft Manor is a location.
+# How does it get tied to the story? The connection is through Lara. Lara
+# inherited Croft Manor and estate when her father died. ... A location
+# wouldn't know anyone or have anything to do with someone." The same holds
+# for lore, factions, deities, governments, religions and cultures. Only
+# characters and creatures are on the dual rotation of being flagged to
+# everything and each other; everything else becomes connected when someone
+# active is tied to it.
+
+
+def test_a_location_is_never_asked_how_it_connects(tmp_path):
+    # The question belongs on Lara's stop, where the manor is offered as an
+    # ANSWER. The manor itself is never asked what it thinks of anybody.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    manor = _thread("e-manor", "Croft Manor", type="location")
+    lara = _thread("e-lara", "Lara Croft")
+    result = scan(folder, [manor, lara], REGISTRY)
+    assert {s.entity_id for s in result.by_kind(STOP_LOOSE)} == {"e-lara"}
+
+
+def test_every_passive_kind_stays_off_the_rotation(tmp_path):
+    # The writer's own list, plus the other shipped kinds that plainly do not
+    # go looking for anyone. The creature is the guard: without it this test
+    # would pass on a scan that flags nothing at all.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    passive = ["location", "lore", "faction", "deity", "government",
+               "religion", "culture", "object", "concept", "event"]
+    world = [_thread(f"e-{k}", k.title(), type=k) for k in passive]
+    world.append(_thread("e-beast", "Guenhwyvar", type="creature"))
+    result = scan(folder, world, REGISTRY)
+    assert {s.entity_id for s in result.by_kind(STOP_LOOSE)} == {"e-beast"}
+
+
+def test_agency_is_data_a_writer_can_override(tmp_path):
+    # A sentient ship asks; a writer who marks characters quiet silences them.
+    # The word lives in their own types.json, and their word wins over the
+    # built-in default -- data first, like everything else in the registry.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    registry = {
+        "types": [
+            {"id": "ship", "label": "Ships", "active": True,
+             "required_fields": [], "sections": []},
+            {"id": "character", "label": "Characters", "active": False,
+             "required_fields": [], "sections": []},
+        ],
+        "relations": [],
+    }
+    world = [_thread("e-ship", "Vestal", type="ship"),
+             _thread("e-quiet", "Elara")]
+    result = scan(folder, world, registry)
+    assert {s.entity_id for s in result.by_kind(STOP_LOOSE)} == {"e-ship"}
+
+
+def test_an_untied_pair_stands_on_the_active_end(tmp_path):
+    # The connect editor opens FROM detail.a, so which end is a decides the
+    # sentence: "Lara lives in Croft Manor" -- never a manor being asked to
+    # pick from a dropdown where "logically none of the entries make sense".
+    folder = _project(tmp_path, {
+        "01.md": "# One\nCroft Manor greeted Lara at dusk.\n",
+        "02.md": "# Two\nCroft Manor held Lara all winter.\n",
+    })
+    world = [_thread("e-manor", "Croft Manor", type="location"),
+             _thread("e-lara", "Lara")]
+    stop = scan(folder, world, REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
+    assert stop.detail["a"]["name"] == "Lara"
+    assert stop.detail["b"]["name"] == "Croft Manor"
+    assert stop.entity_id == "e-lara"
+
+
+def test_two_passive_things_in_a_room_are_scenery(tmp_path):
+    # A location sharing scenes with a faction is a setting doing its job.
+    # Whatever joins them joins them through somebody, and that somebody's
+    # own stop is where it gets recorded.
+    chapters = {
+        "01.md": "# One\nThe Guild met inside Croft Manor.\n",
+        "02.md": "# Two\nThe Guild returned to Croft Manor.\n",
+    }
+    folder = _project(tmp_path, chapters)
+    passive = [_thread("e-manor", "Croft Manor", type="location"),
+               _thread("e-guild", "Guild", type="faction")]
+    assert scan(folder, passive, REGISTRY, _weft()).by_kind(STOP_UNTIED) == []
+    # The same prose with two characters DOES ask -- otherwise the assertion
+    # above is satisfied by a scan that found nothing.
+    people = [_thread("e-manor", "Croft Manor"), _thread("e-guild", "Guild")]
+    assert scan(folder, people, REGISTRY, _weft()).by_kind(STOP_UNTIED) != []
+
+
+def test_standing_the_stop_on_the_active_end_never_changes_the_key(tmp_path):
+    # The key is what the ledger remembers. The swap is presentation only, so
+    # an answer given before this rule existed still counts.
+    chapters = {
+        "01.md": "# One\nCroft Manor greeted Lara at dusk.\n",
+        "02.md": "# Two\nCroft Manor held Lara all winter.\n",
+    }
+    folder = _project(tmp_path, chapters)
+    mixed = [_thread("e-manor", "Croft Manor", type="location"),
+             _thread("e-lara", "Lara")]
+    both = [_thread("e-manor", "Croft Manor"), _thread("e-lara", "Lara")]
+    swapped = scan(folder, mixed, REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
+    straight = scan(folder, both, REGISTRY, _weft()).by_kind(STOP_UNTIED)[0]
+    assert swapped.key == straight.key

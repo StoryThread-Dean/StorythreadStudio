@@ -194,6 +194,37 @@ DEFAULT_TYPES: list[dict] = [
 ]
 
 
+# ── WHO ASKS, AND WHO ONLY GETS ASKED ABOUT ──────────────────────────────────
+#
+# Only a kind with AGENCY is ever the subject of "how is X connected to the
+# story?". Reported from live use, with the example that settled it: Croft
+# Manor is a location, and its way into the story is THROUGH Lara -- she
+# inherited it, lives in it, left it. "A location wouldn't know anyone or have
+# anything to do with someone." The same holds for lore, factions, deities,
+# governments, religions and cultures: things connect TO them, they do not go
+# looking. So the connection walk flags characters and creatures, and a
+# passive thing becomes connected the moment someone active is tied to it.
+#
+# This gates the WALK only. A writer can still open any entry -- a location,
+# a faction -- and record a connection from it by hand; nothing passive is
+# locked out, it just is not nagged.
+#
+# Data first, like everything else here: a type entry in the writer's own
+# types.json may carry `"active": true` (a sentient ship, a talking sword) or
+# `"active": false`, and that word wins. Absent the word, only these two ask.
+ACTIVE_TYPES = frozenset({"character", "creature"})
+
+
+def is_active(registry: dict, type_id: str) -> bool:
+    """Does this kind get flagged to connect, or only get connected to?"""
+    for entry in registry.get("types") or []:
+        if entry.get("id") == type_id:
+            if "active" in entry:
+                return bool(entry.get("active"))
+            break
+    return type_id in ACTIVE_TYPES
+
+
 # The headings a writer picks a relation UNDER, in the order they are offered.
 #
 # A flat list of sixty relations is a worse question than no list at all -- the
@@ -315,8 +346,10 @@ DEFAULT_RELATIONS: list[dict] = [
     _rel("prophesied_in", "prophesied in", group=GROUP_BELIEF,
          src=["character", "event"],
          dst=["lore", "religion"]),
+    # A manor is ownable. The original list stopped at objects, and the first
+    # real estate a writer reached for (Croft Manor) had no way to be hers.
     _rel("owns", "owns", inverse="owned_by", group=GROUP_THINGS,
-         src=["character", "faction"], dst=["object"]),
+         src=["character", "faction"], dst=["object", "location"]),
 
     # The kinds beyond characters and factions had almost no vocabulary, which
     # showed up the moment a real world needed it: a faction that worships a
@@ -359,6 +392,39 @@ DEFAULT_RELATIONS: list[dict] = [
          src=["character", "creature"], dst=["character", "creature"]),
     _rel("lives_in", "lives in", inverse="home_of", group=GROUP_PLACE,
          src=["character", "creature", "culture", "faction"], dst=["location"]),
+
+    # ── How someone relates to a PLACE ───────────────────────────────────────
+    #
+    # From live use, with the writer's own list: "Person A is going to, living
+    # in, residing at, currently staying at, passed thru, doesn't know the
+    # existance of" a location. Before these, a stop about a place offered a
+    # dropdown where "logically none of the entries make sense" -- the place
+    # vocabulary was three words. Every one of these reads in the sentence the
+    # editor shows, active end first: "Lara Croft inherited Croft Manor".
+    #
+    # "Currently" and "formerly" are moments, and moments are what anchors are
+    # for -- but a writer says "formerly lived in" long before they reach for a
+    # chapter number, so the plain words exist too.
+    _rel("staying_at", "staying at", inverse="hosting", group=GROUP_PLACE,
+         src=["character", "creature"], dst=["location"]),
+    _rel("formerly_lived_in", "formerly lived in", group=GROUP_PLACE,
+         src=["character", "creature", "culture", "faction"], dst=["location"]),
+    _rel("passed_through", "passed through", group=GROUP_PLACE,
+         src=["character", "creature", "faction"], dst=["location"]),
+    _rel("travelling_to", "travelling to", group=GROUP_PLACE,
+         src=["character", "creature", "faction"], dst=["location"]),
+
+    # The Croft Manor case itself: she has it because her father died. An
+    # inheritance can be a house, a sword, or a company, so the targets are
+    # wide on purpose.
+    _rel("inherited", "inherited", inverse="inherited_by", group=GROUP_THINGS,
+         src=["character"], dst=["location", "object", "faction"]),
+
+    # Not knowing is a relationship too -- the writer's example was a place
+    # whose existence a character is unaware of, which is often the plot.
+    _rel("unaware_of", "does not know the existence of", group=GROUP_KNOWS,
+         src=["character", "creature", "faction"],
+         dst=["location", "object", "character", "faction", "lore"]),
 
     # ── The rest of what a writer actually needs to say ─────────────────────
     #

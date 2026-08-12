@@ -38,6 +38,7 @@ from app.codex.mentions import (
 )
 from app.codex.snags import Snag, check_facts, check_ties
 from app.codex.threads import is_placeholder
+from app.codex.types_registry import is_active
 from app.codex.together import (
     MIN_SHARED_SCENES,
     Together,
@@ -312,7 +313,7 @@ def scan(
                                       label_for=label_for,
                                       mentioned=mentioned,
                                       together=together))
-    result.stops.extend(_untied_stops(together, threads, request))
+    result.stops.extend(_untied_stops(together, threads, request, registry))
     result.stops.extend(_manuscript_stops(project_path, chapters, threads,
                                           request, index))
     result.stops.extend(_unwoven_stops(threads, request))
@@ -514,7 +515,17 @@ def _thread_stops(threads: list[dict], registry: dict, index: AnchorIndex,
                             "placeholder": bare},
                 ))
 
-        if request.wants(STOP_LOOSE) and entity_id not in connected and not bare:
+        # ONLY A KIND WITH AGENCY IS ASKED HOW IT CONNECTS. Croft Manor's way
+        # into the story is through Lara -- she inherited it -- and asking the
+        # manor produced a dropdown where "logically none of the entries make
+        # sense". A passive thing (location, lore, faction, deity, government,
+        # religion, culture) becomes connected when someone active is tied to
+        # it; until then, an unconnected one is not a problem, so it is not a
+        # stop. See types_registry.is_active -- writer-overridable per type.
+        active = is_active(registry, str(thread.get("type") or ""))
+
+        if (request.wants(STOP_LOOSE) and entity_id not in connected
+                and not bare and active):
             # ASKED AS A QUESTION, FROM SOMETHING THE WRITER RECOGNISES.
             #
             # The first wording was "Nothing connects to Alexandra Langford",
@@ -596,7 +607,7 @@ def _likely_answers(entity_id: str, together: list[Together],
 
 
 def _untied_stops(together: list[Together], threads: list[dict],
-                  request: ScanRequest) -> list[Stop]:
+                  request: ScanRequest, registry: dict) -> list[Stop]:
     """
     Pairs the prose keeps putting in the same scene with nothing recorded.
 
@@ -608,6 +619,20 @@ def _untied_stops(together: list[Together], threads: list[dict],
     It proposes a connection, never a KIND of connection. A knight and the
     dragon he is hunting share a great many scenes; what that relationship IS
     stays the writer's to name.
+
+    AND THE QUESTION STANDS ON THE ACTIVE END. Two rules, both from live use:
+
+      * A pair with no active end -- a location sharing scenes with a faction,
+        lore alongside a religion -- is never asked at all. "A location
+        wouldn't know anyone or have anything to do with someone." Whatever
+        joins them joins them through somebody, and that somebody's own stop
+        is where it gets recorded.
+      * A pair with ONE active end is asked from that end, so the connect
+        sentence reads the way the world works: "Lara Croft lives in Croft
+        Manor", never a manor being asked what it thinks of Lara.
+
+    The KEY keeps the pairing's own order either way, so answers given before
+    this rule existed still count.
     """
     if not request.wants(STOP_UNTIED) or not together:
         return []
@@ -633,11 +658,28 @@ def _untied_stops(together: list[Together], threads: list[dict],
         a, b = names.get(pairing.a), names.get(pairing.b)
         if not a or not b:
             continue
+
+        a_active = is_active(registry, str(a.get("type") or ""))
+        b_active = is_active(registry, str(b.get("type") or ""))
+        if not a_active and not b_active:
+            # Two passive things in a room together is scenery, not a
+            # relationship the walk should demand a word for.
+            continue
+        if b_active and not a_active:
+            # Stand the question on the one with agency. detail.a is the end
+            # the connect editor opens FROM, so this swap is what makes the
+            # sentence read "Lara lives in Croft Manor" rather than asking the
+            # manor. Presentation only -- the key below keeps pairing order.
+            a, b = b, a
+            a_id, b_id = pairing.b, pairing.a
+        else:
+            a_id, b_id = pairing.a, pairing.b
+
         a_name = a.get("name") or "(unnamed)"
         b_name = b.get("name") or "(unnamed)"
         stops.append(Stop(
             kind=STOP_UNTIED,
-            entity_id=pairing.a,
+            entity_id=a_id,
             key=_key(STOP_UNTIED, pairing.a, pairing.b),
             chapter_id=pairing.first_chapter,
             quote=pairing.quote,
@@ -649,10 +691,10 @@ def _untied_stops(together: list[Together], threads: list[dict],
                  f"yours to say -- sharing a scene could mean anything from "
                  f"family to a feud."),
             detail={
-                "a": {"entity_id": pairing.a, "name": a_name,
+                "a": {"entity_id": a_id, "name": a_name,
                       "type": str(a.get("type") or ""),
                       "filename": str(a.get("filename") or "")},
-                "b": {"entity_id": pairing.b, "name": b_name,
+                "b": {"entity_id": b_id, "name": b_name,
                       "type": str(b.get("type") or ""),
                       "filename": str(b.get("filename") or "")},
                 "scenes": pairing.scenes,

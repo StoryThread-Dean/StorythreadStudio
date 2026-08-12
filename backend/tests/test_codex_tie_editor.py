@@ -469,3 +469,52 @@ def _own_types(project, relations: list[dict]) -> None:
     with open(os.path.join(project, "codex", "types.json"), "w",
               encoding="utf-8") as f:
         json.dump(registry, f)
+
+
+# ── Croft Manor: how someone relates to a PLACE ──────────────────────────────
+#
+# Reported from live use: a stop about a location offered a relation dropdown
+# where "logically none of the entries make sense", because the place
+# vocabulary was three words. The writer's own list -- "going to, living in,
+# residing at, currently staying at, passed thru, doesn't know the existance
+# of" -- plus the case that started it: Lara inherited Croft Manor and estate
+# when her father died.
+
+
+def test_a_character_has_real_words_for_a_place(project):
+    body = _relations(project, "character", "location")
+    offered = {r["id"] for r in _named(body)}
+    for rid in ["lives_in", "staying_at", "passed_through", "travelling_to",
+                "inherited", "owns", "born_in", "unaware_of"]:
+        assert rid in offered, rid
+
+
+def test_lara_can_inherit_the_manor(project):
+    # End to end, not just offered: the tie is accepted between those kinds.
+    import pathlib
+    _entry(pathlib.Path(project), "locations", "e-manor", "Croft Manor",
+           "location")
+    assert _tie(project, "e-elara", "inherited", "e-manor").status_code == 200
+    assert _tie(project, "e-elara", "lives_in", "e-manor").status_code == 200
+    recorded = {t["rel"] for t in _ties(project, "e-elara")}
+    assert {"inherited", "lives_in"} <= recorded
+
+
+def test_the_place_reads_the_same_words_backwards(project):
+    # Standing on the manor, the same vocabulary is offered turned around --
+    # the editor folds these into the one dropdown as flipped options, so the
+    # writer never has to work out that "home of" is "lives in" backwards.
+    body = _relations(project, "location", "character")
+    flipped = {r["id"] for r in body["reverse"]}
+    for rid in ["lives_in", "staying_at", "inherited", "owns"]:
+        assert rid in flipped, rid
+
+
+def test_not_knowing_a_place_exists_is_sayable(project):
+    # "Doesn't know the existance of" is often the plot. It reads in the
+    # editor's sentence: "Elara does not know the existence of Croft Manor".
+    import pathlib
+    _entry(pathlib.Path(project), "locations", "e-manor", "Croft Manor",
+           "location")
+    response = _tie(project, "e-elara", "unaware_of", "e-manor")
+    assert response.status_code == 200
