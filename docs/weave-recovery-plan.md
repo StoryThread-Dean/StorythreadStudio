@@ -260,6 +260,61 @@ types it is about are edited in a screen with no fact UI.
       at, per the recommendation. Nothing can auto-convert them -- the two
       parties were never stored as ids.
 
+### Hidden traits: two questions on one control (2026-08-12)
+
+Came out of testing the Main/Side converter. The writer's worked example -- a
+villain who avoids hospitals because his parents died in one, freezes at held
+hands, and deflects the question -- is three traits that are all secret and all
+at DIFFERENT weights (core, present, background). Today `hidden` is a rung on the
+importance ladder, so all three collapse to one level and sort LOWEST in the
+prompt: the trait that drives the most scenes arrives as the weakest signal on
+the page.
+
+The diagnosis: importance is being asked two unrelated questions. WEIGHT (how
+much this shapes them) and DISCLOSURE (may it be said out loud) are orthogonal,
+and the villain proves it -- his parents are core by weight and secret by
+disclosure, and today he cannot be both.
+
+Approved by the writer: importance drops to four levels, disclosure becomes its
+own control, and "never send" is NOT built -- Author Notes is the place for
+material that must not travel (see R5.5).
+
+- [x] **R2.12a** The three prompts that lied about hidden traits are corrected.
+      "Hidden is never sent to AI" has now been wrong in three places and each
+      was found by reading rather than by using the app, because a false promise
+      about privacy raises no error. Worst was the Importance Audit, which told
+      the model to advise the writer to DEMOTE a hidden trait "that would improve
+      AI accuracy" -- accuracy they already had, paid for with the secret. Also
+      corrected: both analytical paths forbade naming a hidden trait even in
+      FEEDBACK, which made a consistency check vague about the writer's own note.
+      The rule protects the manuscript, not the writer: feedback may name it,
+      suggested prose may not. `test_hidden_trait_promise.py` reads the real
+      prompt text so the claim cannot return a fourth time -- verified by
+      reinstating it.
+- [ ] **R2.12b** Split the axes in the data: `importance` keeps four levels,
+      a per-trait `subtext` flag carries disclosure. Both formats, legacy
+      `importance: hidden` reading as present + subtext.
+      *Also undoes a wrong fix of mine:* the Weave's migration set
+      `ai_scope: on-request` on every hidden trait, which stops the AI naming the
+      secret by stopping the AI KNOWING it. On the villain that is the whole
+      character withheld. Subtext material belongs IN the brief, weighted, marked
+      never-name; `ai_scope` goes back to meaning availability only.
+- [ ] **R2.12c** The control on the trait card, the four-level dropdown, and a
+      review panel listing every subtext trait across sections (grouping without
+      moving anything -- a secret belongs in the section it explains).
+      Legacy traits migrate to `present` and are LISTED for a weight rather than
+      silently guessed at.
+- [ ] **R2.12d** Main/Side becomes lossless: on the Side template a section shows
+      its plain box PLUS any subtext traits it holds, so Main to Side dissolves
+      only ordinary traits and leaves secrets as traits. Removes the warning
+      shipped with R2.10b.
+- [ ] **R2.12e** `What's this?` for disclosure, plus a paged
+      **Show me how this works** walkthrough: what it is, how each weight behaves
+      when a trait is secret, and the end result of each choice through Enhance,
+      Smart Advisor's context check, and Draft. Uses a character from popular
+      fiction whose surface and hidden layer are both well known, with all
+      example prose written for the walkthrough rather than quoted.
+
 **Raised by the writer's live testing of R2.1 (2026-08-12), grouped with R2.5 on
 their instruction ("This can be grouped up with R2.5").** The good news from that
 test: the missing characters now appear and a save on a connected character kept
@@ -348,6 +403,20 @@ three surfaces at once.
       manuscript does something.
 - [ ] **R5.4** Decide and implement whether planning-document names are a
       softer stop that never counts toward contradiction checks.
+- [ ] **R5.5** **Author Notes becomes an enforced exclusion, not a convention.**
+      The writer's reasoning for dropping a per-trait "never send" was that
+      Author Notes is the room private material lives in -- and nothing in the
+      code says so. `scan.py` globs `notes/*.md` indiscriminately, which is
+      harmless today (the scan is local and deterministic) and stops being
+      harmless the moment R5.1 reads notes as SOURCES or a Phase 9 AI pass reads
+      "the available documents". A named constant, every AI-facing corpus builder
+      skipping it, and a test -- otherwise this is the "hidden is never sent"
+      falsehood again, one level up.
+      *Second, live:* the profile's own **Notes** section IS sent by profile chat
+      and generate-full-summary (`LEGACY_INCLUDE` has `details: true`) while the
+      chip picker defaults to NOT sending it (`DEFAULT_CHIP_INCLUDE` has
+      `details: false`). Same field, two answers, nothing on screen saying which.
+      Make them agree and say so on the field.
 
 ---
 
@@ -432,13 +501,13 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 14 | 9 |
+| 2 The premise | 19 | 10 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
-| 5 Sources | 4 | 0 |
+| 5 Sources | 5 | 0 |
 | 6 Unwoven | 4 | 0 |
 | 7 Scene identity | 4 | 0 |
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **78** | **27** |
+| **Total** | **84** | **28** |

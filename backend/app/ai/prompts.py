@@ -408,9 +408,11 @@ def _editor_chat_addendum(category: str) -> str:
             "Examples: 'This contradicts her [core] trait \"observant, deliberate\" -- "
             "the description says she pauses before speaking.' Or: 'This lands well "
             "against his [present] motivation \"protect his sister at any cost\".' "
-            "Hidden traits are still off-limits to name directly even here -- if a "
-            "hidden trait is being violated or expressed well, describe the behavior, "
-            "not the trait.\n\n"
+            "Hidden traits: you MAY name one here. This is feedback to the "
+            "writer, who wrote the trait -- being vague about their own note "
+            "helps nobody. What you must not do is put the secret into prose: "
+            "any rewrite or replacement text you offer has to express it as "
+            "behaviour, never state it.\n\n"
             "If no profile context is attached, work from what is observable "
             "in the text itself. Always quote the specific passage that concerns you.\n\n" +
             _STRUCTURED_RESPONSE_FORMAT
@@ -594,8 +596,10 @@ def _editor_pass_addendum(category: str, subcategories: list[str]) -> str:
             "CONTEXT AND CONSISTENCY -- continuity review against attached profiles. "
             "Lean into the profiles actively. When you flag a passage, name the "
             "specific trait it conflicts with or supports and cite its importance "
-            "label in brackets. Hidden traits remain off-limits to name directly: "
-            "describe the behavior, not the trait."
+            "label in brackets. You MAY name a hidden trait when talking TO the "
+            "writer -- it is their own note, and vagueness about it helps nobody. "
+            "Any prose you suggest must still express it as behaviour rather than "
+            "stating it."
         )
     else:
         # Unknown category -- shouldn't happen via the UI, but degrade
@@ -1118,7 +1122,15 @@ def generate_usage_preview_prompt() -> str:
         "  present = included when character is in scene, regularly visible\n"
         "  background = included only when directly relevant, rarely surfaced\n"
         "  contextual = included only when writer explicitly attaches it\n"
-        "  hidden = never sent to AI, writer-only reference\n\n"
+        # NOT "never sent". A hidden trait IS sent, and the main system
+        # prompt (see READING IMPORTANCE LABELS) forbids naming it rather
+        # than withholding it. This is the feature whose whole job is
+        # explaining how AI will use a trait, so getting it backwards here
+        # was the worst possible place for the error: a writer reads it and
+        # concludes their most important material is inert.
+        "  hidden = sent, and used as influence only. AI must never name, "
+        "quote or reveal it; it shapes behaviour, gesture, what the character "
+        "avoids. The reader feels the effect without being told the cause\n\n"
         f"{PUNCTUATION_RULE}\n\n"
         'Return ONLY valid JSON: {"usage_preview": "your text here"}. No extra text.'
     )
@@ -1220,11 +1232,11 @@ def audit_importance_prompt() -> str:
         "  present = regularly relevant, included when character is in scene\n"
         "  background = canon but rarely surfaced, only when directly relevant\n"
         "  contextual = situational, only when writer explicitly attaches\n"
-        "  hidden = writer-only notes, never sent to AI\n\n"
+        "  hidden = sent as influence only, never named in the prose\n\n"
         "Flag examples:\n"
         "- A 'background' trait with strong emotional hooks -> suggest 'core' or 'present'\n"
         "- A 'core' trait with a vague one-liner -> suggest adding detail or downgrading\n"
-        "- A 'hidden' trait that would improve AI accuracy -> suggest 'contextual' or higher\n\n"
+        "- NEVER suggest moving a 'hidden' trait to another level to make AI use it. Hidden traits are already sent and already used; the label only stops the model NAMING them. Suggesting otherwise costs the writer their subtext and buys nothing\n\n"
         "Only flag genuine mismatches. If everything looks reasonable, return an empty list.\n\n"
         f"{PUNCTUATION_RULE}\n\n"
         "Return ONLY valid JSON:\n"

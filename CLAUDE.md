@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 27 of 78 tasks done.
+> **LEDGER — last updated 2026-08-12.** 28 of 84 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -42,7 +42,7 @@ its place without relying on memory or conversation history.
 > context-inspect list · R1.4 `weave_brief` kept (spec amendment) · R1.5a the
 > false hidden-trait comment deleted · R1.6 the two teaching registries bound
 > by a contract test.
-> **Phase 2 (the premise, BLOCKER): 9 of 14.** Groundwork went first because
+> **Phase 2 (the premise, BLOCKER): 10 of 19.** Groundwork went first because
 > both halves fail SILENTLY: R2.3a `role` + `character_kind` indexed (migration
 > 005, tested as an upgrade) · R2.4 `POST /entity` records a Writing Progress
 > save event, which it never did.
@@ -83,11 +83,24 @@ its place without relying on memory or conversation history.
 > rule the frontend was keeping a second copy of. Renaming a shipped kind was
 > already safe (label only); renaming a built-in NOTE was not, and is now refused
 > with the reason — `notes/outline.md` is read by that path.
-> **Next: R2.5** — the Run editor, the real blocker: the spec's opening example
-> (the heroine who believes her father died until chapter fifteen) still cannot
-> be recorded through the interface. Then R2.2b drive sections from the
-> registry, R2.7 import, R2.8 the six kinds with no editor, R2.9 Relationships.
-> Branch health: 1633 backend tests, 1165 frontend tests, ruff and tsc clean.
+> **R2.12a DONE — the three prompts that lied about hidden traits.** "Hidden is
+> never sent to AI" has been wrong in three places now; each was found by
+> reading, because a false promise about privacy raises no error. The Importance
+> Audit was the worst: it told the model to advise DEMOTING a hidden trait to
+> gain accuracy the writer already had, paid for with the secret. Also
+> corrected: feedback may NAME a hidden trait (it is the writer's own note),
+> suggested prose may not. `test_hidden_trait_promise.py` reads the real prompt
+> text; verified by reinstating the claim.
+> **Next: R2.12b-e** — the axis split the writer approved: importance drops to
+> four levels and disclosure becomes its own per-trait control, because their
+> villain (parents died in a hospital) is CORE by weight and secret by
+> disclosure, and today he cannot be both. Includes undoing a wrong fix of mine:
+> the migration set `ai_scope: on-request` on hidden traits, which stops the AI
+> naming the secret by stopping it KNOWING the secret. "Never send" is NOT being
+> built — Author Notes is that room (R5.5, which makes the guarantee real).
+> **Then R2.5** — the Run editor, the blocker: the spec's opening example still
+> cannot be recorded through the interface. Then R2.2b, R2.7, R2.8, R2.9.
+> Branch health: 1638 backend tests, 1165 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 
