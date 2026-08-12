@@ -34,10 +34,15 @@ through cannot easily go back.
 | M3 | Weaving: the deterministic scan, the findings ledger, context assembly, the walkthrough, Unwoven | built |
 
 **Still open in M3:** the AI passes (Untied proposals, semantic Snags, expanding
-an Unwoven answer), and wiring the assembled brief into the Writing Companion
-with its inspect panel. Automatic Weave context is not reachable from any AI
-feature yet -- `/api/codex/context` builds and returns a brief, and nothing calls
-it -- so the amended context rule is not yet exercised in the running app.
+an Unwoven answer).
+
+The assembled brief is now wired into the **Writing Companion**: a world
+context bar under the attachments, with inspection, per-Thread removal,
+per-category exclusion and an off switch, all remembered per book. The amended
+context rule is exercised in the running app for that one surface. Extending it
+to the Smart Advisor and the other AI tools is the follow-on -- each needs its
+own inspect control before it may receive context automatically, because the
+rule is about what the writer can SEE, not about where the plumbing reaches.
 
 Two more, surfaced by the 2026-08-11 head-to-tail sweep and stated in
 `features.md` as not-yet-behaviour so the docs stay honest:

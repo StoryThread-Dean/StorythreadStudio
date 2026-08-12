@@ -29,6 +29,7 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { WeaveScreen } from "./features/codex/WeaveScreen";
 import { WeaveNav } from "./features/codex/WeaveNav";
 import { WeavingPanel } from "./features/codex/WeavingPanel";
+import { WeaveContextBar } from "./features/codex/WeaveContextBar";
 import { ThreadEditor } from "./features/codex/ThreadEditor";
 
 /** The four kinds the Profile Builder owns. Everything else in the Weave is
@@ -302,6 +303,12 @@ function App() {
   // profiles/outline/locations are treated as canon the AI must stay consistent
   // with. When OFF, they are reference only and the writer's typed direction wins.
   const [treatAsCanon, setTreatAsCanon] = useState(true);
+
+  // WHAT THE WEAVE WILL TELL THE AI, assembled locally and inspected by the
+  // writer before any request carries it. Held here rather than inside the
+  // bar because the send path is what transmits it -- which is the locked
+  // context rule: nothing goes until the writer initiates an AI action.
+  const [weaveBrief, setWeaveBrief] = useState("");
 
   // Reasoning toggle: when ON, chat requests ask OpenRouter for the model's
   // reasoning trace, shown as a collapsible block above the reply. Only offered
@@ -1726,6 +1733,12 @@ function App() {
           // carries the NEW ones) -- keeps the backend's ATTACHMENT STANCE
           // instruction active for the whole life of the attachment.
           has_attached_context: contextChips.length > 0,
+          // WHAT THE WEAVE ASSEMBLED, and the moment it actually travels.
+          // Built locally and already inspectable in the bar above the chat;
+          // it rides along here because the writer just initiated an AI
+          // action, which is the only thing allowed to transmit it. Empty
+          // when they switched it off, emptied it, or it did not fit.
+          weave_brief: weaveBrief,
           // Reasoning toggle: only honored by reasoning-capable models, and the
           // toggle is hidden otherwise, so this is false unless both are true.
           include_reasoning: reasoningMode && activeModelSupportsReasoning,
@@ -1807,7 +1820,11 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedSelection, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning]);
+    // weaveBrief is in here deliberately: without it this callback would
+    // close over the brief as it was when the deps last changed and send that
+    // instead of what the writer is looking at now -- the exact stale-closure
+    // shape that made Quick Fill wipe half-typed boxes.
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedSelection, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning, weaveBrief]);
 
 
   // --- Start a new ask ---
@@ -2902,7 +2919,7 @@ function App() {
           )}
 
           {contextChips.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1" data-testid="context-chips">
               {contextChips.map((chip, i) => {
                 // Established chips (already sent in a prior turn) show muted --
                 // they're still "in play" in the AI's memory from the conversation
@@ -2947,6 +2964,29 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* WHAT THE WEAVE ADDS, and every control the context rule requires:
+            read it, drop a Thread, drop a kind, or switch it off. It sits
+            under the attachments because that is the order it reaches the
+            model in -- what the writer chose for this turn first, standing
+            context about the world second. */}
+        {currentProject && (
+          <WeaveContextBar
+            projectPath={currentProject.root_path}
+            chapterFilename={currentChapter?.filename ?? null}
+            // The selection when there is one: what the writer is looking at
+            // decides who counts as named in this scene. Read at assembly
+            // time, so typing does not re-assemble on every keystroke.
+            text={selectedText}
+            // The writer's own attachments claim their tokens first and are
+            // never pruned, so the Weave spends what is left after them.
+            pinnedTokens={contextChips.reduce(
+              (sum, chip) => sum + estimateTokens(chip.content), 0)}
+            prefs={projectUi.uiState.weaveContext ?? {}}
+            onPrefsChange={next => projectUi.update({ weaveContext: next })}
+            onBriefChange={setWeaveBrief}
+          />
+        )}
 
         {/* Chat history */}
         <div className="flex-1 overflow-y-auto px-3 py-3">

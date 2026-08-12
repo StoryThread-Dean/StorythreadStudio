@@ -94,16 +94,6 @@ export function absorb(
   });
 }
 
-/** What the map should call an entry. Separate from its name on purpose. */
-export function setLabel(projectPath: string, entityId: string,
-                         displayName: string): Promise<{ display_name: string }> {
-  return request("/label", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ project_path: projectPath, entity_id: entityId,
-                           display_name: displayName }),
-  });
-}
 
 export interface GraphEdge {
   src_id: string;
@@ -236,25 +226,6 @@ export function fetchGraph(
     // Sent explicitly: the backend defaults to hiding, and a missing
     // parameter must not silently mean "show me the spoilers".
     hide_spoilers: options.hideSpoilers !== false,
-  })}`);
-}
-
-export function fetchThread(projectPath: string, entityId: string): Promise<Record<string, unknown>> {
-  return request(`/entity?${q({ project_path: projectPath, entity_id: entityId })}`);
-}
-
-export function resolveThread(
-  projectPath: string,
-  entityId: string,
-  options: { at?: string; pov?: string; hideSpoilers?: boolean; includeOnRequest?: boolean } = {},
-): Promise<Record<string, unknown>> {
-  return request(`/resolve?${q({
-    project_path: projectPath,
-    entity_id: entityId,
-    at: options.at,
-    pov: options.pov,
-    hide_spoilers: options.hideSpoilers !== false,
-    include_on_request: options.includeOnRequest === true,
   })}`);
 }
 

@@ -43,6 +43,19 @@ export interface ProjectUiState {
    *  put things, which a per-machine setting would lose on a new laptop.
    *  Ids rather than names, so a rename never strands a position. */
   weaveNodePositions?: Record<string, { x: number; y: number }>;
+  /** What the writer decided about automatic world context in the Writing
+   *  Companion: off entirely, and which Threads or kinds to leave out.
+   *
+   *  Follows the BOOK because the decision is about THIS world -- "leave the
+   *  gods out of it" is a fact about the story being written, not about the
+   *  machine. Absent means on, which is what the context product rule
+   *  describes; turning it off is the writer's explicit act and has to
+   *  survive closing the app, or it is not really off. */
+  weaveContext?: {
+    off?: boolean;
+    excludedIds?: string[];
+    excludedTypes?: string[];
+  };
 }
 
 const DEBOUNCE_MS = 800;

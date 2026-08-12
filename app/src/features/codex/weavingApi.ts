@@ -7,12 +7,17 @@
 //
 // THE ONE RULE A CALLER MUST NOT BREAK
 // -----------------------------------
-// `stage()` means the change is in an UNSAVED editor buffer. `apply()` means
-// the Thread file was written to disk. Calling apply() before the save has
-// landed breaks the promise that a discarded edit comes back as a question --
-// the writer would lose the edit AND the finding that would have offered it
-// again. There is no autosave in this app, so the distinction is real every
-// single time, not an edge case.
+// `apply()` means the Thread file was written to DISK. Calling it before the
+// save has landed breaks the promise that a discarded edit comes back as a
+// question -- the writer would lose the edit AND the finding that would have
+// offered it again. There is no autosave in this app, so the distinction is
+// real every single time, not an edge case.
+//
+// The ledger also understands a "staged" state for a change sitting in an
+// unsaved buffer. No client sends it: every surface here saves directly, so
+// there is no buffer to discard. The backend keeps the state because a future
+// buffer-editing surface would need it -- and a client for it belongs with
+// that surface, not sitting here uncalled.
 
 import { CodexApiError } from "./api";
 
@@ -180,11 +185,6 @@ export function fetchRuns(projectPath: string): Promise<{ runs: RunSummary[] }> 
   return request(`/runs?project_path=${encodeURIComponent(projectPath)}`);
 }
 
-export function fetchRun(projectPath: string, runId: string): Promise<Run> {
-  return request(`/run?project_path=${encodeURIComponent(projectPath)}`
-                 + `&run_id=${encodeURIComponent(runId)}`);
-}
-
 interface AnswerBody {
   key?: string;
   state?: string;
@@ -200,13 +200,6 @@ interface AnswerBody {
 function answer(projectPath: string, runId: string, body: AnswerBody):
     Promise<{ run: Run; returned: number }> {
   return post("/run/answer", { project_path: projectPath, run_id: runId, ...body });
-}
-
-/** Accepted into an UNSAVED buffer. Not done yet -- see the header. */
-export function stage(projectPath: string, runId: string, stop: Stop) {
-  return answer(projectPath, runId,
-                { key: stop.key, state: "staged",
-                  evidence_hash: stop.evidence_hash });
 }
 
 /** The Thread file was SAVED. Permanent; never comes back. */
@@ -241,11 +234,6 @@ export function muteKind(projectPath: string, runId: string, kind: string,
                          muted = true) {
   return answer(projectPath, runId,
                 muted ? { mute: kind } : { unmute: kind });
-}
-
-/** The writer closed without saving. Everything staged comes back. */
-export function discardStaged(projectPath: string, runId: string) {
-  return answer(projectPath, runId, { discard_staged: true });
 }
 
 // ── The brief ────────────────────────────────────────────────────────────────

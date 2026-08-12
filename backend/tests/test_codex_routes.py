@@ -360,29 +360,12 @@ def test_deleting_a_thread_removes_it(project):
 
 # ── Resolution and the graph ─────────────────────────────────────────────────
 
-def test_resolving_asks_who_a_thread_is_at_a_point(project):
-    anchor = _chapter_anchor(project)
-    body = client.get("/api/codex/resolve", params={
-        "project_path": project, "entity_id": "e-elara",
-        "at": anchor, "pov": "e-elara"}).json()
-    assert body["as_of"] == anchor
-    assert [f["value"] for f in body["run"]] == ["Believes her father died."]
-
-
-def test_resolving_reports_ambiguity_as_a_readable_sentence(project):
-    anchor = _chapter_anchor(project)
-    client.post("/api/codex/fact", json={
-        "project_path": project, "entity_id": "e-elara",
-        "fact": {"id": "f-a", "axis": "status", "value": "one", "at": anchor}})
-    client.post("/api/codex/fact", json={
-        "project_path": project, "entity_id": "e-elara",
-        "fact": {"id": "f-b", "axis": "status", "value": "two", "at": anchor}})
-
-    body = client.get("/api/codex/resolve", params={
-        "project_path": project, "entity_id": "e-elara", "at": anchor}).json()
-    assert len(body["ambiguities"]) == 1
-    assert "same point" in body["ambiguities"][0]["message"]
-    assert not any(f["axis"] == "status" for f in body["run"])
+# GET /resolve was removed as an unused doorway -- the two tests that stood
+# here asked it who a Thread is at a point, and what it says about two facts
+# landing on one anchor. Neither behaviour went anywhere: resolution and its
+# ambiguity sentence are pinned in test_codex_resolve.py against the module
+# itself, and the same resolution is exercised over HTTP through /graph
+# (below) and through the brief in test_codex_context.py.
 
 
 def test_the_graph_returns_nodes_and_edges(project):

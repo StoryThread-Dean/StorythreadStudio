@@ -644,12 +644,25 @@ behaviour.
 
 ### Context assembly
 
-**Built and tested on the backend; no screen calls it yet.** Wiring the brief
-and its inspect panel into the Writing Companion is the remaining piece of the
-locked context rule, tracked on the roadmap -- until then, AI features use
-manual chips exactly as before, and nothing below is reachable from the UI.
+The Writing Companion carries a **world context bar** under the attachments: it
+says how many Threads the Weave will send and roughly what they cost, and
+**Inspect** opens the whole brief. Each Thread shows why it is there ("named in
+what you are writing", "connected to someone here"), what it costs, and an x
+that drops it; a kind can be dropped whole; **Read it exactly as the AI will**
+shows the actual words. One switch turns automatic world context off and
+returns the app to attachments only. Those choices follow the *book* -- "leave
+the gods out of it" is a fact about the story, not about the machine.
 
-When an AI feature runs at a point in the story, the app can assemble a brief from
+The brief is assembled **as of the chapter open in the editor**, and nothing is
+assembled until that point is known: with no anchor the Weave would answer as
+of the end of the book, and a writer in chapter four would be handed a brief
+that knows chapter nineteen. Assembling sends nothing anywhere -- it is
+arithmetic over local files. The brief travels only as part of a request the
+writer started, which is the locked rule, and it arrives after their own
+attachments, because a chip is something they chose for this turn and the
+Weave is standing context about the world.
+
+When an AI feature runs at a point in the story, the app assembles a brief from
 the Weave as of that point. The budget subtracts every other claim on the window
 by name -- room for the reply, the system prompt, the writer's own text,
 scaffolding, anything pinned by hand -- so what is left is what the Weave may
@@ -663,7 +676,14 @@ half a character profile reads as a whole one and the model has no way to tell.
 Per the locked context rule in `docs/product-scope.md`, the writer can inspect the
 brief, remove individual Threads, exclude whole categories, and switch automatic
 Weave context off entirely -- which returns the app to manual chips only. Nothing
-is sent until the writer starts an AI action.
+is sent until the writer starts an AI action. Each of those four is a test in
+`WeaveContextBar.test.tsx`, and so is the clause most likely to rot: that
+assembling a brief transmits nothing.
+
+**Reaches the Writing Companion only.** The Smart Advisor, the summary and
+profile tools and the rest still use manual chips; extending the brief to them
+is roadmap work, and each surface needs its own inspect control before it gets
+automatic context.
 
 ## Audiobook Converter
 

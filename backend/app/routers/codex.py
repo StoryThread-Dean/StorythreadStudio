@@ -40,7 +40,6 @@ from app.codex.findings import (
 )
 from app.codex.mentions import alias_display, build_alias_map, find_mentions
 from app.codex.normalize import REASON_LIMIT, normalize_reason
-from app.codex.resolve import resolve_thread
 from app.codex.scan import DEPTH_FULL, ScanRequest, scan
 from app.codex.snags import check_ties
 from app.codex.sections import (
@@ -381,6 +380,9 @@ class MoveTypeRequest(BaseModel):
     group: str
 
 
+# NO UI YET, AND KEPT ON PURPOSE. The sidebar offers rename and remove; moving
+# a kind between groups is the third edit a writer will reach for, and
+# types.json is theirs to hand-edit until the control exists.
 @router.patch("/type/group")
 async def patch_type_group(request: MoveTypeRequest):
     """Move a section to a different part of the sidebar. A world where
@@ -534,6 +536,10 @@ async def save_entity(request: SaveThreadRequest):
     return {"saved": True, "revision": codex_store.source_revision(project_path)}
 
 
+# NO UI YET, AND KEPT ON PURPOSE. Removing an entry is the only answer to a
+# duplicate -- two entries with one name, which live testing produced twice --
+# and there is no other path to it anywhere in the app. This is a missing
+# screen, not a dead route; a sweep that deletes it takes the fix with it.
 @router.delete("/entity")
 async def delete_entity(project_path: str = Query(...), entity_id: str = Query(...)):
     project_path = validate_project_path(project_path)
@@ -1038,41 +1044,13 @@ def _check_anchor(project_path: str, anchor: str | None) -> None:
 
 
 # ── Resolution ───────────────────────────────────────────────────────────────
-
-@router.get("/resolve")
-async def get_resolve(
-    project_path: str = Query(...),
-    entity_id: str = Query(...),
-    at: str | None = None,
-    pov: str | None = None,
-    hide_spoilers: bool = True,
-    include_on_request: bool = False,
-):
-    """
-    Who this Thread IS at a point in the story. The whole reason for the Weave.
-
-    `at` omitted means the end of the book -- how a writer looking at the
-    finished story sees it.
-    """
-    project_path = validate_project_path(project_path)
-    registry = _registry(project_path)
-    row = await _locate(project_path, entity_id)
-    thread = _read_thread(project_path, registry, row)
-
-    _check_anchor(project_path, at)
-    index = AnchorIndex.for_project(project_path)
-    resolved = resolve_thread(
-        thread, index, at, pov=pov,
-        hide_spoilers=hide_spoilers, include_on_request=include_on_request,
-    )
-    # Ambiguities are dataclasses; the wire wants plain objects, and the
-    # writer wants the sentence rather than the field names.
-    resolved["ambiguities"] = [
-        {"axis": a.axis, "frame": a.frame, "anchor": a.anchor,
-         "fact_ids": a.fact_ids, "message": a.describe()}
-        for a in resolved["ambiguities"]
-    ]
-    return resolved
+#
+# GET /resolve is deliberately gone. Resolving ONE Thread at a point in the
+# story was an HTTP surface for a screen that was never built and is not
+# planned: the map resolves the whole world at an anchor through /graph, the
+# entry editor shows the Run itself, and the brief resolves everything it
+# carries inside /context. `resolve_thread` remains the heart of the model and
+# keeps its own tests -- what went is one unused doorway to it.
 
 
 def _edge_rank(edge: dict, ordinal) -> tuple:
@@ -1581,6 +1559,10 @@ class LabelBody(BaseModel):
     display_name: str = ""
 
 
+# NO UI YET, AND KEPT ON PURPOSE. Absorbing a word can set a label as a side
+# effect; nothing can set one on its own. The rule below (a label must be a
+# name the entry answers to, so the map and the prose cannot disagree) is
+# tested and would have to be re-derived if this were deleted and rebuilt.
 @router.patch("/label")
 async def patch_label(body: LabelBody):
     """
@@ -1639,17 +1621,10 @@ async def post_run(body: NewRunBody):
     return run
 
 
-@router.get("/run")
-async def get_run(project_path: str = Query(...), run_id: str = Query(...)):
-    run = load_run(validate_project_path(project_path), run_id)
-    if run is None:
-        raise CodexError(
-            "run_not_found",
-            "That Weaving session could not be read. Starting a new one "
-            "loses nothing you applied and saved.",
-            run_id,
-        )
-    return run
+# GET /run is deliberately gone. It returned one session's detail, for a
+# resume design that was replaced: permanent answers live in the BOOK (per
+# book, not per session), so nothing needs to read a single run back. /runs
+# still lists them, which is what the "you have N earlier sessions" line uses.
 
 
 class AnswerBody(BaseModel):
@@ -1766,6 +1741,9 @@ async def post_pin(body: PinBody):
             "total": len(book.get("pinned") or [])}
 
 
+# NO UI YET, AND KEPT ON PURPOSE (both of these). Marks surface as Pinned
+# stops inside the walk, which is the shipped path; a count beside Weaving in
+# the sidebar is the designed next step and this is what it will read.
 @router.get("/pins")
 async def get_pins(project_path: str = Query(...)):
     """Everything marked and not yet dealt with, for a count in the sidebar."""

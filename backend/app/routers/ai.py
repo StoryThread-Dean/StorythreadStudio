@@ -1669,6 +1669,15 @@ class EditorChatRequest(BaseModel):
     # Keeps the ATTACHMENT STANCE instruction in the system prompt for the
     # whole life of the attachment, not just the turn it was added.
     has_attached_context: bool = False
+    # WHAT THE WEAVE ASSEMBLED, already inspected by the writer.
+    #
+    # The brief is built by POST /api/codex/context, which sends nothing
+    # anywhere -- it hands back what WOULD go, so the writer can read it,
+    # drop Threads from it, or switch it off. It arrives here only because
+    # they then started an AI action, which is the locked context rule:
+    # nothing is transmitted until the writer initiates. Empty means the
+    # Weave is off, has nothing to say, or the writer emptied it.
+    weave_brief: str = ""
     # Reasoning toggle: when True (and the model supports it), OpenRouter is
     # asked for the model's reasoning trace, returned alongside the reply.
     # The frontend only offers the toggle for reasoning-capable models.
@@ -1754,6 +1763,7 @@ def _build_materials_message(
     enhance_level: str = "default",
     is_enhance: bool = False,
     treat_as_canon: bool = True,
+    weave_brief: str = "",
 ) -> dict:
     """
     Build a user message containing all variable content (selected text,
@@ -1790,6 +1800,28 @@ def _build_materials_message(
             lines.append(chip.content.strip())
             lines.append(footer)
             lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    # WHAT THE WEAVE ASSEMBLED, after the writer's own attachments and before
+    # their prose. The order is the priority: a chip is something they chose
+    # for THIS turn, so it reads first; the Weave is standing context about
+    # the world at this point in the story.
+    #
+    # Said to be as-of a point on purpose. A brief assembled at chapter four
+    # does not know what happens in chapter nineteen -- that is the whole
+    # reason the Weave is time-aware -- and a model told "this is the world"
+    # would happily reason about things the story has not revealed yet.
+    if weave_brief.strip():
+        lines.append(
+            "FROM YOUR WORLD (assembled from the Weave as of this point in "
+            "the story -- treat as established fact, and do not assume "
+            "anything beyond it has happened yet):"
+        )
+        lines.append("=== BEGIN WORLD CONTEXT ===")
+        lines.append(weave_brief.strip())
+        lines.append("=== END WORLD CONTEXT ===")
+        lines.append("")
         lines.append("---")
         lines.append("")
 
@@ -1856,6 +1888,17 @@ async def editor_chat(request: EditorChatRequest):
                    f"max 30,000). Try enhancing a passage with less text around it."
         )
 
+    # The Weave brief is budgeted where it is ASSEMBLED, so this is a backstop
+    # against a hand-built request rather than something a writer can hit --
+    # said in their terms anyway, with the control that fixes it.
+    if len(request.weave_brief) > 60_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The world context is too long ({len(request.weave_brief):,} chars, "
+                   f"max 60,000). Remove some Threads from it in the Weave "
+                   f"context panel, or switch it off for this turn."
+        )
+
     is_enhance = request.category == "enhance"
 
     # 1. System prompt = instructions only (no story text, no chips)
@@ -1890,6 +1933,7 @@ async def editor_chat(request: EditorChatRequest):
         bool(request.text_content.strip())
         or bool(request.context_chips)
         or bool(request.surrounding_context.strip())
+        or bool(request.weave_brief.strip())
     )
 
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
@@ -1904,6 +1948,7 @@ async def editor_chat(request: EditorChatRequest):
             enhance_level       = request.enhance_level,
             is_enhance          = is_enhance,
             treat_as_canon      = request.treat_attachments_as_canon,
+            weave_brief         = request.weave_brief,
         )
         # Insert the materials just BEFORE the newest user message rather than
         # at the front of the whole conversation. Turn 1 is identical either

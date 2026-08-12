@@ -141,11 +141,14 @@ def _answer(project, run_id, **kw):
 
 
 def test_a_started_run_is_on_disk_immediately(project):
-    # A crash must not lose the fact that a session was started.
+    # A crash must not lose the fact that a session was started. Read from the
+    # DISK rather than through an endpoint: the file is the claim, and GET
+    # /run (which this used to call) was removed as an unused doorway.
+    import os
     run = _new_run(project)
-    assert client.get("/api/codex/run",
-                      params={"project_path": project,
-                              "run_id": run["run_id"]}).status_code == 200
+    path = os.path.join(project, ".storythread", "weave", "runs",
+                        f"{run['run_id']}.json")
+    assert os.path.exists(path)
 
 
 def test_an_applied_stop_does_not_come_back(project):
@@ -205,9 +208,14 @@ def test_a_muted_kind_disappears_and_can_come_back(project):
 
 
 def test_a_run_id_from_a_request_is_not_trusted_as_a_path(project):
-    response = client.get("/api/codex/run",
-                          params={"project_path": project,
-                                  "run_id": "../../project"})
+    # Asked of /run/answer, which is now the endpoint that takes a run id off
+    # the wire. The guard lives in load_run; what matters is that a live
+    # surface still proves it, so removing GET /run did not quietly retire a
+    # traversal test along with the doorway.
+    response = client.post("/api/codex/run/answer",
+                           json={"project_path": project,
+                                 "run_id": "../../project",
+                                 "key": "x", "state": "applied"})
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "run_not_found"
 

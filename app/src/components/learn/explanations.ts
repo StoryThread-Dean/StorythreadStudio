@@ -291,6 +291,26 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "weave.context": {
+    what: "The part of your world the AI is told about, before you ask it "
+      + "anything.",
+    why: "So you do not have to paste a character profile into the chat to be "
+      + "understood. The Weave picks out what your writing names and what "
+      + "connects to it, AS OF where you are in the book -- so the AI knows "
+      + "what your story knows so far, and not what happens later. You can "
+      + "read every word of it, drop anything from it, or switch it off.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Inspect shows each Thread, why it is there, and roughly what it costs.",
+      "The x beside a Thread drops it. Removed Threads are listed underneath "
+        + "so you can put one back.",
+      "The kind buttons leave out a whole category at a time.",
+      "Read it exactly as the AI will shows the actual words.",
+      "Turn world context off sends only what you attach by hand.",
+    ],
+    endpoint: "/api/codex/context",
+  },
   "weaving.scan": {
     what: "The count of things to look at, worked out before you start.",
     why: "So the number you are shown is real. An estimate that turns out wrong "
