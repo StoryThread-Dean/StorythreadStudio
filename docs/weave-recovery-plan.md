@@ -343,6 +343,18 @@ material that must not travel (see R5.5).
       is not a timed reveal.
       Sixteen tests, navigating by page TITLE rather than click count, and one
       that sweeps every page for an em dash.
+- [x] **R2.12f** The walkthrough is REACHABLE. Reported by the writer
+      immediately: "its not in the usual spot within a Character profile next to
+      Hidden and Foreshadowing ... Nothing." They were right. It was offered only
+      from `SecretsPanel`, which returns null when a profile has no secrets, so a
+      writer meeting the idea for the first time -- exactly who it is for -- had no
+      way in. A guide nothing offers is documentation, not help.
+      It now sits beside the **Hidden and Foreshadowing Traits** heading on both
+      templates (the heading row is shared, so neither template is a special
+      case), with the `What's this?` next to it, present whether or not anything is
+      marked yet. A second `What's this?` appears on a trait card once its switch
+      is on, which is the moment the question occurs. Pinned by a source read --
+      the precedent Explain.test.tsx set -- and verified by reinstating the bug.
 
 **Raised by the writer's live testing of R2.1 (2026-08-12), grouped with R2.5 on
 their instruction ("This can be grouped up with R2.5").** The good news from that
@@ -530,7 +542,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 19 | 14 |
+| 2 The premise | 20 | 15 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -539,4 +551,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **84** | **32** |
+| **Total** | **85** | **33** |

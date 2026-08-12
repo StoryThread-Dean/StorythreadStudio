@@ -15,7 +15,7 @@
 //   4. On Ctrl+S or Save: POST to backend, mark saved
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
-import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X, Eye, EyeOff } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X, Eye, EyeOff, BookOpen } from "lucide-react";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { ChatMarkdown } from "../components/ChatMarkdown";
 import { Explain } from "../components/learn/Explain";
@@ -61,6 +61,11 @@ import { convertCharacter, type Conversion } from "./characterTemplate";
 // Every secret on the page in one list, without moving any of them out of
 // the section that explains them.
 import { SecretsPanel } from "./SecretsPanel";
+// The paged walkthrough for a secret trait. Reachable from the section it
+// is about, not only from the panel that lists secrets once some exist --
+// which is where it was, and which meant a writer with no secrets yet had
+// no way in at all.
+import { SubtextGuide } from "./SubtextGuide";
 import type { EntriesHome, ProfileSource } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
@@ -2091,6 +2096,8 @@ export function ProfileBuilder({
                     // only then. Structure appears where protection was asked
                     // for and nowhere else.
                     showSecretsOnly={isSideCharacter}
+                    // The section this idea is named after, on either template.
+                    teachesSubtext={cfg.key === "hidden_and_foreshadowing_traits"}
                     section={section}
                     profileName={profile.name}
                     profileType={profile.type}
@@ -2472,6 +2479,9 @@ interface ProfileSectionEditorProps {
   /** Side template: render only the trait blocks that are secret, since those
    *  cannot be flattened into the plain box without losing their protection. */
   showSecretsOnly?: boolean;
+  /** Show the "never named" help and its walkthrough beside this heading. True
+   *  for the section a writer looks in for it. */
+  teachesSubtext?: boolean;
   section: ProfileSection;
   profileName: string;
   profileType: string;
@@ -2499,6 +2509,7 @@ function ProfileSectionEditor({
   heading,
   hasTraitBlocks,
   showSecretsOnly,
+  teachesSubtext,
   section,
   profileName,
   profileType,
@@ -2514,6 +2525,9 @@ function ProfileSectionEditor({
   onGenerateOverview,
   generatingOverview = false,
 }: ProfileSectionEditorProps) {
+  // Open state for the walkthrough offered beside the heading.
+  const [guideOpen, setGuideOpen] = useState(false);
+
   const isGeneratingSummary = generatingField === sectionKey;
 
   return (
@@ -2526,6 +2540,24 @@ function ProfileSectionEditor({
             Only renders if help content exists for this section. */}
         {!hasTraitBlocks && (
           <SectionHelpPopover profileType={profileType} sectionKey={sectionKey} />
+        )}
+        {/* WHERE A WRITER ACTUALLY LOOKS FOR THIS. The "never named" setting is
+            explained here, next to the section named after it, on both
+            templates and whether or not anything is marked yet. It used to be
+            reachable only from the panel that lists secrets -- and that panel
+            hides itself when there are none, so a writer meeting the idea for
+            the first time had no way to read about it. */}
+        {teachesSubtext && (
+          <>
+            <Explain of="character.subtext" />
+            <button
+              onClick={() => setGuideOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-800 px-1.5 py-0.5 text-[10px] text-violet-200 transition-colors hover:border-violet-500"
+            >
+              <BookOpen size={10} /> Show me how this works
+            </button>
+            {guideOpen && <SubtextGuide onClose={() => setGuideOpen(false)} />}
+          </>
         )}
         {/* Side-character Overview: spin the filled-in fields into a mini
             encapsulated story. Click again for a different angle. */}
@@ -2954,6 +2986,11 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
         >
           {block.subtext ? <EyeOff size={12} /> : <Eye size={12} />}
         </button>
+
+        {/* Only once it is on. Before that the eye's tooltip is enough, and a
+            second control on every trait row would be noise; after it, the
+            writer has just made a decision they may want explained. */}
+        {block.subtext && <Explain of="character.subtext" compact align="right" />}
 
         {/* Trait name */}
         <input

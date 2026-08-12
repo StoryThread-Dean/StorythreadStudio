@@ -217,3 +217,48 @@ describe("the secrets panel", () => {
     expect(screen.getByTestId("subtext-guide")).toBeTruthy();
   });
 });
+
+// ── Being able to FIND it ────────────────────────────────────────────────────
+//
+// The writer's report: "where does this Walkthrough you created for hidden
+// exist? its not in the usual spot within a Character profile next to Hidden and
+// Foreshadowing. Check it on both a Main and Side character's profile builder.
+// Nothing."
+//
+// They were right. It was reachable only from the panel that lists secrets, and
+// that panel hides itself when a profile has none -- so a writer meeting the idea
+// for the first time, which is exactly who it is for, had no way in.
+//
+// A SOURCE READ rather than a render, the same choice Explain.test.tsx makes and
+// for the same reason: mounting the profile editor needs its whole API mocked,
+// and a test that expensive gets skipped rather than extended. What matters here
+// is WHERE the launcher is wired, which the source states plainly.
+
+describe("reaching the walkthrough", () => {
+  const BUILDER = import.meta.glob("./ProfileBuilder.tsx",
+    { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+  const source = Object.values(BUILDER)[0];
+
+  it("is offered from the section heading, not only from the secrets panel", () => {
+    // The section a writer looks in for it, on BOTH templates -- the heading row
+    // is shared, so nothing about this depends on Main or Side.
+    expect(source).toMatch(/teachesSubtext/);
+    expect(source).toMatch(/cfg\.key === "hidden_and_foreshadowing_traits"/);
+    expect(source).toMatch(/Show me how this works/);
+  });
+
+  it("does not depend on a secret already existing", () => {
+    // The bug. SecretsPanel returns null with nothing to list, so a launcher
+    // that lived only there was invisible on every fresh profile.
+    const headingRegion = source.slice(source.indexOf("teachesSubtext && ("),
+                                       source.indexOf("SIDE PAGE, SECRETS ONLY"));
+    expect(headingRegion).toMatch(/SubtextGuide/);
+    expect(headingRegion).not.toMatch(/trait_blocks/);
+  });
+
+  it("explains itself where the switch is flipped, too", () => {
+    // The trait card, once a trait is marked: the moment the writer has just
+    // made the decision and may want it explained.
+    expect(source).toMatch(/block\.subtext && <Explain of="character\.subtext"/);
+  });
+});

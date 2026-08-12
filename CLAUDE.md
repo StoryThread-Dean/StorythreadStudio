@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 32 of 84 tasks done.
+> **LEDGER — last updated 2026-08-12.** 33 of 85 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -42,7 +42,7 @@ its place without relying on memory or conversation history.
 > context-inspect list · R1.4 `weave_brief` kept (spec amendment) · R1.5a the
 > false hidden-trait comment deleted · R1.6 the two teaching registries bound
 > by a contract test.
-> **Phase 2 (the premise, BLOCKER): 10 of 19.** Groundwork went first because
+> **Phase 2 (the premise, BLOCKER): 15 of 20.** Groundwork went first because
 > both halves fail SILENTLY: R2.3a `role` + `character_kind` indexed (migration
 > 005, tested as an upgrade) · R2.4 `POST /entity` records a Writing Progress
 > save event, which it never did.
@@ -106,6 +106,14 @@ its place without relying on memory or conversation history.
 > this"). `SubtextGuide` is the eleven-page walkthrough: one secret through three
 > weights and through Draft, Enhance and a context check, with the same scene
 > written at each weight so the choice is concrete. Spec amended, section D.
+> **R2.12f DONE — and it is the lesson worth keeping.** The walkthrough shipped
+> reachable only from the panel that LISTS secrets, and that panel hides itself
+> when a profile has none, so the writer looked next to Hidden and Foreshadowing
+> on both templates and found nothing. A guide nothing offers is documentation,
+> not help. It is now beside that heading on both templates whether or not
+> anything is marked, plus on a trait card once its switch is on. When adding an
+> Explain or a guide, check the surface it hangs off is VISIBLE in the empty
+> state.
 > **Next: R2.5** — the Run editor, the blocker: the spec's opening example still
 > cannot be recorded through the interface. Then R2.2b, R2.7, R2.8, R2.9.
 > Branch health: 1641 backend tests, 1184 frontend tests, ruff and tsc clean.
