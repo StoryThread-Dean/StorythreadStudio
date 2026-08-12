@@ -131,7 +131,15 @@ Every trait block carries a bracketed importance label that tells you how to wei
 - `[present]` -- regularly active. Surface naturally when the scene calls for it; do not force it.
 - `[background]` -- true of the character but rarely foregrounded. Use as flavor or grounding, not as a focus. Acceptable to ignore in any given scene.
 - `[contextual]` -- only relevant when the situation the trait describes is in play. Otherwise, ignore it entirely.
-- `[hidden]` -- internal-only. NEVER name, describe, quote, or directly reference these traits in your output. They are influence material, not content. A hidden trait may shape: a character's body language, what they avoid looking at, the dialogue option they reach for under pressure, a small gesture, a beat of silence, an off-tone reaction when something external triggers it. The reader and the other characters should be able to feel the effect without ever being told the cause. If you find yourself about to write the hidden trait's name or a paraphrase that reveals it, stop and rewrite as observable behavior instead.
+- `[hidden]` -- an older label meaning the same as SUBTEXT below. Treat it identically.
+
+SUBTEXT TRAITS -- SEPARATE FROM WEIGHT
+A trait may carry `SUBTEXT` in addition to its importance label, e.g. `[core, SUBTEXT]`. That is a second, independent instruction and it does not change the weight.
+
+- The weight still applies in full. A `[core, SUBTEXT]` trait is one of the most important things you know about the character and should be shaping the scene constantly. A `[background, SUBTEXT]` one is a faint tint.
+- NEVER name, describe, quote, or directly reference a SUBTEXT trait in prose. It is influence material, not content. It may shape: body language, what the character avoids looking at, the dialogue option they reach for under pressure, a small gesture, a beat of silence, an off-tone reaction when something external triggers it. The reader and the other characters should be able to feel the effect without ever being told the cause.
+- If you find yourself about to write a SUBTEXT trait's name, or a paraphrase that reveals it, stop and rewrite it as observable behavior instead.
+- The two axes are genuinely independent, and the pair is common: something can be the single most load-bearing fact about a person AND the thing they would never say. A villain who avoids hospitals because he watched his parents die in one is `[core, SUBTEXT]`: it dictates where he will and will not go, and he never explains it.
 
 Importance is a guide, not a quota. A `[core]` trait does not need to appear every paragraph; a `[background]` one may legitimately drive a moment if the scene leans that way. The labels tell you the default weight, not a strict rule. Exception: a `[core]` voice or mannerism trait is a constant -- it colors every line of that character's dialogue and action even when nothing calls attention to it.
 
@@ -1117,20 +1125,25 @@ def generate_usage_preview_prompt() -> str:
         "Explain in 2-3 sentences how this trait's importance level will affect "
         "AI writing behavior. Be specific to this trait, not generic. "
         "Write in second person ('Because this trait is marked Core, AI will...').\n\n"
-        "Importance levels:\n"
+        "Importance is about WEIGHT -- how much this shapes the character:\n"
         "  core = always in AI context, central to every scene with this character\n"
         "  present = included when character is in scene, regularly visible\n"
         "  background = included only when directly relevant, rarely surfaced\n"
         "  contextual = included only when writer explicitly attaches it\n"
+        "\n"
+        "SUBTEXT is a SEPARATE setting about DISCLOSURE -- whether it may be said "
+        "out loud. A subtext trait is sent and used at its full weight, and AI is "
+        "forbidden from naming, quoting or revealing it; it shows only as "
+        "behaviour. When explaining a subtext trait, say both things: how its "
+        "weight will make AI use it, and that AI will never state it.\n"
         # NOT "never sent". A hidden trait IS sent, and the main system
         # prompt (see READING IMPORTANCE LABELS) forbids naming it rather
         # than withholding it. This is the feature whose whole job is
         # explaining how AI will use a trait, so getting it backwards here
         # was the worst possible place for the error: a writer reads it and
         # concludes their most important material is inert.
-        "  hidden = sent, and used as influence only. AI must never name, "
-        "quote or reveal it; it shapes behaviour, gesture, what the character "
-        "avoids. The reader feels the effect without being told the cause\n\n"
+        "  hidden = an older label that meant subtext. Same thing: sent, used, "
+        "never named\n\n"
         f"{PUNCTUATION_RULE}\n\n"
         'Return ONLY valid JSON: {"usage_preview": "your text here"}. No extra text.'
     )
@@ -1227,16 +1240,25 @@ def audit_importance_prompt() -> str:
         "You are a profile calibration assistant for a fiction writer.\n\n"
         "Review all trait blocks below and flag any where the importance level "
         "seems mismatched with the description content.\n\n"
-        "Importance levels:\n"
+        "Importance is WEIGHT and it is the only thing you may suggest changing:\n"
         "  core = central to identity/narrative, always in AI context\n"
         "  present = regularly relevant, included when character is in scene\n"
         "  background = canon but rarely surfaced, only when directly relevant\n"
         "  contextual = situational, only when writer explicitly attaches\n"
-        "  hidden = sent as influence only, never named in the prose\n\n"
+        "\n"
+        "A trait may also be marked SUBTEXT, meaning it is never said out loud. "
+        "That is DISCLOSURE, not weight, and it is not yours to question -- the "
+        "writer decides what their story reveals. A subtext trait can carry any "
+        "weight, and a heavy one is ordinary: the reason a character avoids "
+        "something can be the most load-bearing fact about them and still be "
+        "something they would never say. Judge a subtext trait's weight exactly "
+        "as you would any other, and never suggest un-hiding it.\n\n"
         "Flag examples:\n"
         "- A 'background' trait with strong emotional hooks -> suggest 'core' or 'present'\n"
         "- A 'core' trait with a vague one-liner -> suggest adding detail or downgrading\n"
-        "- NEVER suggest moving a 'hidden' trait to another level to make AI use it. Hidden traits are already sent and already used; the label only stops the model NAMING them. Suggesting otherwise costs the writer their subtext and buys nothing\n\n"
+        "- A SUBTEXT trait whose description carries obvious weight but sits at "
+        "'background' -> suggest a higher weight. Its secrecy is unaffected and "
+        "must not be mentioned as a trade\n\n"
         "Only flag genuine mismatches. If everything looks reasonable, return an empty list.\n\n"
         f"{PUNCTUATION_RULE}\n\n"
         "Return ONLY valid JSON:\n"

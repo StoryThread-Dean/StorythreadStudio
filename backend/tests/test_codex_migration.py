@@ -172,17 +172,32 @@ def test_trait_blocks_survive_with_their_importance(tmp_path):
     assert blocks[0]["description"] == "Keeps her own counsel, even with allies."
 
 
-def test_hidden_traits_become_on_request(tmp_path):
-    # The fix the design session found: profiles.py claimed importance
-    # "hidden" was never sent to the AI, but it was -- the prompt merely asked
-    # the model not to name it. ai_scope is the real gate.
+def test_a_hidden_trait_becomes_a_weight_plus_a_secret(tmp_path):
+    # THIS TEST USED TO ASSERT THE OPPOSITE, and the opposite was wrong.
+    #
+    # An earlier pass set `ai_scope: on-request` on every hidden trait, on the
+    # sound observation that the prompt's never-name rule was not a hard gate.
+    # But that trade is worse than the problem: withholding a secret stops the
+    # model NAMING it by stopping the model KNOWING it. The writer's villain --
+    # parents dead in a hospital, freezes at the sight of held hands -- would
+    # arrive with none of that and behave like somebody else entirely.
+    #
+    # So a hidden trait converts to what it always meant: an ordinary weight,
+    # plus a flag that says never say this out loud. It is sent, it is weighted,
+    # and the prompt forbids naming it.
     folder = _project(tmp_path)
     run_migration(folder)
     blocks = _thread(folder, "characters", "elara.md")["sections"]["personality_traits"]["trait_blocks"]
-    hidden = [b for b in blocks if b["importance"] == "hidden"][0]
-    assert hidden["ai_scope"] == "on-request"
-    # And an ordinary trait is left alone.
-    assert not [b for b in blocks if b["importance"] == "core"][0].get("ai_scope")
+
+    secret = [b for b in blocks if b.get("subtext")][0]
+    assert secret["importance"] == "present"      # a weight, not "hidden"
+    # NOT withheld. This is the line that matters.
+    assert secret.get("ai_scope") in (None, "", "always")
+
+    # And an ordinary trait is left alone entirely.
+    ordinary = [b for b in blocks if b["importance"] == "core"][0]
+    assert not ordinary.get("ai_scope")
+    assert not ordinary.get("subtext")
 
 
 def test_the_profile_id_becomes_the_entity_id(tmp_path):

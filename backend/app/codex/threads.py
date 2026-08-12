@@ -66,7 +66,10 @@ FACT_KEYS = ("id", "at", "axis", "value", "frame", "revealed_at", "ai_scope",
              "supersedes", "intentional")
 TIE_KEYS = ("rel", "rel_inverse", "target", "reason", "reason_inverse",
             "at", "until", "frame", "revealed_at", "ai_scope")
-TRAIT_KEYS = ("trait", "description", "importance", "ai_scope")
+# `subtext` is disclosure -- may this be said out loud -- and is separate
+# from `ai_scope`, which is availability. Conflating them is what made a
+# secret unimportant: see the note on TraitBlock in routers/profiles.py.
+TRAIT_KEYS = ("trait", "description", "importance", "ai_scope", "subtext")
 
 _SECTION_SPLIT_RE = re.compile(r"^# (.+)$", re.MULTILINE)
 _AI_SUMMARY_RE = re.compile(r"^## AI Summary:.*$", re.MULTILINE)
@@ -167,10 +170,21 @@ def _parse_list_block(body: str, keys: tuple[str, ...]) -> tuple[list[dict], str
     return records, rest
 
 
-def parse_thread(raw: str, registry: dict | None = None) -> dict:
+def parse_thread(raw: str, registry: dict | None = None,
+                 heal_legacy: bool = True) -> dict:
     """
     Read a Thread file into a dict. Never raises on malformed content --
     the worst case is that a section round-trips as raw text.
+
+    `heal_legacy` is on for every ordinary read: an older file's
+    `importance: hidden` is interpreted as what it meant (a weight plus a
+    secret) so the app behaves correctly without a rewrite pass.
+
+    Pass False when the point is to see the file AS WRITTEN rather than as
+    understood -- which is exactly what the before-and-after comparison after a
+    conversion is for. Healing both sides of that comparison would make the one
+    content change the conversion makes invisible, which is the opposite of what
+    that screen exists to do.
     """
     front, body = _split_frontmatter(raw)
 
@@ -252,7 +266,8 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
         if _looks_like_trait_list(content):
             parsed, leftover = _parse_list_block(content, TRAIT_KEYS)
             if parsed:
-                trait_blocks = parsed
+                trait_blocks = [_normalize_trait(block) if heal_legacy else block
+                                for block in parsed]
                 content = leftover.strip()
 
         thread["sections"][section_id] = {
@@ -263,6 +278,45 @@ def parse_thread(raw: str, registry: dict | None = None) -> dict:
         }
 
     return thread
+
+
+def _normalize_trait(block: dict) -> dict:
+    """
+    One trait, with weight and disclosure told apart.
+
+    `importance: hidden` used to say both "this is a secret" and "this barely
+    matters", which are unrelated claims -- and the second one was a lie about
+    most secrets. It reads now as weight `present` plus `subtext: true`, and the
+    writer is asked for the real weight rather than having one guessed for them.
+
+    The second half undoes a fix of mine that traded one wrong behaviour for
+    another. The Weave's conversion set `ai_scope: on-request` on every hidden
+    trait, on the reasoning that the prompt's never-name rule was not a real
+    gate. But withholding it stops the model NAMING the secret by stopping the
+    model KNOWING it -- so a villain whose every scene is shaped by what
+    happened in that hospital arrives with none of it, and behaves like someone
+    else. `ai_scope` means availability; disclosure is `subtext`; the never-name
+    rule is what protects the secret, and it always was.
+
+    Nothing in the app can set `on-request` on a trait by hand, so an
+    on-request trait that also reads as hidden can only have come from that
+    conversion, which is what makes correcting it here safe.
+    """
+    out = dict(block)
+    level = str(out.get("importance") or "").strip().lower()
+    was_hidden = level == "hidden"
+    if was_hidden:
+        out["importance"] = "present"
+    out["subtext"] = bool(out.get("subtext")) or was_hidden
+    if was_hidden and str(out.get("ai_scope") or "") == "on-request":
+        # CLEARED rather than set to "always". An absent ai_scope already means
+        # always for a trait, so clearing it leaves a healed trait
+        # indistinguishable from one that never carried the field -- which is
+        # both the right meaning and what keeps a read/render/read round trip
+        # identical. Writing "always" would have rendered as nothing and come
+        # back as None, so the file and the object disagreed after one save.
+        out["ai_scope"] = None
+    return out
 
 
 def _looks_like_trait_list(text: str) -> bool:
@@ -436,6 +490,10 @@ def render_thread(
             lines.append(f"- trait: {block.get('trait', '')}")
             lines.append(f"  description: {_quote(block.get('description', ''))}")
             lines.append(f"  importance: {block.get('importance', 'background')}")
+            # DISCLOSURE, written only when true. AI sees it, weighted like any
+            # other trait, and is instructed never to name it.
+            if block.get("subtext"):
+                lines.append("  subtext: true")
             # Only written when it is not the default, so an ordinary trait
             # block round-trips exactly as the profile format wrote it.
             if block.get("ai_scope") and block["ai_scope"] != "always":

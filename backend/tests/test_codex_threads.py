@@ -396,8 +396,23 @@ def test_traits_and_the_paragraph_under_them_both_survive():
 def test_the_importance_of_each_trait_survives_the_paragraph():
     # The half that used to disappear silently.
     section = parse_thread(BOTH, REGISTRY)["sections"]["overview"]
-    assert [b["importance"] for b in section["trait_blocks"]] == ["core", "hidden"]
-    assert section["trait_blocks"][1]["ai_scope"] == "on-request"
+    # `importance: hidden` in the file said two things at once: this is a secret,
+    # AND this barely matters. It reads now as the first plus a weight, because
+    # the second was untrue of most secrets -- the writer's villain avoids
+    # hospitals for a reason that drives half his scenes.
+    assert [b["importance"] for b in section["trait_blocks"]] == ["core", "present"]
+    assert section["trait_blocks"][1]["subtext"] is True
+    # And NOT withheld: an earlier pass set on-request here, which stops the
+    # model naming the secret by stopping it knowing the secret.
+    assert not section["trait_blocks"][1]["ai_scope"]
+
+
+def test_a_file_can_be_read_exactly_as_written():
+    # The comparison a writer sees after converting has to show what changed, so
+    # it needs the file as WRITTEN rather than as understood. Healing both sides
+    # would make the one content change invisible.
+    section = parse_thread(BOTH, REGISTRY, heal_legacy=False)["sections"]["overview"]
+    assert section["trait_blocks"][1]["importance"] == "hidden"
 
 
 def test_it_round_trips_through_a_render():

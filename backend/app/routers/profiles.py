@@ -143,7 +143,14 @@ VALID_TYPES = set(PROFILE_FOLDERS.keys())
 # withholds it. Corrected under recovery task R1.5, on the spec's own
 # instruction to delete the claim -- a comment that promises a writer their
 # private notes are not transmitted is the worst kind of wrong.
-VALID_IMPORTANCE = {"core", "present", "background", "contextual", "hidden"}
+VALID_IMPORTANCE = {"core", "present", "background", "contextual"}
+
+# Read, never written. A trait saved before the split carries importance:
+# hidden, which said two things at once; it now reads as "present, and secret".
+# present rather than core because the level recorded no weight and guessing
+# high would flood every prompt -- these are LISTED for the writer to weigh
+# rather than silently decided, which is what the review panel is for.
+LEGACY_HIDDEN = "hidden"
 
 
 # ── Pydantic Models ───────────────────────────────────────────────────────────
@@ -153,7 +160,23 @@ class TraitBlock(BaseModel):
     id: str                   # UUID used as a React key (not stored in YAML)
     trait: str                # The trait name(s), e.g. "observant, punctual, eloquent"
     description: str          # Human-written description
-    importance: str           # core|present|background|contextual|hidden
+    importance: str           # core|present|background|contextual -- HOW MUCH
+    # WHETHER IT MAY BE SAID OUT LOUD, which is a different question from how
+    # much it matters, and used to be the same control.
+    #
+    # `hidden` was a fifth importance level, so a secret could not also be
+    # important. The writer's example is the proof: a villain avoids hospitals
+    # because he watched his parents die in one (core -- it dictates events),
+    # freezes when he sees people holding hands (present), and deflects the
+    # question if asked (background). All three are secret. As one level they
+    # collapsed into each other AND sorted lowest in the prompt, so the trait
+    # driving the most scenes arrived as the weakest signal on the page.
+    #
+    # True means: AI receives it, weighted normally, and is instructed never to
+    # name, quote or reveal it -- only to let it shape behaviour. See
+    # READING IMPORTANCE LABELS in ai/prompts.py, which has enforced exactly
+    # this the whole time.
+    subtext: bool = False
 
 
 class ProfileSection(BaseModel):
@@ -352,8 +375,12 @@ _INFLUENCE_TO_IMPORTANCE: dict[str, str] = {
     "major":          "present",
     "minor":          "background",
     "background":     "contextual",
-    "foreshadowing":  "hidden",
+    # An old foreshadowing trait was secret by intent, which is now two fields.
+    "foreshadowing":  "present",
 }
+
+# Old influence values that meant "secret" rather than "unimportant".
+_INFLUENCE_MEANT_SECRET = {"foreshadowing"}
 
 
 def _migrate_influence(raw: str) -> str:
@@ -361,6 +388,14 @@ def _migrate_influence(raw: str) -> str:
     raw = raw.strip().lower()
     if raw in VALID_IMPORTANCE:
         return raw
+    if raw == LEGACY_HIDDEN:
+        # `hidden` recorded no weight -- it was busy saying "secret" instead --
+        # so one has to be chosen. `present` rather than `background`, because
+        # these traits are the writer's most carefully written material and
+        # dropping them to the faintest weight would be a second wrong answer
+        # after the first. The secrecy itself is set by the caller, and the
+        # writer is shown a list of these to weigh properly.
+        return "present"
     return _INFLUENCE_TO_IMPORTANCE.get(raw, "background")
 
 
@@ -404,11 +439,21 @@ def _parse_trait_blocks(content: str) -> list[TraitBlock]:
             # levels so legacy profiles load correctly.
             raw_level = str(item.get("importance", "") or item.get("influence", "background"))
             importance = _migrate_influence(raw_level)
+            # THE TWO AXES, one of which used to be hidden inside the other.
+            # `subtext: true` on the line is authoritative; a legacy
+            # `importance: hidden` (or an even older `influence:
+            # foreshadowing`) means the same thing and is read as such.
+            secret = bool(item.get("subtext", False))
+            if raw_level.strip().lower() == LEGACY_HIDDEN:
+                secret = True
+            if raw_level.strip().lower() in _INFLUENCE_MEANT_SECRET:
+                secret = True
             blocks.append(TraitBlock(
                 id=str(uuid.uuid4()),
                 trait=str(item.get("trait", "")),
                 description=str(item.get("description", "")),
                 importance=importance,
+                subtext=secret,
             ))
         return blocks
     except yaml.YAMLError:
@@ -583,6 +628,10 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
                     lines += [f"- trait: {block.trait}"]
                     lines += [f"  description: {_json.dumps(safe_description)}"]
                     lines += [f"  importance: {block.importance}"]
+                    # Only when true, so an ordinary trait's line is unchanged
+                    # and a resave produces no diff for files without secrets.
+                    if block.subtext:
+                        lines += ["  subtext: true"]
                     lines += [""]
             elif section.content:
                 # Side-character template: the section is plain paragraphs

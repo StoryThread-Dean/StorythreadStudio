@@ -17,6 +17,13 @@
 #
 # This file exists because the claim keeps coming back. It reads the real prompt
 # text, so a well-meaning edit that reintroduces the falsehood fails the build.
+#
+# SINCE THE AXES WERE SPLIT, it also guards the reason the split happened. Weight
+# ("how much does this shape them") and disclosure ("may it be said out loud")
+# are different questions, and a prompt that presents SUBTEXT as a rung on the
+# importance ladder puts the app back where it started -- unable to hold a trait
+# that is both the most load-bearing thing about a character and the thing they
+# would never say.
 
 import inspect
 
@@ -59,15 +66,28 @@ def test_no_prompt_claims_a_hidden_trait_is_never_sent():
         assert "writer-only notes, never sent" not in lowered, where
 
 
-def test_the_builders_that_explain_importance_say_what_hidden_really_does():
+def test_the_builders_that_explain_importance_say_what_a_secret_really_does():
     # Both of these list the importance levels for the model. Whatever they say
-    # about hidden, it has to be the truth: sent, used, never named.
+    # about a secret trait, it has to be the truth: sent, used at its own
+    # weight, never named.
     for builder in (prompts.generate_usage_preview_prompt,
                     prompts.audit_importance_prompt):
         text = builder().lower()
-        assert "hidden" in text
-        assert "sent" in text
-        assert "never name" in text or "never named" in text, builder.__name__
+        assert "subtext" in text, builder.__name__
+        promises_secrecy = ("never name" in text or "never named" in text
+                            or "never suggest un-hiding" in text)
+        assert promises_secrecy, builder.__name__
+
+
+def test_weight_and_disclosure_are_described_as_separate_questions():
+    # The whole point of the split. A prompt that presents subtext as a RUNG on
+    # the importance ladder puts us back where we started: the writer's villain
+    # could not be both load-bearing and secret.
+    for builder in (prompts.generate_usage_preview_prompt,
+                    prompts.audit_importance_prompt):
+        text = builder().lower()
+        assert "weight" in text, builder.__name__
+        assert "separate" in text or "not weight" in text, builder.__name__
 
 
 def test_the_audit_never_advises_trading_a_secret_for_accuracy():
@@ -76,7 +96,9 @@ def test_the_audit_never_advises_trading_a_secret_for_accuracy():
     # parents died in a hospital would let the model write the reason out loud.
     text = prompts.audit_importance_prompt()
     assert "suggest 'contextual' or higher" not in text
-    assert "never suggest moving a 'hidden' trait" in text.lower()
+    assert "never suggest un-hiding it" in text.lower()
+    # Weight is the only thing it may question.
+    assert "not yours to question" in text.lower()
 
 
 def test_the_base_prompt_still_forbids_naming_one():

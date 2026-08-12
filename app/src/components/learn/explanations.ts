@@ -291,6 +291,35 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "character.subtext": {
+    what: "A trait AI uses and never says out loud.",
+    why: "Because the reason a character behaves as they do is often the thing "
+      + "they would never explain, and it is usually the most important thing "
+      + "about them. A villain avoids hospitals because he watched his parents "
+      + "die in one; the reader should feel him avoid them, not be told why. "
+      + "Turning this on sends the trait to AI at its full weight and forbids "
+      + "AI from naming, quoting or hinting at it in prose. It shows only as "
+      + "behaviour: a hesitation, a look away, something the character will not "
+      + "do. This is a SEPARATE question from importance, which is only about "
+      + "how much a trait shapes them. Something can be the single most "
+      + "load-bearing fact about a person and the thing they would never say.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Set the importance as you would for any trait. Secrecy does not make it "
+        + "less important, and Core is the ordinary setting for a secret that "
+        + "drives a character.",
+      "Turn on the eye control beside it. The trait now reaches AI with an "
+        + "instruction never to state it.",
+      "Feedback is different from prose: Smart Advisor MAY name a secret when "
+        + "talking to you, because you wrote it. Any prose it suggests still has "
+        + "to express it as behaviour.",
+      "Use Show me how this works for one secret walked through three weights, "
+        + "and what each produces in Draft, Enhance and a context check.",
+      "For something the reader learns LATER rather than never, use a fact on "
+        + "the entry's Run with the chapter attached instead.",
+    ],
+  },
   "character.template": {
     what: "Whether this character gets the full page or the simple one.",
     why: "Most people in a book are not viewpoint characters. A Main character "

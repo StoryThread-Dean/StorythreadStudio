@@ -15,7 +15,7 @@
 //   4. On Ctrl+S or Save: POST to backend, mark saved
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
-import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X, Eye, EyeOff } from "lucide-react";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { ChatMarkdown } from "../components/ChatMarkdown";
 import { Explain } from "../components/learn/Explain";
@@ -33,6 +33,7 @@ import {
   SECTION_CONFIGS,
   PROFILE_TYPE_LABELS,
   IMPORTANCE_LABELS,
+  SUBTEXT_HELP,
 } from "../types/profile";
 import { v4 as uuidv4 } from "uuid";
 import { IMPORTANCE_HELP, getSectionHelp } from "../data/profileHelp";
@@ -57,6 +58,9 @@ import { fetchEntriesHome, sourceFor } from "./profileSource";
 // Moving a character between the two pages. A data change, kept out of
 // this file so it can be tested on its own.
 import { convertCharacter, type Conversion } from "./characterTemplate";
+// Every secret on the page in one list, without moving any of them out of
+// the section that explains them.
+import { SecretsPanel } from "./SecretsPanel";
 import type { EntriesHome, ProfileSource } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
@@ -76,7 +80,11 @@ interface GaugeThresholds {
   // above wordy = bloated (red)
 }
 
-const GAUGE_THRESHOLDS: Record<Exclude<ImportanceLevel, "hidden">, GaugeThresholds> = {
+// One entry per weight. There used to be an Exclude<> here for "hidden", which
+// had no gauge at all -- so the app refused to advise on the length of the
+// writer's most carefully written material. A secret has a real weight now and
+// gets that weight's guidance.
+const GAUGE_THRESHOLDS: Record<ImportanceLevel, GaugeThresholds> = {
   core:       { sparse: 15,  basic: 40,  good: 120, detailed: 200, wordy: 350 },
   present:    { sparse: 10,  basic: 30,  good: 100, detailed: 175, wordy: 300 },
   background: { sparse: 5,   basic: 20,  good: 60,  detailed: 100, wordy: 150 },
@@ -86,10 +94,6 @@ const GAUGE_THRESHOLDS: Record<Exclude<ImportanceLevel, "hidden">, GaugeThreshol
 type GaugeLevel = "sparse" | "basic" | "good" | "detailed" | "wordy" | "bloated";
 
 function getGaugeLevel(wordCount: number, importance: ImportanceLevel): { level: GaugeLevel; label: string; color: string } {
-  if (importance === "hidden") {
-    return { level: "good", label: `${wordCount} words`, color: "text-text-muted" };
-  }
-
   const t = GAUGE_THRESHOLDS[importance];
 
   if (wordCount <= t.sparse) return { level: "sparse", label: "Sparse -- add more", color: "text-red-400" };
@@ -102,14 +106,6 @@ function getGaugeLevel(wordCount: number, importance: ImportanceLevel): { level:
 
 // Visual gauge bar that fills proportionally
 function WordGauge({ wordCount, importance }: { wordCount: number; importance: ImportanceLevel }) {
-  if (importance === "hidden") {
-    return (
-      <div className="mt-1 flex items-center gap-2 text-xs text-faint">
-        <span>{wordCount} words (writer-only)</span>
-      </div>
-    );
-  }
-
   const { level, label, color } = getGaugeLevel(wordCount, importance);
   const t = GAUGE_THRESHOLDS[importance];
 
@@ -2066,6 +2062,16 @@ export function ProfileBuilder({
                 </div>
               )}
 
+              {/* EVERY SECRET, IN ONE PLACE. A view rather than a move: a
+                  secret belongs beside what it explains, and relocating it into
+                  a bucket would leave the model a floating fact with nothing to
+                  attach it to. */}
+              <SecretsPanel
+                profile={profile}
+                onSetWeight={(sectionKey, blockId, importance) =>
+                  updateTraitBlock(sectionKey, blockId, { importance })}
+              />
+
               {/* Profile sections. Side characters render every section as a
                   single free-text field -- trait blocks are a main-template
                   feature, so hasTraitBlocks is forced off for them. */}
@@ -2079,6 +2085,12 @@ export function ProfileBuilder({
                     sectionKey={cfg.key}
                     heading={cfg.heading}
                     hasTraitBlocks={cfg.hasTraitBlocks && !isSideCharacter}
+                    // A Side page is plain boxes -- except that a secret cannot
+                    // live in one. Prose has nowhere to carry "never say this",
+                    // so any secret the section holds is shown as a trait, and
+                    // only then. Structure appears where protection was asked
+                    // for and nowhere else.
+                    showSecretsOnly={isSideCharacter}
                     section={section}
                     profileName={profile.name}
                     profileType={profile.type}
@@ -2457,6 +2469,9 @@ interface ProfileSectionEditorProps {
   sectionKey: string;
   heading: string;
   hasTraitBlocks: boolean;
+  /** Side template: render only the trait blocks that are secret, since those
+   *  cannot be flattened into the plain box without losing their protection. */
+  showSecretsOnly?: boolean;
   section: ProfileSection;
   profileName: string;
   profileType: string;
@@ -2483,6 +2498,7 @@ function ProfileSectionEditor({
   sectionKey,
   heading,
   hasTraitBlocks,
+  showSecretsOnly,
   section,
   profileName,
   profileType,
@@ -2525,6 +2541,56 @@ function ProfileSectionEditor({
           </button>
         )}
       </div>
+
+      {/* SIDE PAGE, SECRETS ONLY. Shown under the plain box rather than
+          instead of it: the writer keeps the simple page and keeps the one
+          thing the simple page cannot express. */}
+      {!hasTraitBlocks && showSecretsOnly
+        && (section.trait_blocks ?? []).some(b => b.subtext || b.ai_scope === "on-request") && (
+        <div className="mb-3 rounded border border-violet-900/60 bg-violet-950/10 p-2">
+          <p className="mb-1.5 flex items-center gap-1 text-xs text-violet-200">
+            <EyeOff size={11} />
+            Never named
+          </p>
+          <p className="mb-2 text-xs text-faint">
+            AI uses these and never says them. They stay as traits because a
+            plain box has nowhere to record that.
+          </p>
+          {(section.trait_blocks ?? [])
+            .filter(b => b.subtext || b.ai_scope === "on-request")
+            .map(block => (
+              <div key={block.id} className="mb-1.5 last:mb-0">
+                <input
+                  type="text"
+                  value={block.trait}
+                  onChange={e => onUpdateTraitBlock(block.id, { trait: e.target.value })}
+                  placeholder="What it is"
+                  className="mb-1 w-full rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-violet-500"
+                />
+                <textarea
+                  value={block.description}
+                  onChange={e => onUpdateTraitBlock(block.id, { description: e.target.value })}
+                  rows={2}
+                  placeholder="What it makes them do"
+                  className="w-full resize-y rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-violet-500"
+                />
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-xs text-faint">
+                    Weight: {block.importance}
+                  </span>
+                  <button
+                    onClick={() => onRemoveTraitBlock(block.id)}
+                    className="rounded p-0.5 text-faint hover:text-red-400"
+                    title="Remove this"
+                    aria-label={`Remove ${block.trait || "this secret"}`}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
 
       {hasTraitBlocks ? (
         <div>
@@ -2870,6 +2936,24 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
 
         {/* (?) help icon -- explains this importance level with section-specific examples */}
         <ImportanceHelpPopover importance={block.importance} sectionKey={sectionKey} />
+
+        {/* DISCLOSURE. A separate question from the weight beside it, and
+            deliberately a separate control: `hidden` used to be the fifth
+            option in that dropdown, which meant a secret could not also be
+            important. A villain's reason for avoiding hospitals is the most
+            load-bearing thing about him AND the thing he would never say. */}
+        <button
+          onClick={() => onUpdate({ subtext: !block.subtext })}
+          aria-pressed={Boolean(block.subtext)}
+          className={`shrink-0 rounded border px-1.5 py-1 text-xs transition-colors ${
+            block.subtext
+              ? "border-violet-500 bg-violet-600/20 text-violet-200"
+              : "border-border text-faint hover:border-violet-700 hover:text-text-muted"
+          }`}
+          title={block.subtext ? SUBTEXT_HELP.on : SUBTEXT_HELP.off}
+        >
+          {block.subtext ? <EyeOff size={12} /> : <Eye size={12} />}
+        </button>
 
         {/* Trait name */}
         <input

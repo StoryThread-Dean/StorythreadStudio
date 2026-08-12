@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  convertToMain, convertToSide, convertCharacter, traitAsLine,
+  convertToMain, convertToSide, convertCharacter, traitAsLine, isSecret,
 } from "./characterTemplate";
 import type { Profile } from "../types/profile";
 import { SECTION_CONFIGS } from "../types/profile";
@@ -39,8 +39,10 @@ function character(overrides: Partial<Profile> = {}): Profile {
         trait_blocks: [
           { id: "a", trait: "scarred hands", description: "From the fire.",
             importance: "core" },
+          // A SECRET THAT MATTERS, which the old single scale could not hold:
+          // weight and secrecy are separate fields now.
           { id: "b", trait: "keeps a locket", description: "Her mother's.",
-            importance: "hidden", ai_scope: "on-request" },
+            importance: "core", subtext: true },
         ],
         ai_summary: "",
       },
@@ -59,15 +61,25 @@ function character(overrides: Partial<Profile> = {}): Profile {
 
 
 describe("Main to Side", () => {
-  it("keeps every trait as a line, because the Side page has no trait list", () => {
-    // Leaving them in the data would be worse than deleting them: they would be
-    // on disk, invisible on screen, and the next save would look like it had
-    // eaten them.
+  it("turns an ordinary trait into a line, because Side has no trait list", () => {
+    // Leaving one in the data would be worse than deleting it: on disk,
+    // invisible on screen, and the next save would look like it had eaten it.
     const { profile } = convertToSide(character());
     const physical = profile.sections.physical_traits;
-    expect(physical.trait_blocks).toEqual([]);
     expect(physical.content).toContain("scarred hands -- From the fire.");
-    expect(physical.content).toContain("keeps a locket -- Her mother's.");
+  });
+
+  it("does NOT flatten a secret -- it stays a trait", () => {
+    // THE CORRECTION. A line of prose has nowhere to carry "never say this", so
+    // flattening a secret strips the only thing stopping the model writing it
+    // out loud. The Side page shows its plain box AND the section's secrets, so
+    // the conversion is lossless and a Side character can keep one.
+    const { profile } = convertToSide(character());
+    const physical = profile.sections.physical_traits;
+    expect(physical.trait_blocks.map(b => b.trait)).toEqual(["keeps a locket"]);
+    expect(physical.trait_blocks[0].subtext).toBe(true);
+    // And it is not ALSO written into the prose, which would duplicate it.
+    expect(physical.content).not.toContain("keeps a locket");
   });
 
   it("appends under what the writer already wrote, never over it", () => {
@@ -77,22 +89,26 @@ describe("Main to Side", () => {
     expect(voice.content).toContain("never swears -- Not once.");
   });
 
-  it("labels a hidden trait, because Side has nothing that withholds one", () => {
-    // ai_scope: on-request is the mechanism that keeps a hidden trait out of a
-    // prompt. As a plain line it is ordinary text the AI may use. The word
-    // "Hidden" carries what the level carried and can be searched for later.
-    const { profile } = convertToSide(character());
-    expect(profile.sections.physical_traits.content)
-      .toContain("Hidden: keeps a locket");
+  it("reads an unconverted file's on-request trait as a secret too", () => {
+    // What the old migration wrote. A file that has not been re-saved since
+    // still says it, and reading it as ordinary would expose it.
+    const legacy = character({
+      sections: {
+        physical_traits: {
+          content: "", ai_summary: "",
+          trait_blocks: [{ id: "z", trait: "the locket", description: "Hers.",
+                           importance: "present", ai_scope: "on-request" }],
+        },
+      },
+    });
+    const { profile } = convertToSide(legacy);
+    expect(profile.sections.physical_traits.trait_blocks).toHaveLength(1);
   });
 
-  it("reports what it dissolved and how much of it was hidden", () => {
-    // Reported rather than done quietly: the screen has to be able to say this
-    // BEFORE the writer commits, because it is the one part that is not
-    // reversible by converting back.
+  it("reports what it dissolved and what it kept", () => {
     const result = convertToSide(character());
-    expect(result.dissolved).toBe(3);
-    expect(result.hidden).toBe(1);
+    expect(result.dissolved).toBe(2);      // scarred hands, never swears
+    expect(result.hidden).toBe(1);         // the locket, kept as a trait
   });
 
   it("says nothing happened when there was nothing to dissolve", () => {
@@ -177,12 +193,29 @@ describe("a round trip", () => {
     const there = convertToSide(original).profile;
     const back = convertToMain(there).profile;
 
+    const physical = back.sections.physical_traits;
+    const everything = physical.content
+      + physical.trait_blocks.map(b => `${b.trait} ${b.description}`).join(" ");
     for (const block of original.sections.physical_traits.trait_blocks) {
-      expect(back.sections.physical_traits.content).toContain(block.trait);
-      expect(back.sections.physical_traits.content).toContain(block.description);
+      expect(everything).toContain(block.trait);
+      expect(everything).toContain(block.description);
     }
     expect(back.sections.overview.content).toBe("A tall woman.");
     expect(back.sections.voice_notes.content).toContain("Short sentences.");
+  });
+
+  it("never loses a SECRET, in either direction", () => {
+    // The one part of a round trip that cannot be repaired by hand afterwards:
+    // if the flag goes, the writer has no way to know their subtext became
+    // ordinary text the AI may state outright.
+    const there = convertToSide(character()).profile;
+    const back = convertToMain(there).profile;
+    for (const profile of [there, back]) {
+      const secrets = Object.values(profile.sections)
+        .flatMap(section => section.trait_blocks)
+        .filter(block => block.subtext);
+      expect(secrets.map(b => b.trait)).toContain("keeps a locket");
+    }
   });
 
   it("leaves everything that is not a section alone", () => {
@@ -202,6 +235,15 @@ describe("a trait as a line", () => {
     expect(traitAsLine({ id: "x", trait: "scarred hands",
                          description: "From the fire.", importance: "core" }))
       .toBe("scarred hands -- From the fire.");
+  });
+
+  it("is only ever asked about traits that are not secret", () => {
+    // A secret never becomes a line, so this function has no secrecy handling
+    // and no "Hidden:" prefix to get wrong. isSecret is what decides.
+    expect(isSecret({ id: "x", trait: "t", description: "d",
+                      importance: "core", subtext: true })).toBe(true);
+    expect(isSecret({ id: "x", trait: "t", description: "d",
+                      importance: "core" })).toBe(false);
   });
 
   it("uses two hyphens, never an em dash", () => {

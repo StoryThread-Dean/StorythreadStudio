@@ -427,15 +427,25 @@ def _convert(raw: str, type_id: str, filename: str,
         thread["entity_id"] = replacement
     seen_ids.add(thread["entity_id"])
 
-    # THE ai_scope FIX. profiles.py:125 claimed importance "hidden" was never
-    # sent to the AI. It was: formatProfileForAI serialized it and the prompt
-    # merely asked the model not to name it directly. ai_scope is the real
-    # gate, so a hidden trait becomes on-request -- available when the writer
-    # asks for it, never volunteered.
+    # DISCLOSURE, SPLIT FROM WEIGHT.
+    #
+    # This used to set `ai_scope: on-request` on every hidden trait, reasoning
+    # that the prompt's never-name rule was not a real gate. That was a worse
+    # trade, not a fix: withholding a secret stops the model naming it by
+    # stopping the model knowing it, so a character whose behaviour is entirely
+    # shaped by one buried thing arrives with none of it and reads as somebody
+    # else. The writer's villain -- parents dead in a hospital, freezes at held
+    # hands -- is exactly that character.
+    #
+    # So a hidden trait converts to what it always meant: an ordinary weight
+    # plus `subtext`, which is sent, weighted, and never named. `present` is the
+    # weight because the old level recorded none, and these are listed for the
+    # writer to weigh rather than guessed at.
     for section in thread.get("sections", {}).values():
         for block in section.get("trait_blocks") or []:
-            if block.get("importance") == "hidden" and not block.get("ai_scope"):
-                block["ai_scope"] = "on-request"
+            if block.get("importance") == "hidden":
+                block["importance"] = "present"
+                block["subtext"] = True
 
     return thread
 
@@ -599,7 +609,11 @@ def compare_migrated(project_path: str, type_id: str, filename: str) -> dict:
     original_raw = _read(original_path)
     converted_raw = _read(converted_path)
 
-    before = parse_thread(original_raw)
+    # The original AS THE WRITER WROTE IT. Reading it with the legacy healing on
+    # would interpret its `importance: hidden` the same way the converted file
+    # states it, and the two would compare as identical -- hiding the one content
+    # change the conversion makes, in the screen built to show it.
+    before = parse_thread(original_raw, heal_legacy=False)
     after = parse_thread(converted_raw)
 
     return {
@@ -635,6 +649,8 @@ def _section_text(section: dict) -> str:
             line += f"  [{importance}]"
         # The one content change the conversion makes, so it has to be visible
         # in the comparison rather than hidden inside a "same" verdict.
+        if block.get("subtext"):
+            line += "  [subtext: true]"
         if block.get("ai_scope"):
             line += f"  [AI: {block['ai_scope']}]"
         parts.append(line)

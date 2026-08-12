@@ -111,6 +111,61 @@ Ten places the build went against this document. All ten ruled 2026-08-11.
 | 9 | Frayed fill shows every missing section, with no prose-derived suggestions | **SPLIT.** "From what the prose already says" is right and missing -- build it. "One field at a time" is overruled by the writer: it is the same force-march that ruling 8 removes |
 | 10 | Nine stop kinds where this document's table names five | **KEEP BOTH ADDITIONS, AMEND THE TABLE.** `pinned` (the writer's own mark -- the one stop that is not a rule firing) and `early_mention` |
 
+## D. Amendment of 2026-08-12: importance and disclosure are two axes
+
+**Approved by the writer.** This document, and the profile system it inherits,
+treat `hidden` as the fifth level of importance:
+
+> Core / Present / Background / Contextual / Hidden
+
+That is wrong, and it is wrong in a way that cost the writer the use of their
+best material. Importance answers "how much does this shape them". Hidden
+answers "may it be said out loud". The two are unrelated, and the writer's own
+worked example is the proof:
+
+> A villain avoids hospitals because he watched his parents die in one. He will
+> not enter one and will not say the word (**core** -- it decides where the plot
+> can go). He freezes when he sees people holding hands, because they died
+> holding hands (**present**). If asked, he says only that they were taken from
+> him early (**background**).
+
+Three traits, all secret, at three weights. On one scale they collapse into each
+other, and worse: `hidden` sorts LOWEST in every prompt, so the trait driving
+the most scenes arrived as the faintest signal on the page.
+
+**So the axes are split.**
+
+1. `importance` keeps four levels and means weight only.
+2. A per-trait `subtext` flag carries disclosure. True means: AI receives the
+   trait, uses it at its full weight, and is forbidden from naming, quoting or
+   revealing it. It shows as behaviour. The instruction that enforces this has
+   been in `ai/prompts.py` the whole time; what was missing was a control that
+   did not force a writer to trade weight for secrecy.
+3. **"Never send" is deliberately NOT built.** Author Notes is the room for
+   material that must not travel, and it is manually attachable when the writer
+   wants it. Making that guarantee real is R5.5, because today nothing in the
+   code enforces it -- `scan.py` globs `notes/*.md` indiscriminately.
+4. A secret is NOT a timed reveal. Subtext is never said, at any point; the
+   reader learning something in chapter fifteen is a fact with `revealed_at` on
+   the entry's Run. Both are needed and they are different mechanisms.
+
+**This also reverses an earlier build decision recorded in section A.** The
+conversion set `ai_scope: on-request` on every hidden trait, on the sound
+observation that the prompt's never-name rule is not a hard gate. But that trade
+is worse than the problem it solved: withholding a secret stops the model naming
+it by stopping the model KNOWING it, so the villain above arrives with no reason
+to avoid anything and behaves like somebody else. `ai_scope` means availability;
+`subtext` means disclosure; the never-name instruction is what protects a secret.
+
+Files written before the split are read as what they meant: `importance: hidden`
+becomes weight `present` plus `subtext`. `present` because the old level recorded
+no weight at all, and every one of them is listed for the writer to weigh
+properly rather than a value being guessed and hidden.
+
+Recovery tasks R2.12a-e.
+
+---
+
 ## C. Defects in this document, corrected
 
 1. The Verification section appeared **twice, byte-identical**. The duplicate is

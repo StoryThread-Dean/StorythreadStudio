@@ -291,29 +291,58 @@ material that must not travel (see R5.5).
       suggested prose may not. `test_hidden_trait_promise.py` reads the real
       prompt text so the claim cannot return a fourth time -- verified by
       reinstating it.
-- [ ] **R2.12b** Split the axes in the data: `importance` keeps four levels,
-      a per-trait `subtext` flag carries disclosure. Both formats, legacy
-      `importance: hidden` reading as present + subtext.
-      *Also undoes a wrong fix of mine:* the Weave's migration set
-      `ai_scope: on-request` on every hidden trait, which stops the AI naming the
-      secret by stopping the AI KNOWING it. On the villain that is the whole
-      character withheld. Subtext material belongs IN the brief, weighted, marked
-      never-name; `ai_scope` goes back to meaning availability only.
-- [ ] **R2.12c** The control on the trait card, the four-level dropdown, and a
-      review panel listing every subtext trait across sections (grouping without
-      moving anything -- a secret belongs in the section it explains).
-      Legacy traits migrate to `present` and are LISTED for a weight rather than
-      silently guessed at.
-- [ ] **R2.12d** Main/Side becomes lossless: on the Side template a section shows
-      its plain box PLUS any subtext traits it holds, so Main to Side dissolves
-      only ordinary traits and leaves secrets as traits. Removes the warning
-      shipped with R2.10b.
-- [ ] **R2.12e** `What's this?` for disclosure, plus a paged
-      **Show me how this works** walkthrough: what it is, how each weight behaves
-      when a trait is secret, and the end result of each choice through Enhance,
-      Smart Advisor's context check, and Draft. Uses a character from popular
-      fiction whose surface and hidden layer are both well known, with all
-      example prose written for the walkthrough rather than quoted.
+- [x] **R2.12b** The axes are split in the data. `importance` keeps four levels
+      and means weight; a per-trait `subtext` flag carries disclosure. Both file
+      formats hold it, only when true (so a project with no secrets produces no
+      diff), and it round-trips through both parsers. Legacy `importance: hidden`
+      and the even older `influence: foreshadowing` read as weight `present` plus
+      `subtext`, so nothing has to be rewritten to behave correctly.
+      *Undoes a wrong fix of mine:* the migration set `ai_scope: on-request` on
+      every hidden trait, which stops the AI naming the secret by stopping the AI
+      KNOWING it -- on the villain, that is the entire character withheld.
+      `ai_scope` means availability again; the never-name instruction is what
+      protects a secret, and it has been in `prompts.py` all along.
+      `parse_thread` gained `heal_legacy=False` for one caller: the
+      before-and-after comparison, which needs the file AS WRITTEN or the one
+      content change the conversion makes is invisible in the screen built to
+      show it. Twelve tests in `test_trait_disclosure.py`, plus four rewritten
+      tests that had described the old behaviour.
+      The spec is amended in the same commit (section D).
+- [x] **R2.12c** The control is its own button on the trait card, beside a
+      dropdown that now offers four weights. `SecretsPanel` lists every secret on
+      the page with the section it lives in and its weight, editable there --
+      which is the grouping the writer asked for WITHOUT the move they suggested:
+      a secret belongs beside what it explains, and relocated into a bucket it
+      becomes a floating fact with nothing for the model to attach it to. The
+      panel also says out loud that anything written before the split reads as
+      Present, turning an invisible wrong default into a short, finite job.
+      Two special cases disappeared with the fifth level: the word-count gauge
+      had none for hidden (so the app refused to advise on the length of the
+      writer's most careful material) and the trim tool had no range for it.
+- [x] **R2.12d** Main/Side is lossless in both directions, and the warning
+      shipped with R2.10b is gone because the loss is gone. A Side section shows
+      its plain box and, only when it holds one, its secrets as traits: prose has
+      nowhere to carry "never say this", so flattening a secret would strip the
+      one thing stopping the model writing it out loud. Ordinary traits still
+      dissolve into lines. A Side character can now keep a secret at all, which
+      they could not before.
+- [x] **R2.12e** `character.subtext` explains the setting, and
+      `SubtextGuide` is the paged walkthrough the writer specified: eleven pages,
+      one secret walked through three weights and three features.
+      Severus Snape is the example, because the whole point needs a character
+      whose surface and hidden layer are BOTH already known -- his reason is
+      withheld for seven books while shaping every scene he is in. All example
+      prose is written for the walkthrough; nothing is quoted, since the point is
+      to show what THIS APP produces from a profile.
+      Pages: the two questions · the example · Core / Present / Background each
+      with the line the model receives and a worked passage · **the same secret at
+      three weights on one identical scene**, which is the "end results of
+      different path choices" · in a Draft · in an Enhance pass · in Smart
+      Advisor's context check (including that feedback MAY name a secret while
+      suggested prose may not) · what turning it off produces · and why a secret
+      is not a timed reveal.
+      Sixteen tests, navigating by page TITLE rather than click count, and one
+      that sweeps every page for an em dash.
 
 **Raised by the writer's live testing of R2.1 (2026-08-12), grouped with R2.5 on
 their instruction ("This can be grouped up with R2.5").** The good news from that
@@ -501,7 +530,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 19 | 10 |
+| 2 The premise | 19 | 14 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -510,4 +539,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **84** | **28** |
+| **Total** | **84** | **32** |

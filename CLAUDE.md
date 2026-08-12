@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 28 of 84 tasks done.
+> **LEDGER — last updated 2026-08-12.** 32 of 84 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -91,16 +91,24 @@ its place without relying on memory or conversation history.
 > corrected: feedback may NAME a hidden trait (it is the writer's own note),
 > suggested prose may not. `test_hidden_trait_promise.py` reads the real prompt
 > text; verified by reinstating the claim.
-> **Next: R2.12b-e** — the axis split the writer approved: importance drops to
-> four levels and disclosure becomes its own per-trait control, because their
-> villain (parents died in a hospital) is CORE by weight and secret by
-> disclosure, and today he cannot be both. Includes undoing a wrong fix of mine:
-> the migration set `ai_scope: on-request` on hidden traits, which stops the AI
-> naming the secret by stopping it KNOWING the secret. "Never send" is NOT being
-> built — Author Notes is that room (R5.5, which makes the guarantee real).
-> **Then R2.5** — the Run editor, the blocker: the spec's opening example still
+> **R2.12b-e DONE — importance and disclosure are two axes.** `importance` keeps
+> four levels and means weight; a per-trait `subtext` flag says whether it may be
+> said out loud. The writer's villain settled it: his parents dying in a hospital
+> is CORE by weight and secret by disclosure, and one scale could only hold one of
+> those — with `hidden` sorting LOWEST, so the trait driving the most scenes was
+> the faintest signal in the prompt. Legacy `importance: hidden` reads as present
+> + subtext; `parse_thread(heal_legacy=False)` exists for the one caller that
+> needs the file as WRITTEN (the conversion comparison). **Reverses an earlier fix
+> of mine**: the migration's `ai_scope: on-request` stopped the AI naming a secret
+> by stopping it knowing the secret. "Never send" deliberately not built — Author
+> Notes is that room, and R5.5 makes the guarantee real. Main/Side is now lossless
+> (a Side section shows its secrets as traits, since prose cannot carry "never say
+> this"). `SubtextGuide` is the eleven-page walkthrough: one secret through three
+> weights and through Draft, Enhance and a context check, with the same scene
+> written at each weight so the choice is concrete. Spec amended, section D.
+> **Next: R2.5** — the Run editor, the blocker: the spec's opening example still
 > cannot be recorded through the interface. Then R2.2b, R2.7, R2.8, R2.9.
-> Branch health: 1638 backend tests, 1165 frontend tests, ruff and tsc clean.
+> Branch health: 1641 backend tests, 1184 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

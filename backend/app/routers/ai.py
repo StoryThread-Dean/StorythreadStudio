@@ -81,7 +81,7 @@ class GenerateUsagePreviewRequest(BaseModel):
     section_heading: str
     trait:           str
     description:     str
-    importance:      str   # core|present|background|contextual|hidden
+    importance:      str   # core|present|background|contextual (WEIGHT)
     model_id: str | None = None
 
 
@@ -99,7 +99,7 @@ class TrimTraitRequest(BaseModel):
     section_heading: str
     trait:           str
     description:     str
-    importance:      str   # core|present|background|contextual|hidden
+    importance:      str   # core|present|background|contextual (WEIGHT)
     word_count:      int
     model_id: str | None = None
 
@@ -1026,7 +1026,10 @@ _GOOD_RANGES: dict[str, str] = {
     "present":    "31-100",
     "background": "21-60",
     "contextual": "16-40",
-    "hidden":     "any length",
+    # No entry for "hidden": it is not a weight any more. A secret trait has a
+    # real weight and gets that weight's range, which is an improvement -- the
+    # old special case refused to advise on the length of the writer's most
+    # carefully written material.
 }
 
 

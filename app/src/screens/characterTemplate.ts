@@ -25,21 +25,21 @@
 // The prose stays visible because ProfileSectionEditor shows the box whenever
 // there is something in it.
 //
-// MAIN TO SIDE has one real decision. The Side page has no trait list, so trait
-// blocks have to become prose or they would be on disk and invisible -- the
-// worst outcome, since the next save would look like it had eaten them. Each
-// block becomes one line, "trait -- description", appended under whatever prose
-// the section already had.
+// MAIN TO SIDE dissolves ordinary trait blocks into prose, one line each
+// ("trait -- description"), appended under whatever the section already said.
+// Weight is what goes: a Side page has no importance levels, and that costs
+// nothing real -- weighting is all it was.
 //
-// THE ONE THING THAT IS NOT ONE-TO-ONE, and the reason convertToSide reports
-// what it did rather than just doing it: importance. A Side character has no
-// importance levels, so `core` and `background` stop being distinguishable --
-// which costs nothing, they were only ever weighting. `hidden` is different. A
-// hidden trait carries `ai_scope: on-request`, which is the mechanism that
-// actually keeps it out of a prompt; dissolved into a plain line it becomes
-// ordinary text the AI may use like any other. That is a real change to what
-// the writer was promised, so those lines are labelled "Hidden:" and the count
-// is handed back for the screen to say out loud BEFORE the writer commits.
+// A SECRET IS NOT DISSOLVED. It stays a trait block, in the section it was
+// already in.
+//
+// That is a change from the first version, and the reason is the whole point of
+// splitting disclosure from weight. Secrecy lives on the trait; a line of prose
+// has nowhere to carry it. Flattening a secret would strip the one thing
+// stopping the model from writing it out loud -- so the Side page shows its
+// plain box AND any secrets the section holds, and the conversion is lossless in
+// both directions. A Side character can keep a secret now, which they could not
+// before.
 
 import type { Profile, ProfileSection, TraitBlock } from "../types/profile";
 import { SECTION_CONFIGS } from "../types/profile";
@@ -48,8 +48,9 @@ export interface Conversion {
   profile: Profile;
   /** How many trait blocks became lines of prose. */
   dissolved: number;
-  /** How many of those were Hidden, and so lost the thing that withheld them
-   *  from AI. Named separately because it is the only lossy part. */
+  /** How many secrets were KEPT as traits rather than flattened. Reported so
+   *  the screen can say what it did with them, not as a warning: nothing is
+   *  lost, and their protection is intact. */
   hidden: number;
   /** Sections whose text was moved somewhere else, and where it went. Empty in
    *  both directions today; carried because the writer's instruction was
@@ -58,19 +59,23 @@ export interface Conversion {
   moved: string[];
 }
 
-/** One trait block as a line a person would write. */
+/** True when a trait must never be said out loud. */
+export function isSecret(block: TraitBlock): boolean {
+  // `ai_scope: on-request` is read as a secret too: it is what the old
+  // conversion set on hidden traits, so an unconverted file may still say it.
+  return Boolean(block.subtext) || block.ai_scope === "on-request";
+}
+
+/** One ordinary trait block as a line a person would write. */
 export function traitAsLine(block: TraitBlock): string {
   const trait = block.trait.trim();
   const description = block.description.trim();
-  // A hidden trait says so. The word carries what the importance level carried,
-  // and it is findable later with a search for it.
-  const prefix = block.importance === "hidden" || block.ai_scope === "on-request"
-    ? "Hidden: " : "";
-  if (trait && description) return `${prefix}${trait} -- ${description}`;
-  return prefix + (trait || description);
+  if (trait && description) return `${trait} -- ${description}`;
+  return trait || description;
 }
 
-function withText(section: ProfileSection, lines: string[]): ProfileSection {
+function withText(section: ProfileSection, lines: string[],
+                  keep: TraitBlock[]): ProfileSection {
   const existing = (section.content ?? "").trimEnd();
   const added = lines.filter(Boolean).join("\n");
   return {
@@ -78,7 +83,8 @@ function withText(section: ProfileSection, lines: string[]): ProfileSection {
     // APPENDED, never replaced. Whatever the writer already typed in the box
     // comes first and is left exactly as it was.
     content: existing && added ? `${existing}\n${added}` : existing || added,
-    trait_blocks: [],
+    // The secrets stay structured, in the section they were already in.
+    trait_blocks: keep,
   };
 }
 
@@ -96,10 +102,11 @@ export function convertToSide(profile: Profile): Conversion {
       sections[key] = { ...section, trait_blocks: [] };
       continue;
     }
-    dissolved += blocks.length;
-    hidden += blocks.filter(
-      b => b.importance === "hidden" || b.ai_scope === "on-request").length;
-    sections[key] = withText(section, blocks.map(traitAsLine));
+    const secrets = blocks.filter(isSecret);
+    const ordinary = blocks.filter(b => !isSecret(b));
+    dissolved += ordinary.length;
+    hidden += secrets.length;
+    sections[key] = withText(section, ordinary.map(traitAsLine), secrets);
   }
 
   return {

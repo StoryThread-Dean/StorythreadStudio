@@ -134,15 +134,18 @@ def test_prose_that_came_across_unchanged_is_reported_as_unchanged(project):
 
 
 def test_the_one_content_change_is_visible_rather_than_hidden(project):
-    # A "hidden" trait becomes ai_scope: on-request. That is the only content
-    # change the conversion makes, and burying it inside a "same" verdict
-    # would be the one thing a writer most needs to see.
+    # A "hidden" trait becomes a weight plus `subtext: true` -- the two things
+    # that one word was saying at once. It is the only content change the
+    # conversion makes, and burying it inside a "same" verdict would be the one
+    # thing a writer most needs to see.
     run_migration(project)
     diff = compare_migrated(project, "character", "elara.md")
     traits = next(s for s in diff["sections"] if s["id"] == "physical_traits")
     assert traits["changed"] is True
-    assert "on-request" in traits["converted"]
-    assert "on-request" not in traits["original"]
+    assert "subtext: true" in traits["converted"]
+    assert "subtext" not in traits["original"]
+    # And the word that used to carry both meanings is gone from the new file.
+    assert "importance: hidden" not in traits["converted"]
 
 
 def test_a_section_that_did_not_come_across_is_named_as_missing(project):

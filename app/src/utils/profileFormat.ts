@@ -93,7 +93,15 @@ export function formatProfileForAI(
     lines.push(`## ${cfg.heading}`);
     if (hasTraits) {
       for (const block of section.trait_blocks) {
-        lines.push(`- ${block.trait} [${block.importance}]: ${block.description}`);
+        // THE MARKER THE PROMPT KEYS ON. `[core, SUBTEXT]` says two independent
+        // things: weigh this heavily, and never say it out loud. The base system
+        // prompt (see READING IMPORTANCE LABELS in backend/app/ai/prompts.py)
+        // enforces the second; dropping it here would leave a secret looking
+        // like ordinary text, with nothing anywhere to notice.
+        const label = block.subtext
+          ? `${block.importance}, SUBTEXT`
+          : block.importance;
+        lines.push(`- ${block.trait} [${label}]: ${block.description}`);
       }
     } else if (hasText) {
       lines.push(section.content);

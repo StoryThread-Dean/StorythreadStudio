@@ -14,18 +14,24 @@ export type ProfileType =
   | "chapter_summary"
   | "scene_summary";
 
-// Importance levels control how the AI weights a trait when it's in context.
-// Core = defining trait, always reflected in behavior when on stage.
-// Hidden = sent to the AI as influence material, but the AI is instructed
-//          NEVER to name or quote it directly. Hidden traits shape subtext:
-//          gestures, dialogue choices, what the character avoids. The reader
-//          should feel the effect without ever being told the cause.
+/**
+ * HOW MUCH a trait shapes the character. Weight, and nothing else.
+ *
+ * `hidden` used to be a fifth level here, and that was the mistake: it answered
+ * a different question. The writer's example is the proof -- a villain avoids
+ * hospitals because he watched his parents die in one, which decides where the
+ * plot can go (core) and which he would never say out loud (secret). As one
+ * scale he could only be one of those, and choosing secret filed the most
+ * load-bearing fact about him as the least important thing on the page.
+ *
+ * Secrecy is `TraitBlock.subtext` now. The two are independent, and the pair is
+ * ordinary rather than exotic.
+ */
 export type ImportanceLevel =
   | "core"           // defining trait, reflected when on stage
   | "present"        // regularly active, surfaces when scene calls for it
   | "background"     // true but rarely foregrounded, used as flavor
-  | "contextual"     // only relevant when its specific situation is in play
-  | "hidden";        // never named directly, drives subtext only
+  | "contextual";    // only relevant when its specific situation is in play
 
 
 // ── Core Data Models ─────────────────────────────────────────────────────────
@@ -36,18 +42,31 @@ export interface TraitBlock {
   id: string;                  // UUID used as React key (not stored in Markdown)
   trait: string;               // e.g. "observant, punctual, eloquent"
   description: string;         // Human-written description of the trait
-  importance: ImportanceLevel; // Controls AI visibility and prompt position
+  importance: ImportanceLevel; // WEIGHT: how much this shapes them
   /**
-   * Whether the Weave may put this trait in front of a model, and when.
+   * WHETHER IT MAY BE SAID OUT LOUD. Independent of weight.
    *
-   * CARRIED THROUGH RATHER THAN EDITED HERE. The Weave's file format keeps it
-   * per trait, and conversion SETS it: a `hidden` trait becomes
-   * `ai_scope: on-request`, which is the whole mechanism behind "drives
-   * subtext, never named directly". This screen does not offer it as a
-   * control -- but it has to hold it and hand it back, because a save that
-   * dropped the field would silently undo that on the first edit of every
-   * converted character. Optional because profiles written before the Weave
-   * do not carry one, and absent means the default (always).
+   * True means: AI receives it and uses it at its full weight, and is
+   * instructed never to name, quote or reveal it -- it shows only as behaviour,
+   * a gesture, a hesitation, something the character avoids. The reader feels
+   * the effect without being told the cause.
+   *
+   * NOT the same as withholding it. Withholding a secret stops the model naming
+   * it by stopping the model knowing it, which produces a character who behaves
+   * like somebody else entirely.
+   */
+  subtext?: boolean;
+  /**
+   * AVAILABILITY: whether the Weave volunteers this trait in an automatic
+   * brief, or holds it back until asked. NOT the same question as `subtext`.
+   *
+   * The conversion used to set `on-request` on every hidden trait, which was a
+   * worse trade than the problem: withholding a secret stops the model naming it
+   * by stopping the model knowing it. That is undone -- a secret is sent,
+   * weighted, and never named.
+   *
+   * Carried through rather than edited here; nothing in this screen sets it.
+   * Absent means the default, which is always.
    */
   ai_scope?: "always" | "on-request" | "never";
 }
@@ -232,5 +251,21 @@ export const IMPORTANCE_LABELS: Record<ImportanceLevel, string> = {
   present:     "Present -- regularly active, surfaces when scene calls for it",
   background:  "Background -- true but rarely foregrounded, used as flavor",
   contextual:  "Contextual -- only when its specific situation is in play",
-  hidden:      "Hidden -- never named directly, drives subtext only",
+};
+
+/** The other axis, in the words the screen uses for it. */
+export const SUBTEXT_LABEL =
+  "Shows, never named -- AI uses it, and never says it";
+
+/**
+ * What a writer needs to know about the pair, in one sentence each.
+ *
+ * Kept beside the labels because the commonest confusion is thinking secrecy is
+ * a low weight: it is not, and a secret at Core is the ordinary case.
+ */
+export const SUBTEXT_HELP = {
+  on: "AI is told this and lets it drive behaviour, and is forbidden from "
+    + "naming or hinting at it in prose. Its weight above still decides how "
+    + "much it shapes a scene.",
+  off: "AI may refer to this openly, like anything else on the page.",
 };

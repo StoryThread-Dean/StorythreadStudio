@@ -921,8 +921,11 @@ def _entity(project, entity_id="e-elara"):
 TRAITS = [
     {"trait": "guarded", "description": "Keeps her own counsel.",
      "importance": "core"},
+    # A SECRET THAT MATTERS. Weight and disclosure are separate fields now, so
+    # this can be both -- which under the old single scale it could not: a
+    # secret had to be filed as the least important thing on the page.
     {"trait": "haunted", "description": "Will not say what she saw.",
-     "importance": "hidden", "ai_scope": "on-request"},
+     "importance": "core", "subtext": True},
 ]
 
 
@@ -942,17 +945,32 @@ def test_importance_survives_it(project):
     thread["sections"]["overview"]["trait_blocks"] = TRAITS
     _save(project, thread, thread.get("revision"))
     back = _entity(project)["sections"]["overview"]["trait_blocks"]
-    assert [b["importance"] for b in back] == ["core", "hidden"]
+    assert [b["importance"] for b in back] == ["core", "core"]
 
 
-def test_ai_scope_survives_it(project):
-    # The field a client is most likely to drop, and the one that quietly
-    # undoes the conversion when it is dropped.
+def test_a_secret_survives_a_save(project):
+    # The field a client is most likely to drop, and dropping it is the one
+    # mistake here that cannot be seen: the trait still reads correctly, and the
+    # model is no longer told to keep it out of the prose.
     thread = _entity(project)
     thread["sections"]["overview"]["trait_blocks"] = TRAITS
     _save(project, thread, thread.get("revision"))
     back = _entity(project)["sections"]["overview"]["trait_blocks"]
-    assert back[1]["ai_scope"] == "on-request"
+    assert back[1]["subtext"] is True
+    assert not back[0].get("subtext")
+
+
+def test_a_secret_is_not_withheld_from_the_model(project):
+    # It is sent, weighted like anything else, and the prompt forbids naming it.
+    # Withholding it instead -- which an earlier pass did, via
+    # `ai_scope: on-request` -- stops the model naming the secret by stopping the
+    # model knowing it, and a character built on one buried thing then behaves
+    # like somebody else.
+    thread = _entity(project)
+    thread["sections"]["overview"]["trait_blocks"] = TRAITS
+    _save(project, thread, thread.get("revision"))
+    back = _entity(project)["sections"]["overview"]["trait_blocks"]
+    assert back[1].get("ai_scope") in (None, "", "always")
 
 
 def test_a_trait_block_section_is_not_flattened_into_prose(project):
