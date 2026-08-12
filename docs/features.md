@@ -406,9 +406,13 @@ you cannot weave a weft without a warp.
 | Pass | When | What it asks |
 |---|---|---|
 | **Dress the Loom** | Start here | What is here, and what relates to what |
-| **Weave the Chapters** | As you write | One chapter at a time: did anything change here? |
+| **Weave the Chapters** | As you write | Did anything change? Pairs the scenes keep putting together with nothing recorded between them |
 | **Read the Cloth** | When you step back | Where does the book contradict itself? |
 | **Unwoven** | Any time | The ground rules of the world, which is its own job |
+
+(Weave the Chapters reads the whole book today. Scoping it to the chapter being
+written -- "run it from chapter eight and the app already knows when" -- is the
+designed next step for it, tracked on the roadmap, not a current behaviour.)
 
 **The order is a teaching fact, not a lock.** Dressing the loom is never
 finished -- a world grows for the life of a book -- so a gate would never open.
@@ -438,11 +442,28 @@ What it can find without spending anything:
 | **Unplaced** | a fact with no point in the story, so it never takes effect |
 | **Told early** | something named in a chapter where the map would be hiding it |
 | **Unwoven** | ground rules of the world that have not been decided yet |
+| **Pinned** | a phrase the writer marked by hand, raised until answered |
 
 Every stop shows the text that triggered it and answers **"why am I seeing
 this?"** with the rule that fired. Four ways to answer, and they are deliberately
-different: apply, *not a connection* (permanent), *not yet* (comes back), and
-*never ask* about this kind (reversible).
+different: resolve it in place; a **permanent no worded for the kind it is on**
+(*Never make this an entry* on a name, *Not a problem* on a contradiction,
+*Leave it as it is* on a thin entry, *Not a connection* only where it really is
+one); *not yet* (comes back); and *never ask* about this kind (reversible -- and
+it skips the rest of that kind in the current sitting too).
+
+**Only Characters and Creatures are asked how they connect.** Croft Manor's way
+into the story is through Lara -- she inherited it, lives in it, left it -- so
+the manor is never the subject of a connection question. Locations, lore,
+factions, deities, governments, religions, cultures and the rest are *passive*:
+they become connected when someone active is tied to them, an unconnected one is
+not a problem, and a pair the scenes keep sharing stands its question on the
+active end, so the sentence reads "Lara lives in Croft Manor" rather than a
+manor being asked what it thinks of anyone. Two passive things in a room
+together is scenery, not a stop. The split is data: a type in the writer's own
+`types.json` may carry `"active": true` (a sentient ship that should ask) or
+`false`, and that word wins. It gates the walk only -- recording a connection
+from a passive entry by hand works everywhere.
 
 **The prose already knows who the likely answers are.** Both connection
 questions are backed by the same free count: which entries are named in the same
@@ -559,6 +580,15 @@ stop with your place kept. A screen reachable both inside the walk and on its ow
 carries both wordings, because there is nothing to advance to from the map and
 claiming otherwise would be a lie.
 
+**The walk remembers its sitting.** The stop list is a snapshot taken at Start,
+so the panel keeps its own session memory: walking Back onto something already
+answered shows a receipt of what was chosen rather than the live question
+(answering twice was how work got duplicated), *never ask* takes effect
+immediately rather than next session, and a stop whose subject stopped existing
+mid-walk -- absorbed, or fixed through the editor -- says "already sorted out
+somewhere else" with a way forward, instead of a 404 or a spinner that never
+ends.
+
 **Tangles resolve one Snag at a time for now.** The lexicon's Tangle -- several
 contradictions sharing a cause -- is not yet produced as its own grouped stop;
 each Snag in it arrives individually and settles through the same fixer. Grouping
@@ -573,14 +603,17 @@ kinds, and which John a name meant -- live in `answers.json` **per book**, not p
 session, so "permanently" survives closing the panel. The per-session run files
 beside it are logs of what happened in one sitting.
 
-**Applied means saved.** There is no autosave in this app, so a change accepted
-into an unsaved buffer is *staged*, not applied. Discard the buffer and the
-finding comes back as a question rather than sitting in the ledger claiming to be
-done.
+**Applied means saved.** Every inline resolution writes the file first and
+records the answer after, so "applied" in the ledger is always a fact about the
+disk. The ledger also defines a *staged* state for a change sitting in an
+unsaved buffer -- no current screen uses it, because the walk's own forms save
+directly; it exists so a future buffer-editing surface cannot break the promise
+that a discarded edit comes back as a question rather than sitting in the
+ledger claiming to be done.
 
-The one one-click action creates an **empty** entry from a name the writer already
-wrote -- and that entry is immediately Frayed, so the walk then asks for it to be
-written. The app does not write the writer's characters.
+Nothing here writes FOR the writer: the only text Quick Entry can arrive
+holding is the writer's own sentence from the manuscript, offered as an
+editable starter. The app does not write the writer's characters.
 
 **An empty entry can be connected to straight away.** It was excluded at first,
 on the reasoning that something not yet said to BE anything is a word rather than
@@ -597,14 +630,24 @@ Unwoven is the only stop that is not about a mistake. It asks the questions a
 world has not answered -- how power passes, what magic costs and who pays, what
 the worst thing a person can be accused of is.
 
-What keeps it from being a chore is that answers open consequences and reach
-across domains. *"Succession is decided by single combat"* opens *"what stops
-every heir being murdered in childhood?"* and touches the law (*is kinslaying
-prosecuted?*) and the faith (*does it sanctify this?*). A child question is never
-asked before its parent is answered, and every question says where its answer
-belongs, so it becomes part of the world rather than another pile of notes.
+What keeps it from being a chore is that answers reach across domains --
+*"succession is decided by single combat"* touches the law (*is kinslaying
+prosecuted?*) and the faith (*does it sanctify this?*) -- and every question
+says where its answer belongs, so it becomes part of the world rather than
+another pile of notes.
+
+The corpus also holds **follow-up questions** that an answer is designed to
+open (*"what stops every heir being murdered in childhood?"*), never asked
+before their parent is answered. Today the walk asks the trunk questions only;
+surfacing the branches is scheduled work on the roadmap, not a current
+behaviour.
 
 ### Context assembly
+
+**Built and tested on the backend; no screen calls it yet.** Wiring the brief
+and its inspect panel into the Writing Companion is the remaining piece of the
+locked context rule, tracked on the roadmap -- until then, AI features use
+manual chips exactly as before, and nothing below is reachable from the UI.
 
 When an AI feature runs at a point in the story, the app can assemble a brief from
 the Weave as of that point. The budget subtracts every other claim on the window

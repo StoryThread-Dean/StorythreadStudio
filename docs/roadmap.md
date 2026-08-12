@@ -39,6 +39,19 @@ with its inspect panel. Automatic Weave context is not reachable from any AI
 feature yet -- `/api/codex/context` builds and returns a brief, and nothing calls
 it -- so the amended context rule is not yet exercised in the running app.
 
+Two more, surfaced by the 2026-08-11 head-to-tail sweep and stated in
+`features.md` as not-yet-behaviour so the docs stay honest:
+
+- **Chapter-scoped Weave the Chapters.** The pass reads the whole book; the
+  design ("run it from chapter eight and the app already knows when, so `at`
+  is recorded for free") needs the panel to send `chapter_ids`, which the
+  backend already accepts and honours.
+- **Unwoven branch questions.** The world-rules corpus declares follow-ups at
+  depths 2-3 ("what stops every heir being murdered in childhood?"), and a
+  depth check pins every scan to depth 1, so no branch has ever been asked.
+  Needs a decision on pacing (a branch per answer risks eleven questions per
+  sitting) before the check is lifted.
+
 The migration UI is now built: the Weave screen runs the dry run on open,
 itemises it folder by folder, names the backup destination before the button,
 and requires a second click that repeats the count and the destination. An
