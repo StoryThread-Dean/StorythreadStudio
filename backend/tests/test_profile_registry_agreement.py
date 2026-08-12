@@ -1,15 +1,19 @@
-# tests/test_profile_registry_agreement.py -- one set of sections, three files
-# ============================================================================
-# The Profile Builder's sections are written down in THREE places:
+# tests/test_profile_registry_agreement.py -- one set of sections, two files
+# ==========================================================================
+# The Profile Builder's sections used to be written down in THREE places:
 #
-#   backend/app/routers/profiles.py   SECTION_CONFIGS  (parses and writes
-#                                                       profiles/*.md)
-#   backend/app/codex/types_registry.py DEFAULT_TYPES  (parses and writes
-#                                                       codex/*.md)
-#   app/src/types/profile.ts          SECTION_CONFIGS  (renders the form)
+#   backend/app/routers/profiles.py     SECTION_CONFIGS (parses profiles/*.md)
+#   backend/app/codex/types_registry.py DEFAULT_TYPES   (parses codex/*.md)
+#   app/src/types/profile.ts            SECTION_CONFIGS (rendered the form)
 #
-# Collapsing them into one is recovery task R2.2b. Until then they are BOUND,
-# because the drift has already cost the writer real work, twice:
+# R2.2b DELETED THE TYPESCRIPT COPY. The form's sections now come from the
+# world's own types.json at runtime, which is what gave the six kinds with no
+# editor a real one -- and it means there is no third copy left to drift. The
+# test that read profile.ts is gone with it, deliberately: a test that keeps
+# passing after the thing it watched was removed is worse than no test.
+#
+# Two copies remain and are still BOUND here, because the drift between THEM has
+# already cost the writer real work, twice:
 #
 #   * The Weave shipped four sections for a Location where the Profile Builder
 #     had seven, so a converted Location and a Weaving-made Location had
@@ -22,13 +26,8 @@
 # Neither could be caught by using the app: the first looks like a thin page,
 # the second looks like a section you have not filled in yet.
 #
-# This file reads the TypeScript from Python, the same trick test_explain_costs
-# uses to stop a "free" claim outliving the route it describes. A test that
-# checked only the two Python copies would have passed through the bug that
-# actually shipped.
-
-import os
-import re
+# Both remaining copies are Python, and they are bound below. The third was
+# deleted rather than watched, which is the better end for a duplicate.
 
 import pytest
 
@@ -42,11 +41,6 @@ from app.routers.profiles import SECTION_CONFIGS
 # otherwise by looping over the registry instead of over what exists.
 SHARED_KINDS = ["character", "relationship", "location", "lore"]
 
-PROFILE_TS = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "app", "src", "types", "profile.ts",
-)
-
 
 def _registry_sections(kind: str) -> list[tuple[str, str, bool]]:
     entry = next(t for t in DEFAULT_TYPES if t["id"] == kind)
@@ -58,49 +52,12 @@ def _python_sections(kind: str) -> list[tuple[str, str, bool]]:
     return [(c.key, c.heading, c.has_trait_blocks) for c in SECTION_CONFIGS[kind]]
 
 
-def _typescript_sections() -> dict[str, list[tuple[str, str, bool]]]:
-    """
-    Parse SECTION_CONFIGS out of profile.ts.
-
-    Deliberately crude -- a regex over the object literal. Anything cleverer
-    would need a TypeScript parser in the Python test suite, and the shape here
-    is fixed enough that a change which breaks this parse is a change worth
-    looking at anyway.
-    """
-    with open(PROFILE_TS, "r", encoding="utf-8") as f:
-        source = f.read()
-
-    start = source.index("export const SECTION_CONFIGS")
-    body = source[start:source.index("\n};", start)]
-
-    out: dict[str, list[tuple[str, str, bool]]] = {}
-    current = None
-    for line in body.splitlines():
-        opener = re.match(r"\s{2}(\w+):\s*\[", line)
-        if opener:
-            current = opener.group(1)
-            out[current] = []
-            continue
-        row = re.search(
-            r'key:\s*"([^"]+)".*?heading:\s*"([^"]+)".*?hasTraitBlocks:\s*(true|false)',
-            line,
-        )
-        if row and current:
-            out[current].append((row.group(1), row.group(2), row.group(3) == "true"))
-    return out
-
-
 @pytest.mark.parametrize("kind", SHARED_KINDS)
 def test_python_and_the_registry_ship_the_same_sections(kind):
     # Same ids, same headings, same trait-block flags, same ORDER -- order is
     # the sequence the writer fills the page in, and two screens disagreeing
     # about it is its own small bug.
     assert _python_sections(kind) == _registry_sections(kind)
-
-
-@pytest.mark.parametrize("kind", SHARED_KINDS)
-def test_the_form_asks_for_exactly_what_the_backend_stores(kind):
-    assert _typescript_sections()[kind] == _registry_sections(kind)
 
 
 @pytest.mark.parametrize("kind", SHARED_KINDS)

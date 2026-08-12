@@ -63,6 +63,23 @@ const THREAD = {
   },
 };
 
+/**
+ * The sections a character has, as the world reports them.
+ *
+ * The source layer takes this as a lookup now rather than importing a table: the
+ * app reads a project's kinds from its own types.json, which is what gives the
+ * six kinds that had no editor a real one.
+ */
+const SECTIONS: Record<string, { key: string; heading: string; hasTraitBlocks: boolean }[]> = {
+  character: [
+    { key: "overview", heading: "Overview", hasTraitBlocks: false },
+    { key: "physical_traits", heading: "Physical Traits", hasTraitBlocks: true },
+    { key: "voice_notes", heading: "Voice Notes", hasTraitBlocks: true },
+  ],
+  location: [{ key: "overview", heading: "Overview", hasTraitBlocks: false }],
+};
+const sectionsFor = (type: string) => SECTIONS[type] ?? [];
+
 let calls: { url: string; init?: RequestInit }[] = [];
 
 function mockFetch(handler: (url: string, init?: RequestInit) => unknown) {
@@ -109,8 +126,8 @@ describe("which folder this project uses", () => {
   it("sends each home to its own endpoints", async () => {
     mockFetch(url => (url.includes("/api/codex/list")
       ? { threads: [] } : []));
-    await sourceFor("/p", "codex").list("character");
-    await sourceFor("/p", "profiles").list("character");
+    await sourceFor("/p", "codex", sectionsFor).list("character");
+    await sourceFor("/p", "profiles", sectionsFor).list("character");
     expect(calls[0].url).toContain("/api/codex/list");
     expect(calls[1].url).toContain("/api/profiles/list");
   });
@@ -129,7 +146,7 @@ describe("the list", () => {
         filename: "jack.md", status: "active", role: "", character_kind: "" },
     ] }));
 
-    const rows = await codexSource("/p").list("character");
+    const rows = await codexSource("/p", sectionsFor).list("character");
     expect(rows[0]).toMatchObject({
       entity_id: "e-1", name: "Mira Kell", role: "protagonist",
       character_kind: "side",
@@ -146,7 +163,7 @@ describe("opening an entry", () => {
     // An absent section renders as a gap the writer cannot type into. The file
     // here has two of the eight a character page shows.
     mockFetch(() => THREAD);
-    const profile = await codexSource("/p").load(
+    const profile = await codexSource("/p", sectionsFor).load(
       { entity_id: "e-lexa", filename: "lexa.md", name: "Alexandra Langford",
         type: "character", role: "protagonist", status: "active" });
 
@@ -157,7 +174,7 @@ describe("opening an entry", () => {
 
   it("gives every trait block a key without putting one in the writer's file", async () => {
     mockFetch(() => THREAD);
-    const profile = await codexSource("/p").load(
+    const profile = await codexSource("/p", sectionsFor).load(
       { entity_id: "e-lexa", filename: "lexa.md", name: "x",
         type: "character", role: "", status: "active" });
 
@@ -170,7 +187,7 @@ describe("opening an entry", () => {
 
   it("carries the revision it opened at", async () => {
     mockFetch(() => THREAD);
-    const profile = await codexSource("/p").load(
+    const profile = await codexSource("/p", sectionsFor).load(
       { entity_id: "e-lexa", filename: "lexa.md", name: "x",
         type: "character", role: "", status: "active" });
     expect(profile.revision).toBe("rev-1");
@@ -182,7 +199,7 @@ describe("saving an entry", () => {
   async function saveAfterEditing(edit: (p: Profile) => Profile) {
     mockFetch(url => (url.includes("/api/codex/entity?") ? THREAD
       : { saved: true, revision: "rev-2" }));
-    const source = codexSource("/p");
+    const source = codexSource("/p", sectionsFor);
     const profile = await source.load(
       { entity_id: "e-lexa", filename: "lexa.md", name: "x",
         type: "character", role: "", status: "active" });
@@ -249,7 +266,7 @@ describe("saving an entry", () => {
           message: "This entry changed on disk since you opened it.",
         } }), { status: 409 })));
 
-    const source = codexSource("/p");
+    const source = codexSource("/p", sectionsFor);
     const profile = await source.load(
       { entity_id: "e-lexa", filename: "lexa.md", name: "x",
         type: "character", role: "", status: "active" });
@@ -272,7 +289,7 @@ describe("creating and removing", () => {
       ? { ...THREAD, entity_id: "e-new" }
       : { thread: { entity_id: "e-new" } }));
 
-    await codexSource("/p").create({
+    await codexSource("/p", sectionsFor).create({
       type: "character", name: "Mira Kell", role: "protagonist",
       characterKind: "side",
     });
@@ -285,7 +302,7 @@ describe("creating and removing", () => {
   it("does not send a template for something that is not a character", async () => {
     mockFetch(url => (url.includes("/api/codex/entity?")
       ? { ...THREAD, type: "location" } : { thread: { entity_id: "e-new" } }));
-    await codexSource("/p").create({
+    await codexSource("/p", sectionsFor).create({
       type: "location", name: "Ravensmoor", role: "", characterKind: "main",
     });
     expect(sentBody("/thread/new").character_kind).toBe("");
@@ -293,7 +310,7 @@ describe("creating and removing", () => {
 
   it("lets the Weave forget a deleted entry, so its name can be asked about again", async () => {
     mockFetch(() => ({ deleted: "e-lexa", forgotten: 2 }));
-    await codexSource("/p").remove(
+    await codexSource("/p", sectionsFor).remove(
       { entity_id: "e-lexa", filename: "lexa.md", name: "x",
         type: "character", role: "", status: "active" });
     expect(calls[0].url).toContain("forget_answers=true");
@@ -304,8 +321,8 @@ describe("creating and removing", () => {
     // Not ported to the codex yet (R2.7). The screen hides the button; if
     // anything reaches this, it says so plainly rather than failing silently.
     mockFetch(() => ({}));
-    expect(codexSource("/p").canImport).toBe(false);
-    await expect(codexSource("/p").importFile("C:/x.md"))
+    expect(codexSource("/p", sectionsFor).canImport).toBe(false);
+    await expect(codexSource("/p", sectionsFor).importFile("C:/x.md"))
       .rejects.toThrow(/not built yet/);
   });
 });

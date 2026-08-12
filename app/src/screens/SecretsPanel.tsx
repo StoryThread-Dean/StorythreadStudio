@@ -24,28 +24,32 @@ import { useMemo, useState } from "react";
 import { BookOpen, EyeOff } from "lucide-react";
 
 import type { ImportanceLevel, Profile } from "../types/profile";
-import { IMPORTANCE_LABELS, SECTION_CONFIGS } from "../types/profile";
+import { IMPORTANCE_LABELS } from "../types/profile";
+import type { SectionConfig } from "../types/sectionRegistry";
 import { Explain } from "../components/learn/Explain";
 import { isSecret } from "./characterTemplate";
 import { SubtextGuide } from "./SubtextGuide";
 
 interface SecretsPanelProps {
   profile: Profile;
+  /** This kind's sections, for naming where each secret lives. From the world's
+   *  own registry, so a Deity's secret says "Worship" like any other. */
+  sections: SectionConfig[];
   /** Change one trait's weight in place. Marks the profile unsaved, like any
    *  other edit -- this panel writes nothing on its own. */
   onSetWeight: (sectionKey: string, blockId: string,
                 importance: ImportanceLevel) => void;
 }
 
-export function SecretsPanel({ profile, onSetWeight }: SecretsPanelProps) {
+export function SecretsPanel({ profile, sections, onSetWeight }: SecretsPanelProps) {
   const [guideOpen, setGuideOpen] = useState(false);
   const headings = useMemo(() => {
     const map = new Map<string, string>();
-    for (const config of SECTION_CONFIGS[profile.type] ?? []) {
+    for (const config of sections) {
       map.set(config.key, config.heading);
     }
     return map;
-  }, [profile.type]);
+  }, [sections]);
 
   const secrets = useMemo(
     () => Object.entries(profile.sections).flatMap(([key, section]) =>

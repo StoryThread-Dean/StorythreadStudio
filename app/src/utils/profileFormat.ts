@@ -10,8 +10,8 @@
 // This is the single source of truth for how profiles are represented in AI
 // prompts. The raw traits with importance labels are the authoritative source.
 
-import type { Profile, ProfileType } from "../types/profile";
-import { SECTION_CONFIGS } from "../types/profile";
+import type { Profile } from "../types/profile";
+import { headingFromKey } from "../types/sectionRegistry";
 
 
 // Which slices of a profile to include when serializing for the AI.
@@ -59,7 +59,16 @@ export function formatProfileForAI(
   p: Profile,
   include: ChipIncludeOptions = LEGACY_INCLUDE,
 ): string {
-  const configs = SECTION_CONFIGS[p.type as ProfileType] ?? [];
+  // WHAT THE ENTRY ACTUALLY HOLDS, rather than what a hardcoded table said its
+  // kind should hold. This used to walk SECTION_CONFIGS, which meant a Faction,
+  // a Deity or a kind the writer invented serialised as nothing at all: the
+  // table only knew four kinds. A section is a trait section when it holds trait
+  // blocks, which is a fact about the data and true for every kind.
+  const configs = Object.keys(p.sections).map(key => ({
+    key,
+    heading: headingFromKey(key),
+    hasTraitBlocks: (p.sections[key]?.trait_blocks ?? []).length > 0,
+  }));
   const lines: string[] = [`Profile: ${p.name} (${p.type})`, `Role: ${p.role || "unspecified"}`, ""];
 
   // 1. AI Summary first -- when the writer chose to include it, the model

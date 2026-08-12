@@ -32,7 +32,8 @@
 // say so.
 
 import type { Profile, ProfileListItem, CharacterKind } from "../types/profile";
-import { SECTION_CONFIGS } from "../types/profile";
+import type { SectionConfig } from "../types/sectionRegistry";
+import { headingFromKey } from "../types/sectionRegistry";
 import { v4 as uuidv4 } from "uuid";
 
 const API_BASE = "http://localhost:8000";
@@ -180,7 +181,8 @@ export function profilesSource(rootPath: string): ProfileSource {
  *  block, which the Weave's format deliberately does not store (an id in the
  *  writer's Markdown would be noise, and render_thread drops it on the way
  *  back). */
-function sectionsFromThread(thread: WeaveThread, type: string): Profile["sections"] {
+function sectionsFromThread(thread: WeaveThread,
+                            wantedSections: SectionConfig[]): Profile["sections"] {
   const stored = (thread.sections ?? {}) as Record<string, {
     heading?: string; content?: string; ai_summary?: string;
     trait_blocks?: Record<string, unknown>[];
@@ -189,8 +191,7 @@ function sectionsFromThread(thread: WeaveThread, type: string): Profile["section
   const out: Profile["sections"] = {};
   // Every section the form will render must exist, even if the file has none of
   // it -- an absent section renders as an uneditable gap.
-  const wanted = (SECTION_CONFIGS[type as keyof typeof SECTION_CONFIGS] ?? [])
-    .map(s => s.key);
+  const wanted = wantedSections.map(s => s.key);
   for (const key of [...wanted, ...Object.keys(stored)]) {
     if (out[key]) continue;
     const section = stored[key] ?? {};
@@ -211,7 +212,8 @@ function sectionsFromThread(thread: WeaveThread, type: string): Profile["section
   return out;
 }
 
-function profileFromThread(thread: WeaveThread): Profile {
+function profileFromThread(thread: WeaveThread,
+                           sections: SectionConfig[]): Profile {
   const type = String(thread.type ?? "");
   return {
     entity_id: String(thread.entity_id ?? ""),
@@ -221,7 +223,7 @@ function profileFromThread(thread: WeaveThread): Profile {
     status: String(thread.status ?? "active"),
     tags: (thread.tags ?? []) as string[],
     filename: String(thread.filename ?? ""),
-    sections: sectionsFromThread(thread, type),
+    sections: sectionsFromThread(thread, sections),
     full_ai_summary: String(thread.full_ai_summary ?? ""),
     created_at: String(thread.created_at ?? ""),
     updated_at: String(thread.updated_at ?? ""),
@@ -241,23 +243,22 @@ function profileFromThread(thread: WeaveThread): Profile {
   };
 }
 
-function threadFromProfile(profile: Profile): WeaveThread {
+function threadFromProfile(profile: Profile,
+                           sections: SectionConfig[]): WeaveThread {
   const previous = (profile.weave ?? {}) as WeaveThread;
   const previousSections = (previous.sections ?? {}) as Record<string, {
     heading?: string;
   }>;
-  const headings = new Map(
-    (SECTION_CONFIGS[profile.type as keyof typeof SECTION_CONFIGS] ?? [])
-      .map(s => [s.key, s.heading] as const));
+  const headings = new Map(sections.map(s => [s.key, s.heading] as const));
 
-  const sections: Record<string, unknown> = {};
+  const out: Record<string, unknown> = {};
   for (const [key, section] of Object.entries(profile.sections)) {
-    sections[key] = {
+    out[key] = {
       // The heading the file already used wins: it is what the writer sees
       // when they open the Markdown, and the section's id is derived from it,
       // so replacing it with a different wording would re-file the section.
       heading: previousSections[key]?.heading || headings.get(key)
-        || key.replace(/_/g, " "),
+        || headingFromKey(key),
       content: section.content ?? "",
       ai_summary: section.ai_summary ?? "",
       trait_blocks: (section.trait_blocks ?? []).map(block => ({
@@ -288,11 +289,12 @@ function threadFromProfile(profile: Profile): WeaveThread {
     filename: profile.filename,
     character_kind: profile.character_kind === "side" ? "side" : "",
     full_ai_summary: profile.full_ai_summary,
-    sections,
+    sections: out,
   };
 }
 
-export function codexSource(rootPath: string): ProfileSource {
+export function codexSource(rootPath: string,
+                            sectionsFor: (type: string) => SectionConfig[]): ProfileSource {
   const get = async (entityId: string) => {
     const params = new URLSearchParams({
       project_path: rootPath, entity_id: entityId,
@@ -330,23 +332,25 @@ export function codexSource(rootPath: string): ProfileSource {
     },
 
     async load(item) {
-      return profileFromThread(await get(item.entity_id ?? ""));
+      const thread = await get(item.entity_id ?? "");
+      return profileFromThread(thread, sectionsFor(String(thread.type ?? "")));
     },
 
     async save(profile) {
+      const sections = sectionsFor(profile.type);
       await ok(await fetch(`${API_BASE}/api/codex/entity`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           project_path: rootPath,
-          thread: threadFromProfile(profile),
+          thread: threadFromProfile(profile, sections),
           base_revision: profile.revision ?? null,
         }),
       }), "Save failed.");
       // Read back rather than trusting what we sent: the file is the source of
       // truth, the save stamps a date, and the next save needs the revision
       // this one produced or it would be refused as a conflict with itself.
-      return profileFromThread(await get(profile.entity_id));
+      return profileFromThread(await get(profile.entity_id), sections);
     },
 
     async remove(item) {
@@ -371,7 +375,8 @@ export function codexSource(rootPath: string): ProfileSource {
         }),
       }), "Failed to create entry.") as { thread: WeaveThread };
       // Fetched again so the new entry carries a revision, like any other.
-      return profileFromThread(await get(String(body.thread?.entity_id ?? "")));
+      return profileFromThread(await get(String(body.thread?.entity_id ?? "")),
+                               sectionsFor(type));
     },
 
     async importFile() {
@@ -383,6 +388,9 @@ export function codexSource(rootPath: string): ProfileSource {
   };
 }
 
-export function sourceFor(rootPath: string, home: EntriesHome): ProfileSource {
-  return home === "codex" ? codexSource(rootPath) : profilesSource(rootPath);
+export function sourceFor(rootPath: string, home: EntriesHome,
+                          sectionsFor: (type: string) => SectionConfig[]): ProfileSource {
+  return home === "codex"
+    ? codexSource(rootPath, sectionsFor)
+    : profilesSource(rootPath);
 }

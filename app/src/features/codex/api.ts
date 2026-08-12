@@ -167,6 +167,11 @@ export interface TypeEntry {
   label: string;
   folder: string;
   icon: string;
+  /** Which part of the sidebar it belongs to: an entry ABOUT something
+   *  ("profiles"), a document the writer authors ("notes"), or neither
+   *  ("other"). The Profile Builder's tabs follow the same rule the sidebar
+   *  does, so a kind added in one screen appears in the other. */
+  group?: string;
   sections: { id: string; heading: string; trait_blocks: boolean }[];
 }
 

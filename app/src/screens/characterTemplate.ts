@@ -42,7 +42,7 @@
 // before.
 
 import type { Profile, ProfileSection, TraitBlock } from "../types/profile";
-import { SECTION_CONFIGS } from "../types/profile";
+import type { SectionConfig } from "../types/sectionRegistry";
 
 export interface Conversion {
   profile: Profile;
@@ -123,9 +123,10 @@ export function convertToSide(profile: Profile): Conversion {
  * section the Main page shows is created if the file lacks it, so no part of the
  * page is an uneditable gap.
  */
-export function convertToMain(profile: Profile): Conversion {
+export function convertToMain(profile: Profile,
+                              characterSections: SectionConfig[]): Conversion {
   const sections: Profile["sections"] = {};
-  for (const config of SECTION_CONFIGS.character) {
+  for (const config of characterSections) {
     const existing = profile.sections[config.key];
     sections[config.key] = existing
       ? { ...existing, trait_blocks: existing.trait_blocks ?? [] }
@@ -145,7 +146,9 @@ export function convertToMain(profile: Profile): Conversion {
 }
 
 export function convertCharacter(
-  profile: Profile, to: "main" | "side",
+  profile: Profile, to: "main" | "side", characterSections: SectionConfig[],
 ): Conversion {
-  return to === "side" ? convertToSide(profile) : convertToMain(profile);
+  return to === "side"
+    ? convertToSide(profile)
+    : convertToMain(profile, characterSections);
 }

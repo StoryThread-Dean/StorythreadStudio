@@ -17,7 +17,27 @@ import {
   convertToMain, convertToSide, convertCharacter, traitAsLine, isSecret,
 } from "./characterTemplate";
 import type { Profile } from "../types/profile";
-import { SECTION_CONFIGS } from "../types/profile";
+import type { SectionConfig } from "../types/sectionRegistry";
+
+/**
+ * A character's sections, as the world's own registry reports them.
+ *
+ * Passed in rather than imported: the app reads these from the project's
+ * types.json at runtime, so a kind the writer invented has an editor too. A test
+ * that imported a fixed table would be testing a table that no longer exists.
+ */
+const CHARACTER_SECTIONS: SectionConfig[] = [
+  { key: "overview", heading: "Overview", hasTraitBlocks: false },
+  { key: "physical_traits", heading: "Physical Traits", hasTraitBlocks: true },
+  { key: "personality_traits", heading: "Personality Traits", hasTraitBlocks: true },
+  { key: "motivations", heading: "Motivations", hasTraitBlocks: true },
+  { key: "voice_notes", heading: "Voice Notes", hasTraitBlocks: true },
+  { key: "hidden_and_foreshadowing_traits",
+    heading: "Hidden and Foreshadowing Traits", hasTraitBlocks: true },
+  { key: "relationships_overview", heading: "Relationships Overview",
+    hasTraitBlocks: false },
+  { key: "notes", heading: "Notes", hasTraitBlocks: false },
+];
 
 function character(overrides: Partial<Profile> = {}): Profile {
   return {
@@ -147,7 +167,7 @@ describe("Side to Main", () => {
   it("moves nothing at all", () => {
     // Both pages keep their words in the same place in the file. The Main page
     // just also shows a trait list, which starts empty.
-    const { profile, dissolved, moved } = convertToMain(side);
+    const { profile, dissolved, moved } = convertToMain(side, CHARACTER_SECTIONS);
     expect(profile.sections.physical_traits.content)
       .toBe("Weathered hands, always moving.");
     expect(profile.sections.physical_traits.trait_blocks).toEqual([]);
@@ -158,8 +178,8 @@ describe("Side to Main", () => {
   it("gives the page every section it will show", () => {
     // A section the file lacks would otherwise render as a gap the writer
     // cannot type into.
-    const { profile } = convertToMain(side);
-    for (const config of SECTION_CONFIGS.character) {
+    const { profile } = convertToMain(side, CHARACTER_SECTIONS);
+    for (const config of CHARACTER_SECTIONS) {
       expect(Object.keys(profile.sections)).toContain(config.key);
     }
   });
@@ -174,12 +194,12 @@ describe("Side to Main", () => {
         smells_like: { content: "Woodsmoke.", trait_blocks: [], ai_summary: "" },
       },
     });
-    const { profile } = convertToMain(withExtra);
+    const { profile } = convertToMain(withExtra, CHARACTER_SECTIONS);
     expect(profile.sections.smells_like.content).toBe("Woodsmoke.");
   });
 
   it("changes the template", () => {
-    expect(convertToMain(side).profile.character_kind).toBe("main");
+    expect(convertToMain(side, CHARACTER_SECTIONS).profile.character_kind).toBe("main");
   });
 });
 
@@ -191,7 +211,7 @@ describe("a round trip", () => {
     // the writer can promote the lines back into traits themselves.
     const original = character();
     const there = convertToSide(original).profile;
-    const back = convertToMain(there).profile;
+    const back = convertToMain(there, CHARACTER_SECTIONS).profile;
 
     const physical = back.sections.physical_traits;
     const everything = physical.content
@@ -209,7 +229,7 @@ describe("a round trip", () => {
     // if the flag goes, the writer has no way to know their subtext became
     // ordinary text the AI may state outright.
     const there = convertToSide(character()).profile;
-    const back = convertToMain(there).profile;
+    const back = convertToMain(there, CHARACTER_SECTIONS).profile;
     for (const profile of [there, back]) {
       const secrets = Object.values(profile.sections)
         .flatMap(section => section.trait_blocks)
@@ -261,9 +281,9 @@ describe("a trait as a line", () => {
   });
 
   it("routes by the direction asked for", () => {
-    expect(convertCharacter(character(), "side").profile.character_kind)
+    expect(convertCharacter(character(), "side", CHARACTER_SECTIONS).profile.character_kind)
       .toBe("side");
-    expect(convertCharacter(character(), "main").profile.character_kind)
+    expect(convertCharacter(character(), "main", CHARACTER_SECTIONS).profile.character_kind)
       .toBe("main");
   });
 });

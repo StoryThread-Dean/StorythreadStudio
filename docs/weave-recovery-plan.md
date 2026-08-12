@@ -212,10 +212,33 @@ types it is about are edited in a screen with no fact UI.
       "Rule Or Concept" and "Tone And Atmosphere" where the Profile Builder
       writes "Rule or Concept" and "Tone and Atmosphere" -- the same section
       named two different ways depending on which screen created the entry.
-- [ ] **R2.2b** Drive the form's sections from `GET /api/codex/types` and widen
-      `ProfileType` from a closed union to a string, deleting the duplication
-      rather than testing it. This is what unlocks R2.8 with no per-kind
-      frontend work, and covers kinds a writer invents.
+- [x] **R2.2b** The form is built from the world. `SECTION_CONFIGS` and
+      `PROFILE_TYPE_LABELS` are DELETED from `profile.ts`, and `ProfileType` is a
+      string rather than a union of six -- the union was the reason the app could
+      hold exactly six kinds of thing. Sections, labels and tabs come from the
+      project's own `types.json` at runtime (`types/sectionRegistry.ts`).
+      Two consumers stopped needing the table at all rather than being handed it:
+      `formatProfileForAI` and the chip picker now ask the DATA whether a section
+      holds traits, which is true for every kind -- before this, a Faction or a
+      Deity serialised to the model as nothing, because the table only knew four
+      kinds.
+      Tabs follow the SIDEBAR's rule (`GET /sections`) rather than a second one,
+      so a kind appears in both screens together and an unused one appears in
+      neither. Listing every Profiles kind would have put ten tabs on a page
+      whose main problem is already crowding.
+      The hook deliberately has NO fallback table: a fetch that fails says so.
+      A silent default would be the fourth copy of the list, and the copy nobody
+      remembers to update.
+      `sectionKeys.test.ts` is replaced by `sectionRegistry.test.ts` -- the old
+      one watched a table that no longer exists -- and the Python agreement test
+      lost its TypeScript half with an explanation, because a test that keeps
+      passing after the thing it watched was deleted is worse than no test.
+- [x] **R2.8** Editors for the six kinds with none, which fell out of R2.2b
+      rather than being six jobs: Cultures, Creatures, Governments, Factions,
+      Deities and Religions all declare their sections in the registry, so the
+      form renders them with no per-kind code -- as does any kind a writer
+      invents. Add one in the Weave sidebar and its tab is in the Profile
+      Builder.
 - [x] **R2.3a** `role` and `character_kind` are indexed. Migration 005 (its
       own migration, per the append-only rule), written on reindex, and returned
       by `/api/codex/list`. Both were in every Thread FILE from the start and in
@@ -334,8 +357,7 @@ types it is about are edited in a screen with no fact UI.
       writer noticing their summaries got worse. The behaviour shipped in
       Phase 6 with no tests at all; it has six now.
 - [ ] **R2.7** Port `POST /api/profiles/import` to codex.
-- [ ] **R2.8** Editors for the six kinds with none (Cultures, Creatures,
-      Governments, Factions, Deities, Religions), driven by the registry.
+
 - [ ] **R2.9** Relationships decision: keep as the long-form page a Tie points
       at, per the recommendation. Nothing can auto-convert them -- the two
       parties were never stored as ids.
@@ -657,7 +679,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 25 | 21 |
+| 2 The premise | 25 | 23 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -666,4 +688,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **91** | **39** |
+| **Total** | **91** | **41** |

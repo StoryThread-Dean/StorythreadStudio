@@ -30,11 +30,15 @@ import type {
 } from "../types/profile";
 import type { ProfileChatMessage, ProfileBehaviorMode } from "../types/ai";
 import {
-  SECTION_CONFIGS,
-  PROFILE_TYPE_LABELS,
   IMPORTANCE_LABELS,
   SUBTEXT_HELP,
 } from "../types/profile";
+// WHAT KINDS OF ENTRY THIS WORLD HAS, and what sections each one holds -- read
+// from the project's own types.json rather than from a table of four. This is
+// what gives Governments, Factions, Deities, Religions, Creatures and Cultures
+// a real editor, along with any kind the writer invents, without a line of
+// per-kind code here.
+import { useTypeRegistry, type SectionConfig } from "../types/sectionRegistry";
 import { v4 as uuidv4 } from "uuid";
 import { IMPORTANCE_HELP, getSectionHelp } from "../data/profileHelp";
 import type { ImportanceLevelHelp, SectionHelp } from "../data/profileHelp";
@@ -504,10 +508,17 @@ export function ProfileBuilder({
   const [findCaseSens,   setFindCaseSens]   = useState(false);
   const findInputRef = useRef<HTMLInputElement | null>(null);
 
+  // The world's own kinds. One fetch, and the tabs, the labels and every
+  // section on the page come from it.
+  const registry = useTypeRegistry(project.root_path);
+  const sectionsFor = useCallback(
+    (type: string): SectionConfig[] => registry.sections[type] ?? [],
+    [registry.sections]);
+
   // Section configs for the current profile type
   const sections = useMemo(
-    () => SECTION_CONFIGS[profileType] ?? [],
-    [profileType]
+    () => sectionsFor(profileType),
+    [sectionsFor, profileType]
   );
 
   // Which character template the OPEN profile uses. Side/background
@@ -523,11 +534,26 @@ export function ProfileBuilder({
   // for chapter summaries, Summaries > Scene Summaries for scene summaries).
   // Filtering them out here removes the duplicate access point and avoids
   // confusing the writer with the same data shown in two places.
-  const TAB_PROFILE_TYPES: ProfileType[] = useMemo(
-    () => (Object.keys(PROFILE_TYPE_LABELS) as ProfileType[])
-            .filter(t => t !== "chapter_summary" && t !== "scene_summary"),
-    []
-  );
+  // The kinds offered as tabs: the world's Profiles group, which is the same
+  // rule the Weave sidebar follows, so a kind added in one screen is there in
+  // the other. Chapter and scene summaries are not entries at all any more --
+  // they are plain Markdown under summaries/ since Phase 6 -- and the registry
+  // does not list them, so they drop out without a special case.
+  const TAB_PROFILE_TYPES = registry.tabs;
+
+  /** One of them, for a heading like "New Character". Labels are plural
+   *  because a section holds many; this is the only place that wants the
+   *  singular, and a trailing "s" is the whole rule the app's own pluraliser
+   *  uses. "Bloodlines" -> "Bloodline". */
+  const singular = (label: string) =>
+    label.endsWith("ies") ? label.slice(0, -3) + "y"
+      : label.endsWith("s") ? label.slice(0, -1)
+      : label;
+
+  /** What a kind is called on screen. */
+  const labelFor = useCallback(
+    (type: string) => registry.labels[type] ?? type,
+    [registry.labels]);
 
   // Reset chat state when switching profiles
   useEffect(() => {
@@ -581,8 +607,13 @@ export function ProfileBuilder({
   // so every operation below is pointed at one place for as long as the screen
   // is open.
   const source: ProfileSource | null = useMemo(
-    () => (home ? sourceFor(project.root_path, home) : null),
-    [project.root_path, home]
+    // Waits for the registry too: a codex entry cannot be read into a form
+    // whose sections are not known yet, and loading it early would drop every
+    // section the form had not heard of.
+    () => (home && !registry.loading && !registry.error
+      ? sourceFor(project.root_path, home, sectionsFor)
+      : null),
+    [project.root_path, home, registry.loading, registry.error, sectionsFor]
   );
 
   const fetchProfileList = useCallback(async (type: ProfileType) => {
@@ -704,7 +735,7 @@ export function ProfileBuilder({
   const applyTemplate = useCallback((to: "main" | "side") => {
     const current = profileRef.current;
     if (!current) return;
-    const result = convertCharacter(current, to);
+    const result = convertCharacter(current, to, sectionsFor("character"));
     setProfile(result.profile);
     setIsDirty(true);
     setTemplateAsk(null);
@@ -715,7 +746,7 @@ export function ProfileBuilder({
       item.filename === result.profile.filename
         ? { ...item, character_kind: to }
         : item));
-  }, []);
+  }, [sectionsFor]);
 
   // --- Find & Replace actions ---
   // Section-order helper passed to the walker so match order matches the UI.
@@ -1187,8 +1218,7 @@ export function ProfileBuilder({
 
     // Gather every trait block with its section heading
     const allBlocks: { trait: string; description: string; importance: string; section_heading: string }[] = [];
-    const sections = SECTION_CONFIGS[profile.type] ?? [];
-    for (const cfg of sections) {
+    for (const cfg of sectionsFor(profile.type)) {
       const section = profile.sections[cfg.key];
       if (!section?.trait_blocks) continue;
       for (const block of section.trait_blocks) {
@@ -1338,7 +1368,7 @@ export function ProfileBuilder({
                     : "text-text-primary hover:bg-bg-surface"
                 }`}
               >
-                {PROFILE_TYPE_LABELS[type]}
+                {labelFor(type)}
               </button>
             ))}
           </div>
@@ -1348,7 +1378,7 @@ export function ProfileBuilder({
         <div className="flex-1 overflow-y-auto px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              {PROFILE_TYPE_LABELS[profileType]}
+              {labelFor(profileType)}
             </p>
             <div className="flex items-center gap-1">
               {profileType === "character" && source?.canImport && (
@@ -1401,7 +1431,7 @@ export function ProfileBuilder({
 
           {!listLoading && profileList.length === 0 && (
             <p className="text-xs text-faint">
-              No {PROFILE_TYPE_LABELS[profileType].toLowerCase()} yet. Click New to create one.
+              No {labelFor(profileType).toLowerCase()} yet. Click New to create one.
             </p>
           )}
 
@@ -1497,7 +1527,8 @@ export function ProfileBuilder({
                   does not have them.
                 </p>
                 {(() => {
-                  const preview = convertCharacter(profile, "side");
+                  const preview = convertCharacter(profile, "side",
+                                                   sectionsFor("character"));
                   if (preview.dissolved === 0) {
                     return (
                       <p className="text-faint">
@@ -1571,7 +1602,7 @@ export function ProfileBuilder({
             </span>
             {profile && (
               <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">
-                {PROFILE_TYPE_LABELS[profile.type as ProfileType] ?? profile.type}
+                {labelFor(profile.type)}
               </span>
             )}
             {/* WHICH PAGE THIS CHARACTER USES, and the way to change it.
@@ -1735,7 +1766,7 @@ export function ProfileBuilder({
         {showCreateForm && (
           <div className="shrink-0 border-b border-border bg-bg-panel px-4 py-4">
             <p className="mb-3 text-sm font-semibold text-text-primary">
-              New {PROFILE_TYPE_LABELS[profileType].slice(0, -1)}
+              New {singular(labelFor(profileType))}
             </p>
             <label className="mb-1 block text-xs text-text-muted">
               Name <span className="text-indigo-400">*</span>
@@ -2103,6 +2134,7 @@ export function ProfileBuilder({
                   attach it to. */}
               <SecretsPanel
                 profile={profile}
+                sections={sections}
                 onSetWeight={(sectionKey, blockId, importance) =>
                   updateTraitBlock(sectionKey, blockId, { importance })}
               />

@@ -167,6 +167,13 @@ describe("what it teaches", () => {
 
 // ── The panel that groups them ───────────────────────────────────────────────
 
+/** A character's sections, as the world's registry reports them. Passed in
+ *  rather than imported: the app reads a project's kinds at runtime now. */
+const SECTIONS = [
+  { key: "motivations", heading: "Motivations", hasTraitBlocks: true },
+  { key: "overview", heading: "Overview", hasTraitBlocks: false },
+];
+
 function profileWith(blocks: Profile["sections"][string]["trait_blocks"]): Profile {
   return {
     entity_id: "e-1", type: "character", name: "Snape", role: "", status: "active",
@@ -188,14 +195,14 @@ describe("the secrets panel", () => {
   it("says nothing at all when there are no secrets", () => {
     render(<SecretsPanel profile={profileWith([
       { id: "b", trait: "sarcastic", description: "Always.", importance: "core" },
-    ])} onSetWeight={vi.fn()} />);
+    ])} sections={SECTIONS} onSetWeight={vi.fn()} />);
     expect(screen.queryByTestId("secrets-panel")).toBeNull();
   });
 
   it("lists each secret with the section it lives in", () => {
     // The grouping the writer asked for, WITHOUT moving anything: a secret
     // belongs beside what it explains.
-    render(<SecretsPanel profile={profileWith([secret])} onSetWeight={vi.fn()} />);
+    render(<SecretsPanel profile={profileWith([secret])} sections={SECTIONS} onSetWeight={vi.fn()} />);
     const panel = screen.getByTestId("secrets-panel");
     expect(within(panel).getByText("guilt over her death")).toBeTruthy();
     expect(within(panel).getByText("Motivations")).toBeTruthy();
@@ -206,12 +213,12 @@ describe("the secrets panel", () => {
     // setting never recorded a weight. Some of those are Core. This turns an
     // invisible wrong default into a short, finite job.
     const onSetWeight = vi.fn();
-    render(<SecretsPanel profile={profileWith([secret])} onSetWeight={onSetWeight} />);
+    render(<SecretsPanel profile={profileWith([secret])} sections={SECTIONS} onSetWeight={onSetWeight} />);
     expect(screen.getByText(/reads as Present/)).toBeTruthy();
   });
 
   it("offers the walkthrough from where the secrets are", async () => {
-    render(<SecretsPanel profile={profileWith([secret])} onSetWeight={vi.fn()} />);
+    render(<SecretsPanel profile={profileWith([secret])} sections={SECTIONS} onSetWeight={vi.fn()} />);
     await userEvent.click(
       screen.getByRole("button", { name: /Show me how this works/ }));
     expect(screen.getByTestId("subtext-guide")).toBeTruthy();

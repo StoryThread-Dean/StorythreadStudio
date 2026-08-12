@@ -7,14 +7,20 @@ import type { Fact } from "../features/codex/api";
 
 // ── Enums / Literals ─────────────────────────────────────────────────────────
 
-// All profile types supported in Phase 2 MVP
-export type ProfileType =
-  | "character"
-  | "relationship"
-  | "location"
-  | "lore"
-  | "chapter_summary"
-  | "scene_summary";
+/**
+ * WHAT KIND OF THING AN ENTRY IS.
+ *
+ * A string, not a closed list, and that is the whole point. This used to be a
+ * union of six, which meant the app could hold exactly six kinds of thing --
+ * so a Government, a Faction, a Deity or anything a writer invented on a Tuesday
+ * had no editor and rendered an empty page.
+ *
+ * The kinds a world has are declared in its own `codex/types.json` and read at
+ * runtime (see types/sectionRegistry.ts). The type system cannot check a value
+ * that only exists in the writer's file, and pretending otherwise is what kept
+ * the list closed.
+ */
+export type ProfileType = string;
 
 /**
  * HOW MUCH a trait shapes the character. Weight, and nothing else.
@@ -182,83 +188,18 @@ export interface ImportProfilePayload {
 }
 
 
-// ── Section Config (frontend mirror of backend SECTION_CONFIGS) ───────────────
-// Tells the ProfileBuilder form which sections to render for each profile type,
-// and whether each section uses trait blocks or plain text.
-
-export interface SectionConfig {
-  key: string;              // Matches the key in Profile.sections
-  heading: string;          // Displayed as the section title
-  hasTraitBlocks: boolean;  // true = render TraitBlock cards; false = render textarea
-}
-
-export const SECTION_CONFIGS: Record<ProfileType, SectionConfig[]> = {
-  character: [
-    { key: "overview",                heading: "Overview",                        hasTraitBlocks: false },
-    { key: "physical_traits",          heading: "Physical Traits",                 hasTraitBlocks: true  },
-    { key: "personality_traits",       heading: "Personality Traits",              hasTraitBlocks: true  },
-    { key: "motivations",              heading: "Motivations",                     hasTraitBlocks: true  },
-    { key: "voice_notes",              heading: "Voice Notes",                     hasTraitBlocks: true  },
-    // The key must be what the backend derives from the HEADING -- section ids
-    // come from headings when a file is read, so a key that disagrees with its
-    // own heading points at a section that will never exist.
-    { key: "hidden_and_foreshadowing_traits", heading: "Hidden and Foreshadowing Traits", hasTraitBlocks: true  },
-    { key: "relationships_overview",   heading: "Relationships Overview",          hasTraitBlocks: false },
-    { key: "notes",                    heading: "Notes",                           hasTraitBlocks: false },
-  ],
-  relationship: [
-    { key: "overview",            heading: "Overview",           hasTraitBlocks: false },
-    { key: "history",             heading: "History",            hasTraitBlocks: false },
-    { key: "current_dynamic",     heading: "Current Dynamic",    hasTraitBlocks: false },
-    { key: "hidden_tensions",     heading: "Hidden Tensions",    hasTraitBlocks: false },
-    { key: "emotional_direction", heading: "Emotional Direction", hasTraitBlocks: false },
-    { key: "notes",               heading: "Notes",              hasTraitBlocks: false },
-  ],
-  location: [
-    { key: "overview",                heading: "Overview",                hasTraitBlocks: false },
-    { key: "physical_description",    heading: "Physical Description",    hasTraitBlocks: false },
-    { key: "tone_and_atmosphere",     heading: "Tone and Atmosphere",     hasTraitBlocks: false },
-    { key: "historical_significance", heading: "Historical Significance", hasTraitBlocks: false },
-    { key: "cultural_significance",   heading: "Cultural Significance",   hasTraitBlocks: false },
-    { key: "scene_use_notes",         heading: "Scene Use Notes",         hasTraitBlocks: false },
-    { key: "notes",                   heading: "Notes",                   hasTraitBlocks: false },
-  ],
-  lore: [
-    { key: "overview",             heading: "Overview",             hasTraitBlocks: false },
-    { key: "rule_or_concept",      heading: "Rule or Concept",      hasTraitBlocks: false },
-    { key: "what_it_affects",      heading: "What It Affects",      hasTraitBlocks: false },
-    { key: "what_characters_know", heading: "What Characters Know", hasTraitBlocks: false },
-    { key: "story_relevance",      heading: "Story Relevance",      hasTraitBlocks: false },
-    { key: "notes",                heading: "Notes",                hasTraitBlocks: false },
-  ],
-  // Chapter/scene summary profile types are dormant in the profile builder.
-  // Phase 6 moved chapter summaries to plain Markdown files (summaries/chapters/)
-  // edited via a standalone CodeMirror view, not via this profile config.
-  // The entries below exist only so legacy chapter_summary and scene_summary
-  // profile files (if any) still render in the Profile Builder.
-  chapter_summary: [
-    { key: "overview",          heading: "Chapter Overview",    hasTraitBlocks: false },
-    { key: "key_events",        heading: "Key Events",          hasTraitBlocks: false },
-    { key: "character_moments", heading: "Character Moments",   hasTraitBlocks: false },
-    { key: "notes",             heading: "Notes",               hasTraitBlocks: false },
-  ],
-  scene_summary: [
-    { key: "overview",           heading: "Scene Overview",      hasTraitBlocks: false },
-    { key: "characters_present", heading: "Characters Present",  hasTraitBlocks: false },
-    { key: "setting",            heading: "Setting",             hasTraitBlocks: false },
-    { key: "notes",              heading: "Notes",               hasTraitBlocks: false },
-  ],
-};
-
-// Human-readable labels for each profile type tab
-export const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
-  character:       "Characters",
-  relationship:    "Relationships",
-  location:        "Locations",
-  lore:            "Lore",
-  chapter_summary: "Chapter Summaries",
-  scene_summary:   "Scene Summaries",
-};
+// SECTION_CONFIGS and PROFILE_TYPE_LABELS USED TO LIVE HERE.
+//
+// They were a hardcoded mirror of the backend's own list, kept in step by a
+// contract test (R2.2a) after they had drifted three times. R2.2b deleted them
+// instead: the sections a kind has, and what it is called, come from the world's
+// `codex/types.json` at runtime -- see types/sectionRegistry.ts.
+//
+// That is what gave the six kinds with no editor a real one, and it is why a
+// kind a writer invents this afternoon works without a release.
+//
+// SectionConfig itself moved to sectionRegistry.ts, beside the code that builds
+// it.
 
 // Human-readable labels for each importance level, used in the dropdown
 export const IMPORTANCE_LABELS: Record<ImportanceLevel, string> = {

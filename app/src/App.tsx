@@ -60,7 +60,6 @@ import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./util
 import type { ChipIncludeOptions } from "./utils/profileFormat";
 import { buildEditorChatPayload, appendTurnToHistory, isWeakDraftingModel, computeSurroundingWindow } from "./utils/buildEditorChatPayload";
 import { autoSizeTextarea } from "./utils/autoSizeTextarea";
-import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
 import { NavSection } from "./components/sidebar/NavSection";
@@ -4108,7 +4107,10 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
   // disable the "Traits" checkbox for those rather than offering a checkbox
   // that does nothing.
   const pendingHasTraits = pending
-    ? (SECTION_CONFIGS[pending.profile.type as ProfileType] ?? []).some(c => c.hasTraitBlocks)
+    // Does this entry HOLD any traits? Asked of the data rather than of a
+    // table of four kinds, which answered no for every other kind there is.
+    ? Object.values(pending.profile.sections)
+        .some(section => (section.trait_blocks ?? []).length > 0)
     : false;
 
   // Whether the pending profile has an AI Summary worth offering. Brand-new
