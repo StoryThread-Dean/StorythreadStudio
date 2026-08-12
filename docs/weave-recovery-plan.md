@@ -96,10 +96,17 @@ Task ids (R0.1, R1.2 ...) are stable. Reference them in commit messages.
 Ordered first because it is small, mechanical, and restores spec fidelity
 before anything is built on top of it. Each is gated on its R0.9 ruling.
 
-- [ ] **R1.1** Restore `GET /resolve` (spec 469) with a route test.
-- [ ] **R1.2** Restore `GET /run` and add `POST /run/resume` (spec 717).
-      *Done-when:* reopening Weaving resumes a session rather than minting a
-      new run, and the spec's "reopen, resume" acceptance line passes.
+- [x] **R1.1** `GET /resolve` restored, with the two route tests that were
+      deleted alongside it and a refusal test. It is the only way to ask "who
+      is she as of chapter seven" for a WRITER rather than for a model.
+- [x] **R1.2** `GET /run` restored; `POST /run/resume` built; the start screen
+      offers **Carry on where you left off** beside **Start fresh** and says
+      what the difference is. A resumed walk says so on its first stop.
+      *Why it hid:* applied and dismissed answers live in the BOOK and survive
+      either way -- what only a SESSION holds is what was deferred and which
+      kinds were muted, so a writer who closed the app mid-walk met every
+      question they had already put off. Six frontend and six backend tests,
+      including the fallback for a run list that names a session which is gone.
 - [ ] **R1.3** Context inspect per the R0.9 ruling.
 - [ ] **R1.4** `weave_brief` per the R0.9 ruling.
 - [ ] **R1.5** Carry out the two deletion orders.
@@ -253,7 +260,7 @@ it, since the spec calls it the reason the frame system exists.
 | Phase | Tasks | Done |
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
-| 1 Undo session damage | 6 | 0 |
+| 1 Undo session damage | 6 | 2 |
 | 2 The premise | 9 | 0 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
@@ -263,4 +270,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **72** | **12** |
+| **Total** | **72** | **14** |

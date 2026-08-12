@@ -40,6 +40,7 @@ from app.codex.findings import (
 )
 from app.codex.mentions import alias_display, build_alias_map, find_mentions
 from app.codex.normalize import REASON_LIMIT, normalize_reason
+from app.codex.resolve import resolve_thread
 from app.codex.scan import DEPTH_FULL, ScanRequest, scan
 from app.codex.snags import check_ties
 from app.codex.sections import (
@@ -1179,12 +1180,55 @@ def _check_anchor(project_path: str, anchor: str | None) -> None:
 
 # ── Resolution ───────────────────────────────────────────────────────────────
 #
-# GET /resolve is deliberately gone. Resolving ONE Thread at a point in the
-# story was an HTTP surface for a screen that was never built and is not
-# planned: the map resolves the whole world at an anchor through /graph, the
-# entry editor shows the Run itself, and the brief resolves everything it
-# carries inside /context. `resolve_thread` remains the heart of the model and
-# keeps its own tests -- what went is one unused doorway to it.
+# WHO THIS THREAD IS AT A POINT IN THE STORY. The whole reason the Weave exists.
+#
+# This route was deleted once, on 2026-08-11, as an unused doorway -- the map
+# resolves the world through /graph, the brief resolves what it carries inside
+# /context, and nothing called this. That reasoning was sound about the code and
+# wrong about the product: it is specified (weave-spec.md, "Routes"), and it is
+# the only way to ask the question on behalf of a WRITER rather than on behalf
+# of a model. The screen that needs it -- a Run editor that can show a
+# character as of chapter seven -- is scheduled work, not a fantasy.
+#
+# Restored under recovery task R1.1. The lesson is in CLAUDE.md: a route with no
+# caller may be a missing screen rather than dead code, and only the spec can
+# tell you which.
+
+
+@router.get("/resolve")
+async def get_resolve(
+    project_path: str = Query(...),
+    entity_id: str = Query(...),
+    at: str | None = None,
+    pov: str | None = None,
+    hide_spoilers: bool = True,
+    include_on_request: bool = False,
+):
+    """
+    Who this Thread IS at a point in the story.
+
+    `at` omitted means the end of the book -- how a writer looking at the
+    finished story sees it.
+    """
+    project_path = validate_project_path(project_path)
+    registry = _registry(project_path)
+    row = await _locate(project_path, entity_id)
+    thread = _read_thread(project_path, registry, row)
+
+    _check_anchor(project_path, at)
+    index = AnchorIndex.for_project(project_path)
+    resolved = resolve_thread(
+        thread, index, at, pov=pov,
+        hide_spoilers=hide_spoilers, include_on_request=include_on_request,
+    )
+    # Ambiguities are dataclasses; the wire wants plain objects, and the writer
+    # wants the sentence rather than the field names.
+    resolved["ambiguities"] = [
+        {"axis": a.axis, "frame": a.frame, "anchor": a.anchor,
+         "fact_ids": a.fact_ids, "message": a.describe()}
+        for a in resolved["ambiguities"]
+    ]
+    return resolved
 
 
 def _edge_rank(edge: dict, ordinal) -> tuple:
@@ -1755,10 +1799,55 @@ async def post_run(body: NewRunBody):
     return run
 
 
-# GET /run is deliberately gone. It returned one session's detail, for a
-# resume design that was replaced: permanent answers live in the BOOK (per
-# book, not per session), so nothing needs to read a single run back. /runs
-# still lists them, which is what the "you have N earlier sessions" line uses.
+@router.get("/run")
+async def get_run(project_path: str = Query(...), run_id: str = Query(...)):
+    """
+    One session's detail.
+
+    Deleted on 2026-08-11 as an unused doorway and restored under recovery task
+    R1.2. It looked orphaned because its consumer -- resume -- had never been
+    built, which is a different thing from being unwanted.
+    """
+    run = load_run(validate_project_path(project_path), run_id)
+    if run is None:
+        raise CodexError(
+            "run_not_found",
+            "That Weaving session could not be read. Starting a new one "
+            "loses nothing you applied and saved.",
+            run_id,
+        )
+    return run
+
+
+@router.post("/run/resume")
+async def post_run_resume(project_path: str = Query(...)):
+    """
+    Pick up the last session instead of starting a new one.
+
+    WHY THIS IS NOT THE SAME AS A NEW RUN, even though permanent answers live
+    in the book and would be honoured either way. A run also holds what was
+    DEFERRED and which kinds were MUTED in that sitting -- both deliberately
+    per-session, because "not yet" means not in this sitting and muting a kind
+    is a working preference rather than a judgement about the book. Minting a
+    new run silently discards both, so a writer who closed the app mid-walk
+    came back to questions they had already put off.
+
+    Returns the most recently updated run, or null when there is none. A null
+    is not an error: a book nobody has woven has nothing to resume, and the
+    caller starts a new run.
+    """
+    project_path = validate_project_path(project_path)
+    runs = list_runs(project_path)
+    if not runs:
+        return {"run": None}
+    # `list_runs` is ordered newest-first by updated_at; take the newest that
+    # still loads. A corrupt session file is skipped rather than blocking
+    # resume entirely -- losing one sitting's deferrals beats losing the walk.
+    for summary in runs:
+        run = load_run(project_path, summary["run_id"])
+        if run is not None:
+            return {"run": run}
+    return {"run": None}
 
 
 class AnswerBody(BaseModel):

@@ -67,7 +67,7 @@ import { SnagFixer } from "./SnagFixer";
 import { TieEditor } from "./TieEditor";
 import { fetchGraph, type GraphNode } from "./api";
 import {
-  apply, defer, dismiss, fetchRuns, muteKind, scan, startRun,
+  apply, defer, dismiss, fetchRuns, muteKind, resumeRun, scan, startRun,
   type Depth, type RunSummary, type ScanResult, type Stop,
 } from "./weavingApi";
 
@@ -254,6 +254,10 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   // server while the snapshot kept asking for the rest of the walk.
   const [answeredHere, setAnsweredHere] = useState<Record<string, string>>({});
   const [mutedHere, setMutedHere] = useState<Set<string>>(new Set());
+  // Whether this walk carried on an earlier sitting. Said out loud on the
+  // first stop, because a writer who chose "carry on" is entitled to see that
+  // it worked -- and because a resumed walk is shorter than they might expect.
+  const [resumed, setResumed] = useState(false);
   const [earlier, setEarlier] = useState<RunSummary[]>([]);
   // Connecting happens in the walk, so the walk needs to know what there is
   // to connect to. Fetched once the writer asks, not on mount: most stops
@@ -315,11 +319,25 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     }
   }
 
-  async function begin() {
+  /**
+   * Start walking -- either carrying on the last sitting or opening a new one.
+   *
+   * RESUMING IS NOT COSMETIC. Applied and dismissed answers live in the book
+   * and come back either way, which is why nobody noticed this was missing.
+   * What a RUN holds is what was put off and which kinds were silenced in that
+   * sitting -- both per-session on purpose. Starting fresh throws those away,
+   * so a writer who closed the app mid-walk was handed back every question
+   * they had already said "not yet" to.
+   */
+  async function begin(carryOn = false) {
     setBusy(true);
     try {
-      const run = await startRun(projectPath, { depth });
+      const existing = carryOn ? (await resumeRun(projectPath)).run : null;
+      // A resume that finds nothing is not a failure -- it means there was
+      // nothing to carry on, and a new run is the right answer.
+      const run = existing ?? await startRun(projectPath, { depth });
       setRunId(run.run_id);
+      setResumed(Boolean(existing));
       setWalking(true);
       setAt(0);
     } catch (e) {
@@ -510,24 +528,60 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           </p>
         ) : null}
 
+        {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
+
+        {/* CARRY ON, OR START FRESH -- and the difference stated, because it
+            is not obvious. Anything applied or permanently declined lives in
+            the BOOK and survives either way. What only a session holds is what
+            you put off and which kinds you silenced, so starting fresh hands
+            all of that back. Before this there was one Start button, which
+            always meant "start fresh", and a writer who closed the app
+            mid-walk met every question they had already deferred. */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {earlier.length > 0 && (
+            <button
+              onClick={() => void begin(true)}
+              disabled={busy || scanning || open === 0}
+              className="inline-flex flex-col items-start rounded bg-violet-600 px-3 py-1.5 text-left text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {busy ? <Loader size={12} className="animate-spin" /> : null}
+                Carry on where you left off
+              </span>
+              <span className="text-[10px] font-normal text-violet-100/80">
+                keeps what you put off last time
+              </span>
+            </button>
+          )}
+          <button
+            onClick={() => void begin(false)}
+            disabled={busy || scanning || open === 0}
+            className={`inline-flex flex-col items-start rounded px-3 py-1.5 text-left text-xs font-semibold disabled:opacity-40 ${
+              earlier.length > 0
+                ? "border border-border text-text-muted hover:text-text-primary"
+                : "bg-violet-600 text-white hover:bg-violet-500"
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              {busy && earlier.length === 0
+                ? <Loader size={12} className="animate-spin" /> : null}
+              {earlier.length > 0 ? "Start fresh" : "Start"}
+            </span>
+            {earlier.length > 0 && (
+              <span className="text-[10px] font-normal text-faint">
+                asks again about anything you put off
+              </span>
+            )}
+          </button>
+        </div>
+
         {earlier.length > 0 && (
           <p className="mt-2 text-[11px] text-faint">
             You have {earlier.length} earlier session
-            {earlier.length === 1 ? "" : "s"}. Starting a new one does not
-            undo anything you already applied.
+            {earlier.length === 1 ? "" : "s"}. Either way, nothing you have
+            already applied or permanently declined comes back.
           </p>
         )}
-
-        {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
-
-        <button
-          onClick={() => void begin()}
-          disabled={busy || scanning || open === 0}
-          className="mt-3 inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
-        >
-          {busy ? <Loader size={12} className="animate-spin" /> : null}
-          Start
-        </button>
       </Shell>
     );
   }
@@ -846,6 +900,15 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       {notice && (
         <p role="status" className="mt-2 text-[11px] text-amber-200/90">
           {notice}
+        </p>
+      )}
+      {/* Said once, on the first stop of a resumed walk. A writer who chose
+          "carry on" should see that it took -- and a resumed walk is shorter
+          than a fresh one, which would otherwise look like something missing. */}
+      {resumed && at === 0 && (
+        <p className="mt-2 text-[11px] text-violet-300" data-testid="resumed-note">
+          Carrying on from your last sitting -- anything you put off then is
+          still put off.
         </p>
       )}
 

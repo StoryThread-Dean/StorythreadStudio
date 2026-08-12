@@ -142,8 +142,8 @@ def _answer(project, run_id, **kw):
 
 def test_a_started_run_is_on_disk_immediately(project):
     # A crash must not lose the fact that a session was started. Read from the
-    # DISK rather than through an endpoint: the file is the claim, and GET
-    # /run (which this used to call) was removed as an unused doorway.
+    # DISK rather than through an endpoint, because the file IS the claim --
+    # an endpoint could be serving from anywhere.
     import os
     run = _new_run(project)
     path = os.path.join(project, ".storythread", "weave", "runs",
@@ -208,10 +208,9 @@ def test_a_muted_kind_disappears_and_can_come_back(project):
 
 
 def test_a_run_id_from_a_request_is_not_trusted_as_a_path(project):
-    # Asked of /run/answer, which is now the endpoint that takes a run id off
-    # the wire. The guard lives in load_run; what matters is that a live
-    # surface still proves it, so removing GET /run did not quietly retire a
-    # traversal test along with the doorway.
+    # Asked of /run/answer, which is the endpoint a writer's session actually
+    # posts to. The guard lives in load_run and GET /run shares it; asking the
+    # write path keeps the test on the surface that matters.
     response = client.post("/api/codex/run/answer",
                            json={"project_path": project,
                                  "run_id": "../../project",
@@ -463,3 +462,65 @@ def test_deleting_the_run_files_does_not_lose_permanence(project):
     shutil.rmtree(run_dir(project))
 
     assert "Rhoswen" not in _named(_scan(project), "unspun")
+
+
+# ── Resuming a session (R1.2) ───────────────────────────────────────────────
+#
+# The spec's acceptance line: "Apply 15 findings, close the app, reopen,
+# RESUME -- the rest are there with no AI call." Before this, reopening always
+# minted a new run. Permanent answers live in the book so they were honoured
+# either way, which is why the gap was invisible -- but a run also holds what
+# was DEFERRED and which kinds were MUTED in that sitting, and both are
+# deliberately per-session. Minting a new run silently discarded them, so a
+# writer who closed the app mid-walk came back to questions they had already
+# put off.
+
+
+def _resume(project):
+    return client.post("/api/codex/run/resume",
+                       params={"project_path": project}).json()
+
+
+def test_a_book_nobody_has_woven_has_nothing_to_resume(project):
+    # Null rather than an error: the caller starts a new run.
+    assert _resume(project)["run"] is None
+
+
+def test_resuming_returns_the_session_that_was_left_open(project):
+    run = _new_run(project)
+    body = _resume(project)
+    assert body["run"] is not None
+    assert body["run"]["run_id"] == run["run_id"]
+
+
+def test_what_was_put_off_survives_the_app_closing(project):
+    # THE reason resume exists. "Not yet" means not in this sitting, so a
+    # deferral is per-run -- and a new run would forget it.
+    run = _new_run(project)
+    key = _scan(project)["stops"][0]["key"]
+    _answer(project, run["run_id"], key=key, state="deferred")
+
+    resumed = _resume(project)["run"]
+    assert resumed["answers"][key]["state"] == "deferred"
+
+
+def test_a_muted_kind_survives_it_too(project):
+    run = _new_run(project)
+    _answer(project, run["run_id"], mute="frayed")
+    assert "frayed" in _resume(project)["run"]["muted_kinds"]
+
+
+def test_resuming_reads_the_newest_session(project):
+    _new_run(project)
+    second = _new_run(project)
+    assert _resume(project)["run"]["run_id"] == second["run_id"]
+
+
+def test_resuming_asks_no_model_anything(project):
+    # The spec says "with no AI call". Trivially true today -- there are no AI
+    # calls in the Weave at all -- but pinned so that stays deliberate when the
+    # AI passes land rather than becoming true by accident.
+    import app.routers.codex as codex_router
+    assert not hasattr(codex_router, "run_chat")
+    _new_run(project)
+    assert _resume(project)["run"] is not None

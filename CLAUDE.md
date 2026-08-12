@@ -27,14 +27,16 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-11.** 12 of 72 tasks done.
+> **LEDGER — last updated 2026-08-12.** 14 of 72 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
 > identity and phase 9 AI passes).
-> **Phase 1 in progress** (R1.1-R1.6): undo the contradictions introduced while
-> the spec was unreferenced.
-> Branch health: 1573 backend tests, 1098 frontend tests, ruff and tsc clean.
+> **Phase 1 in progress.** R1.1 done (`GET /resolve` restored). R1.2 done
+> (`GET /run` restored, `POST /run/resume` built, Carry on / Start fresh on the
+> start screen). Next: R1.3 context-inspect map, R1.4 spec amendment only,
+> R1.5 deletion orders, R1.6 registry contract test.
+> Branch health: 1582 backend tests, 1104 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

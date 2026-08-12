@@ -39,6 +39,9 @@ function stop(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const OLD_SESSION = { run_id: "run-old", depth: "warp", answered: 3,
+                      deferred: 1, created_at: "", updated_at: "" };
+
 let calls: { url: string; body: Record<string, unknown> }[] = [];
 
 function mockApi(options: {
@@ -61,6 +64,9 @@ function mockApi(options: {
   factsGone?: boolean;
   /** The type registry cannot be read -- Quick Entry has no section list. */
   typesDown?: boolean;
+  /** What POST /run/resume finds. `undefined` means an ordinary resumable
+   *  session; pass null for "the list said there was one and there is not". */
+  resumeFinds?: Record<string, unknown> | null;
 } = {}) {
   const stops = options.stops ?? [stop()];
   calls = [];
@@ -149,6 +155,13 @@ function mockApi(options: {
           unreadable: options.unreadable ?? [], resumed: {},
         }),
       } as Response;
+    }
+    if (url.includes("/run/resume")) {
+      const found = options.resumeFinds === undefined
+        ? { run_id: "run-old", depth: "warp", answers: {}, retired: [],
+            muted_kinds: [], disambiguations: {} }
+        : options.resumeFinds;
+      return { ok: true, json: async () => ({ run: found }) } as Response;
     }
     if (url.endsWith("/run")) {
       return { ok: true, json: async () => ({ run_id: "run-abc123abc123" }) } as Response;
@@ -312,11 +325,82 @@ describe("before anything starts", () => {
       .toBe(true);
   });
 
-  it("says an earlier session is not undone by a new one", async () => {
-    mockApi({ runs: [{ run_id: "run-old", depth: "full", answered: 3,
-                       deferred: 1, created_at: "", updated_at: "" }] });
+  it("says what survives either way, now that there is a choice", async () => {
+    mockApi({ runs: [OLD_SESSION] });
     await open();
-    expect(screen.getByText(/does not undo anything you already applied/)).toBeTruthy();
+    expect(screen.getByText(/nothing you have already applied or permanently declined comes back/i))
+      .toBeTruthy();
+  });
+});
+
+
+describe("carrying on where you left off (R1.2)", () => {
+  // The spec's acceptance line: "Apply 15 findings, close the app, reopen,
+  // RESUME." Before this there was one Start button and it always meant start
+  // fresh -- so a writer who closed the app mid-walk met every question they
+  // had already said "not yet" to.
+  //
+  // Why it went unnoticed for so long: applied and dismissed answers live in
+  // the BOOK and come back either way. What only a SESSION holds is what was
+  // deferred and which kinds were muted, so the loss was invisible unless you
+  // had put something off.
+
+  it("offers the choice only when there is something to carry on", async () => {
+    mockApi({ runs: [] });
+    await open();
+    expect(screen.queryByRole("button", { name: /Carry on where you left off/ }))
+      .toBeNull();
+    expect(screen.getByRole("button", { name: /^Start$/ })).toBeTruthy();
+  });
+
+  it("offers both, and says what the difference is", async () => {
+    mockApi({ runs: [OLD_SESSION] });
+    await open();
+    expect(screen.getByRole("button", { name: /keeps what you put off last time/ }))
+      .toBeTruthy();
+    expect(screen.getByRole("button", { name: /asks again about anything you put off/ }))
+      .toBeTruthy();
+  });
+
+  it("carrying on reuses the earlier run rather than minting one", async () => {
+    mockApi({ runs: [OLD_SESSION] });
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Carry on where you left off/ }));
+    await waitFor(() => expect(screen.getByTestId("weaving-progress")).toBeTruthy());
+    expect(posted("/run/resume").length).toBe(1);
+    expect(posted("/run").filter(c => !c.url.includes("resume")
+                                      && !c.url.includes("answer"))).toEqual([]);
+  });
+
+  it("says out loud that it carried on", async () => {
+    // A writer who chose it is entitled to see that it worked -- and a
+    // resumed walk is shorter, which would otherwise look like loss.
+    mockApi({ runs: [OLD_SESSION] });
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Carry on where you left off/ }));
+    expect(await screen.findByTestId("resumed-note")).toBeTruthy();
+  });
+
+  it("starting fresh mints a new run", async () => {
+    mockApi({ runs: [OLD_SESSION] });
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: /Start fresh/ }));
+    await waitFor(() => expect(screen.getByTestId("weaving-progress")).toBeTruthy());
+    expect(posted("/run/resume")).toEqual([]);
+    expect(screen.queryByTestId("resumed-note")).toBeNull();
+  });
+
+  it("falls back to a new run when there is nothing to resume after all", async () => {
+    // The list said there were earlier sessions and the resume came back
+    // empty -- a deleted run file, say. Not an error: start one.
+    mockApi({ runs: [OLD_SESSION], resumeFinds: null });
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Carry on where you left off/ }));
+    await waitFor(() => expect(screen.getByTestId("weaving-progress")).toBeTruthy());
+    expect(screen.queryByTestId("resumed-note")).toBeNull();
   });
 });
 

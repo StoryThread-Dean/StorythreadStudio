@@ -185,6 +185,30 @@ export function fetchRuns(projectPath: string): Promise<{ runs: RunSummary[] }> 
   return request(`/runs?project_path=${encodeURIComponent(projectPath)}`);
 }
 
+export function fetchRun(projectPath: string, runId: string): Promise<Run> {
+  return request(`/run?project_path=${encodeURIComponent(projectPath)}`
+                 + `&run_id=${encodeURIComponent(runId)}`);
+}
+
+/**
+ * Carry on where you left off, rather than starting again.
+ *
+ * WHY THIS IS NOT THE SAME AS A NEW RUN. Permanent answers live in the book,
+ * so applied and dismissed stops stay answered either way -- which is exactly
+ * why this gap was invisible for so long. But a run also holds what was
+ * DEFERRED and which kinds were MUTED in that sitting, and both are per-session
+ * on purpose: "not yet" means not in this sitting, and muting a kind is a
+ * working preference rather than a judgement about the book. Starting fresh
+ * silently discards both, so a writer who closed the app mid-walk came back to
+ * questions they had already put off.
+ *
+ * `run` is null when there is nothing to resume. That is not an error -- a book
+ * nobody has woven has no session -- and the caller starts a new one.
+ */
+export function resumeRun(projectPath: string): Promise<{ run: Run | null }> {
+  return post(`/run/resume?project_path=${encodeURIComponent(projectPath)}`, {});
+}
+
 interface AnswerBody {
   key?: string;
   state?: string;

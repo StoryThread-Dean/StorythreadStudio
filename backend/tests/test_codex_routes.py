@@ -360,12 +360,44 @@ def test_deleting_a_thread_removes_it(project):
 
 # ── Resolution and the graph ─────────────────────────────────────────────────
 
-# GET /resolve was removed as an unused doorway -- the two tests that stood
-# here asked it who a Thread is at a point, and what it says about two facts
-# landing on one anchor. Neither behaviour went anywhere: resolution and its
-# ambiguity sentence are pinned in test_codex_resolve.py against the module
-# itself, and the same resolution is exercised over HTTP through /graph
-# (below) and through the brief in test_codex_context.py.
+# ── Resolution over HTTP (R1.1) ─────────────────────────────────────────────
+#
+# These two tests were deleted on 2026-08-11 along with the route, on the
+# reasoning that resolution is covered against the module and through /graph.
+# The route is specified, and it is the only way to ask the question on behalf
+# of a WRITER rather than a model. Both are back.
+
+
+def test_resolving_asks_who_a_thread_is_at_a_point(project):
+    anchor = _chapter_anchor(project)
+    body = client.get("/api/codex/resolve", params={
+        "project_path": project, "entity_id": "e-elara",
+        "at": anchor, "pov": "e-elara"}).json()
+    assert body["as_of"] == anchor
+    assert [f["value"] for f in body["run"]] == ["Believes her father died."]
+
+
+def test_resolving_reports_ambiguity_as_a_readable_sentence(project):
+    anchor = _chapter_anchor(project)
+    client.post("/api/codex/fact", json={
+        "project_path": project, "entity_id": "e-elara",
+        "fact": {"id": "f-a", "axis": "status", "value": "one", "at": anchor}})
+    client.post("/api/codex/fact", json={
+        "project_path": project, "entity_id": "e-elara",
+        "fact": {"id": "f-b", "axis": "status", "value": "two", "at": anchor}})
+
+    body = client.get("/api/codex/resolve", params={
+        "project_path": project, "entity_id": "e-elara", "at": anchor}).json()
+    assert len(body["ambiguities"]) == 1
+    assert "same point" in body["ambiguities"][0]["message"]
+    assert not any(f["axis"] == "status" for f in body["run"])
+
+
+def test_resolving_something_that_is_not_there_refuses_in_the_closed_set(project):
+    response = client.get("/api/codex/resolve", params={
+        "project_path": project, "entity_id": "e-nope"})
+    assert response.status_code == 404
+    assert _code(response) == "entity_not_found"
 
 
 def test_the_graph_returns_nodes_and_edges(project):
