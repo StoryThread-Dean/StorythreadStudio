@@ -4,6 +4,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## ⛔ CURRENT STATE: the Weave is PAUSED at Phase 0
+
+**Do not write feature code on `feature/the-weave` until Phase 0 of
+`docs/weave-recovery-plan.md` is complete and the writer has signed off.**
+
+Why: the Weave was built for weeks against a specification that was never in
+the repository (it sat in gitignored `local/updateplan.md`). Nothing was ever
+compared to it. A 2026-08-11 audit of all 806 spec lines found the programme's
+own opening example unreachable through the UI, no AI anywhere in a feature
+specified as AI-guided, no way to export the Weave, and a skipped migration
+step that removes the writer's world from chips, exports and search at once.
+
+| Document | What it is |
+|---|---|
+| `docs/weave-spec.md` | **Source of truth.** The writer's design document |
+| `docs/weave-spec-gaps.md` | Scope addendum: findings, how it happened, what got better |
+| `docs/weave-recovery-plan.md` | **The work ledger.** 72 tasks, ids R0.1-R10.5 |
+
+**Progress is checked off in TWO places, in the same commit: the task's
+checkbox in the recovery plan, and the ledger line below.** This exists so a
+session interrupted mid-task, or forced into a long debugging detour, can find
+its place without relying on memory or conversation history.
+
+> **LEDGER — last updated 2026-08-11.** Phase 0: 7 of 12 done (R0.1-R0.7
+> complete; R0.8-R0.12 await writer decisions). Phases 1-10: not started.
+> Branch health at pause: 67 commits, 1573 backend tests, 1098 frontend tests,
+> ruff and tsc clean.
+
+### Spec discipline (applies to every feature, not just the Weave)
+
+1. **A feature's spec belongs in `docs/`, checked in, from the start.** The
+   Audiobook Converter did this and shipped clean; the Weave did not.
+2. **Where a spec and the code disagree, the CODE is wrong** until the writer
+   rules otherwise.
+3. **Behaviour changes go in the same commit as the spec change.** A deviation
+   that is an improvement gets the spec AMENDED -- it is never left as silent
+   divergence.
+4. **A claim worth keeping is worth a test that cites it.** See
+   `test_explain_costs.py`: Python reads the TypeScript registry so a "free"
+   claim cannot outlive the route it describes.
+5. **Never document the build in place of the spec.** Correcting docs to match
+   drifted code erases the evidence of the drift and leaves build, tests and
+   docs mutually consistent and all three wrong.
+6. **Remember what testing cannot do.** Live testing finds what is WRONG; it
+   never finds what is ABSENT. Missing scope raises no error. Only reading the
+   spec against the code finds a capability that was never built.
+
+---
+
 ## Project Status
 
 **Status: shipped.** The current release is **v1.1.0** -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
@@ -514,8 +563,20 @@ Two MCP servers are configured for this project (see `.mcp.json`). Use them wher
 
 ## Key Reference Files
 
+**A feature with a spec is held to it.** Where a spec and the code disagree,
+the CODE is wrong until the writer says otherwise; behaviour changes belong in
+the same commit as the spec change; and a claim worth keeping is worth a test
+that cites it. This is not a style preference -- the Weave was built for weeks
+against a spec that was never checked in, so the tests described the build, the
+docs described the build, and a whole missing capability ("reads the AVAILABLE
+documents" -- notes, outline, style guide) went unnoticed because absent scope
+raises no error. Never document the build in place of the spec; that erases the
+evidence of drift.
+
 | File | Contains |
 |---|---|
+| `docs/weave-spec.md` | **Source of truth for the Weave** (v2.0.0): the world model, anchors, Ties, stop kinds, Weaving, context assembly, Model Roles |
+| `docs/audiobook-converter-spec.md` | Source of truth for the Audiobook Converter (shipped v1.1.0); tests cite it by section number |
 | `docs/product-scope.md` | Core goals, writing philosophy, locked product rules, in/out-of-scope |
 | `docs/architecture.md` | Three-layer architecture, dual storage model, folder layout, current API surface |
 | `docs/features.md` | What the product does today: editor, Profile Builder, Smart Advisor, Writing Companion, series, exports, settings |
