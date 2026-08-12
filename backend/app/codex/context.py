@@ -383,7 +383,26 @@ def render_thread_brief(resolved: dict) -> str:
         if content:
             lines.append(content)
         for block in blocks:
-            lines.append(f"- {block.get('trait', '')}: "
+            # WEIGHT AND SECRECY, both. This used to emit a bare
+            # "- trait: description", which meant two things were lost between
+            # the Weave's own brief and the model:
+            #
+            #   the weight, so every trait arrived flat and a Core voice trait
+            #   read no louder than a Background one;
+            #
+            #   and the SUBTEXT marker, which is far worse, because the prompt's
+            #   never-name rule keys on it. A secret reaching a model through this
+            #   path arrived as ordinary text the model was free to state
+            #   outright. The chip path (formatProfileForAI) marked it and this
+            #   one did not, so the same trait was protected or exposed depending
+            #   on how it happened to be sent.
+            #
+            # Same shape as the chip path on purpose -- `[core, SUBTEXT]` -- so
+            # there is one thing for the prompt to recognise.
+            importance = str(block.get("importance") or "").strip()
+            marks = [m for m in (importance, "SUBTEXT" if block.get("subtext") else "") if m]
+            label = f" [{', '.join(marks)}]" if marks else ""
+            lines.append(f"- {block.get('trait', '')}{label}: "
                          f"{block.get('description', '')}")
 
     return "\n".join(lines).strip()

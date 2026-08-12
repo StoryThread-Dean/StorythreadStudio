@@ -192,3 +192,66 @@ def test_the_two_formats_agree_about_the_field():
     read_back = thread["sections"]["physical_traits"]["trait_blocks"][0]
     assert read_back["subtext"] is True
     assert read_back["importance"] == "core"
+
+
+# ── Every path to the model marks it ─────────────────────────────────────────
+#
+# There are TWO serialisers, and a secret is only as protected as the weaker of
+# them. The chip path (formatProfileForAI, in the frontend) marks a trait
+# `[core, SUBTEXT]`; the Weave's own brief renders a Thread independently. The
+# brief used to emit a bare "- trait: description", so a secret sent that way
+# arrived as ordinary text and the prompt's never-name rule had nothing to key
+# on -- the same trait protected or exposed depending on how it happened to be
+# sent, which is the worst kind of inconsistency to have in a privacy promise.
+
+def test_the_weave_brief_marks_a_secret():
+    from app.codex.context import render_thread_brief
+
+    text = render_thread_brief({
+        "name": "The Mayor", "type": "character",
+        "sections": {"motivations": {
+            "heading": "Motivations",
+            "content": "",
+            "trait_blocks": [
+                {"trait": "avoids hospitals", "description": "His parents.",
+                 "importance": "core", "subtext": True},
+                {"trait": "runs the council", "description": "Openly.",
+                 "importance": "present"},
+            ],
+        }},
+    })
+    assert "[core, SUBTEXT]" in text
+    # And an ordinary trait keeps its weight without gaining a marker.
+    assert "[present]" in text
+    assert text.count("SUBTEXT") == 1
+
+
+def test_the_brief_carries_the_weight_too():
+    # Not only the secret. Every trait used to arrive flat, so a Core voice trait
+    # read no louder to the model than a Background one -- and weighting is the
+    # entire purpose of the importance field.
+    from app.codex.context import render_thread_brief
+
+    text = render_thread_brief({
+        "name": "X", "type": "character",
+        "sections": {"voice_notes": {
+            "heading": "Voice Notes", "content": "",
+            "trait_blocks": [{"trait": "clipped", "description": "Short lines.",
+                              "importance": "core"}],
+        }},
+    })
+    assert "[core]" in text
+
+
+def test_the_two_serialisers_use_the_same_marker():
+    # Read from the frontend, so the two cannot drift into marking a secret two
+    # different ways -- the prompt recognises one word.
+    import os
+    import re
+
+    formatter = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "app", "src", "utils", "profileFormat.ts")
+    with open(formatter, "r", encoding="utf-8") as f:
+        source = f.read()
+    assert re.search(r"\$\{block\.importance\}, SUBTEXT", source),         "the chip path no longer marks a secret as SUBTEXT"

@@ -355,6 +355,18 @@ material that must not travel (see R5.5).
       marked yet. A second `What's this?` appears on a trait card once its switch
       is on, which is the moment the question occurs. Pinned by a source read --
       the precedent Explain.test.tsx set -- and verified by reinstating the bug.
+- [x] **R2.12g** The Weave's OWN brief marks a secret. `context.py` rendered a
+      trait as a bare `- trait: description`, dropping both the weight and the
+      SUBTEXT marker -- so a secret reaching a model through the automatic brief
+      arrived as ordinary text with nothing for the never-name rule to key on,
+      while the same trait sent as a CHIP was protected. A privacy promise that
+      holds or fails depending on which path happened to be used is not a promise.
+      Found by checking the walkthrough's claims against the code rather than
+      affirming them when the writer asked "if that is so". Both serialisers now
+      emit `[core, SUBTEXT]`, and a test reads `profileFormat.ts` from Python so
+      the two cannot drift into marking it two different ways. The weight travels
+      now too: every trait used to arrive flat, so a Core voice trait read no
+      louder to the model than a Background one.
 
 **Raised by the writer's live testing of R2.1 (2026-08-12), grouped with R2.5 on
 their instruction ("This can be grouped up with R2.5").** The good news from that
@@ -542,7 +554,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 20 | 15 |
+| 2 The premise | 21 | 16 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -551,4 +563,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 5 | 0 |
-| **Total** | **85** | **33** |
+| **Total** | **86** | **34** |
