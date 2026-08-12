@@ -48,6 +48,18 @@ class Anchor:
         return format_anchor(self.chapter_id, self.scene_id)
 
 
+# ── Before page one ──────────────────────────────────────────────────────────
+#
+# A position below every real chapter, and the anchor that names it.
+#
+# Kept HERE rather than in the resolver because everything that compares
+# positions has to agree: resolution, spoiler visibility, the snag checkers and
+# the scan. A second definition of "the beginning" is a second answer to "is this
+# in force yet".
+ALWAYS = (-1, -1)
+BEFORE_STORY = "before"
+
+
 def format_anchor(chapter_id: str, scene_id: str | None = None) -> str:
     """The stored form: 'c-xxx' or 'c-xxx/s-yyy'."""
     return f"{chapter_id}/{scene_id}" if scene_id else chapter_id
@@ -137,8 +149,19 @@ class AnchorIndex:
         An anchor whose SCENE is gone but whose chapter remains degrades to
         the chapter rather than vanishing -- the design's stated fallback,
         and the reason a scene-less anchor is valid everywhere.
+
+        BEFORE_STORY resolves to a position below every real one. It is not the
+        same as an unwritten anchor and must not be confused with one: unwritten
+        means "the writer has not said when", which the Weave reports as Unplaced
+        and asks about. BEFORE_STORY means "true from before page one", which is
+        a deliberate answer and the commonest one there is -- a character was
+        orphaned, a war ended, a house was built. Pinning those to chapter one
+        was the only option before, and it says something false: that the thing
+        happened as the book opened.
         """
         if isinstance(anchor, str):
+            if anchor.strip() == BEFORE_STORY:
+                return ALWAYS
             anchor = parse_anchor(anchor)
         if anchor is None:
             return None

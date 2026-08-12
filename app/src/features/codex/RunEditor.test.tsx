@@ -18,7 +18,7 @@ import { render, screen, cleanup, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { RunEditor } from "./RunEditor";
+import { BEFORE_STORY, RunEditor } from "./RunEditor";
 import type { Fact } from "./api";
 
 afterEach(cleanup);
@@ -79,7 +79,13 @@ describe("recording a fact", () => {
     await open();
     const when = screen.getByLabelText("From when 1") as HTMLSelectElement;
     const options = Array.from(when.options).map(o => o.textContent);
-    expect(options).toEqual(["Not placed yet", "1. The Raid", "2. The Letter"]);
+    expect(options).toEqual([
+      "Not placed yet",
+      // Most of what is true about a character started before page one.
+      "Before the story begins",
+      "1. The Raid",
+      "2. The Letter",
+    ]);
   });
 
   it("keeps 'not placed yet' selectable, because that is a real state", async () => {
@@ -96,7 +102,7 @@ describe("recording a fact", () => {
     // died, and he is alive, and both are recorded without contradicting.
     show([BELIEF], { self: { entity_id: "e-elara", name: "Elara Voss" } });
     await open();
-    expect((screen.getByLabelText("Whose truth 1") as HTMLSelectElement).value)
+    expect((screen.getByLabelText("Is this true 1") as HTMLSelectElement).value)
       .toBe("e-elara");
   });
 
@@ -111,12 +117,16 @@ describe("recording a fact", () => {
       people: [{ entity_id: "e-garrick", name: "Garrick Vale" }],
     });
     await open();
-    const whose = screen.getByLabelText("Whose truth 1") as HTMLSelectElement;
+    const whose = screen.getByLabelText("Is this true 1") as HTMLSelectElement;
     const options = Array.from(whose.options).map(o => o.textContent);
+    // TRUE IS NOT THE SAME AS KNOWN. "True of the world" read as "everybody
+    // knows", which stopped a writer choosing it for something nobody has been
+    // told -- their own report: "True to the world means to me that the whole
+    // world knows that Alexandra believes her father to be dead."
     expect(options).toEqual([
-      "True of the world",
-      "Only Elara Voss believes this",
-      "Only Garrick Vale believes this",
+      "Actually true in your story",
+      "Only what Elara Voss thinks (may be wrong)",
+      "Only what Garrick Vale thinks (may be wrong)",
     ]);
   });
 
@@ -128,17 +138,18 @@ describe("recording a fact", () => {
                { entity_id: "e-elara", name: "Elara Voss" }],
     });
     await open();
-    const whose = screen.getByLabelText("Whose truth 1") as HTMLSelectElement;
+    const whose = screen.getByLabelText("Is this true 1") as HTMLSelectElement;
     const names = Array.from(whose.options).map(o => o.textContent);
-    expect(names[1]).toBe("Only Elara Voss believes this");
+    expect(names[1]).toBe("Only what Elara Voss thinks (may be wrong)");
     // And not twice, because she is also in the full list.
-    expect(names.filter(n => n === "Only Elara Voss believes this")).toHaveLength(1);
+    expect(names.filter(n => n === "Only what Elara Voss thinks (may be wrong)"))
+      .toHaveLength(1);
   });
 
   it("defaults to true of the world", async () => {
     show([{ id: "f-1", axis: "location", at: "c-1", value: "The keep burned." }]);
     await open();
-    expect((screen.getByLabelText("Whose truth 1") as HTMLSelectElement).value)
+    expect((screen.getByLabelText("Is this true 1") as HTMLSelectElement).value)
       .toBe("truth");
   });
 
@@ -148,7 +159,7 @@ describe("recording a fact", () => {
     // character's mistaken belief into a fact about the book.
     show([{ ...BELIEF, frame: "e-gone" }]);
     await open();
-    const whose = screen.getByLabelText("Whose truth 1") as HTMLSelectElement;
+    const whose = screen.getByLabelText("Is this true 1") as HTMLSelectElement;
     expect(whose.value).toBe("e-gone");
     expect(Array.from(whose.options).map(o => o.textContent))
       .toContain("e-gone (not in this world any more)");
@@ -264,7 +275,7 @@ describe("the collapsed line", () => {
     const line = screen.getAllByTestId("fact")[0].textContent ?? "";
     expect(line).toContain("From 1. The Raid");
     expect(line).toContain("Her father died in the raid.");
-    expect(line).toContain("Elara Voss believes it");
+    expect(line).toContain("Elara Voss thinks so");
   });
 
   it("says when the reader finds out, when that is later", () => {
@@ -331,5 +342,48 @@ describe("the collapsed line", () => {
     // The caller owns the list, so nothing new renders here; what matters is
     // that the editor asked for it to be open.
     expect(screen.getAllByTestId("fact")).toHaveLength(1);
+  });
+});
+
+// ── Before page one ──────────────────────────────────────────────────────────
+//
+// "Kipling the adventurer believes she is an orphan. Starts BEFORE chapter 1
+// when she is introduced to the reader as a grown young adult."
+//
+// There was no way to say that. A chapter says the thing happened as the book
+// opened; "not placed" is the Weave's word for "you have not told me yet" and
+// gets asked about. Most of what is true about a character -- an orphaning, a
+// war, a scar -- was true before the first page, so the commonest case had the
+// worst answer available.
+
+describe("something that was already true", () => {
+  it("can be said to start before the story", async () => {
+    const { onChange } = show([BELIEF]);
+    await open();
+    await userEvent.selectOptions(screen.getByLabelText("From when 1"), "before");
+    expect(onChange).toHaveBeenCalledWith(
+      [expect.objectContaining({ at: "before" })]);
+  });
+
+  it("reads as before the story on the line, not as a chapter", () => {
+    show([{ ...BELIEF, at: "before", value: "She is an orphan." }]);
+    const line = screen.getAllByTestId("fact")[0].textContent ?? "";
+    expect(line).toContain("From before the story");
+    expect(line).not.toContain("Not placed yet");
+  });
+
+  it("is not the same as unplaced, on the line or in the box", async () => {
+    // The distinction the whole option exists for: one is an answer, the other
+    // is a question the Weave will keep asking.
+    show([{ ...BELIEF, at: "" }]);
+    expect(screen.getAllByTestId("fact")[0].textContent).toContain("Not placed yet");
+    await open();
+    expect((screen.getByLabelText("From when 1") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("uses the same word as the backend", () => {
+    // It is written into the writer's file as `at: before` and read back by the
+    // resolver. Two spellings would be a fact that never resolves.
+    expect(BEFORE_STORY).toBe("before");
   });
 });

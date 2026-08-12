@@ -46,7 +46,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.codex.anchors import AnchorIndex
+from app.codex.anchors import ALWAYS, AnchorIndex
 from app.codex.normalize import (
     AI_SCOPE_ALWAYS,
     AI_SCOPE_NEVER,
@@ -129,7 +129,9 @@ def _scope_allowed(scope: str, include_on_request: bool) -> bool:
 #
 # It is also every connection that already exists. Treating them as unplaced
 # would empty the map of every project made before states existed.
-_ALWAYS = (-1, -1)
+# Imported rather than redefined -- see anchors.ALWAYS. Two definitions of
+# where the book begins is two answers to whether a fact is in force.
+_ALWAYS = ALWAYS
 
 
 def _supersedes_within(group: list[dict]) -> dict | None:

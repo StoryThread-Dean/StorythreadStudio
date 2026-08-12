@@ -44,13 +44,21 @@
 // Run becomes something a writer can scan.
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Spool, Trash2 } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
 import type { ChapterAnchor, Fact } from "./api";
 
 // Re-exported so a caller that renders the editor does not need two imports.
 export type { Fact };
+
+/**
+ * The anchor for something that was already true when the book opened.
+ *
+ * Must match BEFORE_STORY in backend/app/codex/anchors.py -- it is written into
+ * the writer's file as `at: before` and read back by the resolver.
+ */
+export const BEFORE_STORY = "before";
 
 export const runInputClass =
   "w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs "
@@ -107,6 +115,7 @@ export function factSummary(
 ): string {
   const chapterName = (anchor: string | null | undefined) => {
     if (!anchor) return "";
+    if (anchor === BEFORE_STORY) return "before the story";
     const index = chapters.findIndex(c => c.anchor === anchor);
     return index === -1 ? "" : `${index + 1}. ${chapters[index].title}`;
   };
@@ -129,7 +138,7 @@ export function factSummary(
   const frame = fact.frame && fact.frame !== "truth" ? fact.frame : "";
   if (frame) {
     const who = holders.find(h => h.entity_id === frame);
-    parts.push(who ? `${who.name} believes it` : "one character believes it");
+    parts.push(who ? `${who.name} thinks so` : "one character thinks so");
   }
 
   if (fact.revealed_at) {
@@ -173,9 +182,13 @@ export function RunEditor({
   }
 
   return (
-    <section data-testid="run-editor" className="mt-4 border-t border-border pt-3">
+    <section
+      data-testid="run-editor"
+      className="mt-4 rounded-lg border border-violet-800/60 bg-violet-950/15 p-3"
+    >
       <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold text-text-primary">
+        <Spool size={13} className="shrink-0 text-violet-300" />
+        <h4 className="text-xs font-semibold text-violet-100">
           How this changes through the story
         </h4>
         <Explain of="thread.run" compact />
@@ -203,14 +216,16 @@ export function RunEditor({
                 return (
                 <li key={fact.id}
                     data-testid="fact"
-                    className="rounded border border-border">
+                    className={`rounded border bg-bg-panel/60 transition-colors ${
+                      open ? "border-violet-500" : "border-violet-900/50 hover:border-violet-700"
+                    }`}>
                   {/* THE LINE. What a writer reads when they are not editing:
                       when it starts, what is true, whose it is, and when the
                       reader finds out. */}
                   <button
                     onClick={() => setOpenId(open ? null : fact.id)}
                     aria-expanded={open}
-                    className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-[11px] text-text-muted hover:text-text-primary"
+                    className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-[11px] text-violet-100/80 hover:text-violet-100"
                   >
                     {open ? <ChevronDown size={11} className="mt-0.5 shrink-0" />
                           : <ChevronRight size={11} className="mt-0.5 shrink-0" />}
@@ -220,7 +235,7 @@ export function RunEditor({
                   </button>
 
                   {open && (
-                  <div className="border-t border-border px-2 pb-2">
+                  <div className="border-t border-violet-900/50 px-2 pb-2">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <RunField label="What changes"
                               hint="A short name for the thing that changes, so two facts about it can replace each other.">
@@ -243,6 +258,15 @@ export function RunEditor({
                             selectable, or the writer could not see that it IS
                             unplaced. */}
                         <option value="">Not placed yet</option>
+                        {/* MOST OF WHAT IS TRUE ABOUT A CHARACTER STARTED
+                            BEFORE PAGE ONE -- an orphaning, a war, a scar. The
+                            only options used to be a chapter, which says the
+                            thing happened as the book opened, and "not placed",
+                            which is the Weave's word for "you have not told me
+                            yet" and gets asked about. Neither was true. */}
+                        <option value={BEFORE_STORY}>
+                          Before the story begins
+                        </option>
                         {chapters.map((chapter, n) => (
                           <option key={chapter.chapter_id} value={chapter.anchor}>
                             {n + 1}. {chapter.title}
@@ -263,18 +287,25 @@ export function RunEditor({
                   </RunField>
 
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <RunField label="Whose truth"
-                              hint="True of the world, or something only one character believes. A belief recorded this way does not make it true.">
+                    {/* TRUE IS NOT THE SAME AS KNOWN, and the old wording
+                        implied it was. "True of the world" reads as "everybody
+                        knows", which stopped a writer choosing it for a thing
+                        nobody has been told -- and made an ordinary fact look
+                        like a claim about the whole cast. The app does not model
+                        who knows what among characters at all; it models what is
+                        TRUE, and separately what one character has wrong. */}
+                    <RunField label="Is this true, or does someone think it?"
+                              hint="Being true is not the same as being known. Choose actually true even if nobody has been told -- pick a character only when they are WRONG, or believe it before it becomes true.">
                       <select
                         value={fact.frame || "truth"}
                         onChange={e => change(i, { frame: e.target.value })}
-                        aria-label={`Whose truth ${i + 1}`}
+                        aria-label={`Is this true ${i + 1}`}
                         className={runInputClass}
                       >
-                        <option value="truth">True of the world</option>
+                        <option value="truth">Actually true in your story</option>
                         {holders.map(person => (
                           <option key={person.entity_id} value={person.entity_id}>
-                            Only {person.name} believes this
+                            Only what {person.name} thinks (may be wrong)
                           </option>
                         ))}
                         {/* A frame already on the file that is not in the list --
@@ -342,7 +373,7 @@ export function RunEditor({
 
           <button
             onClick={add}
-            className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-violet-300 hover:text-violet-200"
+            className="mt-2 inline-flex items-center gap-1.5 rounded border border-violet-700 px-2 py-1 text-[11px] font-medium text-violet-200 transition-colors hover:border-violet-500 hover:bg-violet-900/30"
           >
             <Plus size={11} /> Something that changes
           </button>

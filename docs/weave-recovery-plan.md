@@ -276,6 +276,38 @@ types it is about are edited in a screen with no fact UI.
       because collapsed it would say "(nothing written yet)" and the button would
       look like it had done nothing. `factSummary` is exported and tested on its
       own.
+- [x] **R2.5e** Three corrections from the writer's second testing pass, and two
+      of them were semantics rather than wording.
+      **"True of the world" read as "everybody knows".** Their words: "True to
+      the world means to me that the whole world knows that Alexandra believes
+      her father to be dead. Logically that doesn't make sense because strangers
+      don't know." Exactly right, and the label was doing the damage: the app
+      does not model who knows what among characters at all. It models what is
+      TRUE, and separately what one character has WRONG. So the question is now
+      "Is this true, or does someone think it?", answered by "Actually true in
+      your story" or "Only what X thinks (may be wrong)", with the rule stated
+      where it is needed: being true is not the same as being known, so choose
+      actually true even when nobody has been told, and name a character only
+      when they are wrong. That also settles their Kipling case, where both
+      options looked right -- she IS an orphan, so it is simply true.
+      **Nothing could say "before the story".** A fact could take a chapter,
+      which claims it happened as the book opened, or nothing, which is the
+      Weave's word for "you have not told me yet" and gets asked about. Neither
+      is true of an orphaning, a war or a scar -- so the commonest case had the
+      worst answer. `BEFORE_STORY` is an anchor resolving to a position below
+      every chapter, held in `anchors.py` beside `ALWAYS` so resolution, spoiler
+      visibility, the snag checkers and the scan cannot disagree about where the
+      book begins. The resolver's private copy of that constant is gone. It is
+      deliberate, so never Unplaced; in force from page one, so never a spoiler
+      by default; and it can still carry a reveal point, which is how something
+      true all along is learned in chapter eight. Nine backend tests.
+      **The Run is violet now**, matching the Weave everywhere else in the app
+      and distinct from the profile sections' indigo, so the writer's eye lands
+      on it. Their point about it needing to be "more upfront" as a feature is
+      the wider Profile Builder restructure, still a discussion.
+      *Deliberately NOT built:* story chronology. A flashback chapter sits at a
+      reading position while depicting an earlier time, and anchors are reading
+      order. Recorded rather than half-solved -- see the note below.
 - [x] **R2.5b** A save that loses a race no longer loses the work. A full suite
       run failed once on `os.replace` with PermissionError (WinError 5) and
       passed twice in isolation -- which reads as a flaky test and is not one. On
@@ -415,6 +447,22 @@ material that must not travel (see R5.5).
       the two cannot drift into marking it two different ways. The weight travels
       now too: every trait used to arrive flat, so a Core voice trait read no
       louder to the model than a Background one.
+
+### Open question: story time versus reading order (raised 2026-08-12)
+
+Anchors are READING ORDER -- chapter one is position one. A flashback chapter
+sits at its reading position while depicting an earlier time, so a fact anchored
+"from chapter eight" is in force during a chapter-ten flashback set years before
+it. The writer raised this while asking for "before the story begins":
+
+> "This could potentially be useful if the Writer makes a flashback scene that
+> this information is still relevant or possibly NOT relevant because the
+> flashback occurs BEFORE the event takes place."
+
+`BEFORE_STORY` covers the common half (things already true when the book opens)
+and does not touch the rest. Modelling story time properly means a second axis on
+every anchor and a way to say what a chapter depicts, which is a spec-level
+decision rather than a control. Recorded here rather than half-built.
 
 **Raised by the writer's live testing of R2.1 (2026-08-12), grouped with R2.5 on
 their instruction ("This can be grouped up with R2.5").** The good news from that
@@ -609,7 +657,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 24 | 20 |
+| 2 The premise | 25 | 21 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -618,4 +666,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **90** | **38** |
+| **Total** | **91** | **39** |
