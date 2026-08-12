@@ -1297,10 +1297,21 @@ def adopt_relation(project_path: str, rel_id: str) -> dict:
                          "relations")
 
     registry, _from_file = load_registry(project_path)
-    if relation_by_id(registry, rel_id) is not None:
-        return registry                     # already there; nothing to do
-
     known = {t.get("id") for t in registry.get("types", [])}
+    if relation_by_id(registry, rel_id) is not None:
+        # Already here -- but possibly NARROWER than what ships today. The
+        # vocabulary grows in place ("owns" used to stop at objects; now a
+        # manor is ownable), and a project converted before a widening has
+        # the old shape in its own file. Adopting means accepting the shipped
+        # coverage, so the world's copy is widened to it -- which only ever
+        # ADDS kinds the world actually has, and a copy already as wide comes
+        # back byte-identical with nothing written.
+        return widen_relation(
+            project_path, rel_id,
+            [t for t in shipped["source_types"] if t in known],
+            [t for t in shipped["target_types"] if t in known],
+        )
+
     entry = dict(shipped)
     # Narrowed to the kinds this world actually has, so adopting a relation
     # into a world with a trimmed type list cannot write something invalid.
@@ -1341,14 +1352,30 @@ def shipped_relations_between(registry: dict, src_type: str,
     The point of offering these is that "nothing fits" is usually not true --
     it means the project was converted before the vocabulary grew. Showing
     them turns a dead end into a one-click decision the writer makes.
+
+    A relation the world already HAS is offered too, when the world's copy
+    does not cover this pair and the shipped one does. The vocabulary grows in
+    place -- "owns" used to stop at objects, and now a manor is ownable -- and
+    excluding by id alone made every widening invisible to every existing
+    project: a fresh world could say "Lara owns Croft Manor" while a converted
+    one hit a dead end on the same pair. Choosing the offer widens their copy
+    (adds only, nothing removed) rather than duplicating it.
     """
-    have = {r.get("id") for r in registry.get("relations", [])}
+    have = {str(r.get("id")): r for r in registry.get("relations", [])}
     known = {t.get("id") for t in registry.get("types", [])}
-    return [
-        dict(r) for r in DEFAULT_RELATIONS
-        if r["id"] not in have
-        and src_type in known and dst_type in known
-        and (r.get("universal")
-             or (src_type in r["source_types"]
-                 and dst_type in r["target_types"]))
-    ]
+    if src_type not in known or dst_type not in known:
+        return []
+
+    def covers(rel: dict) -> bool:
+        return bool(rel.get("universal")
+                    or (src_type in rel.get("source_types", [])
+                        and dst_type in rel.get("target_types", [])))
+
+    offered: list[dict] = []
+    for shipped in DEFAULT_RELATIONS:
+        if not covers(shipped):
+            continue
+        mine = have.get(shipped["id"])
+        if mine is None or not covers(mine):
+            offered.append(dict(shipped))
+    return offered

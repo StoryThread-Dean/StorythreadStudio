@@ -518,3 +518,65 @@ def test_not_knowing_a_place_exists_is_sayable(project):
            "location")
     response = _tie(project, "e-elara", "unaware_of", "e-manor")
     assert response.status_code == 200
+
+
+# ── The vocabulary grew IN PLACE, and older projects must see it ─────────────
+#
+# "owns" used to stop at objects; now a manor is ownable. A project converted
+# before that widening has the old shape in its own types.json. Excluding
+# offers by id alone made every such widening invisible: a fresh world could
+# say "Lara owns Croft Manor" while a converted one hit a dead end on the very
+# same pair -- and could not even see that the app had the words.
+
+
+def _narrow_owns(project):
+    registry, _ = load_registry(project)
+    for r in registry["relations"]:
+        if r["id"] == "owns":
+            r["target_types"] = ["object"]      # the pre-widening shape
+    from app.codex.types_registry import _write_registry
+    _write_registry(project, registry)
+
+
+def test_a_world_with_a_narrower_copy_is_offered_the_wider_one(project):
+    _narrow_owns(project)
+    body = _relations(project, "character", "location")
+    assert "owns" in {r["id"] for r in body["available"]}
+
+
+def test_a_copy_that_already_covers_the_pair_is_not_re_offered(project):
+    # Offer only where the world's own copy falls short, or "available" would
+    # duplicate half of "forward" on every request.
+    body = _relations(project, "character", "location")
+    forward = {r["id"] for r in body["forward"]}
+    assert "owns" in forward
+    assert "owns" not in {r["id"] for r in body["available"]}
+
+
+def test_adopting_a_relation_the_world_already_has_widens_it(project):
+    # End to end: the offer is choosable, choosing it widens the writer's own
+    # copy (adds only), and the tie that was a dead end now records.
+    import pathlib
+    _narrow_owns(project)
+    _entry(pathlib.Path(project), "locations", "e-manor", "Croft Manor",
+           "location")
+
+    client.post("/api/codex/relation",
+                json={"project_path": project, "adopt": "owns"})
+
+    owns = relation_by_id(load_registry(project)[0], "owns")
+    assert "location" in owns["target_types"]
+    assert "object" in owns["target_types"]     # nothing removed, ever
+    assert _tie(project, "e-elara", "owns", "e-manor").status_code == 200
+
+
+def test_widening_never_touches_a_copy_that_is_already_wide(project):
+    # Adopting what you already fully have stays a no-op -- byte-identical
+    # registry, no write. The harmless-twice contract, kept under widening.
+    before = load_registry(project)[0]
+    client.post("/api/codex/relation",
+                json={"project_path": project, "adopt": "owns"})
+    after = load_registry(project)[0]
+    assert relation_by_id(before, "owns") == relation_by_id(after, "owns")
+    relations = after["relations"]
+    assert len([r for r in relations if r["id"] == "owns"]) == 1
