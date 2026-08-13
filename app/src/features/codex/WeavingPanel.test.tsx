@@ -69,6 +69,9 @@ function mockApi(options: {
   resumeFinds?: Record<string, unknown> | null;
   /** What the scan says changed under a resumed sitting (R8.1). */
   resumed?: Record<string, unknown>;
+  /** The Unwoven domain board's rows. Empty means the board renders nothing,
+   *  which is right -- and is why a test that needs the board must say so. */
+  domains?: Record<string, unknown>[];
 } = {}) {
   const stops = options.stops ?? [stop()];
   calls = [];
@@ -156,6 +159,7 @@ function mockApi(options: {
           total: options.total ?? stops.length,
           unreadable: options.unreadable ?? [],
           resumed: options.resumed ?? {},
+          domains: options.domains ?? [],
         }),
       } as Response;
     }
@@ -2619,5 +2623,145 @@ describe("starter text is never silently dropped", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: /Create it/ }));
     await waitFor(() => expect(posted("/thread/new").length).toBe(1));
     expect(posted("/thread/new")[0].body.sections).toBeUndefined();
+  });
+});
+
+
+// ── Ruling 8: the tick-list, offered from the walk ───────────────────────────
+//
+// "Forty unplaced facts should be a tick-list, not forty screens." Sweep.test.tsx
+// pins the list itself; these pin that the WALK offers it, only when it is worth
+// offering, and that the walk moves past everything the list settled -- which is
+// the part a component test cannot see and the part that would re-ask the writer
+// forty questions they just answered.
+
+describe("working through a whole kind at once", () => {
+  const unplacedStops = [1, 2, 3].map(n => stop({
+    kind: "unplaced", key: `unplaced|e-${n}`, entity_id: `e-${n}`,
+    title: "A fact never takes effect", quote: "",
+    why: "Nothing says when it became true.",
+    detail: { name: `Person ${n}`, type: "character", snag: "unplaced",
+              sides: [{ id: `f-${n}`, value: `Fact ${n}.` }] },
+  }));
+
+  it("offers the list when there is more than one of the kind", async () => {
+    mockApi({ stops: unplacedStops });
+    await start();
+    expect(screen.getByTestId("sweep-offer").textContent)
+      .toContain("all 3 at once");
+  });
+
+  it("stays quiet for a single one", async () => {
+    // "Work through all 1 at once" is a button that costs a click and does
+    // nothing.
+    mockApi({ stops: [unplacedStops[0]] });
+    await start();
+    expect(screen.queryByTestId("sweep-offer")).toBeNull();
+  });
+
+  it("stays quiet for a kind whose answers are each different", async () => {
+    mockApi({ stops: [
+      stop({ kind: "snag", key: "snag|a", entity_id: "e-1", quote: "",
+             detail: { name: "A", type: "character",
+                       sides: [{ id: "f-1", value: "x" }] } }),
+      stop({ kind: "snag", key: "snag|b", entity_id: "e-2", quote: "",
+             detail: { name: "B", type: "character",
+                       sides: [{ id: "f-2", value: "y" }] } }),
+    ] });
+    await start();
+    expect(screen.queryByTestId("sweep-offer")).toBeNull();
+  });
+
+  it("places from the list and walks past every one it settled", async () => {
+    // THE POINT OF THE PANEL HALF. The walk's index has to jump over all three,
+    // or the writer is asked again about facts they just placed.
+    mockApi({ stops: [...unplacedStops,
+                      stop({ key: "after", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByTestId("sweep-offer"));
+    const sweep = await screen.findByTestId("sweep");
+
+    for (const value of ["Fact 1.", "Fact 2.", "Fact 3."]) {
+      await userEvent.selectOptions(
+        within(sweep).getByLabelText(`Chapter for ${value}`), "c-2");
+    }
+    await userEvent.click(within(sweep).getByTestId("sweep-place"));
+
+    // Straight to the stop after the swept ones.
+    expect(await screen.findByText("Something else")).toBeTruthy();
+    // Each fact was PATCHed at the chapter chosen for it.
+    const patched = posted("/fact").filter(c => c.body.fact_id);
+    expect(patched.map(c => c.body.fact_id).sort()).toEqual(["f-1", "f-2", "f-3"]);
+    expect((patched[0].body.set as { at: string }).at).toBe("c-2");
+  });
+
+  it("leaves the walk exactly where it was when the writer backs out", async () => {
+    mockApi({ stops: unplacedStops });
+    await start();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 3/);
+    await userEvent.click(screen.getByTestId("sweep-offer"));
+    await screen.findByTestId("sweep");
+    await userEvent.click(screen.getByTestId("sweep-one-at-a-time"));
+    expect(await screen.findByTestId("weaving-progress")).toBeTruthy();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 3/);
+    expect(posted("/fact")).toEqual([]);
+  });
+
+  it("only lists what is still open in this sitting", async () => {
+    // Answer one on the walk, then open the list: the answered one is gone.
+    // A list assembled from anything but the walk's own snapshot would show a
+    // fact the writer settled five minutes ago.
+    mockApi({ stops: unplacedStops });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    await waitFor(() => expect(screen.getByTestId("sweep-offer")).toBeTruthy());
+    await userEvent.click(screen.getByTestId("sweep-offer"));
+    const sweep = await screen.findByTestId("sweep");
+    expect(within(sweep).queryByText(/Fact 1\./)).toBeNull();
+    expect(within(sweep).getByText(/Fact 2\./)).toBeTruthy();
+  });
+});
+
+
+// ── The guide the walk offered and did not draw ───────────────────────────────
+//
+// The Unwoven stop card has offered "Show me how this works" since R6.4, and
+// UnwovenGuide was mounted only in the setup branch -- so on a stop the button
+// set a flag and rendered nothing. A dead control in the middle of the walk.
+//
+// Same failure as R2.12f with the halves reversed: that was a guide nothing
+// offered, this was an offer with no guide. Both are only findable by reading the
+// mount points against the callers, which is why one test per mount point.
+
+describe("the ground-rules guide is reachable from both places", () => {
+  const unwovenStop = stop({
+    kind: "unwoven", key: "unwoven|gov_power", entity_id: "", quote: "",
+    title: "Who holds power, and how do they keep it?",
+    why: "Nothing in your world says yet.",
+    detail: { question_id: "gov_power", domain: "governance",
+              domain_label: "Power and who holds it", domain_open: 4,
+              lands_as: ["government", "structure"] },
+  });
+
+  it("opens from the setup screen", async () => {
+    // The board is where the setup screen's copy of the button lives, and the
+    // board renders nothing without domains -- correctly, so the test has to
+    // supply them rather than the component pretending.
+    mockApi({ stops: [unwovenStop], domains: [
+      { id: "governance", label: "Power and who holds it", open: 4, asked_now: 1 },
+    ] });
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: /Unwoven/ }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Show me how this works/ }));
+    expect(await screen.findByTestId("unwoven-guide")).toBeTruthy();
+  });
+
+  it("opens from a stop in the middle of the walk", async () => {
+    mockApi({ stops: [unwovenStop] });
+    await start();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Show me how this works/ }));
+    expect(await screen.findByTestId("unwoven-guide")).toBeTruthy();
   });
 });

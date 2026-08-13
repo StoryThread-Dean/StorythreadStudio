@@ -33,6 +33,8 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.codex.normalize import INFLUENCE_MEANT_SECRET, INFLUENCE_TO_IMPORTANCE
+from app.codex.types_registry import DEFAULT_TYPES
 from app.progress_store import record_save_event
 from app.settings_store import get_rollover_hour
 
@@ -54,61 +56,54 @@ class SectionConfig:
     has_trait_blocks: bool # True = YAML trait list; False = freeform text
 
 
-# Maps each profile type to its ordered section list
+# ── DERIVED FROM THE REGISTRY, not written out again (ruling 5) ───────────────
+#
+# The spec said "replace both ... so the two cannot drift". They were duplicated
+# instead, and by the time the recovery audit ran there were THREE definitions of
+# a character's sections. The frontend's copy is gone (R2.2b); this one was held
+# in step by `test_profile_registry_agreement.py`, which is a good test and one
+# copy too many -- a test that catches drift is second best to there being
+# nothing that can drift.
+#
+# So the four live types are COMPUTED from `DEFAULT_TYPES`. Verified identical to
+# the hand-written table it replaces, field for field, before the swap.
+#
+# WHY THE DEFAULTS AND NOT THE PROJECT'S OWN types.json. This file serves
+# `profiles/`, which is the pre-conversion home. An unconverted project has no
+# types.json at all, so there is nothing project-specific to read -- and the
+# three functions below take (text, type) and no project path, which is what
+# makes them safe to call from anywhere. Reading a per-project registry here
+# would mean threading a path through a legacy path that ruling 6 deletes
+# outright once `profiles/` stops being a home.
+#
+# The section-id rule that made this matter in the first place: THE KEY MUST BE
+# WHAT THE HEADING DERIVES TO, because the Weave reads a section's id from its
+# heading. `hidden_and_foreshadowing_traits` once disagreed with its own heading,
+# so the editor looked up a section it never found and a save wrote emptiness
+# over the writer's hidden traits. Deriving from one table is what stops a fourth
+# instance of that.
+def _configs_from_registry(type_id: str) -> list[SectionConfig]:
+    for entry in DEFAULT_TYPES:
+        if entry["id"] == type_id:
+            return [
+                SectionConfig(s["id"], s["heading"], bool(s.get("trait_blocks")))
+                for s in entry["sections"]
+            ]
+    return []
+
+
 SECTION_CONFIGS: dict[str, list[SectionConfig]] = {
-    "character": [
-        SectionConfig("overview",                "Overview",                        False),
-        SectionConfig("physical_traits",          "Physical Traits",                 True),
-        SectionConfig("personality_traits",       "Personality Traits",              True),
-        SectionConfig("motivations",              "Motivations",                     True),
-        SectionConfig("voice_notes",              "Voice Notes",                     True),
-        # THE KEY MUST BE WHAT THE HEADING DERIVES TO. The Weave reads a
-        # section's id from its heading, so a key that disagrees with its own
-        # heading splits one section into two populations -- and this one did.
-        # The consequence was not cosmetic: the editor looked up
-        # hidden_and_foreshadowing_traits, found nothing, and a save wrote an
-        # empty section over the writer's hidden traits. Pinned by
-        # test_profile_registry_agreement.py so the two cannot part again.
-        SectionConfig("hidden_and_foreshadowing_traits",
-                      "Hidden and Foreshadowing Traits", True),
-        # RETIRED in the registry (see types_registry.py) and kept HERE for the
-        # reason it is kept there: this file parses and writes by config, so a
-        # section removed from this list is a section deleted from the writer's
-        # file on the next save. The form hides it unless it already holds
-        # something.
-        SectionConfig("relationships_overview",   "Relationships Overview",          False),
-        SectionConfig("notes",                    "Notes",                           False),
-    ],
-    "relationship": [
-        SectionConfig("overview",            "Overview",           False),
-        SectionConfig("history",             "History",            False),
-        SectionConfig("current_dynamic",     "Current Dynamic",    False),
-        SectionConfig("hidden_tensions",     "Hidden Tensions",    False),
-        SectionConfig("emotional_direction", "Emotional Direction", False),
-        SectionConfig("notes",               "Notes",              False),
-    ],
-    "location": [
-        SectionConfig("overview",                "Overview",                False),
-        SectionConfig("physical_description",    "Physical Description",    False),
-        SectionConfig("tone_and_atmosphere",     "Tone and Atmosphere",     False),
-        SectionConfig("historical_significance", "Historical Significance", False),
-        SectionConfig("cultural_significance",   "Cultural Significance",   False),
-        SectionConfig("scene_use_notes",         "Scene Use Notes",         False),
-        SectionConfig("notes",                   "Notes",                   False),
-    ],
-    "lore": [
-        SectionConfig("overview",             "Overview",             False),
-        SectionConfig("rule_or_concept",      "Rule or Concept",      False),
-        SectionConfig("what_it_affects",      "What It Affects",      False),
-        SectionConfig("what_characters_know", "What Characters Know", False),
-        SectionConfig("story_relevance",      "Story Relevance",      False),
-        SectionConfig("notes",                "Notes",                False),
-    ],
-    # Chapter summary is dormant in this profile system. Phase 6 moved chapter
-    # summaries to plain Markdown files under summaries/chapters/ so the writer
-    # can edit them freely without the profile section scaffolding. This config
-    # is preserved only so legacy chapter_summary profile files (from Phase 2)
-    # still open in the Profile Builder without crashing.
+    "character":    _configs_from_registry("character"),
+    "relationship": _configs_from_registry("relationship"),
+    "location":     _configs_from_registry("location"),
+    "lore":         _configs_from_registry("lore"),
+    # THE TWO THE REGISTRY DOES NOT HAVE, and they stay hand-written because
+    # they are not entries any more. Phase 6 moved chapter and scene summaries to
+    # plain Markdown under summaries/, so the registry deliberately does not list
+    # them; these configs exist only so a legacy summary profile from Phase 2
+    # still opens in the Profile Builder instead of crashing it. Adding them to
+    # the registry to tidy this up would put two dead kinds back in the writer's
+    # sidebar.
     "chapter_summary": [
         SectionConfig("overview",           "Chapter Overview",     False),
         SectionConfig("key_events",         "Key Events",           False),
@@ -123,31 +118,43 @@ SECTION_CONFIGS: dict[str, list[SectionConfig]] = {
     ],
 }
 
-# Maps profile type to its subfolder inside the project
+# Maps profile type to its subfolder inside the project. Derived the same way:
+# the registry names the folder, and `profiles/` is this file's home for it.
 PROFILE_FOLDERS: dict[str, str] = {
-    "character":       "profiles/characters",
-    "relationship":    "profiles/relationships",
-    "location":        "profiles/locations",
-    "lore":            "profiles/lore",
+    **{entry["id"]: f"profiles/{entry['folder']}"
+       for entry in DEFAULT_TYPES
+       if entry["id"] in ("character", "relationship", "location", "lore")},
+    # Dormant, as above.
     "chapter_summary": "profiles/chapters",
     "scene_summary":   "profiles/scenes",
 }
 
 VALID_TYPES = set(PROFILE_FOLDERS.keys())
 
-# The five importance levels control how -- and how prominently -- a trait
-# reaches AI.
+# The FOUR importance levels control how -- and how prominently -- a trait
+# reaches AI. Core = always in prompt, highest priority position.
 #
-# Core = always in prompt, highest priority position.
+# There were five, and the fifth was `hidden`, which said two unrelated things at
+# once: "this is a secret" and "this barely matters". The second was a lie about
+# most secrets, so weight and disclosure were split (R2.12b) -- weight is this
+# scale, secrecy is `TraitBlock.subtext`, and the writer is asked for the real
+# weight rather than having the faintest one guessed for them.
 #
-# Hidden used to be documented here as "writer-only notes, never sent to the AI
-# API", and that was NOT TRUE. Hidden traits were sent like any other; what
-# made them different was only their position and framing in the prompt. The
-# Weave's conversion exists partly because of this: it rewrites every hidden
-# trait as `ai_scope: on-request`, which is the mechanism that actually
-# withholds it. Corrected under recovery task R1.5, on the spec's own
-# instruction to delete the claim -- a comment that promises a writer their
-# private notes are not transmitted is the worst kind of wrong.
+# TWO CORRECTIONS THIS COMMENT HAS NEEDED, both worth remembering:
+#
+# It once said hidden traits were "writer-only notes, never sent to the AI API",
+# which was NOT TRUE -- they were sent like any other, and only their position in
+# the prompt differed. A comment promising a writer their private notes are not
+# transmitted is the worst kind of wrong, and R1.5 deleted it on the spec's
+# instruction.
+#
+# It then said the Weave's conversion "rewrites every hidden trait as
+# `ai_scope: on-request`, which is the mechanism that actually withholds it".
+# R2.12b REVERSED that, and this comment went on asserting it. Withholding a
+# trait stops the model naming a secret by stopping it knowing the secret, so a
+# villain whose every scene is shaped by one arrives with none of it. `ai_scope`
+# means availability; disclosure is `subtext`; the never-name rule in the prompt
+# is what protects the secret. See `_normalize_trait` in codex/threads.py.
 VALID_IMPORTANCE = {"core", "present", "background", "contextual"}
 
 # Read, never written. A trait saved before the split carries importance:
@@ -398,20 +405,15 @@ def _clean_trait_yaml(content: str) -> str:
     return content
 
 
-# Map old influence values to new importance levels.
-# Old: foreshadowing|background|minor|major|core
-# New: core|present|background|contextual|hidden
-_INFLUENCE_TO_IMPORTANCE: dict[str, str] = {
-    "core":           "core",
-    "major":          "present",
-    "minor":          "background",
-    "background":     "contextual",
-    # An old foreshadowing trait was secret by intent, which is now two fields.
-    "foreshadowing":  "present",
-}
-
-# Old influence values that meant "secret" rather than "unimportant".
-_INFLUENCE_MEANT_SECRET = {"foreshadowing"}
+# The old influence scale lives in app/codex/normalize.py now, so both Markdown
+# dialects heal it the same way. Ruling 6: it used to live only here, and the
+# Weave's parser -- which reads the same trait blocks after a conversion -- had
+# never heard of it. See the note there for what that cost.
+#
+# Re-exported under the old private names so this file's call sites read as they
+# did; the definition is elsewhere and there is only one.
+_INFLUENCE_TO_IMPORTANCE = INFLUENCE_TO_IMPORTANCE
+_INFLUENCE_MEANT_SECRET = INFLUENCE_MEANT_SECRET
 
 
 def _migrate_influence(raw: str) -> str:

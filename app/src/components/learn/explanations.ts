@@ -523,6 +523,38 @@ export const EXPLAIN: Record<string, Explains> = {
         + "this is a view of what it does.",
     ],
   },
+  "weaving.sweep-unplaced": {
+    what: "Every fact with no point in the story, as one list.",
+    why: "A fact that says nothing about WHEN it became true is true everywhere "
+      + "or nowhere, so the app cannot reason about it and your AI never sees "
+      + "it. Forty of those is forty of the same small decision, and answering "
+      + "them one screen at a time takes longer than the thinking does. Ticking "
+      + "nothing and closing this is a real answer.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Choose a chapter on any row you want to place. That ticks it for you.",
+      "Place the ticked ones in one go. Anything you leave comes back next time.",
+      "A fact that genuinely belongs nowhere can be left unplaced for good, "
+        + "which stops it being asked about.",
+    ],
+    endpoint: "/api/codex/fact",
+  },
+  "weaving.sweep-loose": {
+    what: "Every entry that connects to nothing, as one list.",
+    why: "Mentions of a name already find its entry on their own. What is "
+      + "missing here is how each one relates to the REST of your world, and "
+      + "for a lot of them the honest answer is that it does not need to. "
+      + "Saying that about thirty entries should be one action, not thirty.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Tick anything that is fine unconnected and say so in one go.",
+      "For one that DOES need a connection, go one at a time instead: the "
+        + "connector needs the other end and a reason, which is a real decision.",
+    ],
+    endpoint: "/api/codex/run/answer",
+  },
   "weaving.stale": {
     what: "A question you already put off, about words you have since "
       + "rewritten.",

@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-13.** 81 of 100 tasks done.
+> **LEDGER — last updated 2026-08-14.** 84 of 104 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -288,9 +288,39 @@ its place without relying on memory or conversation history.
 > is withheld, a foreshadowed one is drawn), and an unintroduced endpoint still
 > hides the whole edge, or the map would announce a character who has not
 > appeared.
-> **PHASE 8 COMPLETE (12 of 12).** Next: **Phase 10** (release hygiene, 6 tasks).
+> **PHASE 8 COMPLETE (12 of 12).**
+> **PHASE 11 (3 of 4) -- the rulings that never became task ids.** A 2026-08-14
+> audit found that three of the ten section-C rulings approved on 2026-08-11 were
+> never given ids, so the progress table silently excluded them. That is this
+> programme's own failure mode: a decision recorded somewhere that nothing was
+> comparing the build against.
+> **R11.1 (ruling 8)** -- `Sweep.tsx`, the tick-list. "Forty unplaced facts should
+> be a tick-list, not forty screens." OFFERED from the walk rather than replacing
+> it, because "not a forced march" cuts both ways. Nothing ticked on open;
+> choosing a chapter ticks its own row; a ticked row with no chapter is counted
+> out loud rather than silently skipped; a partial failure keeps what landed and
+> says how far it got. Snags are deliberately NOT sweepable -- each is a different
+> argument, and a tick-list invites settling them without reading them.
+> **R11.2 (ruling 5)** -- `SECTION_CONFIGS` and `PROFILE_FOLDERS` are COMPUTED
+> from `DEFAULT_TYPES` now. A contract test that catches drift is second best to
+> nothing being able to drift. Verified field-for-field identical before the swap.
+> **R11.3 (ruling 6, the unblocked half)** -- the deletion is blocked by the same
+> thing as R1.5b (`profiles/` is still a home), but the PORT was hiding real data
+> loss: the pre-v1.0.10 `influence` scale was healed by `profiles.py` and unknown
+> to `threads.py`, so a converted older project read every trait weight as absent
+> and defaulted it to `background`, the FAINTEST -- and `foreshadowing`, which
+> meant SECRET, lost its weight and its secrecy. Nothing raised anything, because
+> a weight is a number and there is no obviously wrong one. One map, in
+> `codex/normalize.py`, read by both dialects.
+> **Two live bugs fixed alongside.** A colon in a trait name ("Story role: Comic
+> Relief", which the app's OWN picker inserts) made a whole Personality section
+> parse as prose -- both writers now quote when YAML would misread, and both
+> parsers repair the files already on disk. And the Unwoven guide was mounted only
+> on the setup screen while the stop card also offered it, so that button set a
+> flag and drew nothing.
+> Next: **Phase 10** (release hygiene, 6 tasks).
 > Phases 7 and 9 are deferred to v2.1.0.
-> Branch health: 1838 backend tests, 1314 frontend tests, ruff and tsc clean.
+> Branch health: 1861 backend tests, 1340 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

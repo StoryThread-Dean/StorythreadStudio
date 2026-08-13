@@ -240,19 +240,47 @@ of date. Recommend accepting and amending the document.
    sidebar, the map legend, the walk rail, tooltips and the tutorial cannot
    drift apart". `lexicon.ts` and `explanations.ts` now both feed the same Weave
    screens.
-5. **`PROFILE_FOLDERS` / `SECTION_CONFIGS` were duplicated, not replaced.**
+5. **DONE 2026-08-14.** `SECTION_CONFIGS` and `PROFILE_FOLDERS` in `profiles.py`
+   are now COMPUTED from `DEFAULT_TYPES` rather than written out again, so there
+   is one definition and nothing left to drift. Verified field-for-field
+   identical to the hand-written table before the swap. The registry's DEFAULTS
+   rather than the project's own `types.json`: this file serves `profiles/`,
+   which is the pre-conversion home and has no `types.json` to read. The two
+   dormant summary types stay hand-written and say why -- they are not entries
+   any more, and adding them to the registry to tidy this up would put two dead
+   kinds back in the writer's sidebar.
+   ORIGINAL FINDING: **`PROFILE_FOLDERS` / `SECTION_CONFIGS` were duplicated, not replaced.**
    Spec 313-316: "Replace both ... and the frontend duplicate ... so the two
    cannot drift." There are now **three** definitions of a character's
    sections. The drift this caused is already documented in
    `types_registry.py:132-141`.
-6. **A parallel Markdown parser.** Spec 320-322 said the profile parser and
+6. **PART DONE 2026-08-14; the deletion is BLOCKED.** The ruling was "port its
+   legacy-YAML repair across, then delete it once nothing calls it". The
+   deletion cannot happen yet for the same reason R1.5b cannot: `profiles/` is
+   still a live home for unconverted projects, and `profileSource.ts` routes to
+   it. The PORT is done, and it was hiding real data loss: the pre-v1.0.10
+   `influence` scale was healed by `profiles.py` and unknown to `threads.py`, so
+   converting an older project read every trait's weight as absent and defaulted
+   it to `background` -- the faintest -- while `foreshadowing`, which meant
+   SECRET, lost its weight AND its secrecy. Nothing raised anything, because a
+   weight is a number and there is no obviously wrong one. The map now lives in
+   `codex/normalize.py` and both dialects read the one copy.
+   ORIGINAL FINDING: **A parallel Markdown parser.** Spec 320-322 said the profile parser and
    generator would be "reused nearly whole"; `threads.py` is an independent
    508-line implementation, so two dialects exist.
 7. **Two explicit deletion orders ignored**: `merge_profile_with_arc` is still
    defined and called (spec 501 says delete it); the false comment at
    `profiles.py:125` ("hidden = never sent to the AI API") that spec 363
    ordered deleted is still there.
-8. **Unplaced and Loose thread** were built as one-at-a-time walks; the spec
+8. **DONE 2026-08-14.** `Sweep.tsx`: a tick-list for Unplaced and Loose thread,
+   OFFERED from the walk rather than replacing it (the spec's "not a forced
+   march" cuts both ways, and a list the writer cannot leave is a longer march).
+   Nothing is ticked when it opens; choosing a chapter ticks its own row; a
+   ticked row with no chapter is counted out loud rather than silently skipped;
+   a partial failure keeps what landed and says how far it got. Snags are
+   deliberately NOT sweepable -- every one is a different argument, and a
+   tick-list would invite settling them without reading them.
+   ORIGINAL FINDING: **Unplaced and Loose thread** were built as one-at-a-time walks; the spec
    asks for a multi-select list and "lists them all at once", explicitly "not a
    forced march".
 9. **Frayed's QuickFill** shows all missing sections at once; the spec says

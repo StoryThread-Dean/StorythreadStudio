@@ -600,3 +600,103 @@ def test_a_name_or_axis_with_a_colon_also_survives():
     assert back["role"] == "Antagonist: reformed"
     assert back["aliases"] == ["The Doctor: mk II"]
     assert back["run"][0]["axis"] == "belief: father"
+
+
+# ── Ruling 6, the half that can be done today: one legacy repair, not two ─────
+#
+# The 2026-08-11 audit ordered the two Markdown dialects converged: "port its
+# legacy-YAML repair across, then delete it once nothing calls it." The deletion
+# is blocked -- `profiles/` is still a live home for unconverted projects, the
+# same thing blocking R1.5b -- but the PORT is not, and it was hiding real data
+# loss.
+#
+# Before v1.0.10 a trait's weight was `influence` on a five-value scale.
+# profiles.py had translated it since the scale changed; THIS parser had never
+# heard of it, so `importance` read as absent and every caller defaulted it to
+# `background` -- the faintest weight. Converting an older project moved every
+# carefully weighted trait to the bottom of the prompt, and `foreshadowing`,
+# which meant SECRET rather than unimportant, lost its weight AND its secrecy.
+#
+# Nothing raised anything, because a weight is a number and there is no such
+# thing as an obviously wrong one.
+
+def _legacy(influence: str) -> dict:
+    raw = f"""---
+type: character
+entity_id: e-1
+name: Elara Voss
+---
+
+# Personality Traits
+- trait: Fiercely loyal
+  description: "She will not leave anyone behind."
+  influence: {influence}
+
+## AI Summary: Personality Traits
+_x_
+"""
+    return parse_thread(raw, REGISTRY)["sections"]["personality_traits"][
+        "trait_blocks"][0]
+
+
+def test_the_old_influence_scale_becomes_a_weight():
+    # The whole point: a trait the writer marked `major` must not arrive as the
+    # faintest thing in the prompt.
+    assert _legacy("major")["importance"] == "present"
+    assert _legacy("core")["importance"] == "core"
+    assert _legacy("minor")["importance"] == "background"
+    assert _legacy("background")["importance"] == "contextual"
+
+
+def test_the_old_foreshadowing_level_meant_secret_and_still_does():
+    # It said "secret by intent", not "unimportant". Read as a weight alone it
+    # lost the only thing it was actually claiming.
+    block = _legacy("foreshadowing")
+    assert block["subtext"] is True
+    assert block["importance"] == "present"
+
+
+def test_an_influence_this_build_does_not_know_is_not_a_secret():
+    # A hand-typed or future value gets the cautious weight and NOT the secret
+    # flag: guessing a secret wrong leaks it, and guessing a weight wrong only
+    # mis-sorts it.
+    block = _legacy("whatever-this-is")
+    assert block["importance"] == "background"
+    assert block["subtext"] is False
+
+
+def test_a_modern_importance_wins_over_a_stale_influence():
+    # A file part-way through the change carries both. The new field is the one
+    # the writer has actually been editing, so it must not be overwritten.
+    raw = """---
+type: character
+entity_id: e-1
+name: Elara Voss
+---
+
+# Personality Traits
+- trait: Fiercely loyal
+  description: "d"
+  importance: core
+  influence: minor
+
+## AI Summary: Personality Traits
+_x_
+"""
+    block = parse_thread(raw, REGISTRY)["sections"]["personality_traits"][
+        "trait_blocks"][0]
+    assert block["importance"] == "core"
+
+
+def test_the_old_field_is_kept_rather_than_stripped():
+    # Nothing is ever lost is this parser's founding promise, and it applies to a
+    # field we have finished with as much as to one we understand.
+    assert _legacy("major")["influence"] == "major"
+
+
+def test_both_dialects_read_the_same_map():
+    # Ruling 6 in one assertion. The map used to live only in profiles.py, which
+    # is exactly how the Weave's parser came not to know about it.
+    from app.codex.normalize import INFLUENCE_TO_IMPORTANCE
+    from app.routers.profiles import _INFLUENCE_TO_IMPORTANCE
+    assert _INFLUENCE_TO_IMPORTANCE is INFLUENCE_TO_IMPORTANCE

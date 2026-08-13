@@ -68,7 +68,11 @@ import { QuickEntry } from "./QuickEntry";
 import { QuickFill } from "./QuickFill";
 import { SnagFixer } from "./SnagFixer";
 import { TieEditor } from "./TieEditor";
-import { fetchGraph, type GraphNode } from "./api";
+import {
+  fetchAnchors, fetchGraph, patchFact,
+  type ChapterAnchor, type GraphNode,
+} from "./api";
+import { SWEEPABLE, Sweep } from "./Sweep";
 import {
   apply, defer, dismiss, fetchRuns, muteKind, resumeRun, scan, startRun,
   type Depth, type RunSummary, type ScanResult, type Stop,
@@ -315,6 +319,13 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   const [fixing, setFixing] = useState(false);
   // "Never ask" asks how widely before it writes anything (R8.3).
   const [muting, setMuting] = useState(false);
+  // Ruling 8: the tick-list. Set to a kind while the writer is sweeping it.
+  const [sweeping, setSweeping] = useState<string | null>(null);
+  // The book's chapters, for the sweep's per-row chapter pickers. Fetched once
+  // on mount rather than when the sweep opens: it is one small request, and
+  // loading it on open would put a spinner in front of a list whose whole point
+  // is being faster than the walk.
+  const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
 
   // The scan runs on mount and on every depth change, BEFORE anything is
   // confirmed. That is what makes the count real -- see the header.
@@ -345,6 +356,14 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     fetchRuns(projectPath)
       .then(r => setEarlier(r.runs))
       .catch(() => setEarlier([]));      // a missing list is not worth an error
+  }, [projectPath]);
+
+  useEffect(() => {
+    fetchAnchors(projectPath)
+      .then(r => setChapters(r.chapters))
+      // An empty list is survivable: the sweep's rows still triage, they just
+      // cannot place. Better than refusing to open the walk over it.
+      .catch(() => setChapters([]));
   }, [projectPath]);
 
   // A half-made decision does not travel. Stepping Back with the mute scope
@@ -468,6 +487,44 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     let i = at + 1;
     while (i < stops.length
            && (known[stops[i].key] || muted.has(stops[i].kind))) {
+      i += 1;
+    }
+    setAt(i);
+  }
+
+  /**
+   * Ruling 8. Every still-open stop of one kind, for the tick-list.
+   *
+   * Read off the SAME snapshot the walk is using, so the list the writer sweeps
+   * and the list the walk would have marched them through are the same list --
+   * a sweep assembled from a fresh scan could contain stops they answered five
+   * minutes ago.
+   */
+  const sweepable = useMemo(() => {
+    const tally: Record<string, Stop[]> = {};
+    for (const s of stops) {
+      if (!SWEEPABLE.has(s.kind)) continue;
+      if (answeredHere[s.key] || mutedHere.has(s.kind)) continue;
+      (tally[s.kind] ??= []).push(s);
+    }
+    return tally;
+  }, [stops, answeredHere, mutedHere]);
+
+  /**
+   * Everything the sweep settled, recorded at once, and the walk moved past all
+   * of it.
+   *
+   * `recordAnswer` advances by ONE and takes one key. Calling it in a loop would
+   * work off stale state on every iteration but the first, so the batch builds
+   * the whole map and then finds the next open stop once.
+   */
+  function recordSwept(keys: string[], label: string) {
+    const known = { ...answeredHere };
+    for (const key of keys) known[key] = label;
+    setAnsweredHere(known);
+    let i = at;
+    while (i < stops.length
+           && (known[stops[i].key] || mutedHere.has(stops[i].kind))) {
       i += 1;
     }
     setAt(i);
@@ -730,6 +787,39 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         ? `Never ask (${lex?.term ?? stop.kind} is turned off)`
         : null);
 
+  // Ruling 8: forty of a thing as a list. Inside the Shell rather than as a
+  // full-screen overlay of its own, because it is a VIEW OF THE WALK -- the
+  // writer is still in the same sitting, working through the same snapshot, and
+  // the progress line above it is still true.
+  if (sweeping && sweepable[sweeping]?.length) {
+    return (
+      <Shell onClose={onClose}>
+        <Sweep
+          stops={sweepable[sweeping]}
+          kind={sweeping}
+          chapters={chapters}
+          onPlace={async (target, anchor) => {
+            const fact = (target.detail?.sides as { id?: string }[] | undefined)?.[0];
+            if (!fact?.id) throw new Error("That fact could not be identified.");
+            await patchFact(projectPath, target.entity_id, String(fact.id),
+                            { at: anchor });
+            // The file is written, so the answer is permanent -- the same
+            // two-phase rule the one-at-a-time path follows.
+            if (runId) await apply(projectPath, runId, target);
+          }}
+          onDismiss={async target => {
+            if (runId) await dismiss(projectPath, runId, target);
+          }}
+          onDone={settled => {
+            setSweeping(null);
+            recordSwept(settled, "Done in the list");
+          }}
+          onClose={() => setSweeping(null)}
+        />
+      </Shell>
+    );
+  }
+
   if (naming && stop) {
     return (
       <BindDot
@@ -894,6 +984,14 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
 
   return (
     <Shell onClose={onClose}>
+      {/* MOUNTED ON THE WALK TOO, and it was not. The Unwoven stop card offers
+          "Show me how this works" and the guide was rendered only in the setup
+          branch above, so on a stop the button set a flag and drew nothing --
+          a dead control in the middle of the walk, which is the same failure as
+          R2.12f (a guide nothing offers) with the halves the other way round.
+          Found by reading the two mount points against the two callers. */}
+      {guiding && <UnwovenGuide onClose={() => setGuiding(false)} />}
+
       <div className="flex items-center gap-2 text-[11px] text-faint">
         <button
           onClick={() => setAt(i => Math.max(0, i - 1))}
@@ -1068,6 +1166,29 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           banner explains the situation once; this answers "is this one of
           them?" at the moment that question can actually be acted on. */}
       {staleKeys.has(stop.key) && <StaleMark />}
+
+      {/* RULING 8, OFFERED RATHER THAN IMPOSED. The spec's words are "not a
+          forced march", and a list that replaced the walk would be a different
+          forced march. So the walk still works, and when there is more than one
+          of a kind whose answer is the same shape every time, the card says so
+          and offers the list. Below the threshold it says nothing: "work through
+          all 1 at once" is a button that does nothing but cost a click. */}
+      {SWEEPABLE.has(stop.kind) && (sweepable[stop.kind]?.length ?? 0) > 1 && (
+        <button
+          onClick={() => setSweeping(stop.kind)}
+          data-testid="sweep-offer"
+          className="mt-2 w-full rounded border border-violet-800 bg-violet-950/25 px-2.5 py-1.5 text-left text-[11px] text-violet-100 hover:border-violet-600"
+        >
+          <span className="font-medium">
+            Work through all {sweepable[stop.kind].length} at once
+          </span>
+          <span className="block text-[10px] text-faint">
+            {stop.kind === "unplaced"
+              ? "one list, a chapter each, rather than one screen each"
+              : "tick the ones that are fine unconnected and say so in one go"}
+          </span>
+        </button>
+      )}
 
       {settledAs ? (
         <div data-testid="already-answered"

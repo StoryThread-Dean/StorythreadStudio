@@ -32,6 +32,37 @@ AI_SCOPE_NEVER = "never"
 VALID_AI_SCOPES = {AI_SCOPE_ALWAYS, AI_SCOPE_ON_REQUEST, AI_SCOPE_NEVER}
 
 
+# ── The oldest legacy scale, and why it lives HERE ───────────────────────────
+#
+# Before v1.0.10 a trait's weight was `influence` on a five-value scale. Both
+# Markdown parsers have to heal it, and for a long time only one of them did:
+# `profiles.py` translated it and `codex/threads.py` had never heard of it, so
+# converting an older project read `importance` as absent and every caller then
+# defaulted it to `background` -- the FAINTEST weight. A trait the writer had
+# marked `major` arrived at the bottom of the prompt, and `foreshadowing`, which
+# meant SECRET rather than unimportant, lost its weight AND its secrecy.
+#
+# Nothing raised anything: a weight is a number and there is no obviously wrong
+# one. So the map moved here, where the module that owns "what absent means"
+# owns it, and both dialects read the same one. Ruling 6, which asked for one
+# parser -- this is the part of it that can be done while `profiles/` is still a
+# live home for unconverted projects.
+#
+# Old: foreshadowing | background | minor | major | core
+# New: core | present | background | contextual  (plus `subtext` for secrecy)
+INFLUENCE_TO_IMPORTANCE: dict[str, str] = {
+    "core":           "core",
+    "major":          "present",
+    "minor":          "background",
+    "background":     "contextual",
+    # An old foreshadowing trait was secret by intent, which is now two fields.
+    "foreshadowing":  "present",
+}
+
+# Old influence values that meant "secret" rather than "unimportant".
+INFLUENCE_MEANT_SECRET = frozenset({"foreshadowing"})
+
+
 def _clean(value) -> str | None:
     """A trimmed string, or None for anything empty. Treats "" and "   " the
     same as absent -- a blank field in a hand-edited file means the writer

@@ -920,6 +920,26 @@ it, since the spec calls it the reason the frame system exists.
 
 ---
 
+## Phase 11 -- the rulings that never became tasks
+
+Approved 2026-08-11 in `weave-spec-gaps.md` section C, and then not given ids,
+so the progress table below silently excluded them. Found by the 2026-08-14
+audit. The mechanism is the one this whole programme is about: a decision
+recorded somewhere that nothing was comparing the build against.
+
+- [x] **R11.1** (ruling 8) Unplaced and Loose thread as a tick-list. `Sweep.tsx`,
+      offered from the walk rather than replacing it.
+- [x] **R11.2** (ruling 5) `SECTION_CONFIGS` / `PROFILE_FOLDERS` derived from the
+      registry rather than written out again. One definition, nothing to drift.
+- [x] **R11.3** (ruling 6, the half that is not blocked) the legacy `influence`
+      scale ported into `codex/normalize.py` and read by both dialects. Deleting
+      the second parser stays blocked on `profiles/` ceasing to be a home --
+      the same decision as R1.5b.
+- [ ] **R11.4** (ruling 9, second half) Frayed's QuickFill filling "from what the
+      prose already says". Deferred to v2.1.0 with Phase 9: it needs the AI pass.
+
+---
+
 ## Progress
 
 | Phase | Tasks | Done |
@@ -936,4 +956,5 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 12 | **12** |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **100** | **81** |
+| 11 Late rulings | 4 | **3** |
+| **Total** | **104** | **84** |

@@ -304,6 +304,25 @@ export function deleteThread(projectPath: string, entityId: string,
   })}`, { method: "DELETE" });
 }
 
+/**
+ * Change one fact in place, keeping its id.
+ *
+ * PATCH rather than delete-and-recreate: the id is what other facts' `supersedes`
+ * point at, so losing it can silently break an ordering the writer already
+ * settled. `set` carries only the keys being changed; the route refuses any it
+ * does not recognise by name.
+ */
+export function patchFact(projectPath: string, entityId: string, factId: string,
+                          set: Record<string, unknown>): Promise<unknown> {
+  return request("/fact", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project_path: projectPath, entity_id: entityId, fact_id: factId, set,
+    }),
+  });
+}
+
 export function fetchGraph(
   projectPath: string,
   options: { at?: string; pov?: string; hideSpoilers?: boolean } = {},

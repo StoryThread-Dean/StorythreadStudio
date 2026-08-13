@@ -56,7 +56,10 @@ from typing import Callable
 
 import yaml
 
-from app.codex.normalize import normalize_ai_scope, normalize_fact, normalize_tie
+from app.codex.normalize import (
+    INFLUENCE_MEANT_SECRET, INFLUENCE_TO_IMPORTANCE,
+    normalize_ai_scope, normalize_fact, normalize_tie,
+)
 
 RUN_HEADING = "Run"
 FULL_SUMMARY_HEADING = "Full AI Summary"
@@ -376,6 +379,28 @@ def _normalize_trait(block: dict) -> dict:
     conversion, which is what makes correcting it here safe.
     """
     out = dict(block)
+
+    # ── The OLDER legacy scale, ported from profiles.py (ruling 6) ───────────
+    #
+    # Before v1.0.10 a trait's weight was `influence`, on a five-value scale, and
+    # this parser had never heard of it. The profile parser has healed it since
+    # the scale changed; this one read `importance` as absent and every caller
+    # then defaulted it to `background`, the FAINTEST weight. So converting an
+    # older project moved every carefully-weighted trait to the bottom of the
+    # prompt, and `foreshadowing` -- which meant SECRET, not unimportant -- lost
+    # both its weight and its secrecy.
+    #
+    # Nothing raised anything, because a weight is a number and there is no such
+    # thing as an obviously wrong one. This is the one-parser ruling earning its
+    # keep: the repair existed, ten feet away, in the other dialect.
+    if not str(out.get("importance") or "").strip():
+        influence = str(out.get("influence") or "").strip().lower()
+        if influence:
+            out["importance"] = INFLUENCE_TO_IMPORTANCE.get(influence,
+                                                            "background")
+            if influence in INFLUENCE_MEANT_SECRET:
+                out["subtext"] = True
+
     level = str(out.get("importance") or "").strip().lower()
     was_hidden = level == "hidden"
     if was_hidden:
