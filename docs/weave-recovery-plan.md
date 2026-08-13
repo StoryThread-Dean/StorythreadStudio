@@ -935,6 +935,12 @@ recorded somewhere that nothing was comparing the build against.
       scale ported into `codex/normalize.py` and read by both dialects. Deleting
       the second parser stays blocked on `profiles/` ceasing to be a home --
       the same decision as R1.5b.
+- [x] **R11.5** The accidental-close guard, from live testing. Seven overlays
+      wired the backdrop straight to `onClose`; five held typed text. One
+      `useAttemptClose` hook now owns backdrop, X and Escape on all of them, and
+      asks only when something would be lost. The walk names the place rather
+      than saying "unsaved changes": answers are written as they are made, so
+      the place is what is actually at risk.
 - [ ] **R11.4** (ruling 9, second half) Frayed's QuickFill filling "from what the
       prose already says". Deferred to v2.1.0 with Phase 9: it needs the AI pass.
 
@@ -956,5 +962,5 @@ recorded somewhere that nothing was comparing the build against.
 | 8 Walk honesty | 12 | **12** |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| 11 Late rulings | 4 | **3** |
-| **Total** | **104** | **84** |
+| 11 Late rulings | 5 | **4** |
+| **Total** | **105** | **85** |

@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
+import { useAttemptClose } from "../../components/learn/useAttemptClose";
 import { TONE_CLASSES, kindChoices, threadTypeEntry } from "./lexicon";
 import { nodeLabel, type GraphNode } from "./api";
 
@@ -201,13 +202,20 @@ export function TieEditor({
 
   useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // THE REASON LINE IS THE EXPENSIVE ONE. It is the field a connection cannot be
+  // saved without, and the spec singles it out as outranking the relation type
+  // for what the brief is worth -- so losing it to a stray click costs the
+  // writer the only part of the connection they had to think about.
+  //
+  // The hook owns Escape as well, which is what makes the three ways out one
+  // way out. This file used to keep its own keydown effect beside a bare
+  // backdrop handler, and they disagreed about what closing meant.
+  const dirty = Boolean(
+    reason.trim() || reasonInverse.trim() || newLabel.trim()
+    || newInverse.trim() || madeName.trim() || other);
+  const attemptClose = useAttemptClose(
+    dirty, onClose,
+    "You have not recorded this connection yet. Close and lose what you typed?");
 
   // Which connections mean anything between these two kinds. Asked only once
   // the other end is chosen, because the answer depends on it.
@@ -577,7 +585,7 @@ function relOptionLabel(rel: Relation): string {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
       <div
         role="dialog"

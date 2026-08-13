@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { Check, Loader, X } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
+import { useAttemptClose } from "../../components/learn/useAttemptClose";
 import { TONE_CLASSES, threadTypeEntry } from "./lexicon";
 
 const API_BASE = "http://localhost:8000";
@@ -162,10 +163,17 @@ export function QuickFill({
   const KindIcon = kind.Icon;
   const wrote = boxes.some(b => b.text.trim());
 
+  // The most expensive backdrop click in the Weave: these boxes hold the
+  // writer's own prose for their own profile sections, typed and not yet saved.
+  // `wrote` already existed for the Save button; it is the same question.
+  const attemptClose = useAttemptClose(
+    wrote, onClose,
+    "You have written something here and not saved it. Close and lose it?");
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
       <div
         role="dialog"

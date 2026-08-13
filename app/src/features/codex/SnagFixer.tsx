@@ -42,6 +42,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Loader, Pencil, Trash2, X } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
+import { useAttemptClose } from "../../components/learn/useAttemptClose";
 import { TONE_CLASSES, threadTypeEntry } from "./lexicon";
 import { fetchAnchors, type ChapterAnchor } from "./api";
 import type { Stop } from "./weavingApi";
@@ -296,10 +297,17 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
     </select>
   );
 
+  // Mid-edit on one side of a contradiction: a corrected value, and possibly a
+  // chapter or a reveal point chosen for it. `editing` is the whole condition --
+  // the form is only open when the writer opened it.
+  const attemptClose = useAttemptClose(
+    editing !== null, onClose,
+    "You are part-way through fixing this. Close and lose the correction?");
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
       <div
         role="dialog"

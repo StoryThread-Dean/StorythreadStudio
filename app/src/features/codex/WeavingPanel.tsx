@@ -59,6 +59,7 @@ import {
   STOP_KINDS, TONE_CLASSES, threadTypeEntry, type LexEntry, type Tone,
 } from "./lexicon";
 import { Explain } from "../../components/learn/Explain";
+import { useAttemptClose } from "../../components/learn/useAttemptClose";
 import { DomainBoard } from "./DomainBoard";
 import { StaleMark, StaleNotice } from "./StaleNotice";
 import { UnwovenGuide } from "./UnwovenGuide";
@@ -374,6 +375,23 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
 
   const stops = result?.stops ?? [];
   const stop: Stop | undefined = stops[at];
+
+  /**
+   * What closing the walk would cost right now, in words, or "" for nothing.
+   *
+   * NOT "unsaved changes". Every answer is written as it is made, so the thing
+   * at risk is the writer's PLACE -- and on a long pass that is the expensive
+   * part. Resuming exists and works, but it is a second decision on the setup
+   * screen rather than being where you were.
+   *
+   * The setup screen guards nothing: there is nothing behind it yet, and a
+   * confirm on the way out of a screen with no work on it is how a writer
+   * learns to dismiss confirms without reading them.
+   */
+  const walkGuard = walking && stop
+    ? `You are ${at + 1} of ${stops.length} through this pass. `
+      + "Close Weaving and lose your place?"
+    : "";
 
   /** Which stops in THIS list are about text that has moved since the writer
    *  put them off. A Set because the walk asks the question once per card. */
@@ -793,7 +811,11 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   // the progress line above it is still true.
   if (sweeping && sweepable[sweeping]?.length) {
     return (
-      <Shell onClose={onClose}>
+      // The list holds ticks and chapter picks that are not written yet, so the
+      // guard says so rather than talking about a place in the walk.
+      <Shell onClose={onClose}
+             guard={"You are part-way through this list. Close Weaving and lose "
+                    + "the rows you have ticked?"}>
         <Sweep
           stops={sweepable[sweeping]}
           kind={sweeping}
@@ -983,7 +1005,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   }
 
   return (
-    <Shell onClose={onClose}>
+    <Shell onClose={onClose} guard={walkGuard}>
       {/* MOUNTED ON THE WALK TOO, and it was not. The Unwoven stop card offers
           "Show me how this works" and the guide was rendered only in the setup
           branch above, so on a stop the button set a flag and drew nothing --
@@ -1423,19 +1445,23 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
  * a horizontal strip would either truncate the evidence or push the editor
  * down the screen on every stop.
  */
-function Shell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+function Shell({ children, onClose, guard }: {
+  children: React.ReactNode;
+  onClose: () => void;
+  /** What closing would cost right now, or "" for nothing. The OUTERMOST
+   *  backdrop, and the one the writer reported hitting repeatedly: "very
+   *  sensitive to accidental clicking outside the field causing the entire
+   *  window to Exit prematurely. Then having to start over again where the
+   *  weaving left off." */
+  guard?: string;
+}) {
+  const attemptClose = useAttemptClose(
+    Boolean(guard), onClose, guard || "");
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
       <section
         role="dialog"
@@ -1446,7 +1472,10 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose: () =
         <header className="mb-3 flex items-center gap-2">
           <Spool size={15} className="text-violet-300" />
           <h2 className="flex-1 text-sm font-semibold text-text-primary">Weaving</h2>
-          <button onClick={onClose} aria-label="Close Weaving"
+          {/* The X goes through the same guard as the backdrop and Escape. A
+              deliberate press still confirms when there is work to lose, which
+              is right: the X is one pixel from the corner of the panel. */}
+          <button onClick={attemptClose} aria-label="Close Weaving"
                   className="rounded p-1 text-faint hover:text-text-primary">
             <X size={14} />
           </button>

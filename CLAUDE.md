@@ -318,9 +318,22 @@ its place without relying on memory or conversation history.
 > parsers repair the files already on disk. And the Unwoven guide was mounted only
 > on the setup screen while the stop card also offered it, so that button set a
 > flag and drew nothing.
+> **R11.5 -- the accidental-close guard**, on the writer's request after live
+> testing: "very sensitive to accidental clicking outside the field causing the
+> entire window to Exit prematurely ... happened multiple times to me already."
+> Seven overlays wired the backdrop straight to onClose and FIVE held typed text,
+> including Quick Fill (the writer's own prose) and the Tie editor's required
+> reason line. The app's locked rule already covered it ("Manual save only ...
+> Confirm before closing") and the audiobook has obeyed it for two releases; the
+> Weave never did. `useAttemptClose` is now the one way out -- backdrop, X and
+> Escape through one guard, which they did not share before. It ASKS only when
+> there is something to lose: a confirm on every close is one the writer learns
+> to dismiss without reading. The walk's message names the PLACE ("you are 3 of
+> 12 through this pass"), not "unsaved changes", because every answer is written
+> as it is made and the place is the expensive part.
 > Next: **Phase 10** (release hygiene, 6 tasks).
 > Phases 7 and 9 are deferred to v2.1.0.
-> Branch health: 1861 backend tests, 1340 frontend tests, ruff and tsc clean.
+> Branch health: 1861 backend tests, 1348 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

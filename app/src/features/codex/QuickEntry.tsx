@@ -36,6 +36,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Loader, Plus, X } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
+import { useAttemptClose } from "../../components/learn/useAttemptClose";
 import { TONE_CLASSES, kindChoices, threadTypeEntry } from "./lexicon";
 import { nodeLabel, type GraphNode } from "./api";
 import { TieEditor } from "./TieEditor";
@@ -287,6 +288,16 @@ export function QuickEntry({
    */
   const close = made ? onDone : onClose;
 
+  // ONCE IT IS MADE THERE IS NOTHING TO LOSE: the entry is on disk and `close`
+  // means "done". Before that, a stray click on the backdrop costs the writer
+  // the name they corrected and the line they typed -- which on an Unspun stop
+  // is the whole of their work so far.
+  const dirty = !made
+    && (name.trim() !== presetName.trim() || text.trim() !== (prefill ?? "").trim());
+  const attemptClose = useAttemptClose(
+    dirty, close,
+    "You have not created this entry yet. Close and lose what you typed?");
+
   // ── The connect step, inside the same popup ───────────────────────────────
   if (connecting && made) {
     return (
@@ -306,7 +317,7 @@ export function QuickEntry({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={e => { if (e.target === e.currentTarget) close(); }}
+      onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
       <div
         role="dialog"

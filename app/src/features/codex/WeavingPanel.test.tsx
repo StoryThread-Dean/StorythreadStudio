@@ -2765,3 +2765,133 @@ describe("the ground-rules guide is reachable from both places", () => {
     expect(await screen.findByTestId("unwoven-guide")).toBeTruthy();
   });
 });
+
+
+// ── Losing your place to a click you did not mean ─────────────────────────────
+//
+// Reported after live testing: "The interface UI for this screen is very
+// sensitive to accidental clicking outside the field causing the entire window
+// to Exit prematurely. Then having to start over again where the weaving left
+// off. Its happened multiple times to me already."
+//
+// Seven overlays in the Weave wired the backdrop straight to onClose, and five
+// of them held text the writer had typed. The app's own locked rule already
+// covered it -- "Manual save only ... Confirm before closing" -- and the
+// audiobook has obeyed it for two releases. The Weave never did.
+//
+// The pairing that matters in each test below: it ASKS when there is something
+// to lose, and it does NOT ask when there is not. A confirm on every close is
+// one the writer learns to dismiss without reading, which is worse than none.
+
+describe("closing by accident", () => {
+  function answering(yes: boolean) {
+    return vi.spyOn(window, "confirm").mockReturnValue(yes);
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("asks before losing a walk in progress", async () => {
+    const confirm = answering(false);
+    mockApi({ stops: [stop(), stop({ key: "b" }), stop({ key: "c" })] });
+    const { onClose } = await start();
+    await userEvent.click(
+      screen.getByRole("dialog", { name: "Weaving" }).parentElement!);
+    expect(confirm).toHaveBeenCalled();
+    // Declined, so the walk is still there.
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("weaving-progress")).toBeTruthy();
+  });
+
+  it("says where in the pass they are, not 'unsaved changes'", async () => {
+    // Every answer is already written as it is made, so what is at risk is the
+    // writer's PLACE. Naming it is the difference between a warning they can
+    // act on and boilerplate.
+    const confirm = answering(false);
+    mockApi({ stops: [stop(), stop({ key: "b" }), stop({ key: "c" })] });
+    await start();
+    await userEvent.click(
+      screen.getByRole("dialog", { name: "Weaving" }).parentElement!);
+    expect(confirm.mock.calls[0][0]).toContain("1 of 3");
+    expect(confirm.mock.calls[0][0]).toContain("lose your place");
+  });
+
+  it("closes when they mean it", async () => {
+    answering(true);
+    mockApi({ stops: [stop(), stop({ key: "b" })] });
+    const { onClose } = await start();
+    await userEvent.click(
+      screen.getByRole("dialog", { name: "Weaving" }).parentElement!);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("does not ask on the setup screen, where nothing is at stake", async () => {
+    const confirm = answering(false);
+    const { onClose } = await open();
+    await userEvent.click(
+      screen.getByRole("dialog", { name: "Weaving" }).parentElement!);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("guards the X and Escape by the same rule as the backdrop", async () => {
+    // Three ways out, one way out. They used to disagree: the backdrop and the
+    // X went straight to onClose while Escape had its own handler.
+    const confirm = answering(false);
+    mockApi({ stops: [stop(), stop({ key: "b" })] });
+    const { onClose } = await start();
+
+    await userEvent.click(screen.getByLabelText("Close Weaving"));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("asks before losing prose typed into a thin entry", async () => {
+    // The most expensive one: these boxes hold the writer's own prose for their
+    // own profile sections.
+    const confirm = answering(false);
+    mockApi({ stops: [stop({
+      kind: "frayed", key: "frayed|e-1", entity_id: "e-1", quote: "",
+      title: "Mira Kell is missing Overview",
+      detail: { name: "Mira Kell", type: "character", missing: ["Overview"] },
+    })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const fill = await screen.findByTestId("quick-fill");
+    await userEvent.type(
+      within(fill).getByLabelText(/Overview/), "She keeps the shop.");
+    await userEvent.click(fill.parentElement!);
+    expect(confirm).toHaveBeenCalled();
+    // Still open, with the words still in the box.
+    expect((within(screen.getByTestId("quick-fill"))
+      .getByLabelText(/Overview/) as HTMLTextAreaElement).value)
+      .toBe("She keeps the shop.");
+  });
+
+  it("does not ask when nothing was typed into it", async () => {
+    const confirm = answering(false);
+    mockApi({ stops: [stop({
+      kind: "frayed", key: "frayed|e-1", entity_id: "e-1", quote: "",
+      title: "Mira Kell is missing Overview",
+      detail: { name: "Mira Kell", type: "character", missing: ["Overview"] },
+    })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Fill it in here/ }));
+    const fill = await screen.findByTestId("quick-fill");
+    await userEvent.click(fill.parentElement!);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("asks before losing a name typed into Quick Entry", async () => {
+    const confirm = answering(false);
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Create the entry/ }));
+    const entry = await screen.findByTestId("quick-entry");
+    await userEvent.type(within(entry).getByLabelText("Name"), " of Ashfall");
+    await userEvent.click(entry.parentElement!);
+    expect(confirm).toHaveBeenCalled();
+  });
+});

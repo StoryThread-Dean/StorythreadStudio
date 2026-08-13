@@ -50,6 +50,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Loader, Search, X } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
+import { useAttemptClose } from "../../components/learn/useAttemptClose";
 import { TONE_CLASSES, kindChoices, threadTypeEntry } from "./lexicon";
 import { absorb, nodeLabel, type GraphNode } from "./api";
 
@@ -95,9 +96,21 @@ export function BindDot({
   const [kind, setKind] = useState("");
   const [fullName, setFullName] = useState(dot.name);
 
+  // Part-way through deciding what a bare dot IS: a search under way, a target
+  // picked, or a fuller name typed on the promote path. `done` means the move
+  // already happened, so there is nothing left to lose.
+  const dirty = done === null
+    && (query.trim() !== "" || chosen !== null
+        || (promoting && (kind !== "" || fullName.trim() !== dot.name.trim())));
+  const attemptClose = useAttemptClose(
+    dirty, onClose,
+    "You have not finished saying what this is. Close and lose that?",
+    // Escape is handled below, and routed through the same guard.
+    { escapes: false });
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") attemptClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -180,7 +193,7 @@ export function BindDot({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
       <div
         role="dialog"
