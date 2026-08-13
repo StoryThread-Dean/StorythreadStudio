@@ -431,3 +431,172 @@ def test_prose_that_merely_starts_with_a_dash_is_still_prose():
     section = parse_thread(raw, REGISTRY)["sections"]["overview"]
     assert section["trait_blocks"] == []
     assert "never guarded" in section["content"]
+
+
+# ── A colon in a value, which the app's own content puts there ───────────────
+#
+# THE BUG THIS PINS WAS OURS, and it was reported by the writer as "Personality
+# traits no longer create individual tiles -- saving groups them all into notes".
+# That is exactly what it looked like from outside, and nothing raised anything.
+#
+# `render_thread` wrote a trait name as a bare YAML scalar. The Story Role picker
+# in the Profile Builder inserts a trait called "Story role: Comic Relief", and a
+# colon-space ends the key -- so that line stopped being a mapping and the WHOLE
+# list failed to parse. The tolerant fallback then did its job perfectly and kept
+# every word as prose, which is why six trait cards became one paragraph.
+#
+# Personality Traits was the only section affected because it is the only section
+# the spine pickers write into. That is the shape of this class of bug: one
+# section, one writer, no error, and the words all still there.
+
+def _one_trait(name: str) -> dict:
+    return {
+        "type": "character", "entity_id": "e-1", "name": "Newton",
+        "sections": {"personality_traits": {
+            "heading": "Personality Traits", "content": "",
+            "trait_blocks": [
+                {"trait": name, "description": "d", "importance": "core"},
+                {"trait": "Highly Anxious", "description": "d2",
+                 "importance": "present"},
+            ]}},
+    }
+
+
+def test_a_trait_name_with_a_colon_survives_a_round_trip():
+    # "Story role: Comic Relief" is canned content this app ships, so this is not
+    # an exotic hand-edit -- it is what the Story Role button produces.
+    thread = _one_trait("Story role: Comic Relief")
+    back = parse_thread(render_thread(thread, REGISTRY), REGISTRY)
+    section = back["sections"]["personality_traits"]
+    assert [b["trait"] for b in section["trait_blocks"]] == [
+        "Story role: Comic Relief", "Highly Anxious"]
+    # And nothing fell through into prose, which is how the failure showed.
+    assert section["content"] == ""
+
+
+def test_one_bad_trait_does_not_take_the_whole_list_with_it():
+    # The cost of the bug was never one trait. YAML fails on the document, so a
+    # single colon cost the writer every card in the section.
+    thread = _one_trait("Story role: Comic Relief")
+    assert len(parse_thread(render_thread(thread, REGISTRY),
+                            REGISTRY)["sections"]["personality_traits"]
+               ["trait_blocks"]) == 2
+
+
+def test_other_characters_yaml_minds_are_quoted_too():
+    for name in ("- leading dash", "#hash first", "trailing colon:",
+                 "colon: inside", "*star", "{brace}", "[bracket]",
+                 "quote\" inside", "hash # comment"):
+        thread = _one_trait(name)
+        back = parse_thread(render_thread(thread, REGISTRY), REGISTRY)
+        got = back["sections"]["personality_traits"]["trait_blocks"]
+        assert [b["trait"] for b in got][0] == name, name
+
+
+def test_the_written_file_quotes_a_colon_rather_than_relying_on_the_repair():
+    # ASSERTED ON THE FILE, not on a round trip. The read-time repair catches a
+    # badly written trait on the way back in, so a round-trip test passes whether
+    # or not the write side is fixed -- and that repair exists only for the files
+    # already on disk. Without this, the app would go on writing files that need
+    # repairing forever and every test would stay green.
+    text = render_thread(_one_trait("Story role: Comic Relief"), REGISTRY)
+    assert '- trait: "Story role: Comic Relief"' in text
+
+
+def test_an_ordinary_trait_name_is_still_written_bare():
+    # Quoting only when needed is the point. These files are the writer's own
+    # Markdown and they open them elsewhere; quoting everything would also
+    # rewrite every entry in every project on its next save, which is a diff of
+    # pure noise over content that did not change.
+    text = render_thread(_one_trait("Genuinely Concerned"), REGISTRY)
+    assert "- trait: Genuinely Concerned" in text
+    assert '- trait: "Genuinely Concerned"' not in text
+
+
+def test_a_file_already_broken_on_disk_is_repaired_on_read():
+    # The write side is fixed, so no NEW file can be written this way. This is
+    # for the ones already on disk -- read-time repair, for the same reason
+    # section aliases are read-time: it takes effect the moment the file is
+    # opened, and heals for good on the next save.
+    broken = """---
+type: character
+entity_id: e-1
+name: Newton
+---
+
+# Personality Traits
+- trait: Genuinely Concerned
+  description: "Cares, awkwardly."
+  importance: background
+
+- trait: Story role: Comic Relief
+  description: "The pressure gauge disguised as a punchline."
+  importance: core
+
+## AI Summary: Personality Traits
+_Generated on demand._
+"""
+    section = parse_thread(broken, REGISTRY)["sections"]["personality_traits"]
+    assert [b["trait"] for b in section["trait_blocks"]] == [
+        "Genuinely Concerned", "Story role: Comic Relief"]
+    assert section["content"] == ""
+
+
+def test_the_repair_gives_up_rather_than_guessing():
+    # A repair that guessed harder could change what a hand-edited file MEANS,
+    # which is worse than leaving it as prose. One retry, then the words are
+    # kept verbatim -- which is the parser's founding promise.
+    hopeless = """---
+type: character
+entity_id: e-1
+name: Newton
+---
+
+# Personality Traits
+- trait: fine
+   description: "indented wrongly"
+  importance: core
+    - and then this
+
+## AI Summary: Personality Traits
+_x_
+"""
+    section = parse_thread(hopeless, REGISTRY)["sections"]["personality_traits"]
+    assert "indented wrongly" in section["content"]
+
+
+def test_a_writers_own_quoting_is_left_alone():
+    # If they already quoted it, the repair must not double-quote it.
+    already = """---
+type: character
+entity_id: e-1
+name: Newton
+---
+
+# Personality Traits
+- trait: "Story role: Comic Relief"
+  description: "Fine as written."
+  importance: core
+
+## AI Summary: Personality Traits
+_x_
+"""
+    section = parse_thread(already, REGISTRY)["sections"]["personality_traits"]
+    assert section["trait_blocks"][0]["trait"] == "Story role: Comic Relief"
+
+
+def test_a_name_or_axis_with_a_colon_also_survives():
+    # Same class, other fields. A character called "Doctor: The Return" and an
+    # axis typed as "belief: father" are both things a writer can produce.
+    thread = {
+        "type": "character", "entity_id": "e-1", "name": "Doctor: The Return",
+        "role": "Antagonist: reformed",
+        "aliases": ["The Doctor: mk II"],
+        "sections": {},
+        "run": [{"id": "f-1", "axis": "belief: father", "value": "Dead."}],
+    }
+    back = parse_thread(render_thread(thread, REGISTRY), REGISTRY)
+    assert back["name"] == "Doctor: The Return"
+    assert back["role"] == "Antagonist: reformed"
+    assert back["aliases"] == ["The Doctor: mk II"]
+    assert back["run"][0]["axis"] == "belief: father"

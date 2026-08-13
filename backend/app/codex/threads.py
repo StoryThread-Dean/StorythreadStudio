@@ -133,6 +133,59 @@ def _split_leading_list(body: str) -> tuple[str, str]:
     return "\n".join(taken), "\n".join(lines[rest_at:])
 
 
+# A `key: value` line inside a list item, captured in three pieces so the value
+# can be quoted without disturbing the indent or the key.
+_UNQUOTED_ENTRY_RE = re.compile(r"^(\s*(?:-\s+)?[a-z_]+:)\s+(.+?)\s*$")
+
+
+def _load_or_repair(text: str):
+    """
+    Parse a YAML list, repairing the one way the app itself used to break it.
+
+    THE BUG THIS HEALS was ours, not the writer's. `render_thread` wrote a trait
+    name as a bare scalar, and the app's own Story Role picker produces names
+    like "Story role: Comic Relief". A colon-space ends the key, so the line
+    stopped being a mapping and the WHOLE list failed to parse -- at which point
+    the tolerant fallback did its job and kept every word as prose. Six trait
+    cards silently became one paragraph, on load, with nothing raised anywhere.
+
+    The write side is fixed (see `_scalar`), so no new file can be written this
+    way. This is for the files already on disk. It is a READ-time repair for the
+    same reason `_SECTION_ALIASES` is: a bulk rewrite pass has to be got right
+    first time across worlds nobody has seen, while this takes effect the moment
+    the file is opened and heals for good the next time the writer saves.
+
+    Deliberately narrow. It retries ONCE, quoting only values that are not
+    already quoted, and if the retry also fails it gives up and lets the caller
+    keep the text verbatim. A repair that guessed harder would risk changing what
+    a writer's hand-edited file means, which is worse than leaving it as prose.
+    """
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError:
+        pass
+
+    repaired: list[str] = []
+    for line in text.splitlines():
+        match = _UNQUOTED_ENTRY_RE.match(line)
+        if match is None:
+            repaired.append(line)
+            continue
+        prefix, value = match.group(1), match.group(2)
+        # Already quoted, or nothing YAML would trip over: leave it exactly as
+        # the writer has it.
+        if (value[:1] in ('"', "'")
+                or (": " not in value and not value.endswith(":"))):
+            repaired.append(line)
+            continue
+        repaired.append(f"{prefix} {_quote(value)}")
+
+    try:
+        return yaml.safe_load("\n".join(repaired))
+    except yaml.YAMLError:
+        return None
+
+
 def _parse_list_block(body: str, keys: tuple[str, ...]) -> tuple[list[dict], str]:
     """
     Parse a YAML list of records, keeping anything unrecognised.
@@ -150,10 +203,7 @@ def _parse_list_block(body: str, keys: tuple[str, ...]) -> tuple[list[dict], str
     text = text.strip()
     if not text:
         return [], body
-    try:
-        loaded = yaml.safe_load(text)
-    except yaml.YAMLError:
-        return [], body
+    loaded = _load_or_repair(text)
     if not isinstance(loaded, list):
         return [], body
 
@@ -414,6 +464,48 @@ def _quote(value: str) -> str:
     return f'"{escaped}"'
 
 
+# What makes a plain YAML scalar stop being a plain scalar. Any of these and the
+# value has to be quoted or the line means something else -- or nothing at all.
+#
+#   ": "  ends the key. This is the one that bit: a trait named
+#         "Story role: Comic Relief" -- which the app's OWN Story Role picker
+#         produces -- wrote as `- trait: Story role: Comic Relief`, which is not
+#         a mapping YAML can read. The whole trait list then failed to parse,
+#         and the tolerant fallback kept every word as PROSE. Nothing errored;
+#         six trait cards became one paragraph on the next load.
+#   " #"  starts a comment, so the rest of the value disappears.
+#   a leading indicator character (- ? : , [ ] { } # & * ! | > ' " % @ `) makes
+#         the value a list, an anchor, a block scalar, or a syntax error.
+#   a trailing colon turns the value into a key.
+_NEEDS_QUOTING = (": ", " #", "\n", "\t")
+_YAML_INDICATORS = set("-?:,[]{}#&*!|>'\"%@`")
+
+
+def _scalar(value) -> str:
+    """
+    One YAML value, quoted only when it has to be.
+
+    QUOTING ONLY WHEN NEEDED IS THE POINT, not thrift. These files are the
+    writer's own Markdown and they open them in other editors; `name: Elara Voss`
+    reads better than `name: "Elara Voss"`, and quoting everything would rewrite
+    every entry in every project on its next save -- a diff of pure noise over
+    files whose content had not changed, which is exactly what the surrounding
+    code goes out of its way to avoid.
+
+    So: a value that YAML would read back unchanged is written bare, and one that
+    would not is quoted. An untouched entry stays byte-identical; the entry with
+    a colon in a trait name gets one pair of quotes.
+    """
+    text = " ".join(str(value or "").split())
+    if not text:
+        return ""
+    if (text[0] in _YAML_INDICATORS
+            or text.endswith(":")
+            or any(marker in text for marker in _NEEDS_QUOTING)):
+        return _quote(text)
+    return text
+
+
 def _comment_for(value, label_for) -> str:
     """The trailing '# Elara Voss' that makes an id readable. Regenerated on
     every save, so a rename updates it and never the id itself."""
@@ -435,11 +527,14 @@ def render_thread(
     is optional and purely cosmetic -- the file is complete and correct
     without it.
     """
+    # `type` and `entity_id` are app-minted identifiers and cannot contain
+    # anything YAML minds. Everything below that a WRITER can type goes through
+    # _scalar -- see its note for the bug that taught us which ones those are.
     lines: list[str] = ["---", f"type: {thread.get('type', '')}"]
     lines.append(f"entity_id: {thread.get('entity_id', '')}")
-    lines.append(f"name: {thread.get('name', '')}")
+    lines.append(f"name: {_scalar(thread.get('name', ''))}")
     if thread.get("role"):
-        lines.append(f"role: {thread['role']}")
+        lines.append(f"role: {_scalar(thread['role'])}")
     # Only when the writer said something. An entry that never answered keeps a
     # file as short as it was.
     if thread.get("sex"):
@@ -457,13 +552,13 @@ def render_thread(
         lines.append("character_kind: side")
 
     if thread.get("display_name") and thread["display_name"] != thread.get("name"):
-        lines.append(f"display_name: {thread['display_name']}")
+        lines.append(f"display_name: {_scalar(thread['display_name'])}")
     if thread.get("aliases"):
         lines.append("aliases:")
-        lines += [f"  - {a}" for a in thread["aliases"]]
+        lines += [f"  - {_scalar(a)}" for a in thread["aliases"]]
     if thread.get("tags"):
         lines.append("tags:")
-        lines += [f"  - {t}" for t in thread["tags"]]
+        lines += [f"  - {_scalar(t)}" for t in thread["tags"]]
     # Written only when the entry actually claims a question, so an ordinary
     # entry's file gains nothing. See the parse side for what it is for.
     if thread.get("answers"):
@@ -472,7 +567,7 @@ def render_thread(
     if thread.get("fields"):
         lines.append("fields:")
         for key, value in thread["fields"].items():
-            lines.append(f"  {key}: {value}")
+            lines.append(f"  {key}: {_scalar(value)}")
 
     if thread.get("ties"):
         lines.append("ties:")
@@ -488,7 +583,9 @@ def render_thread(
             if tie.get("reason_inverse"):
                 lines.append(f'    reason_inverse: {_quote(tie["reason_inverse"])}')
             if tie.get("rel_inverse"):
-                lines.append(f"    rel_inverse: {tie['rel_inverse']}")
+                # A writer can name their own reverse reading, so this is theirs
+                # to put a colon in.
+                lines.append(f"    rel_inverse: {_scalar(tie['rel_inverse'])}")
             # Defaults are NOT written back. Normalizing on read fills frame
             # and ai_scope on every tie, so writing them unconditionally would
             # add two lines to every connection in the book the first time it
@@ -521,7 +618,11 @@ def render_thread(
         heading = section.get("heading") or section_id.replace("_", " ").title()
         lines.append(f"# {heading}")
         for block in section.get("trait_blocks") or []:
-            lines.append(f"- trait: {block.get('trait', '')}")
+            # THE LINE THIS WHOLE HELPER EXISTS FOR. A trait named
+            # "Story role: Comic Relief" -- which the app's own Story Role
+            # picker produces -- wrote as an unreadable mapping and took the
+            # entire trait list down with it on the next load.
+            lines.append(f"- trait: {_scalar(block.get('trait', ''))}")
             lines.append(f"  description: {_quote(block.get('description', ''))}")
             lines.append(f"  importance: {block.get('importance', 'background')}")
             # DISCLOSURE, written only when true. AI sees it, weighted like any
@@ -546,8 +647,12 @@ def render_thread(
             lines.append(f"- id: {fact.get('id', '')}")
             for key in ("at", "axis"):
                 if fact.get(key):
+                    # `at` is an app-minted anchor; `axis` is whatever the writer
+                    # typed into "What changes", so it gets the same treatment as
+                    # a trait name.
                     comment = _anchor_comment(fact[key], label_for) if key == "at" else ""
-                    lines.append(f"  {key}: {fact[key]}{comment}")
+                    value = fact[key] if key == "at" else _scalar(fact[key])
+                    lines.append(f"  {key}: {value}{comment}")
             lines.append(f"  value: {_quote(fact.get('value', ''))}")
             if fact.get("frame"):
                 lines.append(f"  frame: {fact['frame']}{_comment_for(fact['frame'], label_for)}")

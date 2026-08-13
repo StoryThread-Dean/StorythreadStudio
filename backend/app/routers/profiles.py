@@ -353,6 +353,9 @@ def _clean_trait_yaml(content: str) -> str:
     content = re.sub(code_block_pattern, _extract_json_block, content, flags=re.MULTILINE)
 
     # --- PASS 2: Quote unquoted values that contain ': ' ---
+    # See _yaml_scalar below for the write-side counterpart. These two are a
+    # pair: one stops the file being written badly, the other reads the ones
+    # already on disk.
     # In YAML block mappings, a plain scalar value that contains ': ' is
     # ambiguous -- YAML may interpret it as a nested key-value pair.
     # We quote any such values that aren't already wrapped in double quotes.
@@ -373,10 +376,24 @@ def _clean_trait_yaml(content: str) -> str:
 
         return match.group(0)
 
-    # Only match INDENTED lines (block mapping values inside a list entry).
-    # Lines starting at column 0 (like '- trait:') use '^-' and won't match.
+    # Indented lines: block mapping values inside a list entry.
     colon_value_pattern = r'^([ \t]+)(\w+): (.+)$'
     content = re.sub(colon_value_pattern, _quote_colon_values, content, flags=re.MULTILINE)
+
+    # AND THE '- trait:' LINE, which this used to exclude on purpose. The old
+    # comment here read "Lines starting at column 0 (like '- trait:') ... won't
+    # match", as though that were a feature -- so the one line the app itself
+    # writes a colon into was the one line the repair skipped. A writer's six
+    # personality traits read back as a single paragraph because of it.
+    def _quote_trait_line(match: re.Match) -> str:
+        value = match.group(1).strip()
+        if value[:1] in ('"', "'") or (': ' not in value
+                                       and not value.endswith(':')):
+            return match.group(0)
+        return f"- trait: {_json.dumps(' '.join(value.split()))}"
+
+    content = re.sub(r'^- trait: (.+)$', _quote_trait_line, content,
+                     flags=re.MULTILINE)
 
     return content
 
@@ -411,6 +428,27 @@ def _migrate_influence(raw: str) -> str:
         # writer is shown a list of these to weigh properly.
         return "present"
     return _INFLUENCE_TO_IMPORTANCE.get(raw, "background")
+
+
+def _yaml_scalar(value: str) -> str:
+    """
+    One YAML value, quoted only when it has to be.
+
+    The write-side counterpart to the repair pass above, and the mirror of
+    `_scalar` in codex/threads.py. Both exist because these profile files are the
+    writer's own Markdown: `trait: Genuinely Concerned` reads better than
+    `trait: "Genuinely Concerned"`, and quoting unconditionally would rewrite
+    every profile in every project on its next save -- a diff of pure noise over
+    content that had not changed.
+    """
+    text = " ".join(str(value or "").split())
+    if not text:
+        return '""'
+    if (text[0] in set("-?:,[]{}#&*!|>'\"%@`")
+            or text.endswith(":")
+            or ": " in text or " #" in text):
+        return _json.dumps(text)
+    return text
 
 
 def _parse_trait_blocks(content: str) -> list[TraitBlock]:
@@ -647,7 +685,19 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
                     # caused by ': ' in values (e.g. "Overall: She presents..."
                     # would break yaml.safe_load without quoting).
                     safe_description = " ".join(block.description.split())
-                    lines += [f"- trait: {block.trait}"]
+                    # THE TRAIT NAME NEEDS THE SAME TREATMENT, and for years it
+                    # did not get it -- the comment above worked out why a colon
+                    # breaks a value and then fixed only `description`. The app's
+                    # own Story Role picker produces "Story role: Comic Relief",
+                    # so a colon-space in a trait NAME is not an exotic
+                    # hand-edit. The line stopped being a mapping, the whole list
+                    # failed to parse, and the tolerant fallback kept every trait
+                    # as prose: six cards became one paragraph, silently.
+                    #
+                    # Quoted only when needed, so a resave of an ordinary profile
+                    # still produces no diff.
+                    safe_trait = " ".join(block.trait.split())
+                    lines += [f"- trait: {_yaml_scalar(safe_trait)}"]
                     lines += [f"  description: {_json.dumps(safe_description)}"]
                     lines += [f"  importance: {block.importance}"]
                     # Only when true, so an ordinary trait's line is unchanged
