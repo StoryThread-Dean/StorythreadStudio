@@ -47,6 +47,10 @@ CODES = {
     "run_not_found",
     "report_not_found",
     "entity_not_empty",
+    # A word that already means something else. Its own code because the
+    # frontend has to name the entry that already has it -- "invalid" would
+    # leave the writer guessing which of their entries it collided with.
+    "alias_taken",
 }
 
 # Which HTTP status each code travels as. Kept in one table so two routes
@@ -68,6 +72,7 @@ _STATUS = {
     "schema_unsupported": 422,
     "index_dirty": 503,
     "migration_incomplete": 409,
+    "alias_taken": 409,
     "run_not_found": 404,
     "report_not_found": 404,
     "entity_not_empty": 409,

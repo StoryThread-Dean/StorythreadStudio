@@ -941,6 +941,14 @@ recorded somewhere that nothing was comparing the build against.
       asks only when something would be lost. The walk names the place rather
       than saying "unsaved changes": answers are written as they are made, so
       the place is what is actually at risk.
+- [x] **R11.6** The two answers an Unspun stop could not give, from live
+      testing: the flagged word is EDITABLE before any destination is chosen,
+      and it can be recorded as another name for an entry that already exists.
+      `POST /api/codex/alias` is the missing route -- `absorb` moves a word off
+      a placeholder ENTITY and an Unspun word has no entity. An ambiguous word
+      is refused by name, because a word meaning two things binds to neither.
+      Correcting the word retires the original phrase, said out loud on the
+      receipt, or the same wrong grouping returns on the next scan.
 - [ ] **R11.4** (ruling 9, second half) Frayed's QuickFill filling "from what the
       prose already says". Deferred to v2.1.0 with Phase 9: it needs the AI pass.
 
@@ -962,5 +970,5 @@ recorded somewhere that nothing was comparing the build against.
 | 8 Walk honesty | 12 | **12** |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| 11 Late rulings | 5 | **4** |
-| **Total** | **105** | **85** |
+| 11 Late rulings | 6 | **5** |
+| **Total** | **106** | **86** |

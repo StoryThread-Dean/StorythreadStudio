@@ -331,9 +331,24 @@ its place without relying on memory or conversation history.
 > to dismiss without reading. The walk's message names the PLACE ("you are 3 of
 > 12 through this pass"), not "unsaved changes", because every answer is written
 > as it is made and the place is the expensive part.
+> **R11.6 -- the two answers an Unspun stop could not give.** Reported with one
+> example carrying both faults: "Blaskowitz Sideburn" is part of a surname glued
+> to part of a nickname, "there was no way for me to EDIT the text it flagged",
+> and "I couldn't CONNECT that name to an existing profile for Newton". The stop
+> offered Create and Never and nothing else, so a mis-grouped phrase had two
+> wrong answers and no right one. The word is now editable BEFORE any destination
+> is chosen -- it was editable only inside the create form, so correcting a word
+> meant first agreeing to make a profile you did not want. `POST /alias` is the
+> missing route: `absorb` moves a word off a placeholder ENTITY and an Unspun
+> word has no entity, so absorbing would mean writing a file, deleting it and
+> reindexing twice to record a string. An ambiguous word is REFUSED by name --
+> a word meaning two things binds to neither, so accepting it quietly would put a
+> name in the world that looks recorded and never matches again. Correcting the
+> word retires the original phrase (said out loud, not done quietly), or the same
+> wrong grouping returns on the next scan.
 > Next: **Phase 10** (release hygiene, 6 tasks).
 > Phases 7 and 9 are deferred to v2.1.0.
-> Branch health: 1861 backend tests, 1348 frontend tests, ruff and tsc clean.
+> Branch health: 1871 backend tests, 1357 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

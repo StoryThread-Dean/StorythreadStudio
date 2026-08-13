@@ -284,3 +284,88 @@ def test_absorbing_removes_the_dot_from_the_map(project):
     _absorb(project, "e-alex", "e-lexa")
     after = {n["entity_id"] for n in _graph(project)["nodes"]}
     assert before - after == {"e-lexa"}
+
+
+# ── A bare WORD onto an entry, which absorb cannot do ────────────────────────
+#
+# Reported from live testing, and it is the commonest true answer an Unspun stop
+# could not give:
+#
+#     "Blaskowitz Sideburn was flagged. This is PART of one of Newton's
+#      nicknames ... I'm not going to assign it a new profile because its wrong
+#      in how it was flagged. [And] I couldn't CONNECT that name to an existing
+#      profile for Newton."
+#
+# The stop offered "make an entry" and "never make an entry" and nothing else.
+# `absorb` does almost this and cannot be used: it moves a word off a
+# PLACEHOLDER ENTITY, and an Unspun word has no entity at all. Creating one just
+# to absorb it would write a file, delete it, and reindex twice to record a
+# string.
+
+def _alias(project, entity_id, word, **kw):
+    return client.post("/api/codex/alias",
+                       json={"project_path": project, "entity_id": entity_id,
+                             "word": word, **kw})
+
+
+def test_a_word_from_the_prose_becomes_a_name_she_answers_to(project):
+    body = _alias(project, "e-alex", "Blaskowitz").json()
+    assert body["added"] == "Blaskowitz"
+    assert "Blaskowitz" in _read(project, "alexandra-langford.md")["aliases"]
+
+
+def test_the_word_then_resolves_to_her_everywhere(project):
+    # The point of recording it. A name that is stored and does not bind is
+    # worse than one that was never offered.
+    import asyncio
+    _alias(project, "e-alex", "Blaskowitz")
+    found = asyncio.run(codex_store.find_by_alias(project, "Blaskowitz"))
+    assert found == ["e-alex"]
+
+
+def test_a_word_that_already_means_something_else_is_REFUSED(project):
+    # The important one. An ambiguous word resolves to two entries, and the
+    # mention binder correctly refuses to bind anything ambiguous -- so quietly
+    # accepting it would produce a name that is in the world, looks recorded,
+    # and never matches anything again.
+    response = _alias(project, "e-alex", "Lexa")
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "alias_taken"
+    # And it names the entry that already has it, so the writer can act.
+    assert "Lexa" in detail["message"]
+
+
+def test_a_refused_word_is_not_half_written(project):
+    _alias(project, "e-alex", "Lexa")
+    assert "Lexa" not in _read(project, "alexandra-langford.md")["aliases"]
+
+
+def test_a_word_she_already_answers_to_is_not_an_error(project):
+    # The writer's belief about their own world is correct and there is nothing
+    # to do. Refusing would make being right feel like a mistake.
+    _alias(project, "e-alex", "Blaskowitz")
+    response = _alias(project, "e-alex", "Blaskowitz")
+    assert response.status_code == 200
+    assert response.json()["added"] == ""
+    # And it was not added twice.
+    assert _read(project, "alexandra-langford.md")["aliases"].count("Blaskowitz") == 1
+
+
+def test_her_own_name_is_already_hers(project):
+    assert _alias(project, "e-alex", "Alexandra Langford").json()["added"] == ""
+
+
+def test_an_empty_word_is_refused(project):
+    assert _alias(project, "e-alex", "   ").status_code == 400
+
+
+def test_a_word_can_become_the_label_the_map_shows(project):
+    # Same argument as absorb's: the official name on the profile can differ
+    # from what the story actually calls her.
+    _alias(project, "e-alex", "Lex", as_label=True)
+    assert _read(project, "alexandra-langford.md")["display_name"] == "Lex"
+
+
+def test_an_entry_that_is_not_there_is_a_404(project):
+    assert _alias(project, "e-nobody", "Whatever").status_code == 404

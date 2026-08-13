@@ -1908,6 +1908,92 @@ async def post_new_thread(body: NewThreadBody):
     return {"thread": thread}
 
 
+class AliasBody(BaseModel):
+    project_path: str
+    # The entry that gains a name it answers to.
+    entity_id: str
+    # The word itself. A bare phrase from the prose, not an entity.
+    word: str
+    # Make it the label the map and the sidebar show. Same argument as absorb's:
+    # "Lexa" over "Alexandra Langford" is the case it exists for.
+    as_label: bool = False
+
+
+@router.post("/alias")
+async def post_alias(body: AliasBody):
+    """
+    Teach an entry another word it answers to.
+
+    THE MISSING THIRD ANSWER ON AN UNSPUN STOP. Weaving finds a name in the prose
+    and asks what it is; the stop could offer "make an entry" or "never make an
+    entry", and nothing else. The commonest true answer was unreachable:
+
+        "Blaskowitz Sideburn was flagged. This is PART of one of Newton's
+         nicknames ... I'm not going to assign it a new profile because its
+         wrong in how it was flagged. [And] I couldn't CONNECT that name to an
+         existing profile for Newton."
+
+    `absorb` does almost this and cannot be used here: it moves the word off a
+    PLACEHOLDER ENTITY into a survivor, and an Unspun word has no entity at all.
+    Creating a placeholder just to absorb it would write a file, delete it, and
+    reindex twice to record one string.
+
+    AN AMBIGUOUS WORD IS REFUSED, and that is the important part. A word that
+    already means something else would resolve to two entries, and the mention
+    binder correctly refuses to bind anything ambiguous -- so quietly accepting
+    it would produce a name that is in the world, looks recorded, and never
+    matches anything again. The refusal says which entry already has it.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+
+    word = " ".join(str(body.word or "").split())
+    if not word:
+        raise CodexError("type_invalid", "That is an empty word.")
+
+    thread = _read_thread(project_path, registry,
+                          await _locate(project_path, body.entity_id))
+
+    known = {str(thread.get("name") or "").lower()}
+    known |= {str(a).lower() for a in (thread.get("aliases") or [])}
+    if word.lower() in known:
+        # Already true. Said kindly rather than refused: the writer's belief
+        # about their own world is correct, and there is nothing to do.
+        return {
+            "entity_id": thread["entity_id"],
+            "name": thread.get("name", ""),
+            "display_name": thread.get("display_name", ""),
+            "aliases": list(thread.get("aliases") or []),
+            "added": "",
+        }
+
+    others = [e for e in await codex_store.find_by_alias(project_path, word)
+              if e != thread["entity_id"]]
+    if others:
+        owner = await _locate(project_path, others[0])
+        raise CodexError(
+            "alias_taken",
+            f"'{word}' already means {owner['name']}. One word cannot mean two "
+            f"things, or mentions of it would match neither. Rename one of "
+            f"them, or use a longer form of the word here.",
+            others[0],
+        )
+
+    thread["aliases"] = list(thread.get("aliases") or []) + [word]
+    if body.as_label:
+        thread["display_name"] = word
+    _write_thread(project_path, registry, thread)
+    await codex_store.reindex(project_path)
+
+    return {
+        "entity_id": thread["entity_id"],
+        "name": thread.get("name", ""),
+        "display_name": thread.get("display_name", ""),
+        "aliases": thread["aliases"],
+        "added": word,
+    }
+
+
 class AbsorbBody(BaseModel):
     project_path: str
     # The entry that survives -- the writer's real profile.

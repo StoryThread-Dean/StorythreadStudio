@@ -63,6 +63,7 @@ import { useAttemptClose } from "../../components/learn/useAttemptClose";
 import { DomainBoard } from "./DomainBoard";
 import { StaleMark, StaleNotice } from "./StaleNotice";
 import { UnwovenGuide } from "./UnwovenGuide";
+import { WordFix } from "./WordFix";
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { BindDot } from "./BindDot";
 import { QuickEntry } from "./QuickEntry";
@@ -322,6 +323,12 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   const [muting, setMuting] = useState(false);
   // Ruling 8: the tick-list. Set to a kind while the writer is sweeping it.
   const [sweeping, setSweeping] = useState<string | null>(null);
+  // The flagged word is wrong, or it is already somebody's. Open on an Unspun
+  // stop, and the two answers that stop could not previously give.
+  const [fixingWord, setFixingWord] = useState(false);
+  // What the writer corrected it TO, carried into Quick Entry when they decide
+  // it is new after all so they do not type it twice.
+  const [correctedName, setCorrectedName] = useState("");
   // The book's chapters, for the sweep's per-row chapter pickers. Fetched once
   // on mount rather than when the sweep opens: it is one small request, and
   // loading it on open would put a spinner in front of a list whose whole point
@@ -872,6 +879,41 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     );
   }
 
+  // The two answers an Unspun stop could not give: the flagged word is WRONG,
+  // or it belongs to something the writer already has. Placed before Quick
+  // Entry because it is the step that decides whether Quick Entry is even the
+  // right destination.
+  if (fixingWord && stop) {
+    const flagged = String(stop.detail?.name ?? "");
+    return (
+      <WordFix
+        projectPath={projectPath}
+        word={flagged}
+        candidates={world}
+        onCreateInstead={corrected => {
+          // Their wording travels with them rather than being typed twice.
+          setCorrectedName(corrected);
+          setFixingWord(false);
+          setEntering(true);
+        }}
+        onDone={retire => {
+          setFixingWord(false);
+          void (async () => {
+            // A corrected word means the phrase the scan found was not a thing,
+            // so it is retired -- otherwise the same wrong grouping is offered
+            // again on the next scan, which is the loop this screen exists to
+            // break. `dismiss` carries the phrase; the receipt already said so.
+            if (runId) {
+              await dismiss(projectPath, runId, stop, retire || undefined);
+            }
+            recordAnswer(stop, retire ? "Corrected and attached" : "Attached");
+          })();
+        }}
+        onClose={() => setFixingWord(false)}
+      />
+    );
+  }
+
   if (entering && stop) {
     // Quick Entry: the base level, made without leaving. Unwoven fixes the
     // kind and the section (the question knows where its answer lands);
@@ -881,7 +923,8 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     return (
       <QuickEntry
         projectPath={projectPath}
-        name={unwoven ? "" : String(stop.detail?.name ?? "")}
+        name={unwoven ? ""
+                      : correctedName || String(stop.detail?.name ?? "")}
         aliases={alsoCalled(stop)}
         kind={unwoven ? (lands[0] ?? "concept") : "character"}
         kindLocked={unwoven}
@@ -1188,6 +1231,36 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           banner explains the situation once; this answers "is this one of
           them?" at the moment that question can actually be acted on. */}
       {staleKeys.has(stop.key) && <StaleMark />}
+
+      {/* THE TWO ANSWERS AN UNSPUN STOP COULD NOT GIVE, offered before the
+          buttons because they are about whether the QUESTION is right. Weaving
+          guesses where one name ends and the next begins; when it guesses wrong
+          the writer used to have two wrong answers and no right one -- make a
+          profile you know is wrong, or permanently silence a word that is a
+          real name in a form you would have accepted.
+
+          Reported with an example that had both faults at once: "Blaskowitz
+          Sideburn" is part of a surname glued to part of a nickname, and
+          "there was no way for me to edit the text it flagged ... I couldn't
+          CONNECT that name to an existing profile for Newton." */}
+      {stop.kind === "unspun" && (
+        <button
+          onClick={() => void (async () => {
+            await loadWorld();
+            setFixingWord(true);
+          })()}
+          data-testid="word-fix-offer"
+          className="mt-2 w-full rounded border border-violet-800 bg-violet-950/25 px-2.5 py-1.5 text-left text-[11px] text-violet-100 hover:border-violet-600"
+        >
+          <span className="font-medium">
+            Not right? Fix the word, or say who it belongs to
+          </span>
+          <span className="block text-[10px] text-faint">
+            correct what was flagged, or make it another name for an entry you
+            already have
+          </span>
+        </button>
+      )}
 
       {/* RULING 8, OFFERED RATHER THAN IMPOSED. The spec's words are "not a
           forced march", and a list that replaced the walk would be a different

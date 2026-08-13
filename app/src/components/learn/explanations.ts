@@ -523,6 +523,29 @@ export const EXPLAIN: Record<string, Explains> = {
         + "this is a view of what it does.",
     ],
   },
+  "weaving.word-fix": {
+    what: "Correct a flagged word, or say it is a name something you already "
+      + "have goes by.",
+    why: "Weaving finds names by guessing where one ends and the next begins, "
+      + "and sometimes it guesses wrong -- it can glue part of a surname to "
+      + "part of a nickname and offer you the join as a new character. Before "
+      + "this screen the only answers were to make a profile you knew was "
+      + "wrong, or to permanently silence a word that IS a real name in a form "
+      + "you would have accepted.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Fix the word first if it split the wrong way. Everything below is about "
+        + "whatever the box says.",
+      "Pick the entry it belongs to. It becomes another name that entry answers "
+        + "to, and every mention of it in your writing finds that entry.",
+      "If you corrected the word, the original is not raised again -- by fixing "
+        + "it you have said the phrase was not a thing.",
+      "Changed your mind and it IS new? Make it its own entry, and your "
+        + "corrected wording comes with you.",
+    ],
+    endpoint: "/api/codex/alias",
+  },
   "weaving.sweep-unplaced": {
     what: "Every fact with no point in the story, as one list.",
     why: "A fact that says nothing about WHEN it became true is true everywhere "

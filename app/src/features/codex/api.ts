@@ -95,6 +95,33 @@ export function absorb(
 }
 
 
+/**
+ * Teach an entry another word it answers to.
+ *
+ * The sibling of `absorb`, for the case absorb cannot serve: a bare word out of
+ * the prose with no entity behind it. An Unspun stop is exactly that, which is
+ * why "it is another name for someone I already have" was an answer the walk
+ * could not take.
+ *
+ * `added` comes back empty when the entry already answered to the word -- not an
+ * error, just nothing to do.
+ */
+export function addAlias(
+  projectPath: string,
+  entityId: string,
+  word: string,
+  asLabel = false,
+): Promise<{ entity_id: string; name: string; display_name: string;
+             aliases: string[]; added: string }> {
+  return request("/alias", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, entity_id: entityId,
+                           word, as_label: asLabel }),
+  });
+}
+
+
 export interface GraphEdge {
   src_id: string;
   dst_id: string;

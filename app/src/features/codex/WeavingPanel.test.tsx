@@ -2895,3 +2895,170 @@ describe("closing by accident", () => {
     expect(confirm).toHaveBeenCalled();
   });
 });
+
+
+// ── The two answers an Unspun stop could not give ─────────────────────────────
+//
+// Reported from live testing, one example with both faults at once:
+//
+//     "Blaskowitz Sideburn was flagged. This is PART of one of Newton's
+//      nicknames ... I'm not going to assign it a new profile because its wrong
+//      in how it was flagged. Second issue, there was no way for me to EDIT the
+//      text it flagged so that I could correct it. Third, I couldn't CONNECT
+//      that name to an existing profile for Newton."
+//
+// The stop offered Create and Never and nothing else, so a mis-grouped phrase
+// had two wrong answers and no right one: make a profile you know is wrong, or
+// permanently silence a word that IS a real name in a form you would accept.
+
+describe("a flagged word that is wrong", () => {
+  const unspun = stop({
+    kind: "unspun", key: "unspun|blaskowitz-sideburn", entity_id: "",
+    title: "'Blaskowitz Sideburn' has no entry",
+    quote: "The Sideburn Swindler, Newton Blaskowitz, adjusted his glasses.",
+    detail: { name: "Blaskowitz Sideburn", count: 2 },
+  });
+
+  const newton = {
+    entity_id: "e-newton", type: "character", name: "Newton Blaskowitz",
+    display_name: "", aliases: ["Newton"], placeholder: false,
+  };
+
+  function withNewton(extra: Record<string, unknown> = {}) {
+    mockApi({ stops: [unspun, stop({ key: "next", title: "Something else" })],
+              nodes: [newton], ...extra });
+  }
+
+  it("offers the fix before it offers a profile", async () => {
+    withNewton();
+    await start();
+    expect(screen.getByTestId("word-fix-offer")).toBeTruthy();
+  });
+
+  it("offers it on nothing else", async () => {
+    mockApi({ stops: [stop({
+      kind: "frayed", key: "frayed|e-1", entity_id: "e-1", quote: "",
+      title: "Mira Kell is missing Overview",
+      detail: { name: "Mira Kell", type: "character", missing: ["Overview"] },
+    })] });
+    await start();
+    expect(screen.queryByTestId("word-fix-offer")).toBeNull();
+  });
+
+  it("lets the writer correct the word before choosing anything", async () => {
+    // The order the writer asked for, and the right one: every answer below is
+    // wrong if the scan guessed the wrong boundary.
+    withNewton();
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    const box = within(fix).getByLabelText("The word");
+    expect((box as HTMLInputElement).value).toBe("Blaskowitz Sideburn");
+    await userEvent.clear(box);
+    await userEvent.type(box, "Blaskowitz");
+    expect(within(fix).getByTestId("word-fix-changed").textContent)
+      .toContain("will not be raised again");
+  });
+
+  it("makes it another name for an entry that already exists", async () => {
+    withNewton();
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    const box = within(fix).getByLabelText("The word");
+    await userEvent.clear(box);
+    await userEvent.type(box, "Blaskowitz");
+    await userEvent.click(within(fix).getByRole("button", { name: /Newton Blaskowitz/ }));
+    await userEvent.click(within(fix).getByTestId("word-fix-record"));
+
+    await waitFor(() => expect(posted("/alias").length).toBe(1));
+    expect(posted("/alias")[0].body).toMatchObject({
+      entity_id: "e-newton", word: "Blaskowitz",
+    });
+  });
+
+  it("retires the phrase it corrected, and says so", async () => {
+    // Otherwise the same wrong grouping is offered again on the next scan,
+    // which is the loop this screen exists to break.
+    withNewton();
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    const box = within(fix).getByLabelText("The word");
+    await userEvent.clear(box);
+    await userEvent.type(box, "Blaskowitz");
+    await userEvent.click(within(fix).getByRole("button", { name: /Newton Blaskowitz/ }));
+    await userEvent.click(within(fix).getByTestId("word-fix-record"));
+
+    const done = await screen.findByTestId("word-fix-done");
+    expect(within(done).getByTestId("word-fix-retired").textContent)
+      .toContain("Blaskowitz Sideburn");
+    await userEvent.click(within(done).getByRole("button", { name: /Carry on/ }));
+
+    await waitFor(() => expect(posted("/run/answer").length).toBeGreaterThan(0));
+    const answer = posted("/run/answer")[0].body;
+    expect(answer.state).toBe("dismissed");
+    expect(answer.retire_phrase).toBe("Blaskowitz Sideburn");
+    // And the walk moved on.
+    expect(await screen.findByText("Something else")).toBeTruthy();
+  });
+
+  it("retires nothing when the word was right as found", async () => {
+    // The writer only said WHO it belongs to. The phrase itself was correct, so
+    // silencing it would be the app inventing a decision.
+    withNewton();
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    await userEvent.click(within(fix).getByRole("button", { name: /Newton Blaskowitz/ }));
+    await userEvent.click(within(fix).getByTestId("word-fix-record"));
+    const done = await screen.findByTestId("word-fix-done");
+    expect(within(done).queryByTestId("word-fix-retired")).toBeNull();
+    await userEvent.click(within(done).getByRole("button", { name: /Carry on/ }));
+    await waitFor(() => expect(posted("/run/answer").length).toBeGreaterThan(0));
+    expect(posted("/run/answer")[0].body.retire_phrase).toBeUndefined();
+  });
+
+  it("carries the corrected wording into Quick Entry when it IS new", async () => {
+    // A writer who fixes the text and then decides it is its own thing should
+    // not have to type it a second time.
+    withNewton();
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    const box = within(fix).getByLabelText("The word");
+    await userEvent.clear(box);
+    await userEvent.type(box, "Sideburn Swindler");
+    await userEvent.click(within(fix).getByTestId("word-fix-create"));
+
+    const entry = await screen.findByTestId("quick-entry");
+    expect((within(entry).getByLabelText("Name") as HTMLInputElement).value)
+      .toBe("Sideburn Swindler");
+  });
+
+  it("leaves the walk where it was when the writer backs out", async () => {
+    withNewton();
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    await screen.findByTestId("word-fix");
+    await userEvent.click(screen.getByRole("button", { name: /Back to the stop/ }));
+    expect(await screen.findByTestId("weaving-progress")).toBeTruthy();
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
+    expect(posted("/alias")).toEqual([]);
+  });
+
+  it("does not offer placeholders as somewhere to attach a word to", async () => {
+    // Attaching a word to an empty stub made from another word records nothing
+    // usable, and it is the shape of mistake that made three entries for one
+    // person in the first place.
+    withNewton({ nodes: [newton, {
+      entity_id: "e-dot", type: "character", name: "Sideburn",
+      display_name: "", aliases: [], placeholder: true,
+    }] });
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    expect(within(fix).getByRole("button", { name: /Newton Blaskowitz/ })).toBeTruthy();
+    expect(within(fix).queryByRole("button", { name: /^Sideburn/ })).toBeNull();
+  });
+});
