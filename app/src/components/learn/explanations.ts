@@ -291,6 +291,29 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "profile.page": {
+    what: "The page where you build one thing in your world: a person, a place, "
+      + "a faction, a faith.",
+    why: "It is ordered the way you would explain somebody to a friend, and you "
+      + "can stop at any point. Basics, then what changes about them through the "
+      + "story, then who they are to other people, then a few sentences on who "
+      + "they are, then the detail. Trunk, branches, leaves. A name and one line "
+      + "is already a real entry -- the app will use it, and nothing here nags "
+      + "you for the rest.",
+    needed: "recommended",
+    cost: FREE,
+    how: [
+      "Fill in the name and what they are to the story. That is enough to save.",
+      "Add anything that becomes true at a POINT in the book under How this "
+        + "changes -- that is the part no other screen can do.",
+      "Connections are chips until you open them, and Weaving offers most of "
+        + "them from your manuscript rather than making you type them.",
+      "The Overview is two or three sentences. It is the one section the app "
+        + "checks for, and an empty one is what the Weave calls Frayed.",
+      "Traits are tiles: closed until you want them, and they stay open while "
+        + "you work. Use Show me how this works for the whole page in order.",
+    ],
+  },
   "character.subtext": {
     what: "A trait AI uses and never says out loud.",
     why: "Because the reason a character behaves as they do is often the thing "

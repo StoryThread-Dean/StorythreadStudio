@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 46 of 96 tasks done.
+> **LEDGER — last updated 2026-08-12.** 49 of 97 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene

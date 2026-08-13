@@ -604,12 +604,31 @@ produce.
       the writer has said something.
 - [x] **R2.13c** The page order: Basics, Overview, the Run, Connections, then the
       trait tools and the traits, with the Full AI Summary last.
-- [ ] **R2.13d** Traits as collapsed tiles: highlights and truncated text by
-      default, click to expand, expansions staying open while the writer works in
-      that profile, scroll doing the moving between them.
-- [ ] **R2.13e** A page-level `What's this?` beside the existing per-section
-      ones, and a full walkthrough of the page: what each part is for, in the
-      order the page now puts them, before the per-section walkthroughs go deep.
+- [x] **R2.13d** Traits are collapsed tiles. A closed one is the name, the
+      weight, a "never named" marker where it applies, and the description
+      truncated on a word -- one line a writer can scan. Every trait used to
+      render as a full card with two AI buttons and a gauge, so twenty traits was
+      a wall the writer scrolled past looking for the one they wanted.
+      MORE THAN ONE STAYS OPEN, unlike the Run's facts, and that is the writer's
+      instruction: "I want the expands to remain open while Writer is working
+      within that profile, allowing the scroll to do the heavy lifting." Comparing
+      two traits while editing a third is ordinary work. Every profile opens with
+      all of them closed, and a newly added trait opens itself, because collapsed
+      it would be a blank line and the button would look like it did nothing.
+- [x] **R2.13e** `profile.page` explains the screen from beside its title, and
+      `ProfilePageGuide` is the seven-page walkthrough of the whole page in its
+      order. Deliberately SHALLOW -- it says what each part is for and hands off
+      to the per-section guides, because a first walkthrough that taught weights,
+      secrecy, frames and reveal points would be the wall of information this
+      restructure exists to remove. It ends by saying where to STOP: a name and
+      one line is a real entry, and nothing here nags for the rest.
+- [x] **R2.13f** Three corrections from the writer on seeing it: Overview moved
+      BELOW Connections (their reasoning, better than mine -- who somebody IS
+      reads better once you know who they are TO people; my argument for second
+      place was about the app's bookkeeping rather than about reading the page),
+      the Run given the same gap under it that every other block has (it and
+      Connections were sitting on top of each other and read as one thing), and
+      Connections defaulted to chips rather than expanded.
 
 ---
 
@@ -753,7 +772,7 @@ it, since the spec calls it the reason the frame system exists.
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
 | 2 The premise | 25 | 25 |
-| 2b Profile Builder | 5 | 3 |
+| 2b Profile Builder | 6 | 6 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -762,4 +781,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **96** | **46** |
+| **Total** | **97** | **49** |

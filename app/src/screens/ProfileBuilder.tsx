@@ -70,6 +70,10 @@ import { SecretsPanel } from "./SecretsPanel";
 // which is where it was, and which meant a writer with no secrets yet had
 // no way in at all.
 import { SubtextGuide } from "./SubtextGuide";
+// The FIRST walkthrough a writer meets here: what each part of the page is
+// for, in the order the page puts them. Deliberately shallow -- the
+// per-section guides do the depth.
+import { ProfilePageGuide } from "./ProfilePageGuide";
 // THE RUN: how an entry changes across the book. The same editor the Weave's
 // own screen uses, because a fact recorded in either place is the same fact.
 // Until this landed, the four kinds a novelist actually spends their time on
@@ -455,6 +459,7 @@ export function ProfileBuilder({
   // has one consequence worth stating first: a hidden trait dissolved into
   // prose loses the thing that kept it out of an AI prompt. `null` means
   // nothing is being asked.
+  const [pageGuideOpen, setPageGuideOpen] = useState(false);
   const [templateAsk, setTemplateAsk] = useState<"main" | "side" | null>(null);
   // What the last conversion actually did, shown afterwards so the writer knows
   // where their traits went rather than hunting for them.
@@ -489,6 +494,28 @@ export function ProfileBuilder({
   const [auditFlags, setAuditFlags] = useState<{ trait: string; current_importance: string; suggested_importance: string; reason: string }[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
+
+  // WHICH TRAIT TILES ARE OPEN.
+  //
+  // Every trait used to render as a full card -- name, description, importance,
+  // gauge, two AI buttons -- so a character with twenty traits was a wall of
+  // controls and the writer scrolled past their own work looking for the one
+  // they wanted. Collapsed, a trait is one line they can scan.
+  //
+  // MORE THAN ONE STAYS OPEN, unlike the Run's facts. The writer asked for
+  // exactly that: "I want the expands to remain open while Writer is working
+  // within that profile, allowing the scroll to do the heavy lifting of moving
+  // between tiles." Comparing two traits while editing a third is ordinary
+  // work; one-at-a-time would fight it.
+  const [openTraits, setOpenTraits] = useState<Set<string>>(new Set());
+  const toggleTrait = useCallback((id: string) => {
+    setOpenTraits(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   // Focused section indicator
   const [focusedSection, setFocusedSection] = useState<{ key: string; heading: string } | null>(null);
@@ -573,6 +600,10 @@ export function ProfileBuilder({
     // something they are no longer looking at.
     setTemplateDid(null);
     setTemplateAsk(null);
+    // Every profile opens closed. Carrying one character's open tiles to the
+    // next would hand the writer a page mid-edit that they did not leave that
+    // way.
+    setOpenTraits(new Set());
   }, [profile?.filename]);
 
 
@@ -986,6 +1017,9 @@ export function ProfileBuilder({
       description: "",
       importance: "background",
     };
+    // Open straight into it. Collapsed, a new trait is a blank line and the
+    // button looks like it did nothing.
+    setOpenTraits(prev => new Set(prev).add(newBlock.id));
     setProfile(prev => {
       if (!prev) return prev;
       return {
@@ -1520,6 +1554,10 @@ export function ProfileBuilder({
       </aside>
 
 
+      {pageGuideOpen && (
+        <ProfilePageGuide onClose={() => setPageGuideOpen(false)} />
+      )}
+
       {/* WHAT IT WILL DO, BEFORE IT DOES IT. Not a confirmation for its own
           sake: Main to Side dissolves trait blocks into lines, and a hidden
           trait stops being hidden. That is worth one sentence first. */}
@@ -1620,6 +1658,16 @@ export function ProfileBuilder({
                 {labelFor(profile.type)}
               </span>
             )}
+            {/* THE PAGE'S OWN HELP, beside its title -- the one place a writer
+                looks when the question is about the screen rather than about a
+                field. The per-section (?) icons answer the narrower questions. */}
+            <Explain of="profile.page" compact />
+            <button
+              onClick={() => setPageGuideOpen(true)}
+              className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            >
+              Show me how this page works
+            </button>
             {/* WHICH PAGE THIS CHARACTER USES, and the way to change it.
                 Beside the type chip because it is the same kind of fact about
                 the entry, and one click from where the writer notices it is
@@ -2156,14 +2204,60 @@ export function ProfileBuilder({
                   various Traits."
                   Trunk, then main branches, then branches, then leaves. Two
                   changes to their draft, both argued rather than assumed:
-                  Overview sits SECOND because it is the shortest thing here and
-                  the one that stops an entry counting as Frayed, so it is a fast
-                  win right after the name; and the Run sits above Connections
+                  Overview sits AFTER Connections, which is the writer's own
+                  correction on seeing it -- who someone IS reads better once
+                  you know who they are TO people, and my argument for putting
+                  it second (a fast win against Frayed) was about the app's
+                  bookkeeping rather than about reading the page. The Run sits
+                  above Connections
                   because Weaving builds connections FOR the writer while the Run
                   is the only part of an entry no other screen can produce. */}
               {/* Profile sections. Side characters render every section as a
                   single free-text field -- trait blocks are a main-template
                   feature, so hasTraitBlocks is forced off for them. */}
+              {/* HOW THIS CHANGES ACROSS THE BOOK.
+                  Under the sections, because the sections are what is true
+                  throughout and this is what is true from a point onwards. The
+                  spec's own opening example lives here: a heroine who believes
+                  her father died, from chapter one, with the reader learning
+                  otherwise in chapter fifteen. */}
+              {/* Wrapped for the same gap every other block on this page has.
+                  Without it the Run and Connections sat directly on top of each
+                  other and read as one thing. */}
+              <div className="mb-6">
+              <RunEditor
+                run={profile.run ?? []}
+                chapters={chapters}
+                people={people}
+                self={{ entity_id: profile.entity_id, name: profile.name }}
+                onChange={next => {
+                  setProfile(prev => (prev ? { ...prev, run: next } : prev));
+                  setIsDirty(true);
+                }}
+                unavailable={home === "profiles"
+                  ? "Facts need this project brought into the Weave first. A "
+                    + "profile file has nowhere to record a chapter, so the app "
+                    + "would take what you typed and lose it. Bring your world "
+                    + "in from the Weave and this fills in here."
+                  : undefined}
+              />
+              </div>
+
+              {/* CONNECTIONS, high on the page because they are most of what a
+                  scene runs on and because Weaving fills them in for the writer.
+                  Codex entries only -- a tie is the Weave's own idea and a
+                  profiles/ file has nowhere to record one. */}
+              {home === "codex" && profile.entity_id && (
+                <div className="mb-6">
+                  <ProfileConnections
+                    projectPath={project.root_path}
+                    entityId={profile.entity_id}
+                    type={profile.type}
+                    name={profile.name}
+                  />
+                </div>
+              )}
+
               {sections.filter(cfg => cfg.key === "overview").map(cfg => {
                 const section = profile.sections[cfg.key] ?? {
                   content: "", trait_blocks: [], ai_summary: "",
@@ -2192,6 +2286,8 @@ export function ProfileBuilder({
                     onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
                     onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
                     generatingField={generatingField}
+                    openTraits={openTraits}
+                    onToggleTrait={toggleTrait}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
                     showAiSummary={!isSideCharacter}
                     onGenerateOverview={
@@ -2202,45 +2298,6 @@ export function ProfileBuilder({
                   </div>
                 );
               })}
-
-              {/* HOW THIS CHANGES ACROSS THE BOOK.
-                  Under the sections, because the sections are what is true
-                  throughout and this is what is true from a point onwards. The
-                  spec's own opening example lives here: a heroine who believes
-                  her father died, from chapter one, with the reader learning
-                  otherwise in chapter fifteen. */}
-              <RunEditor
-                run={profile.run ?? []}
-                chapters={chapters}
-                people={people}
-                self={{ entity_id: profile.entity_id, name: profile.name }}
-                onChange={next => {
-                  setProfile(prev => (prev ? { ...prev, run: next } : prev));
-                  setIsDirty(true);
-                }}
-                unavailable={home === "profiles"
-                  ? "Facts need this project brought into the Weave first. A "
-                    + "profile file has nowhere to record a chapter, so the app "
-                    + "would take what you typed and lose it. Bring your world "
-                    + "in from the Weave and this fills in here."
-                  : undefined}
-              />
-
-              {/* CONNECTIONS, high on the page because they are most of what a
-                  scene runs on and because Weaving fills them in for the writer.
-                  Codex entries only -- a tie is the Weave's own idea and a
-                  profiles/ file has nowhere to record one. */}
-              {home === "codex" && profile.entity_id && (
-                <div className="mb-6">
-                  <ProfileConnections
-                    projectPath={project.root_path}
-                    entityId={profile.entity_id}
-                    type={profile.type}
-                    name={profile.name}
-                    startExpanded
-                  />
-                </div>
-              )}
 
               {/* Importance Audit button + results (main template only --
                   side characters have no trait blocks to audit) */}
@@ -2352,6 +2409,8 @@ export function ProfileBuilder({
                     onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
                     onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
                     generatingField={generatingField}
+                    openTraits={openTraits}
+                    onToggleTrait={toggleTrait}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
                     showAiSummary={!isSideCharacter}
                     onGenerateOverview={
@@ -2726,6 +2785,10 @@ interface ProfileSectionEditorProps {
   /** Show the "never named" help and its walkthrough beside this heading. True
    *  for the section a writer looks in for it. */
   teachesSubtext?: boolean;
+  /** Which trait tiles are open, and how to toggle one. Held by the screen so
+   *  the set survives a re-render and resets when the writer changes profile. */
+  openTraits: Set<string>;
+  onToggleTrait: (id: string) => void;
   section: ProfileSection;
   profileName: string;
   profileType: string;
@@ -2754,6 +2817,8 @@ function ProfileSectionEditor({
   hasTraitBlocks,
   showSecretsOnly,
   teachesSubtext,
+  openTraits,
+  onToggleTrait,
   section,
   profileName,
   profileType,
@@ -2905,6 +2970,8 @@ function ProfileSectionEditor({
             <TraitBlockCard
               key={block.id}
               block={block}
+              open={openTraits.has(block.id)}
+              onToggle={() => onToggleTrait(block.id)}
               profileName={profileName}
               profileType={profileType}
               sectionKey={sectionKey}
@@ -3113,6 +3180,11 @@ function SectionHelpPopover({
 
 interface TraitBlockCardProps {
   block: TraitBlock;
+  /** Closed by default: a trait is one scannable line until the writer wants
+   *  it. Several may be open at once, which is what makes comparing two while
+   *  editing a third possible. */
+  open: boolean;
+  onToggle: () => void;
   profileName: string;
   profileType: string;
   sectionKey: string;
@@ -3121,7 +3193,7 @@ interface TraitBlockCardProps {
   onRemove: () => void;
 }
 
-function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
+function TraitBlockCard({ block, open, onToggle, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
   const wordCount = countWords(block.description);
 
   // AI Trim tool -- suggests a concise rewrite when description is wordy/bloated
@@ -3192,10 +3264,58 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
     }
   };
 
+  // WHAT A CLOSED TILE SAYS. The name is the thing being scanned for; the
+  // weight and the secret marker are what a writer checks at a glance; the
+  // description is truncated on a word so it never breaks mid-syllable.
+  const summary = block.description.trim();
+  const shortened = summary.length > 90
+    ? summary.slice(0, summary.lastIndexOf(" ", 90) > 50
+                       ? summary.lastIndexOf(" ", 90) : 90) + "..."
+    : summary;
+
+  if (!open) {
+    return (
+      <button
+        onClick={onToggle}
+        aria-expanded={false}
+        data-testid="trait-tile"
+        className="mb-1.5 flex w-full items-start gap-2 rounded border border-border bg-bg-panel px-2 py-1.5 text-left transition-colors hover:border-indigo-700"
+      >
+        <ChevronRight size={12} className="mt-1 shrink-0 text-faint" />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="text-sm text-text-primary">
+              {block.trait.trim() || "(unnamed trait)"}
+            </span>
+            <span className="rounded-full border border-border px-1.5 text-xs text-text-muted">
+              {block.importance}
+            </span>
+            {block.subtext && (
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-violet-700 px-1.5 text-xs text-violet-200">
+                <EyeOff size={9} /> never named
+              </span>
+            )}
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-text-muted">
+            {shortened || "Nothing written yet."}
+          </span>
+        </span>
+      </button>
+    );
+  }
+
   return (
-    <div className="mb-3 rounded border border-border bg-bg-panel p-3">
+    <div className="mb-3 rounded border border-indigo-700/60 bg-bg-panel p-3">
       {/* Top row: importance selector + trait name + delete button */}
       <div className="mb-2 flex items-start gap-2">
+        <button
+          onClick={onToggle}
+          aria-expanded
+          aria-label={`Close ${block.trait || "this trait"}`}
+          className="mt-1 shrink-0 rounded text-faint hover:text-text-primary"
+        >
+          <ChevronDown size={12} />
+        </button>
         {/* Importance dropdown */}
         <select
           value={block.importance}
