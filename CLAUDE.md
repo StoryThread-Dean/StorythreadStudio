@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-13.** 79 of 99 tasks done.
+> **LEDGER — last updated 2026-08-13.** 81 of 100 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -272,14 +272,25 @@ its place without relying on memory or conversation history.
 > documented capability whose condition can never be true, raising nothing.
 > Reported rather than patched because it changes what the map SHOWS. The test
 > pins the truth so the suite is not green over a claim it does not check.
-> **R8.6 IS THE ONE LEFT, and it is blocked on a ruling.** The dead precedence
-> level is deader than the audit said: `_resolve_model_and_key` never reads
-> project.json at all -- it synthesises `{"default_model": override}` from one
-> frontend field -- and most AI request models carry no `project_path`. Building
-> it is ~10 request models, every frontend caller, and a per-book UI; a
-> half-threaded version is worse than none, because a writer whose per-book
-> choice reaches Draft but not Enhance has an app they cannot explain.
-> Branch health: 1831 backend tests, 1314 frontend tests, ruff and tsc clean.
+> **R8.6 DONE -- the dead level is DELETED, on the writer's ruling.** It was
+> deader than the audit said: `_resolve_model_and_key` never reads project.json
+> at all, it synthesises `{"default_model": override}` from one frontend field,
+> so a per-book assignment could not have arrived however faithfully
+> `projects.py` stored one. The test that "proved" it worked passed by handing in
+> a project dict no caller can produce -- a test that builds the world instead of
+> observing it. It now pins the opposite. Roles are app-wide; the per-book
+> DEFAULT MODEL is untouched and still works.
+> **R8.6b DONE -- the bug R8.11 found, fixed on the writer's ruling.** The map
+> draws a coming connection dashed again. `show_future` on the Lens, set by the
+> MAP ALONE: the resolver and the brief go on treating a future fact as not in
+> force, which is the one guarantee anchors exist to give. Two bounds kept and
+> both tested -- the spoiler rule still runs (an unforeshadowed future connection
+> is withheld, a foreshadowed one is drawn), and an unintroduced endpoint still
+> hides the whole edge, or the map would announce a character who has not
+> appeared.
+> **PHASE 8 COMPLETE (12 of 12).** Next: **Phase 10** (release hygiene, 6 tasks).
+> Phases 7 and 9 are deferred to v2.1.0.
+> Branch health: 1838 backend tests, 1314 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

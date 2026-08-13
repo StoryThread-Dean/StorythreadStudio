@@ -441,6 +441,29 @@ The Weave — a story-aware world model, and Model Roles
  Precedence: project.json → model_roles[role] → settings model_roles[role] →
  project.default_model → settings default_model → provider.fallback_model (today's path).
 
+ **AMENDED 2026-08-13 (R8.6), on the writer's ruling: THE PER-BOOK ROLE LEVEL IS
+ DELETED.** Precedence is now: settings model_roles[role] → project.default_model
+ → settings default_model → provider.fallback_model. Roles are app-wide.
+
+ It was never built, and it was deader than the audit found. `projects.py` never
+ stored `model_roles` -- but even had it done so, nothing would have read it:
+ `_resolve_model_and_key` does not open project.json at all. It synthesises
+ `{"default_model": override}` from a single field the frontend sends, so a
+ per-book assignment could not have arrived at `resolve_role_model` by any route.
+ The test that "proved" the level worked passed by handing in a project dict no
+ caller in the app can produce -- the exact failure the recovery's own note warns
+ about, a test that builds the world instead of observing it.
+
+ Building it meant threading a project path through about ten request models,
+ every frontend caller, and a new per-book screen. A half-threaded version is
+ worse than none: a writer whose per-book choice reaches Draft but not Enhance
+ has an app they cannot explain. `test_model_roles.py` now pins that a stray
+ `model_roles` in a project dict is IGNORED rather than half-honoured, so nobody
+ reinstates the level by accident.
+
+ What survives untouched is the per-book DEFAULT MODEL, which is level 2 and has
+ worked since before roles existed.
+
  A role assignment is {provider, model}, not a bare model string — different roles use different
  providers, so active_provider() resolves per role and the key comes from that provider's own
  api_key_setting. This is the one structural change from today, where provider is global.
@@ -649,6 +672,26 @@ The Weave — a story-aware world model, and Model Roles
  - Nodes = Threads, each with its type icon and colour, sized by Tie count.
  - Edges = Ties, directional, labelled with the relation, styled by state: solid when true at the
  current anchor, dashed when not yet true, faded when expired (until).
+
+ **CLARIFIED 2026-08-13 (R8.6b).** "Dashed when not yet true" was unbuildable
+ until now and nobody had noticed, because nothing failed: `record_visibility`
+ hid a future Tie before the graph route's `not_yet` branch could run, so
+ `active: false` only ever meant *expired*. Same class as R6.1's depth ceiling --
+ a documented capability whose condition can never be true. Found by writing
+ `test_codex_graph.py`, fixed on the writer's ruling.
+
+ The fix is a `show_future` flag on the Lens, set by the MAP alone. The resolver
+ and the context brief go on treating a future fact as not in force, which is the
+ one guarantee anchors exist to give. Two rules still bound what gets drawn, and
+ both matter:
+
+ - The spoiler rule still runs. A future connection nothing has foreshadowed is
+   withheld outright; one the reader has already been told about (`revealed_at`
+   earlier than its `at`) is drawn as coming. That is what "only for things
+   already revealed" always meant.
+ - An endpoint that has not been INTRODUCED still hides the whole edge. Drawing
+   it dashed would announce that a character called Garrick is on his way, which
+   is precisely what the endpoint check exists to prevent.
  - The anchor scrubber runs along the bottom — chapters as ticks, acts as bands. Dragging it
  re-renders the graph as of that point in the story: Threads appear when introduced, Ties light
  up when they become true, facts change under them. A spoiler toggle sits beside it: hide anything

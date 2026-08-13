@@ -127,15 +127,40 @@ def test_settings_role_beats_the_default_chain():
     assert resolve_role_model(settings, None, "prose")["source"] == "default"
 
 
-def test_a_books_own_assignment_beats_the_app_wide_one():
+def test_roles_are_app_wide_and_a_book_cannot_override_one():
+    """
+    R8.6. This test used to assert the OPPOSITE, and it passed by faking.
+
+    A per-book `model_roles` was documented as the top of the precedence chain
+    and was dead code: `_resolve_model_and_key` never reads project.json at all,
+    it synthesises `{"default_model": override}` from one field the frontend
+    sends. So no per-book assignment could ever have arrived here however
+    faithfully it had been stored -- and this test proved otherwise by handing
+    `resolve_role_model` a project dict no caller in the app can produce.
+
+    That is the exact shape the recovery's own note warns about: a test that
+    builds the world instead of observing it. The level is deleted on the
+    writer's ruling; this pins that a stray `model_roles` in a project dict is
+    IGNORED rather than half-honoured, so nobody reinstates it by accident.
+    """
     settings = _settings(model_roles={
         "prose": {"provider": "openrouter", "model": "app/wide-model"}
     })
     project = {"model_roles": {"prose": {"provider": "openrouter",
                                         "model": "this/book-only"}}}
     r = resolve_role_model(settings, project, "prose")
-    assert r["source"] == "project"
-    assert r["model_id"] == "this/book-only"
+    assert r["source"] == "role"
+    assert r["model_id"] == "app/wide-model"
+
+
+def test_a_books_default_model_still_outranks_the_app_wide_default():
+    # The level that DOES work, and the one that was there before roles
+    # existed. Deleting the per-book ROLE tier must not touch it.
+    settings = _settings(default_model="app/wide-default")
+    r = resolve_role_model(settings, {"default_model": "this/book-default"},
+                           "prose")
+    assert r["source"] == "default"
+    assert r["model_id"] == "this/book-default"
 
 
 def test_a_half_filled_assignment_counts_as_unset():

@@ -829,14 +829,25 @@ three surfaces at once.
       from `scan._mention_counts` and co-presence from `together.py`, both while
       the manuscript is already in memory. Migration 006 drops it; 002 still
       creates it, because editing an applied migration is the bug 004 remembers.
-- [ ] **R8.6** Per-book `model_roles` in `project.json`, or delete the dead
-      precedence level and its faking test. **BLOCKED ON A RULING.** The level is
-      deader than the gaps note said: `_resolve_model_and_key` never reads
-      project.json at all -- it synthesises `{"default_model": override}` from
-      one frontend field -- and most AI request models carry no `project_path`.
-      So building it is ~10 request models, every frontend caller, and a per-book
-      UI; and a half-threaded version is worse than none, because a writer whose
-      per-book choice reaches Draft but not Enhance has an unexplainable app.
+- [x] **R8.6** **DELETED, on the writer's ruling.** The level was deader than the
+      gaps note said: `_resolve_model_and_key` never reads project.json at all --
+      it synthesises `{"default_model": override}` from one frontend field -- so
+      a per-book assignment could not have arrived however faithfully
+      `projects.py` stored one. Building it meant ~10 request models, every
+      frontend caller and a per-book screen, and a half-threaded version is worse
+      than none: a writer whose choice reaches Draft but not Enhance has an app
+      they cannot explain. The faking test now pins the opposite -- a stray
+      `model_roles` in a project dict is IGNORED rather than half-honoured. The
+      per-book DEFAULT MODEL is untouched; it is level 2 and it works.
+- [x] **R8.6b** (new, from R8.11) **The map draws a coming connection again.**
+      "Dashed when not yet true" was in the spec and the route's own docstring
+      and could not fire: `record_visibility` hid a future Tie before the
+      `not_yet` branch ran, so `active: false` only ever meant expired. Fixed
+      with `show_future` on the Lens, set by the MAP alone -- the resolver and
+      the brief go on treating a future fact as not in force. Two bounds kept:
+      the spoiler rule still runs (an unforeshadowed future connection is
+      withheld; a foreshadowed one is drawn), and an unintroduced endpoint still
+      hides the whole edge.
 - [x] **R8.7** Surface the prompt-caching caveat in the Model Roles UI. It is a
       claim about MONEY, so it is bound by a contract test in the
       `test_explain_costs.py` mould: Python reads `providerMeta.ts` and fails the
@@ -922,7 +933,7 @@ it, since the spec calls it the reason the frame system exists.
 | 5 Sources | 5 | **5** |
 | 6 Unwoven | 5 | **5** |
 | 7 Scene identity | 4 | 0 |
-| 8 Walk honesty | 11 | **10** |
+| 8 Walk honesty | 12 | **12** |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **99** | **79** |
+| **Total** | **100** | **81** |

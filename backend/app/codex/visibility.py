@@ -51,6 +51,22 @@ class Lens:
     frames: frozenset[str] = frozenset({TRUTH})
     hide_spoilers: bool = True
     include_on_request: bool = False
+    # R8.6b. Let a record that is not true YET through, so the caller can draw
+    # it as coming rather than pretend it does not exist.
+    #
+    # OFF EVERYWHERE EXCEPT THE MAP, and that is the whole point of it being a
+    # flag rather than a change to the rule. The resolver and the brief must
+    # never treat a future fact as in force -- that is the single thing anchors
+    # exist to prevent. The map is different: the writer is looking at their own
+    # finished book through a scrubber, and a dashed line saying "they marry in
+    # chapter nine" is more use to them than an absence.
+    #
+    # It skips the not-yet check ONLY. The spoiler check still runs, which is
+    # what keeps this honest: a future connection the reader has not been
+    # foreshadowed is still withheld outright, and one the reader HAS been told
+    # about is drawn as coming. That is what the graph route always claimed to
+    # do and could not, because this check ran first and hid it.
+    show_future: bool = False
 
     @staticmethod
     def for_pov(at: str | None, pov: str | None = None, **kw) -> "Lens":
@@ -111,7 +127,8 @@ def record_visibility(record: dict, index: AnchorIndex, lens: Lens) -> str:
     started = index.ordinal(record["at"]) if record.get("at") else None
     if record.get("at") and started is None:
         return HIDDEN_UNPLACED           # anchored somewhere that no longer exists
-    if now is not None and started is not None and started > now:
+    if (not lens.show_future
+            and now is not None and started is not None and started > now):
         return HIDDEN_FUTURE
 
     if lens.hide_spoilers and now is not None:

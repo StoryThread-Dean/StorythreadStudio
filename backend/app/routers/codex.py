@@ -1364,13 +1364,30 @@ async def get_graph(
     dropped, so the map can draw them as dashed lines -- the writer is
     looking at their own future book, not a reader's view. That is only for
     things already revealed; a secret is withheld outright.
+
+    R8.6b: THAT LAST PARAGRAPH DESCRIBED SOMETHING THAT COULD NOT HAPPEN until
+    now, and it took writing test_codex_graph.py to notice. `record_visibility`
+    hid a future Tie before the `not_yet` branch below was reached, so
+    active=false only ever meant "ended" and the dashed line was unreachable --
+    the same class of bug as R6.1's depth ceiling, and just as silent.
+
+    `show_future` on the lens is what makes the paragraph true. It skips the
+    not-yet check for THIS caller only: the resolver and the brief must go on
+    treating a future fact as not in force, which is the one thing anchors exist
+    to guarantee. The spoiler check still runs, which is what keeps the rest of
+    the promise -- a future connection nothing has foreshadowed stays withheld,
+    and one the reader has already been told about is drawn as coming.
+
+    An endpoint that has not been INTRODUCED still hides the whole edge, because
+    drawing it would announce that a character called Garrick is on his way.
     """
     project_path = validate_project_path(project_path)
     registry = _registry(project_path)
     index = AnchorIndex.for_project(project_path)
     now = index.ordinal(at) if at else None
     lens = Lens.for_pov(at, pov, hide_spoilers=hide_spoilers,
-                        include_on_request=include_on_request)
+                        include_on_request=include_on_request,
+                        show_future=True)
 
     # Threads are read in full because visibility needs their anchors: a
     # Thread is "introduced" at the earliest point anything about it happens.

@@ -21,14 +21,17 @@
 #   - one pair growing several lines as a relationship develops. Three states of
 #     one friendship is one line whose label changes, not three lines.
 #
-# WHAT WRITING THIS FILE FOUND, and did not fix: the route's docstring says a
-# Tie that is true LATER comes back with active=false so the map can draw it
-# dashed. It cannot. `record_visibility` hides a future Tie outright, before the
-# route's `not_yet` branch is reached, so `active: false` only ever means
-# "ended". Same class as R6.1's depth ceiling -- a documented capability whose
-# condition can never be true, raising nothing. It is reported rather than
-# patched, because changing it changes what the map SHOWS and that is the
-# writer's call. See test_a_connection_that_is_not_true_yet_is_drawn_as_not_yet.
+# WHAT WRITING THIS FILE FOUND: the route's docstring said a Tie that is true
+# LATER comes back with active=false so the map can draw it dashed, and it could
+# not. `record_visibility` hid a future Tie outright, before the route's
+# `not_yet` branch was reached, so `active: false` only ever meant "ended".
+# Same class as R6.1's depth ceiling -- a documented capability whose condition
+# can never be true, raising nothing.
+#
+# Fixed on the writer's ruling (R8.6b) with `show_future` on the lens, set for
+# the MAP alone: the resolver and the brief must go on treating a future fact as
+# not in force, which is the one thing anchors exist to guarantee. The spoiler
+# check still runs, so a future connection nothing foreshadowed stays withheld.
 
 import json
 
@@ -284,22 +287,64 @@ def test_a_connection_that_is_not_true_yet_is_drawn_as_not_yet(tmp_path):
              f"- id: f-b\n  at: {c1}\n  axis: home\n  value: \"Here too.\"\n"),
     ), encoding="utf-8")
 
-    # WHAT ACTUALLY HAPPENS, and it is not what the route says. A tie whose `at`
-    # is later is HIDDEN by record_visibility before the route's `not_yet`
-    # branch is reached, so `active: false` can only ever mean "ended", never
-    # "not yet". The dashed-line-for-a-future-connection the docstring describes
-    # cannot fire. Reported rather than patched here: fixing it is a change to
-    # what the map SHOWS, which is the writer's call and not a side effect of
-    # writing the test file the spec asked for.
-    #
-    # This test pins the truth so the suite is not green over a claim it does
-    # not check. When the behaviour is decided, this is the test to change.
+    # This branch was UNREACHABLE until R8.6b. record_visibility hid a future
+    # Tie before the route's `not_yet` test ran, so `active: false` could only
+    # ever mean "ended" -- the same class as R6.1's depth ceiling, and just as
+    # silent. `show_future` on the lens is what makes the route's own docstring
+    # true, and it is set for the map ALONE: the resolver and the brief must go
+    # on treating a future fact as not in force.
     later = [e for e in _graph(str(root), at=c1, hide_spoilers=False)["edges"]
              if {e["src_id"], e["dst_id"]} == {"e-a", "e-b"}]
-    assert later == [], (
-        "the route's 'not yet' branch is reachable now -- if that was the "
-        "intended fix, this test should assert active is False instead"
-    )
+    assert later and later[0]["active"] is False
+    assert later[0]["expired"] is False, "not yet is not the same as over"
+
+    # With spoiler hiding ON it is withheld outright, because a Tie with no
+    # reveal point of its own becomes known where it happens -- and a reader in
+    # chapter one has not been told these two will marry.
+    assert not [e for e in _graph(str(root), at=c1)["edges"]
+                if {e["src_id"], e["dst_id"]} == {"e-a", "e-b"}]
+
+
+def test_a_foreshadowed_future_connection_is_drawn_even_to_a_reader(tmp_path):
+    # The other half of "only for things already revealed". If the reader has
+    # been TOLD in chapter one that these two are promised to each other, the
+    # coming marriage is not a spoiler and the line belongs on the map, dashed.
+    root = tmp_path / "MyNovel"
+    (root / "manuscript").mkdir(parents=True)
+    (root / "codex" / "characters").mkdir(parents=True)
+    (root / "project.json").write_text(json.dumps({"title": "N"}), encoding="utf-8")
+    for name in ("01-a.md", "02-b.md"):
+        (root / "manuscript" / name).write_text("# C\n\nRain.\n", encoding="utf-8")
+    ids = ensure_chapter_ids(str(root))
+    c1, c2 = ids["01-a.md"], ids["02-b.md"]
+
+    (root / "codex" / "characters" / "a.md").write_text(_thread(
+        "e-a", "Ana",
+        run=("\n# Run\n"
+             f"- id: f-a\n  at: {c1}\n  axis: home\n  value: \"Here.\"\n"),
+        ties=("ties:\n"
+              "  - rel: married_to\n    target: e-b\n"
+              "    reason: Promised in chapter one, married in chapter two.\n"
+              f"    at: {c2}\n    revealed_at: {c1}\n"),
+    ), encoding="utf-8")
+    (root / "codex" / "characters" / "b.md").write_text(_thread(
+        "e-b", "Bel",
+        run=("\n# Run\n"
+             f"- id: f-b\n  at: {c1}\n  axis: home\n  value: \"Here too.\"\n"),
+    ), encoding="utf-8")
+
+    coming = [e for e in _graph(str(root), at=c1)["edges"]
+              if {e["src_id"], e["dst_id"]} == {"e-a", "e-b"}]
+    assert coming and coming[0]["active"] is False
+
+
+def test_a_future_connection_to_someone_not_yet_introduced_stays_hidden(project):
+    # show_future must not become a hole in the introduction rule. Drawing this
+    # dashed would still announce that a character called Garrick is coming,
+    # which is the thing the endpoint check exists to prevent.
+    folder, c1, _, _ = project
+    assert not [e for e in _graph(folder, at=c1, hide_spoilers=False)["edges"]
+                if {e["src_id"], e["dst_id"]} == {"e-elara", "e-garrick"}]
 
 
 def test_a_connection_that_has_ENDED_is_drawn_as_over(tmp_path):

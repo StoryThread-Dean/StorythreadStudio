@@ -95,6 +95,48 @@ def test_a_record_that_has_not_happened_yet_is_withheld():
     assert record_visibility(_tie(at="c-ccc"), INDEX, Lens(at="c-aaa")) == HIDDEN_FUTURE
 
 
+# ── R8.6b: the one caller that may look ahead ────────────────────────────────
+#
+# The map, and nothing else. A writer scrubbing to chapter one is looking at
+# their own finished book, and a dashed line saying "they marry in chapter nine"
+# is more use to them than an absence -- which the graph route's docstring has
+# claimed since it was written and could not do, because the check above ran
+# first. What must NOT change is the default: a brief that carried a fact which
+# is not true yet would break the one guarantee anchors exist to give.
+
+def test_looking_ahead_is_off_unless_asked_for():
+    # The default Lens is what the resolver and the brief use.
+    assert Lens().show_future is False
+    assert Lens.for_pov("c-aaa").show_future is False
+
+
+def test_a_caller_that_asks_can_see_what_is_coming():
+    assert record_visibility(_tie(at="c-ccc"), INDEX,
+                             Lens(at="c-aaa", show_future=True,
+                                  hide_spoilers=False)) == VISIBLE
+
+
+def test_looking_ahead_does_not_switch_off_the_spoiler_rule():
+    # The half that keeps it honest. A future connection nothing has
+    # foreshadowed is still a spoiler, and a reader at chapter one has not been
+    # told these two will marry.
+    assert record_visibility(_tie(at="c-ccc"), INDEX,
+                             Lens(at="c-aaa", show_future=True)) == HIDDEN_SPOILER
+    # Foreshadowed, so it is not a spoiler and may be drawn as coming.
+    told_early = _tie(at="c-ccc", revealed_at="c-aaa")
+    assert record_visibility(told_early, INDEX,
+                             Lens(at="c-aaa", show_future=True)) == VISIBLE
+
+
+def test_looking_ahead_does_not_reach_an_unintroduced_thread():
+    # thread_visibility is a separate rule and takes no notice of the flag.
+    # Otherwise the map would announce a character who has not appeared.
+    thread = {"run": [{"at": "c-ccc"}]}
+    assert thread_visibility(thread, INDEX,
+                             Lens(at="c-aaa", show_future=True,
+                                  hide_spoilers=False)) == HIDDEN_FUTURE
+
+
 def test_a_secret_is_withheld_until_the_reader_learns_it():
     tie = _tie(at="c-aaa", revealed_at="c-ccc")
     assert record_visibility(tie, INDEX, Lens(at="c-bbb")) == HIDDEN_SPOILER

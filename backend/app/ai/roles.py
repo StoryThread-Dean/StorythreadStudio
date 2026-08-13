@@ -227,18 +227,36 @@ def resolve_role_model(settings: dict, project: dict | None, role: str) -> dict:
     Which provider and model should do this kind of job, and can it run?
 
     Precedence, highest first:
-      1. this book's own assignment      project.json  model_roles[role]
-      2. the app-wide role assignment    settings      model_roles[role]
-      3. the Default Model chain         project.default_model
+      1. the app-wide role assignment    settings      model_roles[role]
+      2. the Default Model chain         project.default_model
                                          -> settings.default_model
                                          -> provider.fallback_model
+
+    THERE USED TO BE A LEVEL ABOVE THIS ONE -- a per-book `model_roles` in
+    project.json -- and it was dead code with a passing test that faked the
+    project dict. Deleted on the writer's ruling (R8.6), because it was deader
+    than it looked: `_resolve_model_and_key` never read project.json at all. It
+    synthesises `{"default_model": override}` from a single field the frontend
+    sends, so no per-book assignment could ever have arrived here however
+    faithfully projects.py had stored one. Most AI request models carry no
+    project_path either.
+
+    Building it properly meant threading a path through about ten request
+    models, every frontend caller and a new per-book screen -- and a
+    half-threaded version is worse than none, because a writer whose per-book
+    choice reaches Draft but not Enhance has an app they cannot explain. Roles
+    are app-wide; the spec says so now rather than describing something that was
+    never true.
+
+    `project` is still taken, and still carries `default_model`: that is level 2
+    and it works.
 
     Returns one flat, fully-populated dict so every caller sees the same
     shape whatever the source:
 
       role, provider_key, provider_label, model_id
-      source            "project" | "role" | "default" | "none"
-      configured        True when levels 1-2 supplied the answer
+      source            "role" | "default" | "none"
+      configured        True when level 1 supplied the answer
       requires_api_key, has_api_key
       usable            False means DO NOT RUN -- and do not substitute
       unusable_reason   writer-facing, present exactly when usable is False
@@ -274,18 +292,14 @@ def resolve_role_model(settings: dict, project: dict | None, role: str) -> dict:
         "caveat": None,
     }
 
-    # ── Levels 1 and 2: an explicit assignment for this role ──────────────
-    assigned = _assignment(project.get("model_roles"), role)
-    source = "project"
-    if assigned is None:
-        assigned = _assignment(settings.get("model_roles"), role)
-        source = "role"
+    # ── Level 1: an explicit assignment for this role ─────────────────────
+    assigned = _assignment(settings.get("model_roles"), role)
 
     if assigned is not None:
         provider_key, model_id = assigned
         result.update({
             "configured": True,
-            "source": source,
+            "source": "role",
             "provider_key": provider_key,
             "model_id": model_id,
         })
