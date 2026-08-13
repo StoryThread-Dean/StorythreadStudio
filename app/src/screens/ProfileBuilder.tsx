@@ -75,6 +75,12 @@ import { SubtextGuide } from "./SubtextGuide";
 // Until this landed, the four kinds a novelist actually spends their time on
 // had no way to record one -- which is why the story timeline on the Weave map
 // has never had anything to move through.
+// WHO THIS IS TO EVERYTHING ELSE. Built and tested in an earlier commit and
+// mounted NOWHERE, which is why the writer had not seen it: a component with
+// no consumer is a component that does not exist. Pinned by a source-read
+// test now, because this is the second time in this recovery (the first was
+// the Weaving panel, rendered inside a branch that never ran).
+import { ProfileConnections } from "../features/codex/ProfileConnections";
 import { RunEditor } from "../features/codex/RunEditor";
 import { fetchAnchors, fetchThreads, type ChapterAnchor } from "../features/codex/api";
 import type { EntriesHome, ProfileSource } from "./profileSource";
@@ -928,13 +934,23 @@ export function ProfileBuilder({
     setError(null);
     const selected = await openFilePicker({
       multiple: false,
-      title: "Select a character profile to import",
-      filters: [{ name: "Markdown Profile", extensions: ["md"] }],
+      // Any kind this world knows, not characters only -- that limit belonged to
+      // the profile system rather than to the idea.
+      title: "Choose an entry from another book",
+      filters: [{ name: "Markdown entry", extensions: ["md"] }],
     });
     if (!selected || typeof selected !== "string") return;
     try {
       const imported: Profile = await source.importFile(selected);
-      await fetchProfileList("character");
+      // The kind comes from the FILE, not from whichever tab happens to be open:
+      // importing a Government while looking at Characters is an ordinary thing
+      // to do, and landing the writer on a list that does not contain what they
+      // just imported would read as a failure.
+      if (imported.type && imported.type !== profileType) {
+        setProfileType(imported.type);
+      } else {
+        await fetchProfileList(profileType);
+      }
       setProfile(imported);
       setIsDirty(false);
     } catch (err) {
@@ -1381,11 +1397,11 @@ export function ProfileBuilder({
               {labelFor(profileType)}
             </p>
             <div className="flex items-center gap-1">
-              {profileType === "character" && source?.canImport && (
+              {source?.canImport && (
                 <button
                   onClick={handleImport}
                   className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
-                  title="Import a character profile from another project"
+                  title="Bring an entry in from another book"
                 >
                   <Download size={12} /> Import
                 </button>
@@ -2083,6 +2099,29 @@ export function ProfileBuilder({
                 />
               )}
 
+              {/* WHAT AN IMPORT LEFT BEHIND. An entry from another book
+                  carries ids that mean nothing here: its connections, the
+                  chapters its facts happen in, whose beliefs they were. Dropped
+                  silently they are a loss the writer finds weeks later; said out
+                  loud they are a short list of things to redo. */}
+              {(profile.importWarnings ?? []).length > 0 && (
+                <div className="mb-6 rounded border border-amber-500/30 bg-amber-500/5 p-3">
+                  <p className="text-xs text-amber-200">
+                    Imported from another book. Some things could not come with
+                    it:
+                  </p>
+                  <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-text-muted">
+                    {(profile.importWarnings ?? []).map(note => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-1.5 text-xs text-faint">
+                    Everything you wrote came across: the name, every section,
+                    every trait, and the words of every fact.
+                  </p>
+                </div>
+              )}
+
               {/* WHAT JUST HAPPENED, AND WHAT IS NEXT -- the continuous-flow
                   rule. A page that silently rearranges itself leaves the writer
                   checking whether their traits are still there; this says where
@@ -2125,6 +2164,22 @@ export function ProfileBuilder({
                       <X size={13} />
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* CONNECTIONS, high on the page because they are most of what a
+                  scene runs on and because Weaving fills them in for the writer.
+                  Codex entries only -- a tie is the Weave's own idea and a
+                  profiles/ file has nowhere to record one. */}
+              {home === "codex" && profile.entity_id && (
+                <div className="mb-6">
+                  <ProfileConnections
+                    projectPath={project.root_path}
+                    entityId={profile.entity_id}
+                    type={profile.type}
+                    name={profile.name}
+                    startExpanded
+                  />
                 </div>
               )}
 

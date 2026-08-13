@@ -161,3 +161,31 @@ describe("making one from here", () => {
     expect(screen.getByText(/what they are TO people/)).toBeTruthy();
   });
 });
+
+// ── Being on the page at all ─────────────────────────────────────────────────
+//
+// This panel was built, tested and mounted NOWHERE. Every test in this file
+// passed the whole time, because they render the component directly -- and the
+// writer, who had asked for exactly this, could not find it on any screen.
+//
+// A component with no consumer is a component that does not exist. It is the
+// second time in this recovery: the Weaving panel was rendered inside a branch
+// of the view switch that never ran, and its tests passed too.
+//
+// So the mount is pinned, the same way that one is: by reading the source.
+
+describe("where it is used", () => {
+  const SOURCES = import.meta.glob("../../screens/ProfileBuilder.tsx",
+    { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+  const builder = Object.values(SOURCES)[0];
+
+  it("is on the profile page", () => {
+    expect(builder).toMatch(/<ProfileConnections/);
+  });
+
+  it("is only offered where a connection can exist", () => {
+    // A tie is the Weave's own idea. A profiles/ file has nowhere to record one,
+    // so offering the panel there would be a control that cannot work.
+    expect(builder).toMatch(/home === "codex" && profile\.entity_id/);
+  });
+});

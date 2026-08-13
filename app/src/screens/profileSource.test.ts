@@ -317,13 +317,30 @@ describe("creating and removing", () => {
     expect(calls[0].init?.method).toBe("DELETE");
   });
 
-  it("refuses to pretend an import worked", async () => {
-    // Not ported to the codex yet (R2.7). The screen hides the button; if
-    // anything reaches this, it says so plainly rather than failing silently.
-    mockFetch(() => ({}));
-    expect(codexSource("/p", sectionsFor).canImport).toBe(false);
-    await expect(codexSource("/p", sectionsFor).importFile("C:/x.md"))
-      .rejects.toThrow(/not built yet/);
+  it("brings an entry in from another book", async () => {
+    mockFetch(() => ({
+      thread: { ...THREAD, entity_id: "e-new", type: "character" },
+      warnings: [],
+    }));
+    const profile = await codexSource("/p", sectionsFor).importFile("C:/other/x.md");
+    expect(sentBody("/api/codex/import")).toMatchObject({
+      source_path: "C:/other/x.md",
+    });
+    expect(profile.entity_id).toBe("e-new");
+  });
+
+  it("carries what the import left behind, so the screen can say it", async () => {
+    // An entry from another book brings ids that mean nothing here -- its
+    // connections, the chapters its facts happen in, whose beliefs they were.
+    // Dropped silently they are a loss the writer finds weeks later.
+    mockFetch(() => ({
+      thread: { ...THREAD, entity_id: "e-new" },
+      warnings: ["2 connections were not brought across: they point at entries "
+                 + "in the other book."],
+    }));
+    const profile = await codexSource("/p", sectionsFor).importFile("C:/other/x.md");
+    expect(profile.importWarnings).toHaveLength(1);
+    expect(profile.importWarnings?.[0]).toContain("connections");
   });
 });
 

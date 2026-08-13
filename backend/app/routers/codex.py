@@ -1623,6 +1623,130 @@ def _clean_aliases(aliases: list[str], name: str) -> list[str]:
     return out
 
 
+class ImportBody(BaseModel):
+    project_path: str
+    # An entry file from ANOTHER project, chosen with the OS file picker.
+    source_path: str
+
+
+@router.post("/import")
+async def post_import(body: ImportBody):
+    """
+    Bring an entry in from another book, as an independent copy.
+
+    The profile system could import CHARACTERS only, which was a limit of the
+    profile system rather than of the idea: a world's kinds are declared in its
+    own registry, so anything that registry knows is importable. A kind it does
+    not know is refused by name -- which is a better answer than a Government
+    landing in a project with nowhere to put it.
+
+    THREE THINGS ARE DELIBERATELY LEFT BEHIND, and the response says so rather
+    than dropping them quietly:
+
+      CONNECTIONS  A tie points at an entity id in the OTHER project's world.
+                   Carried across it would name something that does not exist
+                   here -- a connection to nothing, which the map would draw and
+                   no writer could explain.
+
+      WHERE FACTS HAPPEN  An anchor is a chapter of the other book. Kept, it
+                   would resolve to nothing here; the fact would be silently
+                   out of force forever. Cleared, the fact is Unplaced, which is
+                   the Weave's word for "tell me where this belongs" -- a
+                   question the writer can answer.
+
+      WHOSE BELIEF  A frame naming a character in the other book means nothing
+                   here either, so a belief comes across as what it says rather
+                   than as somebody's mistake, and the response says which.
+
+    What DOES come across is everything the writer wrote: the name, every
+    section, every trait with its weight and its secrecy, and the words of every
+    fact.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+
+    if not os.path.isfile(body.source_path):
+        raise CodexError("import_unreadable",
+                         "That file could not be found.", body.source_path)
+    try:
+        with open(body.source_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except OSError as exc:
+        raise CodexError("import_unreadable",
+                         "That file could not be read.", str(exc)) from exc
+
+    incoming = parse_thread(raw, registry)
+    kind = incoming.get("type") or ""
+    type_entry = type_by_id(registry, kind)
+    if type_entry is None:
+        raise CodexError(
+            "type_invalid",
+            f"This world has no '{kind or 'unknown'}' to import into. Add that "
+            f"kind first, or import into a world that has one.",
+        )
+
+    name = " ".join(str(incoming.get("name") or "").split())
+    if not name:
+        raise CodexError("type_invalid", "That file has no name in it.")
+
+    warnings: list[str] = []
+
+    # A fresh id: this is a copy, not the same entry in two books.
+    incoming["entity_id"] = "e-" + uuid.uuid4().hex[:12]
+
+    ties = incoming.get("ties") or []
+    if ties:
+        warnings.append(
+            f"{len(ties)} connection{'s' if len(ties) != 1 else ''} "
+            f"{'were' if len(ties) != 1 else 'was'} not brought across: they "
+            f"point at entries in the other book.")
+    incoming["ties"] = []
+
+    placed = 0
+    framed = 0
+    for fact in incoming.get("run") or []:
+        if fact.get("at") or fact.get("revealed_at"):
+            placed += 1
+        fact["at"] = ""
+        fact["revealed_at"] = None
+        fact["supersedes"] = None
+        if fact.get("frame") and fact["frame"] != "truth":
+            framed += 1
+            fact["frame"] = "truth"
+    if placed:
+        warnings.append(
+            f"{placed} fact{'s' if placed != 1 else ''} lost "
+            f"{'their' if placed != 1 else 'its'} place in the story, because "
+            f"the chapters belong to the other book. They are waiting to be "
+            f"placed.")
+    if framed:
+        warnings.append(
+            f"{framed} fact{'s' if framed != 1 else ''} read as somebody's "
+            f"belief in the other book and {'are' if framed != 1 else 'is'} "
+            f"now recorded as simply true.")
+
+    folder = os.path.join(project_path, "codex", type_entry["folder"])
+    os.makedirs(folder, exist_ok=True)
+    stem = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "entry"
+    filename = f"{stem}.md"
+    n = 2
+    while os.path.exists(os.path.join(folder, filename)):
+        filename = f"{stem}-{n}.md"
+        n += 1
+    incoming["filename"] = filename
+
+    now = datetime.now(timezone.utc).isoformat()
+    incoming["updated_at"] = now
+    # created_at is kept from the original, so the writer can still see when
+    # they first wrote this person.
+    if not incoming.get("created_at"):
+        incoming["created_at"] = now
+
+    _write_thread(project_path, registry, incoming)
+    await codex_store.reindex(project_path)
+    return {"thread": incoming, "warnings": warnings}
+
+
 class NewThreadBody(BaseModel):
     project_path: str
     type: str

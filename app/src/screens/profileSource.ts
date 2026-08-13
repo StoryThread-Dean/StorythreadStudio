@@ -305,9 +305,7 @@ export function codexSource(rootPath: string,
 
   return {
     home: "codex",
-    // R2.7. Offering a button that cannot work would be worse than not
-    // offering it, and pretending it worked would be worse still.
-    canImport: false,
+    canImport: true,
 
     async list(type) {
       const params = new URLSearchParams({ project_path: rootPath, type });
@@ -379,11 +377,28 @@ export function codexSource(rootPath: string,
                                sectionsFor(type));
     },
 
-    async importFile() {
-      throw new Error(
-        "Importing a profile file into the Weave is not built yet. Open the " +
-        "file in the editor and copy what you need, or import it before " +
-        "bringing the project in.");
+    /**
+     * Bring an entry in from another book.
+     *
+     * Any kind this world knows, not characters only -- that limit belonged to
+     * the profile system, not to the idea. What is deliberately left behind is
+     * everything carrying an id from the other project: its connections, where
+     * its facts happen, and whose beliefs they were. The response says what
+     * went, and the caller shows it.
+     */
+    async importFile(sourcePath) {
+      const body = await ok(await fetch(`${API_BASE}/api/codex/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_path: rootPath, source_path: sourcePath }),
+      }), "Import failed.") as { thread: WeaveThread; warnings?: string[] };
+
+      const profile = profileFromThread(
+        body.thread, sectionsFor(String(body.thread?.type ?? "")));
+      // Carried on the profile so the screen can say it without a second
+      // channel; the editor clears it when the writer moves on.
+      profile.importWarnings = body.warnings ?? [];
+      return profile;
     },
   };
 }

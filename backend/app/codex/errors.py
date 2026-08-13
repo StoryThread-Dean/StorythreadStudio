@@ -35,6 +35,10 @@ CODES = {
     "duplicate_entity_id",
     "duplicate_fact_id",
     "version_conflict",
+    # A file the writer picked from OUTSIDE this project cannot be used. Its own
+    # code because nothing here was looked up and nothing here is corrupt: the
+    # problem is the file they chose, and the message has to point at that.
+    "import_unreadable",
     # Something on disk is wrong.
     "source_corrupt",
     "schema_unsupported",
@@ -48,6 +52,7 @@ CODES = {
 # Which HTTP status each code travels as. Kept in one table so two routes
 # cannot disagree about whether a missing Thread is a 404 or a 400.
 _STATUS = {
+    "import_unreadable": 400,
     "entity_not_found": 404,
     "fact_not_found": 404,
     "anchor_not_found": 404,

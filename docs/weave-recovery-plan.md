@@ -356,11 +356,46 @@ types it is about are edited in a screen with no fact UI.
       the same text, so if that ever stops being true this fails instead of the
       writer noticing their summaries got worse. The behaviour shipped in
       Phase 6 with no tests at all; it has six now.
-- [ ] **R2.7** Port `POST /api/profiles/import` to codex.
+- [x] **R2.7** Import ported, and widened. The profile system could import
+      CHARACTERS only; that was a limit of the profile system rather than of the
+      idea, so `POST /api/codex/import` accepts any kind this world's registry
+      knows and refuses one it does not BY NAME. Everything the writer wrote
+      comes across -- name, sections, every trait with its weight and its
+      secrecy, the words of every fact.
+      Three things are deliberately left behind, and the screen SAYS SO rather
+      than dropping them quietly: connections (a tie names an entity in the other
+      book, so carried across it would draw a line to nothing), where facts
+      happen (an anchor is a chapter of the other book, so kept it would leave
+      the fact silently out of force forever -- cleared, it is Unplaced, which is
+      a question with an answer), and whose belief a fact was. A clean entry
+      produces no warnings at all, because a list of caveats on an import that
+      lost nothing teaches the writer to skip reading them.
+      One new refusal code, added deliberately rather than reusing a near-fit:
+      `import_unreadable` is about a file the writer picked from outside the
+      project, which is neither a missing entry nor a corrupt project file. The
+      closed-set test caught the first attempt at reusing one.
 
-- [ ] **R2.9** Relationships decision: keep as the long-form page a Tie points
-      at, per the recommendation. Nothing can auto-convert them -- the two
-      parties were never stored as ids.
+- [x] **R2.9** Relationships stay, as the long-form page a Tie points at, and
+      **the connections panel is on the profile page** -- which it was not.
+      `ProfileConnections` was built and tested in an earlier commit and mounted
+      NOWHERE. Every test in its file passed the whole time, because they render
+      the component directly; the writer, who had asked for exactly this, could
+      not find it on any screen and listed Connections in their restructure as
+      something they expected to see. A component with no consumer is a component
+      that does not exist. That is the SECOND time in this recovery -- the
+      Weaving panel was rendered inside a branch of the view switch that never
+      ran, and its tests passed too -- so the mount is pinned by a source read.
+      The ruling itself needs no conversion code and never could: a relationship
+      profile names its two parties in PROSE, never as ids, so nothing can
+      reliably turn one into a Tie. The division of labour is the point. A Tie is
+      the queryable spine plus one required reason line, cheap enough to put in
+      front of a model. A Relationship entry is the history no brief could afford
+      -- and it keeps its place as an ordinary kind, with the same editor every
+      other kind now gets.
+      *Left for later, deliberately:* linking a Tie to its long-form page. The
+      only available signal is a name match in prose (which is what
+      `_find_related_relationships` does), and a half-built link that guesses
+      wrong is worse than a writer opening the page themselves.
 
 ### Hidden traits: two questions on one control (2026-08-12)
 
@@ -679,7 +714,7 @@ it, since the spec calls it the reason the frame system exists.
 |---|---|---|
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
-| 2 The premise | 25 | 23 |
+| 2 The premise | 25 | 25 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -688,4 +723,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **91** | **41** |
+| **Total** | **91** | **43** |

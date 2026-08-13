@@ -137,6 +137,16 @@ export interface Profile {
    */
   run?: Fact[];
   /**
+   * What an import left behind, in the writer's words.
+   *
+   * An entry from another book carries ids that mean nothing here -- its
+   * connections, the chapters its facts happen in, whose beliefs they were --
+   * so those are dropped. Dropped SILENTLY they would be a quiet loss the writer
+   * discovers weeks later; said out loud they are a short list of things to
+   * redo. Present only on a freshly imported entry.
+   */
+  importWarnings?: string[];
+  /**
    * Everything the Weave's file format holds that this screen does not edit:
    * aliases, the story's own name for the thing, its connections, and the Run
    * -- the facts that change across the book.
