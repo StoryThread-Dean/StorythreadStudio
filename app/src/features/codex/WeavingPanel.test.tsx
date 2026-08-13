@@ -67,6 +67,8 @@ function mockApi(options: {
   /** What POST /run/resume finds. `undefined` means an ordinary resumable
    *  session; pass null for "the list said there was one and there is not". */
   resumeFinds?: Record<string, unknown> | null;
+  /** What the scan says changed under a resumed sitting (R8.1). */
+  resumed?: Record<string, unknown>;
 } = {}) {
   const stops = options.stops ?? [stop()];
   calls = [];
@@ -152,7 +154,8 @@ function mockApi(options: {
         json: async () => ({
           run_id: null, stops, counts: {},
           total: options.total ?? stops.length,
-          unreadable: options.unreadable ?? [], resumed: {},
+          unreadable: options.unreadable ?? [],
+          resumed: options.resumed ?? {},
         }),
       } as Response;
     }
@@ -405,6 +408,69 @@ describe("carrying on where you left off (R1.2)", () => {
 });
 
 
+// ── R8.1: what changed under the walk ────────────────────────────────────────
+//
+// The panel half of the fix. StaleNotice.test.tsx pins the wording; these pin
+// that the panel actually MOUNTS it, marks the right card, and turns the
+// re-check into a narrowed scan -- the three things a registry-and-component
+// pair can each be perfect at while nothing joins them up. That exact shape of
+// failure is what gap A8 was.
+
+describe("evidence that moved", () => {
+  it("marks the stop the writer already put off, and only that one", async () => {
+    mockApi({
+      stops: [stop({ key: "moved" }), stop({ key: "fresh", title: "Second" })],
+      resumed: { stale: 1, stale_keys: ["moved"], chapters: ["Chapter One"] },
+    });
+    await start();
+    // The first card is the stale one.
+    expect(screen.getByTestId("stale-mark")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    await waitFor(() => expect(screen.getByText("Second")).toBeTruthy());
+    // The second is not, and nothing about the banner leaked onto it.
+    expect(screen.queryByTestId("stale-mark")).toBeNull();
+  });
+
+  it("says nothing at all when nothing moved", async () => {
+    await start();
+    expect(screen.queryByTestId("stale-notice")).toBeNull();
+    expect(screen.queryByTestId("stale-mark")).toBeNull();
+  });
+
+  it("re-checks just the chapters that changed", async () => {
+    // The scan is free, so narrowing costs nothing. What it buys is a list
+    // short enough to work through in one sitting.
+    mockApi({
+      stops: [stop({ key: "moved" })],
+      resumed: { stale: 1, stale_keys: ["moved"], chapters: ["c-2"] },
+    });
+    await start();
+    const before = posted("/scan").length;
+    await userEvent.click(screen.getByTestId("stale-recheck"));
+    await waitFor(() => expect(posted("/scan").length).toBeGreaterThan(before));
+    const scans = posted("/scan");
+    expect(scans[scans.length - 1].body).toMatchObject({ chapter_ids: ["c-2"] });
+  });
+
+  it("offers the way back out of a narrowed walk that runs dry", async () => {
+    // A narrowing with no exit is a trap, and the trap springs precisely when
+    // the writer has finished what they narrowed to.
+    mockApi({
+      stops: [stop({ key: "moved" })],
+      resumed: { stale: 1, stale_keys: ["moved"], chapters: ["c-2"] },
+    });
+    await start();
+    await userEvent.click(screen.getByTestId("stale-recheck"));
+    await waitFor(() => expect(screen.getByTestId("stale-mark")).toBeTruthy());
+    // Answer the one thing the narrowed walk holds.
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    expect(await screen.findByTestId("widen-again")).toBeTruthy();
+    // And it does not claim the whole pass is finished.
+    expect(screen.getByText(/chapters you narrowed to/)).toBeTruthy();
+  });
+});
+
+
 describe("one stop", () => {
   it("shows the text that triggered it", async () => {
     // A decision made without seeing what prompted it is not a decision.
@@ -554,14 +620,18 @@ describe("the four ways to answer", () => {
   it("can turn a whole kind off", async () => {
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    // R8.3: it asks how widely before it writes anything.
+    await userEvent.click(screen.getByTestId("mute-everywhere"));
     await waitFor(() => expect(posted("/run/answer").length).toBe(1));
     expect(posted("/run/answer")[0].body.mute).toBe("unspun");
+    expect(posted("/run/answer")[0].body.mute_for).toBeUndefined();
   });
 
   it("says that turning a kind off is reversible", async () => {
     await start();
-    expect(screen.getByRole("button", { name: /Never ask/ }).getAttribute("title"))
-      .toMatch(/turn it back on/);
+    await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    expect(screen.getByTestId("mute-scope").textContent)
+      .toMatch(/reversible/);
   });
 
   it("moves on after an answer", async () => {
@@ -1605,6 +1675,138 @@ describe("a disagreement is sorted out inside", () => {
 });
 
 
+// ── R8.2: several problems with one cause, as one stop ───────────────────────
+//
+// The grouping existed in the backend and nothing called it, so a moved date
+// arrived as eleven questions about one mistake. What has to hold now: the group
+// SHOWS its members before the writer agrees to open it, the members are worked
+// through inside the one dialog (they are not stops -- the ledger must not
+// remember them individually), and the group-level "all deliberate" is the thing
+// that makes the grouping worth having at all.
+
+describe("a tangle", () => {
+  const tangle = stop({
+    kind: "tangle", key: "tangle|e-1|eyes", entity_id: "e-1",
+    title: "Elara Voss: 2 problems with 'eyes', probably one mistake",
+    quote: "",
+    why: "2 separate contradictions all concern 'eyes' on this entry.",
+    detail: {
+      name: "Elara Voss", type: "character", filename: "elara.md", axis: "eyes",
+      members: [
+        { key: "snag|a", snag: "ambiguous_order", axis: "eyes",
+          summary: "2 facts set 'eyes' at Chapter One with nothing to order them.",
+          sides: [{ id: "f-1", at: "c-1", value: "Green." },
+                  { id: "f-2", at: "c-1", value: "Blue." }] },
+        { key: "snag|b", snag: "axis_conflict", axis: "eyes",
+          summary: "2 facts each say they replaced the same earlier one.",
+          sides: [{ id: "f-3", at: "c-2", value: "Grey." },
+                  { id: "f-4", at: "c-2", value: "Hazel." }] },
+      ],
+    },
+  });
+
+  it("lists what it gathered before asking the writer to open it", async () => {
+    // A Tangle has no quote, so this list IS its evidence. "2 problems" without
+    // the two is a number, and a decision made without seeing what prompted it
+    // is not a decision.
+    mockApi({ stops: [tangle] });
+    await start();
+    const shown = screen.getByTestId("tangle-members").textContent ?? "";
+    expect(shown).toContain("nothing to order them");
+    expect(shown).toContain("replaced the same earlier one");
+  });
+
+  it("works through the members inside one dialog", async () => {
+    mockApi({ stops: [tangle, stop({ key: "next", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort them out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    expect(within(dialog).getByTestId("tangle-progress").textContent)
+      .toContain("1 of 2");
+    // The first member's sides, and only those.
+    expect(within(dialog).getByText("Green.")).toBeTruthy();
+    expect(within(dialog).queryByText("Grey.")).toBeNull();
+
+    await userEvent.click(
+      within(dialog).getAllByRole("button", { name: /Keep this one/ })[0]);
+    // Settling one member moves to the next INSIDE the dialog. The walk has not
+    // advanced: the group is one stop, and leaving mid-group would mean the
+    // remaining problems were silently accepted.
+    await waitFor(() => expect(
+      within(dialog).getByTestId("tangle-progress").textContent).toContain("2 of 2"));
+    expect(within(dialog).getByText("Grey.")).toBeTruthy();
+    expect(screen.queryByText(/Something else/)).toBeNull();
+  });
+
+  it("advances the walk once the last member is settled", async () => {
+    mockApi({ stops: [tangle, stop({ key: "next", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort them out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    await userEvent.click(
+      within(dialog).getAllByRole("button", { name: /Keep this one/ })[0]);
+    await waitFor(() => expect(
+      within(dialog).getByTestId("tangle-progress").textContent).toContain("2 of 2"));
+    await userEvent.click(
+      within(dialog).getAllByRole("button", { name: /Keep this one/ })[0]);
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+
+  it("marks every member deliberate in one action", async () => {
+    // THE REASON THE GROUPING PAYS. Marking these one at a time is the two
+    // questions the stop exists to avoid, and with eleven it is the whole
+    // problem back again.
+    mockApi({ stops: [tangle] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort them out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    await userEvent.click(within(dialog).getByTestId("tangle-all-deliberate"));
+    await waitFor(() => {
+      const marked = posted("/fact").filter(c =>
+        (c.body.set as { intentional?: boolean } | undefined)?.intentional === true);
+      expect(marked.map(c => c.body.fact_id).sort())
+        .toEqual(["f-1", "f-2", "f-3", "f-4"]);
+    });
+  });
+
+  it("offers no group-deliberate when the clash is between connections", async () => {
+    // A tie has no fact to carry the mark. The walk's permanent dismiss covers
+    // that case, and a button that PATCHed a synthetic "rel:target" id would
+    // fail on every one of them.
+    mockApi({ stops: [stop({
+      kind: "tangle", key: "tangle|e-1|leads", entity_id: "e-1",
+      title: "Elara Voss: 2 problems with 'leads'", quote: "",
+      why: "Two connection rules clash.",
+      detail: { name: "Elara Voss", type: "character", axis: "leads",
+                members: [
+                  { key: "snag|a", snag: "cardinality", axis: "leads",
+                    summary: "'leads' allows one at a time, and there are 2.",
+                    sides: [{ id: "leads:e-2", target: "e-2", target_name: "The Guard" },
+                            { id: "leads:e-3", target: "e-3", target_name: "The Watch" }] },
+                  { key: "snag|b", snag: "exclusive_group", axis: "leads",
+                    summary: "These connections cannot both be true at once.",
+                    sides: [{ id: "leads:e-4", target: "e-4", target_name: "The Order" },
+                            { id: "serves:e-5", target: "e-5", target_name: "The Crown" }] },
+                ] },
+    })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort them out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    expect(within(dialog).queryByTestId("tangle-all-deliberate")).toBeNull();
+    // And the connection names are still readable, not raw ids.
+    expect(within(dialog).getByText(/The Guard/)).toBeTruthy();
+  });
+
+  it("says no to all of them at once, permanently", async () => {
+    mockApi({ stops: [tangle, stop({ key: "next", title: "Something else" })] });
+    await start();
+    await userEvent.click(
+      screen.getByRole("button", { name: /None of these are problems/ }));
+    expect(await screen.findByText(/Something else/)).toBeTruthy();
+  });
+});
+
+
 describe("the closed world, structurally", () => {
   it("has no way to navigate anywhere -- the props do not exist", async () => {
     // The rule is held by the TYPE, not by discipline: WeavingPanel takes a
@@ -2060,6 +2262,7 @@ describe("the walk remembers what was answered this sitting", () => {
     ] });
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    await userEvent.click(screen.getByTestId("mute-everywhere"));
     // Straight past the second unspun stop to the frayed one.
     expect(await screen.findByText(/Mira Kell is missing Overview/)).toBeTruthy();
     expect(screen.queryByText(/'Vesper' has no entry/)).toBeNull();
@@ -2071,8 +2274,79 @@ describe("the walk remembers what was answered this sitting", () => {
                              detail: { name: "Vesper", count: 2 } })] });
     await start();
     await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    await userEvent.click(screen.getByTestId("mute-everywhere"));
     expect(await screen.findByText(/That is everything this pass found/))
       .toBeTruthy();
+  });
+});
+
+
+// ── R8.3: "never ask" asks how widely ────────────────────────────────────────
+//
+// One button, one meaning, and the meaning was THE WHOLE BOOK -- unstated. The
+// spec's word was "for this target". The two wants are genuinely different, and
+// the narrow one was unreachable: a writer with a deliberately contradictory
+// character had to turn contradiction checking off for their whole novel.
+
+describe("how widely never-ask reaches", () => {
+  const thin = stop({
+    kind: "frayed", key: "frayed|e-1", entity_id: "e-1",
+    title: "Mira Kell is missing Overview", quote: "",
+    detail: { name: "Mira Kell", type: "character", missing: ["Overview"] },
+  });
+
+  it("writes nothing until the writer says how widely", async () => {
+    // The old button silenced a whole book on one click. Opening the question
+    // is not an answer to it.
+    mockApi({ stops: [thin] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    expect(screen.getByTestId("mute-scope")).toBeTruthy();
+    expect(posted("/run/answer")).toEqual([]);
+  });
+
+  it("narrows to one entry, named", async () => {
+    // "About e-1 only" is not a choice anyone can make. The entry's own name is.
+    mockApi({ stops: [thin] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    expect(screen.getByTestId("mute-this-one").textContent).toContain("Mira Kell");
+    await userEvent.click(screen.getByTestId("mute-this-one"));
+    await waitFor(() => expect(posted("/run/answer").length).toBe(1));
+    expect(posted("/run/answer")[0].body).toMatchObject({
+      mute: "frayed", mute_for: "e-1",
+    });
+  });
+
+  it("offers no narrow choice when there is no entry to narrow to", async () => {
+    // An Unspun name has no entry yet, so "about this one" would name nothing
+    // and silence nothing.
+    await start();          // the default stop is unspun, entity_id ""
+    await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    expect(screen.queryByTestId("mute-this-one")).toBeNull();
+    expect(screen.getByTestId("mute-everywhere")).toBeTruthy();
+  });
+
+  it("backing out of the choice writes nothing and keeps the place", async () => {
+    mockApi({ stops: [thin, stop({ key: "next", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    await userEvent.click(within(screen.getByTestId("mute-scope"))
+      .getByRole("button", { name: /^Back$/ }));
+    expect(screen.queryByTestId("mute-scope")).toBeNull();
+    expect(posted("/run/answer")).toEqual([]);
+    expect(screen.getByTestId("weaving-progress").textContent).toMatch(/1 of 2/);
+  });
+
+  it("a half-made choice does not travel to the next stop", async () => {
+    // Otherwise "About Mira Kell only" sits under a question about someone else,
+    // and the button then does exactly what it says about the wrong entry.
+    mockApi({ stops: [thin, stop({ key: "next", title: "Something else" })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Never ask/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Not yet/ }));
+    await waitFor(() => expect(screen.getByText("Something else")).toBeTruthy());
+    expect(screen.queryByTestId("mute-scope")).toBeNull();
   });
 });
 
@@ -2171,11 +2445,69 @@ describe("a dead entry is a way forward, not a dead end", () => {
     const dialog = await screen.findByTestId("snag-fixer");
     expect(within(dialog).queryByRole("button", { name: /Keep this one/ }))
       .toBeNull();
-    // The honest answers are still there: fix it in place, or deliberate.
+    // The honest answers are still there: fix it in place, or deliberate. And
+    // the wording drops the "both", which offers a choice that is not there --
+    // R8.4's checks can fire on a single fact whose own two anchors disagree.
     expect(within(dialog).getByRole("button", { name: /Edit Serves the Crown/ }))
       .toBeTruthy();
     expect(within(dialog).getByRole("button",
-      { name: /Both are right on purpose/ })).toBeTruthy();
+      { name: /That is deliberate/ })).toBeTruthy();
+    expect(dialog.textContent).not.toContain("These disagree");
+  });
+});
+
+
+// ── R8.4: the two checks the spec named and nothing implemented ──────────────
+//
+// Found is only half of it. Both new checks are about a fact's REVEAL POINT, and
+// the fixer's edit form had no control for that anchor -- so the walk could
+// report a problem it gave the writer no way to fix without leaving, which is
+// the one thing the closed-world rule forbids.
+
+describe("a reveal point that cannot be ordered", () => {
+  const told = stop({
+    kind: "snag", key: "snag|e-1|father", entity_id: "e-1",
+    title: "Elara Voss: the reader is told this before it becomes true",
+    quote: "",
+    why: "The reveal point comes before the point it becomes true.",
+    detail: { name: "Elara Voss", type: "character", axis: "father.fate",
+              snag: "impossible_order",
+              sides: [{ id: "f-1", at: "c-2", value: "Alive, in hiding.",
+                        revealed_at: "c-1" }] },
+  });
+
+  it("offers the reveal point as something the writer can change", async () => {
+    mockApi({ stops: [told] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    await userEvent.click(within(dialog).getByLabelText("Edit Alive, in hiding."));
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("The chapter the reader learns it"), "c-2");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Save the fix/ }));
+    await waitFor(() => {
+      const patched = posted("/fact").filter(c => c.body.fact_id === "f-1");
+      expect((patched[0].body.set as { revealed_at: string }).revealed_at)
+        .toBe("c-2");
+    });
+  });
+
+  it("offers no reveal picker on a fact that has no reveal point", async () => {
+    // Two chapter pickers on every fact turns a two-field edit into a form, and
+    // the ordinary fact becomes known where it happens.
+    mockApi({ stops: [stop({
+      kind: "snag", key: "snag|e-1|eyes", entity_id: "e-1",
+      title: "Two facts disagree about eyes", quote: "",
+      detail: { name: "Elara Voss", type: "character", axis: "eyes",
+                sides: [{ id: "f-1", at: "c-1", value: "Green." },
+                        { id: "f-2", at: "c-1", value: "Blue." }] },
+    })] });
+    await start();
+    await userEvent.click(screen.getByRole("button", { name: /Sort it out here/ }));
+    const dialog = await screen.findByTestId("snag-fixer");
+    await userEvent.click(within(dialog).getByLabelText("Edit Green."));
+    expect(within(dialog)
+      .queryByLabelText("The chapter the reader learns it")).toBeNull();
   });
 });
 

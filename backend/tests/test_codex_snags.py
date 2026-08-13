@@ -14,7 +14,8 @@
 from app.codex.anchors import AnchorIndex
 from app.codex.snags import (
     SNAG_AMBIGUOUS_ORDER, SNAG_AXIS_CONFLICT, SNAG_BAD_SUPERSEDE,
-    SNAG_CARDINALITY, SNAG_EXCLUSIVE, SNAG_UNPLACED,
+    SNAG_CARDINALITY, SNAG_EXCLUSIVE, SNAG_IMPOSSIBLE_ORDER,
+    SNAG_REVEAL_ORDER, SNAG_UNPLACED,
     check_facts, check_ties, group_tangles,
 )
 
@@ -244,6 +245,112 @@ def test_an_unknown_relation_is_left_alone():
     # The registry is the world model. Inventing rules for a relation it does
     # not describe would be guessing at the writer's intent.
     ties = [{"rel": "invented_by_the_writer", "target": "e-a", "at": "c-1"}]
+    assert check_ties("e-x", ties, _registry(), INDEX) == []
+
+
+# ── R8.4: the two checks the spec named and nothing implemented ──────────────
+#
+# Five checks were specified. Axis conflict and tie conflict existed; knowledge
+# violation is the AI pass by design; the introduction half of reveal order
+# shipped as the Early mention stop. These are the rest, and both are arithmetic
+# on the writer's own two anchors -- see the note in snags.py for why the prose
+# half of check 4 is deliberately NOT here.
+
+def test_a_fact_told_before_it_is_true_cannot_be_ordered():
+    # There is no reading of a book in which the reader is told a thing is true
+    # before the point at which it becomes true. A plan, a prophecy or a
+    # prediction is a DIFFERENT fact with its own anchor, not this one revealed
+    # early -- which is the bar this module sets for calling something
+    # structural rather than a matter of taste.
+    run = [_fact("f-1", "c-3", "father.fate", "Alive, in hiding.",
+                 revealed_at="c-1")]
+    snags = check_facts("e-elara", run, INDEX)
+    assert _kinds(snags) == [SNAG_IMPOSSIBLE_ORDER]
+    assert "before it becomes true" in snags[0].summary
+
+
+def test_told_at_the_same_point_it_becomes_true_is_the_ordinary_case():
+    # The overwhelmingly common shape: a thing becomes known as it happens.
+    run = [_fact("f-1", "c-2", "eyes", "Green.", revealed_at="c-2")]
+    assert check_facts("e-x", run, INDEX) == []
+
+
+def test_told_after_it_becomes_true_is_the_whole_point_of_revealed_at():
+    # A secret. The reader learns in chapter three what was true in chapter one.
+    # Flagging this would fight the feature it is checking.
+    run = [_fact("f-1", "c-1", "father.fate", "Alive.", revealed_at="c-3")]
+    assert check_facts("e-elara", run, INDEX) == []
+
+
+def test_a_deleted_reveal_anchor_is_left_to_the_unplaced_stop():
+    # Reporting one problem twice under two names is the noise this recovery
+    # keeps finding. An anchor pointing nowhere is Unplaced's business.
+    run = [_fact("f-1", "c-3", "eyes", "Green.", revealed_at="c-deleted")]
+    assert SNAG_IMPOSSIBLE_ORDER not in _kinds(check_facts("e-x", run, INDEX))
+
+
+def test_a_correction_that_reaches_the_reader_first_spoils_the_book():
+    # The spec's opening example read backwards, and the reason revealed_at is a
+    # separate switch from at. She believes her father died; the truth supersedes
+    # that belief. If the TRUTH reaches the reader in chapter one, the arc is
+    # dead on arrival -- the reader knows better than she does from the moment
+    # they meet her.
+    run = [
+        _fact("f-1", "c-1", "father.fate", "Died in the raid.", revealed_at="c-3"),
+        _fact("f-2", "c-2", "father.fate", "Alive, in hiding.",
+              revealed_at="c-1", supersedes="f-1"),
+    ]
+    snags = check_facts("e-elara", run, INDEX)
+    assert SNAG_REVEAL_ORDER in _kinds(snags)
+    reveal = [s for s in snags if s.kind == SNAG_REVEAL_ORDER][0]
+    # BOTH sides, because either anchor could be the mistake and the app takes
+    # no position on the writer's book.
+    assert {s["id"] for s in reveal.sides} == {"f-1", "f-2"}
+
+
+def test_a_correction_the_reader_meets_second_is_correct():
+    # The ordinary, working case: the belief lands first, the truth lands later.
+    run = [
+        _fact("f-1", "c-1", "father.fate", "Died in the raid.", revealed_at="c-1"),
+        _fact("f-2", "c-2", "father.fate", "Alive, in hiding.",
+              revealed_at="c-3", supersedes="f-1"),
+    ]
+    assert check_facts("e-elara", run, INDEX) == []
+
+
+def test_marking_either_side_deliberate_silences_the_reveal_check():
+    # A story CAN tell the reader first on purpose -- dramatic irony is built on
+    # it. A checker that cannot be told so becomes noise the writer stops
+    # reading, which is this module's founding rule.
+    run = [
+        _fact("f-1", "c-1", "father.fate", "Died in the raid.",
+              revealed_at="c-3", intentional=True),
+        _fact("f-2", "c-2", "father.fate", "Alive, in hiding.",
+              revealed_at="c-1", supersedes="f-1"),
+    ]
+    assert SNAG_REVEAL_ORDER not in _kinds(check_facts("e-elara", run, INDEX))
+
+
+def test_a_connection_that_ends_before_it_starts_is_never_true():
+    # Checked BEFORE the active-window filter, because that filter is exactly
+    # what would drop it: a tie whose window is empty reaches no other check, so
+    # it sits in the file looking correct and doing nothing.
+    ties = [{"rel": "connected_to", "target": "e-a", "at": "c-3", "until": "c-1"}]
+    snags = check_ties("e-x", ties, _registry(), INDEX)
+    assert _kinds(snags) == [SNAG_IMPOSSIBLE_ORDER]
+    assert "never true anywhere" in snags[0].summary
+
+
+def test_a_connection_ending_where_it_starts_is_still_never_true():
+    # `until` is exclusive -- record_visibility treats end <= now as over -- so
+    # equal anchors are an empty window, not a one-chapter one.
+    ties = [{"rel": "connected_to", "target": "e-a", "at": "c-2", "until": "c-2"}]
+    assert _kinds(check_ties("e-x", ties, _registry(), INDEX)) \
+        == [SNAG_IMPOSSIBLE_ORDER]
+
+
+def test_an_ordinary_ended_connection_is_fine():
+    ties = [{"rel": "connected_to", "target": "e-a", "at": "c-1", "until": "c-3"}]
     assert check_ties("e-x", ties, _registry(), INDEX) == []
 
 

@@ -505,6 +505,25 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "weaving.stale": {
+    what: "A question you already put off, about words you have since "
+      + "rewritten.",
+    why: "The walk quotes your own text back at you, and a question about a "
+      + "sentence that no longer exists is a question about nothing. When you "
+      + "carry on from an earlier sitting, anything you deferred is checked "
+      + "against what your chapters say NOW, and the ones that moved are "
+      + "marked rather than quietly re-asked as though nothing had happened.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Read the quote. It is the new wording, not the wording you put off.",
+      "Answer it as normal, or put it off again. Nothing about it is more "
+        + "urgent than any other question.",
+      "Re-check just those chapters if you would rather deal with what you "
+        + "changed last night and leave the rest of the book alone.",
+    ],
+    endpoint: "/api/codex/scan",
+  },
   "weaving.quick-entry": {
     what: "A base-level entry: a name, its kind, and one line to build on.",
     why: "The Weave builds the framework so the walkthrough can keep moving -- "

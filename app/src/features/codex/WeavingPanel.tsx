@@ -60,6 +60,7 @@ import {
 } from "./lexicon";
 import { Explain } from "../../components/learn/Explain";
 import { DomainBoard } from "./DomainBoard";
+import { StaleMark, StaleNotice } from "./StaleNotice";
 import { UnwovenGuide } from "./UnwovenGuide";
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { BindDot } from "./BindDot";
@@ -96,6 +97,10 @@ const PRIMARY_ACTION: Record<string, string> = {
   // only open question is what the connection IS, which is the writer's.
   untied: "Say how they connect",
   snag: "Sort it out here",
+  // Several Snags on one axis. Plural on purpose: the writer is about to be
+  // shown a group, and a button reading "Sort it out" would understate what
+  // they are agreeing to look at.
+  tangle: "Sort them out here",
   unplaced: "Place it",
   early_mention: "Decide here",
   unwoven: "Answer it here",
@@ -121,6 +126,9 @@ const DISMISS_ACTION: Record<string, string> = {
   loose_thread: "Not a connection",
   untied: "Not a connection",
   snag: "Not a problem",
+  // Plural, and it means all of them: the group is one stop, so the permanent
+  // no covers the whole cause rather than one symptom of it.
+  tangle: "None of these are problems",
   unplaced: "Leave it unplaced",
   early_mention: "It is fine where it is",
   unwoven: "Never ask this",
@@ -167,6 +175,24 @@ function lexFor(kind: string): LexEntry | undefined {
  *  inline, like every other resolution in the closed world. */
 function pinnedAction(stop: Stop): string {
   return stop.detail?.has_entry ? "Choose the connection" : "Create the entry";
+}
+
+/** What a narrow mute would be ABOUT, in words the writer recognises. The
+ *  entry's own name where the stop carries it; a plain fallback where it does
+ *  not, since "About e-4f2a91 only" is not a choice anyone can make. */
+function muteTargetName(stop: Stop): string {
+  const name = String(stop.detail?.name ?? "").trim();
+  return name || "this one";
+}
+
+/** The findings a Tangle gathered, each a whole Snag. Empty for anything else. */
+function tangleMembers(stop: Stop): { key: string; summary: string }[] {
+  const members = stop.detail?.members;
+  if (!Array.isArray(members)) return [];
+  return members.map(m => ({
+    key: String((m as Record<string, unknown>).key ?? ""),
+    summary: String((m as Record<string, unknown>).summary ?? ""),
+  }));
 }
 
 /** The other words a grouped Unspun stop covers: "Lara", "Croft". */
@@ -264,6 +290,11 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   // first stop, because a writer who chose "carry on" is entitled to see that
   // it worked -- and because a resumed walk is shorter than they might expect.
   const [resumed, setResumed] = useState(false);
+  // R8.1. Which chapters the walk is narrowed to, or null for the whole book.
+  // Set from the stale banner's "re-check just those": the scan is free, so
+  // narrowing costs nothing and turns "the book changed under me somewhere"
+  // into a list short enough to actually work through.
+  const [scope, setScope] = useState<string[] | null>(null);
   const [earlier, setEarlier] = useState<RunSummary[]>([]);
   // Connecting happens in the walk, so the walk needs to know what there is
   // to connect to. Fetched once the writer asks, not on mount: most stops
@@ -282,17 +313,23 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   const [entering, setEntering] = useState(false);
   const [filling, setFilling] = useState(false);
   const [fixing, setFixing] = useState(false);
+  // "Never ask" asks how widely before it writes anything (R8.3).
+  const [muting, setMuting] = useState(false);
 
   // The scan runs on mount and on every depth change, BEFORE anything is
   // confirmed. That is what makes the count real -- see the header.
   const runScan = useCallback(async (which: Depth, existing: string | null,
-                                     part: string | null) => {
+                                     part: string | null,
+                                     chapters: string[] | null) => {
     setScanning(true);
     setError(null);
     try {
       setResult(await scan(projectPath, {
         depth: which, runId: existing,
         domains: part ? [part] : [],
+        // Empty means the whole book, which is what every pass sends until the
+        // writer narrows to the chapters that moved under them.
+        chapterIds: chapters ?? [],
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "The scan could not run.");
@@ -301,8 +338,8 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     }
   }, [projectPath]);
 
-  useEffect(() => { void runScan(depth, runId, domain); },
-            [runScan, depth, runId, domain]);
+  useEffect(() => { void runScan(depth, runId, domain, scope); },
+            [runScan, depth, runId, domain, scope]);
 
   useEffect(() => {
     fetchRuns(projectPath)
@@ -310,8 +347,33 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       .catch(() => setEarlier([]));      // a missing list is not worth an error
   }, [projectPath]);
 
+  // A half-made decision does not travel. Stepping Back with the mute scope
+  // open would leave "About Elara only" sitting under a question about someone
+  // else, and the button would then do exactly what it said about the wrong
+  // entry.
+  useEffect(() => { setMuting(false); }, [at]);
+
   const stops = result?.stops ?? [];
   const stop: Stop | undefined = stops[at];
+
+  /** Which stops in THIS list are about text that has moved since the writer
+   *  put them off. A Set because the walk asks the question once per card. */
+  const staleKeys = useMemo(
+    () => new Set(result?.resumed?.stale_keys ?? []),
+    [result],
+  );
+
+  /**
+   * Narrow the walk to the chapters that changed, or widen it back.
+   *
+   * `at` goes back to the start because the list is a different list -- keeping
+   * the index would land the writer in the middle of a walk they did not begin.
+   * The scan itself runs from the effect above, on the scope change.
+   */
+  function narrow(chapters: string[] | null) {
+    setScope(chapters);
+    setAt(0);
+  }
 
   const counts = useMemo(() => {
     const tally: Record<string, number> = {};
@@ -622,7 +684,12 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     return (
       <Shell onClose={onClose}>
         <p className="text-xs text-text-primary">
-          That is everything this pass found.
+          {/* A narrowed walk that runs out has NOT finished the pass, and
+              saying it has would be the same class of lie R8.1 exists to fix.
+              The way back out is offered below. */}
+          {scope
+            ? "That is everything in the chapters you narrowed to."
+            : "That is everything this pass found."}
         </p>
         <p className="mt-1.5 text-[11px] text-text-muted">
           Anything you put off comes back next time. Anything you applied, or
@@ -630,6 +697,15 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           your book itself -- it is worked out fresh every time, so as you
           write, this list changes on its own.
         </p>
+        {scope && (
+          <button
+            onClick={() => narrow(null)}
+            data-testid="widen-again"
+            className="mt-3 mr-2 rounded border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text-primary"
+          >
+            Look at the whole book again
+          </button>
+        )}
         <button
           onClick={onClose}
           className="mt-3 rounded border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text-primary"
@@ -885,6 +961,21 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         </p>
       )}
 
+      {/* A Tangle has no quote, because its evidence is a LIST: the findings it
+          gathered. Shown before the button for the same reason every other
+          stop's quote is -- a decision made without seeing what prompted it is
+          not a decision, and "5 problems" without the five is a number. */}
+      {tangleMembers(stop).length > 0 && (
+        <ol className="mt-2 space-y-0.5 rounded border-l-2 border-rose-900/70 bg-bg-surface px-2 py-1.5"
+            data-testid="tangle-members">
+          {tangleMembers(stop).map((m, i) => (
+            <li key={m.key ?? i} className="text-[11px] text-text-muted">
+              {i + 1}. {m.summary}
+            </li>
+          ))}
+        </ol>
+      )}
+
       <details className="mt-2">
         <summary className="cursor-pointer text-[11px] text-violet-300 hover:text-violet-200">
           Why am I seeing this?
@@ -960,6 +1051,23 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           still put off.
         </p>
       )}
+
+      {/* THE BOOK CHANGED UNDER THE WALK. Shown on the first stop, with the
+          count, where it came from, and the offer to look at just that. The
+          backend has always known this and nothing has ever said it. */}
+      {at === 0 && (
+        <StaleNotice
+          report={result?.resumed}
+          onRecheck={narrow}
+          scoped={scope !== null}
+          busy={scanning}
+        />
+      )}
+
+      {/* And on the card itself, for the one the writer is looking at. The
+          banner explains the situation once; this answers "is this one of
+          them?" at the moment that question can actually be acted on. */}
+      {staleKeys.has(stop.key) && <StaleMark />}
 
       {settledAs ? (
         <div data-testid="already-answered"
@@ -1071,21 +1179,86 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           <Clock size={11} /> Not yet
         </button>
 
+        {/* R8.3. This used to be one button that meant the WHOLE BOOK and did
+            not say so. The spec's word was "for this target", and the two wants
+            are genuinely different: a deliberately unreliable narrator should
+            stop being asked about contradictions, and a writer with only that
+            entry in mind used to turn the check off everywhere to get it. So the
+            button asks which, and neither choice is written until it is made. */}
         <button
-          // The kind rides along so every LATER stop of it is skipped in this
-          // sitting too -- the server already knew, but the stop list is a
-          // snapshot, and a mute the current walk ignores reads as a button
-          // that does not work.
-          onClick={() => void answerAndAdvance("Never ask", () =>
-            runId ? muteKind(projectPath, runId, stop.kind) : Promise.resolve(),
-            stop.kind)}
+          onClick={() => setMuting(true)}
           disabled={busy}
-          title={`Stop showing ${lex?.term ?? stop.kind} at all. You can turn it back on.`}
+          title={`Stop being asked about ${lex?.term ?? stop.kind}. You choose how widely.`}
           className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-xs text-faint hover:text-text-primary disabled:opacity-40"
         >
           <BellOff size={11} /> Never ask
         </button>
       </div>
+      )}
+
+      {muting && (
+        <div className="mt-2 rounded border border-border bg-bg-surface p-2"
+             data-testid="mute-scope">
+          <p className="text-[11px] text-text-primary">
+            Stop being asked about {lex?.term ?? stop.kind} -- how widely?
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {/* Only when there IS a target. An Unspun name has no entry yet, so
+                "about this one" would name nothing and silence nothing. */}
+            {stop.entity_id && (
+              <button
+                onClick={() => {
+                  setMuting(false);
+                  void answerAndAdvance(
+                    `Never ask about ${muteTargetName(stop)}`,
+                    () => runId
+                      ? muteKind(projectPath, runId, stop.kind, true,
+                                 stop.entity_id)
+                      : Promise.resolve());
+                }}
+                disabled={busy}
+                data-testid="mute-this-one"
+                className="inline-flex flex-col items-start rounded border border-violet-700 bg-violet-500/10 px-2.5 py-1 text-left text-xs text-text-primary hover:border-violet-500 disabled:opacity-40"
+              >
+                <span>About {muteTargetName(stop)} only</span>
+                <span className="text-[10px] font-normal text-faint">
+                  the rest of your book is still checked
+                </span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setMuting(false);
+                // The kind rides along so every LATER stop of it is skipped in
+                // this sitting too -- the server already knew, but the stop list
+                // is a snapshot, and a mute the current walk ignores reads as a
+                // button that does not work.
+                void answerAndAdvance("Never ask anywhere",
+                  () => runId ? muteKind(projectPath, runId, stop.kind)
+                              : Promise.resolve(),
+                  stop.kind);
+              }}
+              disabled={busy}
+              data-testid="mute-everywhere"
+              className="inline-flex flex-col items-start rounded border border-border px-2.5 py-1 text-left text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
+            >
+              <span>Anywhere in the book</span>
+              <span className="text-[10px] font-normal text-faint">
+                this kind of question stops entirely
+              </span>
+            </button>
+            <button
+              onClick={() => setMuting(false)}
+              className="self-start rounded px-2 py-1 text-[11px] text-faint hover:text-text-primary"
+            >
+              Back
+            </button>
+          </div>
+          <p className="mt-1.5 text-[10px] text-faint">
+            Either one is reversible. It is a preference about what you want to
+            be asked, not a judgement about your book.
+          </p>
+        </div>
       )}
 
       {/* What else is waiting, by kind. Its job is to make the shape of the

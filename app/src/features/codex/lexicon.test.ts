@@ -182,22 +182,18 @@ describe("the words Weaving will use", () => {
     // KEYED BY THE WIRE CODE. The two sides used to use different words for
     // the same thing, which reads as harmless right up until a stop arrives
     // with a kind nothing here has an entry for and renders as a blank row.
-    // ALL NINE of scan.py's STOP_KINDS -- this list used to stop at six, so
+    // ALL TEN of scan.py's STOP_KINDS -- this list used to stop at six, so
     // three real producers (untied, unwoven, pinned) had no contract at all
     // and the comment claiming "every kind" was a lie the suite kept green.
+    // Tangle joined them in R8.2: `group_tangles` had been written, tested and
+    // called by nothing, so every Snag was asked separately.
     const fromTheScan = [
       "unspun", "frayed", "unplaced", "loose_thread", "untied",
-      "snag", "early_mention", "unwoven", "pinned",
+      "snag", "tangle", "early_mention", "unwoven", "pinned",
     ];
     for (const kind of fromTheScan) {
       expect(STOP_KINDS[kind], `no entry for ${kind}`).toBeTruthy();
     }
-  });
-
-  it("keeps the one word with no producer yet", () => {
-    // Tangle is a grouping of Snags the scan does not emit as its own kind.
-    // The word stays because the vocabulary was decided in one pass.
-    expect(STOP_KINDS["tangle"]).toBeTruthy();
   });
 
   it("gives each of them the writer-facing name, not the code", () => {

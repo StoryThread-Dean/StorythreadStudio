@@ -769,6 +769,21 @@ The Weave — a story-aware world model, and Model Roles
  Every stop shows its evidence quote, its "Why am I seeing this?", and its position on the
  map, so the writer sees where in the world they are working.
 
+ **AMENDED 2026-08-13 (R8.3), "Never ask".** The build had ONE meaning for this and
+ it was not the one above: it muted the kind for the whole book, and said nothing
+ about doing so. The narrow half was unreachable, which matters because it is the
+ case the wording was written for -- a deliberately unreliable narrator's entry
+ should stop being asked about contradictions without turning contradiction
+ checking off for an entire novel.
+
+ So the button now ASKS which, and writes nothing until the writer chooses: "About
+ <name> only", which says the rest of the book is still checked, or "Anywhere in
+ the book". The narrow choice is offered only where the stop has an entry to
+ narrow to -- an Unspun name has none yet, so it would name nothing and silence
+ nothing. Both are reversible, and both are stored in the book's own answers file
+ (`muted_kinds`, `muted_targets`) rather than in a session, because "never" cannot
+ mean "until you open Weaving tomorrow".
+
  Unspun — a name with no Thread
 
  Keyword and name detection surfaces candidates; the writer picks which are real. "Not a connection"
@@ -817,6 +832,43 @@ The Weave — a story-aware world model, and Model Roles
  5. Tie conflict — mutually exclusive Ties active at once (married_to two people with no
  intervening fact; member_of two factions at war).
 
+ **AMENDED 2026-08-13 (R8.4), checks 2 and 4.** Both existed only on this page for
+ the whole of the Weave's build; they are implemented now, and NARROWER than the
+ words above, on purpose.
+
+ Checks 2 and 4 as written say "referenced" and "prose references" — matching a
+ sentence of the writer's manuscript to a particular FACT. That is a reading, not
+ arithmetic. There is no mechanical way to know that "she thought of her father,
+ alive somewhere north" is the fact `father.fate: alive`, and a checker that
+ guessed would accuse the writer of spoilers they did not write. That is exactly
+ the line `snags.py` draws in its own header between the half that is arithmetic
+ and the half that is interpretation, and the interpreting half is check 3, which
+ lives in the AI pass with quoted evidence and the freedom to be wrong. Check 4 as
+ worded straddles a line the rest of the design keeps.
+
+ What IS mechanical is the writer's own two anchors disagreeing with each other,
+ and that is what ships:
+
+ - **Timeline impossibility** (`impossible_order`) — a fact whose `revealed_at`
+   comes before its `at`: the reader is told a thing is true before the point at
+   which it becomes true. And a Tie whose `until` is at or before its `at`: a
+   connection that is never true anywhere, which every other check silently skips
+   because its active window is empty.
+ - **Reveal-order break** (`reveal_order`) — a fact reaches the reader before the
+   fact it supersedes does. This is the programme's opening example read
+   backwards: the heroine believes her father died, the truth supersedes that
+   belief, and if the TRUTH is marked as reaching the reader first then the arc is
+   dead on arrival. Both sides are shown; either anchor may be the mistake.
+
+ The prose half of check 4 that DOES ship is the Early mention stop, which
+ compares a bound mention against the point a Thread is introduced. It is worded
+ as a question rather than an error, because the mention may be the intended one
+ and the anchor may be the mistake.
+
+ Both new checks honour `intentional`, like every other one: dramatic irony is
+ built on telling the reader first, and a checker that cannot be told so becomes
+ noise the writer stops reading.
+
  Each Snag shows both sides with anchors and quoted evidence, drawn as a red edge between the two
  nodes on the map, and offers: correct side A / correct side B / add a reconciling fact (often "she
  learned earlier than recorded" → re-anchor) / mark as deliberate / not yet. Mark as deliberate
@@ -825,6 +877,25 @@ The Weave — a story-aware world model, and Model Roles
 
  Tangle — Snags sharing an entity or axis group into one stop, shown as a highlighted cluster on
  the map, so the writer sees the systemic cause rather than five symptoms.
+
+ **AMENDED 2026-08-13 (R8.2).** The grouping function was written and unit-tested
+ from the start and CALLED BY NOTHING, so a moved date arrived as eleven separate
+ questions about one mistake for the whole of the build. It has a producer now, and
+ three details are settled that this paragraph did not cover:
+
+ - A group of ONE stays a Snag. `group_tangles` returns a single finding as a
+   group of one so its caller can have one code path; taking that literally would
+   put "Tangle: 1 problem" and an extra click in front of an identical screen.
+ - Grouping is by (entity, axis), and Unplaced is never swept in. "Where does this
+   belong?" and "which of these is right?" are different questions with different
+   fixers, and bundling them would put two unrelated decisions behind one button.
+ - The members are worked through INSIDE the one stop, and there is a group-level
+   "all of these are deliberate". That button is the reason the grouping pays:
+   marking eleven facts deliberate one at a time is the problem back again.
+
+ The highlighted cluster on the map is NOT built. The Tangle is a walkthrough stop
+ today; drawing it on the graph is a later refinement, recorded rather than
+ quietly dropped.
 
  Unwoven — the root system
 
@@ -903,6 +974,23 @@ The Weave — a story-aware world model, and Model Roles
  are re-derived deterministically where possible or held behind an honest banner — "12 findings need
  re-checking, that text changed" — with a re-run scoped to only those. Nothing is silently shown as
  current when it is not.
+
+ **AMENDED 2026-08-13 (R8.1).** Every word of the paragraph above was implemented
+ except the last three sentences, and they are the ones that matter: staleness was
+ computed correctly from the first day, returned as a COUNT, and read by no screen
+ — so a question the writer had put off about a sentence they later rewrote came
+ back quoting the new sentence with nothing saying the question was older than the
+ words in it. The cause is worth recording, because it is not laziness: a count is
+ not something an interface can act on. It cannot mark the card the writer is
+ looking at, and it cannot scope a re-run.
+
+ The report therefore NAMES things — which stops went stale, and which chapters
+ they live in — and two surfaces read it: a banner on the first stop of a resumed
+ walk, and a mark on each stale card saying the quote above is the new wording. The
+ scoped re-run is a plain scan narrowed to those chapters, which is free like every
+ scan; it says how many stale stops belong to no chapter and would therefore be
+ left out, and a narrowed walk that runs dry offers the way back rather than
+ claiming the pass is finished.
 
  Applied and dismissed never return. Deferred do — exactly the Mentor behaviour: skip it, and the next
  Weaving asks again until it is properly filled in.

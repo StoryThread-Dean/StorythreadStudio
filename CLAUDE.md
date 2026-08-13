@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 69 of 99 tasks done.
+> **LEDGER — last updated 2026-08-13.** 73 of 99 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -195,8 +195,43 @@ its place without relying on memory or conversation history.
 > a bar for what is decided, finished parts still shown) plus a ten-page
 > walkthrough that argues from a cost and shows the same beat written with and
 > without the ground decided. Spec amended, Unwoven section.
-> **Next: Phase 8** (11 tasks, the largest remaining group), then Phase 10 release.
-> Branch health: 1774 backend tests, 1263 frontend tests, ruff and tsc clean.
+> **PHASE 8 IN PROGRESS (4 of 11).** All four so far were the same failure: a
+> capability that was BUILT, correct, and connected to nothing. **R8.1** is the
+> clearest case and the lesson is general -- `refresh` computed staleness
+> correctly from day one and returned a COUNT, and a count is not something an
+> interface can act on. It cannot mark the card the writer is looking at and it
+> cannot scope a re-run, so the right answer went unrendered for the whole build
+> while the test suite proved it was right. The report NAMES things now (which
+> stops, which chapters); a banner reads it on the first stop of a resumed walk,
+> each stale card says the quote is the NEW wording, and the scoped re-check says
+> how many stale stops belong to no chapter and would be left out.
+> **R8.2** -- `group_tangles` had a producer of nothing, so eleven findings from
+> one moved date arrived as eleven questions. A group of one stays a Snag (the
+> function returns groups of one for its caller's convenience, and taking that
+> literally would put "Tangle: 1 problem" in front of an identical screen);
+> Unplaced is never swept in, because "where does this belong" and "which of these
+> is right" have different fixers; the members are worked through inside the one
+> stop, and "all of these are deliberate" is the button that makes the grouping
+> pay. The map cluster the spec describes is NOT built and says so.
+> **R8.3** -- "Never ask" had one meaning and it was not the specified one: it
+> muted a kind for the whole book without saying so, so the case the wording was
+> written for (leave this unreliable narrator alone) could only be had by turning
+> the check off for a whole novel. It asks how widely now and writes nothing until
+> told.
+> **R8.4** -- the two detectors the spec named and nothing implemented, shipped
+> NARROWER than its words on purpose and amended to match. "Prose references a
+> fact" is a reading, not arithmetic; there is no mechanical way to know that "she
+> thought of her father, alive somewhere north" is `father.fate: alive`, and a
+> checker that guessed would accuse the writer of spoilers they did not write.
+> That is check 3's job in the AI pass. What ships is the writer's own two anchors
+> disagreeing: told before it is true, a correction reaching the reader before what
+> it corrects (the opening example read backwards), and a connection ending at or
+> before it starts -- which every other check silently skips, because an empty
+> window never reaches them. The fixer gained the reveal-point control it had
+> nowhere; without it the walk would report problems it offered no way to fix,
+> which is the one thing the closed-world rule forbids.
+> **Next: R8.5** (`codex_mention`, write to it or drop it), then R8.6-R8.11.
+> Branch health: 1802 backend tests, 1289 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

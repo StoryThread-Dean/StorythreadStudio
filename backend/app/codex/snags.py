@@ -11,10 +11,12 @@
 # is arithmetic:
 #
 #     the same axis holds two different values at the same moment
-#     a fact is referenced before the point it becomes true
+#     a fact is told to the reader before the point it becomes true
 #     a relation that permits one target has three
 #     two facts claim the same point with nothing to order them
 #     a name appears in chapter four for something the reader learns in twelve
+#     a correction reaches the reader before the thing it corrects
+#     a connection ends at or before it starts
 #
 # None of that needs interpretation. The other half -- does this passage ACT
 # ON knowledge this character should not have? -- is interpretation, and it
@@ -38,6 +40,7 @@ from app.codex.normalize import TRUTH, normalize_fact
 __all__ = [
     "Snag", "SNAG_AXIS_CONFLICT", "SNAG_AMBIGUOUS_ORDER", "SNAG_BAD_SUPERSEDE",
     "SNAG_EARLY_MENTION", "SNAG_CARDINALITY", "SNAG_EXCLUSIVE", "SNAG_UNPLACED",
+    "SNAG_IMPOSSIBLE_ORDER", "SNAG_REVEAL_ORDER",
     "check_facts", "check_ties", "group_tangles",
 ]
 
@@ -50,6 +53,9 @@ SNAG_EARLY_MENTION = "early_mention"
 SNAG_CARDINALITY = "cardinality"
 SNAG_EXCLUSIVE = "exclusive_group"
 SNAG_UNPLACED = "unplaced"
+# R8.4. The two checks the spec named and nothing implemented.
+SNAG_IMPOSSIBLE_ORDER = "impossible_order"   # anchors that cannot be ordered
+SNAG_REVEAL_ORDER = "reveal_order"           # the book spoils itself
 
 
 @dataclass
@@ -191,7 +197,143 @@ def check_facts(
         ))
 
     snags.extend(_forked_supersession(entity_id, placed, label_for))
+    snags.extend(_impossible_order(entity_id, facts, index, label_for))
+    snags.extend(_reveal_order(entity_id, placed, index, label_for))
     return snags
+
+
+# ── R8.4: the two checks the spec named and nothing implemented ──────────────
+#
+# The spec lists five deterministic-first checks. Three existed (axis conflict,
+# tie conflict, and the introduction half of reveal order as the Early mention
+# stop); knowledge violation is the AI pass by design. These are the other two.
+#
+# BOTH ARE ARITHMETIC ON THE ANCHORS THE WRITER WROTE, and that is a deliberate
+# narrowing of check 4, which the spec words as "prose references a fact before
+# its revealed_at". Matching a sentence to a FACT is a reading -- there is no
+# mechanical way to know that "she thought of her father, alive somewhere north"
+# is the fact `father: alive`, and a checker that guessed would accuse the writer
+# of spoilers they did not write. That is the same line this module's own header
+# draws between arithmetic and interpretation, and the interpreting half lives in
+# the AI pass with quoted evidence and the freedom to be wrong. The spec is
+# amended to say so rather than left describing something the build does not do.
+#
+# What IS mechanical is the writer's own two anchors disagreeing with each other,
+# which is what these read.
+
+def _impossible_order(entity_id: str, facts: list[dict], index: AnchorIndex,
+                      label_for) -> list[Snag]:
+    """
+    Anchors that cannot be ordered as written.
+
+    One fact, two anchors, and the second before the first. There is no reading
+    of a book under which the reader is told a thing is true before the point at
+    which it becomes true -- a plan, a prophecy or a prediction is a different
+    fact with its own anchor, not this one revealed early. That is the bar
+    `_forked_supersession` sets for calling something structural, and this
+    clears it.
+
+    Deliberately NOT checked: a fact whose `at` is later than the chapter that
+    NAMES the entry. That is the Early mention stop, which exists, is worded as a
+    question rather than an error, and is right to be -- the mention may be the
+    intended one and the anchor may be the mistake.
+    """
+    snags: list[Snag] = []
+    for fact in facts:
+        if fact.get("intentional"):
+            continue
+        at = fact.get("at")
+        revealed = fact.get("revealed_at")
+        if not at or not revealed:
+            continue
+        # Both have to resolve. An anchor pointing at a deleted chapter is the
+        # Unplaced stop's business, and reporting it twice under two different
+        # names is the noise problem this recovery keeps finding.
+        start = index.ordinal(at)
+        told = index.ordinal(revealed)
+        if start is None or told is None or told >= start:
+            continue
+        snags.append(Snag(
+            kind=SNAG_IMPOSSIBLE_ORDER, entity_id=entity_id,
+            axis=str(fact.get("axis", "")), anchor=str(at),
+            summary=(f"The reader is told this in "
+                     f"{_anchor_label(revealed, label_for)}, before it becomes "
+                     f"true in {_anchor_label(at, label_for)}."),
+            sides=[{"id": fact.get("id"), "at": at, "value": fact.get("value"),
+                    "revealed_at": revealed,
+                    "where": _anchor_label(at, label_for)}],
+        ))
+    return snags
+
+
+def _reveal_order(entity_id: str, placed: list[dict], index: AnchorIndex,
+                  label_for) -> list[Snag]:
+    """
+    The book spoils itself: a correction reaches the reader before what it
+    corrects.
+
+    This is the spec's opening example read backwards, and it is the reason
+    `revealed_at` exists as a separate switch from `at`. The heroine believes her
+    father died; the truth supersedes that belief in chapter fifteen. If the
+    TRUTH is marked as reaching the reader in chapter three, the belief the whole
+    arc rests on is dead on arrival -- the reader knows better than she does from
+    the moment they meet her, and every scene built on the misunderstanding plays
+    as irony the writer did not choose.
+
+    Purely arithmetic: two facts, two reveal points, one pointing at the other.
+    Nothing is being interpreted, and either anchor could be the mistake, so the
+    finding shows both sides and takes no position on which.
+    """
+    snags: list[Snag] = []
+    by_id = {f.get("id"): f for f in placed if f.get("id")}
+    for fact in placed:
+        if fact.get("intentional"):
+            continue
+        earlier = by_id.get(fact.get("supersedes"))
+        if earlier is None or earlier.get("intentional"):
+            continue
+        # reveal_ordinal's fallback is the right one here: a fact with no reveal
+        # point of its own becomes known where it happens, which is the ordinary
+        # case and needs no separate branch.
+        told_new = _reveal_position(index, fact)
+        told_old = _reveal_position(index, earlier)
+        if told_new is None or told_old is None or told_new >= told_old:
+            continue
+        snags.append(Snag(
+            kind=SNAG_REVEAL_ORDER, entity_id=entity_id,
+            axis=str(fact.get("axis", "")), anchor=str(fact.get("at") or ""),
+            summary=("The reader learns the correction before the thing it "
+                     "corrects, so this spoils itself."),
+            sides=[
+                {"id": fact.get("id"), "at": fact.get("at"),
+                 "value": fact.get("value"),
+                 "revealed_at": fact.get("revealed_at"),
+                 "where": _anchor_label(fact.get("revealed_at")
+                                        or fact.get("at"), label_for)},
+                {"id": earlier.get("id"), "at": earlier.get("at"),
+                 "value": earlier.get("value"),
+                 "revealed_at": earlier.get("revealed_at"),
+                 "where": _anchor_label(earlier.get("revealed_at")
+                                        or earlier.get("at"), label_for)},
+            ],
+        ))
+    return snags
+
+
+def _reveal_position(index: AnchorIndex, fact: dict):
+    """
+    Where the reader learns this, as a number, or None when it cannot be placed.
+
+    Shares the fallback rule with visibility.reveal_ordinal -- no reveal point
+    means it becomes known where it happens -- but returns a plain number rather
+    than that function's "always" sentinel, because "always" cannot be compared
+    with `>` and a checker that silently treated it as 0 would report every
+    undated background fact as a spoiler.
+    """
+    anchor = fact.get("revealed_at") or fact.get("at")
+    if not anchor:
+        return None
+    return index.ordinal(anchor)
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +414,33 @@ def check_ties(
     relations = {r.get("id"): r for r in registry.get("relations", [])}
     now = index.ordinal(at) if at else None
     snags: list[Snag] = []
+
+    # R8.4, the tie half of "anchors that cannot be ordered". A connection that
+    # ends before it starts is never active, which means it is invisible to
+    # everything downstream while looking perfectly correct in the file -- the
+    # same shape of problem as an Unplaced fact, and just as silent. Checked
+    # BEFORE the active-window filter below, because that filter is exactly what
+    # would drop it: a tie whose window is empty never reaches any other check.
+    for tie in ties:
+        if tie.get("intentional") or not tie.get("at") or not tie.get("until"):
+            continue
+        start = index.ordinal(tie.get("at"))
+        end = index.ordinal(tie.get("until"))
+        if start is None or end is None or end > start:
+            continue
+        snags.append(Snag(
+            kind=SNAG_IMPOSSIBLE_ORDER, entity_id=entity_id,
+            axis=str(tie.get("rel", "")), anchor=str(tie.get("at") or ""),
+            summary=(f"This connection ends in "
+                     f"{_anchor_label(tie.get('until'), label_for)}, at or "
+                     f"before it starts in "
+                     f"{_anchor_label(tie.get('at'), label_for)}, so it is "
+                     f"never true anywhere."),
+            sides=[{"id": f"{tie.get('rel', '')}:{tie.get('target')}",
+                    "rel": tie.get("rel"), "target": tie.get("target"),
+                    "at": tie.get("at"), "until": tie.get("until"),
+                    "where": _anchor_label(tie.get("at"), label_for)}],
+        ))
 
     active: list[dict] = []
     for tie in ties:

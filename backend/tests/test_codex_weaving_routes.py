@@ -207,6 +207,40 @@ def test_a_muted_kind_disappears_and_can_come_back(project):
     assert "frayed" in _kinds(_scan(project, run_id=run["run_id"]))
 
 
+def test_muting_one_entry_leaves_the_same_question_on_the_others(project):
+    # R8.3 end to end. "Never ask" meant the whole book and did not say so, and
+    # the narrow half has to be provable over the wire rather than at the store:
+    # the scan reads the BOOK's record, and a per-entry rule that never reached
+    # it would look right in a unit test and change nothing a writer sees.
+    run = _new_run(project)
+    frayed = [s for s in _scan(project)["stops"] if s["kind"] == "frayed"]
+    assert frayed, "the fixture should hold a thin entry"
+    target = frayed[0]["entity_id"]
+
+    _answer(project, run["run_id"], mute="frayed", mute_for=target)
+    after = _scan(project, run_id=run["run_id"])
+    # That one is gone.
+    assert target not in {s["entity_id"] for s in after["stops"]
+                          if s["kind"] == "frayed"}
+    # And the kind itself is still live -- proved by the OTHER kinds surviving,
+    # which a global mute of "frayed" would leave untouched too, so the sharper
+    # proof is the book's own record.
+    book = _answer(project, run["run_id"])["book"]
+    assert book["muted_targets"] == {target: ["frayed"]}
+    assert book["muted_kinds"] == []
+
+
+def test_a_narrow_mute_does_not_silence_the_kind_everywhere(project):
+    # The failure worth catching: `mute_for` ignored, `mute` applied, and every
+    # thin entry in the book quietly stops being asked about.
+    run = _new_run(project)
+    frayed = [s for s in _scan(project)["stops"] if s["kind"] == "frayed"]
+    _answer(project, run["run_id"], mute="frayed",
+            mute_for="e-nothing-like-this")
+    assert len([s for s in _scan(project, run_id=run["run_id"])["stops"]
+                if s["kind"] == "frayed"]) == len(frayed)
+
+
 def test_a_run_id_from_a_request_is_not_trusted_as_a_path(project):
     # Asked of /run/answer, which is the endpoint a writer's session actually
     # posts to. The guard lives in load_run and GET /run shares it; asking the

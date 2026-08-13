@@ -36,7 +36,7 @@ from app.codex.mentions import (
     NameEvidence, alias_display, build_alias_map, find_mentions,
     group_by_containment, parse_markup, unbound_names,
 )
-from app.codex.snags import Snag, check_facts, check_ties
+from app.codex.snags import Snag, check_facts, check_ties, group_tangles
 from app.codex.threads import is_placeholder
 from app.codex.types_registry import is_active
 from app.codex.together import (
@@ -68,12 +68,14 @@ STOP_UNPLACED = "unplaced"          # a fact with no point in the story
 STOP_LOOSE = "loose_thread"         # a Thread nothing connects to
 STOP_UNTIED = "untied"              # two Threads the prose keeps putting together
 STOP_SNAG = "snag"                  # two facts that disagree
+STOP_TANGLE = "tangle"              # several Snags with one cause behind them
 STOP_EARLY = "early_mention"        # named before the reader is meant to know
 STOP_UNWOVEN = "unwoven"            # ground rules not worked out yet
 STOP_PINNED = "pinned"              # the writer marked this by hand
 
 STOP_KINDS = (STOP_UNSPUN, STOP_FRAYED, STOP_UNPLACED, STOP_LOOSE,
-              STOP_UNTIED, STOP_SNAG, STOP_EARLY, STOP_UNWOVEN, STOP_PINNED)
+              STOP_UNTIED, STOP_SNAG, STOP_TANGLE, STOP_EARLY, STOP_UNWOVEN,
+              STOP_PINNED)
 
 # ── FOUR PASSES, WHICH REPLACED THREE SIZES ─────────────────────────────────
 #
@@ -125,7 +127,10 @@ PASS_KINDS: dict[str, frozenset[str]] = {
     # anchor free: run it FROM chapter eight and the app already knows when.
     PASS_WEFT: frozenset({STOP_UNTIED}),
     # Where the book contradicts itself. A report to read, not a queue to clear.
-    PASS_CLOTH: frozenset({STOP_SNAG, STOP_EARLY, STOP_UNPLACED}),
+    # Tangle belongs here rather than to a pass of its own: it IS Snags, several
+    # of them with one cause behind them, so a writer looking for contradictions
+    # is looking for both.
+    PASS_CLOTH: frozenset({STOP_SNAG, STOP_TANGLE, STOP_EARLY, STOP_UNPLACED}),
     # Its own job.
     PASS_UNWOVEN: frozenset({STOP_UNWOVEN}),
 }
@@ -901,19 +906,83 @@ def _snag_stops(snags: list[Snag], where: dict, request: ScanRequest, *,
                 out.append(side)
         return out
 
-    stops: list[Stop] = []
-    for snag in snags:
-        kind = STOP_UNPLACED if snag.kind == SNAG_UNPLACED else STOP_SNAG
-        if not request.wants(kind):
-            continue
-        stops.append(Stop(
+    def as_snag_stop(snag: Snag, kind: str) -> Stop:
+        return Stop(
             kind=kind, entity_id=snag.entity_id, key=_key(kind, snag.key()),
             title=f"{where['name']}: {snag.summary}",
             why=("Found by comparing the Run against itself -- no model was "
                  "asked, and this is the same answer every time."),
             detail={**where, "snag": snag.kind, "sides": enriched(snag.sides),
                     "axis": snag.axis},
-        ))
+        )
+
+    stops: list[Stop] = []
+
+    # Unplaced first, and NEVER grouped. It is a different question -- "where
+    # does this belong?" rather than "which of these is right?" -- and the fixer
+    # answers it with a chapter picker rather than by choosing a side. Bundling
+    # one into a Tangle about the same axis would put two unrelated decisions
+    # behind one button.
+    for snag in snags:
+        if snag.kind != SNAG_UNPLACED:
+            continue
+        if request.wants(STOP_UNPLACED):
+            stops.append(as_snag_stop(snag, STOP_UNPLACED))
+
+    # ── R8.2: the Tangle finally has a producer ──────────────────────────────
+    #
+    # `group_tangles` was written, unit-tested and called by nothing, so every
+    # Snag was asked separately. That matters more than it sounds: moving one
+    # date can produce eleven Snags on one axis, and eleven questions about one
+    # mistake teaches the writer that the checker does not understand their
+    # book. The grouping is by (entity, axis), which is the shape a single
+    # mistake actually takes.
+    #
+    # A GROUP OF ONE STAYS A SNAG. group_tangles returns it as a group of one so
+    # its caller can have a single code path, and the temptation is to take that
+    # literally -- but "Tangle: 1 contradiction" is a worse sentence than the
+    # Snag it is wrapping, and the fixer would show exactly the same screen with
+    # an extra click in front of it.
+    #
+    # Muting is checked against SNAG, not tangle. A Tangle is Snags; a writer who
+    # silenced contradictions did not mean "unless there are several".
+    contradictions = [s for s in snags if s.kind != SNAG_UNPLACED]
+    if request.wants(STOP_SNAG):
+        for group in group_tangles(contradictions):
+            if len(group) == 1:
+                stops.append(as_snag_stop(group[0], STOP_SNAG))
+                continue
+            first = group[0]
+            axis = first.axis or "this"
+            stops.append(Stop(
+                kind=STOP_TANGLE, entity_id=first.entity_id,
+                # Keyed on the CAUSE rather than on the members, so answering it
+                # stays answered while the writer works through the group -- a
+                # key built from every member's key would change the moment one
+                # of them was fixed, and the ledger would call it a new stop.
+                key=_key(STOP_TANGLE, first.entity_id, axis),
+                title=(f"{where['name']}: {len(group)} problems with "
+                       f"'{axis}', probably one mistake"),
+                why=(f"{len(group)} separate contradictions all concern "
+                     f"'{axis}' on this entry. Several findings on one axis are "
+                     "usually one mistake seen from different angles -- a date "
+                     "moved, a fact replaced twice -- so they are gathered here "
+                     "rather than asked one at a time. Found by comparing the "
+                     "Run against itself; no model was asked."),
+                detail={
+                    **where, "axis": axis,
+                    # Each member is a whole snag, so the fixer can work through
+                    # them without another round trip -- and each carries its own
+                    # key, because answering the group has to be able to say
+                    # WHICH parts of it were dealt with.
+                    "members": [
+                        {"key": _key(STOP_SNAG, s.key()), "snag": s.kind,
+                         "summary": s.summary, "axis": s.axis,
+                         "sides": enriched(s.sides)}
+                        for s in group
+                    ],
+                },
+            ))
     return stops
 
 

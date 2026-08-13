@@ -26,6 +26,14 @@
 //                  the early naming is deliberate foreshadowing, which is the
 //                  walk's permanent dismiss.
 //
+//   Tangle         several Snags on one axis, worked through IN HERE one after
+//                  another, plus one button that marks the whole group
+//                  deliberate. R8.2: the grouping existed in the backend and
+//                  nothing called it, so a moved date arrived as eleven
+//                  questions. The group is one stop; the members are not
+//                  separate stops, which is why the progress through them is
+//                  state in this dialog rather than in the walk.
+//
 // Edits go through PATCH /fact, which keeps the fact's id -- the thing other
 // facts' `supersedes` point at. DELETE + re-create would quietly break
 // orderings the writer already settled.
@@ -75,9 +83,24 @@ interface Side {
   frame?: string;
   rel?: string;
   target?: string;
+  /** Where the reader learns it, when the writer set one. Sent by the two R8.4
+   *  checks, which are entirely about this anchor disagreeing with `at`. */
+  revealed_at?: string | null;
+  /** When a connection ends. Sent by the never-true tie check. */
+  until?: string | null;
   /** The other end's NAME, sent by the scan alongside the raw id --
    *  "leads e-4f2a91" is not a sentence a writer can decide anything from. */
   target_name?: string;
+}
+
+/** One Snag inside a Tangle. The whole finding travels with the group, so
+ *  working through them needs no further round trips. */
+interface TangleMember {
+  key: string;
+  snag: string;
+  summary: string;
+  axis: string;
+  sides: Side[];
 }
 
 interface SnagFixerProps {
@@ -98,12 +121,30 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
   const [editing, setEditing] = useState<number | null>(null);
   const [draftValue, setDraftValue] = useState("");
   const [draftAt, setDraftAt] = useState("");
+  // R8.4. The reveal point, which the edit form had no control for -- so the two
+  // new checks (a fact told before it is true, a correction that reaches the
+  // reader first) could be FOUND and not fixed without leaving the walk, which
+  // is the one thing the closed-world rule forbids.
+  const [draftRevealed, setDraftRevealed] = useState("");
   // Early mention: the entry's Run, fetched because the stop's detail does not
   // carry it -- the scan knows the mention, not which anchor makes it late.
   const [run, setRun] = useState<Side[] | null>(null);
+  // Tangle: which of the group is on screen. The group is ONE stop, so this
+  // progress belongs to the dialog and not to the walk -- the walk's index
+  // would make each member look like a stop the ledger should remember.
+  const [memberAt, setMemberAt] = useState(0);
 
+  /** A Tangle's members, each a whole Snag. Empty for every other kind. */
+  const members = useMemo(
+    () => ((stop.detail?.members as TangleMember[] | undefined) ?? []), [stop]);
+  const tangle = stop.kind === "tangle" && members.length > 0;
+  const member: TangleMember | undefined = tangle ? members[memberAt] : undefined;
+
+  // A Tangle shows one member's sides at a time; everything else shows its own.
   const sides = useMemo(
-    () => ((stop.detail?.sides as Side[] | undefined) ?? []), [stop]);
+    () => (member?.sides
+           ?? ((stop.detail?.sides as Side[] | undefined) ?? [])),
+    [member, stop]);
   // Tie-based snags carry a `target` and no fact id -- their `id` is a
   // synthetic "rel:target" that no fact endpoint knows.
   const tieBased = sides.length > 0 && sides.every(s => s.target !== undefined);
@@ -156,12 +197,29 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
     return titles.get(anchor) ?? anchor;
   }
 
-  async function act(work: () => Promise<void>) {
+  /**
+   * Do the work, then move on.
+   *
+   * "On" means the next member of a Tangle if there is one, and the next stop in
+   * the walk otherwise. `all` is for the group-level action, which settles every
+   * member at once and so finishes the stop however many are left.
+   */
+  async function act(work: () => Promise<void>, { all = false } = {}) {
     setBusy(true);
     setError(null);
     try {
       await work();
-      onDone();
+      if (!all && tangle && memberAt < members.length - 1) {
+        // Still inside the group. Reset the editing state with it, or the next
+        // member opens with the previous one's draft text in the box.
+        setMemberAt(i => i + 1);
+        setEditing(null);
+        setDraftValue("");
+        setDraftAt("");
+        setDraftRevealed("");
+      } else {
+        onDone();
+      }
     } catch (e) {
       if (e instanceof GoneError) {
         // Already resolved somewhere else. Not a failure -- the screen flips
@@ -293,6 +351,59 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
             <Explain of="weaving.snag-fixer" />
           </div>
 
+          {/* ── Tangle: say what the group IS before showing one of it ──── */}
+          {tangle && (
+            <div className="mb-2 rounded border border-rose-900/60 bg-rose-950/20 p-2"
+                 data-testid="tangle-group">
+              <p className="text-[11px] text-rose-100">
+                {members.length} problems here all concern{" "}
+                <span className="font-medium text-text-primary">
+                  {String(stop.detail?.axis ?? "one thing")}
+                </span>
+                . That is usually one mistake seen from different angles, so they
+                are gathered rather than asked one at a time.
+              </p>
+              <ol className="mt-1.5 space-y-0.5">
+                {members.map((m, i) => (
+                  <li key={m.key}
+                      className={`text-[11px] ${
+                        i === memberAt ? "text-text-primary"
+                        : i < memberAt ? "text-faint line-through"
+                        : "text-text-muted"
+                      }`}>
+                    {i + 1}. {m.summary}
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-1.5 text-[10px] text-faint"
+                 data-testid="tangle-progress">
+                Working on {memberAt + 1} of {members.length}.
+              </p>
+              {/* THE REASON THE GROUPING PAYS. Marking five deliberate one at a
+                  time is the five questions this stop exists to avoid. Only
+                  offered when every member is fact-based: a tie clash has no
+                  fact to carry the mark, and the walk's permanent dismiss is
+                  what covers that case. */}
+              {members.every(m => m.sides.every(s => s.target === undefined)) && (
+                <button
+                  onClick={() => void act(async () => {
+                    for (const m of members) {
+                      for (const side of m.sides) {
+                        await patchFact(String(side.id), { intentional: true });
+                      }
+                    }
+                  }, { all: true })}
+                  disabled={busy}
+                  data-testid="tangle-all-deliberate"
+                  className="mt-2 rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary disabled:opacity-40"
+                >
+                  All {members.length} are deliberate -- never ask about any of
+                  them again
+                </button>
+              )}
+            </div>
+          )}
+
           {/* ── Unplaced: one fact, one picker ─────────────────────────── */}
           {unplaced && sides[0] && (
             <>
@@ -366,7 +477,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           )}
 
           {/* ── Snag over connections: remove the wrong one ────────────── */}
-          {stop.kind === "snag" && tieBased && (
+          {(stop.kind === "snag" || tangle) && tieBased && (
             <>
               <p className="mb-1.5 text-[11px] text-text-muted">
                 These connections clash. Remove the one that is wrong -- or if
@@ -399,11 +510,17 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           )}
 
           {/* ── Snag over facts: keep one, edit one, or both on purpose ── */}
-          {stop.kind === "snag" && !tieBased && (
+          {(stop.kind === "snag" || tangle) && !tieBased && (
             <>
+              {/* ONE SIDE IS A DIFFERENT SENTENCE. The R8.4 checks can fire on a
+                  single fact whose own two anchors disagree, and "These
+                  disagree. Keep the right one" offers a choice that is not
+                  there. */}
               <p className="mb-1.5 text-[11px] text-text-muted">
-                These disagree. Keep the right one, fix one in place, or say the
-                disagreement is deliberate:
+                {sides.length > 1
+                  ? "These disagree. Keep the right one, fix one in place, or "
+                    + "say the disagreement is deliberate:"
+                  : "Fix it in place, or say it is deliberate:"}
               </p>
               <ul className="space-y-1.5">
                 {sides.map((side, i) => (
@@ -420,10 +537,25 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                         />
                         <div className="flex flex-wrap items-center gap-2">
                           {chapterPicker(draftAt, setDraftAt, "Its chapter")}
+                          {/* Offered only where the writer has actually SET a
+                              reveal point. Two chapter pickers on every fact
+                              would turn a two-field edit into a form, and the
+                              ordinary fact becomes known where it happens. */}
+                          {side.revealed_at !== undefined
+                            && side.revealed_at !== null && (
+                            <>
+                              <span className="text-[10px] text-faint">
+                                reader learns it in
+                              </span>
+                              {chapterPicker(draftRevealed, setDraftRevealed,
+                                             "The chapter the reader learns it")}
+                            </>
+                          )}
                           <button
                             onClick={() => void act(() => patchFact(String(side.id), {
                               value: draftValue,
                               ...(draftAt ? { at: draftAt } : {}),
+                              ...(draftRevealed ? { revealed_at: draftRevealed } : {}),
                             }))}
                             disabled={busy || !draftValue.trim()}
                             className="inline-flex items-center gap-1 rounded bg-violet-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
@@ -475,6 +607,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                             setEditing(i);
                             setDraftValue(String(side.value ?? ""));
                             setDraftAt(String(side.at ?? ""));
+                            setDraftRevealed(String(side.revealed_at ?? ""));
                           }}
                           disabled={busy}
                           aria-label={`Edit ${side.value}`}
@@ -501,7 +634,9 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                 disabled={busy}
                 className="mt-2 rounded border border-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
               >
-                Both are right on purpose -- never ask about this again
+                {sides.length > 1
+                  ? "Both are right on purpose -- never ask about this again"
+                  : "That is deliberate -- never ask about this again"}
               </button>
             </>
           )}

@@ -38,8 +38,8 @@ from app.codex.migrate import (
 from app.codex.context import Budget, assemble, estimate_tokens
 from app.codex.findings import (
     answer, discard_staged, is_permanent, list_runs, load_book, load_run,
-    merge, mute_kind, new_run, open_stops, pin, refresh, remember_choice,
-    retire, save_book, save_run, unpin,
+    merge, mute_kind, mute_target, new_run, open_stops, pin, refresh,
+    remember_choice, retire, save_book, save_run, unpin,
 )
 from app.codex.mentions import alias_display, build_alias_map, find_mentions
 from app.codex.normalize import REASON_LIMIT, normalize_reason
@@ -2126,6 +2126,10 @@ class AnswerBody(BaseModel):
     unpin_phrase: str | None = None
     mute: str | None = None
     unmute: str | None = None
+    # R8.3. With `mute_for` set, the mute is about THIS ENTRY only. Without it,
+    # `mute` still means the whole book -- which is what it always meant, and
+    # what an older client will keep sending.
+    mute_for: str | None = None
     alias: str | None = None
     entity_id: str | None = None
     # The writer discarded an unsaved buffer; everything staged comes back.
@@ -2182,9 +2186,17 @@ async def post_answer(body: AnswerBody):
     for target in (run, book):
         if body.retire_phrase:
             retire(target, body.retire_phrase)
-        if body.mute:
+        # NARROW BEFORE WIDE. `mute_for` says "this kind, about this entry"; the
+        # same field without it says "this kind, anywhere". Only one of the two
+        # is ever applied, so a client that sends both cannot accidentally
+        # silence a whole book while asking about one character.
+        if body.mute and body.mute_for:
+            mute_target(target, body.mute_for, body.mute)
+        elif body.mute:
             mute_kind(target, body.mute)
-        if body.unmute:
+        if body.unmute and body.mute_for:
+            mute_target(target, body.mute_for, body.unmute, muted=False)
+        elif body.unmute:
             mute_kind(target, body.unmute, muted=False)
         if body.alias and body.entity_id:
             remember_choice(target, body.alias, body.entity_id)

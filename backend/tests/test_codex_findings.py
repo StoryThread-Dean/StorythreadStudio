@@ -19,10 +19,10 @@ import os
 from app.codex.findings import (
     STATE_APPLIED, STATE_DEFERRED, STATE_DISMISSED, STATE_PENDING,
     STATE_STAGED, STATE_STALE,
-    answer, discard_staged, list_runs, load_run, mute_kind, new_run,
-    open_stops, refresh, remember_choice, retire, run_dir, save_run,
+    answer, discard_staged, list_runs, load_run, mute_kind, mute_target,
+    new_run, open_stops, refresh, remember_choice, retire, run_dir, save_run,
 )
-from app.codex.scan import STOP_LOOSE, STOP_UNSPUN, Stop
+from app.codex.scan import STOP_LOOSE, STOP_SNAG, STOP_UNSPUN, Stop
 
 
 def _project(tmp_path) -> str:
@@ -31,9 +31,10 @@ def _project(tmp_path) -> str:
     return str(root)
 
 
-def _stop(key: str, kind: str = STOP_UNSPUN, evidence_hash: str = "") -> Stop:
+def _stop(key: str, kind: str = STOP_UNSPUN, evidence_hash: str = "",
+          chapter_id: str = "") -> Stop:
     return Stop(kind=kind, key=key, title=key, why="because",
-                evidence_hash=evidence_hash)
+                evidence_hash=evidence_hash, chapter_id=chapter_id)
 
 
 # ── Durability ───────────────────────────────────────────────────────────────
@@ -203,6 +204,64 @@ def test_unmuting_brings_the_kind_back():
     assert open_stops(run, [_stop("a", STOP_LOOSE)])
 
 
+# ── R8.3: "never ask" has a narrow half now ──────────────────────────────────
+#
+# It had exactly one meaning -- never anywhere -- and the spec's word was "for
+# this target". The gap is not pedantic: a deliberately unreliable narrator's
+# entry SHOULD stop being asked about contradictions, and the only control that
+# existed turned the check off for the entire book to get it.
+
+def test_muting_one_entry_leaves_the_rest_of_the_book_checked():
+    run = new_run("full")
+    mute_target(run, "e-1", STOP_LOOSE)
+    kept = open_stops(run, [
+        _stop("a", STOP_LOOSE), _stop("b", STOP_LOOSE),
+    ])
+    # _stop builds no entity_id, so neither is muted -- prove it with real ones.
+    assert len(kept) == 2
+
+    with_ids = [
+        Stop(kind=STOP_LOOSE, key="a", title="a", why="", entity_id="e-1"),
+        Stop(kind=STOP_LOOSE, key="b", title="b", why="", entity_id="e-2"),
+    ]
+    assert [s.key for s in open_stops(run, with_ids)] == ["b"]
+
+
+def test_muting_one_entry_leaves_its_OTHER_questions_alone():
+    # Per target AND per kind. "Stop asking about contradictions on this one"
+    # must not also stop asking whether it connects to anything.
+    run = new_run("full")
+    mute_target(run, "e-1", STOP_SNAG)
+    stops = [
+        Stop(kind=STOP_SNAG, key="snag", title="s", why="", entity_id="e-1"),
+        Stop(kind=STOP_LOOSE, key="loose", title="l", why="", entity_id="e-1"),
+    ]
+    assert [s.key for s in open_stops(run, stops)] == ["loose"]
+
+
+def test_a_narrow_mute_can_be_taken_back_and_leaves_nothing_behind():
+    # It is a preference, not a judgement, so it reverses. And the record is read
+    # on every scan, so an entry unmuted must not leave an empty list behind --
+    # a file that grows a key per entry the writer ever changed their mind about
+    # grows forever and says nothing.
+    run = new_run("full")
+    mute_target(run, "e-1", STOP_SNAG)
+    mute_target(run, "e-1", STOP_SNAG, muted=False)
+    assert run["muted_targets"] == {}
+
+
+def test_the_book_is_what_is_obeyed_for_narrow_mutes(tmp_path):
+    # Same rule as the global mute: unmuting in one session must not be undone
+    # by opening Weaving tomorrow.
+    from app.codex.findings import empty_book, merge
+
+    book = empty_book()
+    mute_target(book, "e-1", STOP_SNAG)
+    run = new_run("full")
+    view = merge(book, run)
+    assert view["muted_targets"] == {"e-1": [STOP_SNAG]}
+
+
 # ── Staleness, checked locally ───────────────────────────────────────────────
 
 def test_changed_evidence_marks_a_finding_stale_with_no_ai_call():
@@ -253,6 +312,72 @@ def test_a_stale_finding_is_offered_again():
     answer(run, "a", STATE_DEFERRED, evidence_hash="old")
     refresh(run, [_stop("a", evidence_hash="new")])
     assert [s.key for s in open_stops(run, [_stop("a")])] == ["a"]
+
+
+# ── R8.1: the report has to NAME things, not only count them ─────────────────
+#
+# This is the whole of gap A8. The count above was correct from the first day
+# and no screen ever rendered it, for a reason worth remembering: a count is
+# not something an interface can act on. It cannot mark the card the writer is
+# looking at, and it cannot offer to re-check anything, so the honest thing the
+# spec asked for ("nothing is silently shown as current when it is not") was
+# unbuildable from what refresh returned.
+
+def test_the_report_says_which_stops_went_stale():
+    run = new_run("full")
+    answer(run, "moved", STATE_DEFERRED, evidence_hash="old")
+    answer(run, "same", STATE_DEFERRED, evidence_hash="steady")
+    report = refresh(run, [
+        _stop("moved", evidence_hash="new"),
+        _stop("same", evidence_hash="steady"),
+    ])
+    # Named, so the card for "moved" can say so while the writer looks at it.
+    assert report["stale_keys"] == ["moved"]
+
+
+def test_the_report_says_which_chapters_moved():
+    # The scoped re-check is a plain scan narrowed to these. Without them the
+    # only offer available is "read the whole book again", which is a
+    # different-sized decision from "look at the chapter I edited last night".
+    run = new_run("full")
+    answer(run, "a", STATE_DEFERRED, evidence_hash="old")
+    answer(run, "b", STATE_DEFERRED, evidence_hash="old")
+    report = refresh(run, [
+        _stop("a", evidence_hash="new", chapter_id="ch-04"),
+        _stop("b", evidence_hash="new", chapter_id="ch-04"),
+    ])
+    # One chapter, once, however many stops it holds.
+    assert report["chapters"] == ["ch-04"]
+    assert report["stale_elsewhere"] == 0
+
+
+def test_a_stale_stop_with_no_chapter_is_counted_rather_than_dropped():
+    # A chapter-scoped re-check CANNOT include a stop that belongs to no
+    # chapter, so the number the banner quotes and the number the narrowed walk
+    # shows would not agree. Saying so is the difference between a bound and a
+    # lie -- the same rule the Unwoven sitting follows.
+    run = new_run("full")
+    answer(run, "in-prose", STATE_DEFERRED, evidence_hash="old")
+    answer(run, "in-world", STATE_DEFERRED, evidence_hash="old")
+    report = refresh(run, [
+        _stop("in-prose", evidence_hash="new", chapter_id="ch-01"),
+        _stop("in-world", evidence_hash="new"),
+    ])
+    assert report["stale"] == 2
+    assert report["chapters"] == ["ch-01"]
+    assert report["stale_elsewhere"] == 1
+
+
+def test_nothing_stale_reports_no_keys_and_no_chapters():
+    # The banner hides itself on this, so the fields have to be empty rather
+    # than absent -- a resume that says "0 stale" every time teaches the writer
+    # to stop reading banners.
+    run = new_run("full")
+    answer(run, "a", STATE_DEFERRED, evidence_hash="same")
+    report = refresh(run, [_stop("a", evidence_hash="same", chapter_id="ch-01")])
+    assert report["stale"] == 0
+    assert report["stale_keys"] == []
+    assert report["chapters"] == []
 
 
 # ── The answers that are not about one stop ──────────────────────────────────

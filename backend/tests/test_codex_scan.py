@@ -24,6 +24,7 @@ from app.codex.scan import (
     STOP_KINDS,
     STOP_LOOSE,
     STOP_SNAG,
+    STOP_TANGLE,
     STOP_UNPLACED,
     STOP_UNSPUN,
     STOP_UNTIED,
@@ -421,6 +422,130 @@ def test_an_unplaced_fact_is_its_own_kind(tmp_path):
         {"id": "f-1", "at": "c-deleted", "axis": "eyes", "value": "Green."}])
     result = scan(folder, [elara], REGISTRY, ScanRequest(depth=PASS_CLOTH))
     assert len(result.by_kind(STOP_UNPLACED)) == 1
+
+
+# ── R8.2: several Snags on one axis become ONE stop ──────────────────────────
+#
+# `group_tangles` was written, unit-tested in test_codex_snags.py, and called by
+# nothing -- so the grouping worked perfectly and no writer ever saw it. Moving
+# one date can produce eleven findings on one axis, and eleven questions about
+# one mistake teaches the writer that the checker does not understand the book.
+
+def _tangled(folder: str) -> dict:
+    """One entry with two DIFFERENT problems, both about 'eyes'.
+
+    An ambiguous ordering (two facts at one anchor with nothing to order them)
+    and a forked supersession (two facts each claiming to replace f-1). Both
+    land on the same axis, which is the shape a single mistake takes.
+    """
+    ids = list(_chapter_ids(folder).values())
+    return _thread("e-1", "Elara", run=[
+        {"id": "f-1", "at": ids[0], "axis": "eyes", "value": "Green."},
+        {"id": "f-2", "at": ids[0], "axis": "eyes", "value": "Blue."},
+        {"id": "f-3", "at": ids[1], "axis": "eyes", "value": "Grey.",
+         "supersedes": "f-1"},
+        {"id": "f-4", "at": ids[1], "axis": "eyes", "value": "Hazel.",
+         "supersedes": "f-1"},
+    ])
+
+
+def test_several_snags_on_one_axis_arrive_as_one_tangle(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n", "02.md": "# Two\nSun.\n"})
+    result = scan(folder, [_tangled(folder)], REGISTRY,
+                  ScanRequest(depth=PASS_CLOTH))
+    tangles = result.by_kind(STOP_TANGLE)
+    assert len(tangles) == 1
+    # And the individual findings are NOT also asked -- being asked twice is
+    # the failure this replaces, not an improvement on it.
+    assert result.by_kind(STOP_SNAG) == []
+
+
+def test_a_tangle_carries_every_finding_it_gathered(tmp_path):
+    # The group has to be answerable, which means the fixer needs each member
+    # whole -- summary, sides and all -- rather than a count and a round trip.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n", "02.md": "# Two\nSun.\n"})
+    result = scan(folder, [_tangled(folder)], REGISTRY,
+                  ScanRequest(depth=PASS_CLOTH))
+    tangle = result.by_kind(STOP_TANGLE)[0]
+    members = tangle.detail["members"]
+    assert len(members) >= 2
+    assert all(m["summary"] and m["sides"] for m in members)
+    # Named by its cause, so the writer knows what the group is ABOUT.
+    assert tangle.detail["axis"] == "eyes"
+    assert "eyes" in tangle.title
+
+
+def test_a_lone_snag_stays_a_snag(tmp_path):
+    # group_tangles returns a group of one so its caller can have a single code
+    # path, and taking that literally would put "Tangle: 1 problem" and an extra
+    # click in front of a screen that is identical either way.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    chapter_id = list(_chapter_ids(folder).values())[0]
+    elara = _thread("e-1", "Elara", run=[
+        {"id": "f-1", "at": chapter_id, "axis": "eyes", "value": "Green."},
+        {"id": "f-2", "at": chapter_id, "axis": "eyes", "value": "Blue."},
+    ])
+    result = scan(folder, [elara], REGISTRY, ScanRequest(depth=PASS_CLOTH))
+    assert len(result.by_kind(STOP_SNAG)) == 1
+    assert result.by_kind(STOP_TANGLE) == []
+
+
+def test_problems_on_different_axes_are_never_tangled_together(tmp_path):
+    # The grouping claim is "these are one mistake". Two axes are two mistakes,
+    # and gathering them would put that claim in the writer's face as a lie.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    chapter_id = list(_chapter_ids(folder).values())[0]
+    elara = _thread("e-1", "Elara", run=[
+        {"id": "f-1", "at": chapter_id, "axis": "eyes", "value": "Green."},
+        {"id": "f-2", "at": chapter_id, "axis": "eyes", "value": "Blue."},
+        {"id": "f-3", "at": chapter_id, "axis": "home", "value": "Ashfall."},
+        {"id": "f-4", "at": chapter_id, "axis": "home", "value": "Bright Hollow."},
+    ])
+    result = scan(folder, [elara], REGISTRY, ScanRequest(depth=PASS_CLOTH))
+    assert result.by_kind(STOP_TANGLE) == []
+    assert len(result.by_kind(STOP_SNAG)) == 2
+
+
+def test_an_unplaced_fact_is_never_swept_into_a_tangle(tmp_path):
+    # "Where does this belong?" and "which of these is right?" are different
+    # questions with different fixers. Bundling them would put two unrelated
+    # decisions behind one button.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n", "02.md": "# Two\nSun.\n"})
+    thread = _tangled(folder)
+    thread["run"].append({"id": "f-5", "at": "c-deleted", "axis": "eyes",
+                          "value": "Amber."})
+    result = scan(folder, [thread], REGISTRY, ScanRequest(depth=PASS_CLOTH))
+    assert len(result.by_kind(STOP_UNPLACED)) == 1
+    tangle = result.by_kind(STOP_TANGLE)[0]
+    assert all(m["snag"] != "unplaced" for m in tangle.detail["members"])
+
+
+def test_silencing_snags_silences_tangles_too(tmp_path):
+    # A Tangle IS Snags. A writer who turned off contradictions did not mean
+    # "unless there are several of them".
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n", "02.md": "# Two\nSun.\n"})
+    result = scan(folder, [_tangled(folder)], REGISTRY,
+                  ScanRequest(depth=PASS_CLOTH, muted_kinds={STOP_SNAG}))
+    assert result.by_kind(STOP_TANGLE) == []
+
+
+def test_a_tangles_key_survives_fixing_part_of_it(tmp_path):
+    # Keyed on the CAUSE, not on the members. A key built from every member's
+    # key would change the moment one was fixed, and the ledger would call the
+    # remainder a brand new stop -- so "not yet" would be forgotten mid-group.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n", "02.md": "# Two\nSun.\n"})
+    before = scan(folder, [_tangled(folder)], REGISTRY,
+                  ScanRequest(depth=PASS_CLOTH)).by_kind(STOP_TANGLE)[0]
+
+    thinner = _tangled(folder)
+    # The writer settled the forked supersession by dropping one claim.
+    thinner["run"] = [f for f in thinner["run"] if f["id"] != "f-4"]
+    thinner["run"].append({"id": "f-5", "at": list(_chapter_ids(folder).values())[1],
+                           "axis": "eyes", "value": "Amber."})
+    after = scan(folder, [thinner], REGISTRY,
+                 ScanRequest(depth=PASS_CLOTH)).by_kind(STOP_TANGLE)
+    if after:
+        assert after[0].key == before.key
 
 
 # ── Unspun ───────────────────────────────────────────────────────────────────

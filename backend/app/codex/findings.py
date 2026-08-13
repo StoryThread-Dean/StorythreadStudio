@@ -55,9 +55,9 @@ __all__ = [
     "STATE_PENDING", "STATE_STAGED", "STATE_APPLIED", "STATE_DEFERRED",
     "STATE_DISMISSED", "STATE_STALE", "SCHEMA_VERSION",
     "answer", "book_path", "discard_staged", "empty_book", "is_permanent",
-    "list_runs", "load_book", "load_run", "merge", "mute_kind", "new_run",
-    "open_stops", "pin", "refresh", "remember_choice", "retire", "run_dir",
-    "save_book", "save_run", "unpin",
+    "list_runs", "load_book", "load_run", "merge", "mute_kind", "mute_target",
+    "new_run", "open_stops", "pin", "refresh", "remember_choice", "retire",
+    "run_dir", "save_book", "save_run", "unpin",
 ]
 
 SCHEMA_VERSION = 1
@@ -143,6 +143,14 @@ def empty_book() -> dict:
         "answers": {},
         "retired": [],
         "muted_kinds": [],
+        # R8.3: {entity_id -> [kind]}. "Never ask" used to have exactly one
+        # meaning -- never anywhere -- and the spec's word was "for this target".
+        # The difference is not pedantic: a deliberately unreliable narrator's
+        # entry SHOULD stop being asked about contradictions, and a writer who
+        # only has that one entry in mind turns the check off for their whole
+        # book to get it. This is the narrow answer, so the wide one stops being
+        # the only one.
+        "muted_targets": {},
         "disambiguations": {},
         # Phrases the writer marked by hand. See pin() for why this is a
         # separate list rather than a kind of answer.
@@ -207,6 +215,9 @@ def merge(book: dict, run: dict | None) -> dict:
         # Muting is a preference about the book, so the book is authoritative
         # -- otherwise unmuting in one session would be undone by the next.
         "muted_kinds": list(book.get("muted_kinds") or []),
+        # Same reasoning, per entry. Book-authoritative for the same reason.
+        "muted_targets": {k: list(v) for k, v
+                          in (book.get("muted_targets") or {}).items()},
         "disambiguations": {**(book.get("disambiguations") or {}),
                             **(run.get("disambiguations") or {})},
         # Pins are about the book, never about one sitting.
@@ -234,6 +245,9 @@ def new_run(depth: str = "full", *, types: list[str] | None = None,
         # same name in a different chapter must not be asked either.
         "retired": [],
         "muted_kinds": [],
+        # {entity_id -> [kind]}. Mirrored from the book so the session log says
+        # what happened in it; the book is what is obeyed.
+        "muted_targets": {},
         # {lower-cased alias -> entity_id}, so "which John?" is asked once.
         "disambiguations": {},
     }
@@ -265,6 +279,7 @@ def load_run(project_path: str, run_id: str) -> dict | None:
     data.setdefault("answers", {})
     data.setdefault("retired", [])
     data.setdefault("muted_kinds", [])
+    data.setdefault("muted_targets", {})
     data.setdefault("disambiguations", {})
     data.setdefault("pinned", [])
     return data
@@ -411,6 +426,36 @@ def mute_kind(run: dict, kind: str, muted: bool = True) -> None:
         kinds.remove(kind)
 
 
+def mute_target(store: dict, entity_id: str, kind: str,
+                muted: bool = True) -> None:
+    """
+    Never ask THIS kind about THIS entry again.
+
+    R8.3. The narrow half of "never ask", which had no narrow half: the only
+    control was the whole book, so a writer who wanted one unreliable character
+    left alone had to turn contradiction checking off entirely -- and then never
+    hear about the rest of their book either.
+
+    An empty list is removed rather than left behind. This is written to the
+    writer's own answers file and read back on every scan; a file that
+    accumulates `{"e-1": []}` for every entry they ever unmuted is a file that
+    grows forever and says nothing.
+    """
+    if not entity_id or not kind:
+        return
+    targets = store.setdefault("muted_targets", {})
+    kinds = list(targets.get(entity_id) or [])
+    if muted:
+        if kind not in kinds:
+            kinds.append(kind)
+    elif kind in kinds:
+        kinds.remove(kind)
+    if kinds:
+        targets[entity_id] = kinds
+    else:
+        targets.pop(entity_id, None)
+
+
 def remember_choice(run: dict, alias: str, entity_id: str) -> None:
     """Which John. Asked once, remembered for the run."""
     if alias and entity_id:
@@ -433,10 +478,26 @@ def refresh(run: dict, stops: list) -> dict:
     may come back -- a section emptied again, a name re-added -- and a
     dismissal that evaporated the first time the problem went away would
     resurface as a question the writer already refused.
+
+    R8.1: THE REPORT NAMES THINGS, IT DOES NOT ONLY COUNT THEM. A count alone
+    is all this returned for months, and a count is not something a screen can
+    act on -- so nothing rendered it, and a stop the writer had already put off
+    about words that no longer exist came back looking exactly like a fresh
+    one. Two extra fields make it usable:
+
+      stale_keys  which stops, so the card itself can say so
+      chapters    where they live, so "re-check just those" is one scan
+
+    `chapters` skips stale stops that have no chapter (an entity-shaped stop
+    like a Loose thread). That means a chapter-scoped re-check can MISS some of
+    what went stale, so the count of those is reported too rather than left for
+    the writer to discover as a number that does not add up.
     """
     answers = run.get("answers") or {}
     current = {s.key: s for s in stops}
-    report = {"stale": 0, "gone": 0, "answered": 0}
+    report: dict = {"stale": 0, "gone": 0, "answered": 0,
+                    "stale_keys": [], "chapters": [], "stale_elsewhere": 0}
+    chapters: list[str] = []
 
     for key, entry in answers.items():
         state = entry.get("state")
@@ -455,7 +516,15 @@ def refresh(run: dict, stops: list) -> dict:
         if stored and fresh and stored != fresh and state not in _PERMANENT:
             entry["state"] = STATE_STALE
             report["stale"] += 1
+            report["stale_keys"].append(key)
+            chapter = getattr(stop, "chapter_id", "") or ""
+            if chapter:
+                if chapter not in chapters:
+                    chapters.append(chapter)
+            else:
+                report["stale_elsewhere"] += 1
 
+    report["chapters"] = chapters
     return report
 
 
@@ -467,11 +536,18 @@ def open_stops(run: dict, stops: list) -> list:
     what "not yet" means, and a "not yet" that never returned would be a
     dismissal the writer did not choose. Stale comes back too, because the
     text changed and the old answer was about different words.
+
+    Two kinds of mute are honoured here, and per-target is filtered at this
+    layer rather than during the scan on purpose: the scan produces stops per
+    ENTRY and this is the one place that already knows both the kind and the
+    entry it landed on, so there is a single rule rather than two that can drift.
     """
     answers = run.get("answers") or {}
     muted = set(run.get("muted_kinds") or [])
+    per_target = run.get("muted_targets") or {}
     return [
         stop for stop in stops
         if stop.kind not in muted
+        and stop.kind not in set(per_target.get(stop.entity_id) or ())
         and (answers.get(stop.key, {}).get("state") not in _PERMANENT)
     ]

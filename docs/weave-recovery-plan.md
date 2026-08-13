@@ -796,11 +796,31 @@ three surfaces at once.
 
 ## Phase 8 -- Honesty and completeness of the walk
 
-- [ ] **R8.1** Surface stale findings (gap A8) -- the banner and a scoped
-      re-run.
-- [ ] **R8.2** Call `group_tangles` so Tangle has a producer.
-- [ ] **R8.3** Mute per target, not globally.
-- [ ] **R8.4** Reveal-order break and timeline-impossibility detectors.
+- [x] **R8.1** Surface stale findings (gap A8) -- the banner and a scoped
+      re-run. The cause is worth keeping: `refresh` returned a COUNT, and a count
+      is not something an interface can act on -- it cannot mark the card the
+      writer is looking at and it cannot scope a re-run, so the correct
+      computation went unrendered for the whole build. The report NAMES things
+      now (which stops, which chapters), a banner reads it on the first stop of a
+      resumed walk, and each stale card says the quote above is the new wording.
+      The narrowed walk says what it leaves out and offers the way back.
+- [x] **R8.2** Call `group_tangles` so Tangle has a producer. A group of one
+      stays a Snag; Unplaced is never swept in; the members are worked through
+      inside the one stop, and "all of these are deliberate" is the button that
+      makes the grouping pay. The map cluster the spec describes is NOT built and
+      is recorded as such.
+- [x] **R8.3** Mute per target, not globally. The button asks how widely and
+      writes nothing until told; the narrow choice is offered only where there is
+      an entry to narrow to.
+- [x] **R8.4** Reveal-order break and timeline-impossibility detectors --
+      deliberately NARROWER than the spec's wording, which says "prose
+      references a fact". Matching a sentence to a fact is a reading, not
+      arithmetic, and it is check 3's job in the AI pass. What ships is the
+      writer's own two anchors disagreeing: a fact told before it becomes true, a
+      correction that reaches the reader before the thing it corrects, and a
+      connection that ends at or before it starts. Spec amended. The fixer gained
+      the reveal-point control it had nowhere, or the walk would have reported
+      problems it gave the writer no way to fix.
 - [ ] **R8.5** Write to `codex_mention`, or drop the table and say so.
 - [ ] **R8.6** Per-book `model_roles` in `project.json`, or delete the dead
       precedence level and its faking test.
@@ -867,7 +887,7 @@ it, since the spec calls it the reason the frame system exists.
 | 5 Sources | 5 | **5** |
 | 6 Unwoven | 5 | **5** |
 | 7 Scene identity | 4 | 0 |
-| 8 Walk honesty | 11 | 0 |
+| 8 Walk honesty | 11 | **4** |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **99** | **69** |
+| **Total** | **99** | **73** |

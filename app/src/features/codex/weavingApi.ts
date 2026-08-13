@@ -99,7 +99,33 @@ export interface ScanResult {
    *  how much of it is still open -- the sitting is bounded, the board is not,
    *  because a bounded list shown on its own lies about how much is left. */
   domains: WorldDomain[];
-  resumed: { stale?: number; gone?: number; answered?: number };
+  resumed: ResumeReport;
+}
+
+/**
+ * What a resumed sitting found changed under it. Only populated when the scan
+ * carries a run id, which means: after Start, not on the setup screen.
+ *
+ * This was typed here and read by NOTHING for months, which is the whole of
+ * gap A8. A stale stop is one the writer already put off, about words that have
+ * since been rewritten -- and it came back indistinguishable from a stop nobody
+ * had ever seen, which is precisely what the spec forbids.
+ */
+export interface ResumeReport {
+  /** How many answers are about text that has since changed. */
+  stale?: number;
+  /** Stops whose answers no longer match anything the scan found. Kept rather
+   *  than deleted: the condition can come back. */
+  gone?: number;
+  answered?: number;
+  /** WHICH stops, so a card can say so rather than a banner claiming it
+   *  vaguely. */
+  stale_keys?: string[];
+  /** Where they live, so re-checking just those is one scan. */
+  chapters?: string[];
+  /** Stale stops with no chapter to scope to. Reported because a
+   *  chapter-scoped re-check silently leaves these out otherwise. */
+  stale_elsewhere?: number;
 }
 
 export interface WorldDomain {
@@ -271,10 +297,20 @@ export function dismiss(projectPath: string, runId: string, stop: Stop,
 
 /** "Never ask about this kind." Reversible -- it is a preference, not a
  *  judgement about the book. */
+/**
+ * Stop asking about a kind of stop.
+ *
+ * `forEntity` narrows it to ONE entry (R8.3). Without it the mute is about the
+ * whole book, which is what "Never ask" silently meant for its whole existence
+ * -- the spec's word was "for this target", and a writer who wanted one
+ * unreliable character left alone had to turn the check off everywhere.
+ */
 export function muteKind(projectPath: string, runId: string, kind: string,
-                         muted = true) {
+                         muted = true, forEntity?: string) {
+  const scope = forEntity ? { mute_for: forEntity } : {};
   return answer(projectPath, runId,
-                muted ? { mute: kind } : { unmute: kind });
+                muted ? { mute: kind, ...scope }
+                      : { unmute: kind, ...scope });
 }
 
 // ── The brief ────────────────────────────────────────────────────────────────
