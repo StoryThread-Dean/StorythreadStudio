@@ -25,6 +25,65 @@ export interface SectionConfig {
   key: string;              // matches the key in Profile.sections
   heading: string;          // displayed as the section title
   hasTraitBlocks: boolean;  // true = trait cards, false = a text box
+  /**
+   * Its job is done elsewhere now, so the form hides it unless it already holds
+   * something the writer wrote.
+   *
+   * Retired rather than deleted, because both parsers work from this list: a
+   * section removed from it is a section dropped from the file on the next save.
+   */
+  retired?: boolean;
+}
+
+/**
+ * A COLOUR PER SECTION, so a writer finds Motivations by its stripe rather than
+ * by reading six identical headings.
+ *
+ * Assigned by POSITION rather than by name, which is what lets it work for the
+ * six kinds that had no editor last week and for anything a writer invents this
+ * afternoon. The palette is muted on purpose: this is a stripe beside a heading,
+ * not a highlighter.
+ */
+const SECTION_COLOURS = [
+  { bar: "bg-sky-500/70", border: "border-sky-700/60" },
+  { bar: "bg-emerald-500/70", border: "border-emerald-700/60" },
+  { bar: "bg-amber-500/70", border: "border-amber-700/60" },
+  { bar: "bg-rose-500/70", border: "border-rose-700/60" },
+  { bar: "bg-teal-500/70", border: "border-teal-700/60" },
+  { bar: "bg-fuchsia-500/70", border: "border-fuchsia-700/60" },
+  { bar: "bg-lime-500/70", border: "border-lime-700/60" },
+  { bar: "bg-cyan-500/70", border: "border-cyan-700/60" },
+];
+
+/**
+ * The one section that is not just another colour.
+ *
+ * Asked for in these words: "should also be both a different color section
+ * entirely and visually look and appear shadowy while still eye catching and
+ * functional. I want it to stand out as different while keeping with the theme."
+ *
+ * So: violet, which is the Weave's colour everywhere else in this app, over a
+ * darker ground than its neighbours. It reads as a room with the lights lower
+ * rather than as a warning, which is right -- there is nothing wrong with a
+ * secret, it is simply not for saying out loud.
+ */
+export const SHADOWED = {
+  bar: "bg-violet-400/80",
+  border: "border-violet-700/70",
+  panel: "border-violet-900/70 bg-violet-950/30",
+};
+
+/** True for the section a kind keeps its secrets in. Matched on the key rather
+ *  than hardcoded per kind, so a writer's own "hidden_history" gets it too. */
+export function isShadowed(key: string): boolean {
+  return key.includes("hidden");
+}
+
+/** The stripe and the trait border for one section. */
+export function sectionColour(key: string, index: number):
+    { bar: string; border: string; panel?: string } {
+  if (isShadowed(key)) return SHADOWED;
+  return SECTION_COLOURS[index % SECTION_COLOURS.length];
 }
 
 export type SectionsByType = Record<string, SectionConfig[]>;
@@ -58,6 +117,7 @@ export function sectionsFromRegistry(types: TypeEntry[]): SectionsByType {
       key: section.id,
       heading: section.heading || headingFromKey(section.id),
       hasTraitBlocks: Boolean(section.trait_blocks),
+      retired: Boolean(section.retired),
     }));
   }
   return out;

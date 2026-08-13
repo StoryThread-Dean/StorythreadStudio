@@ -71,6 +71,11 @@ SECTION_CONFIGS: dict[str, list[SectionConfig]] = {
         # test_profile_registry_agreement.py so the two cannot part again.
         SectionConfig("hidden_and_foreshadowing_traits",
                       "Hidden and Foreshadowing Traits", True),
+        # RETIRED in the registry (see types_registry.py) and kept HERE for the
+        # reason it is kept there: this file parses and writes by config, so a
+        # section removed from this list is a section deleted from the writer's
+        # file on the next save. The form hides it unless it already holds
+        # something.
         SectionConfig("relationships_overview",   "Relationships Overview",          False),
         SectionConfig("notes",                    "Notes",                           False),
     ],

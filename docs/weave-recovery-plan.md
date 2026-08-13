@@ -622,6 +622,31 @@ produce.
       secrecy, frames and reveal points would be the wall of information this
       restructure exists to remove. It ends by saying where to STOP: a name and
       one line is a real entry, and nothing here nags for the rest.
+- [x] **R2.13g** Colour, and two things it made possible. Each section has its
+      own stripe, assigned by POSITION rather than by name so it works for the six
+      kinds that had no editor last week and for anything a writer invents. Every
+      trait wears its section's colour as its border, which answers "which section
+      am I in" halfway down a long page for the cost of nothing.
+      **Hidden and Foreshadowing gets its own ground**, not just its own stripe:
+      violet, the Weave's colour elsewhere in the app, over a darker panel.
+      Asked for as "shadowy while still eye catching and functional ... stand out
+      as different while keeping with the theme", and it reads as a room with the
+      lights lower rather than as a warning -- which is right, since there is
+      nothing wrong with a secret.
+      **AI summaries open closed**, one line each saying whether they are written
+      or empty, several expandable at once. They are a restatement of the section
+      directly above them, so open by default they were the same words twice on a
+      page whose problem is length. Keying the section wrappers by PROFILE was the
+      part that mattered: without the filename in the key React reuses the
+      components, so every summary opened on the last character would still be
+      open on the next one.
+      **Relationships Overview is retired** -- its job is done twice over, by
+      Connections and by Relationship entries. RETIRED, NOT DELETED: both parsers
+      work from the section list, so removing the entry outright would have
+      dropped the writer's paragraph from the file on the next save. It stays in
+      the list, it round trips, and the form hides it unless it already holds
+      something -- so it disappears for good once the words have been moved
+      somewhere better, and never before.
 - [x] **R2.13f** Three corrections from the writer on seeing it: Overview moved
       BELOW Connections (their reasoning, better than mine -- who somebody IS
       reads better once you know who they are TO people; my argument for second
@@ -772,7 +797,7 @@ it, since the spec calls it the reason the frame system exists.
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
 | 2 The premise | 25 | 25 |
-| 2b Profile Builder | 6 | 6 |
+| 2b Profile Builder | 7 | 7 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -781,4 +806,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **97** | **49** |
+| **Total** | **98** | **50** |

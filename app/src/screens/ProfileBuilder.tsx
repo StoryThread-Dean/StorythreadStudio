@@ -38,7 +38,9 @@ import {
 // what gives Governments, Factions, Deities, Religions, Creatures and Cultures
 // a real editor, along with any kind the writer invents, without a line of
 // per-kind code here.
-import { useTypeRegistry, type SectionConfig } from "../types/sectionRegistry";
+import {
+  isShadowed, sectionColour, useTypeRegistry, type SectionConfig,
+} from "../types/sectionRegistry";
 import { v4 as uuidv4 } from "uuid";
 import { IMPORTANCE_HELP, getSectionHelp } from "../data/profileHelp";
 import type { ImportanceLevelHelp, SectionHelp } from "../data/profileHelp";
@@ -548,9 +550,26 @@ export function ProfileBuilder({
     [registry.sections]);
 
   // Section configs for the current profile type
-  const sections = useMemo(
+  const allSections = useMemo(
     () => sectionsFor(profileType),
     [sectionsFor, profileType]
+  );
+
+  // A RETIRED SECTION IS HIDDEN UNLESS IT ALREADY HOLDS SOMETHING.
+  //
+  // Relationships Overview is the first: its job is done twice over now, by
+  // Connections and by Relationship entries. Hiding it outright would leave a
+  // writer's paragraph on disk with no way to reach it, so it stays on screen
+  // exactly as long as there is something in it -- and disappears for good once
+  // they have moved the words somewhere better.
+  const sections = useMemo(
+    () => allSections.filter(config => {
+      if (!config.retired) return true;
+      const section = profile?.sections?.[config.key];
+      return Boolean(section?.content?.trim())
+        || Boolean(section?.trait_blocks?.length);
+    }),
+    [allSections, profile]
   );
 
   // Which character template the OPEN profile uses. Side/background
@@ -2262,8 +2281,13 @@ export function ProfileBuilder({
                 const section = profile.sections[cfg.key] ?? {
                   content: "", trait_blocks: [], ai_summary: "",
                 };
-                return (
-                  <div key={cfg.key}>
+                // KEYED BY PROFILE AND SECTION, so switching profiles remounts
+                // these. Without the filename in the key React reuses the
+                // component, and every AI summary the writer opened on the last
+                // character would still be open on this one -- exactly what
+                // "minimise upon opening the profile" asks it not to do.
+                return (
+                  <div key={`${profile.filename}:${cfg.key}`}>
                   <ProfileSectionEditor
                     sectionKey={cfg.key}
                     heading={cfg.heading}
@@ -2288,6 +2312,8 @@ export function ProfileBuilder({
                     generatingField={generatingField}
                     openTraits={openTraits}
                     onToggleTrait={toggleTrait}
+                    colour={sectionColour(cfg.key, allSections.findIndex(c => c.key === cfg.key))}
+                    shadowed={isShadowed(cfg.key)}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
                     showAiSummary={!isSideCharacter}
                     onGenerateOverview={
@@ -2385,8 +2411,13 @@ export function ProfileBuilder({
                 const section = profile.sections[cfg.key] ?? {
                   content: "", trait_blocks: [], ai_summary: "",
                 };
-                return (
-                  <div key={cfg.key}>
+                // KEYED BY PROFILE AND SECTION, so switching profiles remounts
+                // these. Without the filename in the key React reuses the
+                // component, and every AI summary the writer opened on the last
+                // character would still be open on this one -- exactly what
+                // "minimise upon opening the profile" asks it not to do.
+                return (
+                  <div key={`${profile.filename}:${cfg.key}`}>
                   <ProfileSectionEditor
                     sectionKey={cfg.key}
                     heading={cfg.heading}
@@ -2411,6 +2442,8 @@ export function ProfileBuilder({
                     generatingField={generatingField}
                     openTraits={openTraits}
                     onToggleTrait={toggleTrait}
+                    colour={sectionColour(cfg.key, allSections.findIndex(c => c.key === cfg.key))}
+                    shadowed={isShadowed(cfg.key)}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
                     showAiSummary={!isSideCharacter}
                     onGenerateOverview={
@@ -2789,6 +2822,12 @@ interface ProfileSectionEditorProps {
    *  the set survives a re-render and resets when the writer changes profile. */
   openTraits: Set<string>;
   onToggleTrait: (id: string) => void;
+  /** This section's stripe, and the border its traits wear, so a writer finds
+   *  Motivations by its colour rather than by reading six identical headings. */
+  colour: { bar: string; border: string; panel?: string };
+  /** True for the section a kind keeps its secrets in: a darker ground, so it
+   *  reads as a room with the lights lower rather than as a warning. */
+  shadowed?: boolean;
   section: ProfileSection;
   profileName: string;
   profileType: string;
@@ -2819,6 +2858,8 @@ function ProfileSectionEditor({
   teachesSubtext,
   openTraits,
   onToggleTrait,
+  colour,
+  shadowed,
   section,
   profileName,
   profileType,
@@ -2836,14 +2877,23 @@ function ProfileSectionEditor({
 }: ProfileSectionEditorProps) {
   // Open state for the walkthrough offered beside the heading.
   const [guideOpen, setGuideOpen] = useState(false);
+  // Closed on arrival. See the note beside the summary itself.
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const isGeneratingSummary = generatingField === sectionKey;
 
   return (
-    <div className="mb-6" onFocus={onFocus}>
-      {/* Section heading with indigo accent + help icon for text sections */}
+    <div
+      className={shadowed
+        // The secrets section, given its own ground rather than only its own
+        // stripe. Eye-catching and unmistakably a different kind of place.
+        ? `mb-6 rounded-lg border ${colour.panel} p-3`
+        : "mb-6"}
+      onFocus={onFocus}
+    >
+      {/* Section heading with its own accent + help icon for text sections */}
       <div className="mb-3 flex items-center gap-2.5 border-b border-border pb-2">
-        <span className="h-4 w-0.5 shrink-0 rounded-full bg-indigo-600/70" />
+        <span className={`h-4 w-0.5 shrink-0 rounded-full ${colour.bar}`} />
         <h2 className="text-sm font-semibold text-text-primary">{heading}</h2>
         {/* (?) icon -- shows writing tips with Poor/Good/Great examples.
             Only renders if help content exists for this section. */}
@@ -2970,6 +3020,7 @@ function ProfileSectionEditor({
             <TraitBlockCard
               key={block.id}
               block={block}
+              borderClass={colour.border}
               open={openTraits.has(block.id)}
               onToggle={() => onToggleTrait(block.id)}
               profileName={profileName}
@@ -3000,28 +3051,56 @@ function ProfileSectionEditor({
       )}
 
       {/* AI Summary sub-section (hidden on the side-character template) */}
+      {/* THE AI SUMMARY, CLOSED UNTIL ASKED FOR.
+          It is a derived restatement of the section above it, so on a page the
+          writer is reading it is the same words twice. Open, several at once
+          doubled the length of every profile. Closed, it is one line -- and it
+          says whether there is anything in it, so the writer never has to open
+          one to find out.
+
+          Local state, and that is deliberate: the wrapper is keyed by filename,
+          so switching profiles remounts these and every summary starts closed
+          again, which is what "upon opening the profile" asks for. Several stay
+          open at once while the writer is in one profile. */}
       {showAiSummary && (
       <div className="rounded border border-border bg-bg-primary p-3">
-        <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-xs font-medium text-text-muted">AI Summary: {heading}</p>
+        <div className="flex items-center justify-between gap-2">
           <button
-            onClick={onGenerateSectionSummary}
+            onClick={() => setSummaryOpen(v => !v)}
+            aria-expanded={summaryOpen}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-medium text-text-muted hover:text-text-primary"
+          >
+            {summaryOpen ? <ChevronDown size={11} className="shrink-0" />
+                         : <ChevronRight size={11} className="shrink-0" />}
+            <span className="truncate">
+              AI Summary: {heading}
+              {!summaryOpen && (
+                <span className="ml-1.5 text-faint">
+                  {section.ai_summary.trim() ? "written" : "empty"}
+                </span>
+              )}
+            </span>
+          </button>
+          <button
+            onClick={() => { setSummaryOpen(true); onGenerateSectionSummary(); }}
             disabled={isGeneratingSummary}
-            className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
             title="Generate this section summary using AI"
           >
             <Sparkles size={10} />
             {isGeneratingSummary ? "Generating..." : "Generate"}
           </button>
         </div>
-        <AutoTextarea
-          value={section.ai_summary}
-          onChange={e => onAiSummaryChange(e.target.value)}
-          placeholder="Click Generate to create an AI summary, or write one manually."
-          className="w-full rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-muted placeholder-faint outline-none focus:border-indigo-500"
-          minRows={2}
-          dataField={`section:${sectionKey}:ai_summary`}
-        />
+        {summaryOpen && (
+          <AutoTextarea
+            value={section.ai_summary}
+            onChange={e => onAiSummaryChange(e.target.value)}
+            placeholder="Click Generate to create an AI summary, or write one manually."
+            className="mt-1.5 w-full rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-muted placeholder-faint outline-none focus:border-indigo-500"
+            minRows={2}
+            dataField={`section:${sectionKey}:ai_summary`}
+          />
+        )}
       </div>
       )}
     </div>
@@ -3180,6 +3259,10 @@ function SectionHelpPopover({
 
 interface TraitBlockCardProps {
   block: TraitBlock;
+  /** Its section's colour. A trait belongs to the section it is in, and saying
+   *  so in the border costs nothing and answers "which section am I in" while
+   *  the writer is halfway down a long page. */
+  borderClass: string;
   /** Closed by default: a trait is one scannable line until the writer wants
    *  it. Several may be open at once, which is what makes comparing two while
    *  editing a third possible. */
@@ -3193,7 +3276,7 @@ interface TraitBlockCardProps {
   onRemove: () => void;
 }
 
-function TraitBlockCard({ block, open, onToggle, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
+function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
   const wordCount = countWords(block.description);
 
   // AI Trim tool -- suggests a concise rewrite when description is wordy/bloated
@@ -3279,7 +3362,7 @@ function TraitBlockCard({ block, open, onToggle, profileName, profileType, secti
         onClick={onToggle}
         aria-expanded={false}
         data-testid="trait-tile"
-        className="mb-1.5 flex w-full items-start gap-2 rounded border border-border bg-bg-panel px-2 py-1.5 text-left transition-colors hover:border-indigo-700"
+        className={`mb-1.5 flex w-full items-start gap-2 rounded border ${borderClass} bg-bg-panel px-2 py-1.5 text-left transition-colors hover:brightness-125`}
       >
         <ChevronRight size={12} className="mt-1 shrink-0 text-faint" />
         <span className="min-w-0 flex-1">
@@ -3305,7 +3388,7 @@ function TraitBlockCard({ block, open, onToggle, profileName, profileType, secti
   }
 
   return (
-    <div className="mb-3 rounded border border-indigo-700/60 bg-bg-panel p-3">
+    <div className={`mb-3 rounded border-2 ${borderClass} bg-bg-panel p-3`}>
       {/* Top row: importance selector + trait name + delete button */}
       <div className="mb-2 flex items-start gap-2">
         <button

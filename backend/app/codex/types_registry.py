@@ -138,8 +138,19 @@ DEFAULT_TYPES: list[dict] = [
             {"id": "voice_notes", "heading": "Voice Notes", "trait_blocks": True},
             {"id": "hidden_and_foreshadowing_traits",
              "heading": "Hidden and Foreshadowing Traits", "trait_blocks": True},
+            # RETIRED, NOT DELETED. Its job is done twice over now -- by
+            # Connections, which records who someone is to everyone else and
+            # carries a reason line, and by Relationship entries, which hold the
+            # long version. A third place to write the same thing is a third
+            # place for it to go stale.
+            #
+            # Deleting the entry outright would be data loss: profiles.py parses
+            # and writes by CONFIG, so a section missing from the list is a
+            # section silently dropped from the file on the next save. It stays,
+            # it round trips, and the form hides it unless it already holds
+            # something the writer wrote.
             {"id": "relationships_overview", "heading": "Relationships Overview",
-             "trait_blocks": False},
+             "trait_blocks": False, "retired": True},
             {"id": "notes", "heading": "Notes", "trait_blocks": False},
         ],
         "required_fields": ["overview"],

@@ -172,7 +172,11 @@ export interface TypeEntry {
    *  ("other"). The Profile Builder's tabs follow the same rule the sidebar
    *  does, so a kind added in one screen appears in the other. */
   group?: string;
-  sections: { id: string; heading: string; trait_blocks: boolean }[];
+  sections: { id: string; heading: string; trait_blocks: boolean;
+              /** Its job is done elsewhere; the form hides it unless it
+               *  already holds something. Kept in the list because both
+               *  parsers work from it. */
+              retired?: boolean }[];
 }
 
 export interface TypeRegistry {
