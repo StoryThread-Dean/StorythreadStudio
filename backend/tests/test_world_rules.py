@@ -19,8 +19,10 @@ from app.codex.world_rules import (
 from app.codex.types_registry import DEFAULT_TYPES
 
 
-def _thread(type_id: str, section_id: str, content: str) -> dict:
+def _thread(type_id: str, section_id: str, content: str,
+            answers: list[str] | None = None) -> dict:
     return {"entity_id": f"e-{type_id}", "type": type_id, "name": "X",
+            "answers": answers or [],
             "sections": {section_id: {"heading": section_id,
                                       "content": content, "trait_blocks": []}}}
 
@@ -181,7 +183,11 @@ def test_an_answered_crosslink_is_offered_as_context():
     # "You have already decided your worst crime -- this touches it."
     answered = [
         _thread("government", "overview", "A council of nine."),
-        _thread("lore", "overview", "Kinslaying, above all."),
+        # lore/overview is shared by five questions, so content alone cannot
+        # say which one this settles -- the entry claims it, exactly as the
+        # walk stamps it when the writer answers there.
+        _thread("lore", "overview", "Kinslaying, above all.",
+                answers=["law_worst_crime"]),
     ]
     item = next(i for i in open_questions(answered)
                 if i.question.id == "gov_succession")
@@ -206,3 +212,129 @@ def test_deleting_the_answer_brings_the_question_back():
 def test_a_domain_can_be_scanned_on_its_own():
     domains = {i.question.domain for i in open_questions([], domains=["religion"])}
     assert domains == {"religion"}
+
+
+# ── An answer belongs to the question it answers (R6.0) ──────────────────────
+#
+# There are about fifty places an answer can land and a hundred questions to
+# ask, so questions share landing places: eleven of them land in a lore entry's
+# "rule or concept", because that is genuinely where a rule about the world
+# belongs. Reading content there as proof meant ONE entry about blood price
+# silenced marriage, inheritance, war rules and forms of address at a stroke --
+# four questions in three other domains, none of them answered by a word.
+#
+# This is the bug that made growing the corpus impossible rather than merely
+# unwise: every question added to a shared landing place made the collapse
+# bigger.
+
+def test_content_alone_settles_a_question_that_owns_its_landing_place():
+    # Unchanged, and deliberately so. Nobody hand-types a question id into a
+    # Markdown file, and a writer who has filled in a government's Overview has
+    # plainly answered who holds power.
+    #
+    # Only eleven of the hundred own their landing place outright now, which is
+    # the measure of how badly content-alone was serving the other eighty-nine.
+    answered = [_thread("government", "overview", "A council of nine.")]
+    ids = {i.question.id for i in open_questions(answered, max_depth=3)}
+    assert "gov_power" not in ids
+
+
+def test_content_alone_settles_nothing_where_a_landing_place_is_shared():
+    # The bug, pinned. This entry says nothing about marriage.
+    world = [_thread("lore", "rule_or_concept", "A debt is paid in kind.")]
+    ids = {i.question.id for i in open_questions(world, max_depth=3)}
+    assert "kin_marriage" in ids
+    assert "mem_records" in ids
+
+
+def test_an_entry_that_claims_a_question_settles_it():
+    world = [_thread("lore", "rule_or_concept", "One spouse, chosen young.",
+                     answers=["kin_marriage"])]
+    ids = {i.question.id for i in open_questions(world, max_depth=3)}
+    assert "kin_marriage" not in ids
+
+
+def test_a_claim_settles_only_what_it_claims():
+    # The whole point. Its neighbours in the same section stay open.
+    world = [_thread("lore", "rule_or_concept", "One spouse, chosen young.",
+                     answers=["kin_marriage"])]
+    ids = {i.question.id for i in open_questions(world, max_depth=3)}
+    assert "mem_records" in ids
+    assert "lang_tongues" in ids
+
+
+def test_one_entry_can_answer_several_questions():
+    # A writer can settle marriage and inheritance in one piece of writing, and
+    # the walk lets them say so rather than making them write it twice.
+    world = [_thread("lore", "rule_or_concept", "Wives inherit; husbands do not.",
+                     answers=["kin_marriage", "kin_inheritance"])]
+    ids = {i.question.id for i in open_questions(world, max_depth=3)}
+    assert "kin_marriage" not in ids
+    assert "kin_inheritance" not in ids
+
+
+def test_a_claim_on_the_wrong_kind_of_entry_settles_nothing():
+    # kin_marriage lands in lore. A character claiming it is either a mistake
+    # or a hand-edit, and either way the answer is not where the question says
+    # its answer lives.
+    world = [_thread("character", "overview", "Married once.",
+                     answers=["kin_marriage"])]
+    ids = {i.question.id for i in open_questions(world, max_depth=3)}
+    assert "kin_marriage" in ids
+
+
+def test_deleting_a_claiming_entry_brings_its_question_back():
+    # Still derived, never a ledger. The claim lives in the writer's file, so
+    # it goes when the file does.
+    world = [_thread("lore", "rule_or_concept", "One spouse.",
+                     answers=["kin_marriage"])]
+    assert "kin_marriage" not in {i.question.id
+                                  for i in open_questions(world, max_depth=3)}
+    assert "kin_marriage" in {i.question.id
+                              for i in open_questions([], max_depth=3)}
+
+
+def test_no_question_is_unanswerable():
+    # Every question must be settleable by SOMETHING, which after this change
+    # means: claimable. A question whose landing type does not exist could
+    # never be closed and would be asked forever.
+    from app.codex.types_registry import DEFAULT_TYPES
+
+    types = {t["id"] for t in DEFAULT_TYPES}
+    for question in WORLD_RULES:
+        world = [_thread(question.lands_as[0], question.lands_as[1], "x",
+                         answers=[question.id])]
+        assert question.lands_as[0] in types, question.id
+        assert question.id not in {i.question.id
+                                   for i in open_questions(world, max_depth=3)}, \
+            question.id
+
+
+# ── The size of it (R6.3) ────────────────────────────────────────────────────
+
+def test_every_domain_is_a_domain_rather_than_a_sample():
+    # The corpus shipped with three or four questions per domain, which is not
+    # a domain, it is a sample of one. A writer who answered all four of
+    # Governance had not decided how power works in their world; they had
+    # decided four things about it, and then the app had nothing left to ask.
+    from collections import Counter
+
+    counts = Counter(q.domain for q in WORLD_RULES)
+    for domain in DOMAINS:
+        assert counts[domain] >= 8, f"{domain} has only {counts[domain]}"
+
+
+def test_every_domain_can_be_started_without_answering_anything_first():
+    # A domain whose questions are all branches would show up on the board with
+    # a count and open onto nothing.
+    trunk = {q.domain for q in WORLD_RULES if q.depth == 1}
+    assert set(DOMAINS) == trunk
+
+
+def test_every_question_could_be_answered_in_a_sentence():
+    # The test each new question had to pass. Not "is this interesting
+    # worldbuilding" but "could a novelist mid-draft answer it in the time it
+    # takes to type a line". A prompt that reads like an essay title gets
+    # skipped, and a walk people skip is a walk they stop opening.
+    for question in WORLD_RULES:
+        assert len(question.prompt.split()) <= 20, question.id

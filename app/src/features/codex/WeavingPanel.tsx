@@ -59,6 +59,8 @@ import {
   STOP_KINDS, TONE_CLASSES, threadTypeEntry, type LexEntry, type Tone,
 } from "./lexicon";
 import { Explain } from "../../components/learn/Explain";
+import { DomainBoard } from "./DomainBoard";
+import { UnwovenGuide } from "./UnwovenGuide";
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { BindDot } from "./BindDot";
 import { QuickEntry } from "./QuickEntry";
@@ -235,6 +237,10 @@ interface WeavingPanelProps {
 
 export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
   const [depth, setDepth] = useState<Depth>("warp");
+  // Which part of the world this sitting is about, on the Unwoven pass only.
+  // Null means all of it, which is what the walk sends by default.
+  const [domain, setDomain] = useState<string | null>(null);
+  const [guiding, setGuiding] = useState(false);
   const [scanning, setScanning] = useState(true);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -279,11 +285,15 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
 
   // The scan runs on mount and on every depth change, BEFORE anything is
   // confirmed. That is what makes the count real -- see the header.
-  const runScan = useCallback(async (which: Depth, existing: string | null) => {
+  const runScan = useCallback(async (which: Depth, existing: string | null,
+                                     part: string | null) => {
     setScanning(true);
     setError(null);
     try {
-      setResult(await scan(projectPath, { depth: which, runId: existing }));
+      setResult(await scan(projectPath, {
+        depth: which, runId: existing,
+        domains: part ? [part] : [],
+      }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "The scan could not run.");
     } finally {
@@ -291,7 +301,8 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     }
   }, [projectPath]);
 
-  useEffect(() => { void runScan(depth, runId); }, [runScan, depth, runId]);
+  useEffect(() => { void runScan(depth, runId, domain); },
+            [runScan, depth, runId, domain]);
 
   useEffect(() => {
     fetchRuns(projectPath)
@@ -451,6 +462,10 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
     const settled = Math.max(0, total - open);
     return (
       <Shell onClose={onClose}>
+        {/* Above everything, because it is a dialog rather than a section of
+            this screen. Mounted here and on the stop card so it is reachable
+            from both places a writer wonders what this pass is for. */}
+        {guiding && <UnwovenGuide onClose={() => setGuiding(false)} />}
         <p className="text-xs text-text-muted">
           Weaving reads what you have written and what your world says, and
           shows you where they do not line up yet. Nothing is changed without
@@ -493,6 +508,22 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             </button>
           ))}
         </div>
+
+        {/* THE WHOLE WORLD, on the one pass where a bounded sitting would
+            otherwise be the only thing the writer could see. Unwoven asks a
+            dozen questions at a time out of a hundred, and without this the
+            other eighty-eight are invisible: no way to tell four questions left
+            from ninety, no way to choose to spend an evening on your religion,
+            and a part of the world you FINISHED just quietly stopped appearing.
+            The board answers all three. */}
+        {depth === "unwoven_pass" && (
+          <DomainBoard
+            domains={result?.domains ?? []}
+            chosen={domain}
+            onChoose={setDomain}
+            onShowGuide={() => setGuiding(true)}
+          />
+        )}
 
         {/* The real number, and what it means in hours rather than in units.
             "340" is information; "many sessions" is the thing a writer
@@ -669,6 +700,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         section={unwoven ? lands[1] : undefined}
         prefill={unwoven ? undefined : stop.quote || undefined}
         asking={unwoven ? stop.title : undefined}
+        questionId={unwoven ? String(stop.detail?.question_id ?? "") : undefined}
         candidates={world}
         onClose={() => setEntering(false)}
         // Finished: record the answer and move on. The ledger is what lets a
@@ -883,6 +915,23 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
               {landsIn(stop).map(part => part.replace(/_/g, " ")).join(" > ")}
             </span>.
           </p>
+          <button
+            onClick={() => setGuiding(true)}
+            className="text-[11px] text-violet-300 underline-offset-2 hover:underline"
+          >
+            Show me how this works
+          </button>
+          {/* WHAT THIS SITTING IS NOT ASKING. A bounded list that presents
+              itself as the whole list is a lie the writer cannot see, and this
+              walk's entire job is to be believable about how much is left. */}
+          {Number(stop.detail.domain_open ?? 0) > 1 && (
+            <p data-testid="unwoven-remaining">
+              {String(stop.detail.domain_label ?? "This part")} has{" "}
+              {Number(stop.detail.domain_open) - 1} more question
+              {Number(stop.detail.domain_open) === 2 ? "" : "s"} open. They are
+              not going anywhere.
+            </p>
+          )}
           {Array.isArray(stop.detail.touches) && stop.detail.touches.length > 0 && (
             // A world is a web. Saying what else this reaches is the thing
             // that stops it feeling like a form.

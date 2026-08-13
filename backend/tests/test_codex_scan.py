@@ -1066,3 +1066,185 @@ def test_a_tie_snag_names_the_other_end_not_its_id(tmp_path):
     assert shown == {"Garrick", "Mira"}
     # And the ids are still there for the fixer to act on.
     assert {s.get("target") for s in snag.detail["sides"]} == {"e-2", "e-3"}
+
+
+# ── Unwoven: reach, and how much of it in one sitting ────────────────────────
+#
+# R6.1 -- the branches were UNREACHABLE. `_unwoven_stops` read
+# `max_depth = 3 if request.depth == DEPTH_FULL else 1`, and DEPTH_FULL is an
+# old wire name for the Warp pass, while these stops are only ever produced by
+# the Unwoven pass. The comparison could not be true in the one place it ran, so
+# the ceiling was always 1 and every branch and capillary question in the corpus
+# was dead code. Nothing failed; the walk just asked the same trunk questions
+# forever.
+#
+# R6.2 -- and the reason a ceiling looked necessary. Every answer opens the
+# questions it implies, so a writer who spends an evening on their government
+# walks back to a list that has GROWN. That is a world getting bigger, which is
+# the feature, and also how a tool teaches somebody it can never be finished.
+# A sitting is bounded, per domain as well as overall, and it SAYS what it is
+# holding back.
+
+def _unwoven(folder, world, **kw):
+    request = ScanRequest(depth=PASS_UNWOVEN, **kw)
+    return scan(folder, world, REGISTRY, request).by_kind(STOP_UNWOVEN)
+
+
+def _worldthread(entity_id, type_id, section_id, content, answers=()):
+    return {"entity_id": entity_id, "type": type_id, "name": entity_id,
+            "filename": f"{entity_id}.md", "answers": list(answers),
+            "aliases": [], "ties": [], "run": [],
+            "sections": {section_id: {"heading": section_id,
+                                      "content": content, "trait_blocks": []}}}
+
+
+def test_a_branch_question_is_reachable_at_all(tmp_path):
+    # The R6.1 regression, stated as the thing a writer would notice: answer
+    # how power is held, and the walk asks what it opened.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    world = [_worldthread("e-gov", "government", "overview", "A council of nine.")]
+    ids = {s.detail["question_id"] for s in _unwoven(folder, world)}
+    assert "gov_succession" in ids
+
+
+def test_an_empty_world_is_asked_only_trunk_questions(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    depths = {s.detail["depth"] for s in _unwoven(folder, [])}
+    assert depths == {1}
+
+
+def test_a_sitting_is_bounded(tmp_path):
+    from app.codex.scan import _UNWOVEN_PER_SITTING
+
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    assert len(_unwoven(folder, [])) <= _UNWOVEN_PER_SITTING
+
+
+def test_no_domain_fills_the_sitting_on_its_own(tmp_path):
+    # Twelve questions all about government is a form about government. The
+    # per-domain bound is what makes a sitting feel like a conversation.
+    from app.codex.scan import _UNWOVEN_PER_DOMAIN
+
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    counts: dict[str, int] = {}
+    for stop in _unwoven(folder, []):
+        d = stop.detail["domain"]
+        counts[d] = counts.get(d, 0) + 1
+    assert counts and max(counts.values()) <= _UNWOVEN_PER_DOMAIN
+
+
+def test_the_walk_says_what_it_is_holding_back(tmp_path):
+    # NO SILENT CAPS. A bounded list that presents itself as the whole list is
+    # a lie the writer cannot see, and this walk's entire job is to be
+    # believable about how much is left.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    stops = _unwoven(folder, [])
+    assert stops[0].detail["held_back"] > 0
+
+
+def test_each_stop_knows_how_much_its_own_domain_has_open(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    stop = next(s for s in _unwoven(folder, [])
+                if s.detail["domain"] == "memory")
+    assert stop.detail["domain_open"] >= 3
+
+
+def test_a_sitting_reaches_every_part_of_the_world(tmp_path):
+    # WHY THE ROUNDS GO ACROSS RATHER THAN DOWN. Taking three from a domain
+    # before moving on filled twelve slots with four domains, always the same
+    # four, because the tie broke alphabetically -- a writer would have been
+    # asked about economy and geography until they ran out and never once about
+    # war. Caught here rather than by anybody using it.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    from app.codex.world_rules import DOMAINS
+
+    shown = {s.detail["domain"] for s in _unwoven(folder, [])}
+    assert shown == set(DOMAINS)
+
+
+def test_the_part_of_the_world_you_worked_in_comes_first(tmp_path):
+    # AND THIS IS WHY sorting purely trunk-first is wrong, which a test written
+    # for R6.1 caught. With a hundred questions there are always undecided trunk
+    # questions, so a bounded sitting sorted by depth alone would never reach a
+    # branch -- every depth-2 question unreachable again, by arithmetic this
+    # time instead of a broken comparison.
+    #
+    # The writer answered how power is held. What that opened is what they
+    # should see next, or the root system's promise is invisible.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    world = [_worldthread("e-gov", "government", "overview", "A council of nine.")]
+    stops = _unwoven(folder, world)
+    assert stops[0].detail["domain"] == "governance"
+    assert "gov_succession" in {s.detail["question_id"] for s in stops}
+
+
+def test_one_domain_can_be_asked_about_on_its_own(tmp_path):
+    # What the board sends. A writer who clicked Religion has said what they
+    # want to work on, so rationing it three at a time would be the app arguing.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    stops = _unwoven(folder, [], domains=["religion"])
+    assert stops
+    assert {s.detail["domain"] for s in stops} == {"religion"}
+
+
+def test_a_retired_question_does_not_take_up_a_slot(tmp_path):
+    # "Never ask this" must move the next question up, not make the walk
+    # shorter. Retiring is filtered BEFORE the bound for exactly this reason.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    first = _unwoven(folder, [])
+    assert first[0].detail["held_back"] > 0      # there IS something to move up
+    gone = first[0].detail["question_id"]
+    after = _unwoven(folder, [], retired={gone})
+    assert len(after) == len(first)
+    assert gone not in {s.detail["question_id"] for s in after}
+
+
+def test_what_your_own_answer_opened_is_asked_first_in_that_domain(tmp_path):
+    # The root system's promise, made visible. Without this the walk reads as a
+    # fixed list that reacts to nothing the writer does.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    world = [_worldthread("e-gov", "government", "overview", "A council of nine.")]
+    stops = _unwoven(folder, world)
+    governance = [s for s in stops if s.detail["domain"] == "governance"]
+    assert governance[0].detail["question_id"] in ("gov_succession",
+                                                   "gov_challenge")
+    assert "which raises this" in governance[0].why
+
+
+def test_the_domain_you_worked_in_leads_the_sitting(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    world = [_worldthread("e-gov", "government", "overview", "A council of nine.")]
+    assert _unwoven(folder, world)[0].detail["domain"] == "governance"
+
+
+def test_the_board_lists_every_part_of_the_world(tmp_path):
+    # R6.4's data. The sitting is bounded; the BOARD is not, because a bounded
+    # list that is the only thing a writer can see is a list that lies about
+    # how much world is left.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    from app.codex.world_rules import DOMAINS
+
+    result = scan(folder, [], REGISTRY, ScanRequest(depth=PASS_UNWOVEN))
+    assert [d["id"] for d in result.domains] == list(DOMAINS)
+    assert all(d["open"] > 0 for d in result.domains)
+    assert sum(d["asked_now"] for d in result.domains) == len(
+        result.by_kind(STOP_UNWOVEN))
+
+
+def test_a_finished_part_of_the_world_still_appears_on_the_board(tmp_path):
+    # Dropping it would make the writer's own progress invisible, which is the
+    # one thing a board like this is for.
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    world = [_worldthread(f"e-{i}", q.lands_as[0], q.lands_as[1], "Decided.",
+                          answers=[q.id])
+             for i, q in enumerate(__import__(
+                 "app.codex.world_rules", fromlist=["WORLD_RULES"]).WORLD_RULES)
+             if q.domain == "language"]
+    result = scan(folder, world, REGISTRY, ScanRequest(depth=PASS_UNWOVEN))
+    language = next(d for d in result.domains if d["id"] == "language")
+    assert language["open"] == 0
+
+
+def test_the_board_is_empty_for_every_other_pass(tmp_path):
+    folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
+    assert scan(folder, [], REGISTRY, ScanRequest(depth=PASS_WARP)).domains == []

@@ -45,7 +45,9 @@ from app.codex.together import (
     shared_scenes,
 )
 from app.codex.visibility import HIDDEN_FUTURE, Lens, thread_visibility
-from app.codex.world_rules import DOMAINS, open_questions
+from app.codex.world_rules import (
+    DOMAINS, answered_domains, corpus_order, open_questions,
+)
 from app.utils.structure_store import ordered_chapter_ids
 
 __all__ = [
@@ -217,6 +219,10 @@ class ScanRequest:
     # Phrases the writer marked by hand: [{phrase, note, where}]. Unlike every
     # other stop these are not found by a rule -- the writer asked.
     pinned: list[dict] = field(default_factory=list)
+    # Unwoven only: which parts of the world this sitting is about. Empty means
+    # all of them, which is what the walk sends; the board (R6.4) sends one,
+    # because a writer who clicks Religion has said what they want to do.
+    domains: list[str] = field(default_factory=list)
 
     def wants(self, kind: str) -> bool:
         """
@@ -241,6 +247,10 @@ class ScanResult:
     # scanned around -- "we found 4 stops" reads very differently when three
     # chapters were skipped.
     unreadable: list[str] = field(default_factory=list)
+    # Unwoven only: every part of the world with how much of it is still open,
+    # WHETHER OR NOT this sitting asks about it. The board is built from this,
+    # and it is what stops a bounded sitting from reading as the whole list.
+    domains: list[dict] = field(default_factory=list)
 
     def by_kind(self, kind: str) -> list[Stop]:
         return [s for s in self.stops if s.kind == kind]
@@ -319,7 +329,7 @@ def scan(
     result.stops.extend(_untied_stops(together, threads, request, registry))
     result.stops.extend(_manuscript_stops(project_path, chapters, threads,
                                           request, index))
-    result.stops.extend(_unwoven_stops(threads, request))
+    result.stops.extend(_unwoven_stops(threads, request, result.domains))
     result.stops.extend(_pinned_stops(project_path, threads, request))
 
     counts: dict[str, int] = {kind: 0 for kind in STOP_KINDS}
@@ -388,7 +398,105 @@ def _pinned_stops(project_path: str, threads: list[dict],
     return stops
 
 
-def _unwoven_stops(threads: list[dict], request: ScanRequest) -> list[Stop]:
+# ── R6.2: how much of a world to ask about in one sitting ────────────────────
+#
+# The corpus reaches three levels deep and every answer opens the questions it
+# implies, so a writer who spends an evening on their government can walk back
+# to a list that has GROWN. That is the feature working -- a world does get
+# bigger as you decide things -- and it is also exactly how a tool teaches
+# somebody that it can never be finished.
+#
+# The ruling: a sitting is bounded, the bound is per DOMAIN as well as overall,
+# and the walk says what it is holding back. Nothing is dropped, hidden or
+# reordered away; the rest is there the next time, and the board (R6.4) shows
+# every domain's real count whether or not this sitting asks about it.
+#
+# Three per domain, because a domain is a subject and three questions is a
+# thought about a subject rather than a form about one. Twelve overall, because
+# a walk a writer abandons halfway teaches them not to start it.
+_UNWOVEN_PER_DOMAIN = 3
+_UNWOVEN_PER_SITTING = 12
+
+# Every level of the corpus. The gate is `unlocks` -- a child is offered once
+# its parent is answered -- so a ceiling here would only ever hide questions
+# the writer has already earned.
+_MAX_DEPTH = 3
+
+
+def _pace_unwoven(items: list, domains: list[str] | None,
+                  touched: set[str] | None = None):
+    """
+    Which open questions this sitting asks, and how many it is holding back.
+
+    A ROUND AT A TIME, ONE QUESTION PER PART OF THE WORLD, and both halves of
+    that were arrived at by getting it wrong first.
+
+    Taking three from a domain before moving on sounds focused and is not: with
+    a hundred questions and ten domains, twelve slots filled three at a time
+    show four domains, always the same four, because ties broke alphabetically.
+    A writer would have been asked about economy and geography until they were
+    exhausted and never once about war. So the rounds go across the world first
+    and deepen only if slots are left.
+
+    Inside a domain, WHAT THE WRITER'S OWN ANSWER OPENED COMES FIRST -- that is
+    what `because` marks. Sorting plainly trunk-first reinstates R6.1 by
+    another route: there are always undecided trunk questions, so a bounded
+    sitting sorted by depth alone would never reach a branch and every depth-2
+    question would be unreachable again, by arithmetic this time instead of a
+    broken comparison. It was a test written for R6.1 that caught it. Beyond
+    that the trunk comes first, because ground the story stands on outranks a
+    consequence of something already decided.
+
+    Asking about ONE domain is not a cap at all beyond the sitting total: a
+    writer who opens the board and picks Religion has said what they want to
+    work on, and rationing it after they asked would be the app arguing.
+    """
+    if domains:
+        items = [i for i in items if i.question.domain in domains]
+    worked_in = touched or set()
+    if domains and len(domains) == 1:
+        # One domain asked for by name: give them the domain.
+        ordered = sorted(items, key=_within_domain)
+        return ordered[:_UNWOVEN_PER_SITTING], max(
+            0, len(ordered) - _UNWOVEN_PER_SITTING)
+
+    # Group by domain, each group in the order that domain should be asked in.
+    by_domain: dict[str, list] = {}
+    for item in items:
+        by_domain.setdefault(item.question.domain, []).append(item)
+    for group in by_domain.values():
+        group.sort(key=_within_domain)
+
+    # Domains the writer has worked in lead, so the first thing they see is the
+    # consequence of the last thing they decided.
+    order = sorted(by_domain, key=lambda d: (0 if d in worked_in else 1, d))
+
+    taken: list = []
+    for round_no in range(_UNWOVEN_PER_DOMAIN):
+        for domain in order:
+            group = by_domain[domain]
+            if round_no >= len(group):
+                continue
+            if len(taken) >= _UNWOVEN_PER_SITTING:
+                return taken, len(items) - len(taken)
+            taken.append(group[round_no])
+    return taken, len(items) - len(taken)
+
+
+def _within_domain(item):
+    """
+    The order questions get asked in inside one part of the world.
+
+    `because` is non-empty exactly when the writer answered the question that
+    opened this one, so putting those first is how "you answered X, which
+    raises this" actually reaches the screen.
+    """
+    return (0 if item.because else 1, item.question.depth,
+            corpus_order(item.question.id))
+
+
+def _unwoven_stops(threads: list[dict], request: ScanRequest,
+                   board: list[dict] | None = None) -> list[Stop]:
     """
     Ground rules this world has not decided yet.
 
@@ -397,19 +505,58 @@ def _unwoven_stops(threads: list[dict], request: ScanRequest) -> list[Stop]:
     quick pass for exactly that reason: "problems only" means nothing that
     asks the writer to invent anything.
 
-    Depth follows the session. A full weave reaches the branches; anything
-    else stays on the trunk, because a writer who has not decided how power
-    passes should not be asked what stops the heirs being murdered.
+    R6.1 -- THE BRANCHES WERE UNREACHABLE. This read
+    `max_depth = 3 if request.depth == DEPTH_FULL else 1`, and DEPTH_FULL is an
+    old wire name for the Warp pass. Unwoven stops are only ever produced by
+    the Unwoven pass, whose depth is "unwoven_pass", so the comparison could
+    not be true in the one place it ran: the ceiling was always 1, and every
+    branch and capillary question in the corpus was dead code. Nothing failed.
+    The walk just quietly asked the same dozen trunk questions forever, which
+    is the shape of bug that this recovery keeps finding.
+
+    There is no depth dial now, and there should not be one: a session size was
+    the wrong control for this. What a writer is ready to be asked is decided by
+    what they have already answered, which is what `unlocks` does -- "what stops
+    every heir being murdered" appears when, and only when, they have said how
+    succession works. Depth is a property of the corpus, not a setting.
+
+    Pacing is R6.2 and it is a different problem: see `_pace_unwoven`.
     """
     if not request.wants(STOP_UNWOVEN):
         return []
 
-    max_depth = 3 if request.depth == DEPTH_FULL else 1
+    # Retired FIRST, then paced. The other order would let a question the
+    # writer has permanently dismissed take up one of the few slots a sitting
+    # has, so "never ask this" would make the walk shorter instead of moving
+    # the next question up.
+    every = [item for item in open_questions(threads, max_depth=_MAX_DEPTH)
+             if item.question.id not in request.retired]
+    asked, held = _pace_unwoven(every, request.domains,
+                                answered_domains(threads))
+
+    # How many are open in each domain, whether or not this sitting shows them.
+    # The board (R6.4) is built from this, and a stop that knows its domain's
+    # real total can say "six more here" instead of pretending it is the last.
+    open_by_domain: dict[str, int] = {}
+    for item in every:
+        d = item.question.domain
+        open_by_domain[d] = open_by_domain.get(d, 0) + 1
+
+    if board is not None:
+        # EVERY domain, including the ones with nothing left. A part of the
+        # world the writer has finished is worth seeing finished; dropping it
+        # from the board would make their own progress invisible.
+        for domain_id, label in DOMAINS.items():
+            board.append({
+                "id": domain_id, "label": label,
+                "open": open_by_domain.get(domain_id, 0),
+                "asked_now": sum(1 for i in asked
+                                 if i.question.domain == domain_id),
+            })
+
     stops: list[Stop] = []
-    for item in open_questions(threads, max_depth=max_depth):
+    for item in asked:
         question = item.question
-        if question.id in request.retired:
-            continue
         # "You said X, which raises this." A question arriving with no reason
         # behind it is what makes worldbuilding prompts feel like homework.
         why = question.why
@@ -426,6 +573,12 @@ def _unwoven_stops(threads: list[dict], request: ScanRequest) -> list[Stop]:
                 "lands_as": list(question.lands_as),
                 "touches": item.touches,
                 "depth": question.depth,
+                # What this sitting is NOT showing, said on the stop itself.
+                # A capped list that presents itself as the whole list is a lie
+                # the writer cannot see, and this walk's whole job is to be
+                # believable about how much is left.
+                "domain_open": open_by_domain.get(question.domain, 0),
+                "held_back": held,
             },
         ))
     return stops

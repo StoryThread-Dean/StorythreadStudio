@@ -95,7 +95,21 @@ export interface ScanResult {
   /** Chapters that could not be read. Said out loud rather than quietly
    *  scanned around. */
   unreadable: string[];
+  /** Unwoven only, empty for every other pass. Every part of the world with
+   *  how much of it is still open -- the sitting is bounded, the board is not,
+   *  because a bounded list shown on its own lies about how much is left. */
+  domains: WorldDomain[];
   resumed: { stale?: number; gone?: number; answered?: number };
+}
+
+export interface WorldDomain {
+  id: string;
+  /** The writer-facing name: "Power and who holds it", not "governance". */
+  label: string;
+  /** Still unanswered here, whether or not this sitting asks about it. */
+  open: number;
+  /** How many of those this sitting is actually asking. */
+  asked_now: number;
 }
 
 export interface Run {
@@ -152,7 +166,7 @@ export function scan(
   projectPath: string,
   options: {
     depth?: Depth; types?: string[]; chapterIds?: string[];
-    kinds?: string[]; runId?: string | null;
+    kinds?: string[]; runId?: string | null; domains?: string[];
   } = {},
 ): Promise<ScanResult> {
   // FREE. No role, no model, no cost -- which is what lets the walkthrough
@@ -163,6 +177,9 @@ export function scan(
     types: options.types ?? [],
     chapter_ids: options.chapterIds ?? [],
     kinds: options.kinds ?? [],
+    // Unwoven only. One domain means the writer picked it off the board, and
+    // the backend stops rationing once they have said what they want.
+    domains: options.domains ?? [],
     run_id: options.runId ?? null,
   });
 }

@@ -214,6 +214,21 @@ def parse_thread(raw: str, registry: dict | None = None,
         # ordinary case and writes nothing to the file.
         "display_name": str(front.get("display_name") or ""),
         "tags": [str(t) for t in (front.get("tags") or []) if t],
+        # WHICH UNWOVEN QUESTIONS THIS ENTRY ANSWERS, by question id.
+        #
+        # The Unwoven pass decides a question is answered by looking at where
+        # its answer was supposed to land. That works while one question owns a
+        # landing place and breaks the moment several share one: eleven of them
+        # land in a lore entry's "rule or concept", so a single entry about
+        # blood price silenced marriage, inheritance, war rules, forms of
+        # address and the rest -- questions in four other domains, none of them
+        # answered by a word.
+        #
+        # So an answer says which question it answers, in the file, in the
+        # writer's own project. Still derived, never a ledger: delete the entry
+        # and the question comes back, which is right, because the answer is
+        # gone.
+        "answers": [str(a) for a in (front.get("answers") or []) if a],
         "fields": dict(front.get("fields") or {}),
         "created_at": _stamp(front.get("created_at")),
         "updated_at": _stamp(front.get("updated_at")),
@@ -449,6 +464,11 @@ def render_thread(
     if thread.get("tags"):
         lines.append("tags:")
         lines += [f"  - {t}" for t in thread["tags"]]
+    # Written only when the entry actually claims a question, so an ordinary
+    # entry's file gains nothing. See the parse side for what it is for.
+    if thread.get("answers"):
+        lines.append("answers:")
+        lines += [f"  - {a}" for a in thread["answers"]]
     if thread.get("fields"):
         lines.append("fields:")
         for key, value in thread["fields"].items():

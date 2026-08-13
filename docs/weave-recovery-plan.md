@@ -765,11 +765,20 @@ three surfaces at once.
 
 ## Phase 6 -- Unwoven (gap A6)
 
-- [ ] **R6.1** Fix the always-false depth comparison so branch and capillary
+- [x] **R6.0** **An answer records which question it answers.** Found while
+      sizing R6.3, and it made R6.3 impossible rather than merely unwise:
+      `lands_as` was read as proof a question was settled, and there are about
+      fifty landing places for a hundred questions, so eleven land in a lore
+      entry's `rule_or_concept`. One entry about blood price silenced marriage,
+      inheritance, war rules and forms of address at once -- four domains, none
+      of them answered by a word. Entries now carry `answers: [question_id]` in
+      their own frontmatter; still derived, never a ledger. Where a question
+      owns its landing place (eleven of the hundred), content alone still counts.
+- [x] **R6.1** Fix the always-false depth comparison so branch and capillary
       questions are reachable.
-- [ ] **R6.2** Decide pacing -- one answer can open eleven questions.
-- [ ] **R6.3** Grow the corpus toward "~10 per domain" (currently ~18%).
-- [ ] **R6.4** The domain board (a card per domain with open counts) replacing
+- [x] **R6.2** Decide pacing -- one answer can open eleven questions.
+- [x] **R6.3** Grow the corpus toward "~10 per domain" (currently ~18%).
+- [x] **R6.4** The domain board (a card per domain with open counts) replacing
       the one-at-a-time drip, plus the multi-page LOTR walkthrough.
 
 ---
@@ -856,9 +865,9 @@ it, since the spec calls it the reason the frame system exists.
 | 3 Migration completeness | 4 | 4 |
 | 4 Export | 5 | 5 |
 | 5 Sources | 5 | **5** |
-| 6 Unwoven | 4 | 0 |
+| 6 Unwoven | 5 | **5** |
 | 7 Scene identity | 4 | 0 |
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **98** | **64** |
+| **Total** | **99** | **69** |

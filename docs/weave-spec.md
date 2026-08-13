@@ -853,6 +853,33 @@ The Weave — a story-aware world model, and Model Roles
  participate in context assembly like everything else. AI proposes answers grounded in what already
  exists ("your prose says X, which implies Y — is that right?"), never inventing freely.
 
+ AMENDED (R6.0-R6.4, 2026-08-12). Four things, three of them found by building it out to the size
+ this section always specified.
+
+ 1. AN ANSWER RECORDS WHICH QUESTION IT ANSWERS. `lands_as` is where an answer BELONGS, and it was
+    also being read as proof that the question was settled. That works while one question owns a
+    landing place and collapses when several share one: there are about fifty places an answer can
+    go and a hundred questions to ask, so eleven of them land in a lore entry's "rule or concept",
+    and one entry about blood price silenced marriage, inheritance, war rules and forms of address
+    at once. An entry now carries `answers: [question_id]` in its own frontmatter. Still derived and
+    never a ledger — it lives in the writer's Markdown, survives deleting the cache, and goes away
+    with the entry. Where a question owns its landing place outright (eleven of the hundred do),
+    content alone still settles it, because nobody hand-types a question id into a file.
+ 2. DEPTH IS A PROPERTY OF THE CORPUS, NOT A SETTING. "Depth maps to the chosen stage" above
+    described the three-sizes model that the four passes replaced; the code kept a ceiling keyed to
+    a pass name Unwoven never uses, so every branch and capillary question was unreachable and the
+    walk asked the same trunk questions forever. What a writer is ready for is decided by what they
+    have answered, which is what `unlocks` is.
+ 3. A SITTING IS BOUNDED, AND SAYS SO. A dozen questions, taken a round at a time across the whole
+    world rather than three at a time from one part of it (which showed four domains out of ten,
+    always the same four). Inside a part, what the writer's own answer OPENED comes first. Nothing
+    is dropped or hidden: the stop says how much its part has left.
+ 4. THE DOMAIN BOARD. Every part of the world with a real count and a bar showing how much is
+    decided, always including parts with nothing left, because progress the writer cannot see does
+    not encourage them. Picking one asks about that part only. Plus a paged walkthrough that argues
+    from a cost ("you will otherwise decide this in chapter nineteen in a way that contradicts
+    chapter four") and shows the same beat written with and without the ground decided.
+
  Loose thread — a Thread nothing connects to
 
  Lists them all at once with what each would need to earn its place. On the map they sit at the rim

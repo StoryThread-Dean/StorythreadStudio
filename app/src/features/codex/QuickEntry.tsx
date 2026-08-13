@@ -60,6 +60,16 @@ interface QuickEntryProps {
   prefill?: string;
   /** The question being answered, shown above the box (Unwoven). */
   asking?: string;
+  /**
+   * WHICH Unwoven question this answers, recorded on the entry itself.
+   *
+   * About fifty places an answer can land, a hundred questions to ask, so
+   * questions share landing places: eleven of them land in a lore entry's
+   * "rule or concept". Content there cannot say which one was settled, so an
+   * answer that does not claim its question would leave the question open and
+   * the writer answering it forever.
+   */
+  questionId?: string;
   /** Everything that exists, for the connect step. */
   candidates: GraphNode[];
   /** Back to the same stop, nothing made. */
@@ -70,7 +80,7 @@ interface QuickEntryProps {
 
 export function QuickEntry({
   projectPath, name: presetName, aliases, kind: presetKind, kindLocked,
-  section, prefill, asking, candidates, onClose, onDone,
+  section, prefill, asking, questionId, candidates, onClose, onDone,
 }: QuickEntryProps) {
   const [name, setName] = useState(presetName);
   const [kind, setKind] = useState(presetKind);
@@ -179,6 +189,11 @@ export function QuickEntry({
       if (text.trim() && landing) {
         body.sections = { [landing.id]: text.trim() };
       }
+      // The claim. Without it the question this entry answers stays open,
+      // because its landing place is almost certainly shared with others.
+      if (questionId) {
+        body.answers = [questionId];
+      }
       const response = await fetch(`${API_BASE}/api/codex/thread/new`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -218,6 +233,16 @@ export function QuickEntry({
       const thread = await got.json();
       if (!got.ok) {
         throw new Error(thread?.detail?.message ?? "That entry could not be read.");
+      }
+      // The same claim, on an entry that already exists. This is the path a
+      // writer takes when the answer is ALREADY somewhere in their world and
+      // they are pointing at it rather than writing it again.
+      if (questionId) {
+        const claimed: string[] = Array.isArray(thread.answers)
+          ? thread.answers.map(String) : [];
+        if (!claimed.includes(questionId)) {
+          thread.answers = [...claimed, questionId];
+        }
       }
       const current = thread.sections?.[landing.id];
       const before = String(current?.content ?? "").trim();

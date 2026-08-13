@@ -209,17 +209,23 @@ def test_an_answered_unwoven_question_stops_being_asked(project):
         return {s["detail"]["question_id"] for s in body["stops"]}
 
     before = unwoven_ids()
-    assert "gov-succession" in before or len(before) > 0
+    assert "gov_power" in before
 
-    # Answer the succession question the way Quick Entry does.
+    # Answer who holds power, the way Quick Entry does.
     client.post("/api/codex/thread/new", json={
         "project_path": project, "type": "government", "name": "The Regency",
-        "sections": {"succession": "The crown passes by combat, once a decade.",
-                     "overview": "The council that rules between kings."},
+        "sections": {"overview": "The council that rules between kings."},
     })
 
     after = unwoven_ids()
-    assert after < before           # strictly fewer questions, none added
+    assert "gov_power" not in after         # the condition ended
+
+    # AND WHAT IT OPENED IS NOW ASKED. This test used to assert `after < before`
+    # -- strictly fewer questions, none added -- which passed only because R6.1
+    # made every branch question unreachable. The root system's whole promise is
+    # that an answer opens the questions it implies, so a world that gets bigger
+    # as you decide things is the feature, not a regression.
+    assert "gov_succession" in after
 
 
 # ── What the Profile Builder's create form has always asked for (R2.3b) ──────
@@ -290,3 +296,61 @@ def test_saving_an_entry_moves_its_updated_date_and_keeps_its_created_one(projec
                                "entity_id": thread["entity_id"]}).json()
     assert saved["created_at"] == created
     assert saved["updated_at"] >= created
+
+
+def test_answering_a_shared_landing_place_settles_only_that_question(project):
+    # THE R6.0 BUG, END TO END. Eleven questions land in a lore entry's "rule or
+    # concept" -- marriage, inheritance, war rules, forms of address, records,
+    # the dead, news -- because that is genuinely where a rule about the world
+    # belongs. Content there used to settle all of them at once, so one entry
+    # about blood price silenced four domains.
+    def unwoven_ids():
+        body = client.post("/api/codex/scan", json={
+            "project_path": project, "depth": "unwoven_pass",
+            "domains": ["kinship"]}).json()
+        return {s["detail"]["question_id"] for s in body["stops"]}
+
+    assert "kin_marriage" in unwoven_ids()
+
+    # Answer it the way Quick Entry does: the entry claims the question.
+    made = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "lore", "name": "Handfasting",
+        "sections": {"rule_or_concept": "One spouse, chosen at midwinter."},
+        "answers": ["kin_marriage"],
+    })
+    assert made.status_code == 200
+    assert made.json()["thread"]["answers"] == ["kin_marriage"]
+
+    after = unwoven_ids()
+    assert "kin_marriage" not in after
+    # Its neighbours in that very section are untouched.
+    body = client.post("/api/codex/scan", json={
+        "project_path": project, "depth": "unwoven_pass",
+        "domains": ["memory"]}).json()
+    assert "mem_records" in {s["detail"]["question_id"] for s in body["stops"]}
+
+
+def test_the_claim_survives_a_round_trip_through_the_file(project):
+    # It lives in the writer's Markdown, not in the cache, which is what makes
+    # it derivation rather than a ledger. Deleting app.db must not lose it.
+    client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "lore", "name": "Handfasting",
+        "sections": {"rule_or_concept": "One spouse."},
+        "answers": ["kin_marriage"],
+    })
+    import os
+    path = os.path.join(project, "codex", "lore", "handfasting.md")
+    with open(path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    assert "answers:" in raw and "kin_marriage" in raw
+
+
+def test_a_question_this_build_does_not_ask_is_never_recorded(project):
+    # An unknown id would sit in the file forever answering nothing, and would
+    # read to anyone opening the Markdown like a claim the app had lost track of.
+    made = client.post("/api/codex/thread/new", json={
+        "project_path": project, "type": "lore", "name": "Something",
+        "sections": {"rule_or_concept": "A rule."},
+        "answers": ["kin_marriage", "not_a_real_question"],
+    })
+    assert made.json()["thread"]["answers"] == ["kin_marriage"]

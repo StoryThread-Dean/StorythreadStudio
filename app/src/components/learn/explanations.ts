@@ -484,6 +484,27 @@ export const EXPLAIN: Record<string, Explains> = {
     cost: FREE,
     endpoint: "/api/codex/scan",
   },
+  "weaving.board": {
+    what: "Every part of your world, with how much of it you have not decided "
+      + "yet.",
+    why: "Unwoven is the one pass that finds things ABSENT rather than wrong, "
+      + "so there is nothing here to fix and no order you have to work in. The "
+      + "board exists so a sitting of a dozen questions does not read as the "
+      + "whole list, and so you can spend an evening on your religion because "
+      + "that is what you feel like thinking about.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Pick a part to ask about only that one. Pick it again to go back to "
+        + "all of it.",
+      "A sitting stays short on purpose. The rest is there next time, and the "
+        + "counts here are the real ones.",
+      "Answering a question opens the questions it implies, so a part can grow "
+        + "as you work on it. That is your world getting deeper, not a list "
+        + "getting longer.",
+    ],
+    endpoint: "/api/codex/scan",
+  },
   "weaving.quick-entry": {
     what: "A base-level entry: a name, its kind, and one line to build on.",
     why: "The Weave builds the framework so the walkthrough can keep moving -- "

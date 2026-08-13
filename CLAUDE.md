@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 64 of 98 tasks done.
+> **LEDGER — last updated 2026-08-12.** 69 of 99 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -173,9 +173,30 @@ its place without relying on memory or conversation history.
 > needed; a source-read test fails the build if a new corpus builder reads it.
 > Two bugs the tests bit first: `_strip_chrome` ate `[[...]]` as an audiobook
 > marker, and a marked name was counted twice.
-> **Next: Phase 6** (Unwoven, 4 tasks), then Phase 8 (11 tasks, the largest
-> remaining group), Phase 10 release.
-> Branch health: 1744 backend tests, 1239 frontend tests, ruff and tsc clean.
+> **PHASE 6 COMPLETE (5 of 5).** Unwoven was asking twelve trunk questions out
+> of a corpus of thirty-three and calling that a world. **R6.0 was found while
+> sizing R6.3 and had to go first:** `lands_as` says where an answer BELONGS and
+> was also read as proof the question was settled, which works while one question
+> owns a landing place and collapses when several share one. Eleven land in a lore
+> entry's `rule_or_concept`, so one entry about blood price silenced marriage,
+> inheritance, war rules and forms of address at once -- four domains, none of
+> them answered by a word. An entry now carries `answers: [question_id]` in its
+> own frontmatter: still derived, still in the writer's Markdown, gone when the
+> entry is. **R6.1** was the same class of bug as the rest of this recovery: a
+> depth ceiling keyed to `DEPTH_FULL`, which is the Warp pass, inside the pass
+> whose depth is `unwoven_pass` -- so the comparison could not be true and every
+> branch question was dead code. Nothing failed; the walk just asked the same
+> dozen forever. **R6.2** paces a sitting to twelve, a round at a time ACROSS the
+> world (three-at-a-time showed four domains out of ten, always alphabetically
+> the same four), with what the writer's own answer OPENED first inside a part --
+> plain trunk-first would have reinstated R6.1 by arithmetic, and a test written
+> for R6.1 caught it. **R6.3** grew the corpus 33 to 100, ten per domain, each
+> answerable in a sentence. **R6.4** is the domain board (every part, real count,
+> a bar for what is decided, finished parts still shown) plus a ten-page
+> walkthrough that argues from a cost and shows the same beat written with and
+> without the ground decided. Spec amended, Unwoven section.
+> **Next: Phase 8** (11 tasks, the largest remaining group), then Phase 10 release.
+> Branch health: 1774 backend tests, 1263 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

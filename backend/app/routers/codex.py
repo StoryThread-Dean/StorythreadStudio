@@ -589,6 +589,13 @@ async def save_entity(request: SaveThreadRequest):
     if not thread.get("created_at"):
         thread["created_at"] = thread["updated_at"]
 
+    # An entry may claim Unwoven questions -- this is the route the walk uses
+    # when the answer is already in an entry that exists. Cleaned here for the
+    # same reason it is cleaned on create: an id this build does not ask would
+    # sit in the file forever, answering nothing.
+    if thread.get("answers"):
+        thread["answers"] = _clean_answers(thread.get("answers"))
+
     _write_thread(project_path, registry, thread)
     await codex_store.reindex(project_path)
 
@@ -1556,6 +1563,10 @@ class ScanBody(BaseModel):
     # Answers carried in from a run, so the scan can leave out what the writer
     # has already retired or muted.
     run_id: str | None = None
+    # Unwoven only: which parts of the world to ask about. Empty means all of
+    # them. The domain board sends one, because a writer who clicked Religion
+    # has already said what they want to work on.
+    domains: list[str] = []
 
 
 @router.post("/scan")
@@ -1581,7 +1592,7 @@ async def post_scan(body: ScanBody):
 
     request = ScanRequest(
         depth=body.depth, types=body.types, chapter_ids=body.chapter_ids,
-        kinds=body.kinds,
+        kinds=body.kinds, domains=body.domains,
         retired=set(view["retired"]),
         muted_kinds=set(view["muted_kinds"]),
         pinned=list(view["pinned"]),
@@ -1607,6 +1618,10 @@ async def post_scan(body: ScanBody):
         # session look like it had barely started.
         "total": len(result.stops),
         "unreadable": result.unreadable,
+        # Unwoven only, and empty for every other pass. Every part of the world
+        # with how much of it is still open, so the board can show the whole
+        # world while the sitting itself stays a sitting.
+        "domains": result.domains,
         "resumed": report,
     }
 
@@ -1771,6 +1786,29 @@ class NewThreadBody(BaseModel):
     # in the section that asked for it -- instead of creating an empty file and
     # racing a second request to fill it.
     sections: dict[str, str] = {}
+    # Which Unwoven questions this entry is the answer to. Recorded on the
+    # entry because questions share landing places -- eleven of them land in a
+    # lore entry's "rule or concept" -- so content there cannot say WHICH one
+    # was settled. Written into the writer's own file, never into the cache.
+    answers: list[str] = []
+
+
+def _clean_answers(ids) -> list[str]:
+    """
+    Question ids, keeping only ones this build actually asks.
+
+    An unknown id would sit in the writer's file forever answering nothing --
+    and would look, to anyone reading the Markdown, like a claim the app had
+    simply lost track of.
+    """
+    from app.codex.world_rules import by_id
+
+    out: list[str] = []
+    for value in ids or []:
+        qid = str(value or "").strip()
+        if qid and by_id(qid) is not None and qid not in out:
+            out.append(qid)
+    return out
 
 
 @router.post("/thread/new")
@@ -1828,6 +1866,7 @@ async def post_new_thread(body: NewThreadBody):
         "updated_at": now,
         "aliases": _clean_aliases(body.aliases, name),
         "tags": [], "fields": {}, "ties": [], "run": [],
+        "answers": _clean_answers(body.answers),
         "sections": {
             section["id"]: {"heading": section["heading"], "content": "",
                             "trait_blocks": [], "ai_summary": ""}
