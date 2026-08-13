@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 54 of 98 tasks done.
+> **LEDGER — last updated 2026-08-12.** 59 of 98 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -149,10 +149,20 @@ its place without relying on memory or conversation history.
 > profiles in it and said nothing. `test_after_conversion.py` converts a project
 > and asks all three surfaces the same question, end to end, because unit tests
 > of each passed throughout the period the bug existed.
-> **Next: Phase 4** — there is still no way to export the Weave itself (5 tasks,
-> BLOCKER, at zero). Then Phase 5 sources, Phase 6 Unwoven, Phase 8 (11 tasks,
-> the largest remaining group), Phase 10 release.
-> Branch health: 1700 backend tests, 1239 frontend tests, ruff and tsc clean.
+> **PHASE 4 COMPLETE (5 of 5).** The Weave can leave the app. `POST
+> /export/weave` writes a dated bundle in three shapes with three different
+> promises: Markdown for a person (chapter names, every connection carrying its
+> reason), JSON for a program (ids intact), CSV as three tables because a nested
+> CSV is not a CSV. `include_weave` on the manuscript export and the snapshot.
+> **Every anchor travels as an id AND a label** — drop the id and a program
+> cannot follow a renamed chapter, drop the label and a person cannot read the
+> file. Read from the FILES rather than the index, so an export cannot be wrong
+> in a way a reindex would quietly fix. `test_codex_export.py` is the file the
+> spec named and which did not exist: 25 tests.
+> **Next: Phase 5** (sources — notes/outline/style guide as real inputs, plus
+> R5.5 making the Author Notes privacy guarantee real), then Phase 6 Unwoven,
+> Phase 8 (11 tasks, the largest remaining group), Phase 10 release.
+> Branch health: 1726 backend tests, 1239 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

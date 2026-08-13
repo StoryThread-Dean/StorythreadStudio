@@ -291,6 +291,31 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "export.weave": {
+    what: "Your world model, out of the app, in three shapes at once.",
+    why: "Your chapters and entries are Markdown files, so they already travel "
+      + "-- copy the folder and they come with you. What the Weave ADDS does "
+      + "not: the connections between things, the reasons you gave them, and "
+      + "what is true at which point in the book. This writes all of that to "
+      + "exports/ as a document you can read, a JSON file a program can read, "
+      + "and CSV tables a spreadsheet can open. Chapters appear by name as well "
+      + "as by id, so the files still make sense outside this app.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Press Export the Weave. It writes a dated folder into exports/.",
+      "Open weave.md for the readable one: every entry, its connections with "
+        + "the reason you wrote, and what changes through the story by chapter "
+        + "name.",
+      "Keep weave.json if you want the whole graph with ids intact, for "
+        + "anything you or somebody else builds later.",
+      "Open the three CSVs in a spreadsheet: entries, connections and facts, "
+        + "one table each, because a spreadsheet cannot open a nested file.",
+      "Ticking The Weave on a manuscript export instead puts the readable "
+        + "version at the end of your book.",
+    ],
+    endpoint: "/api/export/weave",
+  },
   "profile.page": {
     what: "The page where you build one thing in your world: a person, a place, "
       + "a faction, a faith.",

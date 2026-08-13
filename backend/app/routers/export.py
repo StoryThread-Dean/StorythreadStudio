@@ -61,6 +61,13 @@ class ExportRequest(BaseModel):
     include_scene_summaries:   bool = False
     include_notes:             bool = False
     include_profiles:          bool = False
+    # THE WEAVE ITSELF, which is a different thing from the entries.
+    #
+    # include_profiles exports what the writer WROTE -- the prose of each entry.
+    # include_weave exports what the Weave ADDS: who is connected to whom and
+    # why, and what is true at which point in the book. Copying the folder gets
+    # the first; nothing got the second, which is the gap this closes.
+    include_weave:             bool = False
 
     # Optional chapter filter. When None or empty, ALL chapters in manuscript/
     # are exported (preserves the original behavior for callers that don't pass
@@ -738,6 +745,16 @@ async def export_full_manuscript(request: ExportRequest):
             appendices.append("# Profiles" + "".join(profile_chunks))
             extras_summary_parts.append(f"{total_profiles} profiles")
 
+    if request.include_weave:
+        # The world MODEL, rendered for a person: chapter names rather than
+        # anchors, and every connection carrying the reason the writer gave it.
+        from app.codex.export import to_markdown
+
+        weave_md = to_markdown(folder_path).strip()
+        if weave_md and "no entries yet" not in weave_md:
+            appendices.append(weave_md)
+            extras_summary_parts.append("the Weave")
+
     if appendices:
         combined_md = combined_md.rstrip() + "\n\n---\n\n" + "\n\n---\n\n".join(appendices) + "\n"
 
@@ -770,6 +787,96 @@ async def export_full_manuscript(request: ExportRequest):
 
 
 # --- POST /api/export/snapshot ---
+
+class WeaveExportRequest(BaseModel):
+    folder_path: str
+    # Which shapes to write. All three by default: a writer exporting their
+    # world does not yet know which one they will need, and the two they do not
+    # read cost a few kilobytes.
+    formats: list[str] = ["markdown", "json", "csv"]
+
+
+@router.post("/weave", response_model=ExportResponse)
+async def export_weave(request: WeaveExportRequest):
+    """
+    The writer's world model, out of the app, in three shapes.
+
+    THE SPEC IS BLUNT ABOUT WHY, and the audit found none of it built: a world
+    model that cannot leave is a world model the writer does not own. The
+    Markdown files already travelled -- copying a project folder takes the
+    entries with it -- but what the Weave ADDS lived only inside YAML
+    frontmatter and an index documented as a rebuildable cache.
+
+    Markdown is for a person: chapter names, and every connection carrying the
+    reason it was given. JSON is for a program: ids intact, so somebody building
+    on this is not screen-scraping. CSV is for a spreadsheet, which is where a
+    great many novelists actually keep lists, as three tables rather than one
+    nested file.
+
+    Anchors travel as an id AND a label everywhere, because dropping either half
+    makes the file useless to somebody -- and which somebody depends on which
+    half went.
+    """
+    from app.codex.export import read_world, to_csv_tables, to_json, to_markdown
+
+    folder_path = request.folder_path
+    exports = _exports_dir(folder_path)
+
+    wanted = {f.strip().lower() for f in request.formats}
+    unknown = wanted - {"markdown", "json", "csv"}
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown export format: {', '.join(sorted(unknown))}. "
+                   f"Choose from markdown, json, csv.")
+    if not wanted:
+        raise HTTPException(status_code=400,
+                            detail="Choose at least one format to export.")
+
+    title = _project_title(folder_path)
+    slug = _safe_title(title)
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    bundle_dir = os.path.join(exports, f"{slug}-weave-{timestamp}")
+    os.makedirs(bundle_dir, exist_ok=True)
+
+    # Read once, render three ways. The world is read from the FILES rather than
+    # the index: an export is a promise about what the writer actually has, and
+    # reading the source of truth means it cannot be wrong in a way a reindex
+    # would quietly fix.
+    world = read_world(folder_path)
+    written: list[str] = []
+    try:
+        if "markdown" in wanted:
+            path = os.path.join(bundle_dir, "weave.md")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(to_markdown(folder_path, world))
+            written.append("weave.md")
+        if "json" in wanted:
+            path = os.path.join(bundle_dir, "weave.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(to_json(folder_path, world))
+            written.append("weave.json")
+        if "csv" in wanted:
+            for name, text in to_csv_tables(folder_path, world).items():
+                with open(os.path.join(bundle_dir, name), "w", encoding="utf-8",
+                          newline="") as f:
+                    f.write(text)
+                written.append(name)
+    except OSError as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Could not write the export: {exc}") from exc
+
+    entries = len(world["entries"])
+    connections = sum(len(e.get("ties") or []) for e in world["entries"])
+    facts = sum(len(e.get("run") or []) for e in world["entries"])
+
+    return ExportResponse(
+        export_type="weave",
+        output_path=bundle_dir,
+        message=(f"Exported {entries} entries, {connections} connections and "
+                 f"{facts} facts as {', '.join(written)}."),
+    )
+
 
 @router.post("/snapshot", response_model=ExportResponse)
 async def export_snapshot(request: ExportRequest):
@@ -874,6 +981,30 @@ async def export_snapshot(request: ExportRequest):
         n = _copy_tree(live, os.path.join(snapshot_dir, os.path.basename(live)))
         if n:
             extras_parts.append(f"{n} profile files")
+
+    if request.include_weave:
+        # All three shapes inside the snapshot, because a snapshot is the copy a
+        # writer keeps: the readable one for them, and the two machine-readable
+        # ones for whatever they use next.
+        from app.codex.export import to_csv_tables, to_json, to_markdown
+
+        weave_dir = os.path.join(snapshot_dir, "weave")
+        os.makedirs(weave_dir, exist_ok=True)
+        written = 0
+        for name, text in (
+            ("weave.md", to_markdown(folder_path)),
+            ("weave.json", to_json(folder_path)),
+        ):
+            with open(os.path.join(weave_dir, name), "w", encoding="utf-8") as f:
+                f.write(text)
+            written += 1
+        for name, text in to_csv_tables(folder_path).items():
+            with open(os.path.join(weave_dir, name), "w", encoding="utf-8",
+                      newline="") as f:
+                f.write(text)
+            written += 1
+        copied_count += written
+        extras_parts.append("the Weave")
 
     if copied_count == 0:
         # Clean up the empty folder since there was nothing to snapshot

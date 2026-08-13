@@ -18,8 +18,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   X, FileText, Camera, CheckCircle, AlertCircle, Loader,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Network,
 } from "lucide-react";
+import { Explain } from "./learn/Explain";
 import type { ProjectInfo, ChapterInfo } from "../types/project";
 
 const API_BASE = "http://localhost:8000";
@@ -47,6 +48,10 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
   const [includeSceneSummaries,   setIncludeSceneSummaries]   = useState(false);
   const [includeNotes,            setIncludeNotes]            = useState(false);
   const [includeProfiles,         setIncludeProfiles]         = useState(false);
+  // THE WEAVE ITSELF, which is a different thing from the entries. Profiles
+  // exports what the writer WROTE; this exports what the Weave ADDS -- who is
+  // connected to whom and why, and what is true at which point in the book.
+  const [includeWeave,            setIncludeWeave]            = useState(false);
 
   const extrasAvailable = exportFormat === "markdown" || exportFormat === "txt";
 
@@ -131,6 +136,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           include_scene_summaries:   includeSceneSummaries,
           include_notes:             includeNotes,
           include_profiles:          includeProfiles,
+          include_weave:             includeWeave,
           chapter_filenames:         chapterFilenames,
         }),
       });
@@ -146,6 +152,37 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
         path: data.output_path,
         message: data.message,
       });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export failed.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  /**
+   * The bundle, which is its own endpoint rather than an export type.
+   *
+   * It writes a folder rather than a file, and it does not take a chapter
+   * selection or a format -- a world is not a manuscript and pretending
+   * otherwise would put four irrelevant controls in front of the writer.
+   */
+  const handleWeaveExport = async () => {
+    setIsExporting(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/export/weave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder_path: project.root_path }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Export failed.");
+      }
+      const data = await res.json();
+      setResult({ type: data.export_type, path: data.output_path,
+                  message: data.message });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed.");
     } finally {
@@ -348,9 +385,52 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Profiles</span>
-                <span className="text-[10px] text-text-muted">profiles/ (characters, locations, etc.)</span>
+                <span className="text-[10px] text-text-muted">every entry, as you wrote it</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={includeWeave}
+                  onChange={(e) => setIncludeWeave(e.target.checked)}
+                  disabled={isExporting || !extrasAvailable}
+                  className="accent-violet-500"
+                />
+                <span>The Weave</span>
+                <span className="text-[10px] text-text-muted">
+                  connections, and what changes through the story
+                </span>
               </label>
             </div>
+          </div>
+
+          {/* THE WEAVE ON ITS OWN.
+              Its own button rather than a third checkbox, because it answers a
+              different question: not "what goes in my manuscript" but "how do I
+              get my world OUT of this app". A writer reaching for that is
+              usually leaving, backing up, or handing the world to somebody
+              else, and none of those want a novel wrapped around it. */}
+          <div className="rounded-lg border border-violet-900/60 bg-violet-950/10 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Network size={16} className="shrink-0 text-violet-300" />
+              <p className="text-sm font-medium text-text-primary">
+                Export the Weave on its own
+              </p>
+              <Explain of="export.weave" compact />
+            </div>
+            <p className="mb-3 text-xs text-text-muted">
+              Your world model in three shapes at once: a Markdown document you
+              can read, a JSON file a program can read, and CSV tables for a
+              spreadsheet. Chapters appear by name as well as by id, so the
+              files stay readable outside this app.
+            </p>
+            <button
+              onClick={() => handleWeaveExport()}
+              disabled={isExporting}
+              className="inline-flex items-center gap-2 rounded border border-violet-700 px-3 py-1.5 text-xs font-medium text-violet-200 transition-colors hover:border-violet-500 hover:bg-violet-900/30 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Network size={13} />
+              {isExporting ? "Exporting..." : "Export the Weave"}
+            </button>
           </div>
 
           {/* Export option: Full Manuscript */}

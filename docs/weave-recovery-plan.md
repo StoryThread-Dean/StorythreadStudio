@@ -700,12 +700,39 @@ three surfaces at once.
 
 ## Phase 4 -- Export and portability (gap A3) -- BLOCKER
 
-- [ ] **R4.1** `include_weave` on `/export/full-manuscript` and
-      `/export/snapshot`.
-- [ ] **R4.2** `POST /export/weave`: Markdown, JSON and CSV bundles.
-- [ ] **R4.3** Anchors exported as ids **and** human labels.
-- [ ] **R4.4** Export UI: a Weave checkbox and a bundle button.
-- [ ] **R4.5** `test_codex_export.py` -- the named test file that does not exist.
+- [x] **R4.1** `include_weave` on both. It is a DIFFERENT thing from
+      `include_profiles`, and the distinction is the point: profiles exports what
+      the writer WROTE, the prose of each entry, which already travelled by
+      copying the folder. The Weave flag exports what the Weave ADDS -- who is
+      connected to whom and why, and what is true at which point in the book --
+      which lived only in YAML frontmatter and in an index the docs call a
+      rebuildable cache. On a manuscript export it is a readable appendix; in a
+      snapshot it is all three shapes in a `weave/` folder.
+- [x] **R4.2** `POST /export/weave` writes a dated bundle. Three shapes, three
+      promises: **Markdown** for a person (chapter names, and every connection
+      carrying the reason the writer gave it), **JSON** for a program (ids
+      intact, so somebody building on this is not screen-scraping), and **CSV**
+      as three tables, because a nested CSV is not a CSV and a spreadsheet is
+      where a great many novelists keep their lists. Read from the FILES rather
+      than the index, so an export cannot be wrong in a way a reindex would
+      quietly fix. It reports what it wrote as counts a writer can check.
+- [x] **R4.3** Every anchor travels as an id AND a label, in all three shapes.
+      Its own task for a reason: drop the id and a program cannot follow a
+      renamed chapter; drop the label and a person cannot read the file. Which
+      half goes decides who the export is useless to. An anchor whose chapter has
+      been deleted gets an empty label rather than an invented one.
+- [x] **R4.4** The export screen has a Weave checkbox beside Profiles, and a
+      separate **Export the Weave** button with its own `What's this?`. Its own
+      button rather than a third checkbox because it answers a different
+      question: not "what goes in my manuscript" but "how do I get my world OUT
+      of this app". A writer reaching for that is backing up, leaving, or handing
+      the world to somebody else, and none of those want a novel wrapped round
+      it -- so it takes no chapter selection and no format picker.
+- [x] **R4.5** `test_codex_export.py`, the file the spec names and which did not
+      exist. Twenty-five tests: the three shapes, both halves of every anchor,
+      the flag on both other exports, and the awkward cases -- an empty world
+      exports honestly, an unplaced fact says so rather than printing a blank,
+      and a deleted chapter leaves the label empty.
 
 ---
 
@@ -827,11 +854,11 @@ it, since the spec calls it the reason the frame system exists.
 | 2 The premise | 25 | 25 |
 | 2b Profile Builder | 7 | 7 |
 | 3 Migration completeness | 4 | 4 |
-| 4 Export | 5 | 0 |
+| 4 Export | 5 | 5 |
 | 5 Sources | 5 | 0 |
 | 6 Unwoven | 4 | 0 |
 | 7 Scene identity | 4 | 0 |
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **98** | **54** |
+| **Total** | **98** | **59** |
