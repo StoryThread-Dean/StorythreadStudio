@@ -200,3 +200,119 @@ def test_every_kinds_sidebar_group_agrees_with_the_frontend():
             if backend.get(k) != frontend.get(k)
         )
     )
+
+
+# ── R8.10: the connection vocabulary, which was exempt from all of this ──────
+#
+# About seventy relations ship, and they were the one part of the writer-facing
+# vocabulary nothing checked. They are exempt from the CROSS-LANGUAGE half by
+# construction -- the picker fetches them from GET /relations rather than
+# keeping a copy -- so there is no drift to catch. What there is instead is a
+# vocabulary that a writer reads off a dropdown, and every failure below shows
+# up as a menu that is confusing rather than as an error:
+#
+#   a relation filed under a heading the picker does not know -> lands nowhere
+#   two identical labels in one group                          -> unpickable
+#   a directional relation with no inverse                     -> the other end
+#                                                                 reads as
+#                                                                 "X (the other
+#                                                                 way round)"
+#   a relation whose kinds do not exist                        -> never offered
+#
+# None of those raise anything. All of them are the writer's problem.
+
+def _relations() -> list[dict]:
+    from app.codex.types_registry import DEFAULT_RELATIONS
+    return DEFAULT_RELATIONS
+
+
+def test_every_relation_is_filed_under_a_heading_the_picker_knows():
+    from app.codex.types_registry import RELATION_GROUPS
+
+    stray = {r["id"]: r.get("group") for r in _relations()
+             if r.get("group") not in RELATION_GROUPS}
+    assert not stray, (
+        f"these relations name a group the picker does not order: {stray}. "
+        f"The heading would be sorted alphabetically among the real ones, or "
+        f"not appear at all."
+    )
+
+
+def test_no_two_relations_in_one_group_read_the_same():
+    # A dropdown with two identical lines is a dropdown where one of them can
+    # never knowingly be chosen.
+    seen: dict[tuple[str, str], str] = {}
+    clashes: list[str] = []
+    for rel in _relations():
+        key = (rel.get("group", ""), rel["label"].lower())
+        if key in seen:
+            clashes.append(f"{seen[key]} and {rel['id']} both read "
+                           f"'{rel['label']}' under {rel.get('group')}")
+        seen[key] = rel["id"]
+    assert not clashes, "; ".join(clashes)
+
+
+def test_every_directional_relation_can_be_read_from_the_other_end():
+    # Without an inverse the far end of the connection renders as "X (the other
+    # way round)", which is honest and clumsy -- and it is what a writer sees on
+    # the OTHER entry's page, where they did not make the choice.
+    missing = [r["id"] for r in _relations()
+               if not r.get("symmetric") and not r.get("inverse")]
+    assert not missing, (
+        f"these relations are directional and have no inverse label: {missing}"
+    )
+
+
+def test_no_relation_is_offered_between_kinds_that_do_not_exist():
+    # A relation whose endpoints name a kind the registry does not ship can
+    # never be offered by anything, which is the connection-to-nothing failure
+    # the Weave exists to prevent, applied to its own vocabulary.
+    kinds = {t["id"] for t in DEFAULT_TYPES}
+    broken: list[str] = []
+    for rel in _relations():
+        if rel.get("universal"):
+            continue        # runs between anything, including kinds invented later
+        unknown = (set(rel["source_types"]) | set(rel["target_types"])) - kinds
+        if unknown:
+            broken.append(f"{rel['id']} -> {sorted(unknown)}")
+    assert not broken, "; ".join(broken)
+
+
+def test_relation_labels_read_as_english():
+    # They are read straight off a menu. An id leaking through as a label
+    # ("mentored_by") is the same failure as a stop kind with no Lexicon entry:
+    # the app's own word showing where the writer's should be.
+    #
+    # `inverse` is checked differently ON PURPOSE. It is stored underscored and
+    # rendered with `.replace("_", " ")`, so underscores there are the format
+    # rather than a leak; what matters is that it becomes a readable phrase.
+    for rel in _relations():
+        label = rel["label"]
+        assert "_" not in label, (
+            f"{rel['id']} shows an id rather than words: {label!r}")
+        assert label == label.strip(), f"{rel['id']} label has loose whitespace"
+        assert "\u2014" not in label and "\u2013" not in label, (
+            f"{rel['id']} uses an em or en dash")
+
+        inverse = rel.get("inverse")
+        if inverse:
+            spoken = inverse.replace("_", " ")
+            assert spoken == spoken.strip() and spoken, (
+                f"{rel['id']} inverse does not render as a phrase: {spoken!r}")
+            assert "\u2014" not in spoken and "\u2013" not in spoken, (
+                f"{rel['id']} inverse uses an em or en dash")
+
+
+def test_ids_are_unique():
+    ids = [r["id"] for r in _relations()]
+    assert len(ids) == len(set(ids)), "two relations share an id"
+
+
+def test_the_vocabulary_is_worth_having():
+    # Not a size contest. But the reported world (faction worships deity,
+    # faction part of religion, religion worships deity) needs a real spread,
+    # and a handful of relations would send every writer to "name your own".
+    rels = _relations()
+    assert len(rels) > 50
+    # And it must not all be one heading, or the grouping buys nothing.
+    assert len({r.get("group") for r in rels}) >= 6

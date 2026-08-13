@@ -505,6 +505,24 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/scan",
   },
+  "thread.fact-layer": {
+    what: "One fact, and everything that follows from it.",
+    why: "The form above says what a fact IS. Its effect is spread across three "
+      + "different rules -- where it is in force, whose truth it is, when the "
+      + "reader learns it -- and until this screen no single place put them "
+      + "together. Reading a fact's three switches and working out what your "
+      + "AI would actually receive in chapter nine is not something anyone "
+      + "should have to do in their head.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Read the bar: solid means this fact is true in that chapter.",
+      "The last panel is the one that matters. It says what a model gets, and "
+        + "when, which is what all the rest of it is for.",
+      "Nothing here can be changed. Edit the fact in the list you came from; "
+        + "this is a view of what it does.",
+    ],
+  },
   "weaving.stale": {
     what: "A question you already put off, about words you have since "
       + "rewritten.",

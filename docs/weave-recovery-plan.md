@@ -821,16 +821,51 @@ three surfaces at once.
       connection that ends at or before it starts. Spec amended. The fixer gained
       the reveal-point control it had nowhere, or the walk would have reported
       problems it gave the writer no way to fix.
-- [ ] **R8.5** Write to `codex_mention`, or drop the table and say so.
+- [x] **R8.5** **DROPPED, and the reason is not effort.** `codex_mention` could
+      not have been kept fresh by the index's own mechanism: mentions derive
+      from the MANUSCRIPT and `ensure_fresh` fingerprints `codex/`, so every
+      chapter the writer edited would leave the rows silently wrong while the
+      gate reported the index current. Nothing asks for it either -- counts come
+      from `scan._mention_counts` and co-presence from `together.py`, both while
+      the manuscript is already in memory. Migration 006 drops it; 002 still
+      creates it, because editing an applied migration is the bug 004 remembers.
 - [ ] **R8.6** Per-book `model_roles` in `project.json`, or delete the dead
-      precedence level and its faking test.
-- [ ] **R8.7** Surface the prompt-caching caveat in the Model Roles UI.
-- [ ] **R8.8** `GuidedWalk` moved to `components/learn/`, generalised to a
-      `WalkDemo` union, and used on a Weave surface.
-- [ ] **R8.9** The Fact layer (gap: two of four interface layers exist).
-- [ ] **R8.10** Tie relations covered by the lexicon contract test.
-- [ ] **R8.11** `test_codex_graph.py` -- including "a Thread not yet introduced
-      is omitted at an earlier anchor", which nothing asserts today.
+      precedence level and its faking test. **BLOCKED ON A RULING.** The level is
+      deader than the gaps note said: `_resolve_model_and_key` never reads
+      project.json at all -- it synthesises `{"default_model": override}` from
+      one frontend field -- and most AI request models carry no `project_path`.
+      So building it is ~10 request models, every frontend caller, and a per-book
+      UI; and a half-threaded version is worse than none, because a writer whose
+      per-book choice reaches Draft but not Enhance has an unexplainable app.
+- [x] **R8.7** Surface the prompt-caching caveat in the Model Roles UI. It is a
+      claim about MONEY, so it is bound by a contract test in the
+      `test_explain_costs.py` mould: Python reads `providerMeta.ts` and fails the
+      build if the screen's caching claim disagrees with `providers.py`, in
+      either direction.
+- [x] **R8.8** `GuidedWalk` moved to `components/learn/`, `WalkDemo` generalised
+      to an audio-or-shown union, and used on a Weave surface: `RunWalk` teaches
+      the THREE facts the programme's own opening example needs. One fact reading
+      "believes her father died" is the obvious thing to type and produces a
+      world where nobody, including her, ever learns otherwise -- and nothing can
+      detect it, because that world is perfectly consistent.
+- [x] **R8.9** The Fact layer, the fourth of four. Deliberately READ-ONLY: the
+      Run editor already edits the three switches on two screens through one
+      component, and a second place to change them would give one idea two
+      vocabularies. What it adds is the EFFECT -- where the fact is in force,
+      what replaced it, and what a model actually receives -- which is spread
+      across the resolver, the visibility rules and the brief, and which no
+      screen had ever gathered.
+- [x] **R8.10** Tie relations covered by the vocabulary contract test, and it
+      found something: 23 of ~70 directional relations had no inverse, so from
+      the far end they read "loves (the other way round)" on a page the writer
+      did not make the choice on. All 23 now have one.
+- [x] **R8.11** `test_codex_graph.py` -- 14 tests including the one nothing
+      asserted. **It also found a live bug, reported rather than fixed:** the
+      route's docstring says a Tie true LATER comes back `active: false` so the
+      map can draw it dashed, and `record_visibility` hides a future Tie before
+      that branch is reached. Same class as R6.1 -- a documented capability whose
+      condition can never be true. Fixing it changes what the map SHOWS, which is
+      the writer's call.
 
 ---
 
@@ -887,7 +922,7 @@ it, since the spec calls it the reason the frame system exists.
 | 5 Sources | 5 | **5** |
 | 6 Unwoven | 5 | **5** |
 | 7 Scene identity | 4 | 0 |
-| 8 Walk honesty | 11 | **4** |
+| 8 Walk honesty | 11 | **10** |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **99** | **73** |
+| **Total** | **99** | **79** |

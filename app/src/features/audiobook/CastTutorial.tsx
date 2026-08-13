@@ -4,8 +4,8 @@
 // who has never cast a book. The card itself is GuidedWalk -- this file
 // is only the steps.
 
-import { GuidedWalk } from "./GuidedWalk";
-import type { WalkStep } from "./GuidedWalk";
+import { GuidedWalk } from "../../components/learn/GuidedWalk";
+import type { WalkStep } from "../../components/learn/GuidedWalk";
 
 interface CastTutorialProps {
   /** True once a print engine is connected -- the Pro step is skipped

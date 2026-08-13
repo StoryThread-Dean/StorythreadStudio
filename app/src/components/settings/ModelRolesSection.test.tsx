@@ -91,6 +91,7 @@ function renderSection(overrides: Partial<Parameters<typeof ModelRolesSection>[0
       providerReady={{ openrouter: true, nanogpt: false, local: false }}
       modelsByProvider={{ openrouter: CATALOG }}
       onNeedModels={onNeedModels}
+      promptCaching={false}
       {...overrides}
     />
   );
@@ -320,5 +321,71 @@ describe("loading", () => {
   it("says it is loading rather than showing an empty list of jobs", () => {
     renderSection({ loadingRoles: true, roles: [] });
     expect(screen.getByText(/loading roles/i)).toBeTruthy();
+  });
+});
+
+
+// ── R8.7: the caching caveat, which was computed and never shown ────────────
+//
+// The backend has set a `caveat` on exactly this condition since Model Roles
+// shipped, and no screen read it. That matters more than an ordinary missing
+// message because it is a claim about MONEY: prompt caching is a single toggle
+// in Settings, so a writer who turns it on has every reason to think it covers
+// every role they have assigned, and it only covers the services that
+// understand the marker.
+//
+// test_provider_caching_claims.py binds this screen's provider registry to the
+// backend's, so the wording here cannot outlive the fact behind it.
+
+describe("what caching does not reach", () => {
+  it("says so when a role points at a service that cannot cache", async () => {
+    renderSection({
+      promptCaching: true,
+      value: { prose: { provider: "nanogpt", model: "some/model" } },
+    });
+    await expand("Prose");
+    const note = screen.getByTestId("role-no-caching-prose").textContent ?? "";
+    expect(note).toContain("NanoGPT");
+    expect(note).toContain("not be discounted");
+  });
+
+  it("frames it as a cost, not as a fault", async () => {
+    // The role RUNS. Dressing this as a warning next to the real one (an
+    // assignment that will refuse) would teach the writer to read neither.
+    renderSection({
+      promptCaching: true,
+      value: { prose: { provider: "nanogpt", model: "some/model" } },
+    });
+    await expand("Prose");
+    expect(screen.getByTestId("role-no-caching-prose").textContent)
+      .toContain("Everything still works");
+  });
+
+  it("says nothing when caching is off", async () => {
+    // Nothing is being lost, so there is nothing to admit. A note that is
+    // always there is a note nobody reads.
+    renderSection({
+      promptCaching: false,
+      value: { prose: { provider: "nanogpt", model: "some/model" } },
+    });
+    await expand("Prose");
+    expect(screen.queryByTestId("role-no-caching-prose")).toBeNull();
+  });
+
+  it("says nothing when the service does cache", async () => {
+    renderSection({
+      promptCaching: true,
+      value: { prose: { provider: "openrouter", model: "anthropic/claude-opus-4.8" } },
+    });
+    await expand("Prose");
+    expect(screen.queryByTestId("role-no-caching-prose")).toBeNull();
+  });
+
+  it("says nothing about an unassigned role", async () => {
+    // Unassigned uses the Default Model, whose provider is the active one --
+    // a different question, answered on the provider panel.
+    renderSection({ promptCaching: true });
+    await expand("Prose");
+    expect(screen.queryByTestId("role-no-caching-prose")).toBeNull();
   });
 });

@@ -157,8 +157,11 @@ async def reindex(project_path: str, threads: list[dict] | None = None) -> int:
     revision = source_revision(project_path)
 
     async with open_db(project_path) as db:
-        for table in ("codex_entity", "codex_alias", "codex_tie",
-                      "codex_fact", "codex_mention"):
+        # `codex_mention` used to be in this list and was the only table here
+        # that nothing ever wrote to -- so every reindex dutifully cleared a
+        # table that was always already empty. Dropped in migration 006; see
+        # there for why filling it was the wrong answer.
+        for table in ("codex_entity", "codex_alias", "codex_tie", "codex_fact"):
             await db.execute(f"DELETE FROM {table}")
 
         for thread in threads:

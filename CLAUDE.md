@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-13.** 73 of 99 tasks done.
+> **LEDGER — last updated 2026-08-13.** 79 of 99 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -230,8 +230,56 @@ its place without relying on memory or conversation history.
 > window never reaches them. The fixer gained the reveal-point control it had
 > nowhere; without it the walk would report problems it offered no way to fix,
 > which is the one thing the closed-world rule forbids.
-> **Next: R8.5** (`codex_mention`, write to it or drop it), then R8.6-R8.11.
-> Branch health: 1802 backend tests, 1289 frontend tests, ruff and tsc clean.
+> **R8.5 DONE by DROPPING `codex_mention`**, and the reason is worth keeping: it
+> could not have been kept fresh by the index's own mechanism. Mentions derive
+> from the MANUSCRIPT and `ensure_fresh` fingerprints `codex/`, so every chapter
+> the writer edited would have left the rows silently wrong while the gate
+> reported the index current -- a cache that answers confidently and wrongly,
+> with nothing in a position to notice. Nothing asks for it either. Migration 006
+> drops it; 002 still creates it, because editing an applied migration is the bug
+> 004 exists to remember, so fresh and upgraded databases both pass through the
+> same two states.
+> **R8.7 DONE** -- the caching caveat was computed by `resolve_role_model` from
+> the day Model Roles shipped and rendered by nothing. It is a claim about MONEY
+> (caching is one toggle, so a writer reasonably assumes it covers every role),
+> so it is bound like `test_explain_costs.py`: Python reads `providerMeta.ts` and
+> fails the build if the screen and `providers.py` disagree in either direction.
+> **R8.8 DONE** -- `GuidedWalk` moved to `components/learn/` and `WalkDemo`
+> became an audio-or-shown union, because a Weave step has nothing to listen to.
+> The Weave surface is `RunWalk`, teaching the THREE facts the programme's own
+> opening example needs. One fact reading "believes her father died" is the
+> obvious thing to type and makes a world where nobody, including her, ever
+> learns otherwise -- and no check can catch it, because that world is perfectly
+> consistent, just not the writer's book.
+> **R8.9 DONE -- the fourth layer, and it is READ-ONLY on purpose.** The Run
+> editor already edits the three switches on two screens through one component; a
+> second place to change them would give one idea two vocabularies, which is the
+> failure this whole recovery keeps finding. So it answers what the switches DO:
+> where the fact is in force (a bar, not a sentence to assemble), what replaced
+> it, and what a model actually receives. That answer lives in three modules and
+> no screen had ever put it in one place.
+> **R8.10 DONE, and the test bit immediately.** 23 of ~70 directional relations
+> had no inverse, so from the far end they read "loves (the other way round)" --
+> on the OTHER entry's page, where the writer did not make the choice. All 23
+> have one now. The cross-language half does not apply here (the picker fetches
+> relations rather than copying them), so the contract is on the vocabulary
+> itself: a group the picker orders, no two identical labels in one heading, no
+> endpoints naming kinds that do not exist.
+> **R8.11 DONE -- and writing it found a live bug I did NOT fix.** The graph
+> route's docstring says a Tie true LATER comes back `active: false` so the map
+> draws it dashed; `record_visibility` hides a future Tie before that branch is
+> reached, so `active: false` can only ever mean "ended". Same class as R6.1: a
+> documented capability whose condition can never be true, raising nothing.
+> Reported rather than patched because it changes what the map SHOWS. The test
+> pins the truth so the suite is not green over a claim it does not check.
+> **R8.6 IS THE ONE LEFT, and it is blocked on a ruling.** The dead precedence
+> level is deader than the audit said: `_resolve_model_and_key` never reads
+> project.json at all -- it synthesises `{"default_model": override}` from one
+> frontend field -- and most AI request models carry no `project_path`. Building
+> it is ~10 request models, every frontend caller, and a per-book UI; a
+> half-threaded version is worse than none, because a writer whose per-book
+> choice reaches Draft but not Enhance has an app they cannot explain.
+> Branch health: 1831 backend tests, 1314 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 
@@ -496,6 +544,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_codex_routes.py` -- the HTTP surface, including that every refusal the router raises comes from the closed set of codes in `app/codex/errors.py`, and that a connection with no REASON is refused: the Weave exists so a writer need not paste context, and `A -- connected to -- B` spends brief budget to say nothing the prose did not already show
   - `test_codex_icon_keywords.py` -- TWO cross-language contracts, both read `lexicon.ts` from Python: every icon name the app can store is bundled, and every stop kind `scan.py` can send has words on screen
   - `test_codex_mentions.py` -- an ambiguous mention NEVER silently binds (a bound mention pulls a Thread into AI context, so a wrong bind is invisible); the two things allowed to settle one
+  - `test_codex_graph.py` -- the map over HTTP: a Thread not yet introduced omitted at an earlier anchor (which nothing asserted), an edge never outliving the endpoint it points at, a secret connection withheld until the reader learns it, what is left out COUNTED rather than silently dropped, and one developing relationship as one line whose label changes. Writing it found a live bug it reports rather than hides: a Tie true LATER is hidden before the route's `not_yet` branch is reached, so the dashed "coming soon" line the docstring promises cannot fire
+  - `test_provider_caching_claims.py` -- does the Model Roles screen tell the truth about caching: Python reads `providerMeta.ts` against `providers.py` and fails either way round, because a wrong claim here costs the writer money on every repeat request
   - `test_codex_snags.py` -- the structural checks, and the one deliberately NOT made: a value changing across the book is the feature, not a contradiction
   - `test_codex_together.py` -- who shares a SCENE with whom: why the unit is the scene and not the chapter (a chapter that cuts between locations must not pair up strangers), an ambiguous name never counted as present, and the floor that keeps Untied from becoming the next 177-entry noise problem
   - `test_codex_scan.py` -- the FOUR passes (Dress the Loom / Weave the Chapters / Read the Cloth / Unwoven), which replaced three SIZES of one thing with four different questions: every stop kind belongs to exactly one pass (a kind in two gets asked twice, a kind in none silently stops being findable), the old wire names still map, and an unknown pass shows the first rather than refusing. Plus the free pass; stops re-derived and never stored; a non-UTF-8 chapter skipped and named rather than taking the scan down; and the Loose thread wording, which is a question about how an entry relates to OTHER entries and says up front (with a count) that the prose already finding the name is a separate thing that works
@@ -551,6 +601,9 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
 : the other end before the relation, only what means something between those two kinds, "nothing fits" answered three ways (flip the pair, adopt a shipped relation, name your own), a flipped relation stored from the OTHER end, and connections read from the end being looked at
   - `src/features/codex/BindDot.test.tsx` -- saying what a bare dot is: the wording is load-bearing (a word MOVED, never merged or deleted), other placeholders are not offered as targets, standing alone is a real answer, and the label question says the entry keeps its own name
   - `src/features/codex/WeaveNav.test.tsx` -- the sidebar: three groups always, sections grow, and a typo'd section can be renamed or removed (a fixed one offers no menu at all)
+  - `src/features/codex/StaleNotice.test.tsx` -- the walk admitting its evidence moved: it speaks when something changed and stays QUIET when nothing did, names the chapters rather than counting them, admits what a chapter-scoped re-check would leave out, and always offers the way back out of a narrowing
+  - `src/features/codex/FactLayer.test.tsx` -- the fourth zoom level, and what it deliberately does not do: no control to edit anything (the Run editor owns that), a span that ends only where something SAYS it replaces this fact, and the last panel being what a model actually receives
+  - `src/features/codex/RunWalk.test.tsx` -- the three facts a belief needs, taught on the shared GuidedWalk card (now in `components/learn/`), including the mistake named before the fix and a demo shown rather than played
   - `src/features/codex/GuideBody.test.tsx` / `customName.test.ts` -- the per-group guides, and the custom-name rules
   - `src/features/codex/WeavingPanel.test.tsx` -- the walkthrough: a real count rather than an estimate, every stop shows its evidence and can say why, four DIFFERENT ways to answer, and the one-click action creates an EMPTY entry that is immediately Frayed
   - `src/features/codex/MigrationPanel.test.tsx` -- consent for the most dangerous button in the programme: the dry run is not optional, the plan is itemised rather than summed, the backup is named BEFORE the button, two clicks with the count repeated, and an interrupted run offers resume or restore rather than guessing
@@ -636,7 +689,7 @@ Storythread Studio uses a **three-layer local architecture**. No cloud. No sync.
 Two storage systems work together:
 
 - **Markdown files** -- the permanent source of truth. Chapters, profiles, notes, and summaries all live as `.md` files in the project folder. These are human-readable and can be backed up or published to GitHub as-is.
-- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. It holds Writing Progress events (`progress_event`) and, on `feature/the-weave`, the Weave's graph index (`codex_entity` / `codex_alias` / `codex_tie` / `codex_fact` / `codex_mention` / `codex_meta`). Settings live in `~/.storythread/settings.json`, NOT in this database. Anything stored here must be rebuildable from Markdown.
+- **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. It holds Writing Progress events (`progress_event`) and, on `feature/the-weave`, the Weave's graph index (`codex_entity` / `codex_alias` / `codex_tie` / `codex_fact` / `codex_meta`). Settings live in `~/.storythread/settings.json`, NOT in this database. Anything stored here must be rebuildable from Markdown.
 - **The ONE exception under `.storythread/`**: `weave/runs/<run-id>.json` holds what the writer answered during a Weaving session (applied / deferred / retired / muted). That is not derivable from anything, so it is deliberately not in `app.db` -- deleting the cache must never cost the writer answers they already gave.
 
 Think of Markdown as the filing cabinet and SQLite as the index cards on your desk -- the cabinet is what matters; the index cards just make lookup faster.

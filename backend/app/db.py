@@ -169,6 +169,10 @@ async def _migration_002_codex(db: aiosqlite.Connection) -> None:
     )
     await db.execute("CREATE INDEX idx_codex_fact_entity ON codex_fact(entity_id)")
 
+    # DROPPED AGAIN BY MIGRATION 006. It stays here because this migration has
+    # already run on real projects and editing an applied migration is the bug
+    # 004 exists to remember. Nothing ever inserted into it, and it could not
+    # have been kept fresh by this file's own mechanism -- see 006 for why.
     await db.execute(
         """
         CREATE TABLE codex_mention (
@@ -242,6 +246,35 @@ async def _migration_005_entity_role_and_kind(db: aiosqlite.Connection) -> None:
     await db.execute("ALTER TABLE codex_entity ADD COLUMN character_kind TEXT")
 
 
+async def _migration_006_drop_codex_mention(db: aiosqlite.Connection) -> None:
+    """
+    Remove the mention table. It was created, indexed, cleared on every reindex,
+    and NEVER inserted into.
+
+    Recovery task R8.5, which was posed as a choice: fill it or drop it and say
+    so. Dropping is the right answer, and not because filling it would be work.
+
+    IT COULD NOT HAVE BEEN KEPT FRESH BY THIS FILE'S OWN MECHANISM. Mentions are
+    derived from the MANUSCRIPT. The index's freshness gate compares
+    `source_revision(project_path)`, which fingerprints `codex/` -- so every
+    chapter a writer edited would leave the mention rows silently wrong while
+    `ensure_fresh` reported the index current. A cache with a freshness contract
+    it cannot honour is worse than no cache: it answers confidently and wrongly,
+    and nothing in the app would have noticed.
+
+    Nor is anything asking for it. Mention counts are computed during the scan
+    (`scan._mention_counts`) and scene co-presence in `together.py`, both while
+    the manuscript is already open and in memory. Persisting a second copy would
+    buy a lookup nobody makes, at the price of re-reading a novel on every save.
+
+    A new migration rather than an edit to 002, which created it: see 004 for
+    what happens when that rule is broken. Fresh installs create the table at 002
+    and drop it here, so they end up identical to a database that has been
+    carried forward -- which is what test_db_migrations.py pins.
+    """
+    await db.execute("DROP TABLE IF EXISTS codex_mention")
+
+
 # Ordered list. Append-only. Version N = _MIGRATIONS[N-1].
 #
 # APPEND ONLY, and this is not a style preference. Editing an entry that has
@@ -254,6 +287,7 @@ _MIGRATIONS: list[Callable[[aiosqlite.Connection], Awaitable[None]]] = [
     _migration_003_tie_reason,
     _migration_004_tie_rel_inverse,
     _migration_005_entity_role_and_kind,
+    _migration_006_drop_codex_mention,
 ]
 
 

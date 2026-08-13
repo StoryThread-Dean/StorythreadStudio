@@ -235,6 +235,10 @@ The Weave — a story-aware world model, and Model Roles
  edges. We stop one level coarser, at the scene (codex_mention), which is the same idea at a
  granularity the writer can actually maintain. Going to paragraph later needs no redesign.
 
+ (R8.5: the scene granularity is still right and still what ships -- `together.py`
+ works in scenes -- but it is COMPUTED during the scan rather than stored, and
+ `codex_mention` is dropped. See the amendment under the schema below.)
+
  ▎ SynapTale (synaptale.com/graph?ch=100) would not render for inspection — it is a JS app and the
  ▎ browser backend kept closing. Its title ("a living wiki for long fiction") and that ?ch= parameter
  ▎ confirm the concept: a world graph scoped to a chapter. That is the anchor scrubber below.
@@ -602,6 +606,20 @@ The Weave — a story-aware world model, and Model Roles
  This is the knowledge graph: codex_entity are nodes, codex_tie are edges, codex_fact makes both
  time-varying. POST /api/codex/reindex rebuilds it all. Every write is best-effort with
  log.exception, as progress_store already does — an index failure must never block a save.
+
+ **AMENDED 2026-08-13 (R8.5): codex_mention is GONE.** It was created, indexed,
+ cleared on every reindex, and never once inserted into, so each rebuild dutifully
+ emptied a table that was already empty. It is dropped rather than filled, and the
+ reason is not effort: this index's freshness gate compares a fingerprint of
+ `codex/`, and mentions are derived from the MANUSCRIPT. Every chapter the writer
+ edited would have left the rows silently wrong while `ensure_fresh` reported the
+ index current — a cache with a freshness contract it cannot honour, answering
+ confidently and wrongly with nothing in a position to notice. Nor is anything
+ asking for it: mention counts come from `scan._mention_counts` and scene
+ co-presence from `together.py`, both while the manuscript is already open and in
+ memory, so persisting a second copy would buy a lookup nobody makes at the price
+ of re-reading a novel on every save. Migration 006 drops it; 002 still creates it,
+ because editing an applied migration is the bug 004 exists to remember.
 
  Ties — the connection vocabulary
 

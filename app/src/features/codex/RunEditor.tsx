@@ -47,6 +47,8 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Spool, Trash2 } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
+import { FactLayer } from "./FactLayer";
+import { RunWalk } from "./RunWalk";
 import type { ChapterAnchor, Fact } from "./api";
 
 // Re-exported so a caller that renders the editor does not need two imports.
@@ -155,6 +157,11 @@ export function RunEditor({
   // Which fact is open. One at a time, and a new one opens itself -- there is
   // nothing to read on a fact that has not been written yet.
   const [openId, setOpenId] = useState<string | null>(null);
+  // Whether the guided walk is showing. Not persisted: it is a walkthrough, not
+  // a setting, and everything under it stays usable while it is open.
+  const [walking, setWalking] = useState(false);
+  // Which fact is zoomed into, if any. The fourth layer (R8.9).
+  const [zoomed, setZoomed] = useState<string | null>(null);
   // The entry itself first, then everything else, with no duplicate if it is
   // already in the list.
   const holders = [
@@ -198,6 +205,25 @@ export function RunEditor({
         throughout. This is what lets the app tell your AI who someone was in
         chapter seven instead of who they end up being.
       </p>
+
+      {/* R8.8. Offered here whether or not anything is written yet, which is the
+          lesson from R2.12f: a guide that only appears once the writer has
+          already done the thing is documentation, not help. An empty Run editor
+          is exactly where somebody needs to be told that a belief takes three
+          facts. */}
+      {walking ? (
+        <div className="mt-2">
+          <RunWalk onClose={() => setWalking(false)} />
+        </div>
+      ) : (
+        <button
+          onClick={() => setWalking(true)}
+          data-testid="run-walk-open"
+          className="mt-1 text-[11px] text-violet-300 underline-offset-2 hover:underline"
+        >
+          Show me how this works
+        </button>
+      )}
 
       {unavailable ? (
         <p className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-200">
@@ -355,6 +381,19 @@ export function RunEditor({
                         <option value="never">Never</option>
                       </select>
                     </RunField>
+                    {/* R8.9. The fourth zoom level: one fact, and what follows
+                        from it. Read-only on purpose -- the switches are edited
+                        right here, and a second place to change them would give
+                        one idea two vocabularies. What it adds is the EFFECT,
+                        which is spread across the resolver, the visibility rules
+                        and the brief, and which no screen had ever gathered. */}
+                    <button
+                      onClick={() => setZoomed(fact.id)}
+                      data-testid={`fact-zoom-${i}`}
+                      className="mt-2 self-end text-[11px] text-violet-300 underline-offset-2 hover:underline"
+                    >
+                      What does this do?
+                    </button>
                     <button
                       onClick={() => onChange(run.filter((_, n) => n !== i))}
                       aria-label={`Remove ${fact.axis || "this"}`}
@@ -378,6 +417,19 @@ export function RunEditor({
             <Plus size={11} /> Something that changes
           </button>
         </>
+      )}
+
+      {/* The zoom, over the layer it came from rather than instead of it --
+          "every view is a zoom of the one above, never a new screen". */}
+      {zoomed && run.some(f => f.id === zoomed) && (
+        <FactLayer
+          fact={run.find(f => f.id === zoomed)!}
+          run={run}
+          chapters={chapters}
+          people={holders}
+          entryName={self?.name ?? "this entry"}
+          onClose={() => setZoomed(null)}
+        />
       )}
     </section>
   );

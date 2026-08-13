@@ -37,12 +37,12 @@
 // so the jobs on screen cannot drift from the roles the call sites use.
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Loader } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Info, Loader } from "lucide-react";
 
 import { WhatsThis } from "../learn/WhatsThis";
 import type { ModelInfo } from "../../types/ai";
 import { recommendedPicks } from "../../utils/modelFiltering";
-import { PROVIDER_META } from "./providerMeta";
+import { PROVIDER_META, providerMetaById } from "./providerMeta";
 
 /** One kind of job, as described by GET /api/settings/roles. */
 export interface RoleInfo {
@@ -75,11 +75,18 @@ interface ModelRolesSectionProps {
   /** Catalogs by provider id, loaded on demand as roles point at them. */
   modelsByProvider: Record<string, ModelInfo[]>;
   onNeedModels: (providerId: string) => void;
+  /** Whether prompt caching is switched on in Settings. R8.7: the backend has
+   *  always computed a caveat for a role pointed at a service that does not
+   *  understand the cache marker, and no screen rendered it -- so a writer who
+   *  turned caching on would reasonably assume it applied to every role, and it
+   *  does not. That is a claim about money, which is the one kind this app does
+   *  not leave unsaid. */
+  promptCaching: boolean;
 }
 
 export function ModelRolesSection({
   roles, loadingRoles, value, onChange, defaultModel,
-  providerReady, modelsByProvider, onNeedModels,
+  providerReady, modelsByProvider, onNeedModels, promptCaching,
 }: ModelRolesSectionProps) {
 
   // One row open at a time. Settings is a modal with limited height, and two
@@ -139,6 +146,12 @@ export function ModelRolesSection({
           // An assigned role that cannot run will NOT fall back to another
           // model, so this warning is the only place a writer learns it.
           const providerBroken = isAssigned && providerReady[assignment.provider] === false;
+          // R8.7. Not a fault and not a warning: the role runs. It is a COST
+          // fact, and one a writer cannot find out any other way -- caching is a
+          // single switch in Settings, so the reasonable assumption is that it
+          // covers everything.
+          const noCaching = isAssigned && promptCaching
+            && providerMetaById(assignment.provider).supportsCaching === false;
 
           // What the collapsed row shows in place of the picker: the model if
           // one is chosen, otherwise the honest default.
@@ -299,6 +312,22 @@ export function ModelRolesSection({
                         will refuse rather than quietly using another model.
                         Connect it above, or set this role back to your Default
                         Model.
+                      </span>
+                    </p>
+                  )}
+
+                  {noCaching && (
+                    <p
+                      data-testid={`role-no-caching-${role.id}`}
+                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-border bg-bg-surface px-2 py-1 text-[10.5px] leading-relaxed text-text-muted"
+                    >
+                      <Info size={11} className="mt-0.5 shrink-0 text-faint" />
+                      <span>
+                        Prompt caching is on, but{" "}
+                        {providerMetaById(assignment.provider).label} does not
+                        support it, so repeat {role.label.toLowerCase()} requests
+                        will not be discounted. Everything still works -- it just
+                        costs full price each time.
                       </span>
                     </p>
                   )}

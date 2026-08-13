@@ -1184,6 +1184,10 @@ export function Settings({ onClose }: SettingsProps) {
                   )}
                   modelsByProvider={modelsByProvider}
                   onNeedModels={loadProviderModels}
+                  // The LIVE toggle, not the saved setting. A writer turning
+                  // caching on should see immediately which of their roles it
+                  // will not reach -- that is the moment the fact is useful.
+                  promptCaching={promptCaching}
                 />
               </section>
 

@@ -106,7 +106,11 @@ async def test_an_upgraded_database_matches_a_fresh_one(project, tmp_path):
     async with open_db(str(fresh)):
         pass
 
-    for table in ("codex_tie", "codex_entity", "codex_fact", "codex_mention",
+    # codex_mention was in this list until migration 006 dropped it. Its absence
+    # is now the thing being compared: a fresh install creates it at 002 and
+    # drops it at 006, and an upgraded one drops it too, so both must have no
+    # such table.
+    for table in ("codex_tie", "codex_entity", "codex_fact",
                   "codex_alias", "codex_meta", "progress_event"):
         assert _columns(project, table) == _columns(str(fresh), table), table
     assert _version(project) == _version(str(fresh))
@@ -226,3 +230,64 @@ async def test_an_existing_row_survives_the_upgrade(project):
 
     assert row[0] == "Elara Voss"
     assert row[1] is None and row[2] is None
+
+
+# ── 006: the mention table is dropped (R8.5) ────────────────────────────────
+#
+# It was created, indexed, cleared on every reindex, and never inserted into --
+# so every reindex dutifully emptied a table that was already empty.
+#
+# The reason it is DROPPED rather than filled is not effort. It could not have
+# been kept fresh by the index's own mechanism: mentions are derived from the
+# MANUSCRIPT, and `ensure_fresh` compares a fingerprint of `codex/`. Every
+# chapter the writer edited would have left the rows silently wrong while the
+# freshness gate reported the index current -- a cache that answers confidently
+# and wrongly, with nothing in the app in a position to notice.
+
+
+def _tables(project_path: str) -> set[str]:
+    con = sqlite3.connect(get_db_path(project_path))
+    try:
+        return {row[0] for row in con.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")}
+    finally:
+        con.close()
+
+
+@pytest.mark.asyncio
+async def test_a_database_at_version_5_loses_the_mention_table(project):
+    await _build_to(project, 5)
+    assert "codex_mention" in _tables(project)
+
+    async with open_db(project):
+        pass                       # opening runs what is pending
+
+    assert "codex_mention" not in _tables(project)
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_database_never_ends_up_with_one_either(project):
+    # 002 creates it and 006 drops it, so a fresh install passes through the
+    # same two states. If these two ever disagreed, the same query would work on
+    # one writer's machine and fail on another's -- which is this file's whole
+    # subject.
+    async with open_db(project):
+        pass
+    assert "codex_mention" not in _tables(project)
+
+
+@pytest.mark.asyncio
+async def test_dropping_it_twice_is_not_an_error(project):
+    # Every connect runs the pending ladder, and a writer who somehow arrives
+    # here without the table (an older build, a hand-repaired file) must not be
+    # met with a refusal to open their project.
+    import aiosqlite
+
+    await _build_to(project, 5)
+    async with aiosqlite.connect(get_db_path(project)) as db:
+        await db.execute("DROP TABLE codex_mention")
+        await db.commit()
+
+    async with open_db(project):
+        pass
+    assert _version(project) == len(_MIGRATIONS)
