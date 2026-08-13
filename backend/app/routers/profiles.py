@@ -205,7 +205,16 @@ class Profile(BaseModel):
     type: str
     name: str
     role: str = ""
+    # Free text, both. Age has to hold "18 months", "18", "18ish", "approx 30"
+    # and "Unknown" -- a number field would refuse four of the five answers a
+    # novelist actually gives, and blank is a sixth.
+    sex: str = ""
+    age: str = ""
     status: str = "active"
+    # KEPT, NOT EDITED. The tags control is retired: nothing read them except one
+    # side-character prompt, and the Story Role picker wrote them for nothing.
+    # The field stays so a writer who typed tags before still has them, and so a
+    # round trip cannot quietly delete them.
     tags: list[str] = []
     filename: str
     sections: dict[str, ProfileSection]
@@ -563,6 +572,8 @@ def _parse_profile_markdown(raw: str, filename: str, profile_type: str) -> Profi
         type=profile_type,
         name=str(meta.get("name", "")),
         role=str(meta.get("role", "")),
+        sex=str(meta.get("sex", "")),
+        age=str(meta.get("age", "")),
         status=str(meta.get("status", "active")),
         tags=list(meta.get("tags") or []),
         filename=filename,
@@ -597,6 +608,12 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
     lines += [f"name: {profile.name}"]
     if profile.role:
         lines += [f"role: {profile.role}"]
+    # Only when the writer said something, so an entry that never answered keeps
+    # a file as short as it was.
+    if profile.sex:
+        lines += [f"sex: {_json.dumps(profile.sex)}"]
+    if profile.age:
+        lines += [f"age: {_json.dumps(profile.age)}"]
     lines += [f"status: {profile.status}"]
     # character_kind only matters for characters; only write it when it says
     # something (side). Main is the default, so omitting it keeps older

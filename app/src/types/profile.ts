@@ -106,6 +106,25 @@ export interface Profile {
   type: ProfileType;
   name: string;
   role: string;              // e.g. "protagonist", "antagonist", "mentor"
+  /**
+   * M, F, or whatever the writer typed instead.
+   *
+   * Three choices and a box, rather than a list somebody has to maintain: two
+   * cover most books, and the third is the writer's own word for everything
+   * else. Stored as free text either way, so the file says what they meant.
+   */
+  sex?: string;
+  /**
+   * How old, in the writer's own words.
+   *
+   * FREE TEXT ON PURPOSE, and this is the field most likely to be "improved"
+   * into a number by somebody who has not written fiction. All of these are real
+   * answers a novelist gives: "18 months", "18" (years, obviously), "18ish",
+   * "approx 30", "Unknown" -- which can mean the character does not know, or the
+   * book never says, or the species lives to 155 -- and blank, because it does
+   * not matter for this person. A number field refuses five of the six.
+   */
+  age?: string;
   status: string;            // e.g. "active", "archived"
   tags: string[];
   filename: string;          // e.g. "elara-voss.md"

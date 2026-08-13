@@ -52,7 +52,7 @@ import { SpinePickers } from "../components/profiles/SpinePickers";
 import { QuickBuildPanel } from "../components/profiles/QuickBuildPanel";
 import { NameGeneratorPanel } from "../components/profiles/NameGeneratorPanel";
 import { Dices } from "lucide-react";
-import { ROLE_SUGGESTIONS, ARCHETYPE_ROLE_TAGS } from "../data/characterSpines";
+import { ROLE_SUGGESTIONS } from "../data/characterSpines";
 import type { CharacterKind } from "../types/profile";
 // WHERE THIS PROJECT'S ENTRIES LIVE. A converted project keeps them in
 // codex/ and an unconverted one in profiles/; the screen asks rather than
@@ -227,7 +227,6 @@ function walkProfileMatches(
   scan(profile.role, "role", ["role"]);
   // Tags render as a single joined input ("tag1, tag2"), so search the
   // joined form -- matches what the writer sees in the field.
-  scan(profile.tags.join(", "), "tags", ["tags"]);
 
   for (const cfg of sectionOrder) {
     const section = profile.sections[cfg.key];
@@ -1962,34 +1961,87 @@ export function ProfileBuilder({
                     </div>
                   </div>
                 </div>
-                <div className="mb-3 grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs text-text-muted">Status</label>
-                    <select
-                      value={profile.status}
-                      onChange={e => updateProfileField("status", e.target.value)}
-                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
-                    >
-                      <option value="active">Active</option>
-                      <option value="archived">Archived</option>
-                    </select>
+                {/* SEX AND AGE, characters only -- the two facts a writer
+                    states plainly about a person and then stops thinking about.
+                    They belong up here with the name rather than buried in
+                    prose, which is where they had to live before.
+
+                    TAGS USED TO SIT IN THIS ROW AND ARE GONE. Nothing read them
+                    except one side-character prompt: they were absent from the
+                    chip serialiser and from the Weave's brief, so they reached no
+                    AI path at all, and the Story Role picker auto-filled them
+                    with words the app then ignored. Anything already typed stays
+                    in the file. */}
+                {profile.type === "character" && (
+                  <div className="mb-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs text-text-muted">Sex</label>
+                      <div className="flex gap-1.5">
+                        {(["M", "F", "custom"] as const).map(option => {
+                          const isCustom = option === "custom";
+                          const chosen = isCustom
+                            ? Boolean(profile.sex) && profile.sex !== "M" && profile.sex !== "F"
+                            : profile.sex === option;
+                          return (
+                            <button
+                              key={option}
+                              onClick={() => updateProfileField(
+                                "sex", isCustom ? (chosen ? profile.sex : " ") : option)}
+                              className={`rounded border px-2 py-1 text-xs transition-colors ${
+                                chosen
+                                  ? "border-indigo-500 bg-indigo-600/20 text-indigo-200"
+                                  : "border-border text-text-muted hover:border-indigo-700"
+                              }`}
+                            >
+                              {isCustom ? "Custom" : option}
+                            </button>
+                          );
+                        })}
+                        {/* Greyed until Custom is chosen, which is what the
+                            writer asked for: the box is visibly not yours to
+                            type in until you have said you want it. */}
+                        <input
+                          type="text"
+                          value={profile.sex === "M" || profile.sex === "F"
+                            ? "" : (profile.sex ?? "").trim()}
+                          onChange={e => updateProfileField("sex", e.target.value)}
+                          disabled={!profile.sex
+                            || profile.sex === "M" || profile.sex === "F"}
+                          placeholder="Your word for it"
+                          aria-label="Custom sex"
+                          data-pb-field="sex"
+                          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-text-muted">Age</label>
+                      <input
+                        type="text"
+                        value={profile.age ?? ""}
+                        onChange={e => updateProfileField("age", e.target.value)}
+                        placeholder="18, 18ish, 18 months, approx 30, Unknown"
+                        data-pb-field="age"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                      />
+                      <p className="mt-1 text-xs text-faint">
+                        Say it however you would say it. Blank is fine when it
+                        does not matter.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-text-muted">
-                      Tags <span className="text-faint">(comma-separated)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={profile.tags.join(", ")}
-                      onChange={e => updateProfileField(
-                        "tags",
-                        e.target.value.split(",").map(t => t.trim()).filter(Boolean)
-                      )}
-                      placeholder="e.g. strategist, guarded, grief"
-                      data-pb-field="tags"
-                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
-                    />
-                  </div>
+                )}
+
+                <div className="mb-3 w-1/2 pr-1.5">
+                  <label className="mb-1 block text-xs text-text-muted">Status</label>
+                  <select
+                    value={profile.status}
+                    onChange={e => updateProfileField("status", e.target.value)}
+                    className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
+                  >
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                  </select>
                 </div>
 
                 {/* Name generator -- opened by the dice button beside Name.
@@ -2004,7 +2056,7 @@ export function ProfileBuilder({
                 )}
 
                 {/* Personality spine -- characters only, right in the header
-                    under Status/Tags. Inserts into Personality Traits (trait
+                    under Status. Inserts into Personality Traits (trait
                     block on main, appended paragraph on side); a Story Role
                     pick also fills Role and merges its key-aspect tags. */}
                 {profile.type === "character" && (
@@ -2018,86 +2070,16 @@ export function ProfileBuilder({
                         }
                       }}
                       onRolePicked={picked => {
+                        // Fills the Role and nothing else. It used to merge the
+                        // archetype's key-aspect tags in as well -- writing data
+                        // that no part of the app ever read, into a field the
+                        // writer could not tell was inert.
                         updateProfileField("role", picked.label);
-                        const aspects = ARCHETYPE_ROLE_TAGS[picked.id] ?? [];
-                        const merged = [...profile.tags];
-                        for (const tag of aspects) {
-                          if (!merged.some(t => t.toLowerCase() === tag.toLowerCase())) merged.push(tag);
-                        }
-                        if (merged.length !== profile.tags.length) updateProfileField("tags", merged);
                       }}
                     />
                   </div>
                 )}
               </div>
-
-              {/* Importance Audit button + results (main template only --
-                  side characters have no trait blocks to audit) */}
-              {!isSideCharacter && sections.some(s => s.hasTraitBlocks) && (
-                <div className="mb-6">
-                  <button
-                    onClick={runImportanceAudit}
-                    disabled={auditLoading}
-                    className="flex items-center gap-1.5 rounded border border-teal-700/50 px-3 py-1.5 text-xs text-teal-400 transition-colors hover:border-teal-500 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
-                    title="AI reviews all traits and flags importance level mismatches"
-                  >
-                    <Sparkles size={11} />
-                    {auditLoading ? "Auditing..." : "Audit Importance Levels"}
-                  </button>
-
-                  {auditOpen && (
-                    <div className="mt-3 rounded border border-teal-800/40 bg-teal-950/20 p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-xs font-medium text-teal-300">Importance Audit Results</p>
-                        <button
-                          onClick={() => setAuditOpen(false)}
-                          className="text-xs text-teal-700 hover:text-teal-400"
-                        >
-                          Close
-                        </button>
-                      </div>
-                      {auditLoading ? (
-                        <p className="text-xs text-teal-600 animate-pulse">Analyzing trait blocks...</p>
-                      ) : auditFlags.length === 0 ? (
-                        <p className="text-xs text-teal-500">All importance levels look reasonable. No mismatches found.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {auditFlags.map((flag, i) => (
-                            <div key={i} className="rounded border border-teal-800/30 bg-bg-panel p-2">
-                              <div className="mb-1 flex items-center gap-2 text-xs">
-                                <span className="font-medium text-teal-200">{flag.trait}</span>
-                                {flag.current_importance && flag.suggested_importance && (
-                                  <span className="text-teal-600">
-                                    {flag.current_importance} → {flag.suggested_importance}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs leading-relaxed text-teal-400/80">{flag.reason}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Quick Build -- SIDE/BACKGROUND characters only (the
-                  simplified template). Every click appends the option to
-                  the matching section's text as a new line. */}
-              {isSideCharacter && (
-                <QuickBuildPanel
-                  // Keyed by filename so switching profiles remounts the
-                  // panel -- its Story Role select re-derives from the new
-                  // profile's Role field instead of carrying stale state.
-                  key={profile.filename}
-                  initialRoleLabel={profile.role}
-                  onInsert={(sectionKey, text) =>
-                    appendToSectionContent(sectionKey, text, "\n")}
-                  onInsertRoleSummary={(_trait, description) =>
-                    appendToSectionContent("personality_traits", description, "\n\n")}
-                />
-              )}
 
               {/* WHAT AN IMPORT LEFT BEHIND. An entry from another book
                   carries ids that mean nothing here: its connections, the
@@ -2167,37 +2149,22 @@ export function ProfileBuilder({
                 </div>
               )}
 
-              {/* CONNECTIONS, high on the page because they are most of what a
-                  scene runs on and because Weaving fills them in for the writer.
-                  Codex entries only -- a tie is the Weave's own idea and a
-                  profiles/ file has nowhere to record one. */}
-              {home === "codex" && profile.entity_id && (
-                <div className="mb-6">
-                  <ProfileConnections
-                    projectPath={project.root_path}
-                    entityId={profile.entity_id}
-                    type={profile.type}
-                    name={profile.name}
-                    startExpanded
-                  />
-                </div>
-              )}
-
-              {/* EVERY SECRET, IN ONE PLACE. A view rather than a move: a
-                  secret belongs beside what it explains, and relocating it into
-                  a bucket would leave the model a floating fact with nothing to
-                  attach it to. */}
-              <SecretsPanel
-                profile={profile}
-                sections={sections}
-                onSetWeight={(sectionKey, blockId, importance) =>
-                  updateTraitBlock(sectionKey, blockId, { importance })}
-              />
-
+              {/* THE ORDER OF THIS PAGE IS DELIBERATE, and it is the writer's:
+                  "Basic information first and foremost ... Next are the
+                  Connections ... Next is the Overview ... Next or possibly moved
+                  up is this [+ Something that changes] feature. Next are the
+                  various Traits."
+                  Trunk, then main branches, then branches, then leaves. Two
+                  changes to their draft, both argued rather than assumed:
+                  Overview sits SECOND because it is the shortest thing here and
+                  the one that stops an entry counting as Frayed, so it is a fast
+                  win right after the name; and the Run sits above Connections
+                  because Weaving builds connections FOR the writer while the Run
+                  is the only part of an entry no other screen can produce. */}
               {/* Profile sections. Side characters render every section as a
                   single free-text field -- trait blocks are a main-template
                   feature, so hasTraitBlocks is forced off for them. */}
-              {sections.map(cfg => {
+              {sections.filter(cfg => cfg.key === "overview").map(cfg => {
                 const section = profile.sections[cfg.key] ?? {
                   content: "", trait_blocks: [], ai_summary: "",
                 };
@@ -2258,6 +2225,143 @@ export function ProfileBuilder({
                     + "in from the Weave and this fills in here."
                   : undefined}
               />
+
+              {/* CONNECTIONS, high on the page because they are most of what a
+                  scene runs on and because Weaving fills them in for the writer.
+                  Codex entries only -- a tie is the Weave's own idea and a
+                  profiles/ file has nowhere to record one. */}
+              {home === "codex" && profile.entity_id && (
+                <div className="mb-6">
+                  <ProfileConnections
+                    projectPath={project.root_path}
+                    entityId={profile.entity_id}
+                    type={profile.type}
+                    name={profile.name}
+                    startExpanded
+                  />
+                </div>
+              )}
+
+              {/* Importance Audit button + results (main template only --
+                  side characters have no trait blocks to audit) */}
+              {!isSideCharacter && sections.some(s => s.hasTraitBlocks) && (
+                <div className="mb-6">
+                  <button
+                    onClick={runImportanceAudit}
+                    disabled={auditLoading}
+                    className="flex items-center gap-1.5 rounded border border-teal-700/50 px-3 py-1.5 text-xs text-teal-400 transition-colors hover:border-teal-500 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="AI reviews all traits and flags importance level mismatches"
+                  >
+                    <Sparkles size={11} />
+                    {auditLoading ? "Auditing..." : "Audit Importance Levels"}
+                  </button>
+
+                  {auditOpen && (
+                    <div className="mt-3 rounded border border-teal-800/40 bg-teal-950/20 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-medium text-teal-300">Importance Audit Results</p>
+                        <button
+                          onClick={() => setAuditOpen(false)}
+                          className="text-xs text-teal-700 hover:text-teal-400"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      {auditLoading ? (
+                        <p className="text-xs text-teal-600 animate-pulse">Analyzing trait blocks...</p>
+                      ) : auditFlags.length === 0 ? (
+                        <p className="text-xs text-teal-500">All importance levels look reasonable. No mismatches found.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {auditFlags.map((flag, i) => (
+                            <div key={i} className="rounded border border-teal-800/30 bg-bg-panel p-2">
+                              <div className="mb-1 flex items-center gap-2 text-xs">
+                                <span className="font-medium text-teal-200">{flag.trait}</span>
+                                {flag.current_importance && flag.suggested_importance && (
+                                  <span className="text-teal-600">
+                                    {flag.current_importance} → {flag.suggested_importance}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs leading-relaxed text-teal-400/80">{flag.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Quick Build -- SIDE/BACKGROUND characters only (the
+                  simplified template). Every click appends the option to
+                  the matching section's text as a new line. */}
+              {isSideCharacter && (
+                <QuickBuildPanel
+                  // Keyed by filename so switching profiles remounts the
+                  // panel -- its Story Role select re-derives from the new
+                  // profile's Role field instead of carrying stale state.
+                  key={profile.filename}
+                  initialRoleLabel={profile.role}
+                  onInsert={(sectionKey, text) =>
+                    appendToSectionContent(sectionKey, text, "\n")}
+                  onInsertRoleSummary={(_trait, description) =>
+                    appendToSectionContent("personality_traits", description, "\n\n")}
+                />
+              )}
+
+              {/* EVERY SECRET, IN ONE PLACE. A view rather than a move: a
+                  secret belongs beside what it explains, and relocating it into
+                  a bucket would leave the model a floating fact with nothing to
+                  attach it to. */}
+              <SecretsPanel
+                profile={profile}
+                sections={sections}
+                onSetWeight={(sectionKey, blockId, importance) =>
+                  updateTraitBlock(sectionKey, blockId, { importance })}
+              />
+
+              {/* Profile sections. Side characters render every section as a
+                  single free-text field -- trait blocks are a main-template
+                  feature, so hasTraitBlocks is forced off for them. */}
+              {sections.filter(cfg => cfg.key !== "overview").map(cfg => {
+                const section = profile.sections[cfg.key] ?? {
+                  content: "", trait_blocks: [], ai_summary: "",
+                };
+                return (
+                  <div key={cfg.key}>
+                  <ProfileSectionEditor
+                    sectionKey={cfg.key}
+                    heading={cfg.heading}
+                    hasTraitBlocks={cfg.hasTraitBlocks && !isSideCharacter}
+                    // A Side page is plain boxes -- except that a secret cannot
+                    // live in one. Prose has nowhere to carry "never say this",
+                    // so any secret the section holds is shown as a trait, and
+                    // only then. Structure appears where protection was asked
+                    // for and nowhere else.
+                    showSecretsOnly={isSideCharacter}
+                    // The section this idea is named after, on either template.
+                    teachesSubtext={cfg.key === "hidden_and_foreshadowing_traits"}
+                    section={section}
+                    profileName={profile.name}
+                    profileType={profile.type}
+                    onContentChange={content => updateSection(cfg.key, { content })}
+                    onAiSummaryChange={ai_summary => updateSection(cfg.key, { ai_summary })}
+                    onAddTraitBlock={() => addTraitBlock(cfg.key)}
+                    onUpdateTraitBlock={(id, updates) => updateTraitBlock(cfg.key, id, updates)}
+                    onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
+                    onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
+                    generatingField={generatingField}
+                    onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
+                    showAiSummary={!isSideCharacter}
+                    onGenerateOverview={
+                      isSideCharacter && cfg.key === "overview" ? generateQuickOverview : undefined
+                    }
+                    generatingOverview={quickOverviewLoading}
+                  />
+                  </div>
+                );
+              })}
 
               {/* Full AI Summary -- teal card */}
               <div className="mb-6 rounded border border-teal-800/40 bg-teal-950/20 p-4">

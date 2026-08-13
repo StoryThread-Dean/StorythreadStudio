@@ -575,6 +575,44 @@ Weave-made characters finally visible, they were all in the wrong group.
 
 ---
 
+## Phase 2b -- The Profile Builder restructure (2026-08-12)
+
+The writer, after live-testing the Run editor: "the profile builder is already
+getting extremely crowded with information and details. The Writer's eye needs to
+naturally gravitate towards the main/primary features we need them to focus on
+... Tree Trunk > Main branches > Branches > Leaves ... This idea and revamped
+approach is to give the Writer less instant Chaos."
+
+Their order, with two changes argued rather than assumed: Overview sits SECOND
+because it is the shortest thing on the page and the one that stops an entry
+counting as Frayed, and the Run sits above Connections because Weaving builds
+connections FOR the writer while the Run is the only part no other screen can
+produce.
+
+- [x] **R2.13a** Tags retired. Verified before removing: nothing read them except
+      one side-character prompt -- absent from the chip serialiser and from the
+      Weave's brief, so they reached no AI path at all -- and the Story Role
+      picker auto-filled them with words the app then ignored, which is worse
+      than useless because the writer could not tell the field was inert. The
+      control is gone, the FIELD stays so nothing typed before is deleted, and
+      the picker now fills the Role and nothing else.
+- [x] **R2.13b** Sex and age, characters only, up with the name. Sex is
+      [M] [F] [Custom] with a box greyed out until Custom is chosen, exactly as
+      asked. Age is FREE TEXT and that is the point: "18 months", "18", "18ish",
+      "approx 30", "Unknown" and blank are all real answers, and a number field
+      would refuse five of the six. Both formats hold them, written only when
+      the writer has said something.
+- [x] **R2.13c** The page order: Basics, Overview, the Run, Connections, then the
+      trait tools and the traits, with the Full AI Summary last.
+- [ ] **R2.13d** Traits as collapsed tiles: highlights and truncated text by
+      default, click to expand, expansions staying open while the writer works in
+      that profile, scroll doing the moving between them.
+- [ ] **R2.13e** A page-level `What's this?` beside the existing per-section
+      ones, and a full walkthrough of the page: what each part is for, in the
+      order the page now puts them, before the per-section walkthroughs go deep.
+
+---
+
 ## Phase 3 -- Migration completeness (gap A4) -- BLOCKER
 
 Spec 503 step 4 was skipped. After migration the writer's world vanishes from
@@ -715,6 +753,7 @@ it, since the spec calls it the reason the frame system exists.
 | 0 Stop and record | 12 | **12** |
 | 1 Undo session damage | 7 | 6 |
 | 2 The premise | 25 | 25 |
+| 2b Profile Builder | 5 | 3 |
 | 3 Migration completeness | 4 | 0 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
@@ -723,4 +762,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **91** | **43** |
+| **Total** | **96** | **46** |

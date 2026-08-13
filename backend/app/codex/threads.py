@@ -193,6 +193,14 @@ def parse_thread(raw: str, registry: dict | None = None,
         "entity_id": str(front.get("entity_id") or front.get("profile_id") or ""),
         "name": str(front.get("name") or ""),
         "role": str(front.get("role") or ""),
+        # WHAT THIS PERSON IS, in the two ways a writer states it plainly.
+        #
+        # Both free text on purpose. Age especially: "18 months", "18", "18ish",
+        # "approx 30", "Unknown" and blank are all real answers a novelist gives,
+        # and a number field would refuse four of them. The writer's words go in
+        # the file exactly as typed.
+        "sex": str(front.get("sex") or ""),
+        "age": str(front.get("age") or ""),
         "status": str(front.get("status") or "active"),
         # Whether AI may see this entry AT ALL. Distinct from a fact's scope:
         # "never" here means the whole Thread is author-only, however
@@ -417,6 +425,12 @@ def render_thread(
     lines.append(f"name: {thread.get('name', '')}")
     if thread.get("role"):
         lines.append(f"role: {thread['role']}")
+    # Only when the writer said something. An entry that never answered keeps a
+    # file as short as it was.
+    if thread.get("sex"):
+        lines.append(f"sex: {_quote(thread['sex'])}")
+    if thread.get("age"):
+        lines.append(f"age: {_quote(thread['age'])}")
     lines.append(f"status: {thread.get('status') or 'active'}")
     # Only written when it is not the default, so an ordinary Thread's file
     # stays as short as it was -- but an author-only one says so on disk,
