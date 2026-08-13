@@ -3040,6 +3040,7 @@ function ProfileSectionEditor({
           </button>
         </div>
       ) : (
+        <>
         <textarea
           value={section.content}
           onChange={e => onContentChange(e.target.value)}
@@ -3048,6 +3049,19 @@ function ProfileSectionEditor({
           data-pb-field={`section:${sectionKey}:content`}
           className="mb-3 w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
         />
+        {/* SAYING WHAT A FIELD CALLED NOTES ACTUALLY DOES.
+            It used to travel to the model inside the "details" bucket on
+            two paths and be withheld on a third -- the same words in or
+            out depending on how they happened to be sent, with nothing on
+            screen saying which. It is off by default everywhere now, and
+            the field says so rather than leaving the writer to guess. */}
+        {sectionKey === "notes" && (
+          <p className="mb-3 -mt-2 text-xs text-faint">
+            Your own jottings. Not sent to AI unless you tick Notes when
+            attaching this entry to a chat.
+          </p>
+        )}
+        </>
       )}
 
       {/* AI Summary sub-section (hidden on the side-character template) */}

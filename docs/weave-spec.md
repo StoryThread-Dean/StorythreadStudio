@@ -143,8 +143,15 @@ the most scenes arrived as the faintest signal on the page.
    did not force a writer to trade weight for secrecy.
 3. **"Never send" is deliberately NOT built.** Author Notes is the room for
    material that must not travel, and it is manually attachable when the writer
-   wants it. Making that guarantee real is R5.5, because today nothing in the
-   code enforces it -- `scan.py` globs `notes/*.md` indiscriminately.
+   wants it. **That guarantee is now enforced rather than assumed** (R5.5):
+   `notes/author-notes.md` is named in `scan.py`'s `PRIVATE_NOTES` and skipped
+   where the app reads the writer's other documents, and a source-read test
+   fails the build if a corpus builder starts including it. It stays the
+   writer's to attach by hand and theirs to export; what the rule means is that
+   nothing in this app reads it on its own initiative. Written down because the
+   control this replaces was dropped ON THE STRENGTH of it -- a promise about
+   privacy resting on a convention is the "hidden is never sent" falsehood one
+   level up.
 4. A secret is NOT a timed reveal. Subtext is never said, at any point; the
    reader learning something in chapter fifteen is a fact with `revealed_at` on
    the entry's Run. Both are needed and they are different mechanisms.
@@ -766,6 +773,17 @@ The Weave — a story-aware world model, and Model Roles
 
  Keyword and name detection surfaces candidates; the writer picks which are real. "Not a connection"
  permanently retires a phrase, so "the old woman" never asks again.
+
+ AMENDED (R5.1-R5.4, 2026-08-12): the planning documents are a place a stop can COME FROM, not
+ only corroboration that a manuscript word is a name. The outline is where a world gets decided;
+ the manuscript is where it arrives, later, a chapter at a time -- so a writer with nine factions
+ planned and two written was being asked about two. A planned name is a SOFTER stop in four ways,
+ which is the R5.4 ruling: no frequency floor applies (a name the writer decided on is not prose
+ noise even once), the stop says which document it came from in that document's own name, it is
+ attached to no chapter (there is no sentence to go and look at), and it carries from_planning so
+ anything reasoning about what the BOOK contains can tell written from intended. A name in both is
+ one question, asked from the chapter. Markup the writer typed by hand is the strongest signal of
+ all and needs no floor or corroboration; the manuscript is never asked to carry it.
 
  Frayed — a Thread too thin
 

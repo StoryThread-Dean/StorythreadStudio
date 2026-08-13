@@ -27,6 +27,21 @@ export interface ChipIncludeOptions {
   traits:   boolean;
   overview: boolean;
   details:  boolean;
+  /**
+   * The writer's own jottings, off unless asked for.
+   *
+   * NOTES USED TO TRAVEL INSIDE `details`, which meant the same field was sent
+   * by profile chat and by generate-full-summary and withheld by the chip
+   * picker -- the same words, in or out, depending on how they happened to
+   * reach the model, with nothing on screen saying which.
+   *
+   * A field called Notes reads as a scratchpad, so the honest default is off.
+   * It is separated from `details` rather than folded into it because details
+   * also carries real content -- History, Current Dynamic, Physical
+   * Description -- and turning that off to protect a scratchpad would have made
+   * every AI answer thinner to fix a labelling problem.
+   */
+  notes?:   boolean;
 }
 
 
@@ -39,6 +54,9 @@ const LEGACY_INCLUDE: ChipIncludeOptions = {
   traits:   true,
   overview: true,
   details:  true,
+  // Off here too, so profile chat and the full summary agree with the chip
+  // picker about what a writer's Notes are for.
+  notes:    false,
 };
 
 
@@ -88,11 +106,13 @@ export function formatProfileForAI(
 
     const isTrait    = cfg.hasTraitBlocks;
     const isOverview = !isTrait && cfg.key === "overview";
-    const isDetail   = !isTrait && !isOverview;
+    const isNotes    = !isTrait && cfg.key === "notes";
+    const isDetail   = !isTrait && !isOverview && !isNotes;
 
     // Bucket gating: skip the section entirely if its bucket is off.
     if (isTrait    && !include.traits)   continue;
     if (isOverview && !include.overview) continue;
+    if (isNotes    && !include.notes)    continue;
     if (isDetail   && !include.details)  continue;
 
     const hasTraits = isTrait && section.trait_blocks.length > 0;
@@ -132,6 +152,7 @@ export const DEFAULT_CHIP_INCLUDE: ChipIncludeOptions = {
   traits:   true,
   overview: false,
   details:  false,
+  notes:    false,
 };
 
 

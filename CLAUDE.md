@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 59 of 98 tasks done.
+> **LEDGER — last updated 2026-08-12.** 64 of 98 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -159,10 +159,23 @@ its place without relying on memory or conversation history.
 > file. Read from the FILES rather than the index, so an export cannot be wrong
 > in a way a reindex would quietly fix. `test_codex_export.py` is the file the
 > spec named and which did not exist: 25 tests.
-> **Next: Phase 5** (sources — notes/outline/style guide as real inputs, plus
-> R5.5 making the Author Notes privacy guarantee real), then Phase 6 Unwoven,
-> Phase 8 (11 tasks, the largest remaining group), Phase 10 release.
-> Branch health: 1726 backend tests, 1239 frontend tests, ruff and tsc clean.
+> **PHASE 5 COMPLETE (5 of 5).** The planning documents became a place questions
+> can COME FROM rather than only evidence that a manuscript word is a name — a
+> writer with nine factions in their outline and two of them written was asked
+> about two. R5.1/R5.2/R5.4: a planned name is raised, says which document it
+> came from, needs no frequency floor (a name the writer DECIDED on is not prose
+> noise even once), is attached to no chapter, and carries `from_planning` so
+> anything reasoning about what the BOOK contains can tell written from intended.
+> R5.3 gave `parse_markup` its first caller — `[[Ashfall]]` in a note is the
+> strongest signal in the scan, the writer pointing rather than the app guessing,
+> and it is never asked of the manuscript. **R5.5: `PRIVATE_NOTES` makes Author
+> Notes an enforced exclusion**, which is why a per-trait "never send" was not
+> needed; a source-read test fails the build if a new corpus builder reads it.
+> Two bugs the tests bit first: `_strip_chrome` ate `[[...]]` as an audiobook
+> marker, and a marked name was counted twice.
+> **Next: Phase 6** (Unwoven, 4 tasks), then Phase 8 (11 tasks, the largest
+> remaining group), Phase 10 release.
+> Branch health: 1744 backend tests, 1239 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

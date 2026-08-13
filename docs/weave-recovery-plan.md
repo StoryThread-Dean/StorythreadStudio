@@ -738,15 +738,15 @@ three surfaces at once.
 
 ## Phase 5 -- Sources (gap A7)
 
-- [ ] **R5.1** The scan reads notes, outline, style guide and themes as
+- [x] **R5.1** The scan reads notes, outline, style guide and themes as
       SOURCES, not only as corroboration.
-- [ ] **R5.2** Stops say where a name came from ("named in your Outline" reads
+- [x] **R5.2** Stops say where a name came from ("named in your Outline" reads
       differently from "named in chapter 4").
-- [ ] **R5.3** Wire `parse_markup` so `@name` / `[[name]]` outside the
+- [x] **R5.3** Wire `parse_markup` so `@name` / `[[name]]` outside the
       manuscript does something.
-- [ ] **R5.4** Decide and implement whether planning-document names are a
+- [x] **R5.4** Decide and implement whether planning-document names are a
       softer stop that never counts toward contradiction checks.
-- [ ] **R5.5** **Author Notes becomes an enforced exclusion, not a convention.**
+- [x] **R5.5** **Author Notes becomes an enforced exclusion, not a convention.**
       The writer's reasoning for dropping a per-trait "never send" was that
       Author Notes is the room private material lives in -- and nothing in the
       code says so. `scan.py` globs `notes/*.md` indiscriminately, which is
@@ -855,10 +855,10 @@ it, since the spec calls it the reason the frame system exists.
 | 2b Profile Builder | 7 | 7 |
 | 3 Migration completeness | 4 | 4 |
 | 4 Export | 5 | 5 |
-| 5 Sources | 5 | 0 |
+| 5 Sources | 5 | **5** |
 | 6 Unwoven | 4 | 0 |
 | 7 Scene identity | 4 | 0 |
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **98** | **59** |
+| **Total** | **98** | **64** |

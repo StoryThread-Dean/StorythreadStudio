@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from app.codex.anchors import AnchorIndex
 from app.codex.mentions import (
     NameEvidence, alias_display, build_alias_map, find_mentions,
-    group_by_containment, unbound_names,
+    group_by_containment, parse_markup, unbound_names,
 )
 from app.codex.snags import Snag, check_facts, check_ties
 from app.codex.threads import is_placeholder
@@ -166,7 +166,10 @@ def kinds_for_pass(name: str) -> frozenset[str]:
 _LIKELY_ANSWERS = 6
 
 _HEADING_RE = re.compile(r"^#{1,6} .*$", re.MULTILINE)
-_MARKER_RE = re.compile(r"\[[^\]\n]{1,40}\]")
+# A single-bracket marker only. The lookarounds spare `[[Ashfall]]`, which is the
+# writer TALKING TO THIS FEATURE -- stripping it as chrome is how the markup pass
+# came to find nothing in a note that plainly contained a link.
+_MARKER_RE = re.compile(r"(?<!\[)\[[^\[\]\n]{1,40}\](?!\])")
 
 
 @dataclass
@@ -882,10 +885,14 @@ def _manuscript_stops(project_path: str, chapters: list[tuple[str, str]],
     # too, and what the writer has already written is a better source of
     # truth about their world than any guess about grammar.
     evidence = NameEvidence()
+    # What the writer wrote OUTSIDE the manuscript, kept rather than only
+    # observed -- see the loop after the chapters for why that changed.
+    vocabulary: list[tuple[str, str]] = []
     if wants_unspun:
         for _chapter_id, prose in chapters:
             evidence.observe(prose)
-        for label, text in _writer_vocabulary(project_path, threads):
+        vocabulary = _writer_vocabulary(project_path, threads)
+        for label, text in vocabulary:
             evidence.observe(text, source=label)
 
     for chapter_id, prose in chapters:
@@ -907,6 +914,83 @@ def _manuscript_stops(project_path: str, chapters: list[tuple[str, str]],
             stops.extend(_early_mentions(prose, alias_map, display, by_id,
                                          chapter_id, index))
 
+    # ── NAMES THAT ONLY EXIST IN THE PLANNING SO FAR ─────────────────────
+    #
+    # The spec says the Weave "reads the AVAILABLE documents", and the audit
+    # found this half missing: notes, outline, style guide and themes were read
+    # as CORROBORATION -- evidence that a word found in the manuscript is a name
+    # -- and never as a place a question could come from. So a writer who lists
+    # nine factions in their outline and has written two of them into a chapter
+    # got asked about two.
+    #
+    # That is backwards for how people work. The outline is where a world is
+    # decided; the manuscript is where it arrives, later, and one chapter at a
+    # time.
+    #
+    # THEY ARE A SOFTER STOP, which is R5.4's ruling made concrete in three
+    # ways. A planning name needs no frequency floor, because a faction named
+    # once in an outline is as real as one named twice in a chapter and the
+    # floor exists to filter prose noise. Its stop SAYS where it came from, in
+    # the document's own name. And it carries `from_planning`, so anything that
+    # reasons about what the BOOK contains can tell the difference between a
+    # thing the writer has written and a thing they intend to.
+    planning_first: dict[str, tuple[str, str]] = {}
+    planning_counts: dict[str, int] = {}
+    # Names the writer marked up by hand, and where. Kept apart from the rest
+    # because the reason given for them is different in kind: they are not a
+    # guess that turned out well, they are an instruction.
+    marked: dict[str, str] = {}
+    if wants_unspun:
+        for label, text in vocabulary:
+            if label == "entries":
+                # The Weave's own entries. A name in one of those has an entry
+                # by definition, so asking about it would be a loop.
+                continue
+            for name, count in unbound_names(text, alias_map, minimum=1,
+                                             evidence=evidence).items():
+                planning_counts[name] = planning_counts.get(name, 0) + count
+                planning_first.setdefault(name, (label, text))
+
+        # ── WHAT THE WRITER MARKED ON PURPOSE ────────────────────────
+        #
+        # `[[Ashfall]]` and `@Garrick` in a note or an outline. parse_markup has
+        # existed since the mentions work and had no caller at all -- its own
+        # docstring names the thing it makes possible, that "you wrote
+        # [[Ashfall]] and there is no Ashfall" is one of the more useful
+        # sentences Weaving can say, and nothing was saying it.
+        #
+        # This is the strongest signal in the whole scan and it is treated as
+        # such. Everything else here is inference -- a capitalised word, a
+        # frequency, a shape that looks like a name. Markup is the writer
+        # pointing at something and telling the app it matters. It needs no
+        # floor, no corroboration and no guessing at grammar, and it is never
+        # run over the manuscript, because asking a novelist to decorate their
+        # prose to make a feature work is asking them to write for the app.
+        for label, text in vocabulary:
+            if label == "entries":
+                continue
+            for mention in parse_markup(text, alias_map):
+                if mention.bound or not mention.explicit:
+                    continue
+                name = mention.alias.strip()
+                if not name:
+                    continue
+                marked[name] = label
+                planning_first.setdefault(name, (label, text))
+                # MARKS rather than counts. The pass above has usually already
+                # seen this occurrence as an ordinary name, and adding to the
+                # tally there would report one `[[Ashfall]]` as two Ashfalls.
+                # The setdefault is for the case it did NOT see -- a marked name
+                # the grammar rules would have passed over -- where one is right.
+                planning_counts.setdefault(name, 1)
+
+        # Only the ones the manuscript has NOT already raised. A name in both
+        # is one question, and the chapter is the better place to ask it from
+        # because that is where the writer can see it in a sentence.
+        for name, count in planning_counts.items():
+            if name not in unspun_totals:
+                unspun_totals[name] = count
+
     if wants_unspun:
         # Grouped BEFORE anything is asked. "Lara Croft", "Lara" and "Croft"
         # are one question, not three -- see group_by_containment for why
@@ -917,7 +1001,12 @@ def _manuscript_stops(project_path: str, chapters: list[tuple[str, str]],
         # being rare and leave the nickname standing alone.
         retired = {r.lower() for r in request.retired}
         for group in group_by_containment(unspun_totals):
-            if group.count < 2:
+            # The frequency floor filters prose noise, and a name the writer
+            # DECIDED on in their outline is not noise even once. Applied to
+            # planning names it would silently drop exactly the entries a writer
+            # most wants: the ones they have planned and not yet written.
+            from_planning = all(n not in unspun_first for n in group.names)
+            if group.count < 2 and not from_planning:
                 continue
             # "Not a connection" is about the THING, so any of its names
             # having been retired retires the group. Matching on members as
@@ -926,7 +1015,17 @@ def _manuscript_stops(project_path: str, chapters: list[tuple[str, str]],
             if any(n.lower() in retired for n in group.names):
                 continue
             name = group.primary
-            chapter_id, prose = unspun_first[name]
+            if name in unspun_first:
+                chapter_id, prose = unspun_first[name]
+                planning_source = ""
+            else:
+                # Planned, not yet written. The "chapter" it belongs to is
+                # nothing, and saying so is better than attaching it to a
+                # chapter it never appears in.
+                planning_source, prose = planning_first.get(
+                    name, next(iter(planning_first.values()),
+                               ("your notes", "")))
+                chapter_id = ""
             position = prose.find(name)
             written_in = sorted(evidence.sources(name))
             stops.append(Stop(
@@ -943,15 +1042,63 @@ def _manuscript_stops(project_path: str, chapters: list[tuple[str, str]],
                 quote=_sentence_around(prose, position, position + len(name))
                       if position >= 0 else "",
                 evidence_hash=_hash(name),
-                why=_unspun_why(name, group.count, written_in, group.also),
+                why=(_marked_why(name, marked[name], group.also)
+                     if name in marked
+                     else _planning_why(name, planning_source, group.also)
+                     if planning_source
+                     else _unspun_why(name, group.count, written_in,
+                                      group.also)),
                 detail={"name": name, "count": group.count,
                         # Every word this one entry should answer to, so
                         # creating it once settles all of them.
                         "also": group.also,
-                        "also_written_in": written_in},
+                        "also_written_in": written_in,
+                        # Where the question came from, and whether the book
+                        # contains this yet. A caller reasoning about what is
+                        # WRITTEN must be able to tell the two apart.
+                        "source": planning_source or "manuscript",
+                        "from_planning": bool(planning_source),
+                        # The writer pointed at this one by hand. Worth saying,
+                        # because it is the difference between the app noticing
+                        # something and the app being told.
+                        "marked_up": name in marked},
             ))
 
     return stops
+
+
+def _marked_why(name: str, source: str, also: list[str] | None = None) -> str:
+    """
+    The reason, for a name the writer marked up themselves.
+
+    The shortest and most certain of the three, because there is nothing to
+    justify: they wrote [[Ashfall]], and there is no Ashfall.
+    """
+    why = (f"You wrote '{name}' as a link in your {source}, and there is no "
+           f"entry for it. Marking it means you meant it.")
+    if also:
+        words = ", ".join(f"'{w}'" for w in also)
+        why += f" Your writing also calls it {words}."
+    return why
+
+
+def _planning_why(name: str, source: str, also: list[str] | None = None) -> str:
+    """
+    The reason, for a name the writer has planned and not yet written.
+
+    Deliberately different wording from the manuscript case, because it is a
+    different situation and a writer can act on the difference: there is nothing
+    to go and look at in a chapter, and an entry made now is groundwork rather
+    than catching up.
+    """
+    why = (f"You name '{name}' in your {source}, and nothing in the Weave "
+           f"answers to it yet. It has not reached your manuscript, so this is "
+           f"a thing you have planned rather than something you have written.")
+    if also:
+        words = ", ".join(f"'{w}'" for w in also)
+        why += (f" Your writing also calls it {words}, so one entry covers all "
+                f"of them.")
+    return why
 
 
 def _unspun_why(name: str, count: int, written_in: list[str],
@@ -981,6 +1128,25 @@ def _unspun_why(name: str, count: int, written_in: list[str],
     return why
 
 
+# ── The one document the app does not read ───────────────────────────────────
+#
+# AUTHOR NOTES IS THE WRITER'S OWN ROOM, and until now that was a convention
+# rather than a rule. It is the reason a per-trait "never send to AI" control was
+# not built: the writer's answer to where private material goes was "Author
+# Notes, and I attach it myself when I want it". A promise resting on nothing in
+# the code is the same shape as "hidden traits are never sent to the AI", which
+# was wrong in three places.
+#
+# So it is excluded BY NAME here, where the app reads the writer's other
+# documents, and `test_author_notes_is_private.py` fails the build if any
+# AI-facing corpus builder starts including it.
+#
+# Note what this does NOT claim. The file is still theirs to attach to a chat by
+# hand, and still theirs to export. What it means is that nothing in this app
+# reads it on its own initiative.
+PRIVATE_NOTES: frozenset[str] = frozenset({"author-notes.md"})
+
+
 def _writer_vocabulary(project_path: str,
                        threads: list[dict]) -> list[tuple[str, str]]:
     """
@@ -1003,6 +1169,9 @@ def _writer_vocabulary(project_path: str,
     if os.path.isdir(notes_dir):
         for name in sorted(os.listdir(notes_dir)):
             if not name.endswith(".md"):
+                continue
+            # See PRIVATE_NOTES. The writer's own room, skipped on purpose.
+            if name in PRIVATE_NOTES:
                 continue
             try:
                 with open(os.path.join(notes_dir, name), "r",
