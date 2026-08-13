@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-12.** 50 of 98 tasks done.
+> **LEDGER — last updated 2026-08-12.** 54 of 98 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -137,9 +137,22 @@ its place without relying on memory or conversation history.
 > for a moment, so a writer's Save fails at random with no diagnosable cause.
 > `replace_atomic` retries ~150ms then raises honestly. Applied to the Weave's
 > writes; the other stores are R10.6.
-> **Next: R2.2b, R2.7, R2.8, R2.9**, then Phase 3 (chips, search and exports
-> still cannot find a converted world) and Phase 4 (no way to export the Weave).
-> Branch health: 1641 backend tests, 1184 frontend tests, ruff and tsc clean.
+> **PHASE 3 COMPLETE (4 of 4).** The three surfaces that lost a converted world
+> all find it again. Chips REUSE `profileSource` rather than fetching
+> `profiles/` themselves, so the picker and the editor cannot disagree about
+> where entries live; Global Search walks `codex/` (it covered everything except
+> the folder a converted project keeps its world in, and "no results" is
+> indistinguishable from "you have not written that yet"); exports read the live
+> folder. That last one uncovered a bug older than the Weave: **the profiles
+> appendix has never worked**, because it read `profiles/<TYPE>` while the
+> folders are PLURAL — so ticking "include profiles" produced an export with no
+> profiles in it and said nothing. `test_after_conversion.py` converts a project
+> and asks all three surfaces the same question, end to end, because unit tests
+> of each passed throughout the period the bug existed.
+> **Next: Phase 4** — there is still no way to export the Weave itself (5 tasks,
+> BLOCKER, at zero). Then Phase 5 sources, Phase 6 Unwoven, Phase 8 (11 tasks,
+> the largest remaining group), Phase 10 release.
+> Branch health: 1700 backend tests, 1239 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

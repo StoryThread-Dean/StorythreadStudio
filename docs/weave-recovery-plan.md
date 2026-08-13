@@ -662,11 +662,39 @@ produce.
 Spec 503 step 4 was skipped. After migration the writer's world vanishes from
 three surfaces at once.
 
-- [ ] **R3.1** Repoint chip sources at the codex (ChipPicker + App.tsx).
-- [ ] **R3.2** Add `codex/` to Global Search.
-- [ ] **R3.3** Export appendices read the codex (see Phase 4).
-- [ ] **R3.4** A migration test that asserts all three surfaces still find the
-      writer's entries afterwards.
+- [x] **R3.1** The chip picker reads the same folder the editor does, by REUSING
+      `profileSource` rather than fetching `/api/profiles` itself. That is the
+      point of that layer: two screens cannot disagree about where a writer's
+      entries live if only one of them decides. Before this, attaching a
+      character on a converted project sent the model their pre-conversion text,
+      or nothing at all once the writer had tidied `profiles/` away -- and an
+      empty picker looks exactly like a project with no characters in it.
+      Series profiles stay on the old path deliberately: a series folder is not a
+      project and has never been converted, so asking it where its entries live
+      would be asking a question it cannot answer.
+- [x] **R3.2** Global Search walks `codex/`. It covered manuscript, notes,
+      profiles, summaries and arcs -- everything except the folder a converted
+      project keeps its whole world in. Searching for a character returned their
+      OLD text or nothing, and "no results" is indistinguishable from "you have
+      not written that yet". Both folders are listed rather than one swapped for
+      the other, so an unconverted project is untouched and a converted one still
+      finds the backup if the writer keeps it.
+- [x] **R3.3** Exports read the live folder -- and this uncovered a bug older
+      than the Weave. **The profiles appendix has never worked.** It read
+      `profiles/<TYPE>` ("profiles/character") while the folders are PLURAL
+      ("profiles/characters"), so ticking "include profiles" produced an export
+      with no profiles in it and said nothing about it. Two bugs in one line: the
+      folder name, and reading `profiles/` at all after conversion. Both go away
+      by asking `entries_home` and taking folder names from the registry, which
+      also means all fourteen kinds are exported instead of four. The snapshot
+      copies the live folder under its own name.
+- [x] **R3.4** `test_after_conversion.py` converts a real project and asks all
+      three surfaces the same question: can you still find Elara Voss? End to end
+      on purpose -- unit tests of each surface passed throughout the period the
+      bug existed, because each was correct about the folder it was told to read.
+      It also pins the other direction: an unconverted project sees no change,
+      and search still covers the manuscript. Verified by reverting each fix and
+      watching its own test fail.
 
 ---
 
@@ -798,7 +826,7 @@ it, since the spec calls it the reason the frame system exists.
 | 1 Undo session damage | 7 | 6 |
 | 2 The premise | 25 | 25 |
 | 2b Profile Builder | 7 | 7 |
-| 3 Migration completeness | 4 | 0 |
+| 3 Migration completeness | 4 | 4 |
 | 4 Export | 5 | 0 |
 | 5 Sources | 5 | 0 |
 | 6 Unwoven | 4 | 0 |
@@ -806,4 +834,4 @@ it, since the spec calls it the reason the frame system exists.
 | 8 Walk honesty | 11 | 0 |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| **Total** | **98** | **50** |
+| **Total** | **98** | **54** |

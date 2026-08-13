@@ -202,6 +202,28 @@ def _safe_title(title: str) -> str:
 # an empty list/string when the folder is missing so the export never fails
 # just because the writer hasn't created any summaries or notes yet.
 
+def _entries_root(folder_path: str) -> tuple[str, dict]:
+    """
+    (the folder this project keeps its entries in, its type registry).
+
+    One question, asked here exactly as the sidebar, the Profile Builder, the
+    chip picker and the relationship scan ask it. An export reading a different
+    folder from the editor would hand the writer a book with the wrong world
+    attached to it.
+    """
+    from app.codex.migrate import entries_home
+    from app.codex.types_registry import TypesError, default_registry, load_registry
+
+    home = entries_home(folder_path)
+    try:
+        registry, _ = load_registry(folder_path)
+    except TypesError:
+        # A broken types.json is reported by the screen that owns it. Here it
+        # means "use the shipped kinds", not "export nothing".
+        registry = default_registry()
+    return os.path.join(folder_path, home), registry
+
+
 def _collect_md_files(folder: str) -> list[tuple[str, str]]:
     """
     Generic "read all .md files in this folder" helper. Used for chapter
@@ -686,14 +708,28 @@ async def export_full_manuscript(request: ExportRequest):
             extras_summary_parts.append(f"{len(notes)} notes")
 
     if request.include_profiles:
-        profile_types = ["character", "relationship", "location", "lore"]
+        # TWO BUGS IN ONE LINE, and both were silent.
+        #
+        # It read profiles/<TYPE> -- "profiles/character" -- and the folders are
+        # PLURAL: profiles/characters. So this appendix has never contained
+        # anything at all. A writer could tick "include profiles", get an export
+        # with no profiles in it, and have nothing anywhere tell them why.
+        #
+        # And it read profiles/ regardless, which after conversion is the backup
+        # copy rather than the live world.
+        #
+        # Both go away by asking the question every other surface now asks: where
+        # does this project keep its entries, and what does this world call its
+        # folders. It covers all fourteen kinds instead of four as a result, so a
+        # Government or a Deity is in the export like anything else.
+        root, registry = _entries_root(folder_path)
         profile_chunks: list[str] = []
         total_profiles = 0
-        for ptype in profile_types:
-            files = _collect_md_files(os.path.join(folder_path, "profiles", ptype))
+        for entry in registry.get("types", []):
+            files = _collect_md_files(os.path.join(root, entry.get("folder", "")))
             if not files:
                 continue
-            profile_chunks.append(f"\n## {ptype.title()}s\n")
+            profile_chunks.append(f"\n## {entry.get('label', entry['id'])}\n")
             for name, body in files:
                 profile_chunks.append(f"\n### {name.removesuffix('.md')}\n")
                 profile_chunks.append(body.strip())
@@ -831,10 +867,11 @@ async def export_snapshot(request: ExportRequest):
             extras_parts.append(f"{n} notes")
 
     if request.include_profiles:
-        n = _copy_tree(
-            os.path.join(folder_path, "profiles"),
-            os.path.join(snapshot_dir, "profiles"),
-        )
+        # The LIVE folder, under its own name, so a snapshot of a converted
+        # project holds the world the writer has rather than the copy their
+        # conversion left behind.
+        live, _ = _entries_root(folder_path)
+        n = _copy_tree(live, os.path.join(snapshot_dir, os.path.basename(live)))
         if n:
             extras_parts.append(f"{n} profile files")
 

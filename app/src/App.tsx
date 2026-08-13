@@ -16,7 +16,7 @@
 //     2. Conditional early return AFTER all hooks
 //     3. Normal render return at the bottom
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import "./App.css";
 import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
@@ -49,13 +49,23 @@ import { DialogueCheck } from "./components/DialogueCheck";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import { toPutPayload } from "./types/structure";
 import type { StructureManifest } from "./types/structure";
-import type { ProfileType, Profile } from "./types/profile";
+import type { ProfileType, Profile, ProfileListItem } from "./types/profile";
 import type {
   ContextChip, ChipIncludeFlags, EditorChatMessage, EnhanceLevel,
   SceneSummaryInfo, SplitChapterScenesResponse, GenerateSceneSummaryResponse,
   SuggestSceneBreaksResponse,
 } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
+// THE CHIP PICKER READS THE SAME FOLDER THE EDITOR DOES.
+//
+// It fetched /api/profiles directly, which on a converted project is the BACKUP
+// copy rather than the live world -- so attaching a character sent the model
+// their old text, or nothing at all once the writer had tidied profiles/ away.
+// Reusing the source layer means the two screens cannot disagree about where a
+// writer's entries live, which is the whole reason that layer exists.
+import { fetchEntriesHome, sourceFor } from "./screens/profileSource";
+import type { EntriesHome } from "./screens/profileSource";
+import { useTypeRegistry } from "./types/sectionRegistry";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
 import type { ChipIncludeOptions } from "./utils/profileFormat";
 import { buildEditorChatPayload, appendTurnToHistory, isWeakDraftingModel, computeSurroundingWindow } from "./utils/buildEditorChatPayload";
@@ -3822,22 +3832,40 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
   const [pendingInclude, setPendingInclude] = useState<ChipIncludeOptions>(DEFAULT_CHIP_INCLUDE);
   const [showHelp, setShowHelp] = useState(false);
 
-  // On mount, auto-suggest character profiles from the project
+  // Which folder this project keeps its entries in, decided by the backend and
+  // asked exactly as the Profile Builder asks it.
+  const [home, setHome] = useState<EntriesHome | null>(null);
   useEffect(() => {
-    if (suggestedLoaded) return;
-    const params = new URLSearchParams({ folder_path: rootPath, type: "character" });
-    fetch(`${API_BASE}/api/profiles/list?${params}`)
-      .then(r => r.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setSuggested(data.map((p: { filename: string; name: string }) => ({
-            filename: p.filename, name: p.name, type: "character",
-          })));
-        }
+    let cancelled = false;
+    fetchEntriesHome(rootPath).then(report => {
+      if (!cancelled) setHome(report.home);
+    });
+    return () => { cancelled = true; };
+  }, [rootPath]);
+
+  // The world's kinds, for the section shapes a codex entry is read into.
+  const chipRegistry = useTypeRegistry(rootPath);
+  const chipSource = useMemo(
+    () => (home && !chipRegistry.loading && !chipRegistry.error
+      ? sourceFor(rootPath, home, type => chipRegistry.sections[type] ?? [])
+      : null),
+    [rootPath, home, chipRegistry.loading, chipRegistry.error, chipRegistry.sections],
+  );
+
+  // On mount, auto-suggest characters from the project -- from wherever this
+  // project's entries actually live.
+  useEffect(() => {
+    if (suggestedLoaded || !chipSource) return;
+    chipSource.list("character")
+      .then(rows => {
+        setSuggested(rows.map(row => ({
+          filename: row.filename, name: row.name, type: "character",
+          entity_id: row.entity_id,
+        })));
       })
       .catch(() => {})
       .finally(() => setSuggestedLoaded(true));
-  }, [rootPath, suggestedLoaded]);
+  }, [chipSource, suggestedLoaded]);
 
 
   // Load the full chapter-summaries list the first time the writer switches
@@ -3894,14 +3922,25 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
       return;
     }
     setLoading(true);
-    const folderPath = source === "series" && seriesPath ? seriesPath : rootPath;
-    const params = new URLSearchParams({ folder_path: folderPath, type: profileType });
-    fetch(`${API_BASE}/api/profiles/list?${params}`)
-      .then(r => r.json())
-      .then(data => setProfiles(Array.isArray(data) ? data : []))
+    // SERIES PROFILES STAY ON THE OLD PATH. A series folder is not a project and
+    // has never been converted -- the Weave works one book at a time -- so
+    // asking it which folder its entries live in would be asking a question it
+    // cannot answer.
+    if (source === "series" && seriesPath) {
+      const params = new URLSearchParams({ folder_path: seriesPath, type: profileType });
+      fetch(`${API_BASE}/api/profiles/list?${params}`)
+        .then(r => r.json())
+        .then(data => setProfiles(Array.isArray(data) ? data : []))
+        .catch(() => setProfiles([]))
+        .finally(() => setLoading(false));
+      return;
+    }
+    if (!chipSource) return;
+    chipSource.list(profileType)
+      .then((rows: ProfileListItem[]) => setProfiles(rows))
       .catch(() => setProfiles([]))
       .finally(() => setLoading(false));
-  }, [profileType, rootPath, seriesPath, source]);
+  }, [profileType, rootPath, seriesPath, source, chipSource]);
 
   // Step 1 of attaching a profile: fetch it and switch into "configure" mode
   // so the writer can pick which slices to include before the chip is built.
@@ -3915,10 +3954,22 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
         onClose();
         return;
       }
-      const folderPath = (fromSource ?? source) === "series" && seriesPath ? seriesPath : rootPath;
-      const params = new URLSearchParams({ folder_path: folderPath, type: profileType, filename });
-      const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`);
-      const profile: Profile = await res.json();
+      const fromSeries = (fromSource ?? source) === "series" && seriesPath;
+      let profile: Profile;
+      if (fromSeries) {
+        const params = new URLSearchParams({
+          folder_path: seriesPath, type: profileType, filename });
+        profile = await (await fetch(`${API_BASE}/api/profiles/profile?${params}`)).json();
+      } else {
+        if (!chipSource) return;
+        const row = profiles.find(p => p.filename === filename)
+          ?? suggested.find(p => p.filename === filename);
+        profile = await chipSource.load({
+          filename, name, type: profileType,
+          role: "", status: "active",
+          entity_id: (row as { entity_id?: string } | undefined)?.entity_id,
+        });
+      }
       setPending({ filename, name, chipType, profile });
       // Reset to the smart default each time a new profile is selected so
       // there's no surprise carry-over from a previous attach.
