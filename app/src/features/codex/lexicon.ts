@@ -249,13 +249,39 @@ export const STOP_KINDS: Record<string, LexEntry> = {
     "How does power pass? What is forbidden, and by whom? Answering one question opens the questions it implies and connects to others in "
     + "different areas -- so a decision about succession reaches into your laws and your religion. Every answer becomes part of the Weave.",
   ),
+  // THE WORDING HERE IS A PROMISE, and it was one the code could not keep.
+  //
+  // Both lines used to say the check catches "a character acting on something
+  // they do not know yet" / "a character who knows something the story has not
+  // told them". No such detector exists, in any form: `snags.py` says so in as
+  // many words ("knowledge violation is the AI pass by design"), and Early
+  // mention does not cover it -- that check is about what the READER has been
+  // told, not what a character knows.
+  //
+  // The roadmap sets the condition for deferring the AI passes and it is one
+  // sentence long: "Shipping frames without it is defensible only if the product
+  // does not claim the check exists." These two lines are where a writer meets
+  // the Snag first -- the sidebar, the map legend, a tooltip -- so they were the
+  // claim. A checker that promises more than it does is worse than a smaller
+  // one: the writer plants a violation, watches nothing happen, and stops
+  // believing the checks that DO work.
+  //
+  // So this now describes the arithmetic that ships, and says out loud what it
+  // does not do. Amended here rather than in the code, because the code is
+  // right: these checks are free, instant and the same answer every time, and
+  // that is worth having on its own.
   "snag": entry(
     "snag", "Snag", AlertTriangle, "rose",
     "Two things in your world that disagree.",
-    "It catches continuity problems, including a character acting on something they do not know yet.",
-    "A Snag is two facts that cannot both be true: a status set twice at the same moment, an event referenced before it happens, or a "
-    + "character who knows something the story has not told them. Some contradictions are deliberate, and you can mark them so -- the check "
-    + "will not raise them again.",
+    "It compares the facts you have recorded against each other and finds the ones that cannot both be true.",
+    "A Snag is arithmetic on your own anchors, so it is free, instant and the same answer every time: one thing set twice at the same moment "
+    + "with nothing to say which came last, two facts each claiming to replace the same earlier one, a fact the reader is told before it "
+    + "becomes true, a correction that reaches the reader before the thing it corrects, a connection that ends at or before it starts, or two "
+    + "connections your world says cannot both be live. Some contradictions are deliberate, and you can mark them so -- the check will not "
+    + "raise them again.\n\n"
+    + "What it does NOT do yet is read your prose and judge it. Whether a character acts on something they should not know is a question "
+    + "about what a scene means, not about two dates disagreeing, and guessing at it would accuse you of mistakes you did not make. That one "
+    + "needs an AI pass and is not in this release.",
   ),
   "tangle": entry(
     "tangle", "Tangle", GitMerge, "rose",

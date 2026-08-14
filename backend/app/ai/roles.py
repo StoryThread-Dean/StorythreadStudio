@@ -116,8 +116,15 @@ ROLE_INFO: dict[str, dict] = {
                   "its cost.",
         "features": [],
         "reserved": True,
-        "reserved_note": "Nothing uses this yet. It arrives with the Weave, "
-                         "which reasons across a whole book at once.",
+        # "It arrives with the Weave" was true when it was written and stops
+        # being true the day v2.0.0 is tagged: the Weave ships deterministic,
+        # and nothing in it reasons across a whole book. It arrives with the AI
+        # PASSES, which are deferred -- see docs/roadmap.md. Same class as the
+        # Snag lexicon's knowledge-violation claim: a promise the build does not
+        # keep, on a screen the writer reads before deciding where to spend.
+        "reserved_note": "Nothing uses this yet. It arrives with the Weave's AI "
+                         "passes, which read a whole manuscript at once and are "
+                         "not in this release.",
     },
     "brainstorm": {
         "label": "Brainstorming",

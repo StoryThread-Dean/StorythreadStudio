@@ -55,7 +55,7 @@ const ROLES: RoleInfo[] = [
     detail: "Some questions cannot be answered from one chapter.",
     features: [],
     reserved: true,
-    reserved_note: "Nothing uses this yet. It arrives with the Weave.",
+    reserved_note: "Nothing uses this yet. It arrives with the Weave's AI passes.",
   },
 ];
 

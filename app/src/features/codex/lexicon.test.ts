@@ -306,3 +306,64 @@ describe("which group each kind belongs to", () => {
     expect(profiles).toContain("Deity");
   });
 });
+
+
+// ── A check may not promise more than it does ─────────────────────────────────
+//
+// The Snag entry used to say it catches "a character acting on something they do
+// not know yet" and "a character who knows something the story has not told
+// them". No such detector exists in any form -- `snags.py` says so outright
+// ("knowledge violation is the AI pass by design"), and Early mention does not
+// cover it: that check is about what the READER has been told, not what a
+// character knows.
+//
+// The roadmap's condition for deferring the AI passes is one sentence: "Shipping
+// frames without it is defensible only if the product does not claim the check
+// exists." These are the words a writer meets when they hover a Snag in the
+// sidebar or the map legend, so they WERE the claim.
+//
+// Pinned as a test rather than fixed and trusted, because the failure is
+// invisible: a writer plants a violation, watches nothing happen, and quietly
+// stops believing the checks that DO work.
+
+describe("the Snag entry claims only what the code does", () => {
+  const snag = STOP_KINDS["snag"];
+  const words = `${snag.short} ${snag.does} ${snag.whatsThis}`.toLowerCase();
+
+  it("does not promise to catch what a character knows", () => {
+    // Each of these was in the entry, or is the obvious way to reintroduce it.
+    for (const claim of [
+      "do not know yet",
+      "does not know yet",
+      "knows something the story has not told",
+      "acting on something they do not know",
+      "should not know",
+    ]) {
+      // "does NOT do" is allowed to name the absent check; a bare claim is not.
+      const at = words.indexOf(claim);
+      if (at === -1) continue;
+      const before = words.slice(Math.max(0, at - 90), at);
+      expect(
+        /not do|not in this release|needs an ai pass|deferred/.test(before),
+        `the Snag entry claims "${claim}" without saying it is not built`,
+      ).toBe(true);
+    }
+  });
+
+  it("says out loud that reading the prose is not part of it", () => {
+    // The honest half. A writer who knows the boundary trusts what is inside it.
+    expect(words).toContain("not in this release");
+  });
+
+  it("still describes the checks that DO ship", () => {
+    // Trimming the claim must not leave the entry vague. These are free,
+    // instant and the same answer every time, and that is worth having.
+    expect(words).toContain("nothing to say which came last");
+    expect(words).toContain("before it becomes true");
+    expect(words).toContain("ends at or before it starts");
+  });
+
+  it("keeps the deliberate-contradiction escape hatch", () => {
+    expect(words).toContain("deliberate");
+  });
+});

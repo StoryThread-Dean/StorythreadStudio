@@ -336,6 +336,80 @@ Two open items on the Formatting Walkthrough, both raised by walking a real 22,0
 
 Worth building, prioritization not yet committed.
 
+### Profile Extractions: build a world from the manuscript -- PROPOSED 2026-08-14
+
+The writer's own proposal, recorded here the day it was made so it cannot become
+another decision nothing was comparing the build against. **Not scoped to a
+release yet.** It belongs with the Weave's AI passes (recovery plan Phase 9),
+which are deferred to v2.1.0, and it is the largest single thing on this page.
+
+**The idea.** One interface that reads the manuscript (in parts or whole) with the
+list of ALREADY KNOWN entries attached, and comes back with proposed content for
+each: Overview, physical / personality / motivation / voice traits, Notes. It
+proposes for entries the writer already has AND names the ones it found that they
+do not. Per kind: Characters, Locations, Creatures, Lore, Factions, and ruling
+bodies (the writer's note: "Governments ... is more ruling entities than truly
+restricted to the term government").
+
+**The review surface**, from the writer's sketch. A left rail of kinds and the
+entries under each, ticked as they are dealt with. The body is two columns, the AI
+proposal beside the CURRENT profile, so nothing is judged in the abstract:
+
+```
+| Profile Extractions        "What's this?"  "Show me how to use this" (1/N)
+| v Characters   | - Rosie
+|  - Serena  [x] |  AI proposal            | Current profile        | Actions
+|  - Newton  [x] |  Overview: ...          | Overview: original ... | [Overwrite] [Merge] [Remove]
+|  - Rosie       |  Physical trait 1 ...                            | [Add to profile] [Remove]
+|  - Lou         |  Personality trait 1 ...                         | [Add to profile] [Remove]
+|  - Steel Beam  |  Notes: ...             | Notes: original ...    | [Overwrite] [Merge] [Remove]
+| > Lore         |
+| > Creatures    | Additional profiles found, not in Profiles yet
+| > Factions     |  > Huffington City   [Add to Locations]  [Remove]
+| > Government   |  > Mayor Bloomfield  [Add to Character]  [Remove]
+|                |  v The Null
+|                |    Name: The Null [x]   Aliases: Nullem [x]
+|                |    Overview ... [x]   Physical trait 1 [ ]   Motivation 1 [x]
+|                |                          [Add to Character] [Remove]
+```
+
+**What it must inherit, not reinvent.** Every one of these already exists and is
+tested; the pass is new, the plumbing is not:
+
+- The `speaker_analysis.py` contract (Phase 9's R9.7): JSON only, quote exactly,
+  `text.find()` verification, a DROPPED COUNT shown, and the endpoint writes
+  nothing. A proposal that cannot show the sentence it came from is discarded.
+- The write boundary. AI output may not land in human-authored fields without the
+  writer applying it, per action, which is what every button in the sketch is.
+- `Sweep.tsx`'s restraint: nothing pre-ticked, a count that matches what it
+  writes, partial progress kept on failure.
+- `WordFix`'s answers: a proposed entry that is really another name for one the
+  writer has needs `POST /alias`, not a second profile.
+- Money said before it is spent (`Explain`'s cost field, `test_explain_costs.py`),
+  and the Cast ladder's manual / free / free-AI / auto tiers (R9.8).
+
+**The three questions to settle before building.** Each is a fork, not a detail:
+
+1. **What is the unit of a request?** A whole manuscript is the best answer and
+   the most expensive; per chapter is cheap and produces proposals that contradict
+   each other across chapters. This decides the cost model and most of the UI.
+2. **What does Merge mean, exactly?** Overwrite and Add are obvious. Merge on a
+   trait the writer already wrote is the one that can lose their words, and it is
+   the button they will reach for most.
+3. **How is a proposal matched to an existing entry?** The sketch shows "AI
+   character to pre-defined established character". Getting that wrong writes
+   Rosie's traits onto Serena. `build_alias_map` and the ambiguity rule in
+   `mentions.py` are the existing answer, and the same rule has to hold: an
+   ambiguous match NEVER silently binds.
+
+**Why it is worth the size.** It inverts the Weave's current direction. Weaving
+asks the writer to describe a world it found the NAMES of; this reads what they
+have already written and proposes the CONTENT, which is the work a writer would
+otherwise do by re-reading their own book. It is also the strongest answer to the
+reported frustration that the walkthrough's suggested Overview text "was nearly
+always wrong": a whole-manuscript read has context a single-quote heuristic
+cannot.
+
 ### Local model providers -- MOSTLY SHIPPED (v1.1.1)
 
 Shipped: the `local` provider entry, address + API-style settings restricted to loopback / private / `.local` destinations (`backend/app/ai/local_endpoint.py`), Ollama's native `GET /api/tags` via `model_list_style`, `<think>` stripping in the sanitizer, and a Test Connection that tells a bad address, a dead server, and a wrong-API-style server apart. See `docs/research-multi-provider.md` for the original research.

@@ -779,7 +779,7 @@ Eight roles, each listing on screen exactly which features use it:
 | **Structural analysis** | Scene break suggestions |
 | **Prose** | Draft mode, Enhance mode, Revise suggestion |
 | **Extraction** (cheap work) | Usage previews, Generate Overview, section summaries |
-| **Long-context analysis** | *nothing yet* — arrives with the Weave |
+| **Long-context analysis** | *nothing yet* -- arrives with the Weave's AI passes, which are deferred to v2.1.0 |
 | **Research transformation** | *nothing yet* |
 
 The last two are marked "not used yet" on screen with the reason, rather than presenting a control that silently does nothing.
