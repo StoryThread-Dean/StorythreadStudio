@@ -402,10 +402,22 @@ def test_a_group_lists_every_word_it_answers_to():
 #
 # These tests PIN TODAY'S BEHAVIOUR rather than assert it is correct, following
 # what R8.11 did with the map's dashed line: the fix changes which stops a writer
-# is shown, so it is the writer's ruling, and until it is made the suite must not
-# be green over a promise the scan does not keep. If the gate is relaxed, these
-# tests SHOULD fail -- and their failure is the signal to reread this comment,
-# not to delete them.
+# is shown, so it is the writer's ruling.
+#
+# RULED 2026-08-14: LEAVE THE GATE ALONE. The Profile Extractor (v2.0.1) reads
+# the prose with a model and will find these names properly -- along with the
+# characters this pass could never reach at all, the ones described rather than
+# named. So the limitation is stated on screen instead of coded around.
+#
+# The fix was measured before it was declined, which is why it is not worth
+# retrying blind. "A word never written in lowercase is not an English word"
+# sounds decisive and is not: Look, Right, Yes, Sorry, Wait and Meanwhile all
+# survive it, and flooding the walk with those is the 177-junk-stop failure that
+# the frequency floor exists to prevent. Any future attempt needs a closed-class
+# stoplist AND the lowercase rule AND a measurement against a real manuscript.
+#
+# If the gate is relaxed, these tests SHOULD fail -- and their failure is the
+# signal to reread this comment, not to delete them.
 #
 # Not a bug: the frequency floor. Duncan is said once in that book and one
 # mention is deliberately below the floor, so Duncan is hidden twice over. That

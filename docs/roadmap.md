@@ -367,6 +367,17 @@ ones, with three rules that follow from what it is:
    yet, so the entry has no name either, and that is a finished state rather than
    an incomplete one. A writer who has not decided must not be nagged into
    deciding by an app.
+4. **It also picks up the NAMED characters Weaving structurally cannot see.**
+   Found while investigating the above: a name that only ever appears where a
+   capital was required anyway -- at the start of a sentence, or just inside an
+   opening quote -- is invisible to the scan, however often it occurs. `"Duncan,"
+   he said` is the most ordinary way a name reaches a reader. **Ruled 2026-08-14:
+   the scan is left as it is and this feature covers it**, because the safe-looking
+   fix was measured and is not safe (Look, Right, Yes, Sorry, Wait and Meanwhile
+   all pass a "never written in lowercase" test), and because a model reading the
+   prose gets these right for free while it is already reading for point 1.
+   Pinned by five tests in `test_codex_mentions.py`; Weaving now says on screen
+   that this is something it cannot see.
 
 **And the A-then-B shape is the writer's, recorded because it is the design:**
 "That is the two A then B takes of which the Weaving does the first pass at
