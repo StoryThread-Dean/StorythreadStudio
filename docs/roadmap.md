@@ -49,7 +49,7 @@ rule is about what the writer can SEE, not about where the plumbing reaches.
 A three-pass audit of all 806 lines of `docs/weave-spec.md` against the build
 found the programme substantially off its own specification -- because the spec
 had never been in the repository, so nothing was ever compared to it. Findings:
-`docs/weave-spec-gaps.md`. Repair plan, 72 tasks: `docs/weave-recovery-plan.md`.
+`docs/weave-spec-gaps.md`. Repair plan, 107 tasks: `docs/weave-recovery-plan.md`.
 
 **In v2.0.0** (recovery-plan phases 1-6, 8, 10): undo the contradictions
 introduced while the spec was unreferenced; give characters, relationships,
@@ -281,10 +281,15 @@ It also edits the Run, which is what Weaving's Unplaced stops send writers
 there to do -- "when" is a list of the writer's own chapters, and "not placed
 yet" is selectable so the state Weaving is complaining about is visible.
 
-One case is still an honest dead end: a kind the WRITER invented has no
-sections of its own until they give it some, so an editor would open on nothing
-to type in. The walk says so rather than sending them to a blank screen.
-Giving a custom kind its own sections is the remaining piece.
+**CORRECTED 2026-08-14.** This said a kind the writer invented "has no sections
+of its own ... so an editor would open on nothing to type in", and called that an
+honest dead end. It is no longer true: `add_type` seeds `overview`, `details` and
+`notes` (`backend/app/codex/types_registry.py`), and a custom kind fills in like
+any other -- pinned by a test in `WeavingPanel.test.tsx`. Verified by making one.
+
+What IS still missing is letting the writer CHOOSE a custom kind's sections. They
+get the three above and cannot add a fourth or rename them from the UI, which is a
+smaller and different gap from the one this paragraph described.
 
 Also open before release: the manual-smoke additions for each milestone.
 

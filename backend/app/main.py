@@ -11,6 +11,8 @@
 # directly -- everything goes through the waiter.
 
 from fastapi import FastAPI
+
+from app.version import __version__
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers -- each router handles one area of the API.
@@ -26,7 +28,7 @@ from app.utils.names_store import seed_names_db
 app = FastAPI(
     title="Storythread Studio API",
     description="Local backend server for the Storythread Studio writing app.",
-    version="0.1.0",
+    version=__version__,
 )
 
 
@@ -83,7 +85,7 @@ async def health_check():
     return {
         "status": "ok",
         "app": "Storythread Studio API",
-        "version": "0.1.0",
+        "version": __version__,
     }
 
 

@@ -921,9 +921,27 @@ it, since the spec calls it the reason the frame system exists.
       **And v2.0.1 follows immediately** with the Profile Extractor, on the
       writer's ruling -- see `docs/roadmap.md`. That pulls one AI pass forward;
       the other four and the knowledge-violation check stay in v2.1.0.
-- [ ] **R10.3** Version bump and tags.
-- [ ] **R10.4** Walk the spec's Verification section as a manual checklist; add
-      shell-dependent flows to `tests/manual-smoke.md`.
+- [x] **R10.3** The manifest bump and the tag are `release.ps1`'s job at cut time,
+      from `main`, per `docs/RELEASING.md` -- doing it here would only conflict on
+      merge. What this task actually found and fixed: **the backend reported
+      version "0.1.0"** from `GET /health` and its API docs, and had since the
+      project began, because the string was typed into three files and
+      `release.ps1` bumped none of them. One definition in `backend/app/version.py`
+      now; `pyproject.toml` keeps a packaging copy; the script bumps both (verified
+      on throwaway copies, dependency pins intact); `test_version.py` fails the
+      build if they disagree. Tags checked: none stray, none for v1.1.1 -- which
+      matches R10.2.
+- [x] **R10.4** Six Weave scenarios added to `tests/manual-smoke.md` (18-23),
+      which had 711 lines, eight sections on the audiobook and NONE on the Weave.
+      Migration is first and marked as the dangerous one, because it rewrites the
+      writer's files and its Tauri dialogs, backup path and real-project folder are
+      exactly what vitest cannot reach. The others: the map and scrubber
+      (read-only, and pins that the layout must not reshuffle), the three-fact
+      belief by hand, the guided walk with the closed-world rule as the thing to
+      watch, what is sent to AI (checks the Author Notes PROMISE rather than a
+      feature), and export. Two of the spec's Verification lines are unreachable
+      and say so: the scene-break one needs Phase 7, and the knowledge-violation
+      one needs Phase 9.
 - [ ] **R10.5** `/pre-release` to a RELEASE READY verdict.
 - [x] **R10.6** DONE. `settings_store`, `structure_store` and the audiobook JSON
       store all go through `replace_atomic` now; the only bare `os.replace` calls
@@ -999,6 +1017,6 @@ recorded somewhere that nothing was comparing the build against.
 | 7 Scene identity | 4 | 0 |
 | 8 Walk honesty | 12 | **12** |
 | 9 AI passes | 8 | 0 |
-| 10 Release | 6 | **3** |
+| 10 Release | 6 | **5** |
 | 11 Late rulings | 7 | **6** |
-| **Total** | **107** | **90** |
+| **Total** | **107** | **92** |

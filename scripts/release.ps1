@@ -112,6 +112,27 @@ $cargoToml = $cargoToml -replace '(?m)^version\s*=\s*".*"$', "version = `"$Versi
 [System.IO.File]::WriteAllText($cargoTomlPath, $cargoToml, $noBomUtf8)
 OK "app/src-tauri/Cargo.toml"
 
+# backend/app/version.py and backend/pyproject.toml -- THE TWO THIS SCRIPT USED
+# NOT TO TOUCH. The backend reported "0.1.0" from GET /health and from its API
+# docs for eleven releases, because nothing bumped it and nothing compared it to
+# anything. version.py is the definition the code imports; pyproject carries a
+# copy because packaging metadata cannot import Python, and
+# backend/tests/test_version.py fails the build if the two disagree.
+$backendVersionPath = Join-Path $repoRoot "backendppersion.py"
+$backendVersion = Get-Content $backendVersionPath -Raw
+$backendVersion = $backendVersion -replace '(?m)^__version__\s*=\s*".*"$', "__version__ = `"$Version`""
+[System.IO.File]::WriteAllText($backendVersionPath, $backendVersion, $noBomUtf8)
+OK "backend/app/version.py"
+
+# Only the FIRST version line: [project] comes before any dependency table, and
+# a bare (?m) replace would rewrite every version it found further down.
+$backendPyprojectPath = Join-Path $repoRoot "backend\pyproject.toml"
+$backendPyproject = Get-Content $backendPyprojectPath -Raw
+$backendPyproject = [regex]::Replace($backendPyproject,
+    '(?m)^version\s*=\s*".*"$', "version = `"$Version`"", 1)
+[System.IO.File]::WriteAllText($backendPyprojectPath, $backendPyproject, $noBomUtf8)
+OK "backend/pyproject.toml"
+
 
 # â”€â”€ Build the backend sidecar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
