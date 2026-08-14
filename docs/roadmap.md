@@ -465,6 +465,54 @@ than buried in code):
   that. Its `reserved` flag and note change on the day this ships, and
   `test_role_call_sites.py` will fail the build if they do not.
 
+**THREE MORE DECISIONS, 2026-08-14.**
+
+8. **Proposals go STALE, like the Weave's findings.** A proposal left unreviewed
+   while its source chapters get rewritten is about text that no longer exists,
+   and the writer must not be shown it as current -- the same rule R8.1 exists to
+   enforce.
+
+   BUT THE MECHANISM CANNOT BE THE WEAVE'S. `findings.refresh` compares a hash of
+   the EVIDENCE SPAN, and decision 4 says proposals carry no evidence, so there is
+   nothing to hash. Staleness is therefore per CHAPTER SET: the run records which
+   chapters it read and a content hash of each, and any proposal from that run is
+   flagged when one of them changes. Coarser than the Weave's, and free -- R8.1
+   already computes and reports which chapters moved, and `stable_ids.content_hash`
+   already exists for exactly this shape of question.
+
+   The wording follows R8.1's lesson too: name the chapters rather than counting
+   them, and say what a narrowed re-run would leave out.
+
+9. **A new entry arrives BASE-LEVEL, not fully built.** `[Add to Character]`
+   creates what Quick Entry creates -- a name, a kind, one starter line -- and the
+   proposed traits are then added one at a time, each by its own click. Slower than
+   writing the whole proposal in at once, and right for two reasons: it is what the
+   Weave does everywhere else, and with no evidence carried (decision 4) a
+   one-click full profile would be the largest unreviewed write in the app.
+
+   **Characters arrive as SIDE.** The same default and the same reasoning as
+   R2.10a: a name the prose mentions is far more often a shopkeeper than a
+   viewpoint character, and the two mistakes do not cost the same -- a Side page
+   promoted later loses nothing, while a Main page for a walk-on is six empty trait
+   sections asking to be filled in. Promotion already exists, is lossless, and is
+   the writer's to make from the Profile Builder header (R2.10b).
+
+10. **Its own screen.** Not a mode inside the Weaving popup. This is a long review
+    session with a left rail and two columns, which is a different shape from a
+    walkthrough stop, and the popup is already carrying eight sub-views.
+
+    WHICH MEANS THE CLOSED-WORLD RULE DOES NOT APPLY TO IT, and that is worth
+    stating so nobody later "fixes" it by moving it inside. That rule is about the
+    WALKTHROUGH: a writer answering a stop must not be sent away mid-question,
+    because the walk gives up its place. A review screen has no place to give up --
+    the writer arrives at it deliberately, works through a list, and leaves when
+    they choose. `WeaveScreen` is the nearest precedent (persistent chrome, a body
+    that swaps between map and list) and the likeliest home.
+
+    This decision is entangled with the static-shell question, so the two should be
+    settled in the same design session rather than one constraining the other by
+    accident.
+
 **What it must inherit, not reinvent.** Every one of these already exists and is
 tested; the pass is new, the plumbing is not:
 
