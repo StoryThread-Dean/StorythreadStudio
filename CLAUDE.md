@@ -498,6 +498,9 @@ uv sync
 # Start the FastAPI local server in development mode (auto-reloads on file changes)
 uv run uvicorn app.main:app --reload --port 8000
 
+# ...or from ANYWHERE in the repo, which is safer -- see the note below:
+#   .\scripts\dev-backend.ps1
+
 # Verify the backend imports cleanly without starting the server
 uv run python -c "from app.main import app; print('OK')"
 
@@ -508,6 +511,23 @@ uv run pytest
 uv run ruff check .
 uv run ruff format .
 ```
+
+**`app` MEANS TWO THINGS IN THIS REPO, and it bites here.** `app/` at the root
+is the React frontend; `backend/app/` is the Python package. So
+`uvicorn app.main:app` only works from `backend/` -- run it from the repo root
+and Python resolves `app` to the FRONTEND folder, finds no `main.py`, and
+uvicorn says:
+
+```
+ERROR:    Error loading ASGI app. Could not import module "app.main".
+```
+
+That names the module rather than the mistake, so it reads as a broken import in
+the backend, and with `--reload` it repeats on every save as though the problem
+were spreading. `scripts/dev-backend.ps1` exists to remove the choice: it resolves
+`backend/` from its own location, checks the import first so a REAL import error
+prints its own traceback instead of the same misleading line, and then starts
+uvicorn.
 
 ### Frontend + Tauri (React / TypeScript) -- run from `app/`
 
