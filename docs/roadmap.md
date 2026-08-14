@@ -373,12 +373,106 @@ proposal beside the CURRENT profile, so nothing is judged in the abstract:
 |                |                          [Add to Character] [Remove]
 ```
 
+**THE PURPOSE, in the writer's own words, and it reframes every decision below:**
+
+> "The true purpose of this is NOT the true accuracy that AI is literally going to
+> build the profile for the writer. Instead, this feature is to give something to
+> the writer for which he will edit / fine-tune / build from and hone so that the
+> actual envision of that character is more accurately represented for future AI
+> requests and Smart Advisor and Draft building processes. Simplify the Profile
+> building process as this can be EXTREMELY time consuming, just as long, if not
+> longer than it takes for other writers to write the entire book itself."
+
+That is a starting point, not an answer. It means speed and editability outrank
+precision, and it means the review surface is the feature -- the pass is only the
+raw material for it.
+
+**THE THREE FORKS, ANSWERED 2026-08-14.**
+
+1. **Unit of a request: WHOLE MANUSCRIPT is the recommended path.** Per chapter is
+   for addenda, fixes and additions afterwards, and it BUNCHES the ticked chapters
+   into one request rather than one request per chapter. The writer's example:
+   a whole-manuscript pass covered chapters 1-8 of an intended 15; later they want
+   9-11 only, excluding the main characters already established, and expecting
+   4 new side characters, 2 new locations, 1 new main villain finally introduced,
+   and 1 character who appeared briefly in chapter 2 and has now returned.
+
+2. **Merge means APPEND, for prose.** If the existing Overview has two paragraphs
+   and the proposal has one, Merge leaves the writer's two and adds the third.
+   Nothing of theirs is rewritten or reordered. (Overwrite and Add remain the
+   other two answers; Merge is the one that must never lose their words.)
+
+3. **Matching: the request CARRIES a snippet of each established entry.** A brief
+   extract of what is already recorded -- the top details of `rosie.md`, a short
+   current description -- goes up with the manuscript, so the pass has something to
+   attach to and builds on it rather than starting over. `build_alias_map` and the
+   ambiguity rule from `mentions.py` remain the binding rule: an ambiguous match
+   never silently binds.
+
+**FOUR MORE DECISIONS, 2026-08-14.**
+
+4. **No evidence carried.** Proposals do not cite chapters or quote source
+   sentences. It is a draft the writer is going to rewrite, so verification
+   machinery would be effort spent on text that is about to be replaced.
+
+   TWO CONSEQUENCES, and they must be built in rather than remembered:
+
+   - The WRITE BOUNDARY becomes the only safeguard, not one of several. With no
+     evidence to check against, nothing may reach a profile without a per-item
+     click. No "apply all", no default-ticked rows -- the same rule `Sweep.tsx`
+     follows, and here it is the whole of the protection.
+   - The screen must SAY it is unchecked. `speaker_analysis` earns trust by
+     showing a dropped count; this pass has nothing to drop, so the honesty
+     obligation moves to the wording: this was derived from the manuscript, it
+     has not been verified against anything, and it is a starting point. That is
+     an `Explain` entry, not a footnote.
+
+5. **Registry-driven: every kind.** Whatever `types.json` holds, including
+   Religions, Deities, Cultures, Objects, Events, Languages and anything the
+   writer invents this afternoon. Costs nothing extra -- the pass reads each
+   kind's sections from the registry exactly as every other screen does, which is
+   what R11.2 collapsing the section tables was for.
+
+6. **A trait can be ADDED or MERGED INTO ONE THE WRITER PICKS.** Both, per the
+   sketch's prose. The case it exists for: the profile already says "Fiercely
+   loyal" and the pass proposes "Loyal to a fault". Add makes two traits; Merge
+   folds the second into a chosen existing one. The picker is required -- merging
+   into a guessed trait is how a writer's own wording gets overwritten.
+
+7. **Exclusions are TICKED, with a smart default.** Before anything is spent, a
+   list of established entries with the fully-written ones pre-ticked as "leave
+   alone", and every tick reversible. Automatic skipping was rejected for a
+   specific reason from the writer's own example: it cannot know that a character
+   who appeared briefly in chapter 2 has returned for the rest of the book, so it
+   would skip exactly the entry they wanted revisited.
+
+**ASSUMED UNLESS CORRECTED** (recorded so a wrong assumption is visible rather
+than buried in code):
+
+- **Proposals persist.** A whole-manuscript pass costs real money, and the Weave's
+  own rule is that what the writer paid for is never re-bought (`findings.py`:
+  answers live in a file, not in the rebuildable cache). Closing the app mid-review
+  must not mean paying twice, so proposals get their own store under
+  `.storythread/` and are not derivable from anything.
+- **Merge appends at the end.** The writer's paragraphs stay in their order and the
+  new one follows. Nothing of theirs is reordered.
+- **Content mode routes as it already does.** A manuscript is the writer's own
+  prose; an explicit book needs a model that permits it, and
+  `_validate_model_content_mode` already decides that. This pass does not get its
+  own rule.
+- **`long_context` finally has a consumer.** The role has been reserved since Model
+  Roles shipped with the note that it "arrives with the Weave's AI passes"; this is
+  that. Its `reserved` flag and note change on the day this ships, and
+  `test_role_call_sites.py` will fail the build if they do not.
+
 **What it must inherit, not reinvent.** Every one of these already exists and is
 tested; the pass is new, the plumbing is not:
 
-- The `speaker_analysis.py` contract (Phase 9's R9.7): JSON only, quote exactly,
-  `text.find()` verification, a DROPPED COUNT shown, and the endpoint writes
-  nothing. A proposal that cannot show the sentence it came from is discarded.
+- From the `speaker_analysis.py` contract (Phase 9's R9.7): JSON only, and the
+  endpoint WRITES NOTHING. The quote-exactly and dropped-count halves do NOT
+  apply here and it was an error to list them -- an Overview is synthesis and has
+  no single source sentence, so that rule would discard almost every proposal.
+  See decision 4 for what replaces it.
 - The write boundary. AI output may not land in human-authored fields without the
   writer applying it, per action, which is what every button in the sketch is.
 - `Sweep.tsx`'s restraint: nothing pre-ticked, a count that matches what it
@@ -387,20 +481,6 @@ tested; the pass is new, the plumbing is not:
   writer has needs `POST /alias`, not a second profile.
 - Money said before it is spent (`Explain`'s cost field, `test_explain_costs.py`),
   and the Cast ladder's manual / free / free-AI / auto tiers (R9.8).
-
-**The three questions to settle before building.** Each is a fork, not a detail:
-
-1. **What is the unit of a request?** A whole manuscript is the best answer and
-   the most expensive; per chapter is cheap and produces proposals that contradict
-   each other across chapters. This decides the cost model and most of the UI.
-2. **What does Merge mean, exactly?** Overwrite and Add are obvious. Merge on a
-   trait the writer already wrote is the one that can lose their words, and it is
-   the button they will reach for most.
-3. **How is a proposal matched to an existing entry?** The sketch shows "AI
-   character to pre-defined established character". Getting that wrong writes
-   Rosie's traits onto Serena. `build_alias_map` and the ambiguity rule in
-   `mentions.py` are the existing answer, and the same rule has to hold: an
-   ambiguous match NEVER silently binds.
 
 **Why it is worth the size.** It inverts the Weave's current direction. Weaving
 asks the writer to describe a world it found the NAMES of; this reads what they
