@@ -887,6 +887,51 @@ export wrong in a way a reindex would quietly fix.
 
 ---
 
+## 24. Moving a book to another computer
+
+**Touches:** everything at once, from the writer's side. Automated tests cover
+this at the API level (`test_project_portability.py`), but only a human can
+check that the app OPENS a moved project, that the Weave screen looks the same
+as it did, and that nothing asks to be redone.
+
+**Why this is here:** asked by the writer during the v2.0.0 build -- "Authors
+work from multiple computers or need to transfer their project from one
+computer to another at some point." Nothing in the app says a word about it, so
+the behaviour has to be right without instructions.
+
+Steps:
+1. On computer one, open a project with real Weave work in it: several entries,
+   some connections carrying reasons, at least one fact with a reveal point, and
+   a Weaving session where you answered some things and put others off. Note the
+   count on the Weaving screen before you start.
+2. Close the app. Copy the WHOLE project folder to a USB stick or a network
+   share. Confirm the hidden `.storythread` folder came with it -- in Explorer,
+   turn on hidden items and look. This is the step to be fussy about.
+3. On computer two, install the app, then open the copied folder. Expect it to
+   open with no complaint about paths.
+4. Compare against computer one: same entries, same connections WITH their
+   reasons, same facts anchored to the same chapters, the map laid out the same
+   way (the layout is deterministic, so it should not have reshuffled).
+5. Open Weaving. **Expect the same count as step 1**, and expect
+   "Carry on where you left off" to be offered with your earlier session still
+   there. Anything you retired must still be retired; anything you muted must
+   still be muted.
+6. Delete `.storythread/app.db` on computer two and reopen. Expect no loss at
+   all -- it is a cache and rebuilds. This is worth doing once because it is the
+   difference between a cache and a store, and the app claims the former.
+7. **The lossy case, done deliberately so you know what it looks like.** Copy the
+   folder again, this time WITHOUT `.storythread`. Open it and go to Weaving.
+   Expect your world intact (entries, connections, facts are all Markdown) but
+   the walk to ask about things you already retired, with no earlier session to
+   carry on from. Nothing warns about this today.
+
+Expected: steps 3 to 6 lose nothing. Step 7 loses your Weaving ANSWERS and only
+those. If any of steps 3 to 6 loses anything, that is a release blocker -- it
+means machine-specific state is being stored where it should not be.
+
+---
+
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** -- verified separately by bumping a version and
