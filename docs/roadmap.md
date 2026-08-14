@@ -449,11 +449,11 @@ raw material for it.
 **ASSUMED UNLESS CORRECTED** (recorded so a wrong assumption is visible rather
 than buried in code):
 
-- **Proposals persist.** A whole-manuscript pass costs real money, and the Weave's
-  own rule is that what the writer paid for is never re-bought (`findings.py`:
-  answers live in a file, not in the rebuildable cache). Closing the app mid-review
-  must not mean paying twice, so proposals get their own store under
-  `.storythread/` and are not derivable from anything.
+- (Proposals persisting was listed here as an assumption and is now DECISION 8,
+  stated by the writer. The reasoning still holds and is worth keeping: a
+  whole-manuscript pass costs real money, and this repo's rule is that what the
+  writer paid for is never re-bought -- `findings.py` keeps answers in a file
+  rather than in the rebuildable cache for exactly that reason.)
 - **Merge appends at the end.** The writer's paragraphs stay in their order and the
   new one follows. Nothing of theirs is reordered.
 - **Content mode routes as it already does.** A manuscript is the writer's own
@@ -467,21 +467,37 @@ than buried in code):
 
 **THREE MORE DECISIONS, 2026-08-14.**
 
-8. **Proposals go STALE, like the Weave's findings.** A proposal left unreviewed
-   while its source chapters get rewritten is about text that no longer exists,
-   and the writer must not be shown it as current -- the same rule R8.1 exists to
-   enforce.
+8. **ONE RUN, SAVED LOCALLY, REVIEWABLE ACROSS SESSIONS.** The writer's words:
+   "that process is saved locally for processing to which the writer can do all in
+   one go, or if its extremely large, might take multiple sessions. The data
+   remains until a brand new process request is made, to which the previous one is
+   overwritten as the new one supersedes it."
 
-   BUT THE MECHANISM CANNOT BE THE WEAVE'S. `findings.refresh` compares a hash of
-   the EVIDENCE SPAN, and decision 4 says proposals carry no evidence, so there is
-   nothing to hash. Staleness is therefore per CHAPTER SET: the run records which
-   chapters it read and a content hash of each, and any proposal from that run is
-   flagged when one of them changes. Coarser than the Weave's, and free -- R8.1
-   already computes and reports which chapters moved, and `stable_ids.content_hash`
-   already exists for exactly this shape of question.
+   So: a whole-manuscript pass on a long novel is not a sitting, it is a job. The
+   returned proposals persist under `.storythread/` and the writer works through
+   them over as many sessions as it takes. There is exactly one current extraction
+   at a time and no history -- a new run replaces it entirely.
 
-   The wording follows R8.1's lesson too: name the chapters rather than counting
-   them, and say what a narrowed re-run would leave out.
+   (RECORDED WRONG FIRST TIME, and corrected here rather than quietly. I read
+   "stale like the Weave" as the Weave's staleness DETECTION -- hashing evidence to
+   flag a proposal whose source text moved -- and wrote a per-chapter-hash mechanism
+   for it. That was not what was asked. It is also unbuildable alongside decision 4:
+   with no evidence carried there is nothing to hash. The real answer is simpler and
+   needs none of that machinery.)
+
+   TWO OBLIGATIONS FOLLOW, and the first is not optional:
+
+   - **A new run must not silently discard unreviewed proposals.** Overwriting is
+     the writer's stated intent, but those proposals were paid for in tokens, and
+     this repo's rule is that what the writer paid for is never re-bought. So a run
+     started while the previous one still holds unreviewed items says how many will
+     be lost, and asks. Same shape as the close guard (R11.5) and for the same
+     reason: the destructive act is fine, doing it without saying so is not.
+   - **The manuscript may change under a long review, and nothing will flag it.**
+     That is the direct consequence of one-run-until-superseded, and it is the
+     writer's choice rather than an oversight -- so the screen should say when the
+     run was made, and leave re-running to them. Recorded here so a future session
+     does not "fix" it by adding staleness detection nobody asked for.
 
 9. **A new entry arrives BASE-LEVEL, not fully built.** `[Add to Character]`
    creates what Quick Entry creates -- a name, a kind, one starter line -- and the
