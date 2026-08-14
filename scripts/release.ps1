@@ -118,7 +118,7 @@ OK "app/src-tauri/Cargo.toml"
 # anything. version.py is the definition the code imports; pyproject carries a
 # copy because packaging metadata cannot import Python, and
 # backend/tests/test_version.py fails the build if the two disagree.
-$backendVersionPath = Join-Path $repoRoot "backendppersion.py"
+$backendVersionPath = Join-Path $repoRoot "backend\app\version.py"
 $backendVersion = Get-Content $backendVersionPath -Raw
 $backendVersion = $backendVersion -replace '(?m)^__version__\s*=\s*".*"$', "__version__ = `"$Version`""
 [System.IO.File]::WriteAllText($backendVersionPath, $backendVersion, $noBomUtf8)
