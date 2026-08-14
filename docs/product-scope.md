@@ -30,7 +30,9 @@
 - One chapter open at a time
 - Manual save only (no autosave)
 - Session-only undo and redo; no archival draft history for prose
-- Explicit context attachment (the writer attaches profiles, summaries, etc.; AI never has implicit project access)
+- **Explicitly inspectable and controllable context.** AI may automatically receive story context relevant to the current anchor, but the writer must be able to inspect what will be sent, remove individual Threads, exclude categories, and disable automatic Weave context entirely. **No context is transmitted until the writer initiates an AI action.**
+  - This REPLACES the earlier rule ("explicit context attachment; AI never has implicit project access"), which the Weave makes untrue: the app now assembles a brief on the writer's behalf. What is non-negotiable is not that the writer assembles it, but that they can see it, cut it, and switch it off. Nothing is sent on typing, on open, or on save.
+  - Enforced in `backend/app/codex/context.py`, where each of the four capabilities is a function argument rather than a promise, and pinned by `backend/tests/test_codex_context.py`.
 - AI output is reviewed by the writer before use; auto-apply is reserved for designated AI-generated fields
 - AI may write directly only to designated fields: `ai_profile_summary`, `ai_section_summary`, `chapter_summary`, `scene_summary`
 - No em dash or en dash characters in any AI output, ever — enforced at the prompt, sanitizer, and style guide layers. `--` (double hyphen) is the approved substitute; conversational chat replies additionally fold `--` into commas, while drafted prose keeps it

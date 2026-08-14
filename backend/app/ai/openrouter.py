@@ -21,7 +21,7 @@ import logging
 import time
 import httpx
 from app.ai.providers import ProviderConfig, OPENROUTER
-from app.ai.sanitizer import sanitize_dict, contains_em_dash
+from app.ai.sanitizer import sanitize_dict, contains_em_dash, strip_think_blocks
 
 # Kept as an alias for any code/tests that still import the old constant.
 # The live value used per request is provider.base_url.
@@ -101,6 +101,12 @@ async def list_models(api_key: str, provider: ProviderConfig = OPENROUTER) -> li
     gets the detailed mapping below. Every other provider returns some
     variation of a bare model list, handled by _normalize_generic_models().
     """
+    # Ollama's native API does not implement /models at all -- its catalog
+    # lives at /api/tags in a different shape. Everything else, local or
+    # hosted, speaks the OpenAI-compatible /models.
+    if provider.model_list_style == "ollama_tags":
+        return _mark_free_if_local(await _list_ollama_models(provider), provider)
+
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         response = await client.get(
             f"{provider.base_url}/models",
@@ -110,7 +116,7 @@ async def list_models(api_key: str, provider: ProviderConfig = OPENROUTER) -> li
         data = response.json()
 
     if provider.key != "openrouter":
-        return _normalize_generic_models(data)
+        return _mark_free_if_local(_normalize_generic_models(data), provider)
 
     models = []
     for m in data.get("data", []):
@@ -160,6 +166,47 @@ async def list_models(api_key: str, provider: ProviderConfig = OPENROUTER) -> li
     # Sort by name for a clean UI list
     models.sort(key=lambda m: m["name"].lower())
     return models
+
+
+def _mark_free_if_local(models: list[dict], provider: ProviderConfig) -> list[dict]:
+    """
+    A model running on the writer's own machine costs nothing per token.
+
+    _normalize_generic_models deliberately leaves is_free False, because for
+    a hosted provider "no pricing data" is not the same as free and saying
+    otherwise would mislead. For a local runtime it IS the same: there is no
+    account and nothing to bill. Marking it here keeps that judgement in one
+    obvious place rather than teaching the generic normalizer about it.
+    """
+    if not provider.endpoint_from_settings:
+        return models
+    for model in models:
+        model["is_free"] = True
+    return models
+
+
+async def _list_ollama_models(provider: ProviderConfig) -> list[dict]:
+    """
+    Fetch a model list from Ollama's own API instead of /models.
+
+    Ollama answers at /api/tags with {"models": [{"name", "model", ...}]}.
+    That shape is already covered by _normalize_generic_models below (it
+    looks under "models" and accepts an id under "name" or "model"), so the
+    only thing that actually differs is the URL -- which is exactly why the
+    provider carries model_list_style rather than this being special-cased
+    at the call site.
+
+    No API key and no auth header: it is the writer's own machine. The
+    short timeout is deliberate too -- a local server either answers at once
+    or is not running, and a long wait would read as the app hanging.
+    """
+    from app.ai.local_endpoint import LOCAL_LIST_TIMEOUT
+
+    async with httpx.AsyncClient(timeout=LOCAL_LIST_TIMEOUT) as client:
+        response = await client.get(f"{provider.base_url}/api/tags")
+        response.raise_for_status()
+        data = response.json()
+    return _normalize_generic_models(data)
 
 
 def _normalize_generic_models(data) -> list[dict]:
@@ -319,6 +366,13 @@ async def run_completion(
     # Extract the text content from the first choice
     raw_content = data["choices"][0]["message"]["content"]
 
+    # Local reasoning models put their working out in the reply body. Strip
+    # it FIRST: a <think> block ahead of the JSON would make json.loads()
+    # fail below, and the reply would be misreported as "not in the
+    # expected format" when the model actually answered correctly.
+    if provider.strip_think_blocks:
+        raw_content = strip_think_blocks(raw_content)
+
     # Check for em dashes BEFORE sanitizing (for the had_em_dashes flag)
     had_em_dashes = contains_em_dash(raw_content)
 
@@ -450,6 +504,13 @@ async def run_chat(
 
     message = data["choices"][0]["message"]
     raw_reply = message["content"]
+
+    # Strip inline reasoning traces before anything else looks at the text.
+    # This runs ahead of the sanitizer so the writer never sees the model
+    # thinking out loud, and ahead of the caller storing the reply in the
+    # conversation history, where it would be fed back on every later turn.
+    if provider.strip_think_blocks:
+        raw_reply = strip_think_blocks(raw_reply)
 
     # Apply the sanitizer chosen by the caller. Prose drafting keeps ' -- ';
     # everything else folds it to a comma (see sanitize_mode docstring above).

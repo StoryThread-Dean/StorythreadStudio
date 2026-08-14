@@ -16,6 +16,8 @@
 import json
 import logging
 import os
+
+from app.utils.atomic import replace_atomic
 import shutil
 from pathlib import Path
 
@@ -99,6 +101,24 @@ DEFAULT_SETTINGS: dict = {
     # e.g. {"anthropic/claude-3.5-sonnet": ["general", "mature"]}
     # Models not listed default to ["general"] only.
     "model_content_modes": {},
+    # model_roles: one model per KIND of job. Maps a role id from
+    # ai/roles.py ROLES to {"provider": "...", "model": "..."} -- a PAIR,
+    # because different roles may live on different services (critique on
+    # one, prose on a local model). An empty dict means every role falls
+    # back to default_model above, which is exactly how the app behaved
+    # before roles existed. See ai/roles.resolve_role_model.
+    "model_roles":        {},
+    # local_base_url: the address of a model running on the writer's own
+    # machine (Ollama, LM Studio, llama.cpp). Deliberately restricted to
+    # loopback / private / .local addresses -- see ai/local_endpoint.py for
+    # why "Local model" must not become a way to add arbitrary remote
+    # providers. Empty means no local model is configured.
+    "local_base_url":     "",
+    # local_api_style: "openai" (the OpenAI-compatible API, which LM Studio
+    # and llama.cpp speak and Ollama also offers) or "ollama" (Ollama's own
+    # native API). Chosen explicitly by the writer, never sniffed -- see
+    # ai/local_endpoint.LOCAL_API_STYLES.
+    "local_api_style":    "openai",
     # vault_root: parent folder where new projects and series get placed.
     # The default keeps the writer's library inside their Documents folder
     # so it lands somewhere familiar, gets backed up by their existing
@@ -242,7 +262,14 @@ def save_settings(settings: dict) -> None:
             log.warning("Could not refresh settings.json.bak: %s", exc)
 
     # 3. Atomic swap: tmp becomes the new settings.json.
-    os.replace(SETTINGS_TMP, SETTINGS_FILE)
+    # RETRIED, NOT BARE. On Windows a rename fails while a virus scanner, the
+    # search indexer, a cloud-sync client or the writer's own editor holds the
+    # file open for a moment -- so a save fails at random with no cause the
+    # writer could diagnose. R2.5b saw this happen for real (WinError 5) and
+    # fixed the Weave's writes; these are the same one-line change in code the
+    # recovery does not own, which is why they were recorded rather than swept
+    # up. replace_atomic retries for ~150ms and then raises honestly.
+    replace_atomic(SETTINGS_TMP, SETTINGS_FILE)
 
 
 def mask_key(key: str) -> str:

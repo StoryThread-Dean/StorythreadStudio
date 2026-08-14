@@ -22,7 +22,9 @@
 // preserving the original word's capitalization style.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { isMisspelled, suggestCorrections } from "../../utils/spellcheck";
+import { Pin } from "lucide-react";
+import { isMisspelled, suggestCorrections } from "../../utils/spellcheck";
+import { Explain } from "../../components/learn/Explain";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,12 @@ interface ThesaurusPopoverProps {
   to:        number;   // CodeMirror document position (end of word)
   x:         number;   // Mouse X in viewport px
   y:         number;   // Mouse Y in viewport px
+  /** A multi-word selection, when there is one: "Kithicor Forest". */
+  phrase?:   string;
+  /** The sentence it sits in, kept with a mark as a reminder. */
+  sentence?: string;
+  /** Enables the Weaving action. Absent on surfaces with no project. */
+  projectPath?: string;
   onReplace: (word: string, from: number, to: number) => void;
   onClose:   () => void;
 }
@@ -64,8 +72,33 @@ function matchCase(original: string, replacement: string): string {
 // ── ThesaurusPopover ──────────────────────────────────────────────────────────
 
 export function ThesaurusPopover({
-  word, from, to, x, y, onReplace, onClose,
+  word, from, to, x, y, phrase, sentence, projectPath, onReplace, onClose,
 }: ThesaurusPopoverProps) {
+  // What Weaving would mark: the selection when there is one, otherwise
+  // the word under the cursor. A writer selecting "Kithicor Forest"
+  // means the forest, not the word "Forest".
+  const markable = (phrase || word).trim();
+  const [marked, setMarked] = useState<"" | "saving" | "done" | "already" | "failed">("");
+
+  async function mark() {
+    if (!projectPath || !markable) return;
+    setMarked("saving");
+    try {
+      const response = await fetch("http://localhost:8000/api/codex/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_path: projectPath, phrase: markable,
+                               where: sentence ?? "" }),
+      });
+      if (!response.ok) throw new Error();
+      const body = await response.json();
+      // "Already marked" is a different answer from "marked", and saying
+      // so stops the writer wondering whether the click registered.
+      setMarked(body.pinned ? "done" : "already");
+    } catch {
+      setMarked("failed");
+    }
+  }
   const ref                             = useRef<HTMLDivElement>(null);
   const [synonyms, setSynonyms]         = useState<string[]>([]);
   const [related,  setRelated]          = useState<string[]>([]);
@@ -189,6 +222,48 @@ export function ThesaurusPopover({
         />
       )}
 
+      {/* ── Weaving ────────────────────────────────────────────────────────────
+          Weaving will miss things. This is how the writer says "this one
+          matters" about a word it never raised.
+
+          It MARKS rather than connects, deliberately. A form asking for a
+          relation and two endpoints has two failure modes with nothing to
+          catch them -- the wrong relation gets recorded, or there is
+          nothing to connect to yet and the form cannot be finished. A mark
+          has neither: nothing to get wrong, and it can wait.
+
+          Nothing is written into the manuscript. The mark goes into the
+          Weave's own answers file. */}
+      {projectPath && markable && (
+        <div className="flex flex-col border-b border-border">
+          <div className="flex items-baseline gap-1.5 px-3 py-2 border-b border-border shrink-0">
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+              Weaving
+            </span>
+            <span className="font-medium text-violet-300 truncate">{markable}</span>
+          </div>
+          {marked === "" || marked === "saving" ? (
+            <button
+              type="button"
+              onClick={() => void mark()}
+              disabled={marked === "saving"}
+              className="flex items-center gap-2 px-3 py-2 text-left text-xs text-text-primary hover:bg-bg-surface disabled:opacity-50"
+            >
+              <Pin size={12} className="text-violet-300" />
+              Mark for Weaving
+            </button>
+          ) : (
+            <p className="px-3 py-2 text-[11px] text-text-muted">
+              {marked === "done"
+                ? "Marked. Weaving will ask you about it -- nothing was changed in your text."
+                : marked === "already"
+                  ? "Already marked. Weaving has it waiting for you."
+                  : "That could not be marked. Your text is untouched."}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ── Thesaurus section ────────────────────────────────────────────────
           Always present so the writer can reach synonyms even for a misspelled
           word. The header repeats the word for the same reason the spellcheck
@@ -199,6 +274,10 @@ export function ThesaurusPopover({
             Thesaurus
           </span>
           <span className="font-medium text-accent truncate">{word}</span>
+          {/* Why this exists rather than the operating system's own menu, which
+              is the first thing a writer wonders when their usual right-click
+              stops appearing. */}
+          <Explain of="thesaurus.what" />
         </div>
 
         {loading ? (

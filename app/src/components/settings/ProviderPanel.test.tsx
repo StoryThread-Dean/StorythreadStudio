@@ -109,9 +109,27 @@ describe("PROVIDER_META registry", () => {
     expect(providerMetaById("openrouter").supportsCaching).toBe(true);
     expect(providerMetaById("nanogpt").supportsTiers).toBe(false);
     expect(providerMetaById("nanogpt").supportsCaching).toBe(false);
+    expect(providerMetaById("local").supportsTiers).toBe(false);
+    expect(providerMetaById("local").supportsCaching).toBe(false);
   });
 
   it("providerMetaById falls back to the first (default) provider", () => {
     expect(providerMetaById("unknown").id).toBe("openrouter");
+  });
+
+  it("the local entry asks for no key, so its panel shows no key field", () => {
+    // requiresKey drives whether the field renders at all. A local runtime
+    // has nothing to authenticate, and an empty key box would read as a
+    // missing step the writer has to solve.
+    expect(providerMetaById("local").requiresKey).toBe(false);
+  });
+
+  it("the local entry states the restriction that makes it 'local'", () => {
+    // Every local runtime speaks the same API as a hosted one, so without
+    // this rule "Local model" would quietly become a way to connect any
+    // remote service. The backend enforces it; the panel has to say it.
+    const note = providerMetaById("local").note ?? "";
+    expect(note).toMatch(/own machine/i);
+    expect(note).toMatch(/local network/i);
   });
 });

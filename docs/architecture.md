@@ -47,10 +47,61 @@ A third thing that is *not* a process: `espeak-ng` ships inside the worker's env
 Two storage systems work together:
 
 - **Markdown files** are the permanent source of truth. Chapters, profiles, notes, and summaries live as `.md` files in the project folder. They are human-readable and can be version-controlled or backed up as plain text.
-- **SQLite** (`<project>/.storythread/app.db`) is a fast local cache. It stores parsed profile data, app settings, and the model registry cache. The cache can be rebuilt from Markdown if it is corrupted or deleted.
+- **SQLite** (`<project>/.storythread/app.db`) is a fast local cache. It holds the writing-progress log, the model registry cache, and the Weave's graph index (Threads, Ties -- including each Tie's reason line -- facts and mentions). Every row in it is derivable from Markdown, and deleting the file rebuilds it. It does **not** hold app settings -- those live in `~/.storythread/settings.json`.
+- **Weaving answers** (`<project>/.storythread/weave/`) are the one thing under `.storythread/` that is **not** a cache. `answers.json` is the book's permanent record -- what was applied, what was retired as "not a connection", which stop kinds are muted, which John a name meant. `runs/<run-id>.json` beside it logs one sitting: what was staged, what was deferred. The split exists because a session is the wrong scope for "permanently": keeping retirements in the run file meant every new walkthrough handed the writer back every question they had already refused. They record what the writer answered -- applied, deferred, retired, muted -- which is not derivable from anything, and deleting `app.db` must never lose it. Written atomically (tmp + `os.replace`), the same pattern `settings_store` and `structure_store` use.
+
+### The Weave's index, and why it can never serve stale data
+
+"An index failure must never block a save" is right on its own and creates a worse
+bug on its own: the Markdown write succeeds, the index write fails, and the graph
+then answers questions with stale information, confidently. So any write that
+fails to update the index sets `codex_meta.dirty`, and **no read is served while
+that flag is set** -- the next reader rebuilds first. A second mechanism catches
+what no flag could: `indexed_source_revision` fingerprints the `codex/` folder, so
+an out-of-band edit (the writer opening a Thread in another editor, or restoring a
+backup) is detected on the next read whatever the flag says.
 - **SQLite, app-level** (`~/.storythread/names.db`) holds the Name Generator's pools (20 cultures x 5 eras of given names + surnames), seeded at backend startup from JSON shipped inside the app (`backend/app/data/names/`, bundled into the frozen sidecar via `backend.spec` datas). A version stamp triggers reseeding on app updates; deleting the file rebuilds it. Served by `GET /api/names/*`.
 
 Markdown is the filing cabinet; SQLite is the index card on the desk.
+
+### Moving a project between computers
+
+**A project folder is the whole project. Copying it moves everything, exactly.**
+Upload the folder to a drive on one computer, download it on another, and the
+book arrives identical -- entries, connections with their reason lines, facts
+still anchored to the right chapters, the map's layout, and the Weaving sessions
+including what was retired, muted and put off. Open it and carry on.
+
+This works because **no absolute path is ever stored in project data**. Paths are
+arguments passed in per request, never written into a file or a row, so nothing
+in a project knows or cares which machine wrote it. The one exception is
+`project.json`'s `root_path`, which is stamped at creation and **overwritten from
+the folder actually opened**, so the stale copy is never trusted.
+
+Two consequences worth stating, because both are easy to assume backwards:
+
+- **`app.db` can be deleted freely.** It is a cache and rebuilds. A transfer that
+  drops it, or corrupts it, costs nothing.
+- **`.storythread/weave/` cannot.** It is the one thing under `.storythread/`
+  that is not derivable (see above), so a transfer that filters hidden folders --
+  some zip tools, sync clients with dotfile rules, a git repo -- keeps the entire
+  world and loses the Weaving ANSWERS. It loses them quietly, since a walk asking
+  everything again is indistinguishable from never having answered. Copying the
+  project folder carries the dotfolder; selective transfers are the ones to watch.
+
+**The exports deliberately do not carry Weaving answers, and that is correct.**
+`POST /api/codex/export/weave` and the snapshot write the WORLD in three shapes
+for three audiences -- Markdown for a person, JSON for a program, CSV for a
+spreadsheet. Answers are not world; they are a record of what this writer told
+this app to stop asking, which is meaningless to any program that is not
+Storythread Studio. An export is for leaving the app. **Moving the folder is how
+you move the app's own state**, and it is lossless.
+
+Pinned by `backend/tests/test_project_portability.py`, whose root-cause test
+fails the build if any file in a moved project still contains the old machine's
+path. `tests/manual-smoke.md` scenario 24 covers the human half.
+
+
 
 ## Project folder layout
 
@@ -82,13 +133,53 @@ MyNovel/
     scenes/<chapter-stem>/         per-scene summaries (+ optional ## Beats section)
       scene-01.md
       scene-02.md
+  codex/                           the Weave: one linked, time-aware world model
+    types.json                     which kinds of thing this world has, and which
+                                   connections are meaningful between them
+    characters/  relationships/  locations/  lore/
+    factions/  religions/  governments/  deities/  creatures/  cultures/
+    objects/  concepts/  events/
   exports/                         full-manuscript and dated snapshots
   .storythread/                    app cache; safe to delete and rebuild
     app.db
     ui-state.json                  per-book remembered UI state (sidebar collapse etc.)
+    weave/runs/<run-id>.json       Weaving sessions -- NOT a cache, see below
     cache/
     logs/
 ```
+
+### The Weave (`codex/`)
+
+A Thread is one entry -- a character, a place, a faction, an idea -- and it is an
+ordinary Markdown file, so copying the project folder takes the whole world model
+with it. What makes it more than a folder of profiles is that a Thread carries a
+**Run**: a list of facts, each anchored to a point in the story, so the app can
+answer "who was she in chapter seven?" rather than describing one unchanging
+person from page one to the last page.
+
+Three switches sit on every fact and every Tie, and they answer different
+questions:
+
+| Switch | Question |
+|---|---|
+| `frame` | Whose truth is this? `truth`, or an entity id for something a character believes |
+| `revealed_at` | When does the READER learn it? Anything later than the point being written is a spoiler |
+| `ai_scope` | May AI see it at all? `never` / `on-request` / `always` |
+
+Frames are stored as **entity ids, never names**, so renaming a character cannot
+invalidate the epistemic state of the book. The trailing `# Garrick Vale` comment
+beside an id is regenerated on save and carries no authority.
+
+**Anchors** are `c-<chapter id>` or `c-<chapter id>/s-<scene id>`. Ordinals are
+computed on demand and never stored -- the ordering authority stays
+`structure_store.ordered_chapter_filenames()`, so inserting a prologue does not
+silently move every fact in the book one chapter later.
+
+**`types.json` is writer-owned data, not a cache.** An invalid one is reported and
+left byte-for-byte alone, and the Weave opens read-only until it is fixed. This is
+the deliberate OPPOSITE of `structure.json`, which is treated as absent when
+corrupt -- and both are right for their file, because structure.json is derivable
+from the folder and types.json is not.
 
 ### Audiobook workspace layout
 
@@ -254,7 +345,7 @@ POST   /arc/save
 
 ### AI — `/api/ai`
 ```
-GET    /models
+GET    /models?provider=       (provider optional; defaults to the active one)
 POST   /editor-chat            (Writing Companion: chat / Draft / Enhance)
 POST   /editor-pass            (Smart Advisor category passes)
 POST   /revise-suggestion
@@ -274,8 +365,44 @@ POST   /generate-scene-summary
 ```
 GET    /
 PUT    /
+GET    /roles                  (the role catalog the Settings screen renders)
 POST   /test-connection
 ```
+
+### Model resolution — which model runs a request
+
+Every AI endpoint goes through one seam, `_resolve_model_and_key(role, model_id_override)`
+in `backend/app/routers/ai.py`, and every call site declares **which kind of job**
+it is doing. The roles and the resolver live in `backend/app/ai/roles.py`.
+
+Precedence, highest first:
+
+1. `project.json` → `model_roles[role]` (supported by the resolver; no UI yet)
+2. settings → `model_roles[role]`
+3. `project.default_model` → settings `default_model` → `provider.fallback_model`
+
+A role assignment is `{provider, model}` rather than a bare model id, because
+different roles may live on different services. That makes the provider a
+**per-request** resolution rather than a global one -- the single structural
+change from the pre-roles design.
+
+`resolve_role_model()` returns one flat, fully-populated payload (the same shape
+whatever the source), modelled on the audiobook's `resolve_narration_selection()`
+for the same stated reason: several surfaces ask this question, and duplicating
+the precedence in TypeScript would let them disagree.
+
+The distinction the payload exists to carry:
+
+- an **unconfigured** role walks the chain above quietly and reports a
+  `fallback_note` saying which Default Model stood in;
+- a **configured** role that cannot run returns `usable: false` with a reason and
+  **is never substituted**. Callers refuse rather than quietly using a different
+  model than the writer chose.
+
+The local provider's address is not in its `ProviderConfig` (it belongs to the
+writer's machine); `base_url_for()` resolves it from settings at request time,
+and `ai/local_endpoint.py` restricts it to loopback / private / `.local`
+destinations.
 
 ### Progress — `/api/progress`
 ```
@@ -289,6 +416,58 @@ POST   /find
 POST   /replace                (snapshots touched files first)
 POST   /restore                (undo from the most recent snapshot)
 ```
+
+### Codex (the Weave) — `/api/codex`
+
+Writers see "the Weave"; the code says "codex". Every refusal on this router
+travels as `{code, message, detail}` with a code from a closed set
+(`app/codex/errors.py`), so the frontend branches on a stable identifier rather
+than on message text.
+
+```
+The world
+GET    /types                  the type registry + Tie vocabulary (validated, never repaired)
+GET    /sections               the sidebar tree: what to show, what can be added
+POST   /type  /type/show  /note        add a kind, reveal a shipped kind, add a note
+PATCH  /section                rename a kind or a note (entries move with it)
+DELETE /section                remove one (a kind holding entries is REFUSED with a count)
+GET    /health                 index freshness, migration state, registry validity
+POST   /reindex
+
+Threads and Ties
+GET    /list  /entity  /ties
+POST   /entity  /thread/new    save; create an empty Thread from a name
+DELETE /entity
+POST   /tie                    DELETE /tie
+POST   /fact                   PATCH /fact   DELETE /fact
+
+Time
+GET    /anchors                chapters + scenes with ids, in reading order
+GET    /resolve                a Thread AS OF an anchor
+GET    /graph                  nodes + edges at an anchor, spoiler-aware
+
+Weaving
+POST   /scan                   the free deterministic pass -- no role, no model, no cost
+POST   /context                assembles the brief and RETURNS it; sends nothing
+GET    /runs   POST /run   GET /run   POST /run/answer
+
+Migration
+POST   /migrate                dry_run DEFAULTS TO TRUE
+POST   /migrate/restore
+```
+
+Two properties worth knowing before reading the code:
+
+- **`/scan` is free and always runs first.** It compares the manuscript against
+  the Weave using only arithmetic, so the walkthrough can quote a real count
+  before offering anything that spends. Its findings are **never stored** -- they
+  are re-derived from source and destination state every run, so a Thread that
+  gets its Overview filled in stops being Frayed because the condition ended, not
+  because a record says it was handled.
+- **`/context` transmits nothing.** It builds the brief and hands it back so the
+  writer can inspect it, remove Threads from it, exclude categories, or turn it
+  off entirely. A writer-initiated action does the sending, later and elsewhere.
+  See the context rule in `docs/product-scope.md`.
 
 ### Export — `/api/export`
 ```
@@ -361,7 +540,8 @@ Adding a new browser-style runtime requires updating this allowlist.
 | User-authored prose, profiles, notes | Markdown files in the project folder |
 | Generated AI summaries, examples | Designated Markdown fields only |
 | App settings (API key, model picks, allowlists) | `~/.storythread/settings.json` |
-| Parsed profile cache, model registry | Per-project `.storythread/app.db` |
+| Weave graph index, progress log, model registry | Per-project `.storythread/app.db` (rebuildable) |
+| Weaving answers (applied / deferred / retired / muted) | `.storythread/weave/runs/*.json` -- NOT rebuildable, never in app.db |
 | Project state (current chapter, scroll, etc.) | In-memory only; no autosave |
 
 ## AI write boundary

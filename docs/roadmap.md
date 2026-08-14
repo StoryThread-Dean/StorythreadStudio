@@ -10,7 +10,606 @@ For shipped releases see [`../CHANGELOG.md`](../CHANGELOG.md).
 
 Committed work for the near-term roadmap.
 
-### Audiobook Converter -- the v1.1.0 feature
+### The Weave -- the v2.0.0 feature
+
+One linked, time-aware world model, replacing the four hardcoded profile folders.
+What is built so far is described in [`features.md`](features.md) and
+[`architecture.md`](architecture.md).
+
+Tier 1, judged by the three clauses: a new major surface (the map), changed AI
+context behaviour across every existing feature, and a one-time migration of
+source-of-truth files. The Audiobook Converter is the calibration point -- a
+comparable size, shipped as tier 2 -- but it ADDED a workspace without touching
+existing data or existing behaviour, and that difference in kind is what makes
+this one tier 1.
+
+Delivery is one long-lived branch with three milestones, merged to `main` as a
+single release. Nothing ships piecemeal, because a writer who migrates halfway
+through cannot easily go back.
+
+| Milestone | Contents | State |
+|---|---|---|
+| M1 | Data layer, `types.json`, anchors, the graph index, migration | built |
+| M2 | The Weave map, the anchor scrubber, the list view | built |
+| M3 | Weaving: the deterministic scan, the findings ledger, context assembly, the walkthrough, Unwoven | built |
+
+**Still open in M3:** the AI passes (Untied proposals, semantic Snags, expanding
+an Unwoven answer).
+
+The assembled brief is now wired into the **Writing Companion**: a world
+context bar under the attachments, with inspection, per-Thread removal,
+per-category exclusion and an off switch, all remembered per book. The amended
+context rule is exercised in the running app for that one surface. Extending it
+to the Smart Advisor and the other AI tools is the follow-on -- each needs its
+own inspect control before it may receive context automatically, because the
+rule is about what the writer can SEE, not about where the plumbing reaches.
+
+#### Scope after the 2026-08-11 spec audit
+
+A three-pass audit of all 806 lines of `docs/weave-spec.md` against the build
+found the programme substantially off its own specification -- because the spec
+had never been in the repository, so nothing was ever compared to it. Findings:
+`docs/weave-spec-gaps.md`. Repair plan, 107 tasks: `docs/weave-recovery-plan.md`.
+
+**In v2.0.0** (recovery-plan phases 1-6, 8, 10): undo the contradictions
+introduced while the spec was unreferenced; give characters, relationships,
+locations and lore a Run editor so the programme's own opening example can
+actually be recorded; finish the migration (chips, exports, search); Weave
+export and the portability bundle; read notes and the outline as sources, not
+only as corroboration; make Unwoven's branch questions reachable; surface stale
+findings; release hygiene.
+
+**Deferred to v2.1.0:**
+
+- **Scene identity.** `manuscript/scenes.json` is read and never written, so
+  every anchor is chapter-level. Chapter granularity is genuinely useful and no
+  writer has asked for finer, so minting scene ids, LCS re-matching on save and
+  tombstoning move out. Recovery-plan phase 7.
+- **The five AI passes** -- `propose-threads`, `propose-facts`, `propose-ties`,
+  `check-snags`, `expand-unwoven`. None exist; the deterministic half that the
+  spec says should run first is what shipped, and it works. v2.0.0 ships a
+  deterministic Weave and SAYS SO plainly rather than implying otherwise.
+  Recovery-plan phase 9.
+  - **One carve-out to decide before release:** knowledge violation (a
+    character acting on what they cannot yet know) was deferred into
+    `check-snags`, and the spec calls it "the reason the frame system exists".
+    Shipping frames without it is defensible only if the product does not claim
+    the check exists.
+
+Two more, surfaced by the 2026-08-11 head-to-tail sweep and stated in
+`features.md` as not-yet-behaviour so the docs stay honest:
+
+- **Chapter-scoped Weave the Chapters.** The pass reads the whole book; the
+  design ("run it from chapter eight and the app already knows when, so `at`
+  is recorded for free") needs the panel to send `chapter_ids`, which the
+  backend already accepts and honours.
+- **Unwoven branch questions.** The world-rules corpus declares follow-ups at
+  depths 2-3 ("what stops every heir being murdered in childhood?"), and a
+  depth check pins every scan to depth 1, so no branch has ever been asked.
+  Needs a decision on pacing (a branch per answer risks eleven questions per
+  sitting) before the check is lifted.
+
+The migration UI is now built: the Weave screen runs the dry run on open,
+itemises it folder by folder, names the backup destination before the button,
+and requires a second click that repeats the count and the destination. An
+interrupted run offers resume or restore rather than guessing.
+
+#### Pinning a connection by hand -- BUILT
+
+Weaving will miss things, so the writer needs a way to say "this matters"
+about a word the scan never raised. Requested from live testing, with the
+right instinct already in it: *"just tagging it for potential connection
+might be enough for the walkthrough to then safely pick it up from there."*
+
+That instinct is the design. **The action marks, it does not connect.**
+
+| Problem with connecting directly | Why marking avoids it |
+|---|---|
+| The writer picks the wrong relation or direction | Nothing is recorded except "look at this", so there is nothing to get wrong |
+| There is nothing to connect it to yet | A mark can wait indefinitely; a half-made Tie cannot |
+| It needs the Tie editor, which does not exist | A mark needs no editor at all |
+
+Shape: select a word or phrase (`Kithicor`, `Kithicor Forest`), right-click,
+and under a **Weaving** group choose **Mark for Weaving**. The existing
+context-menu items (thesaurus and the rest) stay exactly where they are. The
+same action works in the manuscript, notes, and entry fields, because the
+writer should not have to remember which surface they are on.
+
+Two rules it must keep:
+
+- **Nothing is written into the manuscript.** No `[[markup]]` in prose -- that
+  is a locked product rule. The mark is stored out of band in
+  `.storythread/weave/answers.json` beside `retired`, as a PHRASE rather than
+  an offset, so it survives the text moving. It is writer input, not derivable
+  from the book, which is exactly what that file is for.
+- **It becomes a stop, not an entry.** The scan emits it like any other stop,
+  so it inherits everything already built: the evidence quote, "why am I
+  seeing this?", the four ways to answer, and the fact that marking something
+  that later gets an entry stops being raised on its own.
+
+Writer-facing name: **Pinned**, with a pin icon. Pinning fabric before you
+stitch it is the same idea in the same vocabulary -- it holds a piece in place
+until the real join is made.
+
+One thing that fell out of building it: a pin is the only stop kind that is
+raised until the writer ANSWERS it rather than until a condition ends. Every
+other stop exists because something in the book is true; this one exists
+because the writer pointed at something. No rule can know when a hand-made
+mark is dealt with, so dropping it on a rule would lose the one thing in the
+scan that was never derivable.
+
+#### The map -- open items from live testing
+
+Right idea, wrong execution so far. Two are fixed; three are not.
+
+**Fixed.** Dragging a Thread jumped away from the cursor and then trailed it,
+which was two bugs: no grip offset was recorded on mouse-down (so the centre
+snapped to the cursor), and the cursor was mapped across the whole element
+while the drawing is letterboxed inside its own viewBox (a constant offset in
+one direction, exactly as reported).
+
+**Also fixed: a bare dot now means something, and a click binds it.** A dot
+is drawn hollow and dashed when its entry has nothing in it, and filled with
+its kind icon once it does -- so the legend below the map is now a promise the
+map keeps. A single click on a bare dot asks what it is; a click that travels
+more than a few pixels is a drag and opens nothing, which was the reported bug
+(every attempt to reposition a dot also opened something).
+
+**And the word merge is gone, deliberately.** The objection was right: a dot
+for Alexandra Langford disappearing reads as her profile being deleted. What
+actually happens is that a WORD moves -- Alexandra Langford, Alexandra,
+Langford, Lexi, Lexa and Drea all become words she answers to, every mention
+of any of them resolves to her from then on, and the placeholder that was
+standing in for the word stops standing in for anything. The screen says it in
+those terms. An entry with writing in it is REFUSED rather than absorbed.
+
+The label is separate from the name: `display_name` is what the story calls a
+thing, `name` is what it is. Alexandra Langford stays Alexandra Langford while
+the map says Lexa.
+
+#### Connection Types -- the next expansion, deliberately deferred
+
+A connection is currently either plain ("connected to") or one of the named
+relations in `types.json`. The next step, agreed in review, is a small set of
+**types a writer picks from** once a connection exists:
+
+> Family, Friends, Companion, Rival, Enemy, Acquaintance, plus **[Custom]**
+> for the unique ones -- "Summoned by", "Mind connected to".
+
+The order matters and is the whole reason it is deferred. Making a connection
+comes first; saying what KIND of connection it is comes second. A writer knows
+two things belong together long before they want to argue with themselves
+about whether that is a friendship, a bond or ownership, and being made to
+choose in that moment produces either a bad answer or no connection at all.
+
+So the plain connection shipped first, and typing it is an improvement to
+something that already exists rather than a toll gate in front of making it.
+
+Also on this list when it is picked up: a **Connection Type Check**. Some type
+and endpoint combinations will not make sense (a location cannot be somebody's
+Rival), and the writer should be told rather than stopped -- the same
+warn-do-not-refuse stance cardinality already takes.
+
+#### A caution recorded from review, worth keeping
+
+**Do not read a relation out of a proper noun.** "Companions of the Hall" is
+the name the five main characters call themselves; it is not evidence that its
+members are in a "companion of" relation. The Hand and the Foot in Ninja
+Turtles are factions, not body parts. The name is what defines the grouping,
+not the words inside it.
+
+This was an assumption made and corrected during the Tie editor work, and it
+generalises: the writer's manual grouping does the work, and the app takes
+over from there.
+
+**Also built: the scrubber as a timeline.** Act bands over the chapters they
+contain, sized by how much book each act is; a stop on every chapter; and the
+resting chapter's title opened out and word-wrapped while its neighbours
+truncate. That expansion is the cause and effect -- the writer sees the handle
+land ON a chapter rather than inferring it from a colour change elsewhere.
+
+Act grouping comes from the same `structure.json` the sidebar reads. Two
+sources of truth about the shape of a book would eventually disagree, and the
+writer would have no way to tell which was lying.
+
+The drawn track is decoration over a genuine `<input type="range">`, kept
+deliberately: a custom widget would have to reimplement arrow keys, Home and
+End, and the screen-reader role, and the List view being the accessibility
+answer for the map would be undercut by a scrubber that could only be dragged.
+It announces itself as "Chapter 3, Caught in the Rain" rather than as "3".
+
+**Also built: Unspun asks once per thing, not once per name.** Names are
+grouped before anything is asked, so "Lara Croft", "Lara" and "Croft" are one
+question and creating the entry once settles all three.
+
+Worth being precise about the cause, because it was not a wrong guess: the
+app ASKED three times about one thing, and every answer was individually
+reasonable. The fix is upstream of the answer.
+
+Grouping is by word SUBSET rather than substring -- "Cambridge Library" is not
+a run of characters inside "Cambridge Campus Library" and is obviously the
+same place. And a name that fits into TWO groups is left standalone: "John" is
+inside both "John Vale" and "John Thorne", who are two different men, and a
+wrong grouping is invisible once accepted.
+
+Two things fell out of building it. The frequency floor now applies to the
+GROUP, since "Lara Croft" once plus "Lara" twice is one thing mentioned three
+times. And a soft line wrap no longer counts as forcing a capital -- only a
+paragraph break does -- because writers hard-wrap prose and a name was
+invisible whenever the line happened to break in front of it.
+
+**Not built yet:**
+
+**Also built: the Tie editor.** The reported case can now be recorded in full
+-- the Daughters of Pathicus worship the deity Pathicus, are part of the Faith
+of Pathicus, and the Faith worships him too. Reached from a focused entry on
+the map.
+
+Two things had to change for that to be possible. The shipped connection
+vocabulary covered characters and factions and almost nothing else, so a
+faction could not worship a deity at all -- seven relations were added for the
+kinds that had none. And a writer can now NAME a connection themselves, because
+a tool for writing invented worlds cannot ship the complete list of ways things
+in them relate. The checker reads relations from `types.json`, so a named one
+works everywhere with no further change.
+
+Design notes worth keeping:
+
+- **The other end first, then how.** A writer thinks "the Daughters and
+  Pathicus" before they think "worships", and the list of relations depends on
+  the pair anyway.
+- **Only what means something between those two kinds**, read from the
+  registry, so the list is short and every item in it is true.
+- **"Nothing fits" is never a dead end.** It has three answers, all offered:
+  turn the pair around, adopt a shipped relation this world lacks (types.json
+  is the writer's file and is never modified behind their back), or name it.
+- **Read from the end you are standing at.** An incoming "part of" shows as
+  "contains", so the writer never translates a direction in their head.
+- **Cardinality warns, it does not refuse.** Two simultaneous seats of power is
+  usually a mistake and sometimes a disputed throne. The app records what was
+  asked for and says what it noticed.
+
+**The Thread editor is built.** Every shipped kind the Profile Builder does not
+cover -- factions, religions, governments, deities, creatures, cultures,
+objects, concepts, events, languages -- now has somewhere to be written, and
+Weaving routes to it instead of apologising. Sections come from `types.json`,
+so nothing about the shape of an entry is hardcoded. Manual save throughout:
+unsaved work looks unsaved, leaving is confirmed, and a save that would
+overwrite a newer file is refused with the writer's text still in the buffer.
+
+It also edits the Run, which is what Weaving's Unplaced stops send writers
+there to do -- "when" is a list of the writer's own chapters, and "not placed
+yet" is selectable so the state Weaving is complaining about is visible.
+
+**CORRECTED 2026-08-14.** This said a kind the writer invented "has no sections
+of its own ... so an editor would open on nothing to type in", and called that an
+honest dead end. It is no longer true: `add_type` seeds `overview`, `details` and
+`notes` (`backend/app/codex/types_registry.py`), and a custom kind fills in like
+any other -- pinned by a test in `WeavingPanel.test.tsx`. Verified by making one.
+
+What IS still missing is letting the writer CHOOSE a custom kind's sections. They
+get the three above and cannot add a fourth or rename them from the UI, which is a
+smaller and different gap from the one this paragraph described.
+
+Also open before release: the manual-smoke additions for each milestone.
+
+### Profile Extractor -- the v2.0.1 feature, immediately after the Weave
+
+**SCHEDULED 2026-08-14, on the writer's ruling, which overrules an earlier
+recommendation of mine.** I had put this in v2.1.0 with the deferred AI passes on
+the grounds that it is an AI pass and the largest single item on this page. The
+writer disagreed and the disagreement is the correct one:
+
+> "I disagree that this should be build out separately from v2.0.0's initial The
+> Weave release. This is really part in parsol to the original purpose and
+> envisioning of the The Weave. This is really at best, v2.0.1 Addendum add on. I
+> want this built out immediately with The Weave release."
+
+So: **v2.0.0 ships the Weave as it stands; v2.0.1 adds the Profile Extractor,
+straight after.** It is not held behind the rest of Phase 9. The other four AI
+passes (propose-ties, propose-facts, propose-threads, check-snags) and the
+knowledge-violation check stay in v2.1.0 -- this pulls ONE pass forward, not the
+phase.
+
+**WHERE IT LIVES:** `The Weave > Weaving | Profile Extractor`. A sibling of
+Weaving in the Weave's own navigation, not a mode inside the walkthrough.
+
+**AND WEAVING COMES FIRST, deliberately.** The writer's words: "Not part of the
+Weaving as that process needs to be done separately and on its own first prior to
+running this AI powered feature." That is not just sequencing advice, it is what
+makes the feature work: the request carries a snippet of every established entry
+(decision 3), so the entries have to exist before there is anything to build on.
+Run it on an empty world and it proposes a world from scratch with nothing to
+match against -- which is the expensive way to get the noisiest possible result.
+
+The screen therefore has to SAY so, in its own words rather than in a doc: what
+the feature is, when it is the right thing to reach for, a "What's this?", and a
+"Show me how this works" with worked pages. Same obligation every other surface
+in this app carries, and here it is load-bearing -- a writer who runs this first
+will conclude the feature is bad when they have simply run it too early.
+
+**IT ALSO INHERITS A JOB WEAVING CANNOT DO, decided 2026-08-14 from live
+testing.** The writer walked chapters 1 to 5 of a real book, then found chapters 6
+and 7 raised nothing. Five people are in one scene there and Weaving could see
+none of them:
+
+> "All three are not specifically named but described as 'the hulking figure',
+> 'massive man', 'injured man'. Another character is 'the tall man' ... The third
+> man is the Body builder man, 'The big linebacker-shaped silhouette' ... The
+> descriptive elements to them ARE the characters."
+
+This is a real and ordinary way to write. A shadowy figure doing business under a
+description is a character with a role, a presence and, in that scene, a reveal --
+the hulking figure turns out to be the super-villain Altas, and the tall man is
+never named at all yet is plainly the most dangerous person in the room.
+
+**Weaving will never find these, and should not try.** It works by finding
+capitalised names, so "the tall man" is three ordinary words to it. Any rule that
+tried to promote noun phrases into characters would have to decide that "the tall
+man" is a person while "the long hallway" is not, from the same evidence, on every
+noun phrase in a novel. That is a reading, not arithmetic -- the same line R8.4
+drew when it refused to guess that "she thought of her father, alive somewhere
+north" is `father.fate: alive`. The writer reached the same conclusion unprompted
+("This might not be anything the app can detect by itself as its following the
+rules that it enforces") and named the fallback, which is this feature.
+
+So the Extractor proposes **described-but-unnamed characters** alongside named
+ones, with three rules that follow from what it is:
+
+1. **The description is the working name.** An entry called "The tall man", with
+   the description as its evidence. Not a guess at a real name, and never a name
+   invented to fill the field.
+2. **It offers to fold one into an existing entry when the prose reveals them.**
+   "The hulking figure ... revealed to be Altas" is one character with two labels
+   across a book, which is what `display_name` and aliases already exist for. The
+   offer is the writer's to accept; the app does not merge on a hunch.
+3. **An unrevealed one stays unrevealed.** The tall man has no name in the book
+   yet, so the entry has no name either, and that is a finished state rather than
+   an incomplete one. A writer who has not decided must not be nagged into
+   deciding by an app.
+4. **It also picks up the NAMED characters Weaving structurally cannot see.**
+   Found while investigating the above: a name that only ever appears where a
+   capital was required anyway -- at the start of a sentence, or just inside an
+   opening quote -- is invisible to the scan, however often it occurs. `"Duncan,"
+   he said` is the most ordinary way a name reaches a reader. **Ruled 2026-08-14:
+   the scan is left as it is and this feature covers it**, because the safe-looking
+   fix was measured and is not safe (Look, Right, Yes, Sorry, Wait and Meanwhile
+   all pass a "never written in lowercase" test), and because a model reading the
+   prose gets these right for free while it is already reading for point 1.
+   Pinned by five tests in `test_codex_mentions.py`; Weaving now says on screen
+   that this is something it cannot see.
+
+**And the A-then-B shape is the writer's, recorded because it is the design:**
+"That is the two A then B takes of which the Weaving does the first pass at
+creating the initial characters first through the walkthrough, then B is the
+Profile Generator which picks up the details and attaches them in segments to
+which a character/faction/creature/government/lore can be built." Weaving builds
+the framework from what is mechanically knowable; the Extractor reads the prose
+and fills it. Neither does the other's job, and this is the clearest statement of
+why there are two of them.
+
+
+
+The writer's own proposal, recorded here the day it was made so it cannot become
+another decision nothing was comparing the build against. **Not scoped to a
+release yet.** It belongs with the Weave's AI passes (recovery plan Phase 9),
+which are deferred to v2.1.0, and it is the largest single thing on this page.
+
+**The idea.** One interface that reads the manuscript (in parts or whole) with the
+list of ALREADY KNOWN entries attached, and comes back with proposed content for
+each: Overview, physical / personality / motivation / voice traits, Notes. It
+proposes for entries the writer already has AND names the ones it found that they
+do not. Per kind: Characters, Locations, Creatures, Lore, Factions, and ruling
+bodies (the writer's note: "Governments ... is more ruling entities than truly
+restricted to the term government").
+
+**The review surface**, from the writer's sketch. A left rail of kinds and the
+entries under each, ticked as they are dealt with. The body is two columns, the AI
+proposal beside the CURRENT profile, so nothing is judged in the abstract:
+
+```
+| Profile Extractions        "What's this?"  "Show me how to use this" (1/N)
+| v Characters   | - Rosie
+|  - Serena  [x] |  AI proposal            | Current profile        | Actions
+|  - Newton  [x] |  Overview: ...          | Overview: original ... | [Overwrite] [Merge] [Remove]
+|  - Rosie       |  Physical trait 1 ...                            | [Add to profile] [Remove]
+|  - Lou         |  Personality trait 1 ...                         | [Add to profile] [Remove]
+|  - Steel Beam  |  Notes: ...             | Notes: original ...    | [Overwrite] [Merge] [Remove]
+| > Lore         |
+| > Creatures    | Additional profiles found, not in Profiles yet
+| > Factions     |  > Huffington City   [Add to Locations]  [Remove]
+| > Government   |  > Mayor Bloomfield  [Add to Character]  [Remove]
+|                |  v The Null
+|                |    Name: The Null [x]   Aliases: Nullem [x]
+|                |    Overview ... [x]   Physical trait 1 [ ]   Motivation 1 [x]
+|                |                          [Add to Character] [Remove]
+```
+
+**THE PURPOSE, in the writer's own words, and it reframes every decision below:**
+
+> "The true purpose of this is NOT the true accuracy that AI is literally going to
+> build the profile for the writer. Instead, this feature is to give something to
+> the writer for which he will edit / fine-tune / build from and hone so that the
+> actual envision of that character is more accurately represented for future AI
+> requests and Smart Advisor and Draft building processes. Simplify the Profile
+> building process as this can be EXTREMELY time consuming, just as long, if not
+> longer than it takes for other writers to write the entire book itself."
+
+That is a starting point, not an answer. It means speed and editability outrank
+precision, and it means the review surface is the feature -- the pass is only the
+raw material for it.
+
+**THE THREE FORKS, ANSWERED 2026-08-14.**
+
+1. **Unit of a request: WHOLE MANUSCRIPT is the recommended path.** Per chapter is
+   for addenda, fixes and additions afterwards, and it BUNCHES the ticked chapters
+   into one request rather than one request per chapter. The writer's example:
+   a whole-manuscript pass covered chapters 1-8 of an intended 15; later they want
+   9-11 only, excluding the main characters already established, and expecting
+   4 new side characters, 2 new locations, 1 new main villain finally introduced,
+   and 1 character who appeared briefly in chapter 2 and has now returned.
+
+2. **Merge means APPEND, for prose.** If the existing Overview has two paragraphs
+   and the proposal has one, Merge leaves the writer's two and adds the third.
+   Nothing of theirs is rewritten or reordered. (Overwrite and Add remain the
+   other two answers; Merge is the one that must never lose their words.)
+
+3. **Matching: the request CARRIES a snippet of each established entry.** A brief
+   extract of what is already recorded -- the top details of `rosie.md`, a short
+   current description -- goes up with the manuscript, so the pass has something to
+   attach to and builds on it rather than starting over. `build_alias_map` and the
+   ambiguity rule from `mentions.py` remain the binding rule: an ambiguous match
+   never silently binds.
+
+**FOUR MORE DECISIONS, 2026-08-14.**
+
+4. **No evidence carried.** Proposals do not cite chapters or quote source
+   sentences. It is a draft the writer is going to rewrite, so verification
+   machinery would be effort spent on text that is about to be replaced.
+
+   TWO CONSEQUENCES, and they must be built in rather than remembered:
+
+   - The WRITE BOUNDARY becomes the only safeguard, not one of several. With no
+     evidence to check against, nothing may reach a profile without a per-item
+     click. No "apply all", no default-ticked rows -- the same rule `Sweep.tsx`
+     follows, and here it is the whole of the protection.
+   - The screen must SAY it is unchecked. `speaker_analysis` earns trust by
+     showing a dropped count; this pass has nothing to drop, so the honesty
+     obligation moves to the wording: this was derived from the manuscript, it
+     has not been verified against anything, and it is a starting point. That is
+     an `Explain` entry, not a footnote.
+
+5. **Registry-driven: every kind.** Whatever `types.json` holds, including
+   Religions, Deities, Cultures, Objects, Events, Languages and anything the
+   writer invents this afternoon. Costs nothing extra -- the pass reads each
+   kind's sections from the registry exactly as every other screen does, which is
+   what R11.2 collapsing the section tables was for.
+
+6. **A trait can be ADDED or MERGED INTO ONE THE WRITER PICKS.** Both, per the
+   sketch's prose. The case it exists for: the profile already says "Fiercely
+   loyal" and the pass proposes "Loyal to a fault". Add makes two traits; Merge
+   folds the second into a chosen existing one. The picker is required -- merging
+   into a guessed trait is how a writer's own wording gets overwritten.
+
+7. **Exclusions are TICKED, with a smart default.** Before anything is spent, a
+   list of established entries with the fully-written ones pre-ticked as "leave
+   alone", and every tick reversible. Automatic skipping was rejected for a
+   specific reason from the writer's own example: it cannot know that a character
+   who appeared briefly in chapter 2 has returned for the rest of the book, so it
+   would skip exactly the entry they wanted revisited.
+
+**ASSUMED UNLESS CORRECTED** (recorded so a wrong assumption is visible rather
+than buried in code):
+
+- (Proposals persisting was listed here as an assumption and is now DECISION 8,
+  stated by the writer. The reasoning still holds and is worth keeping: a
+  whole-manuscript pass costs real money, and this repo's rule is that what the
+  writer paid for is never re-bought -- `findings.py` keeps answers in a file
+  rather than in the rebuildable cache for exactly that reason.)
+- **Merge appends at the end.** The writer's paragraphs stay in their order and the
+  new one follows. Nothing of theirs is reordered.
+- **Content mode routes as it already does.** A manuscript is the writer's own
+  prose; an explicit book needs a model that permits it, and
+  `_validate_model_content_mode` already decides that. This pass does not get its
+  own rule.
+- **`long_context` finally has a consumer.** The role has been reserved since Model
+  Roles shipped with the note that it "arrives with the Weave's AI passes"; this is
+  that. Its `reserved` flag and note change on the day this ships, and
+  `test_role_call_sites.py` will fail the build if they do not.
+
+**THREE MORE DECISIONS, 2026-08-14.**
+
+8. **ONE RUN, SAVED LOCALLY, REVIEWABLE ACROSS SESSIONS.** The writer's words:
+   "that process is saved locally for processing to which the writer can do all in
+   one go, or if its extremely large, might take multiple sessions. The data
+   remains until a brand new process request is made, to which the previous one is
+   overwritten as the new one supersedes it."
+
+   So: a whole-manuscript pass on a long novel is not a sitting, it is a job. The
+   returned proposals persist under `.storythread/` and the writer works through
+   them over as many sessions as it takes. There is exactly one current extraction
+   at a time and no history -- a new run replaces it entirely.
+
+   (RECORDED WRONG FIRST TIME, and corrected here rather than quietly. I read
+   "stale like the Weave" as the Weave's staleness DETECTION -- hashing evidence to
+   flag a proposal whose source text moved -- and wrote a per-chapter-hash mechanism
+   for it. That was not what was asked. It is also unbuildable alongside decision 4:
+   with no evidence carried there is nothing to hash. The real answer is simpler and
+   needs none of that machinery.)
+
+   TWO OBLIGATIONS FOLLOW, and the first is not optional:
+
+   - **A new run must not silently discard unreviewed proposals.** Overwriting is
+     the writer's stated intent, but those proposals were paid for in tokens, and
+     this repo's rule is that what the writer paid for is never re-bought. So a run
+     started while the previous one still holds unreviewed items says how many will
+     be lost, and asks. Same shape as the close guard (R11.5) and for the same
+     reason: the destructive act is fine, doing it without saying so is not.
+   - **The manuscript may change under a long review, and nothing will flag it.**
+     That is the direct consequence of one-run-until-superseded, and it is the
+     writer's choice rather than an oversight -- so the screen should say when the
+     run was made, and leave re-running to them. Recorded here so a future session
+     does not "fix" it by adding staleness detection nobody asked for.
+
+9. **A new entry arrives BASE-LEVEL, not fully built.** `[Add to Character]`
+   creates what Quick Entry creates -- a name, a kind, one starter line -- and the
+   proposed traits are then added one at a time, each by its own click. Slower than
+   writing the whole proposal in at once, and right for two reasons: it is what the
+   Weave does everywhere else, and with no evidence carried (decision 4) a
+   one-click full profile would be the largest unreviewed write in the app.
+
+   **Characters arrive as SIDE.** The same default and the same reasoning as
+   R2.10a: a name the prose mentions is far more often a shopkeeper than a
+   viewpoint character, and the two mistakes do not cost the same -- a Side page
+   promoted later loses nothing, while a Main page for a walk-on is six empty trait
+   sections asking to be filled in. Promotion already exists, is lossless, and is
+   the writer's to make from the Profile Builder header (R2.10b).
+
+10. **Its own screen.** Not a mode inside the Weaving popup. This is a long review
+    session with a left rail and two columns, which is a different shape from a
+    walkthrough stop, and the popup is already carrying eight sub-views.
+
+    WHICH MEANS THE CLOSED-WORLD RULE DOES NOT APPLY TO IT, and that is worth
+    stating so nobody later "fixes" it by moving it inside. That rule is about the
+    WALKTHROUGH: a writer answering a stop must not be sent away mid-question,
+    because the walk gives up its place. A review screen has no place to give up --
+    the writer arrives at it deliberately, works through a list, and leaves when
+    they choose. `WeaveScreen` is the nearest precedent (persistent chrome, a body
+    that swaps between map and list) and the likeliest home.
+
+    This decision is entangled with the static-shell question, so the two should be
+    settled in the same design session rather than one constraining the other by
+    accident.
+
+**What it must inherit, not reinvent.** Every one of these already exists and is
+tested; the pass is new, the plumbing is not:
+
+- From the `speaker_analysis.py` contract (Phase 9's R9.7): JSON only, and the
+  endpoint WRITES NOTHING. The quote-exactly and dropped-count halves do NOT
+  apply here and it was an error to list them -- an Overview is synthesis and has
+  no single source sentence, so that rule would discard almost every proposal.
+  See decision 4 for what replaces it.
+- The write boundary. AI output may not land in human-authored fields without the
+  writer applying it, per action, which is what every button in the sketch is.
+- `Sweep.tsx`'s restraint: nothing pre-ticked, a count that matches what it
+  writes, partial progress kept on failure.
+- `WordFix`'s answers: a proposed entry that is really another name for one the
+  writer has needs `POST /alias`, not a second profile.
+- Money said before it is spent (`Explain`'s cost field, `test_explain_costs.py`),
+  and the Cast ladder's manual / free / free-AI / auto tiers (R9.8).
+
+**Why it is worth the size.** It inverts the Weave's current direction. Weaving
+asks the writer to describe a world it found the NAMES of; this reads what they
+have already written and proposes the CONTENT, which is the work a writer would
+otherwise do by re-reading their own book. It is also the strongest answer to the
+reported frustration that the walkthrough's suggested Overview text "was nearly
+always wrong": a whole-manuscript read has context a single-quote heuristic
+cannot.
+
+### Audiobook Converter -- SHIPPED as v1.1.0 (2026-08-03)
+
+*Kept in this section for its open follow-ups only. The feature itself is
+described in [`features.md`](features.md); stages A-G are built and released.*
 
 A standalone workspace inside Storythread Studio that converts a manuscript (DOCX / EPUB / Markdown / TXT, or an existing Storythread project) into chapter MP3s, a combined MP3, and an M4B audiobook. Full specification: [`audiobook-converter-spec.md`](audiobook-converter-spec.md) (reviewed and revised 2026-07-28).
 
@@ -55,14 +654,16 @@ Two open items on the Formatting Walkthrough, both raised by walking a real 22,0
 
 Worth building, prioritization not yet committed.
 
-### Local model providers (Ollama / LM Studio / llama.cpp)
+### Local model providers -- MOSTLY SHIPPED (v1.1.1)
 
-Second slice of "Alternative AI providers" — NanoGPT shipped (v1.0.10) and built the provider plumbing this reuses: adding a runtime is one backend `ProviderConfig` (`backend/app/ai/providers.py`) plus one frontend panel entry (`app/src/components/settings/providerMeta.ts`), with `requires_api_key=False` already supported end to end. Research complete: see [`research-multi-provider.md`](research-multi-provider.md). Key facts locked down so far:
+Shipped: the `local` provider entry, address + API-style settings restricted to loopback / private / `.local` destinations (`backend/app/ai/local_endpoint.py`), Ollama's native `GET /api/tags` via `model_list_style`, `<think>` stripping in the sanitizer, and a Test Connection that tells a bad address, a dead server, and a wrong-API-style server apart. See `docs/research-multi-provider.md` for the original research.
 
-- All local runtimes are OpenAI-compatible for chat, with **no auth header** (Ollama `:11434`, LM Studio `:1234`, llama.cpp `:8080`, plus a custom-URL option).
-- **Ollama lists models via its native `GET /api/tags`, not `/v1/models`** — the one runtime-specific code path. Strip the `:latest` suffix for display; if the user overrides the base URL, derive the tags URL by stripping `/v1`.
-- **Local reasoning models** (DeepSeek-R1 distills, Qwen thinking variants) emit their chain-of-thought inline as `<think>...</think>` blocks in the content itself. These MUST be stripped in the sanitizer layer (they'd otherwise show the writer a wall of internal monologue and break every JSON-output endpoint). Optionally, the stripped trace can feed the existing Reasoning toggle UI as the local analog of OpenRouter's `reasoning` field. Full breakdown in the research doc.
-- Ship with a **local connection test**: a deterministic tiny prompt ("Reply with exactly this text: ...") at temperature 0 with a timeout, showing the model's actual reply or the HTTP error. Local servers have no API key to validate, so proving end-to-end generation is the only meaningful health check.
+Still open:
+
+- **A live-reply connection test.** Today's test proves the server is reachable and lists models; it does not prove generation works. The stronger check is a deterministic tiny prompt ("Reply with exactly this text: ...") at temperature 0 with a timeout, showing the model's actual reply.
+- **Feed the stripped `<think>` trace to the Reasoning toggle** as the local analogue of OpenRouter's `reasoning` field. Currently the trace is discarded.
+- **Strip the `:latest` suffix for display** in the model picker.
+- **A `custom` provider** for arbitrary OpenAI-compatible URLs. Deliberately separate from `local`, which refuses non-local addresses on purpose -- see the note in `providerMeta.ts`.
 
 ### User-editable prompt templates (Default + Custom)
 
@@ -136,7 +737,9 @@ A fifth top-level category for cross-passage critique passes that do not fit Rea
 
 ### Task-aware model auto-selection
 
-Routing classifier that picks an eligible model based on assistant type, content size, and content mode rather than always using the project default. Falls back to the default on ambiguity. The classifier sits in front of the existing allowlist and content-mode validation.
+**Partly delivered by Model Roles (v1.1.1)**, which routes by *assistant type* -- every AI call site declares its role and the writer assigns a model per role. What remains is the automatic half: choosing an eligible model based on **content size** and **content mode** rather than only on the kind of job, falling back on ambiguity. That classifier would sit between `resolve_role_model()` and the existing allowlist / content-mode validation.
+
+Also still open from the roles work: **per-book role overrides.** The resolver already implements and tests precedence level 1 (`project.json` → `model_roles[role]`); it has no UI, so today roles are app-wide.
 
 ### Long-context handling: priority pinning + summary swap
 

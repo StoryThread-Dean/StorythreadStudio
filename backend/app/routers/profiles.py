@@ -33,6 +33,8 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.codex.normalize import INFLUENCE_MEANT_SECRET, INFLUENCE_TO_IMPORTANCE
+from app.codex.types_registry import DEFAULT_TYPES
 from app.progress_store import record_save_event
 from app.settings_store import get_rollover_hour
 
@@ -54,48 +56,54 @@ class SectionConfig:
     has_trait_blocks: bool # True = YAML trait list; False = freeform text
 
 
-# Maps each profile type to its ordered section list
+# ── DERIVED FROM THE REGISTRY, not written out again (ruling 5) ───────────────
+#
+# The spec said "replace both ... so the two cannot drift". They were duplicated
+# instead, and by the time the recovery audit ran there were THREE definitions of
+# a character's sections. The frontend's copy is gone (R2.2b); this one was held
+# in step by `test_profile_registry_agreement.py`, which is a good test and one
+# copy too many -- a test that catches drift is second best to there being
+# nothing that can drift.
+#
+# So the four live types are COMPUTED from `DEFAULT_TYPES`. Verified identical to
+# the hand-written table it replaces, field for field, before the swap.
+#
+# WHY THE DEFAULTS AND NOT THE PROJECT'S OWN types.json. This file serves
+# `profiles/`, which is the pre-conversion home. An unconverted project has no
+# types.json at all, so there is nothing project-specific to read -- and the
+# three functions below take (text, type) and no project path, which is what
+# makes them safe to call from anywhere. Reading a per-project registry here
+# would mean threading a path through a legacy path that ruling 6 deletes
+# outright once `profiles/` stops being a home.
+#
+# The section-id rule that made this matter in the first place: THE KEY MUST BE
+# WHAT THE HEADING DERIVES TO, because the Weave reads a section's id from its
+# heading. `hidden_and_foreshadowing_traits` once disagreed with its own heading,
+# so the editor looked up a section it never found and a save wrote emptiness
+# over the writer's hidden traits. Deriving from one table is what stops a fourth
+# instance of that.
+def _configs_from_registry(type_id: str) -> list[SectionConfig]:
+    for entry in DEFAULT_TYPES:
+        if entry["id"] == type_id:
+            return [
+                SectionConfig(s["id"], s["heading"], bool(s.get("trait_blocks")))
+                for s in entry["sections"]
+            ]
+    return []
+
+
 SECTION_CONFIGS: dict[str, list[SectionConfig]] = {
-    "character": [
-        SectionConfig("overview",                "Overview",                        False),
-        SectionConfig("physical_traits",          "Physical Traits",                 True),
-        SectionConfig("personality_traits",       "Personality Traits",              True),
-        SectionConfig("motivations",              "Motivations",                     True),
-        SectionConfig("voice_notes",              "Voice Notes",                     True),
-        SectionConfig("hidden_and_foreshadowing", "Hidden and Foreshadowing Traits", True),
-        SectionConfig("relationships_overview",   "Relationships Overview",          False),
-        SectionConfig("notes",                    "Notes",                           False),
-    ],
-    "relationship": [
-        SectionConfig("overview",            "Overview",           False),
-        SectionConfig("history",             "History",            False),
-        SectionConfig("current_dynamic",     "Current Dynamic",    False),
-        SectionConfig("hidden_tensions",     "Hidden Tensions",    False),
-        SectionConfig("emotional_direction", "Emotional Direction", False),
-        SectionConfig("notes",               "Notes",              False),
-    ],
-    "location": [
-        SectionConfig("overview",                "Overview",                False),
-        SectionConfig("physical_description",    "Physical Description",    False),
-        SectionConfig("tone_and_atmosphere",     "Tone and Atmosphere",     False),
-        SectionConfig("historical_significance", "Historical Significance", False),
-        SectionConfig("cultural_significance",   "Cultural Significance",   False),
-        SectionConfig("scene_use_notes",         "Scene Use Notes",         False),
-        SectionConfig("notes",                   "Notes",                   False),
-    ],
-    "lore": [
-        SectionConfig("overview",             "Overview",             False),
-        SectionConfig("rule_or_concept",      "Rule or Concept",      False),
-        SectionConfig("what_it_affects",      "What It Affects",      False),
-        SectionConfig("what_characters_know", "What Characters Know", False),
-        SectionConfig("story_relevance",      "Story Relevance",      False),
-        SectionConfig("notes",                "Notes",                False),
-    ],
-    # Chapter summary is dormant in this profile system. Phase 6 moved chapter
-    # summaries to plain Markdown files under summaries/chapters/ so the writer
-    # can edit them freely without the profile section scaffolding. This config
-    # is preserved only so legacy chapter_summary profile files (from Phase 2)
-    # still open in the Profile Builder without crashing.
+    "character":    _configs_from_registry("character"),
+    "relationship": _configs_from_registry("relationship"),
+    "location":     _configs_from_registry("location"),
+    "lore":         _configs_from_registry("lore"),
+    # THE TWO THE REGISTRY DOES NOT HAVE, and they stay hand-written because
+    # they are not entries any more. Phase 6 moved chapter and scene summaries to
+    # plain Markdown under summaries/, so the registry deliberately does not list
+    # them; these configs exist only so a legacy summary profile from Phase 2
+    # still opens in the Profile Builder instead of crashing it. Adding them to
+    # the registry to tidy this up would put two dead kinds back in the writer's
+    # sidebar.
     "chapter_summary": [
         SectionConfig("overview",           "Chapter Overview",     False),
         SectionConfig("key_events",         "Key Events",           False),
@@ -110,22 +118,51 @@ SECTION_CONFIGS: dict[str, list[SectionConfig]] = {
     ],
 }
 
-# Maps profile type to its subfolder inside the project
+# Maps profile type to its subfolder inside the project. Derived the same way:
+# the registry names the folder, and `profiles/` is this file's home for it.
 PROFILE_FOLDERS: dict[str, str] = {
-    "character":       "profiles/characters",
-    "relationship":    "profiles/relationships",
-    "location":        "profiles/locations",
-    "lore":            "profiles/lore",
+    **{entry["id"]: f"profiles/{entry['folder']}"
+       for entry in DEFAULT_TYPES
+       if entry["id"] in ("character", "relationship", "location", "lore")},
+    # Dormant, as above.
     "chapter_summary": "profiles/chapters",
     "scene_summary":   "profiles/scenes",
 }
 
 VALID_TYPES = set(PROFILE_FOLDERS.keys())
 
-# The five importance levels control how (and whether) a trait is sent to AI.
-# Core = always in prompt, highest priority position.
-# Hidden = writer-only notes, never sent to the AI API.
-VALID_IMPORTANCE = {"core", "present", "background", "contextual", "hidden"}
+# The FOUR importance levels control how -- and how prominently -- a trait
+# reaches AI. Core = always in prompt, highest priority position.
+#
+# There were five, and the fifth was `hidden`, which said two unrelated things at
+# once: "this is a secret" and "this barely matters". The second was a lie about
+# most secrets, so weight and disclosure were split (R2.12b) -- weight is this
+# scale, secrecy is `TraitBlock.subtext`, and the writer is asked for the real
+# weight rather than having the faintest one guessed for them.
+#
+# TWO CORRECTIONS THIS COMMENT HAS NEEDED, both worth remembering:
+#
+# It once said hidden traits were "writer-only notes, never sent to the AI API",
+# which was NOT TRUE -- they were sent like any other, and only their position in
+# the prompt differed. A comment promising a writer their private notes are not
+# transmitted is the worst kind of wrong, and R1.5 deleted it on the spec's
+# instruction.
+#
+# It then said the Weave's conversion "rewrites every hidden trait as
+# `ai_scope: on-request`, which is the mechanism that actually withholds it".
+# R2.12b REVERSED that, and this comment went on asserting it. Withholding a
+# trait stops the model naming a secret by stopping it knowing the secret, so a
+# villain whose every scene is shaped by one arrives with none of it. `ai_scope`
+# means availability; disclosure is `subtext`; the never-name rule in the prompt
+# is what protects the secret. See `_normalize_trait` in codex/threads.py.
+VALID_IMPORTANCE = {"core", "present", "background", "contextual"}
+
+# Read, never written. A trait saved before the split carries importance:
+# hidden, which said two things at once; it now reads as "present, and secret".
+# present rather than core because the level recorded no weight and guessing
+# high would flood every prompt -- these are LISTED for the writer to weigh
+# rather than silently decided, which is what the review panel is for.
+LEGACY_HIDDEN = "hidden"
 
 
 # ── Pydantic Models ───────────────────────────────────────────────────────────
@@ -135,7 +172,23 @@ class TraitBlock(BaseModel):
     id: str                   # UUID used as a React key (not stored in YAML)
     trait: str                # The trait name(s), e.g. "observant, punctual, eloquent"
     description: str          # Human-written description
-    importance: str           # core|present|background|contextual|hidden
+    importance: str           # core|present|background|contextual -- HOW MUCH
+    # WHETHER IT MAY BE SAID OUT LOUD, which is a different question from how
+    # much it matters, and used to be the same control.
+    #
+    # `hidden` was a fifth importance level, so a secret could not also be
+    # important. The writer's example is the proof: a villain avoids hospitals
+    # because he watched his parents die in one (core -- it dictates events),
+    # freezes when he sees people holding hands (present), and deflects the
+    # question if asked (background). All three are secret. As one level they
+    # collapsed into each other AND sorted lowest in the prompt, so the trait
+    # driving the most scenes arrived as the weakest signal on the page.
+    #
+    # True means: AI receives it, weighted normally, and is instructed never to
+    # name, quote or reveal it -- only to let it shape behaviour. See
+    # READING IMPORTANCE LABELS in ai/prompts.py, which has enforced exactly
+    # this the whole time.
+    subtext: bool = False
 
 
 class ProfileSection(BaseModel):
@@ -164,7 +217,16 @@ class Profile(BaseModel):
     type: str
     name: str
     role: str = ""
+    # Free text, both. Age has to hold "18 months", "18", "18ish", "approx 30"
+    # and "Unknown" -- a number field would refuse four of the five answers a
+    # novelist actually gives, and blank is a sixth.
+    sex: str = ""
+    age: str = ""
     status: str = "active"
+    # KEPT, NOT EDITED. The tags control is retired: nothing read them except one
+    # side-character prompt, and the Story Role picker wrote them for nothing.
+    # The field stays so a writer who typed tags before still has them, and so a
+    # round trip cannot quietly delete them.
     tags: list[str] = []
     filename: str
     sections: dict[str, ProfileSection]
@@ -298,6 +360,9 @@ def _clean_trait_yaml(content: str) -> str:
     content = re.sub(code_block_pattern, _extract_json_block, content, flags=re.MULTILINE)
 
     # --- PASS 2: Quote unquoted values that contain ': ' ---
+    # See _yaml_scalar below for the write-side counterpart. These two are a
+    # pair: one stops the file being written badly, the other reads the ones
+    # already on disk.
     # In YAML block mappings, a plain scalar value that contains ': ' is
     # ambiguous -- YAML may interpret it as a nested key-value pair.
     # We quote any such values that aren't already wrapped in double quotes.
@@ -318,24 +383,37 @@ def _clean_trait_yaml(content: str) -> str:
 
         return match.group(0)
 
-    # Only match INDENTED lines (block mapping values inside a list entry).
-    # Lines starting at column 0 (like '- trait:') use '^-' and won't match.
+    # Indented lines: block mapping values inside a list entry.
     colon_value_pattern = r'^([ \t]+)(\w+): (.+)$'
     content = re.sub(colon_value_pattern, _quote_colon_values, content, flags=re.MULTILINE)
+
+    # AND THE '- trait:' LINE, which this used to exclude on purpose. The old
+    # comment here read "Lines starting at column 0 (like '- trait:') ... won't
+    # match", as though that were a feature -- so the one line the app itself
+    # writes a colon into was the one line the repair skipped. A writer's six
+    # personality traits read back as a single paragraph because of it.
+    def _quote_trait_line(match: re.Match) -> str:
+        value = match.group(1).strip()
+        if value[:1] in ('"', "'") or (': ' not in value
+                                       and not value.endswith(':')):
+            return match.group(0)
+        return f"- trait: {_json.dumps(' '.join(value.split()))}"
+
+    content = re.sub(r'^- trait: (.+)$', _quote_trait_line, content,
+                     flags=re.MULTILINE)
 
     return content
 
 
-# Map old influence values to new importance levels.
-# Old: foreshadowing|background|minor|major|core
-# New: core|present|background|contextual|hidden
-_INFLUENCE_TO_IMPORTANCE: dict[str, str] = {
-    "core":           "core",
-    "major":          "present",
-    "minor":          "background",
-    "background":     "contextual",
-    "foreshadowing":  "hidden",
-}
+# The old influence scale lives in app/codex/normalize.py now, so both Markdown
+# dialects heal it the same way. Ruling 6: it used to live only here, and the
+# Weave's parser -- which reads the same trait blocks after a conversion -- had
+# never heard of it. See the note there for what that cost.
+#
+# Re-exported under the old private names so this file's call sites read as they
+# did; the definition is elsewhere and there is only one.
+_INFLUENCE_TO_IMPORTANCE = INFLUENCE_TO_IMPORTANCE
+_INFLUENCE_MEANT_SECRET = INFLUENCE_MEANT_SECRET
 
 
 def _migrate_influence(raw: str) -> str:
@@ -343,7 +421,36 @@ def _migrate_influence(raw: str) -> str:
     raw = raw.strip().lower()
     if raw in VALID_IMPORTANCE:
         return raw
+    if raw == LEGACY_HIDDEN:
+        # `hidden` recorded no weight -- it was busy saying "secret" instead --
+        # so one has to be chosen. `present` rather than `background`, because
+        # these traits are the writer's most carefully written material and
+        # dropping them to the faintest weight would be a second wrong answer
+        # after the first. The secrecy itself is set by the caller, and the
+        # writer is shown a list of these to weigh properly.
+        return "present"
     return _INFLUENCE_TO_IMPORTANCE.get(raw, "background")
+
+
+def _yaml_scalar(value: str) -> str:
+    """
+    One YAML value, quoted only when it has to be.
+
+    The write-side counterpart to the repair pass above, and the mirror of
+    `_scalar` in codex/threads.py. Both exist because these profile files are the
+    writer's own Markdown: `trait: Genuinely Concerned` reads better than
+    `trait: "Genuinely Concerned"`, and quoting unconditionally would rewrite
+    every profile in every project on its next save -- a diff of pure noise over
+    content that had not changed.
+    """
+    text = " ".join(str(value or "").split())
+    if not text:
+        return '""'
+    if (text[0] in set("-?:,[]{}#&*!|>'\"%@`")
+            or text.endswith(":")
+            or ": " in text or " #" in text):
+        return _json.dumps(text)
+    return text
 
 
 def _parse_trait_blocks(content: str) -> list[TraitBlock]:
@@ -386,11 +493,21 @@ def _parse_trait_blocks(content: str) -> list[TraitBlock]:
             # levels so legacy profiles load correctly.
             raw_level = str(item.get("importance", "") or item.get("influence", "background"))
             importance = _migrate_influence(raw_level)
+            # THE TWO AXES, one of which used to be hidden inside the other.
+            # `subtext: true` on the line is authoritative; a legacy
+            # `importance: hidden` (or an even older `influence:
+            # foreshadowing`) means the same thing and is read as such.
+            secret = bool(item.get("subtext", False))
+            if raw_level.strip().lower() == LEGACY_HIDDEN:
+                secret = True
+            if raw_level.strip().lower() in _INFLUENCE_MEANT_SECRET:
+                secret = True
             blocks.append(TraitBlock(
                 id=str(uuid.uuid4()),
                 trait=str(item.get("trait", "")),
                 description=str(item.get("description", "")),
                 importance=importance,
+                subtext=secret,
             ))
         return blocks
     except yaml.YAMLError:
@@ -500,6 +617,8 @@ def _parse_profile_markdown(raw: str, filename: str, profile_type: str) -> Profi
         type=profile_type,
         name=str(meta.get("name", "")),
         role=str(meta.get("role", "")),
+        sex=str(meta.get("sex", "")),
+        age=str(meta.get("age", "")),
         status=str(meta.get("status", "active")),
         tags=list(meta.get("tags") or []),
         filename=filename,
@@ -534,6 +653,12 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
     lines += [f"name: {profile.name}"]
     if profile.role:
         lines += [f"role: {profile.role}"]
+    # Only when the writer said something, so an entry that never answered keeps
+    # a file as short as it was.
+    if profile.sex:
+        lines += [f"sex: {_json.dumps(profile.sex)}"]
+    if profile.age:
+        lines += [f"age: {_json.dumps(profile.age)}"]
     lines += [f"status: {profile.status}"]
     # character_kind only matters for characters; only write it when it says
     # something (side). Main is the default, so omitting it keeps older
@@ -562,9 +687,25 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
                     # caused by ': ' in values (e.g. "Overall: She presents..."
                     # would break yaml.safe_load without quoting).
                     safe_description = " ".join(block.description.split())
-                    lines += [f"- trait: {block.trait}"]
+                    # THE TRAIT NAME NEEDS THE SAME TREATMENT, and for years it
+                    # did not get it -- the comment above worked out why a colon
+                    # breaks a value and then fixed only `description`. The app's
+                    # own Story Role picker produces "Story role: Comic Relief",
+                    # so a colon-space in a trait NAME is not an exotic
+                    # hand-edit. The line stopped being a mapping, the whole list
+                    # failed to parse, and the tolerant fallback kept every trait
+                    # as prose: six cards became one paragraph, silently.
+                    #
+                    # Quoted only when needed, so a resave of an ordinary profile
+                    # still produces no diff.
+                    safe_trait = " ".join(block.trait.split())
+                    lines += [f"- trait: {_yaml_scalar(safe_trait)}"]
                     lines += [f"  description: {_json.dumps(safe_description)}"]
                     lines += [f"  importance: {block.importance}"]
+                    # Only when true, so an ordinary trait's line is unchanged
+                    # and a resave produces no diff for files without secrets.
+                    if block.subtext:
+                        lines += ["  subtext: true"]
                     lines += [""]
             elif section.content:
                 # Side-character template: the section is plain paragraphs

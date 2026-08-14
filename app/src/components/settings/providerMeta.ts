@@ -11,11 +11,12 @@
 // layout code.
 //
 // Planned future entries (see docs/research-multi-provider.md) -- NOT built:
-//   - local: Ollama / LM Studio / llama.cpp. requiresKey: false (no key
-//     field rendered), plus a runtime-preset dropdown and an editable base
-//     URL field, and a live-reply connection test ("Reply with exactly this
-//     text: ..."). Include a hint that local reasoning models respond slower.
-//   - custom: any OpenAI-compatible URL. requiresKey optional.
+//   - custom: any OpenAI-compatible URL, deliberately separate from "local".
+//     Every local runtime speaks the same API as a hosted one, so without
+//     that separation the local entry would quietly become a way to connect
+//     any remote service with no key field and no cost warning. The backend
+//     enforces the split by refusing non-local addresses -- see
+//     backend/app/ai/local_endpoint.py.
 
 export interface ProviderMeta {
   id: string;             // Matches the backend ProviderConfig.key + settings ai_provider
@@ -63,6 +64,26 @@ export const PROVIDER_META: ProviderMeta[] = [
     supportsCaching: false,
     note: "NanoGPT does not publish pricing or moderation data -- the cost-tier "
         + "filter is unavailable and all models are shown.",
+  },
+  {
+    id: "local",
+    label: "Local model",
+    tagline: "Runs on your own machine -- no key, no cost, nothing leaves the room",
+    docsUrl: "ollama.com",
+    instructions: [
+      "Install Ollama (ollama.com) or LM Studio, then start it.",
+      "Pull at least one model -- for example: ollama pull llama3",
+      "Enter its address below (usually http://localhost:11434) and pick the API style.",
+      "Test Connection to load the list of models you have downloaded.",
+    ],
+    keyPlaceholder: "",
+    requiresKey: false,
+    supportsTiers: false,
+    supportsCaching: false,
+    note: "Only addresses on your own machine or local network are accepted. "
+        + "Local reasoning models can be noticeably slower than hosted ones, and "
+        + "their quality varies a lot by model -- a good pairing for Prose or "
+        + "experimenting, less so for critique.",
   },
 ];
 

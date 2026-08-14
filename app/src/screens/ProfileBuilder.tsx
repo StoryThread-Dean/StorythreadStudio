@@ -15,9 +15,10 @@
 //   4. On Ctrl+S or Save: POST to backend, mark saved
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
-import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X, Eye, EyeOff, BookOpen } from "lucide-react";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { ChatMarkdown } from "../components/ChatMarkdown";
+import { Explain } from "../components/learn/Explain";
 import type { ProjectInfo } from "../types/project";
 import type {
   Profile,
@@ -29,10 +30,17 @@ import type {
 } from "../types/profile";
 import type { ProfileChatMessage, ProfileBehaviorMode } from "../types/ai";
 import {
-  SECTION_CONFIGS,
-  PROFILE_TYPE_LABELS,
   IMPORTANCE_LABELS,
+  SUBTEXT_HELP,
 } from "../types/profile";
+// WHAT KINDS OF ENTRY THIS WORLD HAS, and what sections each one holds -- read
+// from the project's own types.json rather than from a table of four. This is
+// what gives Governments, Factions, Deities, Religions, Creatures and Cultures
+// a real editor, along with any kind the writer invents, without a line of
+// per-kind code here.
+import {
+  isShadowed, sectionColour, useTypeRegistry, type SectionConfig,
+} from "../types/sectionRegistry";
 import { v4 as uuidv4 } from "uuid";
 import { IMPORTANCE_HELP, getSectionHelp } from "../data/profileHelp";
 import type { ImportanceLevelHelp, SectionHelp } from "../data/profileHelp";
@@ -46,8 +54,42 @@ import { SpinePickers } from "../components/profiles/SpinePickers";
 import { QuickBuildPanel } from "../components/profiles/QuickBuildPanel";
 import { NameGeneratorPanel } from "../components/profiles/NameGeneratorPanel";
 import { Dices } from "lucide-react";
-import { ROLE_SUGGESTIONS, ARCHETYPE_ROLE_TAGS } from "../data/characterSpines";
+import { ROLE_SUGGESTIONS } from "../data/characterSpines";
 import type { CharacterKind } from "../types/profile";
+// WHERE THIS PROJECT'S ENTRIES LIVE. A converted project keeps them in
+// codex/ and an unconverted one in profiles/; the screen asks rather than
+// assuming, because assuming is what left twelve of the writer's characters
+// with no editable page. See profileSource.ts for the whole story.
+import { fetchEntriesHome, sourceFor } from "./profileSource";
+// Moving a character between the two pages. A data change, kept out of
+// this file so it can be tested on its own.
+import { convertCharacter, type Conversion } from "./characterTemplate";
+// Every secret on the page in one list, without moving any of them out of
+// the section that explains them.
+import { SecretsPanel } from "./SecretsPanel";
+// The paged walkthrough for a secret trait. Reachable from the section it
+// is about, not only from the panel that lists secrets once some exist --
+// which is where it was, and which meant a writer with no secrets yet had
+// no way in at all.
+import { SubtextGuide } from "./SubtextGuide";
+// The FIRST walkthrough a writer meets here: what each part of the page is
+// for, in the order the page puts them. Deliberately shallow -- the
+// per-section guides do the depth.
+import { ProfilePageGuide } from "./ProfilePageGuide";
+// THE RUN: how an entry changes across the book. The same editor the Weave's
+// own screen uses, because a fact recorded in either place is the same fact.
+// Until this landed, the four kinds a novelist actually spends their time on
+// had no way to record one -- which is why the story timeline on the Weave map
+// has never had anything to move through.
+// WHO THIS IS TO EVERYTHING ELSE. Built and tested in an earlier commit and
+// mounted NOWHERE, which is why the writer had not seen it: a component with
+// no consumer is a component that does not exist. Pinned by a source-read
+// test now, because this is the second time in this recovery (the first was
+// the Weaving panel, rendered inside a branch that never ran).
+import { ProfileConnections } from "../features/codex/ProfileConnections";
+import { RunEditor } from "../features/codex/RunEditor";
+import { fetchAnchors, fetchThreads, type ChapterAnchor } from "../features/codex/api";
+import type { EntriesHome, ProfileSource } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
 
@@ -66,7 +108,11 @@ interface GaugeThresholds {
   // above wordy = bloated (red)
 }
 
-const GAUGE_THRESHOLDS: Record<Exclude<ImportanceLevel, "hidden">, GaugeThresholds> = {
+// One entry per weight. There used to be an Exclude<> here for "hidden", which
+// had no gauge at all -- so the app refused to advise on the length of the
+// writer's most carefully written material. A secret has a real weight now and
+// gets that weight's guidance.
+const GAUGE_THRESHOLDS: Record<ImportanceLevel, GaugeThresholds> = {
   core:       { sparse: 15,  basic: 40,  good: 120, detailed: 200, wordy: 350 },
   present:    { sparse: 10,  basic: 30,  good: 100, detailed: 175, wordy: 300 },
   background: { sparse: 5,   basic: 20,  good: 60,  detailed: 100, wordy: 150 },
@@ -76,10 +122,6 @@ const GAUGE_THRESHOLDS: Record<Exclude<ImportanceLevel, "hidden">, GaugeThreshol
 type GaugeLevel = "sparse" | "basic" | "good" | "detailed" | "wordy" | "bloated";
 
 function getGaugeLevel(wordCount: number, importance: ImportanceLevel): { level: GaugeLevel; label: string; color: string } {
-  if (importance === "hidden") {
-    return { level: "good", label: `${wordCount} words`, color: "text-text-muted" };
-  }
-
   const t = GAUGE_THRESHOLDS[importance];
 
   if (wordCount <= t.sparse) return { level: "sparse", label: "Sparse -- add more", color: "text-red-400" };
@@ -92,14 +134,6 @@ function getGaugeLevel(wordCount: number, importance: ImportanceLevel): { level:
 
 // Visual gauge bar that fills proportionally
 function WordGauge({ wordCount, importance }: { wordCount: number; importance: ImportanceLevel }) {
-  if (importance === "hidden") {
-    return (
-      <div className="mt-1 flex items-center gap-2 text-xs text-faint">
-        <span>{wordCount} words (writer-only)</span>
-      </div>
-    );
-  }
-
   const { level, label, color } = getGaugeLevel(wordCount, importance);
   const t = GAUGE_THRESHOLDS[importance];
 
@@ -199,7 +233,6 @@ function walkProfileMatches(
   scan(profile.role, "role", ["role"]);
   // Tags render as a single joined input ("tag1, tag2"), so search the
   // joined form -- matches what the writer sees in the field.
-  scan(profile.tags.join(", "), "tags", ["tags"]);
 
   for (const cfg of sectionOrder) {
     const section = profile.sections[cfg.key];
@@ -357,16 +390,45 @@ function AutoTextarea({
 interface ProfileBuilderProps {
   project: ProjectInfo;
   initialType: ProfileType;
+  /**
+   * Open straight onto one entry, by its filename.
+   *
+   * Added for Weaving: a stop that says "Alexandra is missing her Overview --
+   * open it and fill it in" has to actually open Alexandra. Landing on the
+   * Characters list and leaving the writer to find her again is not the same
+   * promise, and reads as a dead end.
+   */
+  initialFilename?: string;
   onBack: () => void;
 }
 
 
 // ── ProfileBuilder Component ─────────────────────────────────────────────────
-export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderProps) {
+export function ProfileBuilder({
+  project, initialType, initialFilename, onBack,
+}: ProfileBuilderProps) {
 
   // ── State ────────────────────────────────────────────────────────────────
   const [profileType, setProfileType] = useState<ProfileType>(initialType);
   const [profileList, setProfileList] = useState<ProfileListItem[]>([]);
+  // Which folder this project's entries live in, and how many are in the other
+  // one. `null` means the answer has not arrived yet, which is different from
+  // "profiles" -- loading a list before knowing would read the wrong folder and
+  // show an empty screen for a converted project.
+  const [home, setHome] = useState<EntriesHome | null>(null);
+  const [elsewhere, setElsewhere] = useState(0);
+  // Whether a conversion is half-finished. See the notice further down: the
+  // same condition (entries in the other folder) has two causes needing
+  // opposite explanations, and without this the screen told a writer whose
+  // migration had died that it had never started.
+  const [migrationState, setMigrationState] =
+    useState<"none" | "incomplete" | "done">("none");
+  // The writer's own chapters, in order, for every "when" question the Run
+  // asks. Never a date and never a number they have to work out.
+  const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
+  // Everyone in the world who could hold a belief, so "whose truth" is a choice
+  // rather than an id typed from memory.
+  const [people, setPeople] = useState<{ entity_id: string; name: string }[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [listLoading, setListLoading] = useState(false);
@@ -399,6 +461,18 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // Generation state -- tracks which field is being AI-generated
   const [generatingField, setGeneratingField] = useState<string | null>(null);
 
+  // MOVING A CHARACTER BETWEEN THE TWO PAGES.
+  //
+  // Held as a pending question rather than done on click, because Main to Side
+  // has one consequence worth stating first: a hidden trait dissolved into
+  // prose loses the thing that kept it out of an AI prompt. `null` means
+  // nothing is being asked.
+  const [pageGuideOpen, setPageGuideOpen] = useState(false);
+  const [templateAsk, setTemplateAsk] = useState<"main" | "side" | null>(null);
+  // What the last conversion actually did, shown afterwards so the writer knows
+  // where their traits went rather than hunting for them.
+  const [templateDid, setTemplateDid] = useState<Conversion | null>(null);
+
   // Phase 6: which standalone relationship profiles were folded into the most
   // recent Full AI Summary generation. Set after a successful character-profile
   // generate-full-summary call; cleared when the writer switches profiles.
@@ -429,6 +503,28 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
 
+  // WHICH TRAIT TILES ARE OPEN.
+  //
+  // Every trait used to render as a full card -- name, description, importance,
+  // gauge, two AI buttons -- so a character with twenty traits was a wall of
+  // controls and the writer scrolled past their own work looking for the one
+  // they wanted. Collapsed, a trait is one line they can scan.
+  //
+  // MORE THAN ONE STAYS OPEN, unlike the Run's facts. The writer asked for
+  // exactly that: "I want the expands to remain open while Writer is working
+  // within that profile, allowing the scroll to do the heavy lifting of moving
+  // between tiles." Comparing two traits while editing a third is ordinary
+  // work; one-at-a-time would fight it.
+  const [openTraits, setOpenTraits] = useState<Set<string>>(new Set());
+  const toggleTrait = useCallback((id: string) => {
+    setOpenTraits(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   // Focused section indicator
   const [focusedSection, setFocusedSection] = useState<{ key: string; heading: string } | null>(null);
 
@@ -452,10 +548,34 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   const [findCaseSens,   setFindCaseSens]   = useState(false);
   const findInputRef = useRef<HTMLInputElement | null>(null);
 
+  // The world's own kinds. One fetch, and the tabs, the labels and every
+  // section on the page come from it.
+  const registry = useTypeRegistry(project.root_path);
+  const sectionsFor = useCallback(
+    (type: string): SectionConfig[] => registry.sections[type] ?? [],
+    [registry.sections]);
+
   // Section configs for the current profile type
+  const allSections = useMemo(
+    () => sectionsFor(profileType),
+    [sectionsFor, profileType]
+  );
+
+  // A RETIRED SECTION IS HIDDEN UNLESS IT ALREADY HOLDS SOMETHING.
+  //
+  // Relationships Overview is the first: its job is done twice over now, by
+  // Connections and by Relationship entries. Hiding it outright would leave a
+  // writer's paragraph on disk with no way to reach it, so it stays on screen
+  // exactly as long as there is something in it -- and disappears for good once
+  // they have moved the words somewhere better.
   const sections = useMemo(
-    () => SECTION_CONFIGS[profileType] ?? [],
-    [profileType]
+    () => allSections.filter(config => {
+      if (!config.retired) return true;
+      const section = profile?.sections?.[config.key];
+      return Boolean(section?.content?.trim())
+        || Boolean(section?.trait_blocks?.length);
+    }),
+    [allSections, profile]
   );
 
   // Which character template the OPEN profile uses. Side/background
@@ -471,11 +591,26 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   // for chapter summaries, Summaries > Scene Summaries for scene summaries).
   // Filtering them out here removes the duplicate access point and avoids
   // confusing the writer with the same data shown in two places.
-  const TAB_PROFILE_TYPES: ProfileType[] = useMemo(
-    () => (Object.keys(PROFILE_TYPE_LABELS) as ProfileType[])
-            .filter(t => t !== "chapter_summary" && t !== "scene_summary"),
-    []
-  );
+  // The kinds offered as tabs: the world's Profiles group, which is the same
+  // rule the Weave sidebar follows, so a kind added in one screen is there in
+  // the other. Chapter and scene summaries are not entries at all any more --
+  // they are plain Markdown under summaries/ since Phase 6 -- and the registry
+  // does not list them, so they drop out without a special case.
+  const TAB_PROFILE_TYPES = registry.tabs;
+
+  /** One of them, for a heading like "New Character". Labels are plural
+   *  because a section holds many; this is the only place that wants the
+   *  singular, and a trailing "s" is the whole rule the app's own pluraliser
+   *  uses. "Bloodlines" -> "Bloodline". */
+  const singular = (label: string) =>
+    label.endsWith("ies") ? label.slice(0, -3) + "y"
+      : label.endsWith("s") ? label.slice(0, -1)
+      : label;
+
+  /** What a kind is called on screen. */
+  const labelFor = useCallback(
+    (type: string) => registry.labels[type] ?? type,
+    [registry.labels]);
 
   // Reset chat state when switching profiles
   useEffect(() => {
@@ -485,52 +620,95 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     setBehaviorMode("chat");
     setBehaviorPanelOpen(false);
     setFocusedSection(null);
+    // The account of a template change belongs to the profile it was
+    // about. Following the writer to the next one would be a receipt for
+    // something they are no longer looking at.
+    setTemplateDid(null);
+    setTemplateAsk(null);
+    // Every profile opens closed. Carrying one character's open tiles to the
+    // next would hand the writer a page mid-edit that they did not leave that
+    // way.
+    setOpenTraits(new Set());
   }, [profile?.filename]);
 
 
   // ── Data Operations ──────────────────────────────────────────────────────
 
+  // One question, asked once: which folder. The backend decides it (see
+  // entries_home in the Python) so this screen and the sidebar can never
+  // disagree about how many Characters a project has.
+  useEffect(() => {
+    let cancelled = false;
+    fetchEntriesHome(project.root_path).then(report => {
+      if (cancelled) return;
+      setHome(report.home);
+      setElsewhere(report.elsewhere);
+      setMigrationState(report.migrationState);
+    });
+    return () => { cancelled = true; };
+  }, [project.root_path]);
+
+  // Chapters, once per project. Cheap, and the Run editor cannot ask "from
+  // when" without them.
+  useEffect(() => {
+    let cancelled = false;
+    fetchAnchors(project.root_path)
+      .then(body => { if (!cancelled) setChapters(body.chapters ?? []); })
+      .catch(() => { if (!cancelled) setChapters([]); });
+    fetchThreads(project.root_path)
+      .then(body => {
+        if (cancelled) return;
+        setPeople((body.threads ?? [])
+          .map(t => ({ entity_id: t.entity_id, name: t.name })));
+      })
+      .catch(() => { if (!cancelled) setPeople([]); });
+    return () => { cancelled = true; };
+  }, [project.root_path]);
+
+  // The reader and writer for that folder. Rebuilt only when the home changes,
+  // so every operation below is pointed at one place for as long as the screen
+  // is open.
+  const source: ProfileSource | null = useMemo(
+    // Waits for the registry too: a codex entry cannot be read into a form
+    // whose sections are not known yet, and loading it early would drop every
+    // section the form had not heard of.
+    () => (home && !registry.loading && !registry.error
+      ? sourceFor(project.root_path, home, sectionsFor)
+      : null),
+    [project.root_path, home, registry.loading, registry.error, sectionsFor]
+  );
+
   const fetchProfileList = useCallback(async (type: ProfileType) => {
+    if (!source) return;
     setListLoading(true);
     setError(null);
     setProfile(null);
     setIsDirty(false);
 
     try {
-      const params = new URLSearchParams({ folder_path: project.root_path, type });
-      const res = await fetch(`${API_BASE}/api/profiles/list?${params}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to load profiles.");
-      }
-      setProfileList(await res.json());
+      setProfileList(await source.list(type));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load profiles.");
       setProfileList([]);
     } finally {
       setListLoading(false);
     }
-  }, [project.root_path]);
+  }, [source]);
 
+  // Waits for the home to arrive: `source` is null until then, and fetching
+  // would otherwise read profiles/ for one render and replace it a moment
+  // later, which looks exactly like an empty project.
   useEffect(() => {
     fetchProfileList(profileType);
   }, [profileType, fetchProfileList]);
 
+
   const loadProfile = useCallback(async (item: ProfileListItem) => {
+    if (!source) return;
     setEditorLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        folder_path: project.root_path,
-        type: item.type,
-        filename: item.filename,
-      });
-      const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to load profile.");
-      }
-      setProfile(await res.json());
+      setProfile(await source.load(item));
       setIsDirty(false);
       // Each profile gets its own list of folded-in relationships. Clear the
       // badge from the previously open profile so it doesn't follow the writer
@@ -541,26 +719,16 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     } finally {
       setEditorLoading(false);
     }
-  }, [project.root_path]);
+  }, [source]);
 
   const handleSave = useCallback(async () => {
     const p = profileRef.current;
-    if (!p) return;
+    if (!p || !source) return;
     try {
-      const res = await fetch(`${API_BASE}/api/profiles/save`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          folder_path: project.root_path,
-          filename: p.filename,
-          profile: p,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Save failed.");
-      }
-      const saved: Profile = await res.json();
+      // A refused save leaves the writer's text exactly where it is, still
+      // marked unsaved. That is the point of refusing rather than overwriting:
+      // the words are still in the buffer to try again with.
+      const saved: Profile = await source.save(p);
       setProfile(saved);
       setIsDirty(false);
       setError(null);
@@ -578,6 +746,10 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
           name:   saved.name,
           role:   saved.role,
           status: saved.status,
+          // Which GROUP the row belongs to. Without this a character moved to
+          // Side stayed under Main until the writer switched tabs, which is
+          // exactly the "no way to move them" complaint in another form.
+          character_kind: saved.character_kind ?? next[idx].character_kind,
         };
         // Re-sort so renames move the item to its alphabetical place.
         next.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
@@ -586,7 +758,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save profile.");
     }
-  }, [project.root_path]);
+  }, [source]);
 
 
   // --- Delete a profile ---
@@ -598,21 +770,10 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     const ok = window.confirm(
       `Delete "${item.name}"? This removes the profile file from disk and cannot be undone.`
     );
-    if (!ok) return;
+    if (!ok || !source) return;
 
     try {
-      const params = new URLSearchParams({
-        folder_path: project.root_path,
-        type:        item.type,
-        filename:    item.filename,
-      });
-      const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to delete profile.");
-      }
+      await source.remove(item);
       setProfileList(prev => prev.filter(p => p.filename !== item.filename));
       // If the deleted profile was open in the editor, clear the editor view.
       if (profileRef.current?.filename === item.filename) {
@@ -623,8 +784,31 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete profile.");
     }
-  }, [project.root_path]);
+  }, [source]);
 
+
+  /**
+   * Move the open character to the other page.
+   *
+   * IN MEMORY ONLY. Manual save is the product rule and this is no exception --
+   * the profile is marked unsaved and the writer commits it, or switches away
+   * and loses nothing. Converting is therefore free to try.
+   */
+  const applyTemplate = useCallback((to: "main" | "side") => {
+    const current = profileRef.current;
+    if (!current) return;
+    const result = convertCharacter(current, to, sectionsFor("character"));
+    setProfile(result.profile);
+    setIsDirty(true);
+    setTemplateAsk(null);
+    setTemplateDid(result);
+    // The left-panel row lives in the other group now. Patched here rather than
+    // refetching, so the writer's unsaved work is not thrown away to move a row.
+    setProfileList(prev => prev.map(item =>
+      item.filename === result.profile.filename
+        ? { ...item, character_kind: to }
+        : item));
+  }, [sectionsFor]);
 
   // --- Find & Replace actions ---
   // Section-order helper passed to the walker so match order matches the UI.
@@ -653,6 +837,20 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   useEffect(() => {
     setCurrentMatchIdx(null);
   }, [findQuery, findCaseSens, profile?.filename]);
+
+  // Open the requested entry once the list it lives in has arrived, and only
+  // then -- the list is what carries the item a load needs. Guarded by a ref
+  // so it happens ONCE: without that, every later list refresh would yank the
+  // writer back to the entry they were sent to, discarding whatever they had
+  // moved on to.
+  const openedRequested = useRef(false);
+  useEffect(() => {
+    if (openedRequested.current || !initialFilename) return;
+    const wanted = profileList.find(item => item.filename === initialFilename);
+    if (!wanted) return;
+    openedRequested.current = true;
+    void loadProfile(wanted);
+  }, [initialFilename, profileList, loadProfile]);
 
   // Jump the writer's cursor to one specific match: scroll its field into
   // view, focus it, and select the exact character range. This gives the
@@ -762,27 +960,17 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   }, [handleSave, findOpen]);
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !source) return;
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/profiles/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          folder_path: project.root_path,
-          type: profileType,
-          name: newName.trim(),
-          role: newRole.trim(),
-          // Non-characters ignore this server-side; "main" is the default.
-          character_kind: profileType === "character" ? newKind : "main",
-        }),
+      const created: Profile = await source.create({
+        type: profileType,
+        name: newName.trim(),
+        role: newRole.trim(),
+        // Non-characters ignore this; "main" is the default template.
+        characterKind: profileType === "character" ? newKind : "main",
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to create profile.");
-      }
-      const created: Profile = await res.json();
       await fetchProfileList(profileType);
       setProfile(created);
       setIsDirty(false);
@@ -798,28 +986,27 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
   };
 
   const handleImport = async () => {
+    if (!source) return;
     setError(null);
     const selected = await openFilePicker({
       multiple: false,
-      title: "Select a character profile to import",
-      filters: [{ name: "Markdown Profile", extensions: ["md"] }],
+      // Any kind this world knows, not characters only -- that limit belonged to
+      // the profile system rather than to the idea.
+      title: "Choose an entry from another book",
+      filters: [{ name: "Markdown entry", extensions: ["md"] }],
     });
     if (!selected || typeof selected !== "string") return;
     try {
-      const res = await fetch(`${API_BASE}/api/profiles/import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          folder_path: project.root_path,
-          source_path: selected,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Import failed.");
+      const imported: Profile = await source.importFile(selected);
+      // The kind comes from the FILE, not from whichever tab happens to be open:
+      // importing a Government while looking at Characters is an ordinary thing
+      // to do, and landing the writer on a list that does not contain what they
+      // just imported would read as a failure.
+      if (imported.type && imported.type !== profileType) {
+        setProfileType(imported.type);
+      } else {
+        await fetchProfileList(profileType);
       }
-      const imported: Profile = await res.json();
-      await fetchProfileList("character");
       setProfile(imported);
       setIsDirty(false);
     } catch (err) {
@@ -856,6 +1043,9 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       description: "",
       importance: "background",
     };
+    // Open straight into it. Collapsed, a new trait is a blank line and the
+    // button looks like it did nothing.
+    setOpenTraits(prev => new Set(prev).add(newBlock.id));
     setProfile(prev => {
       if (!prev) return prev;
       return {
@@ -1103,8 +1293,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
 
     // Gather every trait block with its section heading
     const allBlocks: { trait: string; description: string; importance: string; section_heading: string }[] = [];
-    const sections = SECTION_CONFIGS[profile.type] ?? [];
-    for (const cfg of sections) {
+    for (const cfg of sectionsFor(profile.type)) {
       const section = profile.sections[cfg.key];
       if (!section?.trait_blocks) continue;
       for (const block of section.trait_blocks) {
@@ -1254,7 +1443,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     : "text-text-primary hover:bg-bg-surface"
                 }`}
               >
-                {PROFILE_TYPE_LABELS[type]}
+                {labelFor(type)}
               </button>
             ))}
           </div>
@@ -1264,14 +1453,14 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         <div className="flex-1 overflow-y-auto px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              {PROFILE_TYPE_LABELS[profileType]}
+              {labelFor(profileType)}
             </p>
             <div className="flex items-center gap-1">
-              {profileType === "character" && (
+              {source?.canImport && (
                 <button
                   onClick={handleImport}
                   className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
-                  title="Import a character profile from another project"
+                  title="Bring an entry in from another book"
                 >
                   <Download size={12} /> Import
                 </button>
@@ -1286,13 +1475,58 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             </div>
           </div>
 
+          {/* WHAT THIS SCREEN IS NOT SHOWING.
+              Only in one direction, on purpose. If entries live in profiles/
+              while the Weave's folder also holds some, those are unreachable
+              from here and the writer should be told with a number. The reverse
+              is not worth saying: after conversion, profiles/ is deliberately
+              left in place as a copy, so counting it would raise an alarm about
+              files that are meant to be there. */}
+          {home === "profiles" && elsewhere > 0 && (
+            <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5">
+              <p className="text-xs text-amber-300">
+                {elsewhere} {elsewhere === 1 ? "entry was" : "entries were"} made
+                in the Weave and {elsewhere === 1 ? "is" : "are"} not shown here.
+              </p>
+              {/* TWO CAUSES, TWO SENTENCES.
+                  Found walking the migration smoke test (issue #23). This
+                  notice fires whenever entries sit in the folder this screen is
+                  not reading, and that is true in two very different
+                  situations. The wording was written for one of them and shown
+                  in both, so a writer whose conversion had died four files in
+                  was told the conversion had never happened -- on the screen
+                  they were most likely to be standing on, at the moment most of
+                  their profiles were missing. The count above was right the
+                  whole time; only the explanation was wrong. */}
+              {migrationState === "incomplete" ? (
+                <p className="mt-1 text-xs text-text-muted">
+                  A conversion was started and did not finish, so your entries
+                  are split across both folders right now. Nothing has been
+                  lost: your profiles were copied before anything changed. Open
+                  the Weave to carry on from where it stopped, or to put
+                  everything back the way it was.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-text-muted">
+                  This project has not been brought into the Weave yet, so this
+                  screen is reading your profiles folder. Bring it in from the
+                  Weave to edit everything in one place. Until then, open those
+                  entries from the Weave map.
+                </p>
+              )}
+              <div className="mt-1">
+                <Explain of="profile.home" compact />
+              </div>
+            </div>
+          )}
+
           {listLoading && (
             <p className="text-xs text-faint">Loading...</p>
           )}
 
           {!listLoading && profileList.length === 0 && (
             <p className="text-xs text-faint">
-              No {PROFILE_TYPE_LABELS[profileType].toLowerCase()} yet. Click New to create one.
+              No {labelFor(profileType).toLowerCase()} yet. Click New to create one.
             </p>
           )}
 
@@ -1366,6 +1600,96 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
       </aside>
 
 
+      {pageGuideOpen && (
+        <ProfilePageGuide onClose={() => setPageGuideOpen(false)} />
+      )}
+
+      {/* WHAT IT WILL DO, BEFORE IT DOES IT. Not a confirmation for its own
+          sake: Main to Side dissolves trait blocks into lines, and a hidden
+          trait stops being hidden. That is worth one sentence first. */}
+      {templateAsk && profile && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={e => { if (e.target === e.currentTarget) setTemplateAsk(null); }}
+        >
+          <div role="dialog" aria-label={`Make ${profile.name} a ${templateAsk} character`}
+               className="w-full max-w-md rounded border border-border bg-bg-panel p-4">
+            <h2 className="mb-2 text-sm font-semibold text-text-primary">
+              Make {profile.name} a {templateAsk === "side" ? "Side" : "Main"} character?
+            </h2>
+            {templateAsk === "side" ? (
+              <div className="space-y-2 text-xs text-text-muted">
+                <p>
+                  The Side page is one plain box per section. Every trait you
+                  have written becomes a line in its own section, so nothing is
+                  lost -- and importance levels go, because a Side character
+                  does not have them.
+                </p>
+                {(() => {
+                  const preview = convertCharacter(profile, "side",
+                                                   sectionsFor("character"));
+                  if (preview.dissolved === 0) {
+                    return (
+                      <p className="text-faint">
+                        There are no traits to move, so this only changes the
+                        page.
+                      </p>
+                    );
+                  }
+                  return (
+                    <>
+                      <p className="text-text-primary">
+                        {preview.dissolved} trait
+                        {preview.dissolved === 1 ? "" : "s"} will become
+                        {preview.dissolved === 1 ? " a line" : " lines"} of text.
+                      </p>
+                      {preview.hidden > 0 && (
+                        <p className="rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-amber-200">
+                          {preview.hidden} of {preview.hidden === 1 ? "them is" : "them are"} marked
+                          Hidden. A Side character has no Hidden level, so
+                          {preview.hidden === 1 ? " that line" : " those lines"} will start with
+                          "Hidden:" and AI can use {preview.hidden === 1 ? "it" : "them"} like
+                          anything else you have written. Make them Main again to
+                          get the level back.
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="space-y-2 text-xs text-text-muted">
+                <p>
+                  The Main page adds a trait list to each section, with an
+                  importance level per trait. Everything you have written stays
+                  exactly where it is -- the lists start empty, and you can move
+                  lines into them whenever you like.
+                </p>
+                <p className="text-faint">Nothing is rewritten.</p>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-faint">
+              Nothing is saved until you save, so you can look at the result
+              first.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => applyTemplate(templateAsk)}
+                className="rounded bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-500"
+              >
+                Make {templateAsk === "side" ? "Side" : "Main"}
+              </button>
+              <button
+                onClick={() => setTemplateAsk(null)}
+                className="rounded border border-border px-3 py-1 text-xs text-text-muted hover:text-text-primary"
+              >
+                Leave it as it is
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── CENTER PANEL: Profile Editor ───────────────────────────────── */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
@@ -1377,8 +1701,39 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
             </span>
             {profile && (
               <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">
-                {PROFILE_TYPE_LABELS[profile.type as ProfileType] ?? profile.type}
+                {labelFor(profile.type)}
               </span>
+            )}
+            {/* THE PAGE'S OWN HELP, beside its title -- the one place a writer
+                looks when the question is about the screen rather than about a
+                field. The per-section (?) icons answer the narrower questions. */}
+            <Explain of="profile.page" compact />
+            <button
+              onClick={() => setPageGuideOpen(true)}
+              className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            >
+              Show me how this page works
+            </button>
+            {/* WHICH PAGE THIS CHARACTER USES, and the way to change it.
+                Beside the type chip because it is the same kind of fact about
+                the entry, and one click from where the writer notices it is
+                wrong. */}
+            {profile?.type === "character" && (
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">
+                  {isSideCharacter ? "Side" : "Main"}
+                </span>
+                <button
+                  onClick={() => setTemplateAsk(isSideCharacter ? "main" : "side")}
+                  className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+                  title={isSideCharacter
+                    ? "Give this character the full Main page"
+                    : "Move this character to the simpler Side page"}
+                >
+                  Make {isSideCharacter ? "Main" : "Side"}
+                </button>
+                <Explain of="character.template" compact />
+              </div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -1520,7 +1875,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
         {showCreateForm && (
           <div className="shrink-0 border-b border-border bg-bg-panel px-4 py-4">
             <p className="mb-3 text-sm font-semibold text-text-primary">
-              New {PROFILE_TYPE_LABELS[profileType].slice(0, -1)}
+              New {singular(labelFor(profileType))}
             </p>
             <label className="mb-1 block text-xs text-text-muted">
               Name <span className="text-indigo-400">*</span>
@@ -1700,34 +2055,87 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     </div>
                   </div>
                 </div>
-                <div className="mb-3 grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs text-text-muted">Status</label>
-                    <select
-                      value={profile.status}
-                      onChange={e => updateProfileField("status", e.target.value)}
-                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
-                    >
-                      <option value="active">Active</option>
-                      <option value="archived">Archived</option>
-                    </select>
+                {/* SEX AND AGE, characters only -- the two facts a writer
+                    states plainly about a person and then stops thinking about.
+                    They belong up here with the name rather than buried in
+                    prose, which is where they had to live before.
+
+                    TAGS USED TO SIT IN THIS ROW AND ARE GONE. Nothing read them
+                    except one side-character prompt: they were absent from the
+                    chip serialiser and from the Weave's brief, so they reached no
+                    AI path at all, and the Story Role picker auto-filled them
+                    with words the app then ignored. Anything already typed stays
+                    in the file. */}
+                {profile.type === "character" && (
+                  <div className="mb-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs text-text-muted">Sex</label>
+                      <div className="flex gap-1.5">
+                        {(["M", "F", "custom"] as const).map(option => {
+                          const isCustom = option === "custom";
+                          const chosen = isCustom
+                            ? Boolean(profile.sex) && profile.sex !== "M" && profile.sex !== "F"
+                            : profile.sex === option;
+                          return (
+                            <button
+                              key={option}
+                              onClick={() => updateProfileField(
+                                "sex", isCustom ? (chosen ? profile.sex : " ") : option)}
+                              className={`rounded border px-2 py-1 text-xs transition-colors ${
+                                chosen
+                                  ? "border-indigo-500 bg-indigo-600/20 text-indigo-200"
+                                  : "border-border text-text-muted hover:border-indigo-700"
+                              }`}
+                            >
+                              {isCustom ? "Custom" : option}
+                            </button>
+                          );
+                        })}
+                        {/* Greyed until Custom is chosen, which is what the
+                            writer asked for: the box is visibly not yours to
+                            type in until you have said you want it. */}
+                        <input
+                          type="text"
+                          value={profile.sex === "M" || profile.sex === "F"
+                            ? "" : (profile.sex ?? "").trim()}
+                          onChange={e => updateProfileField("sex", e.target.value)}
+                          disabled={!profile.sex
+                            || profile.sex === "M" || profile.sex === "F"}
+                          placeholder="Your word for it"
+                          aria-label="Custom sex"
+                          data-pb-field="sex"
+                          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-text-muted">Age</label>
+                      <input
+                        type="text"
+                        value={profile.age ?? ""}
+                        onChange={e => updateProfileField("age", e.target.value)}
+                        placeholder="18, 18ish, 18 months, approx 30, Unknown"
+                        data-pb-field="age"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                      />
+                      <p className="mt-1 text-xs text-faint">
+                        Say it however you would say it. Blank is fine when it
+                        does not matter.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-text-muted">
-                      Tags <span className="text-faint">(comma-separated)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={profile.tags.join(", ")}
-                      onChange={e => updateProfileField(
-                        "tags",
-                        e.target.value.split(",").map(t => t.trim()).filter(Boolean)
-                      )}
-                      placeholder="e.g. strategist, guarded, grief"
-                      data-pb-field="tags"
-                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
-                    />
-                  </div>
+                )}
+
+                <div className="mb-3 w-1/2 pr-1.5">
+                  <label className="mb-1 block text-xs text-text-muted">Status</label>
+                  <select
+                    value={profile.status}
+                    onChange={e => updateProfileField("status", e.target.value)}
+                    className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
+                  >
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                  </select>
                 </div>
 
                 {/* Name generator -- opened by the dice button beside Name.
@@ -1742,7 +2150,7 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 )}
 
                 {/* Personality spine -- characters only, right in the header
-                    under Status/Tags. Inserts into Personality Traits (trait
+                    under Status. Inserts into Personality Traits (trait
                     block on main, appended paragraph on side); a Story Role
                     pick also fills Role and merges its key-aspect tags. */}
                 {profile.type === "character" && (
@@ -1756,18 +2164,193 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                         }
                       }}
                       onRolePicked={picked => {
+                        // Fills the Role and nothing else. It used to merge the
+                        // archetype's key-aspect tags in as well -- writing data
+                        // that no part of the app ever read, into a field the
+                        // writer could not tell was inert.
                         updateProfileField("role", picked.label);
-                        const aspects = ARCHETYPE_ROLE_TAGS[picked.id] ?? [];
-                        const merged = [...profile.tags];
-                        for (const tag of aspects) {
-                          if (!merged.some(t => t.toLowerCase() === tag.toLowerCase())) merged.push(tag);
-                        }
-                        if (merged.length !== profile.tags.length) updateProfileField("tags", merged);
                       }}
                     />
                   </div>
                 )}
               </div>
+
+              {/* WHAT AN IMPORT LEFT BEHIND. An entry from another book
+                  carries ids that mean nothing here: its connections, the
+                  chapters its facts happen in, whose beliefs they were. Dropped
+                  silently they are a loss the writer finds weeks later; said out
+                  loud they are a short list of things to redo. */}
+              {(profile.importWarnings ?? []).length > 0 && (
+                <div className="mb-6 rounded border border-amber-500/30 bg-amber-500/5 p-3">
+                  <p className="text-xs text-amber-200">
+                    Imported from another book. Some things could not come with
+                    it:
+                  </p>
+                  <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-text-muted">
+                    {(profile.importWarnings ?? []).map(note => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-1.5 text-xs text-faint">
+                    Everything you wrote came across: the name, every section,
+                    every trait, and the words of every fact.
+                  </p>
+                </div>
+              )}
+
+              {/* WHAT JUST HAPPENED, AND WHAT IS NEXT -- the continuous-flow
+                  rule. A page that silently rearranges itself leaves the writer
+                  checking whether their traits are still there; this says where
+                  they went and what is left to do. */}
+              {templateDid && (
+                <div className="mb-6 rounded border border-indigo-700/40 bg-indigo-950/20 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-xs text-text-muted">
+                      <p className="text-text-primary">
+                        {profile.name} is now a{" "}
+                        {isSideCharacter ? "Side" : "Main"} character.
+                      </p>
+                      {templateDid.dissolved > 0 ? (
+                        <p className="mt-1">
+                          {templateDid.dissolved} trait
+                          {templateDid.dissolved === 1 ? "" : "s"} became lines of
+                          text inside the same sections.
+                          {templateDid.hidden > 0 && (
+                            <> The {templateDid.hidden === 1 ? "one" : templateDid.hidden}{" "}
+                            marked Hidden {templateDid.hidden === 1 ? "starts" : "start"} with
+                            "Hidden:" so you can find {templateDid.hidden === 1 ? "it" : "them"} again.</>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="mt-1">
+                          Nothing needed moving. Everything you wrote is where it
+                          was.
+                        </p>
+                      )}
+                      <p className="mt-1 text-amber-300">
+                        Not saved yet -- press Save (or Ctrl+S) to keep it, or
+                        switch profiles to leave it alone.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setTemplateDid(null)}
+                      aria-label="Dismiss"
+                      className="shrink-0 rounded p-0.5 text-faint hover:text-text-primary"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* THE ORDER OF THIS PAGE IS DELIBERATE, and it is the writer's:
+                  "Basic information first and foremost ... Next are the
+                  Connections ... Next is the Overview ... Next or possibly moved
+                  up is this [+ Something that changes] feature. Next are the
+                  various Traits."
+                  Trunk, then main branches, then branches, then leaves. Two
+                  changes to their draft, both argued rather than assumed:
+                  Overview sits AFTER Connections, which is the writer's own
+                  correction on seeing it -- who someone IS reads better once
+                  you know who they are TO people, and my argument for putting
+                  it second (a fast win against Frayed) was about the app's
+                  bookkeeping rather than about reading the page. The Run sits
+                  above Connections
+                  because Weaving builds connections FOR the writer while the Run
+                  is the only part of an entry no other screen can produce. */}
+              {/* Profile sections. Side characters render every section as a
+                  single free-text field -- trait blocks are a main-template
+                  feature, so hasTraitBlocks is forced off for them. */}
+              {/* HOW THIS CHANGES ACROSS THE BOOK.
+                  Under the sections, because the sections are what is true
+                  throughout and this is what is true from a point onwards. The
+                  spec's own opening example lives here: a heroine who believes
+                  her father died, from chapter one, with the reader learning
+                  otherwise in chapter fifteen. */}
+              {/* Wrapped for the same gap every other block on this page has.
+                  Without it the Run and Connections sat directly on top of each
+                  other and read as one thing. */}
+              <div className="mb-6">
+              <RunEditor
+                run={profile.run ?? []}
+                chapters={chapters}
+                people={people}
+                self={{ entity_id: profile.entity_id, name: profile.name }}
+                onChange={next => {
+                  setProfile(prev => (prev ? { ...prev, run: next } : prev));
+                  setIsDirty(true);
+                }}
+                unavailable={home === "profiles"
+                  ? "Facts need this project brought into the Weave first. A "
+                    + "profile file has nowhere to record a chapter, so the app "
+                    + "would take what you typed and lose it. Bring your world "
+                    + "in from the Weave and this fills in here."
+                  : undefined}
+              />
+              </div>
+
+              {/* CONNECTIONS, high on the page because they are most of what a
+                  scene runs on and because Weaving fills them in for the writer.
+                  Codex entries only -- a tie is the Weave's own idea and a
+                  profiles/ file has nowhere to record one. */}
+              {home === "codex" && profile.entity_id && (
+                <div className="mb-6">
+                  <ProfileConnections
+                    projectPath={project.root_path}
+                    entityId={profile.entity_id}
+                    type={profile.type}
+                    name={profile.name}
+                  />
+                </div>
+              )}
+
+              {sections.filter(cfg => cfg.key === "overview").map(cfg => {
+                const section = profile.sections[cfg.key] ?? {
+                  content: "", trait_blocks: [], ai_summary: "",
+                };
+                // KEYED BY PROFILE AND SECTION, so switching profiles remounts
+                // these. Without the filename in the key React reuses the
+                // component, and every AI summary the writer opened on the last
+                // character would still be open on this one -- exactly what
+                // "minimise upon opening the profile" asks it not to do.
+                return (
+                  <div key={`${profile.filename}:${cfg.key}`}>
+                  <ProfileSectionEditor
+                    sectionKey={cfg.key}
+                    heading={cfg.heading}
+                    hasTraitBlocks={cfg.hasTraitBlocks && !isSideCharacter}
+                    // A Side page is plain boxes -- except that a secret cannot
+                    // live in one. Prose has nowhere to carry "never say this",
+                    // so any secret the section holds is shown as a trait, and
+                    // only then. Structure appears where protection was asked
+                    // for and nowhere else.
+                    showSecretsOnly={isSideCharacter}
+                    // The section this idea is named after, on either template.
+                    teachesSubtext={cfg.key === "hidden_and_foreshadowing_traits"}
+                    section={section}
+                    profileName={profile.name}
+                    profileType={profile.type}
+                    onContentChange={content => updateSection(cfg.key, { content })}
+                    onAiSummaryChange={ai_summary => updateSection(cfg.key, { ai_summary })}
+                    onAddTraitBlock={() => addTraitBlock(cfg.key)}
+                    onUpdateTraitBlock={(id, updates) => updateTraitBlock(cfg.key, id, updates)}
+                    onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
+                    onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
+                    generatingField={generatingField}
+                    openTraits={openTraits}
+                    onToggleTrait={toggleTrait}
+                    colour={sectionColour(cfg.key, allSections.findIndex(c => c.key === cfg.key))}
+                    shadowed={isShadowed(cfg.key)}
+                    onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
+                    showAiSummary={!isSideCharacter}
+                    onGenerateOverview={
+                      isSideCharacter && cfg.key === "overview" ? generateQuickOverview : undefined
+                    }
+                    generatingOverview={quickOverviewLoading}
+                  />
+                  </div>
+                );
+              })}
 
               {/* Importance Audit button + results (main template only --
                   side characters have no trait blocks to audit) */}
@@ -1837,19 +2420,43 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                 />
               )}
 
+              {/* EVERY SECRET, IN ONE PLACE. A view rather than a move: a
+                  secret belongs beside what it explains, and relocating it into
+                  a bucket would leave the model a floating fact with nothing to
+                  attach it to. */}
+              <SecretsPanel
+                profile={profile}
+                sections={sections}
+                onSetWeight={(sectionKey, blockId, importance) =>
+                  updateTraitBlock(sectionKey, blockId, { importance })}
+              />
+
               {/* Profile sections. Side characters render every section as a
                   single free-text field -- trait blocks are a main-template
                   feature, so hasTraitBlocks is forced off for them. */}
-              {sections.map(cfg => {
+              {sections.filter(cfg => cfg.key !== "overview").map(cfg => {
                 const section = profile.sections[cfg.key] ?? {
                   content: "", trait_blocks: [], ai_summary: "",
                 };
-                return (
-                  <div key={cfg.key}>
+                // KEYED BY PROFILE AND SECTION, so switching profiles remounts
+                // these. Without the filename in the key React reuses the
+                // component, and every AI summary the writer opened on the last
+                // character would still be open on this one -- exactly what
+                // "minimise upon opening the profile" asks it not to do.
+                return (
+                  <div key={`${profile.filename}:${cfg.key}`}>
                   <ProfileSectionEditor
                     sectionKey={cfg.key}
                     heading={cfg.heading}
                     hasTraitBlocks={cfg.hasTraitBlocks && !isSideCharacter}
+                    // A Side page is plain boxes -- except that a secret cannot
+                    // live in one. Prose has nowhere to carry "never say this",
+                    // so any secret the section holds is shown as a trait, and
+                    // only then. Structure appears where protection was asked
+                    // for and nowhere else.
+                    showSecretsOnly={isSideCharacter}
+                    // The section this idea is named after, on either template.
+                    teachesSubtext={cfg.key === "hidden_and_foreshadowing_traits"}
                     section={section}
                     profileName={profile.name}
                     profileType={profile.type}
@@ -1860,6 +2467,10 @@ export function ProfileBuilder({ project, initialType, onBack }: ProfileBuilderP
                     onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
                     onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
                     generatingField={generatingField}
+                    openTraits={openTraits}
+                    onToggleTrait={toggleTrait}
+                    colour={sectionColour(cfg.key, allSections.findIndex(c => c.key === cfg.key))}
+                    shadowed={isShadowed(cfg.key)}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
                     showAiSummary={!isSideCharacter}
                     onGenerateOverview={
@@ -2228,6 +2839,22 @@ interface ProfileSectionEditorProps {
   sectionKey: string;
   heading: string;
   hasTraitBlocks: boolean;
+  /** Side template: render only the trait blocks that are secret, since those
+   *  cannot be flattened into the plain box without losing their protection. */
+  showSecretsOnly?: boolean;
+  /** Show the "never named" help and its walkthrough beside this heading. True
+   *  for the section a writer looks in for it. */
+  teachesSubtext?: boolean;
+  /** Which trait tiles are open, and how to toggle one. Held by the screen so
+   *  the set survives a re-render and resets when the writer changes profile. */
+  openTraits: Set<string>;
+  onToggleTrait: (id: string) => void;
+  /** This section's stripe, and the border its traits wear, so a writer finds
+   *  Motivations by its colour rather than by reading six identical headings. */
+  colour: { bar: string; border: string; panel?: string };
+  /** True for the section a kind keeps its secrets in: a darker ground, so it
+   *  reads as a room with the lights lower rather than as a warning. */
+  shadowed?: boolean;
   section: ProfileSection;
   profileName: string;
   profileType: string;
@@ -2254,6 +2881,12 @@ function ProfileSectionEditor({
   sectionKey,
   heading,
   hasTraitBlocks,
+  showSecretsOnly,
+  teachesSubtext,
+  openTraits,
+  onToggleTrait,
+  colour,
+  shadowed,
   section,
   profileName,
   profileType,
@@ -2269,18 +2902,48 @@ function ProfileSectionEditor({
   onGenerateOverview,
   generatingOverview = false,
 }: ProfileSectionEditorProps) {
+  // Open state for the walkthrough offered beside the heading.
+  const [guideOpen, setGuideOpen] = useState(false);
+  // Closed on arrival. See the note beside the summary itself.
+  const [summaryOpen, setSummaryOpen] = useState(false);
+
   const isGeneratingSummary = generatingField === sectionKey;
 
   return (
-    <div className="mb-6" onFocus={onFocus}>
-      {/* Section heading with indigo accent + help icon for text sections */}
+    <div
+      className={shadowed
+        // The secrets section, given its own ground rather than only its own
+        // stripe. Eye-catching and unmistakably a different kind of place.
+        ? `mb-6 rounded-lg border ${colour.panel} p-3`
+        : "mb-6"}
+      onFocus={onFocus}
+    >
+      {/* Section heading with its own accent + help icon for text sections */}
       <div className="mb-3 flex items-center gap-2.5 border-b border-border pb-2">
-        <span className="h-4 w-0.5 shrink-0 rounded-full bg-indigo-600/70" />
+        <span className={`h-4 w-0.5 shrink-0 rounded-full ${colour.bar}`} />
         <h2 className="text-sm font-semibold text-text-primary">{heading}</h2>
         {/* (?) icon -- shows writing tips with Poor/Good/Great examples.
             Only renders if help content exists for this section. */}
         {!hasTraitBlocks && (
           <SectionHelpPopover profileType={profileType} sectionKey={sectionKey} />
+        )}
+        {/* WHERE A WRITER ACTUALLY LOOKS FOR THIS. The "never named" setting is
+            explained here, next to the section named after it, on both
+            templates and whether or not anything is marked yet. It used to be
+            reachable only from the panel that lists secrets -- and that panel
+            hides itself when there are none, so a writer meeting the idea for
+            the first time had no way to read about it. */}
+        {teachesSubtext && (
+          <>
+            <Explain of="character.subtext" />
+            <button
+              onClick={() => setGuideOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-800 px-1.5 py-0.5 text-[10px] text-violet-200 transition-colors hover:border-violet-500"
+            >
+              <BookOpen size={10} /> Show me how this works
+            </button>
+            {guideOpen && <SubtextGuide onClose={() => setGuideOpen(false)} />}
+          </>
         )}
         {/* Side-character Overview: spin the filled-in fields into a mini
             encapsulated story. Click again for a different angle. */}
@@ -2297,9 +2960,85 @@ function ProfileSectionEditor({
         )}
       </div>
 
+      {/* SIDE PAGE, SECRETS ONLY. Shown under the plain box rather than
+          instead of it: the writer keeps the simple page and keeps the one
+          thing the simple page cannot express. */}
+      {!hasTraitBlocks && showSecretsOnly
+        && (section.trait_blocks ?? []).some(b => b.subtext || b.ai_scope === "on-request") && (
+        <div className="mb-3 rounded border border-violet-900/60 bg-violet-950/10 p-2">
+          <p className="mb-1.5 flex items-center gap-1 text-xs text-violet-200">
+            <EyeOff size={11} />
+            Never named
+          </p>
+          <p className="mb-2 text-xs text-faint">
+            AI uses these and never says them. They stay as traits because a
+            plain box has nowhere to record that.
+          </p>
+          {(section.trait_blocks ?? [])
+            .filter(b => b.subtext || b.ai_scope === "on-request")
+            .map(block => (
+              <div key={block.id} className="mb-1.5 last:mb-0">
+                <input
+                  type="text"
+                  value={block.trait}
+                  onChange={e => onUpdateTraitBlock(block.id, { trait: e.target.value })}
+                  placeholder="What it is"
+                  className="mb-1 w-full rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-violet-500"
+                />
+                <textarea
+                  value={block.description}
+                  onChange={e => onUpdateTraitBlock(block.id, { description: e.target.value })}
+                  rows={2}
+                  placeholder="What it makes them do"
+                  className="w-full resize-y rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-violet-500"
+                />
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-xs text-faint">
+                    Weight: {block.importance}
+                  </span>
+                  <button
+                    onClick={() => onRemoveTraitBlock(block.id)}
+                    className="rounded p-0.5 text-faint hover:text-red-400"
+                    title="Remove this"
+                    aria-label={`Remove ${block.trait || "this secret"}`}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
       {hasTraitBlocks ? (
         <div>
-          {section.trait_blocks.length === 0 && (
+          {/* PROSE IN A TRAIT SECTION IS SHOWN, not hidden.
+              The file format has always allowed a section to hold both a trait
+              list and a paragraph, and three things put text here: a writer
+              hand-editing the Markdown, Quick Build before a character was
+              promoted, and moving a character from Side to Main. Rendering only
+              the list meant that text sat on disk, invisible, and the writer
+              would reasonably conclude it had been eaten. Shown only when there
+              IS something, so an ordinary Main character's page is unchanged. */}
+          {(section.content ?? "").trim() !== "" && (
+            <div className="mb-3">
+              <p className="mb-1 text-xs text-text-muted">
+                Notes in this section
+              </p>
+              <textarea
+                value={section.content}
+                onChange={e => onContentChange(e.target.value)}
+                rows={3}
+                data-pb-field={`section:${sectionKey}:content`}
+                className="w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+              />
+              <p className="mt-1 text-xs text-faint">
+                Written as plain notes rather than as traits. Move any of it into
+                a trait below when you want AI to weigh it.
+              </p>
+            </div>
+          )}
+          {section.trait_blocks.length === 0 && (section.content ?? "").trim() === "" && (
             <p className="mb-2 text-xs text-faint">
               No traits yet. Click "Add Trait" to add one.
             </p>
@@ -2308,6 +3047,9 @@ function ProfileSectionEditor({
             <TraitBlockCard
               key={block.id}
               block={block}
+              borderClass={colour.border}
+              open={openTraits.has(block.id)}
+              onToggle={() => onToggleTrait(block.id)}
               profileName={profileName}
               profileType={profileType}
               sectionKey={sectionKey}
@@ -2325,6 +3067,7 @@ function ProfileSectionEditor({
           </button>
         </div>
       ) : (
+        <>
         <textarea
           value={section.content}
           onChange={e => onContentChange(e.target.value)}
@@ -2333,31 +3076,72 @@ function ProfileSectionEditor({
           data-pb-field={`section:${sectionKey}:content`}
           className="mb-3 w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
         />
+        {/* SAYING WHAT A FIELD CALLED NOTES ACTUALLY DOES.
+            It used to travel to the model inside the "details" bucket on
+            two paths and be withheld on a third -- the same words in or
+            out depending on how they happened to be sent, with nothing on
+            screen saying which. It is off by default everywhere now, and
+            the field says so rather than leaving the writer to guess. */}
+        {sectionKey === "notes" && (
+          <p className="mb-3 -mt-2 text-xs text-faint">
+            Your own jottings. Not sent to AI unless you tick Notes when
+            attaching this entry to a chat.
+          </p>
+        )}
+        </>
       )}
 
       {/* AI Summary sub-section (hidden on the side-character template) */}
+      {/* THE AI SUMMARY, CLOSED UNTIL ASKED FOR.
+          It is a derived restatement of the section above it, so on a page the
+          writer is reading it is the same words twice. Open, several at once
+          doubled the length of every profile. Closed, it is one line -- and it
+          says whether there is anything in it, so the writer never has to open
+          one to find out.
+
+          Local state, and that is deliberate: the wrapper is keyed by filename,
+          so switching profiles remounts these and every summary starts closed
+          again, which is what "upon opening the profile" asks for. Several stay
+          open at once while the writer is in one profile. */}
       {showAiSummary && (
       <div className="rounded border border-border bg-bg-primary p-3">
-        <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-xs font-medium text-text-muted">AI Summary: {heading}</p>
+        <div className="flex items-center justify-between gap-2">
           <button
-            onClick={onGenerateSectionSummary}
+            onClick={() => setSummaryOpen(v => !v)}
+            aria-expanded={summaryOpen}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-medium text-text-muted hover:text-text-primary"
+          >
+            {summaryOpen ? <ChevronDown size={11} className="shrink-0" />
+                         : <ChevronRight size={11} className="shrink-0" />}
+            <span className="truncate">
+              AI Summary: {heading}
+              {!summaryOpen && (
+                <span className="ml-1.5 text-faint">
+                  {section.ai_summary.trim() ? "written" : "empty"}
+                </span>
+              )}
+            </span>
+          </button>
+          <button
+            onClick={() => { setSummaryOpen(true); onGenerateSectionSummary(); }}
             disabled={isGeneratingSummary}
-            className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
             title="Generate this section summary using AI"
           >
             <Sparkles size={10} />
             {isGeneratingSummary ? "Generating..." : "Generate"}
           </button>
         </div>
-        <AutoTextarea
-          value={section.ai_summary}
-          onChange={e => onAiSummaryChange(e.target.value)}
-          placeholder="Click Generate to create an AI summary, or write one manually."
-          className="w-full rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-muted placeholder-faint outline-none focus:border-indigo-500"
-          minRows={2}
-          dataField={`section:${sectionKey}:ai_summary`}
-        />
+        {summaryOpen && (
+          <AutoTextarea
+            value={section.ai_summary}
+            onChange={e => onAiSummaryChange(e.target.value)}
+            placeholder="Click Generate to create an AI summary, or write one manually."
+            className="mt-1.5 w-full rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-muted placeholder-faint outline-none focus:border-indigo-500"
+            minRows={2}
+            dataField={`section:${sectionKey}:ai_summary`}
+          />
+        )}
       </div>
       )}
     </div>
@@ -2516,6 +3300,15 @@ function SectionHelpPopover({
 
 interface TraitBlockCardProps {
   block: TraitBlock;
+  /** Its section's colour. A trait belongs to the section it is in, and saying
+   *  so in the border costs nothing and answers "which section am I in" while
+   *  the writer is halfway down a long page. */
+  borderClass: string;
+  /** Closed by default: a trait is one scannable line until the writer wants
+   *  it. Several may be open at once, which is what makes comparing two while
+   *  editing a third possible. */
+  open: boolean;
+  onToggle: () => void;
   profileName: string;
   profileType: string;
   sectionKey: string;
@@ -2524,7 +3317,7 @@ interface TraitBlockCardProps {
   onRemove: () => void;
 }
 
-function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
+function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
   const wordCount = countWords(block.description);
 
   // AI Trim tool -- suggests a concise rewrite when description is wordy/bloated
@@ -2595,10 +3388,58 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
     }
   };
 
+  // WHAT A CLOSED TILE SAYS. The name is the thing being scanned for; the
+  // weight and the secret marker are what a writer checks at a glance; the
+  // description is truncated on a word so it never breaks mid-syllable.
+  const summary = block.description.trim();
+  const shortened = summary.length > 90
+    ? summary.slice(0, summary.lastIndexOf(" ", 90) > 50
+                       ? summary.lastIndexOf(" ", 90) : 90) + "..."
+    : summary;
+
+  if (!open) {
+    return (
+      <button
+        onClick={onToggle}
+        aria-expanded={false}
+        data-testid="trait-tile"
+        className={`mb-1.5 flex w-full items-start gap-2 rounded border ${borderClass} bg-bg-panel px-2 py-1.5 text-left transition-colors hover:brightness-125`}
+      >
+        <ChevronRight size={12} className="mt-1 shrink-0 text-faint" />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="text-sm text-text-primary">
+              {block.trait.trim() || "(unnamed trait)"}
+            </span>
+            <span className="rounded-full border border-border px-1.5 text-xs text-text-muted">
+              {block.importance}
+            </span>
+            {block.subtext && (
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-violet-700 px-1.5 text-xs text-violet-200">
+                <EyeOff size={9} /> never named
+              </span>
+            )}
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-text-muted">
+            {shortened || "Nothing written yet."}
+          </span>
+        </span>
+      </button>
+    );
+  }
+
   return (
-    <div className="mb-3 rounded border border-border bg-bg-panel p-3">
+    <div className={`mb-3 rounded border-2 ${borderClass} bg-bg-panel p-3`}>
       {/* Top row: importance selector + trait name + delete button */}
       <div className="mb-2 flex items-start gap-2">
+        <button
+          onClick={onToggle}
+          aria-expanded
+          aria-label={`Close ${block.trait || "this trait"}`}
+          className="mt-1 shrink-0 rounded text-faint hover:text-text-primary"
+        >
+          <ChevronDown size={12} />
+        </button>
         {/* Importance dropdown */}
         <select
           value={block.importance}
@@ -2615,6 +3456,29 @@ function TraitBlockCard({ block, profileName, profileType, sectionKey, sectionHe
 
         {/* (?) help icon -- explains this importance level with section-specific examples */}
         <ImportanceHelpPopover importance={block.importance} sectionKey={sectionKey} />
+
+        {/* DISCLOSURE. A separate question from the weight beside it, and
+            deliberately a separate control: `hidden` used to be the fifth
+            option in that dropdown, which meant a secret could not also be
+            important. A villain's reason for avoiding hospitals is the most
+            load-bearing thing about him AND the thing he would never say. */}
+        <button
+          onClick={() => onUpdate({ subtext: !block.subtext })}
+          aria-pressed={Boolean(block.subtext)}
+          className={`shrink-0 rounded border px-1.5 py-1 text-xs transition-colors ${
+            block.subtext
+              ? "border-violet-500 bg-violet-600/20 text-violet-200"
+              : "border-border text-faint hover:border-violet-700 hover:text-text-muted"
+          }`}
+          title={block.subtext ? SUBTEXT_HELP.on : SUBTEXT_HELP.off}
+        >
+          {block.subtext ? <EyeOff size={12} /> : <Eye size={12} />}
+        </button>
+
+        {/* Only once it is on. Before that the eye's tooltip is enough, and a
+            second control on every trait row would be noise; after it, the
+            writer has just made a decision they may want explained. */}
+        {block.subtext && <Explain of="character.subtext" compact align="right" />}
 
         {/* Trait name */}
         <input

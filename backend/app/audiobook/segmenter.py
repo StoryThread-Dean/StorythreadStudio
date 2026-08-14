@@ -29,13 +29,13 @@
 # ordered items (segments and silences), plus a superseded list holding
 # replaced segments until cleanup.
 
-import hashlib
 import os
 import re
 import uuid
 
 from app.audiobook.jsonstore import read_json, write_json_atomic
 from app.audiobook.markers import ParsedNarration
+from app.utils.stable_ids import content_hash, lcs_match as _lcs_match
 
 # Bumped to 2 when paragraphs stopped grouping into shared segments. The
 # version exists so a change in HOW text is cut re-runs segmentation
@@ -81,13 +81,14 @@ def _new_segment_id() -> str:
     return "seg-" + uuid.uuid4().hex[:8]
 
 
-def content_hash(text: str) -> str:
-    """
-    The identity of a segment's text. Hashed over the RAW narration text of
-    the segment -- including inline [say:...] markup, which is deliberate:
-    editing a [say] changes the audio, so it must change the identity.
-    """
-    return "sha256-" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:24]
+# content_hash and _lcs_match moved to app/utils/stable_ids.py, because the
+# Weave's scene anchors need exactly the same trick. Re-exported under their
+# old names so everything below (and the tests) is untouched by the move.
+#
+# NOTE the deliberate omission: stable_ids also offers a FUZZY matcher that
+# pairs up blocks the writer merely edited. The audiobook must never use it.
+# Here a changed segment MUST get a new identity so its audio regenerates --
+# reusing the ID would leave the old recording attached to new words.
 
 
 def _split_oversize_paragraph(paragraph: str) -> list[str]:
@@ -337,35 +338,6 @@ def _segment_texts_from_elements(elements: list[dict]) -> list[dict]:
 
 
 # ── Book-wide re-matching ─────────────────────────────────────────────────────
-
-def _lcs_match(old_hashes: list[str], new_hashes: list[str]) -> dict[int, int]:
-    """
-    Longest common subsequence over content hashes. Returns
-    {new_index: old_index} for every matched pair -- order preserving, so
-    a hash that appears twice resolves in reading order.
-    """
-    n, m = len(old_hashes), len(new_hashes)
-    # Classic DP table; ~500x500 for a full novel, comfortably cheap.
-    dp = [[0] * (m + 1) for _ in range(n + 1)]
-    for i in range(n - 1, -1, -1):
-        for j in range(m - 1, -1, -1):
-            if old_hashes[i] == new_hashes[j]:
-                dp[i][j] = dp[i + 1][j + 1] + 1
-            else:
-                dp[i][j] = max(dp[i + 1][j], dp[i][j + 1])
-    matches: dict[int, int] = {}
-    i = j = 0
-    while i < n and j < m:
-        if old_hashes[i] == new_hashes[j]:
-            matches[j] = i
-            i += 1
-            j += 1
-        elif dp[i + 1][j] >= dp[i][j + 1]:
-            i += 1
-        else:
-            j += 1
-    return matches
-
 
 def resegment(parsed: ParsedNarration, previous: dict | None) -> dict:
     """

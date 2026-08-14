@@ -219,6 +219,487 @@ Two export modes, both run from `POST /api/export/full-manuscript` and `POST /ap
 - **Full manuscript** — combines chapters in order into a single file in `exports/`. Optional flags append chapter summaries, scene summaries, notes, and profiles as `#` appendices.
 - **Manual snapshot** — dated folder under `exports/snapshot-YYYY-MM-DD/` mirroring the project layout, with the same opt-in toggles for summaries, notes, and profiles.
 
+### Exporting is not the same as moving
+
+An export is for **leaving the app**: a manuscript to send to a reader, a Weave
+bundle a spreadsheet or another program can read. It carries the work, not the
+app's own state, so it does not include Weaving answers -- what you retired,
+muted or put off. Those are a record of what you told this app to stop asking and
+mean nothing outside it.
+
+**To move a book to another computer, move the folder.** Upload the project
+folder to a drive, download it on the other machine, open it there. Everything
+arrives identical, Weaving history included, and you carry on where you stopped.
+See `docs/architecture.md` for what makes that work and the one transfer method
+to avoid (anything that filters hidden folders and so drops `.storythread/`).
+
+
+## The Weave
+
+*In development on `feature/the-weave`, for v2.0.0. Not in a shipped release yet.*
+
+The Weave is one linked, time-aware world model. Every character, place, faction,
+object and idea is a **Thread**; the connections between them are **Ties**; and a
+Thread's **Run** records how it changes across the story.
+
+The Run is the point of the whole thing. A profile today describes one unchanging
+person from page one to the last page, which is wrong: a heroine who spends
+fourteen chapters believing her father died in a raid is a different person in
+chapter fifteen. Ask the Weave about chapter seven and you get the belief; ask
+about chapter fifteen and you get the truth.
+
+### Saying how, from a grouped list
+
+The relation goes in one dropdown, inside the sentence it records:
+
+```
+Record it as
+Alexandra Langford [ choose from ...  v ]  Lara Croft
+                   | Family
+                   |   parent of
+                   |   sibling of
+                   |   cousin of
+                   | Knows / Known
+                   |   friend of
+                   |   partners with
+                   | Intimate
+                   |   married to (one at a time)
+                   | ...
+                   | Write my own...
+```
+
+It replaced a column of buttons where every button *was* the save action. That
+shape was wrong twice: about seventy relations ship now, which makes a column a
+wall, and a writer looking for something to press could not tell the wall was it.
+One dropdown refines one save button.
+
+**Leaving it at "choose from ..." is a real answer**, not an unfinished one -- the
+connection records as the plain kind and can be labelled on a later pass. The
+reason line is the required half; the relation is the queryable half.
+
+Relations are grouped under **Family · Knows / Known · Intimate · Against · Duty
+and standing · Belonging · Place · Belief · Things and events**, and only the ones
+that mean something between those two kinds of entry are offered. A relation the
+world does not have yet is in the list too and is adopted when chosen -- which is
+not behind the writer's back, because choosing it *is* the request.
+
+Two things ride in an option's label because an option has no second line:
+`(stored the other way)` for a relation that runs from the other end, since the
+writer will see it listed under that entry afterwards and an unexplained flip
+looks like a bug; and `(one at a time)` for cardinality, worth knowing before
+choosing rather than after.
+
+**The other end can be a different relation, not just different wording.**
+Alexandra is *friends of* Lara; Lara is *business partners with* Alexandra. Both
+are true, from different ends, and no derivation produces the second from the
+first. Left unset, the registry's own inverse is used -- `mentored by` reads as
+`mentor of` -- which is right almost always, and is why the override is optional.
+
+**Writing your own** is in the list rather than beside it, so it is found while
+choosing rather than after giving up. It carries a warning that the label becomes
+part of the connection string sent to AI, so plain words a model already knows
+cost less and land better than invented ones. Guidance, not a rule: an invented
+culture may genuinely need a word no model knows, and then the reason line carries
+the meaning. A name the app already knows is not an error -- it is used, adopted,
+or widened to cover the pair in front of you, never refused.
+
+### A connection changes across the book
+
+A relationship is not a fact of the premise. Three scenarios, all ordinary:
+
+| | |
+|---|---|
+| Chapter 2 they meet through a friend; chapter 4 they are friends; chapter 8 she saves his life | changes twice |
+| Chapter 1 she is his daughter | never changes |
+| Chapter 7 she is disgusted by him; chapter 8 they work together; chapter 11 they are lovers | changes twice, and reverses |
+
+All three work, because **the pair is an axis**. `(Alexandra, Dean)` is the axis
+and the states are a run on it, so a connection supersedes its own earlier states
+exactly the way a fact does: the latest state at or before the point being read
+is the one in force, and **the writer closes nothing by hand.** Recording
+"friends" at chapter 4 is all it takes -- "acquaintances" stops applying from
+there on, and reading chapter 3 still gives acquaintances.
+
+Two states on one pair at the same chapter with nothing to order them is a
+**Snag**, reported, never silently resolved -- the same rule facts follow, for
+the same reason: a quietly-picked winner would be a relationship the book never
+establishes.
+
+**An undated connection is true of the whole book.** This is the one place
+connections and facts differ, and the asymmetry is real: a fact records a
+*change*, and a change with no point in the story is meaningless, so an undated
+fact is Unplaced. A connection records that two things *relate* -- "she is his
+daughter" is simply true, and asking a writer to date it is asking them to date
+the premise. A dated state still supersedes it from its own chapter onward, so a
+relationship that starts as the premise can still develop. An anchor that was
+written and no longer resolves -- a deleted chapter -- is still Unplaced, because
+that is a real problem rather than a default.
+
+`frame` and `revealed_at` work on a connection's states too, which is what makes
+the hard versions expressible: Alexandra believes they are friends while Dean is
+using her -- two states, one pair, both in force, not a contradiction. And a
+secret marriage stays hidden until its reveal chapter, including the wording of
+whatever it replaced.
+
+**`until` survives for the one thing supersession cannot say.** "They stopped
+being friends and became nothing" is a different statement from "they became
+enemies." Replacement is derived; ending is declared.
+
+**On the map this is one line, not three.** The states of a connection are one
+edge whose label changes as the scrubber moves -- which is what the scrubber was
+built for. Drawing a line per state would make a developing friendship look like
+a crowd.
+
+**A limit worth knowing:** anchors are narrative position, not in-world dates.
+The app knows chapter 11 follows chapter 8 and nothing about the year that passed
+between them. "A year on, and they cannot be apart" is recorded in the writer's
+own words rather than computed, and the app cannot do arithmetic with it. Real
+dates would need a per-world calendar, which is a separate thing.
+
+### A connection has to say WHY
+
+The one field a connection cannot be saved without is a single line, in the
+writer's own words, saying why the two are connected. Not the relation label --
+that is optional and can come on a later pass.
+
+The order is deliberate, and it follows from what the Weave is for. The point is
+that a writer can ask AI for help without pasting profiles and explaining
+context. Measured against that:
+
+| Recorded | What AI learns |
+|---|---|
+| `Alexandra -- connected to -- Dean` | that two people exist near each other, which the prose already showed |
+| `Alexandra -- is hiding her theft from -- Dean` | the tension, the stakes, and the thing Dean must not notice |
+
+A relation label like `antagonist_of` is a category a model could mostly have
+guessed. The sentence is the scene. So the app asks for the sentence first and
+**refuses a connection without one**, rather than accumulating thousands of bare
+edges that make every brief longer and no smarter.
+
+**Brevity is arithmetic, not style policing.** The reason goes into the brief
+every time the writer asks for help, multiplied by every connection in scope:
+twenty connections at a line each is affordable; twenty at four paragraphs each
+would spend the whole budget on edges before the chapter is even included. A
+wordy reason does not merely read badly -- it gets **pruned out of the brief**, so
+the writer did the work and lost the benefit. The field is therefore a
+**single-line input rather than a text area** (the shape of the box teaches the
+rule before any counter has to), capped at 140 characters, and the cap is sent by
+the backend so the box can never be wider than what is kept.
+
+A connection may also carry a second line for how it reads from the other end --
+"Alexandra is hiding her theft from Dean" does not reverse cleanly. That one is
+offered, not demanded, because a writer mid-thought should not be made to answer
+twice.
+
+Three switches on every fact and every Tie decide what is visible:
+
+| Switch | Question it answers |
+|---|---|
+| `frame` | Whose truth is this? Objective, or something one character believes |
+| `revealed_at` | When does the reader learn it? Later than the point being written = spoiler |
+| `ai_scope` | May AI see it at all? never / on request / always |
+
+Together they cover author-only secrets, hidden motives, misinformation,
+unreliable narration and layered-world premises with one mechanism -- and they
+apply to Ties as well as facts, so spoiler mode cannot hide a secret while drawing
+a large labelled edge that gives it away.
+
+Threads are ordinary Markdown files under `codex/`, so copying the project folder
+takes the whole world model with it.
+
+### Weaving
+
+A guided session that reads the manuscript and the Weave together and walks the
+writer through what it found, one decision at a time.
+
+**Four passes, because they are four different questions.** What was here first
+was Full / Targeted / Quick, which is three sizes of one thing -- the only real
+choice was how long to be there. These are named out of the same loom vocabulary
+as the rest of the Weave, and the metaphor carries the dependency deliberately:
+you cannot weave a weft without a warp.
+
+| Pass | When | What it asks |
+|---|---|---|
+| **Dress the Loom** | Start here | What is here, and what relates to what |
+| **Weave the Chapters** | As you write | Did anything change? Pairs the scenes keep putting together with nothing recorded between them |
+| **Read the Cloth** | When you step back | Where does the book contradict itself? |
+| **Unwoven** | Any time | The ground rules of the world, which is its own job |
+
+(Weave the Chapters reads the whole book today. Scoping it to the chapter being
+written -- "run it from chapter eight and the app already knows when" -- is the
+designed next step for it, tracked on the roadmap, not a current behaviour.)
+
+**The order is a teaching fact, not a lock.** Dressing the loom is never
+finished -- a world grows for the life of a book -- so a gate would never open.
+Where a later pass needs something an earlier one provides, it asks for it inline
+rather than sending you back. Unwoven is separate because world invention is not
+tidying, and mixing it in buries the connection work under questions about how
+succession functions.
+
+Every kind of finding belongs to exactly one pass. A kind in two gets asked
+twice; a kind in none silently stops being findable -- so a test holds the
+division rather than a convention.
+
+**It scans before it asks, and the scan is free.** No model, no role, no cost --
+just arithmetic over the book and the world. That is what lets it say "this found
+340 things to look at, which is many sessions of work" and mean it, instead of
+quoting an estimate that turns out wrong two hours in.
+
+What it can find without spending anything:
+
+| | |
+|---|---|
+| **Unspun** | a name in the prose with no entry behind it |
+| **Frayed** | an entry too thin to be useful |
+| **Loose thread** | an entry that relates to nothing else in the world |
+| **Untied** | two entries the prose keeps putting in the same scene with nothing recorded between them |
+| **Snag** | two facts that disagree, or a supersession that cannot be right |
+| **Unplaced** | a fact with no point in the story, so it never takes effect |
+| **Told early** | something named in a chapter where the map would be hiding it |
+| **Unwoven** | ground rules of the world that have not been decided yet |
+| **Pinned** | a phrase the writer marked by hand, raised until answered |
+
+Every stop shows the text that triggered it and answers **"why am I seeing
+this?"** with the rule that fired. Four ways to answer, and they are deliberately
+different: resolve it in place; a **permanent no worded for the kind it is on**
+(*Never make this an entry* on a name, *Not a problem* on a contradiction,
+*Leave it as it is* on a thin entry, *Not a connection* only where it really is
+one); *not yet* (comes back); and *never ask* about this kind (reversible -- and
+it skips the rest of that kind in the current sitting too).
+
+**Only Characters and Creatures are asked how they connect.** Croft Manor's way
+into the story is through Lara -- she inherited it, lives in it, left it -- so
+the manor is never the subject of a connection question. Locations, lore,
+factions, deities, governments, religions, cultures and the rest are *passive*:
+they become connected when someone active is tied to them, an unconnected one is
+not a problem, and a pair the scenes keep sharing stands its question on the
+active end, so the sentence reads "Lara lives in Croft Manor" rather than a
+manor being asked what it thinks of anyone. Two passive things in a room
+together is scenery, not a stop. The split is data: a type in the writer's own
+`types.json` may carry `"active": true` (a sentient ship that should ask) or
+`false`, and that word wins. It gates the walk only -- recording a connection
+from a passive entry by hand works everywhere.
+
+**The prose already knows who the likely answers are.** Both connection
+questions are backed by the same free count: which entries are named in the same
+**scene**. The scene is the unit deliberately -- a chapter that cuts between two
+locations would otherwise pair up characters who are never in the same room. So
+the picker behind "how is this connected?" leads with the entries the story keeps
+putting in the room, each saying how many scenes it shares, and the full list
+stays one click away. It is a shortcut, not a filter.
+
+**Untied** is the same count speaking unprompted, and it has a floor: two
+strangers pass on a street once, so one shared scene says nothing. It proposes
+that a connection exists and never what the connection IS -- a knight and the
+dragon he is hunting share a great many scenes.
+
+**Two different things get called *connected*, and the walk says which it
+means.** A name in the prose finding its entry is automatic -- it needs nothing
+from the writer, and it works from the moment the entry exists. An entry relating
+to *other* entries is what Loose thread is about. Told as a bare absence
+("Nothing connects to Alexandra Langford") the stop reads as the app having lost
+a profile that plainly exists, so it is asked as a question instead -- **"How is
+Alexandra Langford connected to the story?"** -- shown beneath her own entry's
+icon and name, and it opens by saying how many times the prose already found her.
+The number is there to be checked.
+
+**And every step can explain itself.** Beside anything you could reasonably be
+stuck on there is one **What's this?** -- a question mark on its own where a row
+is crowded -- and it opens a panel that floats over the screen rather than
+rearranging it. That last part matters: in the Smart Advisor toolbar an inline
+panel grew the row, shoved the pass buttons sideways and pushed the manuscript
+down the page. An explanation has to answer four things:
+
+| | |
+|---|---|
+| **What** it is | one line, in the app's own words |
+| **Why** | why it exists, or why it is happening right now |
+| **Necessary?** | required, worth doing, or entirely optional |
+| **What it spends** | where it is worth saying, including when the answer is nothing |
+
+Where a feature does spend, the note names the cheaper way of doing the same
+thing. A Smart Advisor pass reads the whole chapter unless something is selected,
+so "select a passage first" is not a tip -- it is the difference in the bill. The
+rewrite modifiers on an issue card cost per press, which is worth knowing before
+cycling through all seven to see what they do.
+
+And the reverse is worth saying too: Quick Build, the personality and story-role
+cheat sheets, the name generator and the right-click thesaurus all read like AI
+features and are not. Their text comes from lists that ship with the app. A writer
+who assumes otherwise avoids the cheapest tools in here.
+
+That last row is a nice-to-have rather than a rule, and worth including more often
+than not, because most of this app costs nothing and a model-shaped app trains
+people to expect otherwise. Silence about money is fine; being wrong about it is
+not, and a build fails over a "free" claim on anything that calls a model. "Free. No AI is called, so
+this costs nothing" is worth the space. Where something does spend, the note says
+*what* -- one call over a chapter reads very differently from a pass over the
+whole book.
+
+The steps sit in the same panel under a **How to do this** heading. They were a
+second button once; two worded buttons cost about 240px per use and two of them
+stacked on one screen read as clutter rather than as help.
+
+The two rules are halves of one thing: the flow makes the app ask what comes
+next, and this lets it answer how, why, and at what cost.
+
+**The Weave is a closed world.** From the moment the walkthrough opens, the
+writer does not leave it until they are done or they X out -- every path, for
+every kind of finding, resolves inside the popup. Creating an entry, filling a
+thin one in, answering a world question, fixing a contradiction, placing a fact:
+all of it happens in place, and finishing returns to the walkthrough at the next
+stop. This exists because the alternative was tested and reported plainly:
+advancing to another screen -- even a well-built one -- closed the walk behind
+the writer. "Good intentions, terrible execution."
+
+The creation path is **Quick Entry**: a name, a kind, and one starter line. The
+Weave builds base-level entries and connections only -- the framework. Expanding
+them into full profiles is the writer's later work, from the sidebar, in their
+own time. Where the starter line arrives prefilled, it is the writer's own
+sentence from the manuscript. Answering an Unwoven question this way puts the
+answer in the exact section the question tracks, so it stops being asked by
+re-derivation -- and when the world already has an entry of that kind, adding
+the answer to it is offered before creating a second one.
+
+Fixing a contradiction offers all three honest answers: keep one side (the other
+is removed), edit a side in place -- its text or its chapter -- or say both are
+right **on purpose**, which marks every side deliberate and means it is never
+asked again. Edits keep the fact's identity, so orderings the writer already
+settled cannot silently break.
+
+**Identity is asked once, at creation, and never again.** An entry the walk
+minted arrives with a writer-confirmed name and kind, so a thin one is asked to
+be WRITTEN -- the same fill-in as any other -- not re-identified. The one
+genuine leftover case, a minted word that is really another name for an entry
+that already exists, is a side path inside the fill form, phrased from the
+word's side.
+
+The rule is held structurally, not by discipline: the walkthrough component has
+no navigation callbacks at all, and a test reads its source to keep it that way.
+
+**Every step proposes the next one.** This is a rule the walkthrough is held to,
+not a property of one screen. Completing an action and returning to where you
+started has silently ended the sequence -- so after a connection is recorded the
+screen says what it recorded and asks:
+
+> Recorded: **Alexandra Langford friend of Lara Croft**
+>
+> Would you like Alexandra Langford to connect to anyone or anything else?
+>
+> **[ Yes -- make another connection ]**  **[ No, I am good for now ]**
+> *takes you to the next thing in the walk*
+
+Two named exits rather than one ambiguous Close, and the exit says what it will
+do. "Finished with this" **advances the walk**; backing out returns to the same
+stop with your place kept. A screen reachable both inside the walk and on its own
+carries both wordings, because there is nothing to advance to from the map and
+claiming otherwise would be a lie.
+
+**The walk remembers its sitting.** The stop list is a snapshot taken at Start,
+so the panel keeps its own session memory: walking Back onto something already
+answered shows a receipt of what was chosen rather than the live question
+(answering twice was how work got duplicated), *never ask* takes effect
+immediately rather than next session, and a stop whose subject stopped existing
+mid-walk -- absorbed, or fixed through the editor -- says "already sorted out
+somewhere else" with a way forward, instead of a 404 or a spinner that never
+ends.
+
+**Tangles resolve one Snag at a time for now.** The lexicon's Tangle -- several
+contradictions sharing a cause -- is not yet produced as its own grouped stop;
+each Snag in it arrives individually and settles through the same fixer. Grouping
+them into one stop is a later refinement of the same screen, not a different one.
+
+**Nothing about the book is stored.** Stops are re-derived every run, so a Thread
+that gets its Overview filled in stops being Frayed because the condition ended --
+not because a record says it was handled. What IS stored is the writer's answers,
+under `.storythread/weave/`, which is the one place under `.storythread/` that is
+not a rebuildable cache. Permanent answers -- applied, *not a connection*, muted
+kinds, and which John a name meant -- live in `answers.json` **per book**, not per
+session, so "permanently" survives closing the panel. The per-session run files
+beside it are logs of what happened in one sitting.
+
+**Applied means saved.** Every inline resolution writes the file first and
+records the answer after, so "applied" in the ledger is always a fact about the
+disk. The ledger also defines a *staged* state for a change sitting in an
+unsaved buffer -- no current screen uses it, because the walk's own forms save
+directly; it exists so a future buffer-editing surface cannot break the promise
+that a discarded edit comes back as a question rather than sitting in the
+ledger claiming to be done.
+
+Nothing here writes FOR the writer: the only text Quick Entry can arrive
+holding is the writer's own sentence from the manuscript, offered as an
+editable starter. The app does not write the writer's characters.
+
+**An empty entry can be connected to straight away.** It was excluded at first,
+on the reasoning that something not yet said to BE anything is a word rather than
+a thing -- and that turned out to make the walk dead-end on its own output: the
+entry created thirty seconds ago was missing from the list of things to connect
+to. Since a connection now carries a reason in the writer's words, "she is hiding
+her theft from him" says what he is to her whether or not his entry has prose in
+it yet. Bare entries are offered and marked as bare, so nothing is passed off as
+more than it is.
+
+### Unwoven, and why it is a root system
+
+Unwoven is the only stop that is not about a mistake. It asks the questions a
+world has not answered -- how power passes, what magic costs and who pays, what
+the worst thing a person can be accused of is.
+
+What keeps it from being a chore is that answers reach across domains --
+*"succession is decided by single combat"* touches the law (*is kinslaying
+prosecuted?*) and the faith (*does it sanctify this?*) -- and every question
+says where its answer belongs, so it becomes part of the world rather than
+another pile of notes.
+
+The corpus also holds **follow-up questions** that an answer is designed to
+open (*"what stops every heir being murdered in childhood?"*), never asked
+before their parent is answered. Today the walk asks the trunk questions only;
+surfacing the branches is scheduled work on the roadmap, not a current
+behaviour.
+
+### Context assembly
+
+The Writing Companion carries a **world context bar** under the attachments: it
+says how many Threads the Weave will send and roughly what they cost, and
+**Inspect** opens the whole brief. Each Thread shows why it is there ("named in
+what you are writing", "connected to someone here"), what it costs, and an x
+that drops it; a kind can be dropped whole; **Read it exactly as the AI will**
+shows the actual words. One switch turns automatic world context off and
+returns the app to attachments only. Those choices follow the *book* -- "leave
+the gods out of it" is a fact about the story, not about the machine.
+
+The brief is assembled **as of the chapter open in the editor**, and nothing is
+assembled until that point is known: with no anchor the Weave would answer as
+of the end of the book, and a writer in chapter four would be handed a brief
+that knows chapter nineteen. Assembling sends nothing anywhere -- it is
+arithmetic over local files. The brief travels only as part of a request the
+writer started, which is the locked rule, and it arrives after their own
+attachments, because a chip is something they chose for this turn and the
+Weave is standing context about the world.
+
+When an AI feature runs at a point in the story, the app assembles a brief from
+the Weave as of that point. The budget subtracts every other claim on the window
+by name -- room for the reply, the system prompt, the writer's own text,
+scaffolding, anything pinned by hand -- so what is left is what the Weave may
+actually spend, and the panel can show where the window went instead of an
+unexplained "context full".
+
+Pinned content is never the thing that gets dropped, everything dropped is
+reported, and pinned content that cannot fit is **refused rather than truncated**:
+half a character profile reads as a whole one and the model has no way to tell.
+
+Per the locked context rule in `docs/product-scope.md`, the writer can inspect the
+brief, remove individual Threads, exclude whole categories, and switch automatic
+Weave context off entirely -- which returns the app to manual chips only. Nothing
+is sent until the writer starts an AI action. Each of those four is a test in
+`WeaveContextBar.test.tsx`, and so is the clause most likely to rot: that
+assembling a brief transmits nothing.
+
+**Reaches the Writing Companion only.** The Smart Advisor, the summary and
+profile tools and the rest still use manual chips; extending the brief to them
+is roadmap work, and each surface needs its own inspect control before it gets
+automatic context.
+
 ## Audiobook Converter
 
 A standalone workspace that turns a finished manuscript into an audiobook: per-chapter MP3s, a combined MP3, and an M4B with chapter marks. Reached from Project Home. Each audiobook is its own folder; the source manuscript is copied in and never modified.
@@ -289,13 +770,49 @@ Per-chapter MP3s with real ID3 titles, one combined MP3, and an M4B with navigab
 
 A modal accessible from the sidebar. Sections:
 
-- **AI Provider** — selector cards, one per connection, each with its own dedicated panel: tailored "How to connect" steps, its own masked API key, and a Test Connection button. Shipped connections: **OpenRouter** (recommended default; hosts the Prompt Caching toggle and the cost-tier slider) and **NanoGPT** (pay-per-prompt, many unmoderated models; no published pricing, so the cost-tier filter is hidden). Both keys stay stored — switching never loses one, and the switch only takes effect on Save, which reloads the model list from the new provider and warns if the saved default model isn't in its catalog. Panels are registry-driven (`providerMeta.ts` + `backend/app/ai/providers.py`), so a future connection (Ollama, LM Studio, llama.cpp, custom URL) is one entry on each side.
+- **AI Provider** — selector cards, one per connection, each with its own dedicated panel: tailored "How to connect" steps, its own masked API key, and a Test Connection button. Shipped connections: **OpenRouter** (recommended default; hosts the Prompt Caching toggle and the cost-tier slider), **NanoGPT** (pay-per-prompt, many unmoderated models; no published pricing, so the cost-tier filter is hidden), and **Local model** (below). Keys stay stored per provider — switching never loses one, and the switch only takes effect on Save, which reloads the model list from the new provider and warns if the saved default model isn't in its catalog. Panels are registry-driven (`providerMeta.ts` + `backend/app/ai/providers.py`), so a future connection is one entry on each side.
+- **Local model** — a runtime on the writer's own machine (Ollama, LM Studio, llama.cpp). No API key and no per-token cost. The panel takes a server address and an **API style** (OpenAI-compatible or Ollama's native one, chosen explicitly rather than guessed); Test Connection distinguishes a bad address, nothing listening, and a server answering in the *other* style — naming the setting to flip in that last case. Replies from local reasoning models have inline `<think>...</think>` traces stripped before the writer or the conversation history sees them. **Only local destinations are accepted**: loopback, private-network addresses, or a `.local` name. A public address is refused with the rule explained, because every local runtime speaks the same API as a hosted one and without that line "Local model" would quietly become an undocumented way to connect any remote service.
 - **Prompt Caching** (inside the OpenRouter panel, default on) — marks the unchanged part of each request (instructions + story context) as cacheable so supported models charge less and respond faster on repeats. Never sent to other providers.
-- **Default model** — model picker populated from the active provider's catalog, with a cost-tier slider on providers that publish pricing
+- **Default model** — model picker populated from the active provider's catalog, with a cost-tier slider on providers that publish pricing. This is what any unassigned role uses.
+- **Model Roles** — one model per KIND of job (see below)
 - **Content mode** — project-level default (`general`, `mature`, `explicit`) overridable per request
 - **Model Routing** — allowlist, blocklist, and per-model content-mode declarations enforced at request time
 - **Theme** — light / dark
 - **Debug options**
+
+## Model Roles
+
+The app asks an AI to do very different things, and the models available today are not equally good at all of them. A **role** is a kind of job. The writer assigns one model to each role, and every AI feature declares which role it belongs to — so assigning a model to Critique points the Smart Advisor, chapter summaries, scene summaries, AI Trim and the importance audit at it in one move.
+
+Eight roles, each listing on screen exactly which features use it:
+
+| Role | Used by |
+|---|---|
+| **Critique** | Smart Advisor pass, Writing Companion review categories, chapter and scene summaries, importance audit, AI Trim |
+| **Character reasoning** | Profile Builder chat, Interview mode, full profile summaries, dialogue speaker analysis |
+| **Brainstorming** | Writing Companion chat |
+| **Structural analysis** | Scene break suggestions |
+| **Prose** | Draft mode, Enhance mode, Revise suggestion |
+| **Extraction** (cheap work) | Usage previews, Generate Overview, section summaries |
+| **Long-context analysis** | *nothing yet* -- arrives with the Weave's AI passes, which are deferred to v2.1.0 |
+| **Research transformation** | *nothing yet* |
+
+The last two are marked "not used yet" on screen with the reason, rather than presenting a control that silently does nothing.
+
+**The list is collapsed by default** — one line per role: name, the model currently chosen (or "Use Default Model"), and a one-line description that truncates rather than wrapping, so all eight fit on screen at once. Opening a row reveals the full explanation behind "What's this?" (what the job is, why it matters, and what a better model actually buys you there), the features it covers, and the two pickers. Only one row opens at a time, so the list never scrolls itself away. A broken assignment shows a warning icon on the collapsed row, so it is visible without opening anything.
+
+The **From Source** picker greys out services that are not connected yet — no API key, or for a local model no address — and labels them "not connected" rather than hiding them, so what exists and what is merely unconfigured are distinguishable.
+
+The **Model** picker opens with a short **Recommended** group of four to seven models drawn from the curated list and spread across price buckets, each labelled by bucket (Free / Lowest / Pricier / Priority Best) and ordered cheapest first. The bucket name is the whole recommendation — there is nothing further to read. The full catalog follows underneath, with the recommended entries not repeated. Recommendations only appear for providers whose catalog matches the curated ids; elsewhere the group is simply absent.
+
+A role assignment is a **provider and a model together**, not just a model id, so different roles can live on different services — critique on OpenRouter while prose runs on a local model.
+
+Two behaviours matter more than the rest:
+
+- **Leaving a role unassigned is the supported default.** It falls through to the Default Model, exactly as the app behaved before roles existed. An upgrading install changes nothing until the writer changes something.
+- **An assigned role never silently substitutes.** If it cannot run — no key for that service, an unreachable local server, a model the provider does not offer — the feature refuses and says why. Without this, a writer could assign Claude to prose, hit a missing key, and unknowingly have their book drafted by a different model.
+
+Per-book role overrides are supported by the resolver but have no UI yet; today roles are app-wide.
 
 ## Content mode and routing
 

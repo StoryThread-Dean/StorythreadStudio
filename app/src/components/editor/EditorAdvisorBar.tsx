@@ -21,7 +21,8 @@ import type {
 } from "../../types/ai";
 import {
   addIssuesEffect, clearIssuesEffect, locateQuoteInDoc, type LocatedIssue,
-} from "./issueOverlay";
+} from "./issueOverlay";
+import { Explain } from "../../components/learn/Explain";
 
 
 const API_BASE = "http://localhost:8000";
@@ -449,6 +450,15 @@ export function EditorAdvisorBar({
   return (
     <div ref={barRef} className="flex flex-wrap items-center gap-2 border-b border-border bg-bg-primary px-3 py-1.5">
       <span className="text-[10px] uppercase tracking-wide text-faint">Smart Advisor</span>
+      {/* THE FIRST PLACE IN THIS APP WHERE HELP HAS TO TALK ABOUT MONEY.
+          A pass reads the whole chapter unless something is selected, so
+          "select first" is not a tip -- it is the difference in the bill.
+
+          compact because this is a crowded toolbar: worded triggers took enough
+          width to shove the pass buttons along the row. The panel floats, so
+          opening it no longer grows this row and wraps Context onto a second
+          line. */}
+      <Explain of="advisor.what" compact />
 
       <CategoryButton
         category="readability"

@@ -15,6 +15,8 @@ import {
   tierIndex,
   modelPassesTier,
   modelIsTextOnly,
+  modelTier,
+  recommendedPicks,
 } from "./modelFiltering";
 import type { ModelInfo } from "../types/ai";
 
@@ -165,5 +167,78 @@ describe("modelIsTextOnly", () => {
   it("rejects models with image/audio/video output", () => {
     expect(modelIsTextOnly(model("a/img", { output_modalities: ["text", "image"] }))).toBe(false);
     expect(modelIsTextOnly(model("a/vid", { output_modalities: ["video"] }))).toBe(false);
+  });
+});
+
+// ── Price bucketing, used by the Model Roles picker ──────────────────────────
+
+describe("modelTier", () => {
+  it("reads the same thresholds modelPassesTier caps at", () => {
+    expect(modelTier(model("a/free", { is_free: true, cost_input_per_million: 0 }))).toBe("free");
+    expect(modelTier(model("a/cheap", { cost_input_per_million: 0.5 }))).toBe("budget");
+    expect(modelTier(model("a/mid", { cost_input_per_million: 5 }))).toBe("standard");
+    expect(modelTier(model("a/top", { cost_input_per_million: 40 }))).toBe("premium");
+  });
+
+  it("puts a boundary price in the cheaper bucket, as the cap does", () => {
+    expect(modelTier(model("a/one", { cost_input_per_million: 1.0 }))).toBe("budget");
+    expect(modelTier(model("a/fifteen", { cost_input_per_million: 15.0 }))).toBe("standard");
+  });
+});
+
+describe("recommendedPicks", () => {
+  // The curated list leans expensive, so "first N" would show a writer
+  // nothing but premium models and imply there is nothing cheap worth using.
+  const catalog: ModelInfo[] = [
+    model("meta-llama/llama-3.3-70b-instruct:free", { is_free: true, cost_input_per_million: 0 }),
+    model("mistralai/mistral-nemo", { cost_input_per_million: 0.15 }),
+    model("anthropic/claude-haiku-4.5", { cost_input_per_million: 1.0 }),
+    model("deepseek/deepseek-chat", { cost_input_per_million: 0.9 }),
+    model("anthropic/claude-sonnet-4.6", { cost_input_per_million: 3 }),
+    model("mistralai/mistral-large", { cost_input_per_million: 4 }),
+    model("anthropic/claude-opus-4.8", { cost_input_per_million: 20 }),
+    model("x-ai/grok-4.3", { cost_input_per_million: 25 }),
+    model("some/uncurated", { cost_input_per_million: 2 }),
+  ];
+
+  it("spreads the picks across price buckets rather than taking the first N", () => {
+    const tiers = new Set(recommendedPicks(catalog).map(p => p.tier));
+    expect(tiers.has("free")).toBe(true);
+    expect(tiers.has("premium")).toBe(true);
+  });
+
+  it("returns them cheapest first", () => {
+    const order = recommendedPicks(catalog).map(p => tierIndex(p.tier));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("honours the limit", () => {
+    expect(recommendedPicks(catalog, 4)).toHaveLength(4);
+    expect(recommendedPicks(catalog).length).toBeLessThanOrEqual(7);
+  });
+
+  it("only offers models the catalog actually has", () => {
+    // A slug the provider dropped must vanish here rather than 404 later.
+    const picks = recommendedPicks([catalog[0]]);
+    expect(picks).toHaveLength(1);
+    expect(picks[0].model.id).toBe("meta-llama/llama-3.3-70b-instruct:free");
+  });
+
+  it("never recommends an uncurated model", () => {
+    const ids = recommendedPicks(catalog).map(p => p.model.id);
+    expect(ids).not.toContain("some/uncurated");
+  });
+
+  it("returns nothing for a catalog with no curated ids", () => {
+    // Non-OpenRouter catalogs use different slugs. An empty group is hidden;
+    // the full model list is still there underneath.
+    expect(recommendedPicks([model("local/mythomax")])).toEqual([]);
+  });
+
+  it("labels each pick with its price bucket", () => {
+    const labels = recommendedPicks(catalog).map(p => p.tierLabel);
+    for (const label of labels) {
+      expect(TIERS.map(t => t.label)).toContain(label);
+    }
   });
 });

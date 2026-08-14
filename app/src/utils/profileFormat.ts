@@ -10,8 +10,8 @@
 // This is the single source of truth for how profiles are represented in AI
 // prompts. The raw traits with importance labels are the authoritative source.
 
-import type { Profile, ProfileType } from "../types/profile";
-import { SECTION_CONFIGS } from "../types/profile";
+import type { Profile } from "../types/profile";
+import { headingFromKey } from "../types/sectionRegistry";
 
 
 // Which slices of a profile to include when serializing for the AI.
@@ -27,6 +27,21 @@ export interface ChipIncludeOptions {
   traits:   boolean;
   overview: boolean;
   details:  boolean;
+  /**
+   * The writer's own jottings, off unless asked for.
+   *
+   * NOTES USED TO TRAVEL INSIDE `details`, which meant the same field was sent
+   * by profile chat and by generate-full-summary and withheld by the chip
+   * picker -- the same words, in or out, depending on how they happened to
+   * reach the model, with nothing on screen saying which.
+   *
+   * A field called Notes reads as a scratchpad, so the honest default is off.
+   * It is separated from `details` rather than folded into it because details
+   * also carries real content -- History, Current Dynamic, Physical
+   * Description -- and turning that off to protect a scratchpad would have made
+   * every AI answer thinner to fix a labelling problem.
+   */
+  notes?:   boolean;
 }
 
 
@@ -39,6 +54,9 @@ const LEGACY_INCLUDE: ChipIncludeOptions = {
   traits:   true,
   overview: true,
   details:  true,
+  // Off here too, so profile chat and the full summary agree with the chip
+  // picker about what a writer's Notes are for.
+  notes:    false,
 };
 
 
@@ -59,7 +77,16 @@ export function formatProfileForAI(
   p: Profile,
   include: ChipIncludeOptions = LEGACY_INCLUDE,
 ): string {
-  const configs = SECTION_CONFIGS[p.type as ProfileType] ?? [];
+  // WHAT THE ENTRY ACTUALLY HOLDS, rather than what a hardcoded table said its
+  // kind should hold. This used to walk SECTION_CONFIGS, which meant a Faction,
+  // a Deity or a kind the writer invented serialised as nothing at all: the
+  // table only knew four kinds. A section is a trait section when it holds trait
+  // blocks, which is a fact about the data and true for every kind.
+  const configs = Object.keys(p.sections).map(key => ({
+    key,
+    heading: headingFromKey(key),
+    hasTraitBlocks: (p.sections[key]?.trait_blocks ?? []).length > 0,
+  }));
   const lines: string[] = [`Profile: ${p.name} (${p.type})`, `Role: ${p.role || "unspecified"}`, ""];
 
   // 1. AI Summary first -- when the writer chose to include it, the model
@@ -79,11 +106,13 @@ export function formatProfileForAI(
 
     const isTrait    = cfg.hasTraitBlocks;
     const isOverview = !isTrait && cfg.key === "overview";
-    const isDetail   = !isTrait && !isOverview;
+    const isNotes    = !isTrait && cfg.key === "notes";
+    const isDetail   = !isTrait && !isOverview && !isNotes;
 
     // Bucket gating: skip the section entirely if its bucket is off.
     if (isTrait    && !include.traits)   continue;
     if (isOverview && !include.overview) continue;
+    if (isNotes    && !include.notes)    continue;
     if (isDetail   && !include.details)  continue;
 
     const hasTraits = isTrait && section.trait_blocks.length > 0;
@@ -93,7 +122,15 @@ export function formatProfileForAI(
     lines.push(`## ${cfg.heading}`);
     if (hasTraits) {
       for (const block of section.trait_blocks) {
-        lines.push(`- ${block.trait} [${block.importance}]: ${block.description}`);
+        // THE MARKER THE PROMPT KEYS ON. `[core, SUBTEXT]` says two independent
+        // things: weigh this heavily, and never say it out loud. The base system
+        // prompt (see READING IMPORTANCE LABELS in backend/app/ai/prompts.py)
+        // enforces the second; dropping it here would leave a secret looking
+        // like ordinary text, with nothing anywhere to notice.
+        const label = block.subtext
+          ? `${block.importance}, SUBTEXT`
+          : block.importance;
+        lines.push(`- ${block.trait} [${label}]: ${block.description}`);
       }
     } else if (hasText) {
       lines.push(section.content);
@@ -115,6 +152,7 @@ export const DEFAULT_CHIP_INCLUDE: ChipIncludeOptions = {
   traits:   true,
   overview: false,
   details:  false,
+  notes:    false,
 };
 
 

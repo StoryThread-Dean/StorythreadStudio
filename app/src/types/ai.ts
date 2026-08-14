@@ -33,6 +33,15 @@ export interface AppSettings {
   // Writing Progress: clock hour at which "today" rolls over. 0 = midnight
   // (default), 4 = Night Owl. Anything in [00:00, rollover_hour) counts toward yesterday.
   day_rollover_hour:      number;
+  // Model Roles: one model per KIND of job. {role: {provider, model}}. Empty
+  // means every role uses default_model above -- the pre-roles behaviour.
+  // The provider travels WITH the model because different roles may sit on
+  // different services. See backend/app/ai/roles.py for the role list.
+  model_roles:            Record<string, { provider: string; model: string }>;
+  // A model running on the writer's own machine. Restricted to local
+  // addresses by the backend; "" means no local model is configured.
+  local_base_url:         string;
+  local_api_style:        string;   // "openai" | "ollama"
 }
 
 export interface UpdateSettingsPayload {
@@ -47,6 +56,16 @@ export interface UpdateSettingsPayload {
   cost_tier?:          string;
   // Empty string resets to the default (~/Documents/Storythread Studio).
   vault_root?:         string;
+  // {role: {provider, model}}. Entries naming an unknown role or provider are
+  // dropped server-side, and the PUT response echoes what was actually
+  // stored -- so anything rejected is visible immediately rather than looking
+  // like it saved and then quietly not working.
+  model_roles?:        Record<string, { provider: string; model: string }>;
+  // A non-local address is refused with a 400 (not silently ignored like the
+  // enum fields above): the writer typed it, so they are told why. Empty
+  // string clears it.
+  local_base_url?:     string;
+  local_api_style?:    string;
 }
 
 // ── Models ────────────────────────────────────────────────────────────────────

@@ -14,7 +14,8 @@
       "Bash(./node_modules/.bin/tsc --noEmit)",
       "Bash(npm run:*)",
       "Bash(uv run:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "mcp__playwright__browser_navigate"
     ]
   },
   "disabledMcpjsonServers": [

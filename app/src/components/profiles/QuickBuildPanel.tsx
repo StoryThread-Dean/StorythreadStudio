@@ -23,6 +23,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Dices } from "lucide-react";
 import { ARCHETYPE_OPTIONS, archetypeIdForRole, spineOptionById } from "../../data/characterSpines";
 import { rollTraitOptions, type TraitSection } from "../../data/traitPools";
+import { Explain } from "../../components/learn/Explain";
 
 // How many options each row shows per roll -- enough for a real choice,
 // few enough that rerolling stays fun.
@@ -35,7 +36,7 @@ export const QUICK_BUILD_ROWS: { section: TraitSection; label: string; targetSec
   { section: "mannerism", label: "Mannerism", targetSectionKey: "personality_traits" },
   { section: "voice",     label: "Voice",     targetSectionKey: "voice_notes" },
   { section: "want",      label: "Want / Motivation", targetSectionKey: "motivations" },
-  { section: "hidden",    label: "Hidden / Foreshadowing", targetSectionKey: "hidden_and_foreshadowing" },
+  { section: "hidden",    label: "Hidden / Foreshadowing", targetSectionKey: "hidden_and_foreshadowing_traits" },
 ];
 
 interface QuickBuildPanelProps {
@@ -137,6 +138,10 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
       >
         {open ? <ChevronDown size={14} className="text-faint" /> : <ChevronRight size={14} className="text-faint" />}
         <span className="text-xs font-medium text-text-primary">Quick Build</span>
+        {/* Reads like an AI feature and is not one. Saying so is the
+            point: a writer who assumes it costs money avoids the
+            cheapest tool in here. */}
+        <Explain of="quickbuild.what" />
         <span className="text-xs text-faint">-- roll traits, click to add them below</span>
       </button>
 

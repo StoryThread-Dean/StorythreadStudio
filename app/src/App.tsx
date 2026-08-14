@@ -16,7 +16,7 @@
 //     2. Conditional early return AFTER all hooks
 //     3. Normal render return at the bottom
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import "./App.css";
 import { MarkdownEditor } from "./components/MarkdownEditor";
 import { EditorToolbar, FONT_OPTIONS, type FontValue } from "./components/EditorToolbar";
@@ -24,6 +24,18 @@ import { ProjectHome } from "./screens/ProjectHome";
 import { AudiobookConverter } from "./features/audiobook/AudiobookConverter";
 import { ReaderMode } from "./screens/ReaderMode";
 import { ProfileBuilder } from "./screens/ProfileBuilder";
+// The Weave: a self-contained island under features/codex/, opened from the
+// sidebar. This file only knows how to show it.
+import { WeaveScreen } from "./features/codex/WeaveScreen";
+import { WeaveNav } from "./features/codex/WeaveNav";
+import { WeavingPanel } from "./features/codex/WeavingPanel";
+import { WeaveContextBar } from "./features/codex/WeaveContextBar";
+import { ThreadEditor } from "./features/codex/ThreadEditor";
+
+/** The four kinds the Profile Builder owns. Everything else in the Weave is
+ *  edited by the Thread editor -- named once so the three places that route on
+ *  it cannot drift apart. */
+const PROFILE_KINDS = ["character", "relationship", "location", "lore"];
 import { OutlinePlanner } from "./screens/OutlinePlanner";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
@@ -37,22 +49,33 @@ import { DialogueCheck } from "./components/DialogueCheck";
 import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
 import { toPutPayload } from "./types/structure";
 import type { StructureManifest } from "./types/structure";
-import type { ProfileType, Profile } from "./types/profile";
+import type { ProfileType, Profile, ProfileListItem } from "./types/profile";
 import type {
   ContextChip, ChipIncludeFlags, EditorChatMessage, EnhanceLevel,
   SceneSummaryInfo, SplitChapterScenesResponse, GenerateSceneSummaryResponse,
   SuggestSceneBreaksResponse,
 } from "./types/ai";
 import { ChatMarkdown } from "./components/ChatMarkdown";
+// THE CHIP PICKER READS THE SAME FOLDER THE EDITOR DOES.
+//
+// It fetched /api/profiles directly, which on a converted project is the BACKUP
+// copy rather than the live world -- so attaching a character sent the model
+// their old text, or nothing at all once the writer had tidied profiles/ away.
+// Reusing the source layer means the two screens cannot disagree about where a
+// writer's entries live, which is the whole reason that layer exists.
+import { fetchEntriesHome, sourceFor } from "./screens/profileSource";
+import type { EntriesHome } from "./screens/profileSource";
+import { useTypeRegistry } from "./types/sectionRegistry";
 import { formatProfileForAI, DEFAULT_CHIP_INCLUDE, estimateTokens } from "./utils/profileFormat";
 import type { ChipIncludeOptions } from "./utils/profileFormat";
 import { buildEditorChatPayload, appendTurnToHistory, isWeakDraftingModel, computeSurroundingWindow } from "./utils/buildEditorChatPayload";
 import { autoSizeTextarea } from "./utils/autoSizeTextarea";
-import { SECTION_CONFIGS } from "./types/profile";
 import { EditorAdvisorBar } from "./components/editor/EditorAdvisorBar";
 import { ProjectCompletionGauge } from "./components/progress/ProjectCompletionGauge";
 import { NavSection } from "./components/sidebar/NavSection";
-import { NavItem } from "./components/sidebar/NavItem";
+// NavItem is no longer used here: the Notes and Profiles lists it built are
+// now the Weave's own tree (WeaveNav). The component itself stays -- the
+// chapter rows still use it.
 import { ChapterNavRow } from "./components/sidebar/ChapterNavRow";
 import { ActGroup } from "./components/sidebar/ActGroup";
 import { GlobalSearchModal } from "./components/GlobalSearchModal";
@@ -117,8 +140,24 @@ function App() {
   // it's a completely separate screen; chapter_summary is rendered in the
   // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
   const [currentView, setCurrentView]   = useState<
-    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary" | "outline_planner"
+    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
+    | "outline_planner" | "weave" | "thread"
   >("editor");
+  // Which Weave section the sidebar shows as active. Kept here rather than
+  // inside WeaveNav because opening a section changes the VIEW, and the view
+  // lives in this file.
+  const [weaveSection, setWeaveSection] = useState<string | null>(null);
+  // Weaving opens as a right-hand panel rather than a screen: it is a
+  // conversation ABOUT the book, and taking the book away to have it would
+  // make every stop harder to judge.
+  const [weavingOpen, setWeavingOpen] = useState(false);
+  // Which entry Weaving sent the writer to, so the Profile Builder opens
+  // on THAT one rather than on its list. "Open it" has to open it.
+  const [profileFilename, setProfileFilename] = useState<string | undefined>();
+  // Which kind of Weave entry the Thread editor has open. The Profile
+  // Builder covers four kinds; everything else in the Weave -- factions,
+  // deities, objects, a writer's own Race -- is edited here.
+  const [threadType, setThreadType] = useState<string | null>(null);
   // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
   // when no writing project is open. Not part of currentView because it
   // never coexists with the editor layout.
@@ -273,6 +312,12 @@ function App() {
   // profiles/outline/locations are treated as canon the AI must stay consistent
   // with. When OFF, they are reference only and the writer's typed direction wins.
   const [treatAsCanon, setTreatAsCanon] = useState(true);
+
+  // WHAT THE WEAVE WILL TELL THE AI, assembled locally and inspected by the
+  // writer before any request carries it. Held here rather than inside the
+  // bar because the send path is what transmits it -- which is the locked
+  // context rule: nothing goes until the writer initiates an AI action.
+  const [weaveBrief, setWeaveBrief] = useState("");
 
   // Reasoning toggle: when ON, chat requests ask OpenRouter for the model's
   // reasoning trace, shown as a collapsible block above the reply. Only offered
@@ -438,7 +483,8 @@ function App() {
   const currentProjectRef = useRef<ProjectInfo | null>(null);
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
   const currentViewRef = useRef<
-    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary" | "outline_planner"
+    "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
+    | "outline_planner" | "weave" | "thread"
   >("editor");
 
   // Keep refs in sync with state on every render.
@@ -1696,6 +1742,12 @@ function App() {
           // carries the NEW ones) -- keeps the backend's ATTACHMENT STANCE
           // instruction active for the whole life of the attachment.
           has_attached_context: contextChips.length > 0,
+          // WHAT THE WEAVE ASSEMBLED, and the moment it actually travels.
+          // Built locally and already inspectable in the bar above the chat;
+          // it rides along here because the writer just initiated an AI
+          // action, which is the only thing allowed to transmit it. Empty
+          // when they switched it off, emptied it, or it did not fit.
+          weave_brief: weaveBrief,
           // Reasoning toggle: only honored by reasoning-capable models, and the
           // toggle is hidden otherwise, so this is false unless both are true.
           include_reasoning: reasoningMode && activeModelSupportsReasoning,
@@ -1777,7 +1829,11 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedSelection, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning]);
+    // weaveBrief is in here deliberately: without it this callback would
+    // close over the brief as it was when the deps last changed and send that
+    // instead of what the writer is looking at now -- the exact stale-closure
+    // shape that made Quick Fill wipe half-typed boxes.
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedSelection, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning, weaveBrief]);
 
 
   // --- Start a new ask ---
@@ -2033,6 +2089,7 @@ function App() {
         <ProfileBuilder
           project={currentProject}
           initialType={profileType}
+          initialFilename={profileFilename}
           onBack={() => setCurrentView("editor")}
         />
       </>
@@ -2366,38 +2423,41 @@ function App() {
             })()}
           </NavSection>
 
-          {/* Notes and Profiles are collapsible; their collapsed state is
-              remembered PER BOOK (useProjectUiState) so a writer who folds
-              Profiles in one project finds it folded there forever after --
-              across restarts and app updates -- while other books keep the
-              default expanded layout. */}
-          <NavSection label="Notes"
-            collapsed={projectUi.uiState.notesCollapsed ?? false}
-            onToggle={() => projectUi.update({
-              notesCollapsed: !(projectUi.uiState.notesCollapsed ?? false),
-            })}>
-            <NavItem label="Outline"     hint="Story structure, targets, and plot beats"
-              active={currentView === "outline_planner"}
-              onClick={() => setCurrentView("outline_planner")} />
-            <NavItem label="Style Guide" hint="Rules for tone, voice, and punctuation"
-              active={currentView === "notes" && currentNote?.filename === "style-guide.md"}
-              onClick={() => loadNote("style-guide.md", "Style Guide", currentProject)} />
-          </NavSection>
+          {/* The Weave replaces the old flat Notes and Profiles sections.
+              Both are now GROUPS inside it, alongside Other, and each grows
+              as the writer needs it rather than listing every possibility
+              up front. The tree itself is built by the backend from one
+              rule -- a section appears when it holds something, or when it
+              is a default -- so this file does not decide what is in it.
 
-          <NavSection label="Profiles"
-            collapsed={projectUi.uiState.profilesCollapsed ?? false}
-            onToggle={() => projectUi.update({
-              profilesCollapsed: !(projectUi.uiState.profilesCollapsed ?? false),
-            })}>
-            <NavItem label="Characters"    hint="Character profiles and trait blocks"
-              onClick={() => { setProfileType("character");    setCurrentView("profiles"); }} />
-            <NavItem label="Relationships" hint="Relationship profiles and dynamic notes"
-              onClick={() => { setProfileType("relationship"); setCurrentView("profiles"); }} />
-            <NavItem label="Locations"     hint="Location descriptions and atmosphere notes"
-              onClick={() => { setProfileType("location");     setCurrentView("profiles"); }} />
-            <NavItem label="Lore"          hint="World-building rules and history entries"
-              onClick={() => { setProfileType("lore");         setCurrentView("profiles"); }} />
-          </NavSection>
+              Sections still open the screens they always did: a note goes
+              to the editor, a profile kind to the Profile Builder. Only the
+              way a writer FINDS them has changed. */}
+          <WeaveNav
+            projectPath={currentProject.root_path}
+            activeSection={weaveSection}
+            onOpenWeave={() => setCurrentView("weave")}
+            onOpenWeaving={() => setWeavingOpen(true)}
+            onOpenSection={section => {
+              setWeaveSection(section.id);
+              if (section.kind === "note") {
+                if (section.id === "outline") { setCurrentView("outline_planner"); return; }
+                loadNote(section.filename ?? `${section.id}.md`,
+                         section.label, currentProject);
+                return;
+              }
+              // A kind of entry. The Profile Builder still handles the four
+              // it was built for; everything else opens in the Thread editor.
+              if (PROFILE_KINDS.includes(section.id)) {
+                setProfileType(section.id as "character" | "relationship" | "location" | "lore");
+                setCurrentView("profiles");
+              } else {
+                setThreadType(section.id);
+                setProfileFilename(undefined);
+                setCurrentView("thread");
+              }
+            }}
+          />
 
         </nav>
 
@@ -2448,7 +2508,33 @@ function App() {
         continuity editing, not prose drafting, so the chat panel would only
         distract.
       */}
-      {currentView === "outline_planner" ? (
+      {currentView === "thread" && threadType ? (
+        // Every Weave kind the Profile Builder does not cover. Rendered like
+        // the Weave itself rather than as a takeover, so the chapter list
+        // stays put -- an entry is something a writer edits WHILE writing.
+        <div className="flex-1 overflow-hidden">
+          <ThreadEditor
+            projectPath={currentProject.root_path}
+            typeId={threadType}
+            initialFilename={profileFilename}
+            onBack={() => setCurrentView("editor")}
+            onDirtyChange={setIsDirty}
+          />
+        </div>
+      ) : currentView === "weave" ? (
+        // Rendered here rather than as a full-screen takeover so the left
+        // nav stays put: the Weave is something you consult WHILE writing,
+        // and losing the chapter list to look at it would make it a
+        // destination rather than a reference. The feature itself stays an
+        // island in features/codex/ -- this file only knows how to show it.
+        <div className="flex-1 overflow-y-auto">
+          <WeaveScreen
+            projectPath={currentProject.root_path}
+            pinned={projectUi.uiState.weaveNodePositions}
+            onPin={positions => projectUi.update({ weaveNodePositions: positions })}
+          />
+        </div>
+      ) : currentView === "outline_planner" ? (
         <OutlinePlanner
           project={currentProject}
           onBack={() => setCurrentView("editor")}
@@ -2640,6 +2726,7 @@ function App() {
                 defaultValue={noteContent}
                 onChange={handleContentChange}
                 font={currentFont}
+                projectPath={currentProject.root_path}
                 onEditorReady={(view) => {
                   setEditorView(view);
                   editorViewRef.current = view;
@@ -2669,6 +2756,7 @@ function App() {
                 defaultValue={chapterContent}
                 onChange={handleContentChange}
                 font={currentFont}
+                projectPath={currentProject.root_path}
                 onEditorReady={(view) => {
                   setEditorView(view);
                   editorViewRef.current = view;
@@ -2819,7 +2907,7 @@ function App() {
           )}
 
           {contextChips.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1" data-testid="context-chips">
               {contextChips.map((chip, i) => {
                 // Established chips (already sent in a prior turn) show muted --
                 // they're still "in play" in the AI's memory from the conversation
@@ -2864,6 +2952,29 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* WHAT THE WEAVE ADDS, and every control the context rule requires:
+            read it, drop a Thread, drop a kind, or switch it off. It sits
+            under the attachments because that is the order it reaches the
+            model in -- what the writer chose for this turn first, standing
+            context about the world second. */}
+        {currentProject && (
+          <WeaveContextBar
+            projectPath={currentProject.root_path}
+            chapterFilename={currentChapter?.filename ?? null}
+            // The selection when there is one: what the writer is looking at
+            // decides who counts as named in this scene. Read at assembly
+            // time, so typing does not re-assemble on every keystroke.
+            text={selectedText}
+            // The writer's own attachments claim their tokens first and are
+            // never pruned, so the Weave spends what is left after them.
+            pinnedTokens={contextChips.reduce(
+              (sum, chip) => sum + estimateTokens(chip.content), 0)}
+            prefs={projectUi.uiState.weaveContext ?? {}}
+            onPrefsChange={next => projectUi.update({ weaveContext: next })}
+            onBriefChange={setWeaveBrief}
+          />
+        )}
 
         {/* Chat history */}
         <div className="flex-1 overflow-y-auto px-3 py-3">
@@ -3291,6 +3402,37 @@ function App() {
       </>
       )}
 
+      {/* ── WEAVING ───────────────────────────────────────────────────────
+          An overlay, not a column. As a third panel it left the writer's own
+          prose as the narrowest thing on screen, between the sidebar and the
+          Writing Companion -- exactly backwards for an app whose rule is
+          that the manuscript is the visual focus. It is also the shape this
+          app already uses for a guided walk (the audiobook's formatting
+          walkthrough), so the interaction is one the writer has met before.
+          The component renders its own backdrop; nothing here reserves
+          space for it.
+
+          RENDERED HERE, WITH THE OTHER OVERLAYS, AND THAT POSITION IS THE
+          WHOLE POINT. It used to sit inside the editor arm of the view
+          switch, which meant clicking "Weaving..." from the Weave screen set
+          the state and mounted nothing -- reported as "attempting to go into
+          Weaving does nothing... if I switch to a document, the Weaving
+          interface pops up like I had clicked it then." It was never hung;
+          it simply was not in the tree. An overlay opened from a sidebar
+          that is visible in every view has to live outside every view.
+
+          The Weave is also a CLOSED WORLD: the writer does not leave it
+          until they are done or they X out. It used to take navigation
+          callbacks here and five stop kinds ended by calling one --
+          creation, filling-in and fixing all happen inside the panel now,
+          so there is nothing to route. */}
+      {weavingOpen && currentProject && (
+        <WeavingPanel
+          projectPath={currentProject.root_path}
+          onClose={() => setWeavingOpen(false)}
+        />
+      )}
+
       {/* Settings modal -- rendered as an overlay on top of everything */}
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
 
@@ -3690,22 +3832,40 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
   const [pendingInclude, setPendingInclude] = useState<ChipIncludeOptions>(DEFAULT_CHIP_INCLUDE);
   const [showHelp, setShowHelp] = useState(false);
 
-  // On mount, auto-suggest character profiles from the project
+  // Which folder this project keeps its entries in, decided by the backend and
+  // asked exactly as the Profile Builder asks it.
+  const [home, setHome] = useState<EntriesHome | null>(null);
   useEffect(() => {
-    if (suggestedLoaded) return;
-    const params = new URLSearchParams({ folder_path: rootPath, type: "character" });
-    fetch(`${API_BASE}/api/profiles/list?${params}`)
-      .then(r => r.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setSuggested(data.map((p: { filename: string; name: string }) => ({
-            filename: p.filename, name: p.name, type: "character",
-          })));
-        }
+    let cancelled = false;
+    fetchEntriesHome(rootPath).then(report => {
+      if (!cancelled) setHome(report.home);
+    });
+    return () => { cancelled = true; };
+  }, [rootPath]);
+
+  // The world's kinds, for the section shapes a codex entry is read into.
+  const chipRegistry = useTypeRegistry(rootPath);
+  const chipSource = useMemo(
+    () => (home && !chipRegistry.loading && !chipRegistry.error
+      ? sourceFor(rootPath, home, type => chipRegistry.sections[type] ?? [])
+      : null),
+    [rootPath, home, chipRegistry.loading, chipRegistry.error, chipRegistry.sections],
+  );
+
+  // On mount, auto-suggest characters from the project -- from wherever this
+  // project's entries actually live.
+  useEffect(() => {
+    if (suggestedLoaded || !chipSource) return;
+    chipSource.list("character")
+      .then(rows => {
+        setSuggested(rows.map(row => ({
+          filename: row.filename, name: row.name, type: "character",
+          entity_id: row.entity_id,
+        })));
       })
       .catch(() => {})
       .finally(() => setSuggestedLoaded(true));
-  }, [rootPath, suggestedLoaded]);
+  }, [chipSource, suggestedLoaded]);
 
 
   // Load the full chapter-summaries list the first time the writer switches
@@ -3762,14 +3922,25 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
       return;
     }
     setLoading(true);
-    const folderPath = source === "series" && seriesPath ? seriesPath : rootPath;
-    const params = new URLSearchParams({ folder_path: folderPath, type: profileType });
-    fetch(`${API_BASE}/api/profiles/list?${params}`)
-      .then(r => r.json())
-      .then(data => setProfiles(Array.isArray(data) ? data : []))
+    // SERIES PROFILES STAY ON THE OLD PATH. A series folder is not a project and
+    // has never been converted -- the Weave works one book at a time -- so
+    // asking it which folder its entries live in would be asking a question it
+    // cannot answer.
+    if (source === "series" && seriesPath) {
+      const params = new URLSearchParams({ folder_path: seriesPath, type: profileType });
+      fetch(`${API_BASE}/api/profiles/list?${params}`)
+        .then(r => r.json())
+        .then(data => setProfiles(Array.isArray(data) ? data : []))
+        .catch(() => setProfiles([]))
+        .finally(() => setLoading(false));
+      return;
+    }
+    if (!chipSource) return;
+    chipSource.list(profileType)
+      .then((rows: ProfileListItem[]) => setProfiles(rows))
       .catch(() => setProfiles([]))
       .finally(() => setLoading(false));
-  }, [profileType, rootPath, seriesPath, source]);
+  }, [profileType, rootPath, seriesPath, source, chipSource]);
 
   // Step 1 of attaching a profile: fetch it and switch into "configure" mode
   // so the writer can pick which slices to include before the chip is built.
@@ -3783,10 +3954,22 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
         onClose();
         return;
       }
-      const folderPath = (fromSource ?? source) === "series" && seriesPath ? seriesPath : rootPath;
-      const params = new URLSearchParams({ folder_path: folderPath, type: profileType, filename });
-      const res = await fetch(`${API_BASE}/api/profiles/profile?${params}`);
-      const profile: Profile = await res.json();
+      const fromSeries = (fromSource ?? source) === "series" && seriesPath;
+      let profile: Profile;
+      if (fromSeries) {
+        const params = new URLSearchParams({
+          folder_path: seriesPath, type: profileType, filename });
+        profile = await (await fetch(`${API_BASE}/api/profiles/profile?${params}`)).json();
+      } else {
+        if (!chipSource) return;
+        const row = profiles.find(p => p.filename === filename)
+          ?? suggested.find(p => p.filename === filename);
+        profile = await chipSource.load({
+          filename, name, type: profileType,
+          role: "", status: "active",
+          entity_id: (row as { entity_id?: string } | undefined)?.entity_id,
+        });
+      }
       setPending({ filename, name, chipType, profile });
       // Reset to the smart default each time a new profile is selected so
       // there's no surprise carry-over from a previous attach.
@@ -3975,7 +4158,10 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
   // disable the "Traits" checkbox for those rather than offering a checkbox
   // that does nothing.
   const pendingHasTraits = pending
-    ? (SECTION_CONFIGS[pending.profile.type as ProfileType] ?? []).some(c => c.hasTraitBlocks)
+    // Does this entry HOLD any traits? Asked of the data rather than of a
+    // table of four kinds, which answered no for every other kind there is.
+    ? Object.values(pending.profile.sections)
+        .some(section => (section.trait_blocks ?? []).length > 0)
     : false;
 
   // Whether the pending profile has an AI Summary worth offering. Brand-new

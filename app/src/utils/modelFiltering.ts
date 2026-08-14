@@ -99,6 +99,15 @@ export function filterModelByContentMode(
   provider: string = "openrouter",
 ): boolean {
   if (mode === "general") return true;
+  if (provider === "local") {
+    // A model on the writer's own machine has no upstream policy to infer:
+    // nothing is refused by a vendor because nothing leaves the room. The
+    // prefix lists below are OpenRouter slug conventions and would not match
+    // a bare local name like "mythomax" anyway -- in explicit mode the
+    // whitelist would match nothing and hide every model the writer has
+    // downloaded. Offer them all and let the model itself decide.
+    return true;
+  }
   if (provider === "nanogpt") {
     return !nanogptLooksModerated(m);
   }
@@ -145,3 +154,72 @@ export const RECOMMENDED_MODELS: { id: string; note: string; flagship?: boolean 
   // Free
   { id: "meta-llama/llama-3.3-70b-instruct:free", note: "Best free option"             },
 ];
+
+// ── Price bucketing, for the Model Roles picker ──────────────────────────────
+// The cost-tier slider asks "show me everything up to HERE". The role picker
+// asks a different question -- "which bucket is this model IN?" -- so it can
+// group a short recommended list by price. Same thresholds, read the other
+// way round, kept next to modelPassesTier so the two cannot drift.
+
+/** Which price bucket a model falls in. */
+export function modelTier(m: ModelInfo): TierValue {
+  if (m.is_free)                        return "free";
+  if (m.cost_input_per_million <= 1.0)  return "budget";
+  if (m.cost_input_per_million <= 15.0) return "standard";
+  return "premium";
+}
+
+export function tierLabel(tier: TierValue): string {
+  return TIERS.find(t => t.value === tier)?.label ?? tier;
+}
+
+export interface RecommendedPick {
+  model: ModelInfo;
+  tier: TierValue;
+  tierLabel: string;
+}
+
+/**
+ * A short recommended list for the role picker, spread across price buckets.
+ *
+ * Takes the curated RECOMMENDED_MODELS, keeps only those the live catalog
+ * actually offers (a slug the provider has dropped simply disappears rather
+ * than 404ing later), then fills the list ROUND-ROBIN across Free -> Lowest ->
+ * Pricier -> Priority Best. Round-robin rather than "first N" because the
+ * curated list leans expensive: taking the first seven would show a writer
+ * seven premium models and imply there is nothing cheap worth using.
+ *
+ * Returned in price order, which is the only information the writer needs to
+ * choose -- the bucket name IS the recommendation's context.
+ *
+ * Non-OpenRouter catalogs return nothing, since the curated ids are
+ * OpenRouter slugs. That is correct: an empty group is hidden, and the full
+ * model list is still there underneath.
+ */
+export function recommendedPicks(models: ModelInfo[], limit = 7): RecommendedPick[] {
+  const byId = new Map(models.map(m => [m.id, m]));
+  const buckets = new Map<TierValue, ModelInfo[]>(TIERS.map(t => [t.value, []]));
+
+  for (const rec of RECOMMENDED_MODELS) {
+    const model = byId.get(rec.id);
+    if (model) buckets.get(modelTier(model))!.push(model);
+  }
+
+  const picked: RecommendedPick[] = [];
+  let depth = 0;
+  let addedThisPass = true;
+  while (picked.length < limit && addedThisPass) {
+    addedThisPass = false;
+    for (const tier of TIERS) {
+      if (picked.length >= limit) break;
+      const candidate = buckets.get(tier.value)![depth];
+      if (candidate) {
+        picked.push({ model: candidate, tier: tier.value, tierLabel: tier.label });
+        addedThisPass = true;
+      }
+    }
+    depth += 1;
+  }
+
+  return picked.sort((a, b) => tierIndex(a.tier) - tierIndex(b.tier));
+}

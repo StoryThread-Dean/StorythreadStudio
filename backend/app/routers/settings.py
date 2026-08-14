@@ -10,12 +10,14 @@
 #   PUT  /api/settings        -- update one or more settings fields
 #   POST /api/settings/test-connection  -- verify the OpenRouter API key works
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.settings_store import load_settings, mask_key, save_settings, get_vault_root
 from app.ai.openrouter import test_connection
-from app.ai.providers import PROVIDERS, active_provider
+from app.ai.local_endpoint import LOCAL_API_STYLES, validate_local_base_url
+from app.ai.providers import PROVIDERS, active_provider, base_url_for
+from app.ai.roles import ROLE_INFO, ROLES
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -61,6 +63,15 @@ class SettingsResponse(BaseModel):
     # Writing Progress: hour at which "today" rolls over. 0 = midnight
     # (default), 4 = Night Owl. See progress_store.local_date_for().
     day_rollover_hour:      int
+    # Model Roles: one model per KIND of job. {role: {provider, model}}.
+    # An empty dict means every role uses default_model above, which is how
+    # the app behaved before roles existed. See app/ai/roles.py.
+    model_roles:            dict[str, dict[str, str]]
+    # Address of a model running on the writer's own machine, and which API
+    # shape it speaks. Restricted to local destinations -- see
+    # app/ai/local_endpoint.py.
+    local_base_url:         str
+    local_api_style:        str
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -96,6 +107,16 @@ class UpdateSettingsRequest(BaseModel):
     writing_skill_level: str | None                   = None
     # Only 0 or 4 are accepted. Anything else is clamped to 0 at write time.
     day_rollover_hour:   int | None                   = None
+    # {role: {provider, model}}. Entries naming an unknown role or provider
+    # are dropped on write (the response echoes what was actually stored, so
+    # the UI shows the truth rather than a value that did not stick).
+    model_roles:         dict[str, dict[str, str]] | None = None
+    # A local model's address. Unlike most fields here, an invalid value is
+    # a 400 rather than a silent ignore: the writer typed an address and
+    # needs to be told why it was refused. Empty string clears it.
+    local_base_url:      str | None                   = None
+    # "openai" or "ollama". Anything else is ignored.
+    local_api_style:     str | None                   = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -107,33 +128,7 @@ async def get_settings():
     only a masked preview ("sk-or-...xyz") is shown in the UI. This prevents the
     key from appearing in browser dev tools or network logs.
     """
-    settings = load_settings()
-    key = settings.get("openrouter_api_key", "")
-    nano_key = settings.get("nanogpt_api_key", "")
-
-    return SettingsResponse(
-        ai_provider            = active_provider(settings).key,
-        openrouter_api_key     = _mask_key(key),
-        openrouter_api_key_set = bool(key),
-        nanogpt_api_key        = _mask_key(nano_key),
-        nanogpt_api_key_set    = bool(nano_key),
-        prompt_caching         = bool(settings.get("prompt_caching", True)),
-        default_model          = settings.get("default_model", ""),
-        content_mode           = settings.get("content_mode", "general"),
-        cost_tier              = settings.get("cost_tier", "standard"),
-        text_only_filter       = settings.get("text_only_filter", True),
-        starred_models         = settings.get("starred_models", []),
-        model_allowlist        = settings.get("model_allowlist", []),
-        model_blocklist        = settings.get("model_blocklist", []),
-        model_content_modes    = settings.get("model_content_modes", {}),
-        # get_vault_root() resolves blanks to the default and ensures the
-        # directory exists -- frontend always sees a real path.
-        vault_root             = get_vault_root(),
-        theme                  = settings.get("theme", "dark"),
-        ui_scale               = settings.get("ui_scale", "default"),
-        writing_skill_level    = settings.get("writing_skill_level", "novice"),
-        day_rollover_hour      = int(settings.get("day_rollover_hour", 0) or 0),
-    )
+    return _settings_response(load_settings())
 
 
 @router.put("", response_model=SettingsResponse)
@@ -201,32 +196,26 @@ async def update_settings(request: UpdateSettingsRequest):
             if request.day_rollover_hour in (0, 4)
             else 0
         )
+    if request.model_roles is not None:
+        settings["model_roles"] = _clean_model_roles(request.model_roles)
+    if request.local_base_url is not None:
+        raw = request.local_base_url.strip()
+        if not raw:
+            settings["local_base_url"] = ""      # clearing it is always fine
+        else:
+            # A 400 rather than a silent ignore: the writer typed an address
+            # and the refusal message explains the rule (loopback / private /
+            # .local only). Silently dropping it would look like a save bug.
+            try:
+                validate_local_base_url(raw)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            settings["local_base_url"] = raw
+    if request.local_api_style is not None and request.local_api_style in LOCAL_API_STYLES:
+        settings["local_api_style"] = request.local_api_style
 
     save_settings(settings)
-
-    key = settings.get("openrouter_api_key", "")
-    nano_key = settings.get("nanogpt_api_key", "")
-    return SettingsResponse(
-        ai_provider            = active_provider(settings).key,
-        openrouter_api_key     = _mask_key(key),
-        openrouter_api_key_set = bool(key),
-        nanogpt_api_key        = _mask_key(nano_key),
-        nanogpt_api_key_set    = bool(nano_key),
-        prompt_caching         = bool(settings.get("prompt_caching", True)),
-        default_model          = settings.get("default_model", ""),
-        content_mode           = settings.get("content_mode", "general"),
-        cost_tier              = settings.get("cost_tier", "standard"),
-        text_only_filter       = settings.get("text_only_filter", True),
-        starred_models         = settings.get("starred_models", []),
-        model_allowlist        = settings.get("model_allowlist", []),
-        model_blocklist        = settings.get("model_blocklist", []),
-        model_content_modes    = settings.get("model_content_modes", {}),
-        vault_root             = get_vault_root(),
-        theme                  = settings.get("theme", "dark"),
-        ui_scale               = settings.get("ui_scale", "default"),
-        writing_skill_level    = settings.get("writing_skill_level", "novice"),
-        day_rollover_hour      = int(settings.get("day_rollover_hour", 0) or 0),
-    )
+    return _settings_response(settings)
 
 
 class TestConnectionRequest(BaseModel):
@@ -252,6 +241,9 @@ async def test_provider_connection(request: TestConnectionRequest | None = None)
     requested = (request.provider if request else None) or ""
     provider = PROVIDERS.get(requested) or active_provider(settings)
 
+    if provider.endpoint_from_settings:
+        return await _test_local_connection(settings, provider)
+
     api_key = settings.get(provider.api_key_setting, "")
     if not api_key:
         return {"ok": False, "error": f"No API key saved. Enter your {provider.label} key in Settings first."}
@@ -260,7 +252,162 @@ async def test_provider_connection(request: TestConnectionRequest | None = None)
     return result
 
 
+async def _test_local_connection(settings: dict, provider) -> dict:
+    """
+    Test a local model server, and be specific about how it failed.
+
+    Three failures are worth telling apart, because the fix differs:
+      - the address is not a valid local one    -> fix the address
+      - nothing is listening                    -> start the server
+      - it answers, but on the OTHER API shape  -> flip one setting
+
+    That last case is the reason this does not sniff the style up front.
+    Guessing would hide the mismatch; testing the writer's choice and then
+    checking the alternative lets the app say "you picked Ollama, but it
+    answered as OpenAI-compatible -- switch?" and hand back the fix.
+    """
+    import dataclasses
+
+    chosen = str(settings.get("local_api_style") or "openai")
+    other = "ollama" if chosen == "openai" else "openai"
+
+    async def _try(style: str) -> dict:
+        probe = dict(settings, local_api_style=style)
+        candidate = dataclasses.replace(
+            provider, base_url=base_url_for(provider, probe),
+            model_list_style="ollama_tags" if style == "ollama" else "openai",
+        )
+        return await test_connection("", provider=candidate)
+
+    try:
+        result = await _try(chosen)
+    except ValueError as exc:
+        # base_url_for refused the address itself.
+        return {"ok": False, "error": str(exc)}
+
+    if result.get("ok"):
+        result["style"] = chosen
+        if not result.get("model_count"):
+            result["error"] = (
+                "Connected, but no models are loaded. Pull or load a model in "
+                "your local runtime first."
+            )
+        return result
+
+    # It did not answer the way the writer said it would. Before reporting a
+    # dead server, check whether it is simply speaking the other dialect.
+    try:
+        alt = await _try(other)
+    except ValueError:
+        alt = {"ok": False}
+    if alt.get("ok"):
+        return {
+            "ok": False,
+            "style": other,
+            "suggested_style": other,
+            "error": (
+                f"That address answered, but as a {other} endpoint rather than "
+                f"{chosen}. Switch the API style to {other}."
+            ),
+        }
+
+    return {
+        "ok": False,
+        "style": chosen,
+        "error": result.get("error")
+                 or "Nothing answered at that address. Is the server running?",
+    }
+
+
+@router.get("/roles")
+async def get_roles():
+    """
+    The role catalog the Settings screen renders.
+
+    Served from the backend rather than duplicated in TypeScript so the
+    list of jobs, and the features each one covers, cannot drift from what
+    the AI call sites actually do. tests/test_role_call_sites.py checks this
+    same table against the real source.
+
+    `reserved` marks a role no feature uses yet. Those still appear, with
+    their reason, because a picker that silently does nothing is worse than
+    one that explains itself.
+    """
+    return {
+        "roles": [
+            {
+                "id":            role,
+                "label":         ROLE_INFO[role]["label"],
+                "blurb":         ROLE_INFO[role]["blurb"],
+                "detail":        ROLE_INFO[role]["detail"],
+                "features":      ROLE_INFO[role]["features"],
+                "reserved":      ROLE_INFO[role]["reserved"],
+                "reserved_note": ROLE_INFO[role].get("reserved_note", ""),
+            }
+            for role in ROLES
+        ]
+    }
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _clean_model_roles(raw: dict) -> dict:
+    """
+    Keep only role assignments this build can actually honour.
+
+    Drops unknown role ids and unknown providers (a stale client, or a
+    hand-edited file), and treats a half-filled entry as unset -- the same
+    rule ai/roles.py applies when reading. The PUT response echoes what was
+    stored, so anything dropped is visible in the UI immediately rather than
+    appearing to save and then quietly not working.
+    """
+    cleaned: dict[str, dict[str, str]] = {}
+    for role, entry in (raw or {}).items():
+        if role not in ROLES or not isinstance(entry, dict):
+            continue
+        provider = str(entry.get("provider") or "").strip()
+        model = str(entry.get("model") or "").strip()
+        if provider in PROVIDERS and model:
+            cleaned[role] = {"provider": provider, "model": model}
+    return cleaned
+
+
+def _settings_response(settings: dict) -> SettingsResponse:
+    """
+    Build the settings payload the frontend sees.
+
+    One builder for both GET and PUT: they returned byte-identical blocks
+    before, and every new field was two edits that could disagree.
+    """
+    key = settings.get("openrouter_api_key", "")
+    nano_key = settings.get("nanogpt_api_key", "")
+    return SettingsResponse(
+        ai_provider            = active_provider(settings).key,
+        openrouter_api_key     = _mask_key(key),
+        openrouter_api_key_set = bool(key),
+        nanogpt_api_key        = _mask_key(nano_key),
+        nanogpt_api_key_set    = bool(nano_key),
+        prompt_caching         = bool(settings.get("prompt_caching", True)),
+        default_model          = settings.get("default_model", ""),
+        content_mode           = settings.get("content_mode", "general"),
+        cost_tier              = settings.get("cost_tier", "standard"),
+        text_only_filter       = settings.get("text_only_filter", True),
+        starred_models         = settings.get("starred_models", []),
+        model_allowlist        = settings.get("model_allowlist", []),
+        model_blocklist        = settings.get("model_blocklist", []),
+        model_content_modes    = settings.get("model_content_modes", {}),
+        # get_vault_root() resolves blanks to the default and ensures the
+        # directory exists -- frontend always sees a real path.
+        vault_root             = get_vault_root(),
+        theme                  = settings.get("theme", "dark"),
+        ui_scale               = settings.get("ui_scale", "default"),
+        writing_skill_level    = settings.get("writing_skill_level", "novice"),
+        day_rollover_hour      = int(settings.get("day_rollover_hour", 0) or 0),
+        model_roles            = settings.get("model_roles", {}) or {},
+        local_base_url         = settings.get("local_base_url", "") or "",
+        local_api_style        = settings.get("local_api_style", "openai") or "openai",
+    )
+
 
 def _mask_key(key: str) -> str:
     """

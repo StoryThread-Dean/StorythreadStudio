@@ -7,7 +7,7 @@ with a real API key.
 
 **Environment:** a built release `.msi`, or `npm run tauri dev` from
 `app/` for a dev-mode pre-flight. Do NOT run against a non-local
-environment — there isn't one.
+environment -- there isn't one.
 
 **Before starting:** create a throwaway project at a known location
 (e.g. `~/Documents/Storythread Studio/smoke-<date>/`) so each scenario
@@ -31,7 +31,7 @@ Steps:
    ```powershell
    Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
    ```
-   Expect no output — port 8000 should be free. If a row comes back,
+   Expect no output -- port 8000 should be free. If a row comes back,
    the sidecar leaked; capture the `OwningProcess` and file the
    regression before proceeding.
 3. Launch Storythread Studio.
@@ -43,7 +43,7 @@ Expected:
 - Window opens; no "Backend not responding" banner appears.
 - Left panel shows the project title, the Writing Progress gauge, and
   the Manuscript / Notes / Profiles navigation.
-- After step 5's port check, port 8000 is free — clean shutdown.
+- After step 5's port check, port 8000 is free -- clean shutdown.
 
 ---
 
@@ -60,20 +60,20 @@ Steps:
 4. When prompted, pick an empty subfolder of your vault root.
 5. Confirm creation.
 
-Expected — a native folder-picker dialog opens (NOT a browser file
+Expected -- a native folder-picker dialog opens (NOT a browser file
 input), and the new project folder contains all of:
-- `manuscript/` — with at least one starter chapter `.md`
-- `notes/` — containing `outline.md`
+- `manuscript/` -- with at least one starter chapter `.md`
+- `notes/` -- containing `outline.md`
 - `profiles/characters/`
 - `profiles/relationships/`
 - `profiles/locations/`
 - `profiles/lore/`
-- `profiles/chapters/` — legacy dir, still scaffolded; current chapter
+- `profiles/chapters/` -- legacy dir, still scaffolded; current chapter
   summaries write to `summaries/chapters/`
-- `profiles/scenes/` — legacy dir, still scaffolded; current scene
+- `profiles/scenes/` -- legacy dir, still scaffolded; current scene
   summaries write to `summaries/scenes/<chapter-stem>/`
 - `exports/`
-- `.storythread/` — cache; `app.db` will appear here after the first
+- `.storythread/` -- cache; `app.db` will appear here after the first
   save event
 
 `notes/outline.md` begins with a YAML frontmatter block: starts with
@@ -124,13 +124,13 @@ Expected:
 - A file exists on disk at `profiles/characters/<slug>-<short-id>.md`
   with YAML frontmatter (`id`, `name`, `type: character`, `importance`,
   `updated_at`).
-- Click the Writing Progress gauge — today's task list shows the new
+- Click the Writing Progress gauge -- today's task list shows the new
   profile file with reason "save". (Per-file-per-day credit idempotency
-  is covered by `test_progress_store.py` — no need to re-save here.)
+  is covered by `test_progress_store.py` -- no need to re-save here.)
 
 ---
 
-## 5. Export full manuscript — all four formats
+## 5. Export full manuscript -- all four formats
 
 **Touches:** export endpoint, native save dialog, `python-docx` /
 `ebooklib` / Markdown serializers.
@@ -154,8 +154,8 @@ Expected:
 ## 6. Writing Progress + Settings round-trip
 
 **Touches:** Writing Progress gauge, daily tracker, slide-over layout,
-Skill Level + Night Owl wiring. (Settings persistence itself — save,
-reload, backup, corruption recovery — is covered by
+Skill Level + Night Owl wiring. (Settings persistence itself -- save,
+reload, backup, corruption recovery -- is covered by
 `test_settings_store.py`; no relaunch round-trip needed here.)
 
 Steps:
@@ -173,7 +173,7 @@ Expected:
 
 ---
 
-## 7. Deprecated project model — error message + picker + live save
+## 7. Deprecated project model -- error message + picker + live save
 
 **Touches:** OpenRouter error translation (`_openrouter_exc`), per-project
 model resolution (`project.json` `default_model`), the Project Settings
@@ -197,8 +197,8 @@ Steps:
 
 Expected:
 - Step 2: a clear model-unavailable error surfaces in the UI (not a
-  silent failure). The exact error translation — provider message
-  quoted, no bare "HTTP 404" — is covered by `test_openrouter_errors.py`.
+  silent failure). The exact error translation -- provider message
+  quoted, no bare "HTTP 404" -- is covered by `test_openrouter_errors.py`.
 - Step 3: the dropdown shows the stored model flagged
   `x-ai/grok-3-mini (unavailable -- select a current model)` plus an amber
   warning, instead of silently displaying a different model.
@@ -684,18 +684,272 @@ not write.
 
 ---
 
+## 18. The Weave -- converting an existing project (THE DANGEROUS ONE)
+
+**Touches:** the migration dry run, the on-disk backup, `codex/` creation, the
+resume/restore path after an interruption, and the per-file report. This rewrites
+the writer's own files and is the single most destructive button in the app, which
+is why it is first of the Weave scenarios.
+
+**Set up:** take a COPY of a real project that still has `profiles/` with several
+characters, relationships and locations in it. Do not use a project you care
+about, even though the backup exists. Note the file count in each `profiles/`
+subfolder before you start.
+
+Steps:
+1. Open the copy. In the Weave screen, find the conversion offer. Expect it to be
+   an OFFER: nothing should have converted on open, and the project should be
+   fully usable unconverted.
+2. Run the **dry run** first and confirm you cannot skip it. Expect a plan broken
+   down PER FOLDER ("7 from profiles/characters/", "3 from profiles/locations/")
+   rather than one total, and expect anything being LEFT ALONE to be named with a
+   reason. Confirm the backup location is named BEFORE the button that writes
+   anything, along with what happens to your existing profiles/ folder.
+   Entry NAMES are not shown here and are not meant to be -- they belong to the
+   report at step 6, which lists all of them. (Written the other way round first
+   and walked that way once: it reads as a missing feature when it is the wrong
+   screen.)
+3. Check the dry run wrote nothing: `codex/` does not exist, and every
+   `profiles/` file has its original modified time.
+4. Convert. Expect the count repeated on a second click before it proceeds.
+5. On disk: the backup folder exists and contains the original `profiles/` tree;
+   `codex/` now has one folder per kind; the file count per kind matches what you
+   noted. Open two or three converted `.md` files in Notepad -- frontmatter intact,
+   the writer's prose unchanged, trait blocks still readable as trait blocks.
+6. Read the report. Every entry listed and grouped, each openable field by field
+   as original-versus-converted. Confirm "changed" and "missing" are shown as
+   DIFFERENT things, and that the raw files are offered.
+7. **Interruption.** Convert a second copy and kill the app mid-conversion (close
+   the window, or end the backend process). Reopen. Expect to be offered
+   **resume** or **restore** rather than the app guessing, and expect it NOT to
+   present a half-converted project as finished.
+8. Take the resume branch on that copy and confirm it completes. On a third copy,
+   take **restore** and confirm `profiles/` comes back intact and `codex/` is gone.
+
+Expected: your original manuscript is never touched by any of this. No entry is
+silently dropped. If anything at all is unclear about what was changed, that is a
+failure -- the report exists because a table is an interpretation.
+
+---
+
+## 19. The Weave -- the map, the scrubber, and spoilers
+
+**Touches:** the graph route, the deterministic layout, the chapter scrubber, the
+spoiler toggle, and the list view.
+
+Steps:
+1. Open the Weave on a converted project with several connected entries. Expect a
+   graph, a legend rendered from the app's own vocabulary, and a chapter slider
+   along the bottom.
+2. Close and reopen the Weave. **The layout must not reshuffle.** Spatial memory is
+   most of a graph's value; a map that rearranges itself on every open is a map you
+   cannot learn.
+3. Record a fact on one entry anchored to a late chapter (see scenario 20 if you
+   have none). Drag the scrubber to a chapter BEFORE it: expect that entry to
+   disappear if everything about it happens later, and reappear as you pass its
+   first anchor.
+4. Give a connection a reveal point in a late chapter. With **spoilers hidden**,
+   scrub to before it: the line is absent. Scrub past the reveal: it appears.
+   Switch spoilers OFF and it appears early, drawn as a coming connection rather
+   than a live one.
+5. Confirm the scrubber announces something readable ("Chapter 3, Caught in the
+   Rain"), not a bare number, and that the chapter you are resting on is legible
+   while its neighbours truncate.
+6. Anything hidden must be COUNTED on screen. A map that quietly omits looks like
+   a world with less in it than you built.
+7. Switch to the list view. Expect a peer view of the same world, not a degraded
+   one, and the same spoiler behaviour.
+
+Expected: no dialogs, no writes. This scenario should be entirely read-only.
+
+---
+
+## 20. The Weave -- recording a fact that changes (the three-fact belief)
+
+**Touches:** the Run editor on both screens, the three switches, the chapter
+pickers, manual save, and the conflict refusal.
+
+This is the app's founding example and the reason the Weave exists, so it is worth
+walking by hand: a heroine who believes her father died until chapter fifteen.
+
+Steps:
+1. Open a character in the Profile Builder. Find "How this changes through the
+   story" and press **Show me how this works** -- confirm the guided card appears
+   and says a belief needs THREE facts.
+2. Add fact one: her belief, on HER frame, from an early chapter. Confirm "whose
+   truth" is a PICKER of your own entries rather than a text box -- a typed name
+   would save, look right, and never resolve.
+3. Add fact two: the truth, on the truth frame, with **the reader learns it** set
+   to a late chapter.
+4. Add fact three: her change of mind, on her frame, from that late chapter,
+   marked as replacing fact one.
+5. Confirm the collapsed lines read as sentences you can scan, and that only one
+   fact is expanded at a time.
+6. Press **What does this do?** on a fact. Expect a read-only view: where it is in
+   force as a bar, what replaced it, and what a model would actually receive.
+   Confirm there is NOTHING to edit there.
+7. Ctrl+S. Reopen the file in Notepad: all three facts present, anchors readable.
+8. **Conflict:** open the same character in a second window, save from one, then
+   save from the other. Expect the second save to be REFUSED with your text still
+   in the buffer -- never a silent overwrite.
+
+Expected: nothing is written until you save. Leaving with unsaved work asks first.
+
+---
+
+## 21. The Weave -- Weaving, the guided walk
+
+**Touches:** all four passes, the free scan, the closed-world rule, the inline
+resolutions, and the answer ledger across sessions.
+
+Steps:
+1. Open Weaving. Before starting, confirm the count is a REAL number and that
+   nothing has been spent -- this pass calls no model.
+2. Run **Dress the Loom**. Work at least one of each stop you are offered:
+   a name with no entry, a thin entry, and an entry nothing connects to.
+3. **The closed-world rule is the thing to watch.** At no point should any button
+   close Weaving and drop you somewhere else. Creating an entry, filling one in,
+   and recording a connection all happen inside the popup, and finishing a stop
+   moves you FORWARD rather than back onto the same question.
+4. On a flagged name that is wrong (part of another name, a title, a mis-split
+   phrase), use **Not right?** -- correct the word, then attach it to an entry you
+   already have. Confirm the corrected word is what gets recorded, and that the
+   original phrase says it will not be raised again.
+5. Record a connection and confirm you cannot save it without a REASON in your own
+   words.
+6. Use each of the three noes: **not yet**, the permanent no in that stop's own
+   wording, and **Never ask** -- which must ask HOW WIDELY before writing anything.
+7. Where a kind offers "work through all N at once", take it. Confirm nothing is
+   pre-ticked, that choosing a chapter ticks its own row, and that a ticked row
+   with no chapter is counted out loud rather than skipped.
+8. X out mid-walk. Expect to be asked, and told where you were. Reopen Weaving and
+   take **Carry on where you left off** -- expect what you put off to still be put
+   off, and what you answered for good to be gone.
+9. Run **Read the Cloth** on a project with a contradiction (record two facts
+   about the same thing at the same chapter). Settle one by editing a side, and
+   mark a second **deliberate**. Rescan and confirm the deliberate one does not
+   return.
+10. Run **Unwoven**. Confirm the board shows every part of your world with real
+    counts, that picking a part narrows the sitting, and that answering a question
+    creates a real entry in the right section. Confirm a finished part still
+    appears, marked finished.
+
+Expected: no AI call anywhere in this scenario. Every answer survives a restart.
+
+---
+
+## 22. The Weave -- context, and what is sent to AI
+
+**Touches:** the automatic brief, the inspect panel, the exclusions, the off
+switch, and the Author Notes guarantee.
+
+This is the scenario that checks a promise rather than a feature, so read the
+screen carefully rather than clicking through.
+
+Steps:
+1. Put something distinctive in `notes/author-notes.md` -- an invented name you
+   use nowhere else.
+2. Open a chapter and inspect what would be sent. Expect a small map above the
+   list, and a reason beside each Thread.
+3. **Confirm the author-notes name is absent.** It must never appear, in any
+   brief, on any screen.
+4. Remove one Thread from the brief and confirm the estimate changes. Exclude a
+   whole category and confirm the same.
+5. Switch automatic context OFF entirely and confirm the brief is empty and says
+   so.
+6. Confirm nothing was transmitted at any point in steps 2 to 5 -- inspecting is
+   not sending.
+7. Now run one real AI action with context on. Confirm what arrives is consistent
+   with what the panel showed.
+8. Set a fact's reveal point to a late chapter, then inspect from an early
+   chapter: the fact must be absent, and the panel must say something was
+   withheld rather than silently shortening the list.
+
+Expected: the author-notes name appears nowhere. Anything withheld is counted.
+
+---
+
+## 23. The Weave -- export
+
+**Touches:** `POST /api/codex/export/weave`, the three shapes, and the
+include-the-Weave flags on the manuscript export and the snapshot.
+
+Steps:
+1. Export the Weave as **Markdown**. Open it: chapter NAMES readable, every
+   connection carrying its reason, no raw ids where a person has to read.
+2. Export as **JSON**. Confirm ids are intact and that every anchor carries BOTH
+   an id and a label -- drop the id and a program cannot follow a renamed chapter;
+   drop the label and a person cannot read the file.
+3. Export as **CSV**. Expect THREE files rather than one nested one.
+4. Rename a chapter, re-export the JSON, and confirm the anchors still resolve.
+5. Run the full-manuscript export with **include the Weave** ticked, and confirm
+   the appendix actually contains entries. (Ticking "include profiles" produced an
+   empty appendix silently for most of this app's life -- worth a second look.)
+6. Run a dated snapshot with the Weave included and confirm the folder layout is
+   mirrored.
+
+Expected: every export is written from the FILES, so a stale index cannot make an
+export wrong in a way a reindex would quietly fix.
+
+---
+
+## 24. Moving a book to another computer
+
+**Touches:** everything at once, from the writer's side. Automated tests cover
+this at the API level (`test_project_portability.py`), but only a human can
+check that the app OPENS a moved project, that the Weave screen looks the same
+as it did, and that nothing asks to be redone.
+
+**Why this is here:** asked by the writer during the v2.0.0 build -- "Authors
+work from multiple computers or need to transfer their project from one
+computer to another at some point." Nothing in the app says a word about it, so
+the behaviour has to be right without instructions.
+
+Steps:
+1. On computer one, open a project with real Weave work in it: several entries,
+   some connections carrying reasons, at least one fact with a reveal point, and
+   a Weaving session where you answered some things and put others off. Note the
+   count on the Weaving screen before you start.
+2. Close the app. Copy the WHOLE project folder to a USB stick or a network
+   share. Confirm the hidden `.storythread` folder came with it -- in Explorer,
+   turn on hidden items and look. This is the step to be fussy about.
+3. On computer two, install the app, then open the copied folder. Expect it to
+   open with no complaint about paths.
+4. Compare against computer one: same entries, same connections WITH their
+   reasons, same facts anchored to the same chapters, the map laid out the same
+   way (the layout is deterministic, so it should not have reshuffled).
+5. Open Weaving. **Expect the same count as step 1**, and expect
+   "Carry on where you left off" to be offered with your earlier session still
+   there. Anything you retired must still be retired; anything you muted must
+   still be muted.
+6. Delete `.storythread/app.db` on computer two and reopen. Expect no loss at
+   all -- it is a cache and rebuilds. This is worth doing once because it is the
+   difference between a cache and a store, and the app claims the former.
+7. **The lossy case, done deliberately so you know what it looks like.** Copy the
+   folder again, this time WITHOUT `.storythread`. Open it and go to Weaving.
+   Expect your world intact (entries, connections, facts are all Markdown) but
+   the walk to ask about things you already retired, with no earlier session to
+   carry on from. Nothing warns about this today.
+
+Expected: steps 3 to 6 lose nothing. Step 7 loses your Weaving ANSWERS and only
+those. If any of steps 3 to 6 loses anything, that is a release blocker -- it
+means machine-specific state is being stored where it should not be.
+
+---
+
+
 ## What this checklist does NOT cover
 
-- **Auto-updater** — verified separately by bumping a version and
+- **Auto-updater** -- verified separately by bumping a version and
   confirming the update prompt + restart cycle.
-- **SmartScreen warning** — only visible on a machine without prior
+- **SmartScreen warning** -- only visible on a machine without prior
   trust on this installer.
-- **Series and book-in-series flows** — add a scenario when actively
+- **Series and book-in-series flows** -- add a scenario when actively
   changing series code.
-- **Thesaurus right-click popover** — low-risk; add a scenario if it
+- **Thesaurus right-click popover** -- low-risk; add a scenario if it
   breaks repeatedly.
-- **Reader Mode** — visual; add a scenario if its layout changes.
-- **Smart Advisor passes** — require a real OpenRouter key and an
+- **Reader Mode** -- visual; add a scenario if its layout changes.
+- **Smart Advisor passes** -- require a real OpenRouter key and an
   active model. Worth keeping out of routine smoke runs; verify by
   hand when changing advisor prompts or the OpenRouter integration.
 

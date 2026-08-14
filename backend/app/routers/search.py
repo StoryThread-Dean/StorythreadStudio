@@ -29,10 +29,23 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 #
 # Spec: walk manuscript/, notes/, profiles/ (all subfolders), summaries/,
 # arcs/. Hard-exclude exports/ and .storythread/.
+#
+# CODEX/ WAS MISSING, and it is the folder a converted project keeps its entire
+# world in. Search walked profiles/ -- which after conversion holds the backup
+# copies rather than the live entries -- so searching for a character returned
+# their OLD text, or nothing, depending on whether the writer had tidied
+# profiles/ away. The one surface where "no results" is indistinguishable from
+# "you have not written that yet".
+#
+# Both are listed rather than one or the other, deliberately. An unconverted
+# project has only profiles/; a converted one has codex/ live and profiles/ as a
+# copy the writer removes when they are ready; and a search that quietly stopped
+# covering one of them would repeat the bug in the other direction.
 
 _SEARCH_FOLDERS: list[str] = [
     "manuscript",
     "notes",
+    "codex",
     "profiles",
     "summaries",
     "arcs",

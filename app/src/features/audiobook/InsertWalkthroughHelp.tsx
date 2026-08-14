@@ -20,8 +20,8 @@
 // silences. Every step therefore says what the reader HEARS, not what
 // the button does.
 
-import { GuidedWalk } from "./GuidedWalk";
-import type { WalkStep } from "./GuidedWalk";
+import { GuidedWalk } from "../../components/learn/GuidedWalk";
+import type { WalkStep } from "../../components/learn/GuidedWalk";
 
 const STEPS: WalkStep[] = [
   {

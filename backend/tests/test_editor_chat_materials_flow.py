@@ -22,7 +22,7 @@ from app.routers import ai
 def _patch_auth(monkeypatch):
     """Make auth/validation permissive so we reach the endpoint body hermetically."""
     monkeypatch.setattr(ai, "_resolve_model_and_key",
-                        lambda mid: (ai.OPENROUTER, "fake-key", mid or "test/model"))
+                        lambda role, mid=None: (ai.OPENROUTER, "fake-key", mid or "test/model"))
     monkeypatch.setattr(ai, "_validate_model_content_mode", lambda *a, **k: None)
     monkeypatch.setattr(ai, "_validate_model_allowed", lambda *a, **k: None)
     monkeypatch.setattr(ai, "_build_story_context", lambda *a, **k: "")
@@ -175,3 +175,116 @@ def test_temperature_split_per_category(client, monkeypatch):
 
     # draft_prose must actually sit below generation, or the split is a no-op.
     assert TEMPERATURE_DEFAULTS["draft_prose"] < TEMPERATURE_DEFAULTS["generation"]
+
+
+# ── The Weave brief on the wire ─────────────────────────────────────────────
+#
+# The locked context rule says AI may automatically receive story context, and
+# that nothing is transmitted until the writer initiates an AI action. This is
+# that moment: the brief was assembled locally by /api/codex/context (which
+# sends nothing anywhere) and inspected in the companion; it rides here
+# because the writer pressed send.
+
+_BRIEF = "Alexandra Langford (Character)\nis hiding her theft from Dean."
+
+
+def test_the_brief_reaches_the_model_when_the_writer_sends(client, monkeypatch):
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    resp = client.post("/api/ai/editor-chat", json={
+        "category": "chat",
+        "text_content": "",
+        "messages": [{"role": "user", "content": "what is she risking here?"}],
+        "weave_brief": _BRIEF,
+    })
+    assert resp.status_code == 200, resp.text
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "is hiding her theft from Dean" in sent
+
+
+def test_it_is_framed_as_of_this_point_in_the_story(client, monkeypatch):
+    # A brief assembled at chapter four does not know chapter nineteen -- that
+    # is the whole reason the Weave is time-aware. A model told "this is the
+    # world" would reason happily about things the story has not revealed.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    client.post("/api/ai/editor-chat", json={
+        "category": "chat",
+        "text_content": "",
+        "messages": [{"role": "user", "content": "?"}],
+        "weave_brief": _BRIEF,
+    })
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "as of this point in the story" in sent
+    assert "do not assume anything beyond it has happened yet" in sent
+
+
+def test_the_writers_own_attachments_come_first(client, monkeypatch):
+    # Order is priority: a chip is something they chose for THIS turn; the
+    # Weave is standing context about the world.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    client.post("/api/ai/editor-chat", json={
+        "category": "chat",
+        "text_content": "",
+        "messages": [{"role": "user", "content": "?"}],
+        "context_chips": [_CHIP],
+        "weave_brief": _BRIEF,
+    })
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert sent.index("ATTACHED CONTEXT") < sent.index("FROM YOUR WORLD")
+
+
+def test_a_brief_alone_is_enough_to_build_materials(client, monkeypatch):
+    # Turn 2+ with nothing new but the world: no selection, no fresh chips.
+    # Without the brief counting as materials, it would be silently dropped.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    resp = client.post("/api/ai/editor-chat", json={
+        "category": "chat",
+        "text_content": "",
+        "messages": [{"role": "user", "content": "?"}],
+        "context_chips": [],
+        "weave_brief": _BRIEF,
+    })
+    assert "FROM YOUR WORLD" in "\n".join(
+        m["content"] for m in captured["messages"])
+    # And it is echoed, so it stays in front of the model on later turns
+    # rather than vanishing after one -- the same fix chips needed.
+    assert "FROM YOUR WORLD" in resp.json()["materials_content"]
+
+
+def test_nothing_is_added_when_the_writer_switched_it_off(client, monkeypatch):
+    # Off means off: an empty brief must not leave a header behind claiming
+    # the world said something.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    client.post("/api/ai/editor-chat", json={
+        "category": "chat",
+        "text_content": "some selected prose",
+        "messages": [{"role": "user", "content": "?"}],
+        "weave_brief": "",
+    })
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "FROM YOUR WORLD" not in sent
+    assert "WORLD CONTEXT" not in sent
+
+
+def test_an_oversized_brief_is_refused_with_the_control_that_fixes_it(client,
+                                                                     monkeypatch):
+    _patch_auth(monkeypatch)
+    _capture_run_chat(monkeypatch)
+
+    resp = client.post("/api/ai/editor-chat", json={
+        "category": "chat",
+        "text_content": "",
+        "messages": [{"role": "user", "content": "?"}],
+        "weave_brief": "x" * 60_001,
+    })
+    assert resp.status_code == 400
+    assert "Remove some Threads" in resp.json()["detail"]

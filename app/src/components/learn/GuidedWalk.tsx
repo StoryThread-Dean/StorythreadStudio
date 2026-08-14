@@ -1,5 +1,5 @@
-// features/audiobook/GuidedWalk.tsx
-// ==================================
+// components/learn/GuidedWalk.tsx
+// ================================
 // The shared "Show me how this works" card: a numbered walk through a
 // feature, one step at a time, with an example of what each step looks
 // like on screen.
@@ -15,19 +15,56 @@
 // around. A writer should be able to read step 3, DO step 3, and come
 // back -- so it sits inside the panel it describes and everything
 // underneath stays usable while it is open.
+//
+// R8.8: MOVED HERE FROM features/audiobook/. It was written as a shared
+// component, described as one in its own header, and lived inside one
+// feature's folder -- so the second feature that wanted it would have had to
+// reach across a feature boundary or copy it, and copying is how two
+// walkthroughs end up teaching in two different shapes. The Weave uses it now
+// (see codex/RunWalk.tsx).
+//
+// The demo type is a UNION for the same reason. It used to mean one thing --
+// a clip rendered by the audiobook pipeline -- which is a perfectly good
+// demonstration of something audible and no use at all for something a writer
+// READS. A Weave step showing what a brief looks like with and without a
+// belief recorded needs to show text, and it should not have to invent its own
+// way to do that.
 
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, ChevronLeft, ChevronRight, GraduationCap, Loader2, Play, X,
 } from "lucide-react";
 
-import { fetchMarkerDemo } from "./api";
+import { fetchMarkerDemo } from "../../features/audiobook/api";
 
-export interface WalkDemo {
+/**
+ * One thing a step can demonstrate rather than describe.
+ *
+ * Discriminated on `play`, and `"audio"` is the default when it is absent so
+ * every existing audiobook step keeps working untouched -- there were two dozen
+ * of them and rewriting them all to say what they already meant would be churn
+ * with a chance of a typo.
+ */
+export type WalkDemo = AudioDemo | ShownDemo;
+
+export interface AudioDemo {
+  play?: "audio";
   /** A DEMO_SCRIPTS key on the backend (marker_demos.py). */
   kind: string;
   /** What the writer is about to hear, in their terms. */
   label: string;
+}
+
+/** Something to READ side by side: what the app produces with and without the
+ *  thing the step is teaching. The Weave's demonstrations are all of this
+ *  kind -- there is nothing to listen to in a context brief. */
+export interface ShownDemo {
+  play: "shown";
+  /** Stable key for React, since two shown demos have no `kind` to tell them
+   *  apart. */
+  kind: string;
+  label: string;
+  body: React.ReactNode;
 }
 
 export interface WalkStep {
@@ -164,20 +201,29 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
         <div className={`mt-1.5 overflow-hidden rounded border bg-zinc-950/60 ${c.example}`}>
           {step.demos.map(demo => (
             <div key={demo.kind}
-                 className="flex items-center gap-2 border-b border-zinc-800/60 px-2 py-1.5 last:border-b-0">
-              <button
-                onClick={() => void playDemo(demo.kind)}
-                disabled={loading !== null}
-                aria-label={`Play: ${demo.label}`}
-                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
-              >
-                {loading === demo.kind
-                  ? <Loader2 size={11} className="animate-spin" />
-                  : <Play size={11} />}
-                Play
-              </button>
+                 className="flex items-start gap-2 border-b border-zinc-800/60 px-2 py-1.5 last:border-b-0">
+              {/* A shown demo has nothing to press. Rendering a dead Play
+                  button beside it would be the clearest possible way to say
+                  "this feature does not understand what it is showing you". */}
+              {demo.play === "shown" ? (
+                <span className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                  {demo.label}
+                </span>
+              ) : (
+                <button
+                  onClick={() => void playDemo(demo.kind)}
+                  disabled={loading !== null}
+                  aria-label={`Play: ${demo.label}`}
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                >
+                  {loading === demo.kind
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <Play size={11} />}
+                  Play
+                </button>
+              )}
               <span className="min-w-0 flex-1 text-[11px] leading-tight text-zinc-300">
-                {demo.label}
+                {demo.play === "shown" ? demo.body : demo.label}
               </span>
             </div>
           ))}

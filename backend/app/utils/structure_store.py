@@ -36,6 +36,8 @@
 import json
 import logging
 import os
+
+from app.utils.atomic import replace_atomic
 import uuid
 
 log = logging.getLogger(__name__)
@@ -66,8 +68,33 @@ def _new_act_id() -> str:
     return "a-" + uuid.uuid4().hex[:8]
 
 
+def _new_chapter_id() -> str:
+    """Same style as act ids. See chapter_ids below for what these are for."""
+    return "c-" + uuid.uuid4().hex[:8]
+
+
+# ── Chapter IDs (the Weave's anchors) ────────────────────────────────────────
+# The Weave records facts against a point in the story -- "as of chapter 7,
+# she knows" -- so it needs a chapter identity that survives a rename. The
+# filename cannot be it: renaming a chapter is an ordinary thing to do, and
+# every anchor keyed to the old name would break.
+#
+# Stored as a MAP beside the tree rather than inside it:
+#
+#   "chapter_ids": { "01-chapter-1.md": "c-3f9c2e1b" }
+#
+# A map rather than turning each entry into {id, file} because filename is
+# already the identity everywhere else in this codebase (summaries, progress
+# rows, scene sidecars), and every consumer of ordered_chapter_filenames()
+# keeps working untouched.
+#
+# MINTED LAZILY. Nothing here creates ids on its own -- only ensure_chapter_ids()
+# does, and only the Weave calls it. A project that never opens the Weave
+# keeps a structure.json without the key at all, byte-identical to before.
+
+
 def _empty_structure() -> dict:
-    return {"version": STRUCTURE_VERSION, "acts": [], "unassigned": []}
+    return {"version": STRUCTURE_VERSION, "acts": [], "unassigned": [], "chapter_ids": {}}
 
 
 def _heal(manifest: dict, disk_files: list[str]) -> tuple[dict, bool]:
@@ -120,8 +147,25 @@ def _heal(manifest: dict, disk_files: list[str]) -> tuple[dict, bool]:
             healed_unassigned.append(name)
             changed = True
 
+    # Chapter ids follow their files: an id whose file is gone is dropped
+    # (the anchor pointing at it degrades rather than resolving to nothing),
+    # and no id is ever minted here -- see ensure_chapter_ids.
+    raw_ids = manifest.get("chapter_ids") or {}
+    healed_ids = {
+        name: str(cid)
+        for name, cid in raw_ids.items()
+        if isinstance(name, str) and name in disk_set and cid
+    }
+    if len(healed_ids) != len(raw_ids):
+        changed = True
+
     return (
-        {"version": STRUCTURE_VERSION, "acts": healed_acts, "unassigned": healed_unassigned},
+        {
+            "version": STRUCTURE_VERSION,
+            "acts": healed_acts,
+            "unassigned": healed_unassigned,
+            "chapter_ids": healed_ids,
+        },
         changed,
     )
 
@@ -178,10 +222,23 @@ def save_structure(folder_path: str, manifest: dict) -> None:
     """
     path = _structure_path(folder_path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Omit chapter_ids entirely when there are none. A project that has never
+    # opened the Weave then keeps exactly the file shape it had before ids
+    # existed, rather than gaining an empty key on its next act reorder.
+    payload = dict(manifest)
+    if not payload.get("chapter_ids"):
+        payload.pop("chapter_ids", None)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
-    os.replace(tmp, path)
+        json.dump(payload, f, indent=2)
+    # RETRIED, NOT BARE. On Windows a rename fails while a virus scanner, the
+    # search indexer, a cloud-sync client or the writer's own editor holds the
+    # file open for a moment -- so a save fails at random with no cause the
+    # writer could diagnose. R2.5b saw this happen for real (WinError 5) and
+    # fixed the Weave's writes; these are the same one-line change in code the
+    # recovery does not own, which is why they were recorded rather than swept
+    # up. replace_atomic retries for ~150ms and then raises honestly.
+    replace_atomic(tmp, path)
 
 
 def ordered_chapter_filenames(folder_path: str) -> list[str]:
@@ -213,6 +270,72 @@ def order_rank(folder_path: str) -> dict[str, int]:
     return {name: i for i, name in enumerate(ordered_chapter_filenames(folder_path))}
 
 
+# ── Chapter identity, for Weave anchors ──────────────────────────────────────
+
+def ensure_chapter_ids(folder_path: str) -> dict[str, str]:
+    """
+    Give every chapter a stable id, minting any that are missing.
+
+    THE ONLY function that creates chapter ids, and the only one that writes
+    the manifest for that reason. Call it when a project first needs anchors;
+    a project that never does keeps its structure.json untouched (and may not
+    have one at all).
+
+    Returns {filename: chapter_id} for every chapter currently on disk.
+    """
+    manifest, _exists = load_structure(folder_path)
+    ids = dict(manifest.get("chapter_ids") or {})
+
+    minted = False
+    for name in ordered_chapter_filenames(folder_path):
+        if not ids.get(name):
+            ids[name] = _new_chapter_id()
+            minted = True
+
+    if minted:
+        manifest["chapter_ids"] = ids
+        try:
+            save_structure(folder_path, manifest)
+        except OSError as exc:
+            # Best-effort, like the healing write above. An anchor created in
+            # this session still resolves; the next call re-mints.
+            log.warning("could not persist chapter ids: %s", exc)
+    return ids
+
+
+def chapter_id_for_file(folder_path: str, filename: str) -> str | None:
+    """This chapter's stable id, or None if ids have never been minted."""
+    manifest, _ = load_structure(folder_path)
+    return (manifest.get("chapter_ids") or {}).get(filename)
+
+
+def file_for_chapter_id(folder_path: str, chapter_id: str) -> str | None:
+    """
+    The chapter a stored anchor points at, or None when it has been deleted.
+
+    None is a normal answer, not an error: an anchor into a chapter the
+    writer removed should degrade visibly rather than resolve to whatever
+    file now sits in that position.
+    """
+    manifest, _ = load_structure(folder_path)
+    for name, cid in (manifest.get("chapter_ids") or {}).items():
+        if cid == chapter_id:
+            return name
+    return None
+
+
+def ordered_chapter_ids(folder_path: str) -> list[tuple[str, str]]:
+    """
+    [(chapter_id, filename)] in reading order, minting ids if needed.
+
+    Reading order comes from ordered_chapter_filenames() -- the single
+    ordering authority -- so anchors sort the same way the sidebar, Reader
+    Mode and exports do.
+    """
+    ids = ensure_chapter_ids(folder_path)
+    return [(ids[name], name) for name in ordered_chapter_filenames(folder_path) if name in ids]
+
+
 # ── Mutation hooks (called by chapter create/delete/rename) ─────────────────
 # All three are no-ops when structure.json doesn't exist yet: projects that
 # never used acts keep their zero-manifest life, and the synthesized view
@@ -240,6 +363,7 @@ def _load_raw(folder_path: str) -> dict | None:
         return None
     loaded.setdefault("acts", [])
     loaded.setdefault("unassigned", [])
+    loaded.setdefault("chapter_ids", {})
     return loaded
 
 
@@ -266,6 +390,10 @@ def sync_remove_chapter(folder_path: str, filename: str) -> None:
         if isinstance(act, dict):
             act["chapters"] = [n for n in act.get("chapters", []) if n != filename]
     manifest["unassigned"] = [n for n in manifest["unassigned"] if n != filename]
+    # Drop the id too. Any Weave anchor into it now resolves to None, which
+    # reads as "that chapter is gone" rather than silently pointing at
+    # whatever file later takes its place.
+    manifest.get("chapter_ids", {}).pop(filename, None)
     save_structure(folder_path, manifest)
 
 
@@ -292,6 +420,15 @@ def sync_rename_chapter(folder_path: str, old_filename: str, new_filename: str) 
         if name == old_filename:
             manifest["unassigned"][i] = new_filename
             found = True
+
+    # Carry the chapter id across the rename. This is the whole point of
+    # having ids: a rename is an ordinary thing to do, and every Weave anchor
+    # keyed to this chapter must survive it. Done even when the tree itself
+    # had no entry to update, so a renamed chapter never loses its identity.
+    ids = manifest.get("chapter_ids", {})
+    if old_filename in ids:
+        ids[new_filename] = ids.pop(old_filename)
+        found = True
 
     if found:
         save_structure(folder_path, manifest)

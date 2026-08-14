@@ -343,21 +343,50 @@ interface MarkdownEditorProps {
   font: FontValue;        // Current writing font (CSS font-family string)
   onEditorReady: (view: EditorView) => void;  // Called once on mount with the EditorView
   onSelectionChange?: (selectedText: string) => void;  // Fires when selection changes
+  /** Which project this text belongs to. Only used by the right-click
+   *  Weaving action, which records a mark against the project. */
+  projectPath?: string;
 }
 
 
 // ── Thesaurus state shape ─────────────────────────────────────────────────────
+/**
+ * The sentence a selection sits in, for showing a mark in context.
+ *
+ * Deliberately crude: split on sentence-enders and take the piece the
+ * selection falls in. A mark is shown to the writer as a reminder of where
+ * they were, not parsed by anything, so approximately-a-sentence is the
+ * right amount of effort.
+ */
+function sentenceAround(text: string, from: number, to: number): string {
+  const left = Math.max(0, text.lastIndexOf(".", from - 1) + 1);
+  const dot = text.indexOf(".", to);
+  const right = dot === -1 ? Math.min(text.length, to + 120) : dot + 1;
+  return text.slice(left, right).trim().replace(/\s+/g, " ").slice(0, 240);
+}
+
 interface ThesaurusState {
   word: string;
   from: number;   // document position of word start
   to:   number;   // document position of word end
   x:    number;   // viewport px for popover
   y:    number;
+  /**
+   * A multi-word selection, when there is one.
+   *
+   * The thesaurus only ever wants one word, so `word` stays a word. But
+   * "Kithicor Forest" and "Cambridge Campus Library" are single things in
+   * a writer's world, and Weaving has to be able to mark them -- so the
+   * phrase rides along beside the word rather than replacing it.
+   */
+  phrase?: string;
+  /** The sentence it came from, so a mark can show where it was made. */
+  sentence?: string;
 }
 
 
 // ── MarkdownEditor Component ──────────────────────────────────────────────────
-export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, onSelectionChange }: MarkdownEditorProps) {
+export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, onSelectionChange, projectPath }: MarkdownEditorProps) {
   const editorViewRef = useRef<EditorView | null>(null);
 
   // Thesaurus popover state -- null when closed
@@ -405,10 +434,30 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
       }
     }
 
-    if (!word) return;   // nothing word-like found -- let native menu show
+    // A MULTI-WORD SELECTION is not a thesaurus lookup, but it is exactly
+    // what Weaving needs to mark: "Kithicor Forest" is one thing in the
+    // writer's world. So a phrase opens the menu even when no single word
+    // does, and the thesaurus half simply finds nothing for it.
+    let phrase = "";
+    if (!sel.empty) {
+      const text = view.state.sliceDoc(sel.from, sel.to).trim();
+      // Up to six words: enough for the longest real name, short enough
+      // that selecting a paragraph does not offer to mark a paragraph.
+      if (text && text.length <= 80 && text.split(/\s+/).length <= 6
+          && !text.includes("\n")) {
+        phrase = text;
+        if (!word) { from = sel.from; to = sel.to; }
+      }
+    }
+
+    if (!word && !phrase) return;   // let the native menu show
 
     e.preventDefault();
-    setThesaurus({ word, from, to, x: e.clientX, y: e.clientY });
+    setThesaurus({
+      word, from, to, phrase: phrase || undefined,
+      sentence: sentenceAround(view.state.doc.toString(), from, to),
+      x: e.clientX, y: e.clientY,
+    });
   }, []);
 
   // Replace the original word with the chosen synonym, then close the popover
@@ -491,6 +540,9 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
           to={thesaurus.to}
           x={thesaurus.x}
           y={thesaurus.y}
+          phrase={thesaurus.phrase}
+          sentence={thesaurus.sentence}
+          projectPath={projectPath}
           onReplace={handleThesaurusReplace}
           onClose={() => setThesaurus(null)}
         />

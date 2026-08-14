@@ -1258,7 +1258,10 @@ async def speaker_pass_estimate(workspace_path: str, characters: int = 0):
     from app.routers.ai import _resolve_model_and_key
 
     try:
-        provider, api_key, model_id = _resolve_model_and_key(None)
+        # The speaker pass reads prose to work out who is talking, which is
+        # character reasoning -- and it runs on the WRITING side's model, not
+        # narration's. Narration keys pay for speech, not for reading.
+        provider, api_key, model_id = _resolve_model_and_key("character_reasoning")
     except HTTPException:
         # No key or no model yet: the estimate is not the place to nag.
         return {"model_id": "", "price_known": False, "cost_usd": None,
@@ -1331,7 +1334,7 @@ async def analyze_speakers(request: AnalyzeSpeakersRequest):
                    "characters). Analyse a chapter at a time.",
         )
 
-    provider, api_key, model_id = _resolve_model_and_key(None)
+    provider, api_key, model_id = _resolve_model_and_key("character_reasoning")
     manifest = workspace.load_manifest(request.workspace_path)
     # The AI is told every spelling the book uses -- "Lexi" in the prose
     # has to resolve to Alexandra, and a model that has never heard the

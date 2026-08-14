@@ -51,6 +51,11 @@ def test_active_provider_defaults_to_openrouter():
 
 
 # ── _resolve_model_and_key dispatch ──────────────────────────────────────────
+# Since v1.1.1 every call site declares WHICH KIND OF JOB it is doing, so
+# the first argument is a role (see app/ai/roles.py) and the model override
+# moved to second. The behaviour pinned below is the path an install with
+# no roles configured takes -- which is to say, all of it is the
+# no-behaviour-change guarantee, exercised through the real seam.
 
 def _patch_settings(monkeypatch, settings: dict):
     """Point ai.load_settings at a fixed dict so no real file is read."""
@@ -64,7 +69,7 @@ def test_resolve_openrouter_uses_its_key_and_fallback(monkeypatch):
         "nanogpt_api_key": "nano-real",
         "default_model": "",
     })
-    provider, api_key, model_id = ai._resolve_model_and_key(None)
+    provider, api_key, model_id = ai._resolve_model_and_key("critique")
     assert provider is OPENROUTER
     assert api_key == "sk-or-real"
     assert model_id == OPENROUTER.fallback_model
@@ -77,7 +82,7 @@ def test_resolve_nanogpt_uses_its_own_key(monkeypatch):
         "nanogpt_api_key": "nano-real",
         "default_model": "some/nano-model",
     })
-    provider, api_key, model_id = ai._resolve_model_and_key(None)
+    provider, api_key, model_id = ai._resolve_model_and_key("critique")
     assert provider is NANOGPT
     assert api_key == "nano-real"          # NOT the OpenRouter key
     assert model_id == "some/nano-model"
@@ -91,7 +96,7 @@ def test_resolve_nanogpt_missing_key_names_nanogpt(monkeypatch):
         "default_model": "some/model",
     })
     with pytest.raises(HTTPException) as exc_info:
-        ai._resolve_model_and_key(None)
+        ai._resolve_model_and_key("critique")
     assert exc_info.value.status_code == 400
     assert "NanoGPT" in exc_info.value.detail
 
@@ -105,17 +110,37 @@ def test_resolve_nanogpt_no_model_is_400_not_fallback(monkeypatch):
         "default_model": "",
     })
     with pytest.raises(HTTPException) as exc_info:
-        ai._resolve_model_and_key(None)
+        ai._resolve_model_and_key("critique")
     assert exc_info.value.status_code == 400
-    assert "No model selected" in exc_info.value.detail
-    assert "NanoGPT" in exc_info.value.detail
+    assert "Pick" in exc_info.value.detail        # tells them what to do
+    assert "NanoGPT" in exc_info.value.detail     # and on which service
 
 
 def test_resolve_request_override_wins(monkeypatch):
+    # The override is the PROJECT's default_model, which still outranks the
+    # global one. It now sits below an explicit role assignment -- see
+    # test_model_roles.py -- but with no roles configured this is unchanged.
     _patch_settings(monkeypatch, {
         "ai_provider": "openrouter",
         "openrouter_api_key": "sk-or-real",
         "default_model": "global/model",
     })
-    provider, _, model_id = ai._resolve_model_and_key("project/override")
+    provider, _, model_id = ai._resolve_model_and_key("critique", "project/override")
     assert model_id == "project/override"
+
+
+def test_an_assigned_role_outranks_the_project_default_model(monkeypatch):
+    # The one deliberate precedence change: a writer who assigned a model to
+    # a specific kind of work meant it for that work, so it beats the
+    # book-wide Default Model. Only reachable once a role is configured.
+    _patch_settings(monkeypatch, {
+        "ai_provider": "openrouter",
+        "openrouter_api_key": "sk-or-real",
+        "default_model": "global/model",
+        "model_roles": {"prose": {"provider": "openrouter", "model": "assigned/model"}},
+    })
+    _, _, model_id = ai._resolve_model_and_key("prose", "project/override")
+    assert model_id == "assigned/model"
+    # ...and a role with no assignment still takes the override.
+    _, _, other = ai._resolve_model_and_key("critique", "project/override")
+    assert other == "project/override"
