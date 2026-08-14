@@ -942,7 +942,17 @@ it, since the spec calls it the reason the frame system exists.
       feature), and export. Two of the spec's Verification lines are unreachable
       and say so: the scene-break one needs Phase 7, and the knowledge-violation
       one needs Phase 9.
-- [ ] **R10.5** `/pre-release` to a RELEASE READY verdict.
+- [x] **R10.5** DONE 2026-08-14. `/pre-release` returns RELEASE READY: 1897
+      backend, 1370 frontend, zero open `pre-release-blocker` issues, manual
+      smoke acknowledged by the writer. One open issue exists and is NOT a
+      blocker -- #21, the intermittent `CastPanel` speaker-key flake, labelled
+      `qa-automation`; both suites passed clean on this run.
+      Worth recording for the next cut: the writer acknowledged the smoke with
+      seven of the 24 scenarios newly written and never walked (18-23, the Weave,
+      including the migration; and 24, moving a book between computers). That was
+      stated plainly before the acknowledgment rather than after, and it is the
+      writer's call to make -- but the gate's signature is only ever as good as
+      the walk behind it, and scenario 18 rewrites the writer's own files.
 - [x] **R10.6** DONE. `settings_store`, `structure_store` and the audiobook JSON
       store all go through `replace_atomic` now; the only bare `os.replace` calls
       left in `app/` are inside `replace_atomic` itself. Also corrected a comment
@@ -1017,6 +1027,6 @@ recorded somewhere that nothing was comparing the build against.
 | 7 Scene identity | 4 | 0 |
 | 8 Walk honesty | 12 | **12** |
 | 9 AI passes | 8 | 0 |
-| 10 Release | 6 | **5** |
+| 10 Release | 6 | **6** |
 | 11 Late rulings | 7 | **6** |
-| **Total** | **107** | **92** |
+| **Total** | **107** | **93** |

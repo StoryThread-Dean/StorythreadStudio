@@ -27,7 +27,7 @@ checkbox in the recovery plan, and the ledger line below.** This exists so a
 session interrupted mid-task, or forced into a long debugging detour, can find
 its place without relying on memory or conversation history.
 
-> **LEDGER — last updated 2026-08-14.** 92 of 107 tasks done.
+> **LEDGER — last updated 2026-08-14.** 93 of 107 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
 > contradictions ruled, seven amendments approved, three spec defects fixed,
 > scope set (v2.0.0 = phases 1-6, 8, 10; deferred to v2.1.0 = phase 7 scene
@@ -379,10 +379,30 @@ its place without relying on memory or conversation history.
 > in `app/` are inside `replace_atomic` itself. Also fixed a comment in
 > `findings.py` claiming the Weave followed the pattern those stores used, which
 > had been backwards since R2.5b fixed the Weave first.
-> Left in Phase 10: **R10.3** version bump and tags, **R10.4** the Weave section of
-> `manual-smoke.md` (711 lines, eight on the audiobook, zero on the Weave -- and
-> the Weave contains migration, which rewrites the writer's files), **R10.5**
-> `/pre-release` to a verdict.
+> **PHASE 10 COMPLETE (6 of 6).** R10.3 gave the backend a real version (it had
+> reported 0.1.0 through eleven releases, from three hand-typed copies); R10.4
+> added seven manual-smoke scenarios, migration first as THE DANGEROUS ONE;
+> **R10.5 returns RELEASE READY** -- 1897 backend, 1370 frontend, zero blockers,
+> smoke acknowledged. The one open issue is #21, an intermittent CastPanel flake
+> labelled `qa-automation`, not a blocker.
+> **Two things found after the plan was written, both from live testing.** The
+> Weaving walk went silent on chapter 6 and said "your world and your book agree",
+> which it is in no position to claim -- it reads NAMES, and that scene had three
+> men described rather than named plus two names revealed once each in dialogue.
+> The screen now states what the pass cannot see. Underneath it sat a real bug:
+> `evidence.is_a_name` is used as a GATE, so a name appearing only at a sentence
+> start or only just inside an opening quote (`"Duncan," he said`) is invisible
+> however often it occurs. RULED: leave the gate, the Profile Extractor covers it;
+> the tempting fix was measured and floods (Look, Right, Yes, Sorry, Wait survive
+> a "never written lowercase" test). Pinned by five tests.
+> **Portability is now proven rather than assumed.** The writer asked whether a
+> book moves between computers; nothing was checking it. It does, exactly, because
+> no absolute path is stored in project data -- `project.json`'s `root_path` is the
+> one exception and is healed on open. `app.db` may be deleted freely; the Weaving
+> ANSWERS under `.storythread/weave/` may not, and a transfer filtering hidden
+> folders loses them silently. Eight tests, plus smoke scenario 24. The root-cause
+> test caught ITSELF first: it searched for the raw path only and passed while
+> project.json held the old location, because JSON escapes backslashes.
 > Phases 7 and 9 are deferred to v2.1.0.
 > Branch health: 1897 backend tests, 1370 frontend tests, ruff and tsc clean.
 
