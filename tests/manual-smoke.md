@@ -700,9 +700,15 @@ Steps:
 1. Open the copy. In the Weave screen, find the conversion offer. Expect it to be
    an OFFER: nothing should have converted on open, and the project should be
    fully usable unconverted.
-2. Run the **dry run** first and confirm you cannot skip it. Expect an ITEMISED
-   plan -- every entry named, grouped by kind -- not a total. Confirm the backup
-   location is named BEFORE the button that writes anything.
+2. Run the **dry run** first and confirm you cannot skip it. Expect a plan broken
+   down PER FOLDER ("7 from profiles/characters/", "3 from profiles/locations/")
+   rather than one total, and expect anything being LEFT ALONE to be named with a
+   reason. Confirm the backup location is named BEFORE the button that writes
+   anything, along with what happens to your existing profiles/ folder.
+   Entry NAMES are not shown here and are not meant to be -- they belong to the
+   report at step 6, which lists all of them. (Written the other way round first
+   and walked that way once: it reads as a missing feature when it is the wrong
+   screen.)
 3. Check the dry run wrote nothing: `codex/` does not exist, and every
    `profiles/` file has its original modified time.
 4. Convert. Expect the count repeated on a second click before it proceeds.
