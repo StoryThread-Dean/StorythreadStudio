@@ -28,6 +28,7 @@
 
 import hashlib
 import os
+from functools import lru_cache
 import re
 from dataclasses import dataclass, field
 
@@ -281,6 +282,173 @@ def _strip_chrome(text: str) -> str:
     """
     without = _HEADING_RE.sub("", text)
     return _MARKER_RE.sub(" ", without)
+
+
+# An HTML comment, across lines. The outline template puts its seed metadata in
+# one of these and labels it, in the app's own words, "TREAT AS SEED METADATA --
+# NOT ESTABLISHED STORY FACTS ... AI assistants: do NOT assume these lines are
+# canon." The scan then read it as prose anyway.
+_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+
+# A FIELD LABEL at the start of a line, bold or plain, with its colon:
+#
+#     - **Working Title:** Cult of the Pathicus
+#     - **Inciting Incident:** The team's capture by the cult
+#       Genre:       (not set)
+#     Chapter 1 Title: The Altars of Sodom and Pathicus
+#
+# The label is the TEMPLATE's word and the value after the colon is the
+# writer's. Capped at five words so it cannot swallow a sentence that happens to
+# contain a colon, and anchored to the line start so mid-sentence colons ("she
+# had one rule: never look back") are untouched.
+_FIELD_LABEL_RE = re.compile(
+    r"^[ \t]*(?:[-*+]\s+)?(?:\*\*|__)?"      # optional bullet, optional bold
+    r"[A-Za-z][A-Za-z0-9]*(?:[ \t]+[A-Za-z0-9]+){0,4}"   # up to five words
+    r"(?:\*\*|__)?:[ \t]*",                  # the colon that makes it a field
+    re.MULTILINE)
+
+# A BOLD SPAN, anywhere on the line. The label rule above is anchored to the line
+# start and so misses the template's instruction voice, which references its own
+# fields mid-sentence: "Describe the **Inciting Incident**: ...", "Move on to the
+# **Status Quo**: ...".
+#
+# Checked against a real outline before trusting it: of the 31 distinct bold
+# spans in it, every single one was a template label -- Protagonist, Logline,
+# Premise, Theme, Tone, Genre, Target Length, POV / Tense, Working Title, and the
+# beat names. Not one was a character, a place or anything the writer invented.
+# That is what bold IS in a form: the name of the box, not what is in it.
+_BOLD_SPAN_RE = re.compile(r"(?:\*\*|__)(.+?)(?:\*\*|__)")
+
+# THE FIELDS WHOSE VALUE IS ALSO CHROME.
+#
+# The label rule keeps the value, which is right almost everywhere: "**Status
+# Quo:** The 3 teams (Alpha, Bravo, Charlie) have been captured" must still yield
+# the writer's three invented names. But a handful of fields are BOOK metadata,
+# and their values are classification tags rather than anything in the story.
+# The writer's words: "Examples being Genre: Fiction, Sciences Fiction, Thriller.
+# Other book specific grouping tags that are definitely not part of any words
+# that need to be tagged, ever."
+#
+# Named from the app's OWN field list -- `OutlineMetadata` in outline_templates.py
+# declares title, series_name, genre, tone and description, and the template
+# renders those labels plus the length and point-of-view fields. So this is the
+# app recognising its own form, not a guess about English.
+_METADATA_FIELDS = (
+    "title", "working title", "series", "genre", "tone", "description",
+    "target length", "pov", "tense", "pov / tense", "status", "template",
+)
+
+# The whole line, label and value, for those fields only.
+_METADATA_LINE_RE = re.compile(
+    r"^[ \t]*(?:[-*+]\s+)?(?:\*\*|__)?"
+    r"(?:" + "|".join(re.escape(f) for f in _METADATA_FIELDS) + r")"
+    r"(?:\*\*|__)?[ \t]*:.*$",
+    re.MULTILINE | re.IGNORECASE)
+
+
+@lru_cache(maxsize=1)
+def _template_vocabulary() -> frozenset[str]:
+    """
+    Every name the SHIPPED outline templates contain, lower-cased.
+
+    THE APP WROTE THE TEMPLATE, SO IT DOES NOT HAVE TO GUESS. This is the
+    difference between a heuristic and a fact: the regex rules above infer that
+    a bold span or a leading label is scaffolding, and they are right most of the
+    time. This knows. Every template is rendered with EMPTY metadata and read
+    with the same extractor the scan uses on the writer's own text, so the two
+    sets are directly comparable -- anything in the result is the app's word, not
+    the writer's, by construction.
+
+    It catches the class the regexes cannot: the template's instruction prose
+    ("Replace every italic example", "Detailed Section", "Template", "Stage"),
+    its beat names wherever they appear, and any example content it ships. A
+    writer who has not replaced an example should not be asked about the
+    example's invented names as though they were their own.
+
+    ONLY EVER APPLIED TO PLANNING DOCUMENTS. If a writer really does have a
+    character called Setup, the manuscript still finds them -- and the manuscript
+    is where a character being real gets decided. Filtering prose by this list
+    would be the app telling a novelist which words they are allowed to use.
+
+    Cached: the templates are constants, so this is computed once per process.
+    Rendered defensively, because a template that raises must not take the whole
+    scan down with it -- a missing filter costs noise, an exception costs the
+    writer their walk.
+    """
+    words: set[str] = set()
+    try:
+        from app.outline_templates import TEMPLATES, render_outline
+        for template_type in TEMPLATES:
+            try:
+                rendered = render_outline(template_type, None)
+            except Exception:          # noqa: BLE001 -- see the docstring
+                continue
+            # HARVESTED RAW, and that is the whole trick. Running the planning
+            # strip over the template first is the obvious thing to write and it
+            # is self-defeating: the strip exists to REMOVE scaffolding, so it
+            # discards the very words this set is for. Measured: 32 words with
+            # the strip, 158 without.
+            #
+            # Headings are kept too, and cost nothing: the writer's own headings
+            # are stripped from their document before it is scanned, so a heading
+            # word can never reach them either way.
+            #
+            # Also tried and removed: harvesting both the raw and stripped forms
+            # and unioning them. It added nothing measurable for the templates as
+            # they ship, so it was complexity buying a benefit it did not deliver.
+            #
+            # No alias map and no floor: every candidate the extractor can see,
+            # which is exactly the set that would otherwise reach the writer.
+            words.update(n.lower()
+                         for n in unbound_names(rendered, {}, minimum=1)
+                         if n)
+    except Exception:                  # noqa: BLE001
+        return frozenset()
+    return frozenset(words)
+
+
+def _strip_planning_chrome(text: str) -> str:
+    """
+    The outline's scaffolding out, the writer's own words in.
+
+    WHY THIS EXISTS. R5.1 made the planning documents a place a stop can COME
+    FROM, which was right and which turned the outline TEMPLATE into a source of
+    candidate names. Reported from live testing: "it is picking a slew of
+    Capitalized Words That Are Actually Part Of The process of the outline
+    formating. Examples being Genre: Fiction, Sciences Fiction, Thriller. Other
+    book specific grouping tags that are definitely not part of any words that
+    need to be tagged, ever."
+
+    Measured on a real outline before this: 53 planned names, of which about six
+    were real. The rest were Protagonist, Antagonist, Logline, Premise, Theme,
+    Tone, Genre, Setup, Resolution, Inciting Incident, Midpoint Reversal, Status
+    Quo, Target Length, Working Title, Supporting Cast -- the template's own
+    headings for the boxes the writer fills in.
+
+    THE VALUE IS KEPT, ONLY THE LABEL GOES, and that distinction is the whole
+    design. "**Status Quo:** The 3 teams (Alpha, Bravo, Charlie) have been
+    captured" must still yield Alpha, Bravo and Charlie: those are the writer's
+    invented names, sitting in the writer's own sentence, and they are exactly
+    what R5.1 was built to find. A rule that dropped whole lines would have
+    thrown them out with the label.
+
+    Applied to planning documents ONLY. The manuscript is never touched by this:
+    a novel legitimately contains "Ashfall: the city fell in one night", and
+    prose is not a form.
+    """
+    without = _COMMENT_RE.sub(" ", text)
+    # Whole metadata lines next: label AND value, for the few fields whose value
+    # is a classification tag rather than anything in the story.
+    without = _METADATA_LINE_RE.sub(" ", without)
+    # BOLD SPANS BEFORE LABELS, and the order is load-bearing -- the comment here
+    # used to say it was only cosmetic and that was wrong. The label rule matches
+    # the OPENING half of a bold span ("- **Chapter 5:") and strips it, which
+    # leaves the closing ** unpaired so the bold rule can no longer match the
+    # pair, and the rest of the span survives as prose. That is where "Half
+    # Limit" and "Margin" came from: chapter titles inside bold, cut in half.
+    without = _BOLD_SPAN_RE.sub(" ", without)
+    # Labels last, for the plain unbolded ones.
+    return _FIELD_LABEL_RE.sub(" ", without)
 
 
 def _sentence_around(text: str, start: int, end: int, width: int = 160) -> str:
@@ -1162,6 +1330,11 @@ def _manuscript_stops(project_path: str, chapters: list[tuple[str, str]],
     # because the reason given for them is different in kind: they are not a
     # guess that turned out well, they are an instruction.
     marked: dict[str, str] = {}
+    # THE TEMPLATE'S OWN WORDS ARE NOT THE WRITER'S. See _template_vocabulary:
+    # the app SHIPPED the outline, so it knows exactly which capitalised words
+    # are its own scaffolding, and does not have to guess.
+    scaffolding = _template_vocabulary()
+
     if wants_unspun:
         for label, text in vocabulary:
             if label == "entries":
@@ -1170,6 +1343,8 @@ def _manuscript_stops(project_path: str, chapters: list[tuple[str, str]],
                 continue
             for name, count in unbound_names(text, alias_map, minimum=1,
                                              evidence=evidence).items():
+                if name.lower() in scaffolding:
+                    continue
                 planning_counts[name] = planning_counts.get(name, 0) + count
                 planning_first.setdefault(name, (label, text))
 
@@ -1398,7 +1573,11 @@ def _writer_vocabulary(project_path: str,
             try:
                 with open(os.path.join(notes_dir, name), "r",
                           encoding="utf-8") as f:
-                    corpora.append((_note_label(name), _strip_chrome(f.read())))
+                    # Planning documents get the extra pass: they are FORMS the
+                    # writer fills in, so the template's labels are chrome in a
+                    # way a manuscript's sentences never are.
+                    corpora.append((_note_label(name),
+                                    _strip_planning_chrome(_strip_chrome(f.read()))))
             except (OSError, UnicodeDecodeError):
                 continue
 

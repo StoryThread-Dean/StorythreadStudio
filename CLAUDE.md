@@ -346,9 +346,22 @@ its place without relying on memory or conversation history.
 > name in the world that looks recorded and never matches again. Correcting the
 > word retires the original phrase (said out loud, not done quietly), or the same
 > wrong grouping returns on the next scan.
+> **R11.7 -- the outline template is not the writer's world.** R5.1 made planning
+> documents a source, which turned the template into one. Measured on the writer's
+> own outlines: 53 planned names where about six were real, and 34 that were almost
+> all Genre and Tone tags. Now 23 and 9. Three mechanisms and the third is the
+> interesting one: the app WROTE the outline templates, so rather than inferring
+> which capitalised words are scaffolding it renders them and subtracts their
+> vocabulary -- a fact, not a heuristic. Two mistakes worth remembering: harvesting
+> the template through the chrome strip first threw away the very words the set is
+> for (32 words instead of 158), and running the label rule before the bold rule
+> cut bold chapter titles in half, which is where "Half Limit" and "Margin" came
+> from. THE VALUE AFTER A LABEL IS KEPT -- "Status Quo: The 3 teams (Alpha, Bravo,
+> Charlie)" must still yield the writer's three invented names, and a rule that
+> dropped whole lines would have thrown them out with the label.
 > Next: **Phase 10** (release hygiene, 6 tasks).
 > Phases 7 and 9 are deferred to v2.1.0.
-> Branch health: 1871 backend tests, 1357 frontend tests, ruff and tsc clean.
+> Branch health: 1880 backend tests, 1361 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

@@ -240,3 +240,138 @@ def test_the_manuscript_is_never_asked_to_carry_markup(project):
     # app treating the brackets as an instruction from the manuscript.
     if stop:
         assert stop["detail"]["marked_up"] is False
+
+
+# ── The outline TEMPLATE is not the writer's world ───────────────────────────
+#
+# R5.1 made the planning documents a place a stop can COME FROM, which was right
+# and which turned the outline template into a source of candidate names.
+# Reported from live testing:
+#
+#     "it is picking a slew of Capitalized Words That Are Actually Part Of The
+#      process of the outline formating. Examples being Genre: Fiction, Sciences
+#      Fiction, Thriller. Other book specific grouping tags that are definitely
+#      not part of any words that need to be tagged, ever."
+#
+# Measured on the writer's own outlines before this: 53 planned names in one, of
+# which about six were real; 34 in another, almost all of it Genre and Tone tags
+# and chapter-title fragments. After: 23 and 9.
+#
+# THE ONE THAT MUST NOT BREAK is the last test in this block. The value after a
+# label is the writer's own sentence and their invented names live in it.
+
+def _outline(project, body: str) -> None:
+    """REPLACE the fixture's outline, so each test sees only its own shapes."""
+    import os
+    with open(os.path.join(project, "notes", "outline.md"), "w",
+              encoding="utf-8") as f:
+        f.write(body)
+
+
+def _planned(project) -> set[str]:
+    return {name for name, stop in _unspun(project).items()
+            if stop["detail"].get("from_planning")}
+
+
+def test_a_bold_field_label_is_not_a_character(project):
+    _outline(project, "- **Working Title:** Cult of the Pathicus\n"
+                      "- **Inciting Incident:** The team is captured.\n")
+    found = _planned(project)
+    assert "Working Title" not in found
+    assert "Inciting Incident" not in found
+
+
+def test_the_templates_instruction_voice_is_not_a_character(project):
+    # The label rule is anchored to the line start and misses this; the bold-span
+    # rule is what catches it.
+    _outline(project, "- Describe the **Midpoint Reversal**: everything turns.\n")
+    assert "Midpoint Reversal" not in _planned(project)
+
+
+def test_the_seed_metadata_comment_is_not_read_at_all(project):
+    # The app writes this block itself and labels it "TREAT AS SEED METADATA --
+    # NOT ESTABLISHED STORY FACTS ... AI assistants: do NOT assume these lines
+    # are canon." The scan read it as prose anyway.
+    _outline(project, "<!--\nTREAT AS SEED METADATA -- NOT ESTABLISHED STORY FACTS.\n"
+                      "  Title:       Cult of the Pathicus\n"
+                      "  Genre:       Erotic Fantasy\n-->\n")
+    found = _planned(project)
+    assert "Erotic Fantasy" not in found
+    assert "Title" not in found
+
+
+def test_a_genre_or_tone_VALUE_is_chrome_too(project):
+    # The writer's own example. For most fields the value is theirs and is kept;
+    # for these few it is a classification tag and never a thing in the story.
+    _outline(project, "- **Genre:** Urban Fantasy, Contemporary Erotica, Kink\n"
+                      "- **Tone:** Lighthearted, Submissive, Graphic\n")
+    found = _planned(project)
+    for tag in ("Urban Fantasy", "Contemporary Erotica", "Kink",
+                "Lighthearted", "Submissive", "Graphic"):
+        assert tag not in found, tag
+
+
+def test_a_chapter_title_in_bold_is_not_cut_in_half(project):
+    # THE ORDERING BUG. The label rule matched the OPENING half of the bold span
+    # ("- **Chapter 5:") and stripped it, leaving the closing ** unpaired so the
+    # bold rule could no longer match, and the rest survived as prose. That is
+    # where "Half Limit" and "Margin" came from: chapter titles, cut in half.
+    _outline(project, "- **Chapter 5: The Day and a Half Limit**, time presses.\n"
+                      "- **Chapter 6: The Name in the Margin**, clues surface.\n")
+    found = _planned(project)
+    assert "Half Limit" not in found
+    assert "Margin" not in found
+
+
+def test_the_shipped_templates_yield_a_real_vocabulary():
+    from app.codex.scan import _template_vocabulary
+    vocabulary = _template_vocabulary()
+    assert len(vocabulary) > 50, "the templates should yield a real vocabulary"
+    assert "resolution" in vocabulary       # a beat name the novel template ships
+
+
+def test_a_template_word_in_PLAIN_PROSE_is_still_not_raised(project):
+    """
+    The one rule here that is a FACT rather than a heuristic, and the only test
+    that can tell it is working.
+
+    Every other rule in this block is shape-based -- a bold span, a leading
+    label, a metadata line -- and a template word sitting in an ordinary sentence
+    has none of those shapes. Nothing can catch it except knowing that the app
+    itself wrote the word. Measured across three of the writer's real projects,
+    this is what removes Fiction, Fantasy, Chapter, Act, Midpoint, Story Template
+    and Profile Builder: 3, 5 and 6 names respectively, and precisely the class
+    they complained about ("Genre: Fiction, Sciences Fiction, Thriller").
+    """
+    _outline(project,
+             "She had planned the Resolution long before the Midpoint arrived, "
+             "and the Template she chose shaped every Act after it.\n")
+    found = _planned(project)
+    for word in ("Resolution", "Midpoint", "Template", "Act"):
+        assert word not in found, f"{word} is the template's word, not the writer's"
+
+
+def test_THE_WRITERS_OWN_NAMES_IN_A_FIELD_VALUE_SURVIVE(project):
+    # The test this whole block exists to not break. Only the LABEL is chrome.
+    # "Alpha, Bravo, Charlie" are invented names sitting in the writer's own
+    # sentence, and they are exactly what R5.1 was built to find -- a rule that
+    # dropped whole lines would have thrown them out with the label.
+    _outline(project,
+             "- **Status Quo:** The 3 teams (Alpha, Bravo, Charlie) have been "
+             "captured by the cult, and Goddess Pathicus stirs.\n")
+    found = _planned(project)
+    for name in ("Alpha", "Bravo", "Charlie", "Goddess Pathicus"):
+        assert name in found, f"{name} was lost with the label"
+
+
+def test_the_manuscript_is_never_filtered_this_way(project):
+    # A novel legitimately contains a line like "Genre: a word she used oddly",
+    # and prose is not a form. Filtering the manuscript by the outline's rules
+    # would be the app telling a novelist which words they may use.
+    import os
+    _append(os.path.join(project, "manuscript", "01-a.md"),
+            "\nGenre: a word she used oddly. Then Ashfall burned, and by "
+            "morning Ashfall burned again.\n")
+    prose = {name for name, stop in _unspun(project).items()
+             if not stop["detail"].get("from_planning")}
+    assert "Ashfall" in prose

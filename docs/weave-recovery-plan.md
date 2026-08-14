@@ -949,6 +949,16 @@ recorded somewhere that nothing was comparing the build against.
       is refused by name, because a word meaning two things binds to neither.
       Correcting the word retires the original phrase, said out loud on the
       receipt, or the same wrong grouping returns on the next scan.
+- [x] **R11.7** The outline template stopped being mistaken for the writer's
+      world. R5.1 made planning documents a source, which turned the outline
+      TEMPLATE into a source of candidate names: measured 53 planned names in one
+      real outline of which about six were real, and 34 in another that was almost
+      entirely Genre and Tone tags. Now 23 and 9. Three mechanisms, each pinned by
+      a test that fails without it: the seed-metadata HTML comment is not read at
+      all (the app writes it and labels it "NOT ESTABLISHED STORY FACTS"), field
+      labels and bold spans are chrome while their VALUES are kept, and the
+      shipped templates' own vocabulary is subtracted -- which is a fact rather
+      than a heuristic, because the app wrote the template.
 - [ ] **R11.4** (ruling 9, second half) Frayed's QuickFill filling "from what the
       prose already says". Deferred to v2.1.0 with Phase 9: it needs the AI pass.
 
@@ -970,5 +980,5 @@ recorded somewhere that nothing was comparing the build against.
 | 8 Walk honesty | 12 | **12** |
 | 9 AI passes | 8 | 0 |
 | 10 Release | 6 | 0 |
-| 11 Late rulings | 6 | **5** |
-| **Total** | **106** | **86** |
+| 11 Late rulings | 7 | **6** |
+| **Total** | **107** | **87** |
