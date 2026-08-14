@@ -676,11 +676,72 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           {scanning
             ? "Counting..."
             : total === 0
-              ? "Nothing to look at. Your world and your book agree."
+              ? "This pass found nothing to ask about."
               : open === 0
                 ? "Everything this pass finds has already been answered."
                 : `This found ${open} ${open === 1 ? "thing" : "things"} to look at.`}
         </p>
+
+        {/* WHY BOTH BUTTONS ARE GREY, AND WHAT THIS PASS CANNOT SEE.
+            ────────────────────────────────────────────────────────────────
+            Reported from live testing after a walk through chapters 1 to 5:
+            "I can't click Start Fresh or Carry on where you left off because
+            it's greyed out. Not sure if this is a bug or it didn't pick up the
+            names? The impression I get is that the walkthrough process stopped
+            at 5 and didn't ever continue."
+
+            It had not stopped. There was nothing left it could raise, and both
+            buttons are disabled at zero because a walk with no stops is an
+            empty popup. But a disabled button explains nothing, and the line
+            above it used to say "Your world and your book agree" -- which is a
+            claim this pass is in no position to make. It reads names. Chapter 6
+            of that book has three men described rather than named ("the hulking
+            figure", "the tall man") and two names revealed once each in
+            dialogue, and it could not see any of the five.
+
+            So at zero the screen now says what the pass looks for and what it
+            does not, because a writer cannot tell "finished" from "broken" from
+            a grey button, and the wrong one of those is a reason to distrust
+            everything else the walk said. Per the flow rule, it also names the
+            next step rather than leaving a dead end. */}
+        {!scanning && open === 0 && (
+          <div
+            className="mt-2 rounded border border-border bg-surface px-2.5 py-2"
+            data-testid="weaving-nothing-open"
+          >
+            <p className="text-[11px] text-text-muted">
+              {total === 0
+                ? "That does not mean your book and your world agree. It means this pass has run out of things it can find."
+                : "Nothing new since your last session, so there is nothing to walk."}
+            </p>
+            <p className="mt-1.5 text-[11px] text-faint">
+              This pass reads NAMES: a capitalised name your prose uses more
+              than once, and names you wrote in your outline or notes. Three
+              things it cannot see, all of them normal in a novel:
+            </p>
+            <ul className="mt-1 space-y-0.5 pl-3 text-[11px] text-faint">
+              <li>
+                A character described rather than named. "The tall man" and
+                "the hulking figure" are characters, and to this pass they are
+                ordinary words.
+              </li>
+              <li>
+                A name said only once. One mention is the floor, and it is
+                there because without it a book produces hundreds of stops
+                that are not names at all.
+              </li>
+              <li>
+                A name that only ever appears where a capital was required
+                anyway, at the start of a sentence or a line of dialogue.
+              </li>
+            </ul>
+            <p className="mt-1.5 text-[11px] text-faint">
+              What to do next: try another pass above, since each one asks a
+              different question. For characters your prose describes without
+              naming, that is the Profile Extractor's job rather than this one.
+            </p>
+          </div>
+        )}
         {!scanning && open > 0 && settled > 0 && (
           <p className="mt-1 text-[11px] text-faint">
             {settled} more {settled === 1 ? "was" : "were"} answered for good

@@ -323,13 +323,67 @@ describe("before anything starts", () => {
     expect(unwoven.textContent).toMatch(/Nothing here is wrong yet/);
   });
 
-  it("has nothing to start when the book and the world agree", async () => {
+  // A GREY BUTTON IS NOT AN EXPLANATION.
+  //
+  // Reported from live testing: after walking chapters 1 to 5 of a real book,
+  // chapters 6 and 7 raised nothing, both Start buttons were grey, and the
+  // writer reasonably read it as the walk having stopped rather than finished.
+  //
+  // The disable is right (a walk with no stops is an empty popup). What was
+  // wrong was the sentence beside it: "Your world and your book agree" is a
+  // claim this pass cannot make. It reads NAMES. The scene it went quiet on had
+  // three men described rather than named and two names revealed once each in
+  // dialogue, and it could see none of the five.
+  it("says nothing was found without claiming the book and the world agree", async () => {
     mockApi({ stops: [], total: 0 });
     await open();
     expect(screen.getByTestId("weaving-count").textContent)
-      .toMatch(/your world and your book agree/i);
+      .toMatch(/found nothing to ask about/i);
+    // The retracted claim. This is the assertion that would have failed before.
+    expect(document.body.textContent).not.toMatch(/your world and your book agree/i);
     expect(screen.getByRole("button", { name: "Start" }).hasAttribute("disabled"))
       .toBe(true);
+  });
+
+  it("says what the pass cannot see, so grey reads as finished not broken", async () => {
+    mockApi({ stops: [], total: 0 });
+    await open();
+    const note = screen.getByTestId("weaving-nothing-open");
+    // All three blind spots named, because the writer hit two of them at once.
+    expect(note.textContent).toMatch(/described rather than named/i);
+    expect(note.textContent).toMatch(/said only once/i);
+    expect(note.textContent).toMatch(/capital was required/i);
+    // And it says outright that silence is not agreement.
+    expect(note.textContent).toMatch(/does not mean your book and your world agree/i);
+  });
+
+  it("offers a next step rather than a dead end", async () => {
+    // The flow rule: after any state the screen says what to do next.
+    mockApi({ stops: [], total: 0 });
+    await open();
+    const note = screen.getByTestId("weaving-nothing-open");
+    expect(note.textContent).toMatch(/try another pass/i);
+    expect(note.textContent).toMatch(/Profile Extractor/);
+  });
+
+  it("distinguishes a finished pass from a pass with nothing in it", async () => {
+    // total > 0 with nothing open means every stop was answered in an earlier
+    // session. That is a different sentence from "this found nothing", and
+    // collapsing the two would tell a writer who did the work that they had not.
+    mockApi({ stops: [], total: 12 });
+    await open();
+    expect(screen.getByTestId("weaving-count").textContent)
+      .toMatch(/already been answered/i);
+    expect(screen.getByTestId("weaving-nothing-open").textContent)
+      .toMatch(/nothing new since your last session/i);
+  });
+
+  it("keeps quiet about all this when there IS something to walk", async () => {
+    // The note must not become permanent furniture: a caveat shown always is a
+    // caveat nobody reads.
+    mockApi({ stops: [stop()], total: 1 });
+    await open();
+    expect(screen.queryByTestId("weaving-nothing-open")).toBeNull();
   });
 
   it("says what survives either way, now that there is a choice", async () => {

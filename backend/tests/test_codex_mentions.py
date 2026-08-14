@@ -382,3 +382,87 @@ def test_the_loudest_group_is_offered_first():
 def test_a_group_lists_every_word_it_answers_to():
     group = group_by_containment({"Lara Croft": 4, "Lara": 9})[0]
     assert group.names == ["Lara Croft", "Lara"]
+
+
+# ── THE TWO POSITIONS A NAME CAN HIDE IN (a KNOWN limitation, pinned) ─────────
+#
+# Reported from live testing of a real book: a walk through chapters 1 to 5
+# finished, and chapters 6 and 7 raised nothing at all, so both Start buttons
+# were grey and the writer read it as the walk having stopped. It had not. The
+# chapters were read; nothing in them could be seen.
+#
+# Two of the five people in that scene are NAMED -- Altas and Duncan -- and both
+# are invisible here, for a reason worth stating exactly:
+#
+#   `evidence.is_a_name` requires the word to appear at least once where English
+#   did NOT require a capital. That test is right about the question it answers:
+#   "Later, he left" must not make Later a character. But it is used as a GATE,
+#   and a name that only ever appears at the start of a sentence or the start of
+#   a line of dialogue can never pass it, however often it appears.
+#
+# These tests PIN TODAY'S BEHAVIOUR rather than assert it is correct, following
+# what R8.11 did with the map's dashed line: the fix changes which stops a writer
+# is shown, so it is the writer's ruling, and until it is made the suite must not
+# be green over a promise the scan does not keep. If the gate is relaxed, these
+# tests SHOULD fail -- and their failure is the signal to reread this comment,
+# not to delete them.
+#
+# Not a bug: the frequency floor. Duncan is said once in that book and one
+# mention is deliberately below the floor, so Duncan is hidden twice over. That
+# floor is what stopped a real project producing 177 junk stops.
+
+def test_a_name_only_ever_addressed_in_dialogue_is_NOT_seen():
+    # '"Duncan," he said.' -- the most ordinary way a name reaches a reader.
+    # Every occurrence sits just inside an opening quote, where the capital was
+    # required, so no occurrence is evidence and the name is never raised.
+    text = '"Duncan," he said. "Duncan, stand down." Nobody moved. "Duncan!"'
+    evidence = NameEvidence()
+    evidence.observe(text)
+    assert evidence.is_a_name("Duncan") is False
+    assert unbound_names(text, {}, minimum=1, evidence=evidence) == {}
+
+
+def test_a_name_that_always_starts_its_sentence_is_NOT_seen():
+    # The alarming half, because this is how an action scene reads: the
+    # character is the subject of every sentence they are in.
+    text = "Duncan obeyed. Duncan said nothing. Duncan left the room."
+    evidence = NameEvidence()
+    evidence.observe(text)
+    assert unbound_names(text, {}, minimum=1, evidence=evidence) == {}
+
+
+def test_the_same_name_IS_seen_the_moment_it_appears_mid_sentence():
+    # The other side of the gate, and why most names survive it in practice: one
+    # ordinary mid-sentence mention anywhere in the book is enough, and it then
+    # counts the sentence-initial ones too. This is what makes the limitation
+    # easy to miss -- it only bites a character who appears in one scene.
+    text = ("Duncan obeyed. Duncan said nothing. "
+            "The tall man told Duncan to stand down.")
+    evidence = NameEvidence()
+    evidence.observe(text)
+    assert evidence.is_a_name("Duncan") is True
+    assert unbound_names(text, {}, minimum=1, evidence=evidence) == {"Duncan": 3}
+
+
+def test_a_name_addressed_MID_quote_is_seen():
+    # Worth pinning as the working case so the limitation is not overstated in
+    # either direction. A comma does not require a capital, so direct address
+    # inside a line of dialogue is ordinary evidence and always has been.
+    text = '"Stand down, Duncan." He waited. "Enough of it, Duncan."'
+    evidence = NameEvidence()
+    evidence.observe(text)
+    assert evidence.is_a_name("Duncan") is True
+    assert unbound_names(text, {}, minimum=1, evidence=evidence) == {"Duncan": 2}
+
+
+def test_a_described_character_is_not_a_name_and_is_not_pretended_to_be():
+    # "The hulking figure", "the tall man", "the injured man". These ARE
+    # characters and the writer can say so; they are not names, and no rule over
+    # capitalisation will ever find them. Pinned so that nobody later reads the
+    # silence above as covering this too: it does not, and the fix for it is a
+    # model reading the prose, not a better regex.
+    text = ("The hulking figure did not move. The massive man filled the "
+            "doorway. The tall man considered the wreckage.")
+    evidence = NameEvidence()
+    evidence.observe(text)
+    assert unbound_names(text, {}, minimum=1, evidence=evidence) == {}

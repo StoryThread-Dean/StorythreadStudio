@@ -384,7 +384,7 @@ its place without relying on memory or conversation history.
 > the Weave contains migration, which rewrites the writer's files), **R10.5**
 > `/pre-release` to a verdict.
 > Phases 7 and 9 are deferred to v2.1.0.
-> Branch health: 1884 backend tests, 1366 frontend tests, ruff and tsc clean.
+> Branch health: 1889 backend tests, 1370 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

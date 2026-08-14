@@ -328,6 +328,55 @@ the feature is, when it is the right thing to reach for, a "What's this?", and a
 in this app carries, and here it is load-bearing -- a writer who runs this first
 will conclude the feature is bad when they have simply run it too early.
 
+**IT ALSO INHERITS A JOB WEAVING CANNOT DO, decided 2026-08-14 from live
+testing.** The writer walked chapters 1 to 5 of a real book, then found chapters 6
+and 7 raised nothing. Five people are in one scene there and Weaving could see
+none of them:
+
+> "All three are not specifically named but described as 'the hulking figure',
+> 'massive man', 'injured man'. Another character is 'the tall man' ... The third
+> man is the Body builder man, 'The big linebacker-shaped silhouette' ... The
+> descriptive elements to them ARE the characters."
+
+This is a real and ordinary way to write. A shadowy figure doing business under a
+description is a character with a role, a presence and, in that scene, a reveal --
+the hulking figure turns out to be the super-villain Altas, and the tall man is
+never named at all yet is plainly the most dangerous person in the room.
+
+**Weaving will never find these, and should not try.** It works by finding
+capitalised names, so "the tall man" is three ordinary words to it. Any rule that
+tried to promote noun phrases into characters would have to decide that "the tall
+man" is a person while "the long hallway" is not, from the same evidence, on every
+noun phrase in a novel. That is a reading, not arithmetic -- the same line R8.4
+drew when it refused to guess that "she thought of her father, alive somewhere
+north" is `father.fate: alive`. The writer reached the same conclusion unprompted
+("This might not be anything the app can detect by itself as its following the
+rules that it enforces") and named the fallback, which is this feature.
+
+So the Extractor proposes **described-but-unnamed characters** alongside named
+ones, with three rules that follow from what it is:
+
+1. **The description is the working name.** An entry called "The tall man", with
+   the description as its evidence. Not a guess at a real name, and never a name
+   invented to fill the field.
+2. **It offers to fold one into an existing entry when the prose reveals them.**
+   "The hulking figure ... revealed to be Altas" is one character with two labels
+   across a book, which is what `display_name` and aliases already exist for. The
+   offer is the writer's to accept; the app does not merge on a hunch.
+3. **An unrevealed one stays unrevealed.** The tall man has no name in the book
+   yet, so the entry has no name either, and that is a finished state rather than
+   an incomplete one. A writer who has not decided must not be nagged into
+   deciding by an app.
+
+**And the A-then-B shape is the writer's, recorded because it is the design:**
+"That is the two A then B takes of which the Weaving does the first pass at
+creating the initial characters first through the walkthrough, then B is the
+Profile Generator which picks up the details and attaches them in segments to
+which a character/faction/creature/government/lore can be built." Weaving builds
+the framework from what is mechanically knowable; the Extractor reads the prose
+and fills it. Neither does the other's job, and this is the clearest statement of
+why there are two of them.
+
 
 
 The writer's own proposal, recorded here the day it was made so it cannot become
