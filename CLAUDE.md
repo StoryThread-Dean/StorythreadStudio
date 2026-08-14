@@ -359,7 +359,30 @@ its place without relying on memory or conversation history.
 > from. THE VALUE AFTER A LABEL IS KEPT -- "Status Quo: The 3 teams (Alpha, Bravo,
 > Charlie)" must still yield the writer's three invented names, and a rule that
 > dropped whole lines would have thrown them out with the label.
-> Next: **Phase 10** (release hygiene, 6 tasks).
+> **PHASE 10 STARTED (3 of 6).**
+> **R10.2 -- ONE v2.0.0.** `main` is at v1.1.0 and all 106 commits since are on
+> this branch, interleaved: Model Roles, local models and the whole Weave. The
+> three planned tier-3 releases never happened AS releases, so there is nothing to
+> tag retroactively; their content is part of v2.0.0 and the CHANGELOG says so
+> rather than pretending otherwise. The tier rule decides it: judge by what the
+> RELEASE delivers. **v2.0.1 follows immediately with the Profile Extractor**, on
+> the writer's ruling -- it is "part in parsol to the original purpose and
+> envisioning of The Weave", lives at `The Weave > Weaving | Profile Extractor`,
+> and requires Weaving to have been run FIRST (the request carries a snippet of
+> each established entry, so the entries must exist). That pulls one AI pass
+> forward; the other four stay in v2.1.0.
+> **R10.1 -- the CHANGELOG.** A `## [2.0.0]` section, 27 bullets, writer-facing
+> (what they get, not task ids). Heading says `- UNRELEASED`: `release.ps1`
+> extracts the section but does not stamp the date, so that word is a manual swap
+> at cut time.
+> **R10.6 -- three one-line changes done.** The only bare `os.replace` calls left
+> in `app/` are inside `replace_atomic` itself. Also fixed a comment in
+> `findings.py` claiming the Weave followed the pattern those stores used, which
+> had been backwards since R2.5b fixed the Weave first.
+> Left in Phase 10: **R10.3** version bump and tags, **R10.4** the Weave section of
+> `manual-smoke.md` (711 lines, eight on the audiobook, zero on the Weave -- and
+> the Weave contains migration, which rewrites the writer's files), **R10.5**
+> `/pre-release` to a verdict.
 > Phases 7 and 9 are deferred to v2.1.0.
 > Branch health: 1880 backend tests, 1361 frontend tests, ruff and tsc clean.
 

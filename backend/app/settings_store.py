@@ -16,6 +16,8 @@
 import json
 import logging
 import os
+
+from app.utils.atomic import replace_atomic
 import shutil
 from pathlib import Path
 
@@ -260,7 +262,14 @@ def save_settings(settings: dict) -> None:
             log.warning("Could not refresh settings.json.bak: %s", exc)
 
     # 3. Atomic swap: tmp becomes the new settings.json.
-    os.replace(SETTINGS_TMP, SETTINGS_FILE)
+    # RETRIED, NOT BARE. On Windows a rename fails while a virus scanner, the
+    # search indexer, a cloud-sync client or the writer's own editor holds the
+    # file open for a moment -- so a save fails at random with no cause the
+    # writer could diagnose. R2.5b saw this happen for real (WinError 5) and
+    # fixed the Weave's writes; these are the same one-line change in code the
+    # recovery does not own, which is why they were recorded rather than swept
+    # up. replace_atomic retries for ~150ms and then raises honestly.
+    replace_atomic(SETTINGS_TMP, SETTINGS_FILE)
 
 
 def mask_key(key: str) -> str:

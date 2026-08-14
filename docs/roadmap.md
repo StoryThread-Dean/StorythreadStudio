@@ -288,55 +288,42 @@ Giving a custom kind its own sections is the remaining piece.
 
 Also open before release: the manual-smoke additions for each milestone.
 
-### Audiobook Converter -- SHIPPED as v1.1.0 (2026-08-03)
+### Profile Extractor -- the v2.0.1 feature, immediately after the Weave
 
-*Kept in this section for its open follow-ups only. The feature itself is
-described in [`features.md`](features.md); stages A-G are built and released.*
+**SCHEDULED 2026-08-14, on the writer's ruling, which overrules an earlier
+recommendation of mine.** I had put this in v2.1.0 with the deferred AI passes on
+the grounds that it is an AI pass and the largest single item on this page. The
+writer disagreed and the disagreement is the correct one:
 
-A standalone workspace inside Storythread Studio that converts a manuscript (DOCX / EPUB / Markdown / TXT, or an existing Storythread project) into chapter MP3s, a combined MP3, and an M4B audiobook. Full specification: [`audiobook-converter-spec.md`](audiobook-converter-spec.md) (reviewed and revised 2026-07-28).
+> "I disagree that this should be build out separately from v2.0.0's initial The
+> Weave release. This is really part in parsol to the original purpose and
+> envisioning of the The Weave. This is really at best, v2.0.1 Addendum add on. I
+> want this built out immediately with The Weave release."
 
-The headline workflow is **"draft locally, print premium"**: generate the whole book free with the local Kokoro narrator to listen, catch awkward prose, and fix pronunciations -- then, when the book is final, switch to a premium hosted voice (OpenRouter TTS or NanoGPT, which hosts the identical Kokoro voices plus ElevenLabs tiers) and regenerate once, cost-confirmed, as the "print" pass.
+So: **v2.0.0 ships the Weave as it stands; v2.0.1 adds the Profile Extractor,
+straight after.** It is not held behind the rest of Phase 9. The other four AI
+passes (propose-ties, propose-facts, propose-threads, check-snags) and the
+knowledge-violation check stay in v2.1.0 -- this pulls ONE pass forward, not the
+phase.
 
-This is the fundamental change the 1.1.0 version slot has been reserved for. Delivery is staged across multiple releases; the first release that includes a usable free local audiobook pipeline becomes **v1.1.0**, and later stages ship as 1.1.1, 1.1.2, and so on. Normal 1.0.x releases can continue in parallel while the converter is built on its own branch.
+**WHERE IT LIVES:** `The Weave > Weaving | Profile Extractor`. A sibling of
+Weaving in the Weave's own navigation, not a mode inside the walkthrough.
 
-Build stages (spec phases in parentheses; estimates in working sessions, the unit this project actually ships in):
+**AND WEAVING COMES FIRST, deliberately.** The writer's words: "Not part of the
+Weaving as that process needs to be done separately and on its own first prior to
+running this AI powered feature." That is not just sequencing advice, it is what
+makes the feature work: the request carries a snippet of every established entry
+(decision 3), so the entries have to exist before there is anything to build on.
+Run it on an empty world and it proposes a world from scratch with nothing to
+match against -- which is the expensive way to get the noisiest possible result.
 
-| Stage | Contents | Est. sessions | Release |
-|---|---|---|---|
-| A. Foundation + import (1-2) | Dashboard, workspace + manifest, recent-activity index, DOCX/EPUB/MD/TXT + Storythread-project import, chapter detection, narration editor with markers + pronunciation dictionary | 2-3 | dev branch |
-| B. Local narration (3) | kokoro-worker.exe companion artifact (build/sign/host/download/verify), worker lifecycle, CPU synthesis, voice previews, chapter queue, progress persistence, restart recovery, sleep inhibit | 3-4 | dev branch |
-| C. Audio assembly (4) | FFmpeg integration, silence-at-assembly, chapter MP3 / combined MP3 / M4B, metadata + cover art | 2 | **v1.1.0** |
-| D. Cloud providers + print pass (5) | OpenRouter TTS + NanoGPT speech providers, model discovery, cost estimator, the premium print flow | 1-2 | v1.1.1 |
-| E. Revision + recovery (6) | Segment hashing, stale-audio detection, regenerate-changed-sections, revision retention, cleanup, export-only state | 1-2 | v1.1.2 |
-| F. PDF import (7) | Text-based PDF extraction, scanned-PDF rejection, PDF artifact cleanup | 1 | 1.1.x |
-| G. Multi-character foundation (8) | Speaker management UI, speaker-to-voice mapping, AI annotation review framework | 2-3 | 1.1.x |
+The screen therefore has to SAY so, in its own words rather than in a doc: what
+the feature is, when it is the right thing to reach for, a "What's this?", and a
+"Show me how this works" with worked pages. Same obligation every other surface
+in this app carries, and here it is load-bearing -- a writer who runs this first
+will conclude the feature is bad when they have simply run it too early.
 
-Total: roughly 12 to 17 working sessions to complete all stages, with a usable v1.1.0 at the 7-to-9 session mark. Highest-risk items (watch these first): the kokoro-worker packaging pipeline, EPUB extraction variability, and M4B assembly.
 
-**Status (2026-08-01): all seven stages (A through G) are built and awaiting review as a stacked set of PRs into the converter branch.** Two notes against the estimates above: Stage E came in well under its 1-2 sessions because segment hashing and stale detection had already shipped in Stage B (stable IDs were needed to make generation resumable at all), and the Standard price tier ships EMPTY -- all three candidate engines were auditioned and demoted, with the search pinned rather than closed. See the spec for both.
-
-#### Follow-ups from live testing (2026-08-03)
-
-Two open items on the Formatting Walkthrough, both raised by walking a real 22,000-word chapter. Neither blocks v1.1.0.
-
-**1. Rare word senses need an ear pass.** Word readings (spec 18.6) landed well on the 16 main entries. The 6 rare ones are weaker and need their own session -- the audition proved the respellings are *mechanically* correct, which is not the same as *audibly* right:
-
-- **`use` may not be worth offering at all.** Noun and verb differ only by `/s/` against `/z/`, and to the ear the two clips are nearly identical. If the distinction is inaudible the choice is noise; drop the entry rather than ship a decision that changes nothing.
-- **`minute` has the stress in the wrong place.** `mynoot` renders as "MY-noot"; the real word is "my-NOOT". This is the same problem as the deferred noun/verb stress family, so it wants the same tool: the weak-first-syllable trick (spec 18.5) found by scripted search.
-- **Every `sounds` label needs checking against the audio it actually produces.** The label is a plain-English description written by hand. Where it does not match what the Play button plays, it actively misleads -- worse than having no label, because the writer trusts it.
-- **Then decide whether rare senses earn a stop at all**, or belong in the say popout's tips as documentation. The capability is cheap to keep; the credibility cost of a stop that offers a bad reading is not.
-
-**1b. Interjection beats may not earn their place.** Reviewed 2026-08-03: the tutorial demo was rebuilt around a harder word ("Enough!") at 0.8 seconds rather than 0.4, because the first attempt was inaudible even to the person who asked for it. It is better, still the quietest of the four beat types. The tutorial now says so and tells the writer to skip these if they cannot hear the difference on their voice. If a second listening pass says the effect is still marginal, the honest move is to drop the trigger rather than keep a stop nobody can justify -- it fires roughly once per chapter, so nothing is lost.
-
-**2. The dialogue hand-off defaults were reviewed and kept.** The question was whether `paragraph_gap_ms` (550ms) had made them redundant. Answer: partly. The across-a-paragraph-break variant *was* redundant and has been removed. The same-paragraph variants were kept, because dialogue is detected per PARAGRAPH in the segmenter -- a quote opening mid-paragraph gets no seam and no pace change from any setting, so the walk is the only thing that can put a beat there. On the test chapter they fire 283 + 111 times and every sample inspected was a real hand-off.
-
----
-
-## Proposed
-
-Worth building, prioritization not yet committed.
-
-### Profile Extractions: build a world from the manuscript -- PROPOSED 2026-08-14
 
 The writer's own proposal, recorded here the day it was made so it cannot become
 another decision nothing was comparing the build against. **Not scoped to a
@@ -553,6 +540,54 @@ otherwise do by re-reading their own book. It is also the strongest answer to th
 reported frustration that the walkthrough's suggested Overview text "was nearly
 always wrong": a whole-manuscript read has context a single-quote heuristic
 cannot.
+
+### Audiobook Converter -- SHIPPED as v1.1.0 (2026-08-03)
+
+*Kept in this section for its open follow-ups only. The feature itself is
+described in [`features.md`](features.md); stages A-G are built and released.*
+
+A standalone workspace inside Storythread Studio that converts a manuscript (DOCX / EPUB / Markdown / TXT, or an existing Storythread project) into chapter MP3s, a combined MP3, and an M4B audiobook. Full specification: [`audiobook-converter-spec.md`](audiobook-converter-spec.md) (reviewed and revised 2026-07-28).
+
+The headline workflow is **"draft locally, print premium"**: generate the whole book free with the local Kokoro narrator to listen, catch awkward prose, and fix pronunciations -- then, when the book is final, switch to a premium hosted voice (OpenRouter TTS or NanoGPT, which hosts the identical Kokoro voices plus ElevenLabs tiers) and regenerate once, cost-confirmed, as the "print" pass.
+
+This is the fundamental change the 1.1.0 version slot has been reserved for. Delivery is staged across multiple releases; the first release that includes a usable free local audiobook pipeline becomes **v1.1.0**, and later stages ship as 1.1.1, 1.1.2, and so on. Normal 1.0.x releases can continue in parallel while the converter is built on its own branch.
+
+Build stages (spec phases in parentheses; estimates in working sessions, the unit this project actually ships in):
+
+| Stage | Contents | Est. sessions | Release |
+|---|---|---|---|
+| A. Foundation + import (1-2) | Dashboard, workspace + manifest, recent-activity index, DOCX/EPUB/MD/TXT + Storythread-project import, chapter detection, narration editor with markers + pronunciation dictionary | 2-3 | dev branch |
+| B. Local narration (3) | kokoro-worker.exe companion artifact (build/sign/host/download/verify), worker lifecycle, CPU synthesis, voice previews, chapter queue, progress persistence, restart recovery, sleep inhibit | 3-4 | dev branch |
+| C. Audio assembly (4) | FFmpeg integration, silence-at-assembly, chapter MP3 / combined MP3 / M4B, metadata + cover art | 2 | **v1.1.0** |
+| D. Cloud providers + print pass (5) | OpenRouter TTS + NanoGPT speech providers, model discovery, cost estimator, the premium print flow | 1-2 | v1.1.1 |
+| E. Revision + recovery (6) | Segment hashing, stale-audio detection, regenerate-changed-sections, revision retention, cleanup, export-only state | 1-2 | v1.1.2 |
+| F. PDF import (7) | Text-based PDF extraction, scanned-PDF rejection, PDF artifact cleanup | 1 | 1.1.x |
+| G. Multi-character foundation (8) | Speaker management UI, speaker-to-voice mapping, AI annotation review framework | 2-3 | 1.1.x |
+
+Total: roughly 12 to 17 working sessions to complete all stages, with a usable v1.1.0 at the 7-to-9 session mark. Highest-risk items (watch these first): the kokoro-worker packaging pipeline, EPUB extraction variability, and M4B assembly.
+
+**Status (2026-08-01): all seven stages (A through G) are built and awaiting review as a stacked set of PRs into the converter branch.** Two notes against the estimates above: Stage E came in well under its 1-2 sessions because segment hashing and stale detection had already shipped in Stage B (stable IDs were needed to make generation resumable at all), and the Standard price tier ships EMPTY -- all three candidate engines were auditioned and demoted, with the search pinned rather than closed. See the spec for both.
+
+#### Follow-ups from live testing (2026-08-03)
+
+Two open items on the Formatting Walkthrough, both raised by walking a real 22,000-word chapter. Neither blocks v1.1.0.
+
+**1. Rare word senses need an ear pass.** Word readings (spec 18.6) landed well on the 16 main entries. The 6 rare ones are weaker and need their own session -- the audition proved the respellings are *mechanically* correct, which is not the same as *audibly* right:
+
+- **`use` may not be worth offering at all.** Noun and verb differ only by `/s/` against `/z/`, and to the ear the two clips are nearly identical. If the distinction is inaudible the choice is noise; drop the entry rather than ship a decision that changes nothing.
+- **`minute` has the stress in the wrong place.** `mynoot` renders as "MY-noot"; the real word is "my-NOOT". This is the same problem as the deferred noun/verb stress family, so it wants the same tool: the weak-first-syllable trick (spec 18.5) found by scripted search.
+- **Every `sounds` label needs checking against the audio it actually produces.** The label is a plain-English description written by hand. Where it does not match what the Play button plays, it actively misleads -- worse than having no label, because the writer trusts it.
+- **Then decide whether rare senses earn a stop at all**, or belong in the say popout's tips as documentation. The capability is cheap to keep; the credibility cost of a stop that offers a bad reading is not.
+
+**1b. Interjection beats may not earn their place.** Reviewed 2026-08-03: the tutorial demo was rebuilt around a harder word ("Enough!") at 0.8 seconds rather than 0.4, because the first attempt was inaudible even to the person who asked for it. It is better, still the quietest of the four beat types. The tutorial now says so and tells the writer to skip these if they cannot hear the difference on their voice. If a second listening pass says the effect is still marginal, the honest move is to drop the trigger rather than keep a stop nobody can justify -- it fires roughly once per chapter, so nothing is lost.
+
+**2. The dialogue hand-off defaults were reviewed and kept.** The question was whether `paragraph_gap_ms` (550ms) had made them redundant. Answer: partly. The across-a-paragraph-break variant *was* redundant and has been removed. The same-paragraph variants were kept, because dialogue is detected per PARAGRAPH in the segmenter -- a quote opening mid-paragraph gets no seam and no pace change from any setting, so the walk is the only thing that can put a beat there. On the test chapter they fire 283 + 111 times and every sample inspected was a real hand-off.
+
+---
+
+## Proposed
+
+Worth building, prioritization not yet committed.
 
 ### Local model providers -- MOSTLY SHIPPED (v1.1.1)
 

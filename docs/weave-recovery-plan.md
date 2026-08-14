@@ -903,14 +903,34 @@ it, since the spec calls it the reason the frame system exists.
 
 ## Phase 10 -- Release hygiene
 
-- [ ] **R10.1** CHANGELOG entries for the Weave work (currently none).
-- [ ] **R10.2** Decide the release boundary: three tier-3 releases as specified,
-      or one v2.0.0.
+- [x] **R10.1** CHANGELOG written: a `## [2.0.0]` section with 27 bullets across
+      Added / Changed / Fixed. Writer-facing throughout -- what they get, not task
+      ids. Includes the v1.1.1 material (Model Roles, local models), which had
+      been sitting in `[Unreleased]` untagged. The heading reads
+      `## [2.0.0] - UNRELEASED`: `release.ps1` extracts the section for release
+      notes but does NOT stamp the date, so replacing that word is a manual step
+      at cut time (it is in the script's own printed checklist).
+- [x] **R10.2** **ONE v2.0.0.** `main` is at v1.1.0 and everything since -- Model
+      Roles, local models, and the whole Weave, 106 commits -- is on this branch
+      only, interleaved. The three planned tier-3 releases (v1.1.1/2/3) never
+      happened AS releases, so there is nothing to tag retroactively; their
+      content becomes part of v2.0.0 and the CHANGELOG says so rather than
+      pretending they shipped. The tier rule gives this directly: judge by what
+      the RELEASE delivers, and this one delivers a new world model plus two AI
+      additions.
+      **And v2.0.1 follows immediately** with the Profile Extractor, on the
+      writer's ruling -- see `docs/roadmap.md`. That pulls one AI pass forward;
+      the other four and the knowledge-violation check stay in v2.1.0.
 - [ ] **R10.3** Version bump and tags.
 - [ ] **R10.4** Walk the spec's Verification section as a manual checklist; add
       shell-dependent flows to `tests/manual-smoke.md`.
 - [ ] **R10.5** `/pre-release` to a RELEASE READY verdict.
-- [ ] **R10.6** Route the remaining atomic writes through `replace_atomic`:
+- [x] **R10.6** DONE. `settings_store`, `structure_store` and the audiobook JSON
+      store all go through `replace_atomic` now; the only bare `os.replace` calls
+      left in `app/` are inside `replace_atomic` itself. Also corrected a comment
+      in `findings.py` that said the Weave followed the pattern those stores used,
+      which had been backwards since R2.5b fixed the Weave first.
+      ORIGINAL: Route the remaining atomic writes through `replace_atomic`:
       `settings_store`, `structure_store` and the audiobook JSON store. R2.5b
       fixed the Weave's own writes, where the Windows lock failure was actually
       observed; these are the same one-line change in code this recovery does not
@@ -979,6 +999,6 @@ recorded somewhere that nothing was comparing the build against.
 | 7 Scene identity | 4 | 0 |
 | 8 Walk honesty | 12 | **12** |
 | 9 AI passes | 8 | 0 |
-| 10 Release | 6 | 0 |
+| 10 Release | 6 | **3** |
 | 11 Late rulings | 7 | **6** |
-| **Total** | **107** | **87** |
+| **Total** | **107** | **90** |

@@ -12,8 +12,11 @@
 # app.db is documented, correctly, as a rebuildable cache -- delete it and
 # nothing is lost. Findings are promised the opposite: never re-bought. Those
 # two contracts cannot both hold for the same file, so findings live under
-# `.storythread/weave/` in two files, both written atomically (tmp +
-# os.replace), the same pattern settings_store and structure_store use:
+# `.storythread/weave/` in two files, both written atomically through
+# `replace_atomic` -- which RETRIES, because on Windows a rename fails while
+# a scanner or a sync client holds the file for a moment. The Weave got that
+# treatment first (R2.5b, after a real WinError 5); settings_store,
+# structure_store and the audiobook store followed in R10.6:
 #
 #   answers.json          the BOOK's permanent record -- applied, dismissed,
 #                         retired phrases, muted kinds, settled names
