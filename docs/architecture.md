@@ -64,6 +64,45 @@ backup) is detected on the next read whatever the flag says.
 
 Markdown is the filing cabinet; SQLite is the index card on the desk.
 
+### Moving a project between computers
+
+**A project folder is the whole project. Copying it moves everything, exactly.**
+Upload the folder to a drive on one computer, download it on another, and the
+book arrives identical -- entries, connections with their reason lines, facts
+still anchored to the right chapters, the map's layout, and the Weaving sessions
+including what was retired, muted and put off. Open it and carry on.
+
+This works because **no absolute path is ever stored in project data**. Paths are
+arguments passed in per request, never written into a file or a row, so nothing
+in a project knows or cares which machine wrote it. The one exception is
+`project.json`'s `root_path`, which is stamped at creation and **overwritten from
+the folder actually opened**, so the stale copy is never trusted.
+
+Two consequences worth stating, because both are easy to assume backwards:
+
+- **`app.db` can be deleted freely.** It is a cache and rebuilds. A transfer that
+  drops it, or corrupts it, costs nothing.
+- **`.storythread/weave/` cannot.** It is the one thing under `.storythread/`
+  that is not derivable (see above), so a transfer that filters hidden folders --
+  some zip tools, sync clients with dotfile rules, a git repo -- keeps the entire
+  world and loses the Weaving ANSWERS. It loses them quietly, since a walk asking
+  everything again is indistinguishable from never having answered. Copying the
+  project folder carries the dotfolder; selective transfers are the ones to watch.
+
+**The exports deliberately do not carry Weaving answers, and that is correct.**
+`POST /api/codex/export/weave` and the snapshot write the WORLD in three shapes
+for three audiences -- Markdown for a person, JSON for a program, CSV for a
+spreadsheet. Answers are not world; they are a record of what this writer told
+this app to stop asking, which is meaningless to any program that is not
+Storythread Studio. An export is for leaving the app. **Moving the folder is how
+you move the app's own state**, and it is lossless.
+
+Pinned by `backend/tests/test_project_portability.py`, whose root-cause test
+fails the build if any file in a moved project still contains the old machine's
+path. `tests/manual-smoke.md` scenario 24 covers the human half.
+
+
+
 ## Project folder layout
 
 Every project is a folder the user owns. Storythread does not touch anything outside of it.

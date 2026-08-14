@@ -219,6 +219,21 @@ Two export modes, both run from `POST /api/export/full-manuscript` and `POST /ap
 - **Full manuscript** — combines chapters in order into a single file in `exports/`. Optional flags append chapter summaries, scene summaries, notes, and profiles as `#` appendices.
 - **Manual snapshot** — dated folder under `exports/snapshot-YYYY-MM-DD/` mirroring the project layout, with the same opt-in toggles for summaries, notes, and profiles.
 
+### Exporting is not the same as moving
+
+An export is for **leaving the app**: a manuscript to send to a reader, a Weave
+bundle a spreadsheet or another program can read. It carries the work, not the
+app's own state, so it does not include Weaving answers -- what you retired,
+muted or put off. Those are a record of what you told this app to stop asking and
+mean nothing outside it.
+
+**To move a book to another computer, move the folder.** Upload the project
+folder to a drive, download it on the other machine, open it there. Everything
+arrives identical, Weaving history included, and you carry on where you stopped.
+See `docs/architecture.md` for what makes that work and the one transfer method
+to avoid (anything that filters hidden folders and so drops `.storythread/`).
+
+
 ## The Weave
 
 *In development on `feature/the-weave`, for v2.0.0. Not in a shipped release yet.*

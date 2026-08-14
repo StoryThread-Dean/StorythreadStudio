@@ -65,6 +65,7 @@ entry while working on a feature, append it under Unreleased.
 - **The Weave walkthrough asks before losing your work.** A click landing outside a dialog used to close it instantly and discard whatever you had typed, including a connection's reason line and prose written into a thin entry. Every way out -- the X, Escape, and a click on the backdrop -- now goes through one guard that asks only when something would actually be lost.
 - **Renaming a built-in note is refused with the reason** rather than silently breaking the outline the Planner reads.
 - The map draws a connection that becomes true later as a dashed line, which it was documented to do and could not.
+- **Your book moves between computers.** Copy the project folder to a drive and open it on another machine: entries, connections with their reasons, facts and their chapter anchors, and your Weaving history all arrive identical, so you carry on where you stopped. Exports are for leaving the app and deliberately do not carry Weaving answers, which mean nothing outside Storythread Studio.
 
 ---
 
