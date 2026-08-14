@@ -71,14 +71,25 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
   // Placeholders are left out: attaching a word to an empty stub made from
   // another word records nothing the writer could use, and it is the shape of
   // mistake that produced three entries for one person in the first place.
+  const attachable = useMemo(
+    () => candidates.filter(c => !c.placeholder), [candidates]);
+
+  // EVERY MATCH, and the list scrolls. This used to end in `.slice(0, 8)`, which
+  // is the shape of bug this repo has a rule against: as the writer's world grew
+  // past eight entries the rest were simply not rendered, with nothing saying so,
+  // and the search box stopped being a convenience and became the only way to
+  // reach your own profiles. Reported exactly that way.
+  //
+  // Both sibling pickers (BindDot, TieEditor) already scroll rather than cap. A
+  // few hundred rows is nothing to render, and a cap on a list with no "see all"
+  // anywhere else is a silent cap.
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return candidates
-      .filter(c => !c.placeholder)
-      .filter(c => !needle || nodeLabel(c).toLowerCase().includes(needle)
-                   || c.aliases.some(a => a.toLowerCase().includes(needle)))
-      .slice(0, 8);
-  }, [candidates, query]);
+    if (!needle) return attachable;
+    return attachable.filter(
+      c => nodeLabel(c).toLowerCase().includes(needle)
+           || c.aliases.some(a => a.toLowerCase().includes(needle)));
+  }, [attachable, query]);
 
   async function record() {
     if (!chosen) return;
@@ -180,26 +191,43 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
 
             {/* ── Which entry it belongs to ──────────────────────────────── */}
             <div>
-              <p className="mb-1 text-[11px] text-text-muted">
-                Which entry is this another name for?
+              <p className="mb-1 flex items-baseline gap-2 text-[11px] text-text-muted">
+                <span>Which entry is this another name for?</span>
+                {/* HOW MANY THERE ARE, so the search box reads as a shortcut
+                    rather than the only way through. A writer whose world has
+                    grown cannot otherwise tell whether they are looking at all of
+                    it -- which is what the truncated version got wrong. */}
+                {attachable.length > 0 && (
+                  <span className="ml-auto shrink-0 text-faint"
+                        data-testid="word-fix-count">
+                    {query.trim()
+                      ? `${matches.length} of ${attachable.length}`
+                      : `${attachable.length} ${attachable.length === 1
+                          ? "entry" : "entries"}`}
+                  </span>
+                )}
               </p>
               <div className="mb-1.5 flex items-center gap-1.5 rounded border border-border bg-bg-surface px-2 py-1">
                 <Search size={11} className="shrink-0 text-faint" />
                 <input
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder="Search your world"
+                  placeholder="Search your world, or scroll the list"
                   aria-label="Search your world"
                   className="w-full bg-transparent text-xs text-text-primary placeholder-faint outline-none"
                 />
               </div>
               {matches.length === 0 ? (
                 <p className="text-[11px] text-faint">
-                  Nothing matches. If it is not in your world yet, make it an
-                  entry instead.
+                  {attachable.length === 0
+                    ? "Nothing in your world can take another name yet. Make it an entry instead."
+                    : "Nothing matches that. Clear the box to see all of them, or make it an entry instead."}
                 </p>
               ) : (
-                <ul className="space-y-0.5">
+                // Scrolls rather than truncates. Tall enough to show several
+                // rows, short enough that the buttons below stay on screen.
+                <ul className="max-h-52 space-y-0.5 overflow-y-auto"
+                    data-testid="word-fix-list">
                   {matches.map(node => {
                     const kind = threadTypeEntry(node.type);
                     const KindIcon = kind.Icon;

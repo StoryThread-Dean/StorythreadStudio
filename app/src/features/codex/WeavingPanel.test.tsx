@@ -3062,3 +3062,94 @@ describe("a flagged word that is wrong", () => {
     expect(within(fix).queryByRole("button", { name: /^Sideburn/ })).toBeNull();
   });
 });
+
+
+// ── A growing world must not outgrow the picker ───────────────────────────────
+//
+// Reported from live testing: "the list of Profiles is growing. So when I get to a
+// word that I want to connect to someone, there are more entries/profiles than
+// there are viewable spaces ... Currently, [the search box] is the only way to see
+// all the options now."
+//
+// My bug, from R11.6. The list ended in `.slice(0, 8)`, so once the writer had
+// nine entries the ninth onwards were simply not rendered, with nothing saying so.
+// The search box stopped being a convenience and became the only route to the
+// writer's own profiles.
+//
+// The CSS is not what these tests pin -- a scroll container is a class and would
+// be a brittle assertion. What they pin is that NOTHING IS DROPPED, which is the
+// part that was wrong, and that the screen says how many there are so the writer
+// can tell whether they are seeing all of it.
+
+describe("the picker with a world that has grown", () => {
+  const unspun = stop({
+    kind: "unspun", key: "unspun|rover", entity_id: "",
+    title: "'Rover' has no entry", quote: "Rover barked once.",
+    detail: { name: "Rover", count: 2 },
+  });
+
+  /** Twenty real entries, which is a small world by the standards of a novel. */
+  const world = Array.from({ length: 20 }, (_, i) => ({
+    entity_id: `e-${i}`, type: "character", name: `Person ${i}`,
+    display_name: "", aliases: [], placeholder: false,
+  }));
+
+  it("offers every entry, not the first handful", async () => {
+    mockApi({ stops: [unspun], nodes: world });
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    const rows = within(fix).getAllByRole("button", { name: /^Person \d+/ });
+    expect(rows.length).toBe(20);
+    // The one that used to vanish: entry nineteen, well past the old cap of 8.
+    expect(within(fix).getByRole("button", { name: /^Person 19/ })).toBeTruthy();
+  });
+
+  it("says how many there are, so the search box reads as a shortcut", async () => {
+    mockApi({ stops: [unspun], nodes: world });
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    expect(within(fix).getByTestId("word-fix-count").textContent)
+      .toContain("20 entries");
+  });
+
+  it("says how many of how many once the writer searches", async () => {
+    mockApi({ stops: [unspun], nodes: world });
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    await userEvent.type(
+      within(fix).getByLabelText("Search your world"), "Person 1");
+    // Person 1 and 10-19: eleven of twenty.
+    expect(within(fix).getByTestId("word-fix-count").textContent)
+      .toMatch(/\d+ of 20/);
+  });
+
+  it("offers a way back when a search matches nothing", async () => {
+    // The dead end this could otherwise be: a typo in the box, an empty list,
+    // and no hint that clearing it brings the world back.
+    mockApi({ stops: [unspun], nodes: world });
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    await userEvent.type(
+      within(fix).getByLabelText("Search your world"), "zzzznothing");
+    expect(within(fix).queryByTestId("word-fix-list")).toBeNull();
+    expect(fix.textContent).toContain("Clear the box to see all of them");
+  });
+
+  it("still leaves placeholders out of the count", async () => {
+    // Attaching a word to an empty stub made from another word records nothing
+    // usable. The count must not promise rows that are not there.
+    mockApi({ stops: [unspun], nodes: [...world.slice(0, 3), {
+      entity_id: "e-dot", type: "character", name: "Rove",
+      display_name: "", aliases: [], placeholder: true,
+    }] });
+    await start();
+    await userEvent.click(screen.getByTestId("word-fix-offer"));
+    const fix = await screen.findByTestId("word-fix");
+    expect(within(fix).getByTestId("word-fix-count").textContent)
+      .toContain("3 entries");
+  });
+});
