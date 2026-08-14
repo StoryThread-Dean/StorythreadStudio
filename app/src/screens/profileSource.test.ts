@@ -106,13 +106,15 @@ describe("which folder this project uses", () => {
     // One rule, in one place. The sidebar counts the same folder, which is what
     // stops "13 in the tree, 12 on the map" from coming back.
     mockFetch(() => ({ entries_home: "codex", elsewhere: 0 }));
-    expect(await fetchEntriesHome("/p")).toEqual({ home: "codex", elsewhere: 0 });
+    expect(await fetchEntriesHome("/p"))
+      .toEqual({ home: "codex", elsewhere: 0, migrationState: "none" });
     expect(calls[0].url).toContain("/api/codex/health");
   });
 
   it("reports how much is in the other folder, so a screen can say so", async () => {
     mockFetch(() => ({ entries_home: "profiles", elsewhere: 3 }));
-    expect(await fetchEntriesHome("/p")).toEqual({ home: "profiles", elsewhere: 3 });
+    expect(await fetchEntriesHome("/p"))
+      .toEqual({ home: "profiles", elsewhere: 3, migrationState: "none" });
   });
 
   it("falls back to profiles when the backend cannot answer", async () => {
@@ -121,6 +123,45 @@ describe("which folder this project uses", () => {
     // unconverted project would show an empty screen.
     mockFetch(() => new Response("nope", { status: 500 }));
     expect((await fetchEntriesHome("/p")).home).toBe("profiles");
+  });
+
+  // ── A HALF-FINISHED CONVERSION IS NOT AN UNCONVERTED PROJECT ─────────────
+  //
+  // Issue #23, found by walking the migration smoke test rather than by any
+  // test: a writer whose conversion died four files in was told on the Profile
+  // Builder that the project "has not been brought into the Weave yet". It had.
+  // Both suites were green, because both screens are individually correct --
+  // the Weave offers resume and restore properly. Nothing stood on one screen
+  // and read another.
+  //
+  // The state was in the /health response the whole time and this function
+  // dropped it, so the screen had no way to tell the two causes apart.
+
+  it("carries whether a conversion is half-finished", async () => {
+    mockFetch(() => ({
+      entries_home: "profiles", elsewhere: 4, migration_state: "incomplete",
+    }));
+    expect((await fetchEntriesHome("/p")).migrationState).toBe("incomplete");
+  });
+
+  it("tells a converted project apart from one that never started", async () => {
+    mockFetch(() => ({
+      entries_home: "codex", elsewhere: 0, migration_state: "done",
+    }));
+    expect((await fetchEntriesHome("/p")).migrationState).toBe("done");
+  });
+
+  it("assumes nothing is in flight when the backend says nothing", async () => {
+    // An older backend, or a field that goes missing. The safe reading is that
+    // no conversion is half-done, because claiming one would send the writer
+    // looking for a recovery choice that is not there.
+    mockFetch(() => ({ entries_home: "profiles", elsewhere: 2 }));
+    expect((await fetchEntriesHome("/p")).migrationState).toBe("none");
+  });
+
+  it("assumes nothing is in flight when the backend cannot answer at all", async () => {
+    mockFetch(() => new Response("nope", { status: 500 }));
+    expect((await fetchEntriesHome("/p")).migrationState).toBe("none");
   });
 
   it("sends each home to its own endpoints", async () => {
@@ -375,5 +416,61 @@ describe("the profiles folder, unchanged", () => {
 
   it("can still import, which is why the button is per home", async () => {
     expect(profilesSource("/p").canImport).toBe(true);
+  });
+});
+
+
+// ── AND THE SCREEN THAT READS IT ─────────────────────────────────────────────
+//
+// The plumbing above is only half of issue #23. The bug a writer actually met
+// was a SENTENCE, and the sentence is in ProfileBuilder.tsx.
+//
+// Read as source rather than rendered, the same choice Explain.test.tsx makes
+// and for the same reason: ProfileBuilder is a large screen whose mount needs
+// its whole API mocked, and a test that expensive gets skipped rather than
+// extended. What matters here is narrow and a source read can prove it -- that
+// the explanation BRANCHES on the migration state, and that both branches say
+// the right thing. A screen that carries only one of these sentences is the
+// bug, whichever one it kept.
+
+describe("what a half-converted project is told", () => {
+  const SOURCES = import.meta.glob("./*.tsx", {
+    query: "?raw", import: "default", eager: true,
+  }) as Record<string, string>;
+
+  const screen = (() => {
+    const key = Object.keys(SOURCES).find(k => k.endsWith("/ProfileBuilder.tsx"));
+    expect(key, "ProfileBuilder.tsx not found").toBeTruthy();
+    return SOURCES[key!];
+  })();
+
+  it("branches the explanation on the migration state", () => {
+    // The fix. Without this the two causes are indistinguishable on screen.
+    expect(screen).toMatch(/migrationState === "incomplete"\s*\?/);
+  });
+
+  it("tells an interrupted conversion that it was interrupted", () => {
+    expect(screen).toMatch(/conversion was started and did not finish/i);
+  });
+
+  it("says nothing was lost, and where to go to fix it", () => {
+    // Not decoration. This notice is the one a writer meets FIRST, before the
+    // Weave screen where resume and restore live, so it has to carry them there
+    // rather than leaving the state as a dead end.
+    // Whitespace-tolerant: this is JSX prose, so any phrase can be split across
+    // a line break by the formatter at any time. Matching the exact spacing
+    // would make these tests fail on a reflow rather than on a regression.
+    expect(screen).toMatch(/Nothing\s+has\s+been\s+lost/i);
+    expect(screen).toMatch(/Open\s+the\s+Weave\s+to\s+carry\s+on/i);
+  });
+
+  it("keeps the original wording for a project that really has not converted", () => {
+    // The fix must not swap one wrong sentence for another. A writer who made
+    // entries in the Weave on an unconverted project still needs the old text.
+    expect(screen).toMatch(/has not been brought into the Weave yet, so this/);
+  });
+
+  it("still reports the count, which was never the broken part", () => {
+    expect(screen).toMatch(/made\s*\n?\s*in the Weave and .* not shown here/);
   });
 });

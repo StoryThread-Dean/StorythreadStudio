@@ -68,6 +68,13 @@ export interface ProfileSource {
 export interface HomeReport {
   home: EntriesHome;
   elsewhere: number;
+  /** Whether a conversion is in flight. Carried because "entries live in the
+   *  other folder" has TWO causes and they need opposite sentences: a project
+   *  that was never converted (the writer made entries in the Weave directly),
+   *  and one whose conversion stopped part way. Reported by the same /health
+   *  call as the two fields above -- it was already in the response and being
+   *  dropped here, which is why the screen could not tell them apart. */
+  migrationState: "none" | "incomplete" | "done";
 }
 
 export async function fetchEntriesHome(rootPath: string): Promise<HomeReport> {
@@ -77,12 +84,14 @@ export async function fetchEntriesHome(rootPath: string): Promise<HomeReport> {
     // A health check that cannot answer must not decide. profiles/ is the older
     // home and the safe assumption: it is where an unconverted project's work
     // is, and reading it can lose nothing.
-    return { home: "profiles", elsewhere: 0 };
+    return { home: "profiles", elsewhere: 0, migrationState: "none" };
   }
   const body = await res.json();
   return {
     home: body?.entries_home === "codex" ? "codex" : "profiles",
     elsewhere: Number(body?.elsewhere ?? 0) || 0,
+    migrationState: body?.migration_state === "incomplete" ? "incomplete"
+      : body?.migration_state === "done" ? "done" : "none",
   };
 }
 

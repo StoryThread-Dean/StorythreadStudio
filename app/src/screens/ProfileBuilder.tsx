@@ -417,6 +417,12 @@ export function ProfileBuilder({
   // show an empty screen for a converted project.
   const [home, setHome] = useState<EntriesHome | null>(null);
   const [elsewhere, setElsewhere] = useState(0);
+  // Whether a conversion is half-finished. See the notice further down: the
+  // same condition (entries in the other folder) has two causes needing
+  // opposite explanations, and without this the screen told a writer whose
+  // migration had died that it had never started.
+  const [migrationState, setMigrationState] =
+    useState<"none" | "incomplete" | "done">("none");
   // The writer's own chapters, in order, for every "when" question the Run
   // asks. Never a date and never a number they have to work out.
   const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
@@ -637,6 +643,7 @@ export function ProfileBuilder({
       if (cancelled) return;
       setHome(report.home);
       setElsewhere(report.elsewhere);
+      setMigrationState(report.migrationState);
     });
     return () => { cancelled = true; };
   }, [project.root_path]);
@@ -1481,12 +1488,32 @@ export function ProfileBuilder({
                 {elsewhere} {elsewhere === 1 ? "entry was" : "entries were"} made
                 in the Weave and {elsewhere === 1 ? "is" : "are"} not shown here.
               </p>
-              <p className="mt-1 text-xs text-text-muted">
-                This project has not been brought into the Weave yet, so this
-                screen is reading your profiles folder. Bring it in from the
-                Weave to edit everything in one place. Until then, open those
-                entries from the Weave map.
-              </p>
+              {/* TWO CAUSES, TWO SENTENCES.
+                  Found walking the migration smoke test (issue #23). This
+                  notice fires whenever entries sit in the folder this screen is
+                  not reading, and that is true in two very different
+                  situations. The wording was written for one of them and shown
+                  in both, so a writer whose conversion had died four files in
+                  was told the conversion had never happened -- on the screen
+                  they were most likely to be standing on, at the moment most of
+                  their profiles were missing. The count above was right the
+                  whole time; only the explanation was wrong. */}
+              {migrationState === "incomplete" ? (
+                <p className="mt-1 text-xs text-text-muted">
+                  A conversion was started and did not finish, so your entries
+                  are split across both folders right now. Nothing has been
+                  lost: your profiles were copied before anything changed. Open
+                  the Weave to carry on from where it stopped, or to put
+                  everything back the way it was.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-text-muted">
+                  This project has not been brought into the Weave yet, so this
+                  screen is reading your profiles folder. Bring it in from the
+                  Weave to edit everything in one place. Until then, open those
+                  entries from the Weave map.
+                </p>
+              )}
               <div className="mt-1">
                 <Explain of="profile.home" compact />
               </div>
