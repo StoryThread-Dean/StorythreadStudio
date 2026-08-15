@@ -68,13 +68,14 @@ STOP_FRAYED = "frayed"              # a Thread too thin to be useful
 STOP_UNPLACED = "unplaced"          # a fact with no point in the story
 STOP_LOOSE = "loose_thread"         # a Thread nothing connects to
 STOP_UNTIED = "untied"              # two Threads the prose keeps putting together
+STOP_PLACE = "place"                # where an entry appears, offered from the prose
 STOP_SNAG = "snag"                  # two facts that disagree
 STOP_TANGLE = "tangle"              # several Snags with one cause behind them
 STOP_EARLY = "early_mention"        # named before the reader is meant to know
 STOP_UNWOVEN = "unwoven"            # ground rules not worked out yet
 STOP_PINNED = "pinned"              # the writer marked this by hand
 
-STOP_KINDS = (STOP_UNSPUN, STOP_FRAYED, STOP_UNPLACED, STOP_LOOSE,
+STOP_KINDS = (STOP_UNSPUN, STOP_FRAYED, STOP_UNPLACED, STOP_LOOSE, STOP_PLACE,
               STOP_UNTIED, STOP_SNAG, STOP_TANGLE, STOP_EARLY, STOP_UNWOVEN,
               STOP_PINNED)
 
@@ -126,7 +127,7 @@ PASS_KINDS: dict[str, frozenset[str]] = {
     PASS_WARP: frozenset({STOP_UNSPUN, STOP_FRAYED, STOP_LOOSE, STOP_PINNED}),
     # Did anything change here. Scoped to chapters, which is what makes the
     # anchor free: run it FROM chapter eight and the app already knows when.
-    PASS_WEFT: frozenset({STOP_UNTIED}),
+    PASS_WEFT: frozenset({STOP_UNTIED, STOP_PLACE}),
     # Where the book contradicts itself. A report to read, not a queue to clear.
     # Tangle belongs here rather than to a pass of its own: it IS Snags, several
     # of them with one cause behind them, so a writer looking for contradictions
@@ -500,6 +501,11 @@ def scan(
                                       mentioned=mentioned,
                                       together=together))
     result.stops.extend(_untied_stops(together, threads, request, registry))
+    # Where the prose puts each entry, OFFERED. See _place_stops: it never
+    # stores, and only what the writer accepts becomes their statement.
+    result.stops.extend(_place_stops(chapters, threads,
+                                     build_alias_map(threads), request,
+                                     _shown_name_teller(threads)))
     result.stops.extend(_manuscript_stops(project_path, chapters, threads,
                                           request, index))
     result.stops.extend(_unwoven_stops(threads, request, result.domains))
@@ -951,6 +957,75 @@ def _likely_answers(entity_id: str, together: list[Together],
         if len(likely) >= _LIKELY_ANSWERS:
             break
     return likely
+
+
+def _place_stops(chapters: list[tuple[str, str]], threads: list[dict],
+                 alias_map: dict, request: ScanRequest,
+                 shown) -> list[Stop]:
+    """
+    "Your prose puts Serena in chapters 1 to 9. Record that?"
+
+    THE OFFER HALF OF DECLARED PRESENCE, and the reason the feature can exist
+    at all: a writer with sixty characters will not tag them by hand, and a
+    world that goes untagged makes the context filter useless.
+
+    IT OFFERS, IT NEVER STORES. Only what the writer accepts is written to
+    their file. An unaccepted suggestion is not data, which is what keeps this
+    authored rather than derived -- and derived-and-cached is exactly what R8.5
+    deleted `codex_mention` for.
+
+    Raised only when the offer would CHANGE something. An entry already placed
+    in every chapter the prose names is not a question, it is a fact the writer
+    has already stated, and asking again is how a walk becomes noise.
+    """
+    if not request.wants(STOP_PLACE):
+        return []
+
+    by_id = {str(t.get("entity_id") or ""): t for t in threads}
+    seen: dict[str, list[str]] = {}
+
+    for chapter_id, prose in chapters:
+        for mention in find_mentions(prose, alias_map):
+            # AN AMBIGUOUS NAME IS NEVER COUNTED. A "John" that answers to two
+            # entries would place the wrong man in the chapter, and a wrong
+            # placement is invisible: it does not error, it just quietly
+            # withholds somebody from a brief later.
+            if not mention.bound or not mention.entity_id:
+                continue
+            where = seen.setdefault(mention.entity_id, [])
+            if chapter_id not in where:
+                where.append(chapter_id)
+
+    stops: list[Stop] = []
+    for entity_id, found in seen.items():
+        thread = by_id.get(entity_id)
+        if thread is None:
+            continue
+        placed = [str(a).split("/", 1)[0] for a in thread.get("appears_in") or []]
+        fresh = [c for c in found if c not in placed]
+        if not fresh:
+            continue
+
+        name = shown(thread) if shown else str(thread.get("name") or "")
+        stops.append(Stop(
+            kind=STOP_PLACE,
+            entity_id=entity_id,
+            key=_key(STOP_PLACE, entity_id),
+            title=f"Where does {name} appear?",
+            why=("Recording where an entry appears lets the app send only "
+                 "what belongs in the chapter you are writing, instead of "
+                 "your whole world every time."),
+            detail={
+                "name": name,
+                # What the prose shows, offered.
+                "found": found,
+                # What is new about the offer, so the card can say "adds four"
+                # rather than repeating what the writer already recorded.
+                "adds": fresh,
+                "already": placed,
+            },
+        ))
+    return stops
 
 
 def _untied_stops(together: list[Together], threads: list[dict],

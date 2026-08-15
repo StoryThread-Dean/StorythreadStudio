@@ -1060,3 +1060,77 @@ def test_the_save_still_succeeds_when_progress_cannot_be_recorded(project, monke
     thread["sections"]["overview"]["content"] = "Still saved."
     assert _save(project, thread, thread.get("revision")).status_code == 200
     assert "Still saved." in _entity(project)["sections"]["overview"]["content"]
+
+
+# ── Recording where an entry appears ────────────────────────────────────────
+#
+# The other half of declared presence. The scan OFFERS; this is the only thing
+# that ever WRITES, and it writes what the writer accepted. An offer they
+# ignored leaves no trace, which is what keeps presence authored rather than
+# derived -- see the note on POST /place.
+
+def test_a_placement_is_recorded_in_reading_order(project):
+    chapters = client.get("/api/codex/anchors",
+                          params={"project_path": project}).json()["chapters"]
+    anchor = chapters[0]["anchor"]
+
+    response = client.post("/api/codex/place", json={
+        "project_path": project, "entity_id": "e-elara",
+        "appears_in": [anchor],
+    })
+    assert response.status_code == 200
+    assert response.json()["appears_in"] == [anchor]
+
+    # And it is in the writer's file, not a table.
+    body = client.get("/api/codex/entity",
+                      params={"project_path": project,
+                              "entity_id": "e-elara"}).json()
+    assert body["appears_in"] == [anchor]
+
+
+def test_A_PLACEMENT_AT_A_CHAPTER_THAT_DOES_NOT_EXIST_IS_REFUSED(project):
+    """
+    Refused rather than stored, because the failure would have no symptom.
+
+    A placement pointing at a deleted chapter withholds the entry from every
+    brief about anywhere -- the model simply never hears about that character,
+    and nothing on screen says why. An error the writer can read beats a
+    silence they cannot.
+    """
+    response = client.post("/api/codex/place", json={
+        "project_path": project, "entity_id": "e-elara",
+        "appears_in": ["c-nonexistent"],
+    })
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "anchor_not_found"
+    body = client.get("/api/codex/entity",
+                      params={"project_path": project,
+                              "entity_id": "e-elara"}).json()
+    assert not body.get("appears_in")
+
+
+def test_an_empty_list_clears_a_placement(project):
+    # The whole list is sent, not a delta, so "actually, nowhere" is expressible.
+    # A screen that could only ADD would have no way to undo a wrong tag.
+    chapters = client.get("/api/codex/anchors",
+                          params={"project_path": project}).json()["chapters"]
+    client.post("/api/codex/place", json={
+        "project_path": project, "entity_id": "e-elara",
+        "appears_in": [chapters[0]["anchor"]]})
+
+    client.post("/api/codex/place", json={
+        "project_path": project, "entity_id": "e-elara", "appears_in": []})
+    body = client.get("/api/codex/entity",
+                      params={"project_path": project,
+                              "entity_id": "e-elara"}).json()
+    assert body["appears_in"] == []
+
+
+def test_the_same_chapter_twice_is_recorded_once(project):
+    chapters = client.get("/api/codex/anchors",
+                          params={"project_path": project}).json()["chapters"]
+    anchor = chapters[0]["anchor"]
+    response = client.post("/api/codex/place", json={
+        "project_path": project, "entity_id": "e-elara",
+        "appears_in": [anchor, anchor]})
+    assert response.json()["appears_in"] == [anchor]

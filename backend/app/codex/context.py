@@ -160,6 +160,11 @@ class Brief:
     refusal: str = ""
     withheld_spoilers: int = 0
     withheld_by_scope: int = 0
+    # Entries left out because the writer said where they appear and this is
+    # not one of those places. COUNTED, never silent: a shorter brief with no
+    # explanation is indistinguishable from a smaller world, which is the rule
+    # this app applies to every other omission it makes.
+    withheld_not_present: int = 0
     budget: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
@@ -218,6 +223,7 @@ def assemble(
     pieces: list[Piece] = []
     spoilers = 0
     by_scope = 0
+    not_present = 0
 
     for thread in threads:
         entity_id = str(thread.get("entity_id") or "")
@@ -232,6 +238,32 @@ def assemble(
         verdict = thread_visibility(thread, index, lens)
         if verdict != VISIBLE:
             by_scope += 1
+            continue
+
+        # ── WHO IS ACTUALLY IN THIS CHAPTER ─────────────────────────────
+        #
+        # An entry the writer has PLACED is only sent where they placed it.
+        # This is the answer to a world of sixty characters: without it the
+        # brief carries everyone who is merely visible, ranked and then
+        # trimmed to budget, and the writer's only control is unticking them
+        # by hand every time.
+        #
+        # TWO THINGS OUTRANK IT, and they are what make filtering safe rather
+        # than merely tight:
+        #
+        #   - a PINNED Thread. The writer said "this one, now", which is more
+        #     specific than a list they wrote last week.
+        #   - a Thread NAMED IN THE TEXT being written. The strongest signal
+        #     there is: if the paragraph says Lou, Lou goes, whatever any
+        #     placement says. A tag must never hide the character the writer
+        #     is literally writing about.
+        #
+        # An entry with NO placement is not filtered. Silence means "I have
+        # not said", not "nowhere" -- otherwise turning this feature on would
+        # empty the brief for every project that has never used it.
+        if (at and not _is_present(thread, at, index)
+                and entity_id not in pinned and entity_id not in mentioned):
+            not_present += 1
             continue
 
         resolved = resolve_thread(thread, index, at, pov=pov,
@@ -254,7 +286,7 @@ def assemble(
             pinned=entity_id in pinned,
         ))
 
-    return _fit(pieces, budget, at, spoilers, by_scope)
+    return _fit(pieces, budget, at, spoilers, by_scope, not_present)
 
 
 def _connected_to(threads: list[dict], mentioned: set[str]) -> set[str]:
@@ -290,8 +322,32 @@ def _relevance(entity_id: str, mentioned: set[str], connected: set[str],
     return RELEVANCE_BACKGROUND
 
 
+def _is_present(thread: dict, at: str, index) -> bool:
+    """
+    Has the writer placed this entry here?
+
+    True when they have placed it nowhere, which is the ordinary state of a
+    project that has never used this: silence means "not said", not "nowhere".
+
+    Comparison is by CHAPTER. A placement is stored as an anchor so scenes can
+    extend it later, and an anchor carrying a scene still answers for its
+    chapter -- so a writer who places something at a scene is not excluded from
+    every request made about the chapter around it.
+    """
+    placed = thread.get("appears_in") or []
+    if not placed:
+        return True
+    here = _chapter_of(at)
+    return any(_chapter_of(anchor) == here for anchor in placed)
+
+
+def _chapter_of(anchor: str) -> str:
+    """The chapter half of an anchor. `c-abc/s-def` -> `c-abc`."""
+    return str(anchor or "").split("/", 1)[0]
+
+
 def _fit(pieces: list[Piece], budget: Budget, at: str | None,
-         spoilers: int, by_scope: int) -> Brief:
+         spoilers: int, by_scope: int, not_present: int = 0) -> Brief:
     """
     Keep what fits, drop the least relevant, and say what was dropped.
 
@@ -302,7 +358,8 @@ def _fit(pieces: list[Piece], budget: Budget, at: str | None,
     in the model's answer impossible to attribute.
     """
     brief = Brief(as_of=at, withheld_spoilers=spoilers,
-                  withheld_by_scope=by_scope, budget=budget.breakdown())
+                  withheld_by_scope=by_scope,
+                  withheld_not_present=not_present, budget=budget.breakdown())
 
     required = [p for p in pieces if p.pinned]
     optional = [p for p in pieces if not p.pinned]

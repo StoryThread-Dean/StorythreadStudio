@@ -445,14 +445,25 @@ export function WeaveContextBar({
                 </details>
               )}
 
-              {(brief?.withheld_spoilers || brief?.withheld_by_scope) ? (
-                <p className="mb-2 text-[10px] text-faint">
+              {(brief?.withheld_spoilers || brief?.withheld_by_scope
+                || brief?.withheld_not_present) ? (
+                <p className="mb-2 text-[10px] text-faint"
+                   data-testid="brief-withheld">
                   {brief.withheld_spoilers > 0 && (
                     <>{brief.withheld_spoilers} held back as not yet revealed
                       to the reader. </>
                   )}
                   {brief.withheld_by_scope > 0 && (
-                    <>{brief.withheld_by_scope} you marked as never for AI.</>
+                    <>{brief.withheld_by_scope} you marked as never for AI. </>
+                  )}
+                  {/* COUNTED, NEVER SILENT. The writer said where these appear
+                      and this is not one of those chapters. A quietly shorter
+                      brief is indistinguishable from a smaller world, and they
+                      would have no way to tell that a placement made last week
+                      was the reason. */}
+                  {(brief.withheld_not_present ?? 0) > 0 && (
+                    <>{brief.withheld_not_present} you placed in other
+                      chapters.</>
                   )}
                 </p>
               ) : null}

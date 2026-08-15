@@ -23,6 +23,7 @@ from app.codex.scan import (
     STOP_FRAYED,
     STOP_KINDS,
     STOP_LOOSE,
+    STOP_PLACE,
     STOP_SNAG,
     STOP_TANGLE,
     STOP_UNPLACED,
@@ -1373,3 +1374,102 @@ def test_a_finished_part_of_the_world_still_appears_on_the_board(tmp_path):
 def test_the_board_is_empty_for_every_other_pass(tmp_path):
     folder = _project(tmp_path, {"01.md": "# One\nRain.\n"})
     assert scan(folder, [], REGISTRY, ScanRequest(depth=PASS_WARP)).domains == []
+
+
+# -- WHERE AN ENTRY APPEARS: THE OFFER, AND THE RECORD -----------------------
+#
+# Declared presence. Two halves, and the split is the whole design:
+#
+#   the SCAN offers what the prose shows, for free, and stores nothing
+#   the WRITER accepts, and only then is anything written
+#
+# An unaccepted offer is not data. That is what keeps presence authored rather
+# than derived, and derived-and-cached is exactly what R8.5 deleted
+# `codex_mention` for: presence worked out from the manuscript goes silently
+# wrong the moment a chapter is edited, while the freshness gate reports the
+# index current.
+
+def test_the_scan_offers_where_the_prose_puts_an_entry(tmp_path):
+    project = _project(tmp_path, {
+        "01.md": "Serena crossed the yard. Serena did not look back.",
+        "02.md": "Lou watched from the gate.",
+    })
+    ids = _chapter_ids(project)
+    threads = [_thread("e-serena", "Serena"), _thread("e-lou", "Lou")]
+    result = scan(project, threads, REGISTRY, ScanRequest(depth=PASS_WEFT))
+
+    places = {s.entity_id: s for s in result.stops if s.kind == STOP_PLACE}
+    assert places["e-serena"].detail["found"] == [ids["01.md"]]
+    assert places["e-lou"].detail["found"] == [ids["02.md"]]
+
+
+def test_it_offers_every_chapter_the_entry_is_in(tmp_path):
+    project = _project(tmp_path, {
+        "01.md": "Serena went north.",
+        "02.md": "Nothing here.",
+        "03.md": "Serena returned.",
+    })
+    ids = _chapter_ids(project)
+    result = scan(project, [_thread("e-serena", "Serena")], REGISTRY,
+                  ScanRequest(depth=PASS_WEFT))
+    stop = next(s for s in result.stops if s.kind == STOP_PLACE)
+    assert stop.detail["found"] == [ids["01.md"], ids["03.md"]]
+
+
+def test_an_entry_already_placed_is_not_asked_about(tmp_path):
+    project = _project(tmp_path, {"01.md": "Serena crossed the yard."})
+    ids = _chapter_ids(project)
+    thread = _thread("e-serena", "Serena")
+    thread["appears_in"] = [ids["01.md"]]
+    result = scan(project, [thread], REGISTRY, ScanRequest(depth=PASS_WEFT))
+    assert not [s for s in result.stops if s.kind == STOP_PLACE]
+
+
+def test_it_asks_only_about_what_is_NEW(tmp_path):
+    # A writer who placed chapter one and then wrote chapter three should be
+    # offered chapter three, not asked to confirm chapter one again.
+    project = _project(tmp_path, {
+        "01.md": "Serena crossed the yard.",
+        "02.md": "Serena again, later.",
+    })
+    ids = _chapter_ids(project)
+    thread = _thread("e-serena", "Serena")
+    thread["appears_in"] = [ids["01.md"]]
+    result = scan(project, [thread], REGISTRY, ScanRequest(depth=PASS_WEFT))
+    stop = next(s for s in result.stops if s.kind == STOP_PLACE)
+    assert stop.detail["adds"] == [ids["02.md"]]
+    assert stop.detail["already"] == [ids["01.md"]]
+
+
+def test_AN_AMBIGUOUS_NAME_IS_NEVER_PLACED(tmp_path):
+    """
+    The dangerous one, and the same rule mentions.py already enforces.
+
+    A "John" answering to two entries would put the wrong man in the chapter.
+    A wrong placement does not error -- it quietly withholds somebody from
+    every brief about everywhere else, and nothing on screen says why.
+    """
+    project = _project(tmp_path, {"01.md": "John walked in. John sat down."})
+    threads = [_thread("e-vale", "John Vale", aliases=["John"]),
+               _thread("e-thorne", "John Thorne", aliases=["John"])]
+    result = scan(project, threads, REGISTRY, ScanRequest(depth=PASS_WEFT))
+    assert not [s for s in result.stops if s.kind == STOP_PLACE]
+
+
+def test_the_stop_says_why_it_is_worth_answering(tmp_path):
+    # The walk's own rule: every stop can say why it is being asked. Here the
+    # payoff is not obvious -- tagging chapters is work, and the reason to do
+    # it is what happens to the AI brief afterwards.
+    project = _project(tmp_path, {"01.md": "Serena crossed the yard."})
+    result = scan(project, [_thread("e-serena", "Serena")], REGISTRY,
+                  ScanRequest(depth=PASS_WEFT))
+    stop = next(s for s in result.stops if s.kind == STOP_PLACE)
+    assert "chapter you are writing" in stop.why
+
+
+def test_the_place_stop_belongs_to_exactly_one_pass():
+    # A kind in two passes is asked twice; a kind in none silently stops being
+    # findable. Weave the Chapters is the pass about where things are.
+    from app.codex.scan import PASS_KINDS
+    owners = [p for p, kinds in PASS_KINDS.items() if STOP_PLACE in kinds]
+    assert owners == [PASS_WEFT]

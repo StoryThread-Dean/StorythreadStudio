@@ -235,6 +235,14 @@ export const STOP_KINDS: Record<string, LexEntry> = {
     "Your text says Garrick taught her everything, but no Tie says so. This proposes the connection with the sentence it came from, and lets "
     + "you correct the relationship, flip its direction, or say when it became true before you accept it.",
   ),
+  "place": entry(
+    "place", "Where it appears", MapPin, "blue",
+    "An entry your prose puts in chapters the app has not been told about.",
+    "It offers to record where each entry appears, so the app can send only what belongs in the chapter you are writing.",
+    "A long book has more characters, places and factions than fit in one AI request, and unticking them by hand every time is the tedious part. "
+    + "Recording where each one appears lets the app do it for you. It offers what your prose shows and writes nothing until you accept -- and a "
+    + "name it is unsure of is never placed, because putting the wrong John in a chapter would quietly withhold the right one from everywhere else.",
+  ),
   "unplaced": entry(
     "unplaced", "Unplaced", CalendarOff, "amber",
     "A fact with no point in the story.",

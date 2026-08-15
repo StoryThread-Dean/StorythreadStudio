@@ -64,6 +64,7 @@ import { DomainBoard } from "./DomainBoard";
 import { StaleMark, StaleNotice } from "./StaleNotice";
 import { UnwovenGuide } from "./UnwovenGuide";
 import { WordFix } from "./WordFix";
+import { PlaceStop } from "./PlaceStop";
 import { WhatsThis } from "../../components/learn/WhatsThis";
 import { BindDot } from "./BindDot";
 import { QuickEntry } from "./QuickEntry";
@@ -73,6 +74,7 @@ import { TieEditor } from "./TieEditor";
 import {
   fetchAnchors, fetchGraph, patchFact,
   type ChapterAnchor, type GraphNode,
+  placeThread,
 } from "./api";
 import { SWEEPABLE, Sweep } from "./Sweep";
 import {
@@ -1304,6 +1306,29 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           Sideburn" is part of a surname glued to part of a nickname, and
           "there was no way for me to edit the text it flagged ... I couldn't
           CONNECT that name to an existing profile for Newton." */}
+      {/* WHERE THIS APPEARS. The offer half of declared presence: the scan
+          read the manuscript for free and can see which chapters name this
+          entry, so it asks rather than making the writer find out. Answering
+          is what lets the AI brief carry this chapter's part of the world
+          instead of all of it. */}
+      {stop.kind === "place" && (
+        <PlaceStop
+          name={String(stop.detail?.name ?? "this entry")}
+          found={(stop.detail?.found as string[]) ?? []}
+          already={(stop.detail?.already as string[]) ?? []}
+          chapters={chapters}
+          busy={busy}
+          onSave={appearsIn => void answerAndAdvance(
+            appearsIn.length
+              ? `Recorded in ${appearsIn.length} ${appearsIn.length === 1
+                  ? "chapter" : "chapters"}`
+              : "Cleared where it appears",
+            () => placeThread(projectPath, stop.entity_id, appearsIn))}
+          onSkip={() => void answerAndAdvance("Not yet", () =>
+            runId ? defer(projectPath, runId, stop) : Promise.resolve())}
+        />
+      )}
+
       {stop.kind === "unspun" && (
         <button
           onClick={() => void (async () => {

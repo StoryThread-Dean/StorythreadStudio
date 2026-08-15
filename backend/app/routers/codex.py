@@ -1919,6 +1919,62 @@ class AliasBody(BaseModel):
     as_label: bool = False
 
 
+class PlaceBody(BaseModel):
+    project_path: str
+    entity_id: str
+    # The anchors this entry appears at. The WHOLE list, not a delta: the
+    # writer's placement is a statement about their book, and a screen that
+    # sent additions only could never express "actually, remove chapter four".
+    appears_in: list[str] = []
+
+
+@router.post("/place")
+async def post_place(body: PlaceBody):
+    """
+    Record where an entry appears. The writer's own statement, not a guess.
+
+    THIS IS THE ONLY WAY `appears_in` IS EVER WRITTEN. The free scan offers what
+    the prose shows and this records what the writer accepted -- nothing derives
+    it, nothing caches it, and an offer they ignored leaves no trace. That is
+    the whole reason the feature can exist without repeating R8.5, where a
+    presence index derived from the manuscript went silently wrong every time a
+    chapter was edited while the freshness gate reported it current.
+
+    Anchors are VALIDATED. A placement pointing at a chapter that no longer
+    exists would quietly withhold the entry from every brief about anywhere,
+    which is a failure with no symptom: the model simply never hears about a
+    character, and nothing on screen says why.
+    """
+    project_path = validate_project_path(body.project_path)
+    registry = _registry(project_path)
+    row = await _locate(project_path, body.entity_id)
+    thread = _read_thread(project_path, registry, row)
+
+    index = AnchorIndex.for_project(project_path)
+    cleaned: list[str] = []
+    for anchor in body.appears_in:
+        anchor = str(anchor or "").strip()
+        if not anchor:
+            continue
+        if index.ordinal(anchor) is None:
+            raise CodexError(
+                "anchor_not_found",
+                "That points at a chapter this book does not have, so it has "
+                "not been recorded.",
+                anchor,
+            )
+        if anchor not in cleaned:
+            cleaned.append(anchor)
+
+    # Reading order, always. A list the writer sees should read like their book
+    # rather than like the order they happened to tick things.
+    cleaned.sort(key=lambda a: (index.ordinal(a) or 0, a))
+    thread["appears_in"] = cleaned
+    thread["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _write_thread(project_path, registry, thread)
+    await codex_store.reindex(project_path)
+    return {"entity_id": body.entity_id, "appears_in": cleaned}
+
 @router.post("/alias")
 async def post_alias(body: AliasBody):
     """

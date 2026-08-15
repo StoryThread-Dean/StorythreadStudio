@@ -267,6 +267,23 @@ def parse_thread(raw: str, registry: dict | None = None,
         # ordinary case and writes nothing to the file.
         "display_name": str(front.get("display_name") or ""),
         "tags": [str(t) for t in (front.get("tags") or []) if t],
+        # WHERE IN THE BOOK THIS APPEARS -- anchors, in reading order.
+        #
+        # AUTHORED, NEVER DERIVED, and that distinction is the whole design.
+        # R8.5 deleted `codex_mention` because presence worked out from the
+        # MANUSCRIPT and cached against a fingerprint of `codex/` goes silently
+        # wrong the moment a chapter is edited, while the freshness gate reports
+        # everything current. Any mechanism that computes this and stores it
+        # brings that straight back.
+        #
+        # So this is a statement the writer makes, living in their Markdown,
+        # travelling with the file, with nothing to rebuild and nothing to go
+        # stale. The free scan may OFFER what it sees; only an accepted offer
+        # is written, and an unaccepted one is not data.
+        #
+        # A list of ANCHORS rather than chapter ids, so scene-level presence
+        # extends this later (Phase 7) instead of replacing it.
+        "appears_in": [str(a) for a in (front.get("appears_in") or []) if a],
         # WHICH UNWOVEN QUESTIONS THIS ENTRY ANSWERS, by question id.
         #
         # The Unwoven pass decides a question is answered by looking at where
@@ -584,6 +601,11 @@ def render_thread(
     if thread.get("tags"):
         lines.append("tags:")
         lines += [f"  - {_scalar(t)}" for t in thread["tags"]]
+    # Written only when the writer has actually said where this appears, so an
+    # entry nobody has placed gains nothing in its file.
+    if thread.get("appears_in"):
+        lines.append("appears_in:")
+        lines += [f"  - {a}" for a in thread["appears_in"]]
     # Written only when the entry actually claims a question, so an ordinary
     # entry's file gains nothing. See the parse side for what it is for.
     if thread.get("answers"):

@@ -80,6 +80,21 @@ superseded on each point.
    seeded before the change is healed on load unless the writer had renamed the
    label themselves, in which case theirs wins.)*
 
+**AMENDED 2026-08-15: DECLARED PRESENCE.** An entry may carry `appears_in`, a
+list of anchors saying where in the book it appears. Authored by the writer,
+never derived: the free scan OFFERS what the prose shows and only an accepted
+offer is written, because presence computed from the manuscript and cached is
+exactly what R8.5 deleted `codex_mention` for.
+
+Context assembly FILTERS on it. An entry placed elsewhere is left out and the
+count is reported, per the rule that anything omitted is counted out loud. Two
+things outrank a placement and are what make filtering safe rather than merely
+tight: a PINNED Thread, and a Thread NAMED IN THE TEXT being written. An entry
+with no placement is never filtered -- silence means "not said", not "nowhere".
+
+Chapters now; the field is a list of anchors so scene-level presence extends it
+when Phase 7 lands rather than replacing it.
+
 Also accepted into the spec as intended behaviour, having been proven necessary
 by live testing rather than designed here:
 

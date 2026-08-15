@@ -501,3 +501,17 @@ export function newThread(body: {
     body: JSON.stringify(body),
   });
 }
+
+/** Record where an entry appears. The whole list, not a delta -- "actually,
+ *  nowhere" has to be expressible or a wrong tag could never be undone.
+ *  The ONLY thing that writes `appears_in`; the scan offers, this records. */
+export function placeThread(projectPath: string, entityId: string,
+                            appearsIn: string[]):
+    Promise<{ entity_id: string; appears_in: string[] }> {
+  return request("/place", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, entity_id: entityId,
+                           appears_in: appearsIn }),
+  });
+}

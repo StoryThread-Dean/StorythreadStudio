@@ -254,3 +254,138 @@ def test_a_believed_fact_is_labelled_as_believed():
 
 def test_the_estimate_grows_with_the_text():
     assert estimate_tokens("word " * 100) > estimate_tokens("word " * 10)
+
+
+# -- WHO IS ACTUALLY IN THIS CHAPTER ----------------------------------------
+#
+# Declared presence. The writer's reason, which decides the design: "An epic
+# adventure story may have 30-60 character profiles with dozens of creatures,
+# 20-40 locations. Having to check and uncheck what the writer wants to attach
+# as context can be tedious."
+#
+# AUTHORED, NEVER DERIVED. R8.5 deleted `codex_mention` because presence worked
+# out from the manuscript and cached against a fingerprint of codex/ goes
+# silently wrong the moment a chapter is edited, while the freshness gate says
+# everything is current. This is a statement the writer makes, in their own
+# Markdown, with nothing to rebuild.
+
+def _placed(entity_id, name, appears_in, **kw):
+    thread = _thread(entity_id, name, **kw)
+    thread["appears_in"] = list(appears_in)
+    return thread
+
+
+def test_an_entry_placed_elsewhere_is_left_out():
+    threads = [_placed("e-lou", "Lou", ["c-2"])]
+    index = INDEX
+    brief = assemble(threads, index, at="c-1", budget=_budget())
+    assert brief.pieces == []
+
+
+def test_an_entry_placed_here_goes_in():
+    threads = [_placed("e-lou", "Lou", ["c-1", "c-2"])]
+    brief = assemble(threads, INDEX, at="c-1", budget=_budget())
+    assert [p.entity_id for p in brief.pieces] == ["e-lou"]
+
+
+def test_WHAT_WAS_LEFT_OUT_IS_COUNTED():
+    """
+    The rule this app applies to every omission it makes.
+
+    A brief that is quietly shorter is indistinguishable from a smaller world.
+    The writer has to be able to see that four entries were held back, or the
+    feature becomes a silent editor of their context.
+    """
+    threads = [_placed("e-lou", "Lou", ["c-2"]),
+               _placed("e-rosie", "Rosie", ["c-2"])]
+    brief = assemble(threads, INDEX, at="c-1", budget=_budget())
+    assert brief.withheld_not_present == 2
+
+
+def test_AN_ENTRY_NOBODY_HAS_PLACED_IS_NOT_FILTERED():
+    """
+    Silence means "I have not said", not "nowhere".
+
+    Otherwise turning this on would empty the brief for every project that has
+    never used it -- the feature would look like it had broken context
+    assembly, on a book where the writer had done nothing wrong.
+    """
+    threads = [_thread("e-anyone", "Anyone")]
+    brief = assemble(threads, INDEX, at="c-1", budget=_budget())
+    assert [p.entity_id for p in brief.pieces] == ["e-anyone"]
+    assert brief.withheld_not_present == 0
+
+
+def test_A_PINNED_ENTRY_SURVIVES_ITS_OWN_PLACEMENT():
+    # "This one, now" is more specific than a list the writer wrote last week,
+    # and it is one of the two things that make filtering safe rather than
+    # merely tight.
+    threads = [_placed("e-lou", "Lou", ["c-2"])]
+    brief = assemble(threads, INDEX, at="c-1", budget=_budget(),
+                     pinned={"e-lou"})
+    assert [p.entity_id for p in brief.pieces] == ["e-lou"]
+
+
+def test_A_NAME_IN_THE_PROSE_BEATS_ANY_PLACEMENT():
+    """
+    The other override, and the more important one.
+
+    If the paragraph being written says Lou, Lou goes -- whatever a placement
+    says. A tag set weeks ago must never hide the character the writer is
+    literally writing about, because that failure would be invisible: the model
+    would answer about a scene without knowing who is in it.
+    """
+    threads = [_placed("e-lou", "Lou", ["c-2"])]
+    brief = assemble(threads, INDEX, at="c-1", budget=_budget(),
+                     mentioned={"e-lou"})
+    assert [p.entity_id for p in brief.pieces] == ["e-lou"]
+
+
+def test_a_placement_at_a_scene_still_answers_for_its_chapter():
+    # Placements are ANCHORS so scenes can extend this later. A writer who
+    # places something at a scene must not be excluded from every request made
+    # about the chapter around it.
+    threads = [_placed("e-lou", "Lou", ["c-1/s-3"])]
+    brief = assemble(threads, INDEX, at="c-1", budget=_budget())
+    assert [p.entity_id for p in brief.pieces] == ["e-lou"]
+
+
+def test_nothing_is_filtered_when_there_is_no_point_in_the_story():
+    # A request with no `at` is not about anywhere, so "is it here?" has no
+    # answer and filtering on it would be inventing one.
+    threads = [_placed("e-lou", "Lou", ["c-2"])]
+    brief = assemble(threads, INDEX, at=None, budget=_budget())
+    assert [p.entity_id for p in brief.pieces] == ["e-lou"]
+
+
+def test_presence_is_authored_and_survives_a_round_trip(tmp_path):
+    # The whole reason it is a field in the writer's Markdown rather than a
+    # table: there is nothing to rebuild and nothing that can go stale.
+    from app.codex.threads import parse_thread, render_thread
+    from app.codex.types_registry import default_registry
+
+    registry = default_registry()
+    source = ("---" + chr(10) + "type: character" + chr(10)
+              + "entity_id: e-serena" + chr(10) + "name: Serena" + chr(10)
+              + "appears_in:" + chr(10) + "  - c-1" + chr(10)
+              + "  - c-2" + chr(10) + "---" + chr(10) + chr(10)
+              + "# Overview" + chr(10) + "The protagonist." + chr(10))
+    thread = parse_thread(source, registry)
+    assert thread["appears_in"] == ["c-1", "c-2"]
+    again = parse_thread(render_thread(thread, registry), registry)
+    assert again["appears_in"] == ["c-1", "c-2"]
+
+
+def test_an_unplaced_entry_writes_nothing_to_its_file():
+    # An entry nobody has placed must gain nothing in its file, or every
+    # existing project would show a diff on its next save for a feature the
+    # writer has not used.
+    from app.codex.threads import parse_thread, render_thread
+    from app.codex.types_registry import default_registry
+
+    registry = default_registry()
+    source = ("---" + chr(10) + "type: character" + chr(10)
+              + "entity_id: e-x" + chr(10) + "name: X" + chr(10)
+              + "---" + chr(10) + chr(10) + "# Overview" + chr(10) + "A." + chr(10))
+    rendered = render_thread(parse_thread(source, registry), registry)
+    assert "appears_in" not in rendered

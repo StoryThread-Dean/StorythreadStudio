@@ -182,6 +182,10 @@ export interface Brief {
   refusal: string;
   withheld_spoilers: number;
   withheld_by_scope: number;
+  /** Entries left out because the writer said where they appear and this
+   *  is not one of those places. Counted so a shorter brief is never
+   *  mistaken for a smaller world. */
+  withheld_not_present?: number;
   budget: Record<string, number>;
   mentioned: string[];
 }
