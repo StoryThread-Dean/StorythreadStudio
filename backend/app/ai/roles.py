@@ -114,17 +114,14 @@ ROLE_INFO: dict[str, dict] = {
                   "amount of text at once, which is a different strength from "
                   "writing well. This is where a very large context window earns "
                   "its cost.",
-        "features": [],
-        "reserved": True,
-        # "It arrives with the Weave" was true when it was written and stops
-        # being true the day v2.0.0 is tagged: the Weave ships deterministic,
-        # and nothing in it reasons across a whole book. It arrives with the AI
-        # PASSES, which are deferred -- see docs/roadmap.md. Same class as the
-        # Snag lexicon's knowledge-violation claim: a promise the build does not
-        # keep, on a screen the writer reads before deciding where to spend.
-        "reserved_note": "Nothing uses this yet. It arrives with the Weave's AI "
-                         "passes, which read a whole manuscript at once and are "
-                         "not in this release.",
+        # NO LONGER RESERVED, as of v2.0.1. The note here said "it arrives with
+        # the Weave's AI passes" for two releases, which was an honest promise
+        # and an unkept one -- a writer could assign a model to this role and
+        # have it do nothing at all. The Profile Extractor is the pass it was
+        # waiting for: it reads an entire manuscript in one request, which is
+        # exactly the strength this role exists to buy.
+        "features": ["Profile Extractor"],
+        "reserved": False,
     },
     "brainstorm": {
         "label": "Brainstorming",

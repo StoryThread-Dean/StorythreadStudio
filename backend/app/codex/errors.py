@@ -51,6 +51,25 @@ CODES = {
     # frontend has to name the entry that already has it -- "invalid" would
     # leave the writer guessing which of their entries it collided with.
     "alias_taken",
+    # ── The Profile Extractor (v2.0.1) ──────────────────────────────────────
+    # A new run would replace proposals the writer has not looked at yet. Its
+    # own code, and a 409 rather than a 400, because the frontend has to offer
+    # a CHOICE here: the count travels in `detail` so the confirm can say how
+    # many things are about to be thrown away. Treating it as a generic invalid
+    # would make it an error message about a thing the writer is allowed to do.
+    "extraction_would_replace",
+    # Asked to work through an extraction that is not there -- usually a screen
+    # left open while another one discarded the run.
+    "extraction_missing",
+    # A selection with no readable chapters in it. Separate from "missing"
+    # because nothing is wrong: the writer ticked nothing, or ticked chapters
+    # that could not be read.
+    "extraction_empty",
+    # More text than this pass will send in one request.
+    "extraction_too_long",
+    # A proposal for an entry that does not exist yet. The writer creates it
+    # first; guessing would write a profile nobody asked for.
+    "extraction_no_target",
 }
 
 # Which HTTP status each code travels as. Kept in one table so two routes
@@ -73,6 +92,11 @@ _STATUS = {
     "index_dirty": 503,
     "migration_incomplete": 409,
     "alias_taken": 409,
+    "extraction_would_replace": 409,
+    "extraction_missing": 404,
+    "extraction_empty": 400,
+    "extraction_too_long": 400,
+    "extraction_no_target": 400,
     "run_not_found": 404,
     "report_not_found": 404,
     "entity_not_empty": 409,

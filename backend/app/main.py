@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers -- each router handles one area of the API.
 # As we build more features, we'll add more routers here.
-from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search, structure, names, audiobook, codex
+from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search, structure, names, audiobook, codex, extractor
 from app.utils.names_store import seed_names_db
 
 
@@ -107,6 +107,10 @@ app.include_router(names.router)
 app.include_router(audiobook.router)
 # The Weave. Writers see that name; the code says "codex" -- see CLAUDE.md.
 app.include_router(codex.router)
+# The Profile Extractor (v2.0.1): reads the manuscript and proposes what the
+# Weave's entries should SAY. Its own router because codex.py is already
+# 2,400 lines, and because this one calls a model where that one never does.
+app.include_router(extractor.router)
 
 
 # --- Seed the name-generator database ---

@@ -20,8 +20,6 @@ from pathlib import Path
 from app.ai.roles import ROLE_INFO, ROLES
 
 ROUTERS = Path(__file__).resolve().parents[1] / "app" / "routers"
-AI_PY = ROUTERS / "ai.py"
-AUDIOBOOK_PY = ROUTERS / "audiobook.py"
 
 # Matches the first argument of each call: _resolve_model_and_key(<this>, ...
 # The alternation matters: the argument may be a quoted role, a bare None
@@ -51,7 +49,23 @@ def _call_site_roles(path: Path) -> list[str]:
 
 
 def _all_call_sites() -> list[str]:
-    return _call_site_roles(AI_PY) + _call_site_roles(AUDIOBOOK_PY)
+    """
+    Every role argument in EVERY router, not a named few.
+
+    This listed `ai.py` and `audiobook.py` by hand until v2.0.1, when the
+    Profile Extractor arrived in a router of its own and was invisible to it.
+    The failure that would have caused is the quiet kind: a new AI feature
+    could take the Default Model forever while Settings showed the writer a
+    role picker that never touched it, and this test -- the thing whose whole
+    job is catching that -- would have stayed green because it was not looking.
+
+    A hand-maintained list of files to check is a list somebody has to remember
+    to update at the exact moment they are thinking about something else.
+    """
+    found: list[str] = []
+    for path in sorted(ROUTERS.glob("*.py")):
+        found.extend(_call_site_roles(path))
+    return found
 
 
 def test_every_call_site_names_a_real_role():

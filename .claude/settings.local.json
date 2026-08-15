@@ -15,7 +15,12 @@
       "Bash(npm run:*)",
       "Bash(uv run:*)",
       "WebFetch(domain:github.com)",
-      "mcp__playwright__browser_navigate"
+      "mcp__playwright__browser_navigate",
+      "Bash(gh release *)",
+      "Bash(awk '/^### Profile Extractor -- the v2.0.1 feature/,/^### [^P]/' docs/roadmap.md)",
+      "Bash(awk '/^7\\\\. \\\\*\\\\*Exclusions are TICKED/,0' docs/roadmap.md)",
+      "Bash(awk '/^9\\\\. \\\\*\\\\*A new entry arrives BASE-LEVEL/,0' docs/roadmap.md)",
+      "Bash(python -)"
     ]
   },
   "disabledMcpjsonServers": [
