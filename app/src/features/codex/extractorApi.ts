@@ -196,3 +196,36 @@ export function setEntryState(body: {
 }): Promise<{ ok: boolean; entry: ExtractionEntry; progress: ExtractionProgress }> {
   return post("/entry", body);
 }
+
+// ── Choosing the model, from this screen ─────────────────────────────────────
+//
+// The Settings roles picker groups models as budget / pricier and never shows a
+// context window. That is fine for a request about one chapter and useless for
+// one carrying an entire manuscript, which is the writer's own report: the list
+// does "not list the limits at all", so a bad choice is discovered by paying
+// for it. This is the same catalog ordered by the number that decides the
+// outcome here.
+
+export interface ExtractorModel {
+  id: string;
+  name: string;
+  context_length: number;
+  cost_input_per_million: number;
+  cost_output_per_million: number;
+  is_free: boolean;
+  /** Reasoning models spend their reply budget thinking first, and can return
+   *  nothing at all. Surfaced because that is the exact trap a live run hit. */
+  supports_reasoning: boolean;
+}
+
+export function fetchModels(): Promise<{
+  models: ExtractorModel[]; provider?: string; error: string;
+}> {
+  return request("/models");
+}
+
+/** Assigns the app-wide Long-context role -- the same setting the Settings
+ *  screen writes, deliberately, rather than a second copy of the choice. */
+export function chooseModel(modelId: string): Promise<{ ok: boolean; model_id: string }> {
+  return post("/model", { model_id: modelId });
+}

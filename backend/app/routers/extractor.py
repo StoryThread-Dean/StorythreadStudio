@@ -57,6 +57,18 @@ MAX_MANUSCRIPT_CHARS = 900_000
 # reading an entire book, and a large model legitimately takes minutes over it.
 EXTRACT_TIMEOUT = 600.0
 
+# HOW MUCH THE MODEL MAY WRITE BACK. Every other pass in this app leaves this
+# to the model's own default, which is right for a reply about one chapter and
+# wrong here: this asks for proposals covering a whole novel, and the answer is
+# the largest any pass produces.
+#
+# Left unset, the second live run returned an EMPTY message. Gemini 2.5
+# Flash-Lite is a reasoning model, and a reasoning model spends output budget
+# on thinking before it writes a word -- so a default budget can be exhausted
+# mid-thought and return nothing at all, which arrives looking exactly like a
+# model that had nothing to say.
+EXTRACT_MAX_OUTPUT = 32_000
+
 
 # ── Reading the project ─────────────────────────────────────────────────────
 
@@ -252,6 +264,96 @@ async def get_plan(project_path: str = Query(...)):
     }
 
 
+@router.get("/models")
+async def get_models_for_this_screen():
+    """
+    The catalog, with the numbers this screen actually needs, biggest first.
+
+    THIS EXISTS BECAUSE THE SETTINGS PICKER CANNOT ANSWER THE QUESTION ASKED
+    HERE. It groups models as budget / pricier and never shows a context
+    window, which is fine when the request is one chapter and useless when it
+    is an entire manuscript: the writer's own words were that the roles list
+    does "not list the limits at all", leaving them to discover a bad choice by
+    paying for it.
+
+    So this is the same catalog, ordered by the number that decides the
+    outcome, with the cost beside it. Nothing is written; picking a model here
+    saves the app-wide Long-context role like the Settings screen does, because
+    two places storing the same choice differently is how they drift apart.
+    """
+    from app.ai.providers import active_provider
+    from app.ai.roles import role_api_key
+    from app.settings_store import load_settings
+
+    settings = load_settings()
+    provider = active_provider(settings)
+    api_key = role_api_key(settings, provider)
+    if provider.requires_api_key and not api_key:
+        return {"models": [], "error": f"No {provider.label} API key yet."}
+
+    try:
+        from app.ai.openrouter import list_models
+        catalog = await list_models(api_key, provider)
+    except Exception as exc:                      # noqa: BLE001 - best effort
+        return {"models": [], "error": f"Could not read the model list: {exc}"}
+
+    models = [
+        {
+            "id": entry.get("id", ""),
+            "name": entry.get("name") or entry.get("id", ""),
+            "context_length": int(entry.get("context_length") or 0),
+            "cost_input_per_million": entry.get("cost_input_per_million") or 0,
+            "cost_output_per_million": entry.get("cost_output_per_million") or 0,
+            "is_free": bool(entry.get("is_free")),
+            # Surfaced because it is the exact trap the second live run fell
+            # into: a reasoning model spends its reply budget thinking and can
+            # return nothing at all.
+            "supports_reasoning": bool(entry.get("supports_reasoning")),
+        }
+        for entry in catalog
+        if entry.get("id")
+    ]
+    # Biggest window first, because on this screen that is the whole question.
+    models.sort(key=lambda m: (-m["context_length"], m["id"]))
+    return {"models": models, "provider": provider.key, "error": ""}
+
+
+class ChooseModelBody(BaseModel):
+    """Assign the Long-context role from this screen."""
+    model_id: str
+
+
+@router.post("/model")
+async def choose_model(body: ChooseModelBody):
+    """
+    Point Long-context analysis at a model, from here.
+
+    Writes the SAME app-wide setting the Settings screen writes. A per-screen
+    copy would be a second place storing one choice, and this app has already
+    paid for that mistake once -- the per-book role assignment that was
+    documented, never worked, and had to be deleted in R8.6.
+    """
+    from app.ai.providers import active_provider
+    from app.settings_store import load_settings, save_settings
+
+    settings = load_settings()
+    roles = dict(settings.get("model_roles") or {})
+    model_id = (body.model_id or "").strip()
+    if model_id:
+        roles["long_context"] = {
+            "provider": active_provider(settings).key,
+            "model_id": model_id,
+        }
+    else:
+        # Empty means "unassign", which falls back to the Default Model -- the
+        # documented behaviour of an unassigned role, not a special case.
+        roles.pop("long_context", None)
+    settings["model_roles"] = roles
+    save_settings(settings)
+    _CONTEXT_CACHE.clear()
+    return {"ok": True, "model_id": model_id}
+
+
 @router.get("/current")
 async def get_current(project_path: str = Query(...)):
     """The saved extraction, or nothing. Read-only; costs nothing."""
@@ -267,6 +369,34 @@ async def delete_current(project_path: str = Query(...)):
 
 
 # ── Running the pass ────────────────────────────────────────────────────────
+
+def _empty_answer_reason(finish_reason: str, model_id: str,
+                         usage: dict) -> str:
+    """
+    Why an empty answer is empty, in a sentence the writer can act on.
+
+    The second live run of this feature came back with nothing at all and the
+    app said "the model did not return readable JSON" -- accurate, useless, and
+    indistinguishable from a dozen other causes. The provider tells us which
+    one it was; we simply were not asking.
+    """
+    spent = usage.get("completion_tokens") or 0
+    if finish_reason == "length":
+        return (f"{model_id} ran out of room to answer before it wrote "
+                f"anything usable (it used {spent:,} tokens of its reply "
+                f"budget). This happens with reasoning models, which spend "
+                f"that budget thinking first. Try fewer chapters, or a model "
+                f"that is not a reasoning model.")
+    if finish_reason == "content_filter":
+        return (f"{model_id} refused to answer, which usually means its "
+                f"content filter objected to something in the manuscript. A "
+                f"model without filters will read it.")
+    if finish_reason:
+        return (f"{model_id} returned an empty answer and gave "
+                f"'{finish_reason}' as the reason.")
+    return (f"{model_id} returned an empty answer and gave no reason. It may "
+            f"not support being asked for JSON. Try a different model.")
+
 
 class RunBody(BaseModel):
     project_path: str
@@ -393,6 +523,7 @@ async def post_run(body: RunBody):
                 # no evidence carried an invented detail is indistinguishable
                 # from an observed one by the time the writer sees it.
                 temperature=TEMPERATURE_DEFAULTS["critique"],
+                max_tokens=EXTRACT_MAX_OUTPUT,
             ),
             timeout=EXTRACT_TIMEOUT,
         )
@@ -410,8 +541,22 @@ async def post_run(body: RunBody):
         raise HTTPException(status_code=503,
                             detail=f"Could not reach {provider.label}: {exc}")
 
-    raw = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+    choice = (result.get("choices") or [{}])[0]
+    raw = (choice.get("message") or {}).get("content", "")
+    # WHY THE ANSWER ENDED, which is the field that turns a mystery into a
+    # sentence. "length" means it ran out of room; "content_filter" means the
+    # provider refused; empty content with either is not a model that found
+    # nothing, and the writer should never be left to guess between them.
+    finish_reason = str(choice.get("finish_reason") or "")
+    usage = result.get("usage") or {}
+
     proposals, dropped = extract.parse_response(raw, registry.get("types") or [])
+
+    # An empty answer is its own diagnosis and deserves its own words, rather
+    # than the generic "did not return readable JSON" -- which is true, and
+    # tells the writer nothing they can act on.
+    if not proposals and not (raw or "").strip():
+        dropped = [_empty_answer_reason(finish_reason, model_id, usage)]
 
     # WHEN NOTHING SURVIVES, KEEP THE EVIDENCE. The first live failure threw the
     # model's answer away and left the writer with "nothing was proposed", which
@@ -436,6 +581,11 @@ async def post_run(body: RunBody):
     # keeps finding.
     run["dropped"] = dropped
     run["raw_excerpt"] = raw_excerpt
+    run["finish_reason"] = finish_reason
+    run["usage"] = {
+        "prompt_tokens": usage.get("prompt_tokens") or 0,
+        "completion_tokens": usage.get("completion_tokens") or 0,
+    }
     run["estimated_tokens"] = estimated
     run["context_tokens"] = context_tokens
     store.save(project_path, run)

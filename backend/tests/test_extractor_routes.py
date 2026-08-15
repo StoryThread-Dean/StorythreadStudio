@@ -553,3 +553,118 @@ def test_A_RUN_THAT_CANNOT_FIT_IS_REFUSED_BEFORE_ANYTHING_IS_SENT(project, monke
     assert "nothing has been spent" in message.lower()
     # And it says what to do, not only what went wrong.
     assert "fewer chapters" in message.lower() or "Settings" in message
+
+
+# ── WHEN THE MODEL RETURNS NOTHING AT ALL ───────────────────────────────────
+#
+# The second live run. Gemini 2.5 Flash-Lite, 1,048,576-token window, a 68,883
+# token request that fitted comfortably -- and an EMPTY message came back. The
+# app said "the model did not return readable JSON", which was true, useless,
+# and indistinguishable from a dozen other causes.
+#
+# The provider had told us which one it was. We were not asking: `finish_reason`
+# was never read. And no `max_tokens` was set, so a reasoning model could spend
+# its entire reply budget thinking and return nothing, which is the likeliest
+# explanation of that run.
+
+def test_an_empty_answer_that_RAN_OUT_OF_ROOM_says_so(project, monkeypatch):
+    import app.routers.extractor as extractor
+
+    async def empty_from_length(**_kwargs):
+        return {"choices": [{"message": {"content": ""},
+                             "finish_reason": "length"}],
+                "usage": {"completion_tokens": 8000}}
+
+    monkeypatch.setattr("app.ai.openrouter.run_completion", empty_from_length)
+    monkeypatch.setattr(extractor, "_context_window",
+                        lambda *_a, **_k: _fake_window())
+
+    response = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    })
+    assert response.status_code == 200
+    dropped = response.json()["dropped"]
+    assert len(dropped) == 1
+    # It names the cause, the budget spent, and what to do -- not the symptom.
+    assert "ran out of room" in dropped[0]
+    assert "8,000" in dropped[0]
+    assert "reasoning models" in dropped[0]
+
+
+def test_an_empty_answer_from_a_CONTENT_FILTER_says_that_instead(project, monkeypatch):
+    import app.routers.extractor as extractor
+
+    async def refused(**_kwargs):
+        return {"choices": [{"message": {"content": ""},
+                             "finish_reason": "content_filter"}], "usage": {}}
+
+    monkeypatch.setattr("app.ai.openrouter.run_completion", refused)
+    monkeypatch.setattr(extractor, "_context_window",
+                        lambda *_a, **_k: _fake_window())
+
+    response = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    })
+    dropped = response.json()["dropped"]
+    assert "refused" in dropped[0]
+    assert "content filter" in dropped[0]
+
+
+def test_the_run_records_the_finish_reason_for_next_time(project, monkeypatch):
+    # Kept on the saved run so a failure can be diagnosed from the file after
+    # the screen has been closed -- which is exactly how the first two failures
+    # were diagnosed.
+    import app.routers.extractor as extractor
+
+    async def empty(**_kwargs):
+        return {"choices": [{"message": {"content": ""},
+                             "finish_reason": "length"}],
+                "usage": {"completion_tokens": 42, "prompt_tokens": 100}}
+
+    monkeypatch.setattr("app.ai.openrouter.run_completion", empty)
+    monkeypatch.setattr(extractor, "_context_window",
+                        lambda *_a, **_k: _fake_window())
+
+    client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    })
+    saved = store.load(project)
+    assert saved["finish_reason"] == "length"
+    assert saved["usage"]["completion_tokens"] == 42
+
+
+def test_the_pass_asks_for_enough_room_to_answer(project, monkeypatch):
+    """
+    Every other pass leaves max_tokens to the model's default, which is right
+    for a reply about one chapter and wrong for one covering a novel.
+
+    Pinned because the symptom of getting it wrong is an EMPTY answer rather
+    than a truncated one, and an empty answer looks like a model with nothing
+    to say.
+    """
+    import app.routers.extractor as extractor
+
+    seen = {}
+
+    async def capture(**kwargs):
+        seen.update(kwargs)
+        return {"choices": [{"message": {"content": '{"entries": []}'},
+                             "finish_reason": "stop"}], "usage": {}}
+
+    monkeypatch.setattr("app.ai.openrouter.run_completion", capture)
+    monkeypatch.setattr(extractor, "_context_window",
+                        lambda *_a, **_k: _fake_window())
+
+    client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    })
+    assert seen.get("max_tokens") == extractor.EXTRACT_MAX_OUTPUT
+    assert seen["max_tokens"] >= 16000
+
+
+def _fake_window():
+    """A window big enough that the fit check passes and the test is about
+    what it says it is about."""
+    async def _window(*_args, **_kwargs):
+        return 1_000_000
+    return _window()

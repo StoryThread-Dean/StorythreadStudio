@@ -24,6 +24,7 @@ import { AlertTriangle, BookOpen, Loader, Sparkles } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
 import { ExtractorGuide } from "./ExtractorGuide";
+import { ExtractorModelPicker } from "./ExtractorModelPicker";
 import {
   fetchPlan, runExtraction,
   type ExtractionRun, type ExtractorPlan,
@@ -65,6 +66,9 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
   // writer is not on is documentation. The order-of-operations page is the
   // one that saves them money, so it has to be reachable before they spend.
   const [guiding, setGuiding] = useState(false);
+  // The model the picker last set, so the numbers below update at once
+  // rather than after a round trip the writer has no reason to expect.
+  const [chosenModel, setChosenModel] = useState<string>("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,6 +133,23 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
     ? (plan?.chapters.length ?? 0) : chapters.size;
   const includedEntries = included.size;
 
+  // LIVE, from the ticked chapters, because the whole point of the dashboard
+  // is that unticking one changes the number in front of you. Computed here
+  // rather than fetched: a round trip per tick would lag behind the clicking,
+  // and the arithmetic is a sum of character counts the plan already sent.
+  const selectedChars = (plan?.chapters ?? [])
+    .filter(c => chapters.size === 0 || chapters.has(c.chapter_id))
+    .reduce((total, c) => total + c.chars, 0);
+  // The same rough 4-chars-per-token the backend uses. It does not need to be
+  // exact -- it needs to tell a 69k run from a 20k one, and to move when the
+  // writer ticks something.
+  const estimatedTokens = Math.round(selectedChars / 4);
+  const modelId = chosenModel || plan?.model_id || "";
+  // A model chosen here has a window the plan did not know about, so its own
+  // fit answer is stale the moment the picker is used.
+  const contextTokens = chosenModel ? 0 : (plan?.context_tokens ?? 0);
+  const fits = contextTokens === 0 || estimatedTokens < contextTokens * 0.8;
+
   return (
     <div className="space-y-4" data-testid="extractor-setup">
       {guiding && <ExtractorGuide onClose={() => setGuiding(false)} />}
@@ -180,6 +201,32 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
           you will rewrite -- that is what it is for, and it is why nothing
           reaches a profile until you press a button on that exact piece.
         </p>
+      </div>
+
+      {/* THE MODEL, ON THIS SCREEN. Requested after the second live run:
+          the Settings list sorts by price and never shows a limit, which is
+          the wrong sort entirely when the request is a whole manuscript. */}
+      <ExtractorModelPicker
+        current={modelId}
+        needed={estimatedTokens}
+        onChosen={id => { setChosenModel(id); void load(); }}
+      />
+
+      {/* THE RUNNING TOTAL. It moves when a chapter is ticked, which is the
+          point: "68,500 approximate, unchecking a chapter results in 59,900
+          approximate". A number that only appears after the request is a
+          receipt, not a decision. */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded border border-border bg-border sm:grid-cols-4"
+           data-testid="extractor-dashboard">
+        <Stat label="Chapters" value={`${selectedChapters} of ${plan?.chapters.length ?? 0}`} />
+        <Stat label="Words" value={Math.round(selectedChars / 5.5).toLocaleString()} />
+        <Stat label="Tokens, roughly" value={`~${estimatedTokens.toLocaleString()}`}
+              testId="extractor-token-estimate" />
+        <Stat
+          label="Model holds"
+          value={contextTokens ? contextTokens.toLocaleString() : "unknown"}
+          tone={contextTokens && !fits ? "bad" : "plain"}
+        />
       </div>
 
       {/* WHAT TO READ */}
@@ -285,11 +332,10 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
             the writer did not think they were using: Long-context analysis was
             unassigned, so it fell through to the Default Model. Saying which
             role it comes from was not enough -- it has to say which MODEL. */}
-        {plan?.model_id && (
+        {modelId && (
           <>
             {" "}It will use{" "}
-            <span className="text-text-primary">{plan.model_id}</span>, from
-            your Long-context analysis role in Settings.
+            <span className="text-text-primary">{modelId}</span>.
           </>
         )}
       </div>
@@ -297,16 +343,16 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       {/* WILL IT FIT. The first live run sent about 69,000 tokens to a model
           that holds 64,000, got an unreadable answer back, and spent the
           request finding that out. */}
-      {plan && plan.model_id && !plan.fits && (
+      {plan && modelId && !fits && contextTokens > 0 && (
         <div className="rounded border border-rose-800 bg-rose-950/30 px-3 py-2"
              data-testid="extractor-too-big">
           <p className="text-xs font-semibold text-rose-100">
-            This will not fit in {plan.model_id}.
+            This will not fit in {modelId}.
           </p>
           <p className="mt-1 text-[11px] text-rose-200/80">
             Your selection is roughly{" "}
-            {plan.estimated_tokens.toLocaleString()} tokens and that model holds{" "}
-            {plan.context_tokens.toLocaleString()}. Tick fewer chapters, or
+            {estimatedTokens.toLocaleString()} tokens and that model holds{" "}
+            {contextTokens.toLocaleString()}. Tick fewer chapters, or
             assign a model with a bigger context window to Long-context
             analysis in Settings. Nothing will be sent or charged until it fits.
           </p>
@@ -362,7 +408,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
             type="button"
             onClick={() => void start(false)}
             disabled={running || (plan?.chapters.length ?? 0) === 0
-                      || (!!plan?.model_id && !plan.fits)}
+                      || (!!modelId && contextTokens > 0 && !fits)}
             data-testid="extractor-run"
             className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
           >
@@ -384,6 +430,26 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
           A whole novel takes a few minutes. You can leave this screen open.
         </p>
       )}
+    </div>
+  );
+}
+
+
+/** One number in the dashboard. Small enough to live here rather than earn a
+ *  file: it exists so four figures line up and read as one instrument. */
+function Stat({ label, value, tone = "plain", testId }: {
+  label: string;
+  value: string;
+  tone?: "plain" | "bad";
+  testId?: string;
+}) {
+  return (
+    <div className="bg-bg-primary px-2.5 py-1.5" data-testid={testId}>
+      <p className="text-[10px] uppercase tracking-wide text-faint">{label}</p>
+      <p className={`text-xs tabular-nums ${
+        tone === "bad" ? "text-rose-300" : "text-text-primary"}`}>
+        {value}
+      </p>
     </div>
   );
 }

@@ -292,6 +292,7 @@ async def run_completion(
     temperature: float | None = None,
     provider: ProviderConfig = OPENROUTER,
     cache_prompts: bool = False,
+    max_tokens: int | None = None,
 ) -> dict:
     """
     Send a chat completion request to the provider and return the parsed result.
@@ -332,6 +333,20 @@ async def run_completion(
     # Omitting it lets OpenRouter use the model's default.
     if temperature is not None:
         payload["temperature"] = temperature
+
+    # HOW MUCH THE MODEL IS ALLOWED TO WRITE BACK, when a caller needs to say.
+    #
+    # Added for the Profile Extractor, which asks for proposals covering a whole
+    # novel and so wants an answer far larger than any other pass here. Left
+    # unset everywhere else, because a model's own default is right for a reply
+    # to one chapter.
+    #
+    # It matters more than it looks on a REASONING model. Those spend output
+    # budget on thinking before they write anything, and a budget that runs out
+    # mid-thought returns an EMPTY message with a finish reason of "length" --
+    # which arrives looking exactly like a model that had nothing to say.
+    if max_tokens is not None:
+        payload["max_tokens"] = int(max_tokens)
 
     # --- Observability: measure payload size + elapsed time ---
     # Logged no matter what happens (success, timeout, HTTP error) so we

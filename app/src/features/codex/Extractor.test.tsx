@@ -110,6 +110,22 @@ function mockApi(overrides: Record<string, unknown> = {}) {
         return respond(body);
       }
     }
+    if (url.includes("/api/extractor/models")) return respond({
+      models: [
+        { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4",
+          context_length: 200000, cost_input_per_million: 3,
+          cost_output_per_million: 15, is_free: false,
+          supports_reasoning: false },
+        { id: "google/gemini-2.5-flash-lite", name: "Gemini Flash Lite",
+          context_length: 1048576, cost_input_per_million: 0.1,
+          cost_output_per_million: 0.4, is_free: false,
+          supports_reasoning: true },
+        { id: "deepseek/deepseek-chat", name: "DeepSeek",
+          context_length: 64000, cost_input_per_million: 0.14,
+          cost_output_per_million: 0.28, is_free: false,
+          supports_reasoning: false },
+      ], provider: "openrouter", error: "" });
+    if (url.includes("/api/extractor/model")) return respond({ ok: true });
     if (url.includes("/api/extractor/plan")) return respond(PLAN);
     if (url.includes("/api/codex/entity")) return respond(ROSIE_THREAD);
     if (url.includes("/api/extractor/part")
@@ -142,14 +158,15 @@ describe("the setup screen", () => {
     await screen.findByTestId("extractor-setup");
   }
 
-  it("says what it will cost and which model does it, before the button", async () => {
-    // The money rule: a writer must be able to decide before spending, not
-    // discover afterwards. Naming the ROLE matters too -- otherwise "which
-    // model just read my whole novel?" has no answer on screen.
+  it("says what it will cost, and names the model", async () => {
+    // The money rule: a writer must be able to decide before spending rather
+    // than discover afterwards. The MODEL is named rather than the role,
+    // because "which model just read my whole novel?" is the question the
+    // first live run left unanswered.
     await open();
     const summary = body("extractor-summary");
     expect(summary).toMatch(/most expensive/i);
-    expect(summary).toMatch(/Long-context analysis/);
+    expect(summary).toMatch(/anthropic\/claude-sonnet-4/);
   });
 
   it("counts what it is about to read", async () => {
@@ -250,23 +267,35 @@ describe("the setup screen", () => {
     });
   });
 
-  it("NAMES THE MODEL THAT WILL ACTUALLY RUN IT", async () => {
+  it("NAMES THE MODEL, AND ITS LIMIT, ON THIS SCREEN", async () => {
     // The first live run was made by a model the writer did not think they
     // were using: Long-context analysis was unassigned, so it fell through to
     // the Default Model. Naming the ROLE was not enough.
     await open();
-    expect(body("extractor-summary")).toMatch(/anthropic\/claude-sonnet-4/);
+    expect(body("extractor-current-model")).toMatch(/anthropic\/claude-sonnet-4/);
+    // The window arrives with the catalog, a moment after the plan.
+    await waitFor(() =>
+      expect(body("extractor-current-model")).toMatch(/holds 200k/i));
   });
 
   it("REFUSES TO SPEND when the book will not fit in that model", async () => {
     // The first live run sent ~69,000 tokens to a model holding 64,000, got an
     // unreadable answer, and paid for the privilege of finding out.
+    // The real numbers from the writer's own book: seven chapters, 275,535
+    // characters, against deepseek-chat's 64k window. The estimate is computed
+    // from the ticked chapters rather than taken from the plan, so the fixture
+    // has to carry real sizes -- which is the more honest test anyway.
     await open({ "/api/extractor/plan": {
-      ...PLAN, model_id: "deepseek/deepseek-chat",
+      ...PLAN,
+      chapters: [
+        { chapter_id: "c-1", filename: "01.md", title: "One", chars: 137768 },
+        { chapter_id: "c-2", filename: "02.md", title: "Two", chars: 137767 },
+      ],
+      model_id: "deepseek/deepseek-chat",
       context_tokens: 64000, estimated_tokens: 68883, fits: false } });
     const warning = body("extractor-too-big");
     expect(warning).toMatch(/will not fit/i);
-    expect(warning).toMatch(/68,883/);
+    expect(warning).toMatch(/68,88[0-9]/);
     expect(warning).toMatch(/64,000/);
     expect(warning).toMatch(/Nothing will be sent or charged/i);
     expect(screen.getByTestId("extractor-run").hasAttribute("disabled"))
@@ -627,5 +656,159 @@ describe("an empty result", () => {
                                context_tokens: undefined });
     expect(panel.textContent).toMatch(/Nothing came back/i);
     expect(panel.textContent).not.toMatch(/already says what your entries say/i);
+  });
+});
+
+
+// ── THE DASHBOARD, AND WHY IT HAS TO BE LIVE ────────────────────────────────
+//
+// Asked for after the second live run: "a small dashboard of numbers that
+// adjust when a chapter is selected/deselected that give a token estimate ...
+// example: 68,500 approximate, unchecking a chapter results in 59,900
+// approximate."
+//
+// The word doing the work is ADJUST. A total that only appears after the
+// request is a receipt; one that moves while you tick is a decision. So the
+// arithmetic is done on the screen from character counts the plan already
+// sent, rather than fetched per tick -- a round trip per click would lag
+// behind the clicking and be worse than no number at all.
+
+describe("the token dashboard", () => {
+  const BIG = {
+    ...PLAN,
+    chapters: [
+      { chapter_id: "c-1", filename: "01.md", title: "One", chars: 200000 },
+      { chapter_id: "c-2", filename: "02.md", title: "Two", chars: 75535 },
+    ],
+    context_tokens: 1048576,
+    model_id: "google/gemini-2.5-flash-lite",
+  };
+
+  async function open(plan = BIG) {
+    mockApi({ "/api/extractor/plan": plan });
+    render(<ExtractorSetup projectPath={PROJECT} onExtracted={() => {}} />);
+    await screen.findByTestId("extractor-setup");
+  }
+
+  it("estimates the whole book before anything is ticked", async () => {
+    await open();
+    // 275,535 characters at roughly 4 per token.
+    expect(body("extractor-token-estimate")).toMatch(/68,88[0-9]/);
+  });
+
+  it("THE NUMBER MOVES WHEN A CHAPTER IS UNTICKED", async () => {
+    await open();
+    const before = body("extractor-token-estimate");
+    await userEvent.click(screen.getByRole("button", { name: "Two" }));
+    const after = body("extractor-token-estimate");
+    expect(after).not.toBe(before);
+    // 200,000 characters left, so about 50,000 tokens.
+    expect(after).toMatch(/50,000/);
+  });
+
+  it("counts the chapters alongside it", async () => {
+    await open();
+    expect(body("extractor-dashboard")).toMatch(/2 of 2/);
+    await userEvent.click(screen.getByRole("button", { name: "Two" }));
+    expect(body("extractor-dashboard")).toMatch(/1 of 2/);
+  });
+
+  it("shows what the model can hold beside what the run needs", async () => {
+    await open();
+    expect(body("extractor-dashboard")).toMatch(/1,048,576/);
+  });
+
+  it("says the limit is unknown rather than pretending it fits", async () => {
+    // A local model reports no context length. Claiming a fit we never checked
+    // is how a writer pays for a request that overflows.
+    await open({ ...BIG, context_tokens: 0, model_id: "local/whatever" });
+    expect(body("extractor-dashboard")).toMatch(/unknown/i);
+  });
+});
+
+
+// ── THE MODEL PICKER ON THIS SCREEN ─────────────────────────────────────────
+//
+// Reported: the roles list "do not list the limits at all ... Only the
+// recommended are at the top listed as budget, pricier, etc."
+//
+// Right, and it is a difference in what the two screens are for. Everywhere
+// else a request is one chapter and any model holds it, so price is the useful
+// sort. Here the request is a whole book and the window decides whether it
+// works at all -- so sorting by price puts the models that CANNOT do the job
+// at the top of the list.
+
+describe("choosing the model here", () => {
+  async function open() {
+    mockApi();
+    render(<ExtractorSetup projectPath={PROJECT} onExtracted={() => {}} />);
+    await screen.findByTestId("extractor-setup");
+    await userEvent.click(screen.getByTestId("extractor-change-model"));
+    return screen.findByTestId("extractor-model-list");
+  }
+
+  it("shows each model's window and its price", async () => {
+    const list = await open();
+    expect(list.textContent).toMatch(/1\.0M/);
+    expect(list.textContent).toMatch(/200k/);
+    expect(list.textContent).toMatch(/\$/);
+  });
+
+  it("hides the models too small for this run, and says it did", async () => {
+    // 400 entries sorted by a number the writer cannot use is a list, not a
+    // choice. deepseek-chat holds 64k, which cannot take a 275,000-character
+    // book -- so the plan here carries the real size rather than the small
+    // default, or nothing would be too small to hide.
+    mockApi({ "/api/extractor/plan": {
+      ...PLAN,
+      chapters: [{ chapter_id: "c-1", filename: "01.md", title: "One",
+                   chars: 275535 }] } });
+    render(<ExtractorSetup projectPath={PROJECT} onExtracted={() => {}} />);
+    await screen.findByTestId("extractor-setup");
+    await userEvent.click(screen.getByTestId("extractor-change-model"));
+    const list = await screen.findByTestId("extractor-model-list");
+    await waitFor(() => expect(list.textContent).not.toMatch(/deepseek/));
+    expect(screen.getByTestId("extractor-model-picker").textContent)
+      .toMatch(/too small for this run are hidden/i);
+  });
+
+  it("finds a hidden model when the writer searches for it", async () => {
+    await open();
+    await userEvent.type(screen.getByLabelText("Search models"), "deepseek");
+    await waitFor(() =>
+      expect(screen.getByTestId("extractor-model-list").textContent)
+        .toMatch(/deepseek/));
+  });
+
+  it("FLAGS REASONING MODELS, which is how the second run failed", async () => {
+    // A reasoning model spends its reply budget thinking before it writes, and
+    // can return an empty answer that looks exactly like having nothing to say.
+    const list = await open();
+    expect(list.textContent).toMatch(/reasoning/);
+  });
+
+  it("saves the choice as the app-wide role, not a private copy", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: /gemini/i }));
+    await waitFor(() => {
+      const call = calls.find(c => c.url.includes("/api/extractor/model")
+                                && c.init?.method === "POST");
+      expect(call).toBeTruthy();
+      expect(JSON.parse(String(call!.init!.body)).model_id)
+        .toBe("google/gemini-2.5-flash-lite");
+    });
+  });
+
+  it("warns when the model already chosen cannot hold the run", async () => {
+    mockApi({ "/api/extractor/plan": {
+      ...PLAN,
+      chapters: [{ chapter_id: "c-1", filename: "01.md", title: "One",
+                   chars: 275535 }],
+      model_id: "deepseek/deepseek-chat", context_tokens: 64000, fits: false } });
+    render(<ExtractorSetup projectPath={PROJECT} onExtracted={() => {}} />);
+    await screen.findByTestId("extractor-setup");
+    await waitFor(() =>
+      expect(screen.getByTestId("extractor-model-too-small").textContent)
+        .toMatch(/Pick a bigger one/i));
   });
 });
