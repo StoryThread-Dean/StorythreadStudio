@@ -618,6 +618,80 @@ reported frustration that the walkthrough's suggested Overview text "was nearly
 always wrong": a whole-manuscript read has context a single-quote heuristic
 cannot.
 
+#### Live feedback from the first real review session (2026-08-14)
+
+The first working run, on *Becoming a Hero*. The pass itself landed well --
+"most of these trait entries were one to two liners that I could fold into
+existing traits. This is excellent." Four things came out of actually using it,
+and the last is a design problem rather than a bug.
+
+**1. A trait title is not enough to fold by.** Serena had four physical, four
+personality and five motivation traits (Survival, Proving Herself, Emulating
+Resilience, Seeking Identity, Seeking Purpose). Choosing which to fold a
+proposal into meant guessing from the label alone:
+
+> "the titles alone were not enough to determine what was in each of those
+> traits ... I need the ability to see what is actually written and determine
+> which to fold into."
+
+So the fold-into picker carries the trait's TEXT, not only its name, and the
+"what you have now" column shows each existing trait's description under its
+label. BUILT.
+
+**2. The current profile went stale mid-review.** Add a proposal as its own
+trait, then meet a second proposal that belongs with the one just added -- and
+it was not in the fold-into list, because the column was fetched once when the
+entry opened:
+
+> "The WHAT YOU HAVE NOW list should be refreshed to list the latest entry."
+
+A plain bug, and a nasty one: it made the correct action unavailable at exactly
+the moment the writer wanted it, so the only way to fold was to reload the
+screen. BUILT.
+
+**3. "Add to character" is the wrong words.** It CREATES the entry:
+
+> "which btw doesn't make sense because we are technically Creating the
+> character, not adding TO the character"
+
+BUILT: it reads "Create this character" / "Create this location", and the button
+that attaches to something existing is separate and says so.
+
+**4. THE ONE THAT NEEDS DESIGN: a described character may already exist.**
+
+The Man in the Alley is the hulking man from chapter 5 scene 3, who is later
+revealed to be Altas. Creating a second entry for him is wrong. But the writer
+named a second case in the same breath, and it is the one that makes this
+subtle:
+
+> "We also want to be careful about TAGGING a character literally playing
+> someone else, Example: Tom the Barkeep in chapter 2 was really Donald Morgan
+> the arch wizard in disguise. But Tom the Barkeep is an established character
+> with a profile."
+
+Those are NOT the same relationship, and an app that treated them the same would
+destroy work:
+
+  - **Another name for the same entry.** "The Man in the Alley" is a phrase the
+    prose uses for Altas. There is one person and one entry; the phrase becomes
+    an ALIAS, and the proposal's content belongs on Altas. `POST /alias` already
+    does exactly this and is already the answer WordFix reaches for.
+
+  - **A separate identity worn by someone else.** Tom the Barkeep is a person in
+    the story with his own profile, his own scenes and his own connections. That
+    he is Donald Morgan in disguise is a FACT ABOUT THE WORLD, not a spelling.
+    Folding Tom into Donald would delete a character the writer wrote, and no
+    undo would bring back the connections that went with him.
+
+So the screen must ask which, and never guess. The second case is a CONNECTION
+between two entries (the Weave already models this, with a reason line), plus
+optionally a fact anchored to where the disguise holds -- which is exactly what
+the Run editor exists for.
+
+**The rule that falls out of it, worth stating on its own:** an alias is about
+WORDS, a tie is about THINGS. Two names for one person is an alias. Two people
+who are the same person is a story fact, and both of them keep their entries.
+
 ### Audiobook Converter -- SHIPPED as v1.1.0 (2026-08-03)
 
 *Kept in this section for its open follow-ups only. The feature itself is

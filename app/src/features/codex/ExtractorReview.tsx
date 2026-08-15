@@ -38,6 +38,7 @@ import {
 
 import { Explain } from "../../components/learn/Explain";
 import { ExtractorGuide } from "./ExtractorGuide";
+import { ExtractorWhoIsThis } from "./ExtractorWhoIsThis";
 import { CodexApiError, fetchThread, newThread, type ThreadDetail } from "./api";
 import {
   applyPart, setEntryState,
@@ -270,6 +271,17 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
   const [current, setCurrent] = useState<ThreadDetail | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bumped after every apply so the entry is READ AGAIN.
+  //
+  // Reported from the first review session: add a proposal as its own trait,
+  // meet a second proposal moments later that belongs with it, and the trait
+  // just created is missing from the fold-into list. The column was fetched
+  // once when the entry opened, so it went stale the instant the writer used
+  // it -- making the correct action unavailable at exactly the moment they
+  // wanted it, with reloading the screen as the only way out.
+  const [reread, setReread] = useState(0);
+  const [identifying, setIdentifying] = useState(false);
+  const [connectNote, setConnectNote] = useState(false);
 
   const targetId = entry.created_entity_id || entry.entity_id;
 
@@ -280,7 +292,7 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       .then(thread => { if (!cancelled) setCurrent(thread); })
       .catch(() => { if (!cancelled) setCurrent(null); });
     return () => { cancelled = true; };
-  }, [projectPath, targetId]);
+  }, [projectPath, targetId, reread]);
 
   const create = useCallback(async () => {
     setCreating(true);
@@ -368,16 +380,29 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       {!targetId && (
         <div className="rounded border border-violet-800 bg-violet-500/5 px-3 py-2">
           <p className="text-[11px] text-text-muted">
-            You do not have an entry for this yet. Make one and its pieces
-            become available below, one at a time.
+            You do not have an entry for this yet. Either it is somebody new, or
+            it is a name your book uses for somebody you already have.
           </p>
-          <button type="button" onClick={() => void create()} disabled={creating}
-                  data-testid="extractor-create"
-                  className="mt-1.5 inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
-            {creating ? <Loader size={11} className="animate-spin" />
-                      : <Plus size={11} />}
-            Add to {entry.type}
-          </button>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {/* CREATE, not "add to". The first review session: "which btw
+                doesn't make sense because we are technically Creating the
+                character, not adding TO the character." */}
+            <button type="button" onClick={() => void create()} disabled={creating}
+                    data-testid="extractor-create"
+                    className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+              {creating ? <Loader size={11} className="animate-spin" />
+                        : <Plus size={11} />}
+              Create this {entry.type}
+            </button>
+            {/* The other door, and it has to be here rather than buried,
+                because a described character is MORE often somebody you have
+                under another name than somebody new. */}
+            <button type="button" onClick={() => setIdentifying(true)}
+                    data-testid="extractor-who-is-this"
+                    className="rounded border border-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary">
+              This is somebody I already have
+            </button>
+          </div>
           {entry.character_kind === "side" && (
             <p className="mt-1 text-[10px] text-faint">
               It arrives as a Side character. Most names a book mentions are;
@@ -385,6 +410,46 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
             </p>
           )}
         </div>
+      )}
+
+      {identifying && (
+        <ExtractorWhoIsThis
+          projectPath={projectPath}
+          name={entry.name}
+          type={entry.type}
+          suggestedId={entry.same_as || undefined}
+          onClose={() => setIdentifying(false)}
+          onAliased={entityId => {
+            // The phrase is now a name that finds them, so everything proposed
+            // here belongs on their page. Recorded on the run so a second
+            // click cannot make a second entry.
+            void setEntryState({
+              project_path: projectPath, item_id: entry.item_id,
+              state: "open", created_entity_id: entityId,
+            });
+            onPatch({ created_entity_id: entityId });
+            setIdentifying(false);
+            setReread(n => n + 1);
+          }}
+          onWantsConnection={() => {
+            // Deliberately a hand-off rather than a tie editor in here. Two
+            // entries that relate is the Weave's own job, it needs a reason
+            // line, and building a second way to record one is how an idea
+            // ends up with two vocabularies.
+            setIdentifying(false);
+            setConnectNote(true);
+          }}
+        />
+      )}
+
+      {connectNote && (
+        <p className="rounded border border-border bg-surface px-2.5 py-1.5 text-[11px] text-text-muted"
+           data-testid="extractor-connect-note">
+          Both entries stay. Record how they relate from either one's page,
+          in Connections -- that is where a connection carries its reason, and
+          this screen deliberately does not keep a second way of making one.
+          Nothing here has been changed.
+        </p>
       )}
 
       {error && <p role="alert" className="text-[11px] text-rose-300">{error}</p>}
@@ -399,6 +464,7 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
             entityId={targetId}
             current={current}
             onProgress={onProgress}
+            onApplied={() => setReread(n => n + 1)}
           />
         ))}
       </ul>
@@ -409,13 +475,17 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
 
 // ── One clickable proposal ──────────────────────────────────────────────────
 
-function PartRow({ projectPath, itemId, part, entityId, current, onProgress }: {
+function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
+                  onApplied }: {
   projectPath: string;
   itemId: string;
   part: ExtractionPart;
   entityId: string;
   current: ThreadDetail | null;
   onProgress: (progress: ExtractionProgress) => void;
+  /** Re-read the entry: what the writer just added has to be available to fold
+   *  the next proposal into. */
+  onApplied: () => void;
 }) {
   const [state, setState] = useState(part.state);
   const [busy, setBusy] = useState(false);
@@ -439,13 +509,15 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress }: {
       });
       setState(action === "dismiss" ? "dismissed" : "applied");
       onProgress(body.progress);
+      if (action !== "dismiss") onApplied();
     } catch (e) {
       setError(e instanceof CodexApiError ? e.message
                : e instanceof Error ? e.message : "That did not apply.");
     } finally {
       setBusy(false);
     }
-  }, [projectPath, itemId, part.part_id, entityId, mergeInto, onProgress]);
+  }, [projectPath, itemId, part.part_id, entityId, mergeInto, onProgress,
+      onApplied]);
 
   if (state !== "open") {
     return (
@@ -487,9 +559,21 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress }: {
               {existingProse || <span className="text-faint">Nothing yet.</span>}
             </p>
           ) : existingTraits.length ? (
-            <ul className="space-y-0.5 text-[11px] text-text-muted">
+            /* THE TEXT, NOT ONLY THE LABEL. Reported from the first review
+               session: five motivations called Survival, Proving Herself,
+               Emulating Resilience, Seeking Identity and Seeking Purpose are
+               indistinguishable by name, and folding a proposal into one of
+               them is a guess without the words underneath. */
+            <ul className="space-y-1 text-[11px]" data-testid="extractor-current-traits">
               {existingTraits.map((trait, index) => (
-                <li key={index}>{trait.trait || trait.name}</li>
+                <li key={index}>
+                  <span className="text-text-primary">
+                    {trait.trait || trait.name}
+                  </span>
+                  {trait.description && (
+                    <span className="block text-faint">{trait.description}</span>
+                  )}
+                </li>
               ))}
             </ul>
           ) : (
@@ -536,11 +620,22 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress }: {
                   className="rounded border border-border bg-bg-primary px-1 py-0.5 text-[11px] text-text-primary"
                 >
                   <option value="">fold into...</option>
-                  {existingTraits.map((trait, index) => (
-                    <option key={index} value={trait.trait || trait.name || ""}>
-                      {trait.trait || trait.name}
-                    </option>
-                  ))}
+                  {existingTraits.map((trait, index) => {
+                    const label = trait.trait || trait.name || "";
+                    // A native option is one line, so the description is
+                    // clipped onto it. The full text is in the column beside
+                    // this; what the dropdown has to do is stop the writer
+                    // choosing between five labels that all sound alike.
+                    const gist = (trait.description || "").trim();
+                    return (
+                      <option key={index} value={label}>
+                        {gist
+                          ? `${label} -- ${gist.length > 70
+                              ? gist.slice(0, 70).trimEnd() + "..." : gist}`
+                          : label}
+                      </option>
+                    );
+                  })}
                 </select>
                 <button type="button" disabled={busy || !mergeInto}
                         onClick={() => void act("merge_trait")}

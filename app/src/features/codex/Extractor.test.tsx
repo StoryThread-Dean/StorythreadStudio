@@ -1008,3 +1008,200 @@ describe("a book that needs more than one request", () => {
     expect(notice.textContent).toMatch(/is saved/i);
   });
 });
+
+
+// -- WHAT THE FIRST REAL REVIEW SESSION FOUND --------------------------------
+//
+// The pass landed well ("most of these trait entries were one to two liners
+// that I could fold into existing traits. This is excellent"). Four things came
+// out of actually working through it.
+
+describe("folding a proposal into a trait you already have", () => {
+  const withTraits = {
+    ...ROSIE_THREAD,
+    sections: {
+      ...ROSIE_THREAD.sections,
+      motivations: {
+        heading: "Motivations", content: "",
+        trait_blocks: [
+          { trait: "Survival", description: "Will do what it takes to eat." },
+          { trait: "Proving Herself", description: "Needs to be taken seriously." },
+          { trait: "Seeking Purpose", description: "Wants the work to mean something." },
+        ],
+      },
+    },
+  };
+
+  async function open() {
+    mockApi({ "/api/codex/entity": withTraits });
+    render(<ExtractorReview projectPath={PROJECT} run={RUN}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+  }
+
+  it("SHOWS WHAT EACH TRAIT SAYS, not only its title", async () => {
+    // Reported: five motivations called Survival, Proving Herself, Emulating
+    // Resilience, Seeking Identity and Seeking Purpose are indistinguishable by
+    // name. "I need the ability to see what is actually written and determine
+    // which to fold into."
+    await open();
+    const traits = await screen.findByTestId("extractor-current-traits");
+    expect(traits.textContent).toMatch(/Survival/);
+    expect(traits.textContent).toMatch(/Will do what it takes to eat/);
+    expect(traits.textContent).toMatch(/Needs to be taken seriously/);
+  });
+
+  it("carries the text into the fold-into picker too", async () => {
+    // The column and the dropdown are read at different moments. A writer
+    // choosing from the dropdown should not have to look away to know what
+    // they are choosing.
+    await open();
+    const picker = await screen.findByTestId("extractor-merge-into");
+    expect(picker.textContent).toMatch(/Survival -- Will do what it takes/);
+  });
+
+  it("clips a long description rather than making an unreadable option", async () => {
+    mockApi({ "/api/codex/entity": {
+      ...ROSIE_THREAD,
+      sections: { ...ROSIE_THREAD.sections, motivations: {
+        heading: "Motivations", content: "",
+        trait_blocks: [{ trait: "Long one", description: "x".repeat(300) }],
+      } },
+    } });
+    render(<ExtractorReview projectPath={PROJECT} run={RUN}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    const picker = await screen.findByTestId("extractor-merge-into");
+    const option = picker.textContent ?? "";
+    expect(option).toMatch(/\.\.\./);
+    expect(option.length).toBeLessThan(200);
+  });
+});
+
+
+describe("the profile you are working on", () => {
+  it("IS RE-READ AFTER EVERY APPLY", async () => {
+    // Reported: add a proposal as its own trait, then meet a second proposal
+    // moments later that belongs with it -- and the trait just created was
+    // missing from the fold-into list, because the column was fetched once
+    // when the entry opened. It went stale exactly when the writer used it.
+    mockApi();
+    render(<ExtractorReview projectPath={PROJECT} run={RUN}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+    const before = calls.filter(c => c.url.includes("/api/codex/entity")).length;
+
+    await userEvent.click((await screen.findAllByTestId("extractor-merge"))[0]);
+
+    await waitFor(() => {
+      const after = calls.filter(c => c.url.includes("/api/codex/entity")).length;
+      expect(after).toBeGreaterThan(before);
+    });
+  });
+
+  it("is NOT re-read when a proposal was only thrown away", async () => {
+    // Dismissing changes nothing on disk, so re-reading would be a request
+    // that can only return what is already on screen.
+    mockApi();
+    render(<ExtractorReview projectPath={PROJECT} run={RUN}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+    await waitFor(() =>
+      expect(calls.some(c => c.url.includes("/api/codex/entity"))).toBe(true));
+    const before = calls.filter(c => c.url.includes("/api/codex/entity")).length;
+
+    await userEvent.click((await screen.findAllByTestId("extractor-dismiss"))[0]);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("extractor-part-settled").length)
+        .toBeGreaterThan(0));
+
+    expect(calls.filter(c => c.url.includes("/api/codex/entity")).length)
+      .toBe(before);
+  });
+});
+
+
+describe("a described character who may already exist", () => {
+  async function openTallMan() {
+    mockApi({ "/api/codex/list": { threads: [
+      { entity_id: "e-altas", type: "character", name: "Altas",
+        filename: "altas.md", status: "active" },
+      { entity_id: "e-tom", type: "character", name: "Tom the Barkeep",
+        filename: "tom.md", status: "active" },
+    ] } });
+    render(<ExtractorReview projectPath={PROJECT} run={RUN}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+    await userEvent.click(screen.getByRole("button", { name: /The tall man/ }));
+  }
+
+  it("says CREATE rather than add to", async () => {
+    // Reported: "which btw doesn't make sense because we are technically
+    // Creating the character, not adding TO the character."
+    await openTallMan();
+    expect(screen.getByTestId("extractor-create").textContent)
+      .toMatch(/Create this character/i);
+  });
+
+  it("offers the other door: this is somebody I already have", async () => {
+    // A described character is more often somebody the writer has under
+    // another name than somebody new, so this cannot be buried.
+    await openTallMan();
+    expect(screen.getByTestId("extractor-who-is-this")).toBeTruthy();
+  });
+
+  it("OFFERS TWO ANSWERS AND NEVER GUESSES BETWEEN THEM", async () => {
+    // The whole design. An alias is about WORDS; a tie is about THINGS.
+    await openTallMan();
+    await userEvent.click(screen.getByTestId("extractor-who-is-this"));
+    const dialog = await screen.findByTestId("who-is-this-dialog");
+    await userEvent.click(await within(dialog).findByRole("button", { name: /Altas/ }));
+
+    const choices = await screen.findByTestId("who-is-this-choices");
+    expect(choices.textContent).toMatch(/another way your book says/i);
+    expect(choices.textContent).toMatch(/two people, and one is pretending/i);
+  });
+
+  it("says what folding two entries would COST", async () => {
+    // Tom the Barkeep is a person with his own scenes and connections. Folding
+    // him into Donald Morgan would delete a character the writer wrote, and
+    // nothing would bring back what went with him.
+    await openTallMan();
+    await userEvent.click(screen.getByTestId("extractor-who-is-this"));
+    const dialog = await screen.findByTestId("who-is-this-dialog");
+    await userEvent.click(await within(dialog).findByRole("button", { name: /Altas/ }));
+    const choices = screen.getByTestId("who-is-this-choices");
+    expect(choices.textContent).toMatch(/still a barkeep/i);
+    expect(choices.textContent).toMatch(/would delete one of them/i);
+  });
+
+  it("records the phrase as another name when they are one person", async () => {
+    await openTallMan();
+    await userEvent.click(screen.getByTestId("extractor-who-is-this"));
+    const dialog = await screen.findByTestId("who-is-this-dialog");
+    await userEvent.click(await within(dialog).findByRole("button", { name: /Altas/ }));
+    await userEvent.click(screen.getByTestId("who-is-this-alias"));
+
+    await waitFor(() => {
+      const call = calls.find(c => c.url.includes("/api/codex/alias"));
+      expect(call).toBeTruthy();
+      const sent = JSON.parse(String(call!.init!.body));
+      expect(sent.entity_id).toBe("e-altas");
+      expect(sent.word).toBe("The tall man");
+    });
+  });
+
+  it("hands a disguise to Connections rather than building a second way", async () => {
+    // Two entries that relate is the Weave own job, it needs a reason line,
+    // and a second place to record one is how an idea gets two vocabularies.
+    await openTallMan();
+    await userEvent.click(screen.getByTestId("extractor-who-is-this"));
+    const dialog = await screen.findByTestId("who-is-this-dialog");
+    await userEvent.click(await within(dialog).findByRole("button", { name: /Altas/ }));
+    await userEvent.click(screen.getByTestId("who-is-this-connection"));
+
+    const note = await screen.findByTestId("extractor-connect-note");
+    expect(note.textContent).toMatch(/Both entries stay/i);
+    expect(note.textContent).toMatch(/Connections/);
+    expect(note.textContent).toMatch(/Nothing here has been changed/i);
+  });
+});
