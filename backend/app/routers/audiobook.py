@@ -1379,7 +1379,13 @@ async def analyze_speakers(request: AnalyzeSpeakersRequest):
         raise HTTPException(status_code=503,
                             detail=f"Could not reach {provider.label}: {e}")
 
-    raw_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+    # SAME BUG, SAME LIFETIME. This read result["choices"], which
+    # `run_completion` has never returned -- it hands back the model's PARSED
+    # JSON -- so raw_text was always "" and this pass proposed nothing from the
+    # day it shipped in v1.1.0. It failed silently in the worst way available:
+    # `dropped` was 0 too, so the screen said the model had found no dialogue
+    # rather than that we had thrown its answer away.
+    raw_text = result.get("raw_text") or ""
     proposals, dropped = speaker_analysis.parse_response(raw_text, text)
     cast_names = {name.lower() for name in known}
     for proposal in proposals:

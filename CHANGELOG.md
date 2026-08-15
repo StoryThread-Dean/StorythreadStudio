@@ -40,6 +40,12 @@ entry while working on a feature, append it under Unreleased.
 - **Every kind, not just characters.** Whatever your project's types file holds, including kinds you invented yourself: locations, factions, creatures, religions, governments, deities, cultures, objects, events, languages.
 - **Long-context analysis is a role you can now use.** It has been in Settings since Model Roles shipped, marked as reserved with a note saying it arrived with the Weave's AI passes. This is that pass, and it is what the role exists to buy.
 
+
+### Fixed
+
+- **The AI Importance Audit has never returned a single flag, and now does.** It asks a model which of your traits are weighted wrongly, and the answer was being read from the wrong place -- so it reported "nothing to flag" on every profile since it shipped, whatever the model said. There was no error and no way to tell it apart from a model that had looked carefully and found nothing.
+- **The audiobook's AI speaker pass had the same fault**, since v1.1.0. It proposes who speaks each line of dialogue; it was proposing nothing, and reporting nothing discarded, so it looked like a model that could not find any dialogue.
+
 ### Changed
 
 - The setup screen states what the run will cost, how many chapters and entries it covers, and which model does the work, before the button. Entries you have already written up are ticked to be left alone, as a suggestion you can undo -- nothing here can know that a character who appeared once in chapter two has come back for the rest of the book.

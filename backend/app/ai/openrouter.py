@@ -379,7 +379,21 @@ async def run_completion(
         )
 
     # Extract the text content from the first choice
-    raw_content = data["choices"][0]["message"]["content"]
+    choice = (data.get("choices") or [{}])[0]
+    raw_content = (choice.get("message") or {}).get("content") or ""
+    # WHY THE ANSWER ENDED, carried through rather than dropped here.
+    #
+    # This function parses the model's JSON and returns the PARSED object, so
+    # everything about the transport -- the choice, the finish reason, the token
+    # usage -- stopped at this line. Three separate call sites then reached for
+    # `result["choices"]`, which this has never returned, and every one of them
+    # silently read an empty string from a model that had answered perfectly.
+    #
+    # Two of those were shipped features that therefore never worked. The seam
+    # is the right place to fix it: a caller should not have to know that this
+    # returns something different from what the provider sent.
+    finish_reason = str(choice.get("finish_reason") or "")
+    usage = data.get("usage") or {}
 
     # Local reasoning models put their working out in the reply body. Strip
     # it FIRST: a <think> block ahead of the JSON would make json.loads()
@@ -421,6 +435,16 @@ async def run_completion(
         "notes":         parsed.get("notes", []),
         "model_used":    model_id,
         "had_em_dashes": had_em_dashes,
+        # The model's answer as TEXT, before parsing. A caller that does its own
+        # parsing (the Profile Extractor, the speaker pass, the importance
+        # audit) needs this, and reaching into a transport shape this function
+        # does not return is how all three came to read nothing at all.
+        "raw_text":      raw_content,
+        "finish_reason": finish_reason,
+        "usage":         {
+            "prompt_tokens":     usage.get("prompt_tokens") or 0,
+            "completion_tokens": usage.get("completion_tokens") or 0,
+        },
     }
 
     return result

@@ -20,7 +20,10 @@
       "Bash(awk '/^### Profile Extractor -- the v2.0.1 feature/,/^### [^P]/' docs/roadmap.md)",
       "Bash(awk '/^7\\\\. \\\\*\\\\*Exclusions are TICKED/,0' docs/roadmap.md)",
       "Bash(awk '/^9\\\\. \\\\*\\\\*A new entry arrives BASE-LEVEL/,0' docs/roadmap.md)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(awk 'NR>=1050 && NR<=1120 && /@router\\\\.\\(post|get\\)/' app/routers/ai.py)",
+      "Bash(awk -F: '$1<1114')",
+      "Bash(awk -F: '$1<1382')"
     ]
   },
   "disabledMcpjsonServers": [

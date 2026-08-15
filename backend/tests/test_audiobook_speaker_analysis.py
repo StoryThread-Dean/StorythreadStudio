@@ -169,9 +169,41 @@ def _workspace(tmp_path) -> str:
 
 
 def _fake_completion(payload: str):
+    """
+    What `run_completion` REALLY returns, which is not what this said.
+
+    Until v2.0.1 this double answered with the provider's transport shape --
+    {"choices": [{"message": {"content": ...}}]} -- and `run_completion` has
+    never returned that. It parses the model's JSON and hands back the parsed
+    object. So the route read result["choices"], got nothing, and this pass
+    proposed NOTHING from the day it shipped, while this test went green on
+    every run because it was answering in a world that does not exist.
+
+    That is the failure mode this repo already has a note about: a mock
+    supplying a field the real API omits. The fix is not a bigger assertion, it
+    is a double that tells the truth -- so this now returns the parsed object
+    spread in, plus the raw text and the transport facts, exactly as the real
+    function does.
+    """
     async def _run(**kwargs):
         _fake_completion.last_kwargs = kwargs
-        return {"choices": [{"message": {"content": payload}}]}
+        try:
+            parsed = json.loads(payload)
+            if not isinstance(parsed, dict):
+                parsed = {}
+        except (json.JSONDecodeError, TypeError):
+            parsed = {}
+        return {
+            **parsed,
+            "raw_text": payload,
+            "finish_reason": "stop",
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+            "summary": parsed.get("summary", ""),
+            "suggestions": parsed.get("suggestions", []),
+            "notes": parsed.get("notes", []),
+            "model_used": "test/model",
+            "had_em_dashes": False,
+        }
     return _run
 
 

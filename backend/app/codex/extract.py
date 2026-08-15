@@ -285,6 +285,18 @@ def parse_response(raw: str, types: list[dict]) -> tuple[list[dict], list[str]]:
     if not isinstance(raw_entries, list):
         return [], ["The answer had no entries list."]
 
+    return parse_proposals(raw_entries, types)
+
+
+def parse_proposals(raw_entries: list, types: list[dict]) -> tuple[list[dict], list[str]]:
+    """
+    The same checks, starting from an entries list somebody else already parsed.
+
+    Split out because `run_completion` parses the model's JSON itself and hands
+    back the object. Re-serialising it just to parse it again here would be two
+    chances to lose something, and this pass has already been bitten once by
+    reading the answer out of the wrong place.
+    """
     sections_for = _section_index(types)
     proposals: list[dict] = []
     dropped: list[str] = []

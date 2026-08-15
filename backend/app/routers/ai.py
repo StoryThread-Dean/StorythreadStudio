@@ -1110,13 +1110,25 @@ async def audit_importance(request: AuditImportanceRequest):
     except httpx.RequestError as e:
         raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
-    # Parse the flags array from the AI response
-    raw_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-    try:
-        parsed = json.loads(raw_text)
-        flags = parsed.get("flags", [])
-    except json.JSONDecodeError:
-        flags = []
+    # Parse the flags array from the AI response.
+    #
+    # THIS READ result["choices"] UNTIL v2.0.1, AND SO READ NOTHING, EVER.
+    # `run_completion` does not return the provider's response -- it parses the
+    # model's JSON and returns the parsed object -- so that lookup produced an
+    # empty string from every model on every request, `flags` was always [], and
+    # the audit reported "nothing to flag" for its entire life. No error, no
+    # log line, no test: a feature that quietly did nothing.
+    #
+    # Found by the Profile Extractor hitting the identical bug three times in
+    # live testing. Pinned now by a contract test that reads every router.
+    flags = result.get("flags")
+    if not isinstance(flags, list):
+        # The model answered in some other shape; recover from the text.
+        try:
+            parsed = json.loads(result.get("raw_text") or "")
+            flags = parsed.get("flags", [])
+        except (json.JSONDecodeError, AttributeError):
+            flags = []
 
     # Sanitize all text in flags
     for flag in flags:

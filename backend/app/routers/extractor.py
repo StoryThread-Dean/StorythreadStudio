@@ -541,16 +541,24 @@ async def post_run(body: RunBody):
         raise HTTPException(status_code=503,
                             detail=f"Could not reach {provider.label}: {exc}")
 
-    choice = (result.get("choices") or [{}])[0]
-    raw = (choice.get("message") or {}).get("content", "")
-    # WHY THE ANSWER ENDED, which is the field that turns a mystery into a
-    # sentence. "length" means it ran out of room; "content_filter" means the
-    # provider refused; empty content with either is not a model that found
-    # nothing, and the writer should never be left to guess between them.
-    finish_reason = str(choice.get("finish_reason") or "")
+    # THE ANSWER, AS TEXT. Read from run_completion's own result rather than
+    # from a provider shape it does not return -- which is what this code did
+    # for three live runs, reading an empty string every time from a model that
+    # was answering correctly. See the note in openrouter.run_completion.
+    raw = result.get("raw_text") or ""
+    finish_reason = str(result.get("finish_reason") or "")
     usage = result.get("usage") or {}
 
-    proposals, dropped = extract.parse_response(raw, registry.get("types") or [])
+    # run_completion has already parsed the JSON, so when the model answered in
+    # the shape we asked for, the entries are right here and re-parsing the text
+    # would be doing the same work twice.
+    if isinstance(result.get("entries"), list):
+        proposals, dropped = extract.parse_proposals(
+            result["entries"], registry.get("types") or [])
+    else:
+        proposals, dropped = extract.parse_response(
+            raw, registry.get("types") or [])
+
 
     # An empty answer is its own diagnosis and deserves its own words, rather
     # than the generic "did not return readable JSON" -- which is true, and

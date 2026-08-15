@@ -570,10 +570,14 @@ def test_A_RUN_THAT_CANNOT_FIT_IS_REFUSED_BEFORE_ANYTHING_IS_SENT(project, monke
 def test_an_empty_answer_that_RAN_OUT_OF_ROOM_says_so(project, monkeypatch):
     import app.routers.extractor as extractor
 
+    # THE SHAPE run_completion ACTUALLY RETURNS. Mocking the provider's
+    # transport shape here is precisely the mistake that cost three live runs:
+    # a test double that answers in a shape the real function never produces
+    # proves the caller works against a world that does not exist.
     async def empty_from_length(**_kwargs):
-        return {"choices": [{"message": {"content": ""},
-                             "finish_reason": "length"}],
-                "usage": {"completion_tokens": 8000}}
+        return {"raw_text": "", "finish_reason": "length",
+                "usage": {"completion_tokens": 8000, "prompt_tokens": 100},
+                "summary": "", "suggestions": [], "notes": []}
 
     monkeypatch.setattr("app.ai.openrouter.run_completion", empty_from_length)
     monkeypatch.setattr(extractor, "_context_window",
@@ -595,8 +599,8 @@ def test_an_empty_answer_from_a_CONTENT_FILTER_says_that_instead(project, monkey
     import app.routers.extractor as extractor
 
     async def refused(**_kwargs):
-        return {"choices": [{"message": {"content": ""},
-                             "finish_reason": "content_filter"}], "usage": {}}
+        return {"raw_text": "", "finish_reason": "content_filter",
+                "usage": {}, "summary": "", "suggestions": [], "notes": []}
 
     monkeypatch.setattr("app.ai.openrouter.run_completion", refused)
     monkeypatch.setattr(extractor, "_context_window",
@@ -617,9 +621,9 @@ def test_the_run_records_the_finish_reason_for_next_time(project, monkeypatch):
     import app.routers.extractor as extractor
 
     async def empty(**_kwargs):
-        return {"choices": [{"message": {"content": ""},
-                             "finish_reason": "length"}],
-                "usage": {"completion_tokens": 42, "prompt_tokens": 100}}
+        return {"raw_text": "", "finish_reason": "length",
+                "usage": {"completion_tokens": 42, "prompt_tokens": 100},
+                "summary": "", "suggestions": [], "notes": []}
 
     monkeypatch.setattr("app.ai.openrouter.run_completion", empty)
     monkeypatch.setattr(extractor, "_context_window",
@@ -648,8 +652,9 @@ def test_the_pass_asks_for_enough_room_to_answer(project, monkeypatch):
 
     async def capture(**kwargs):
         seen.update(kwargs)
-        return {"choices": [{"message": {"content": '{"entries": []}'},
-                             "finish_reason": "stop"}], "usage": {}}
+        return {"raw_text": '{"entries": []}', "entries": [],
+                "finish_reason": "stop", "usage": {},
+                "summary": "", "suggestions": [], "notes": []}
 
     monkeypatch.setattr("app.ai.openrouter.run_completion", capture)
     monkeypatch.setattr(extractor, "_context_window",
@@ -668,3 +673,121 @@ def _fake_window():
     async def _window(*_args, **_kwargs):
         return 1_000_000
     return _window()
+
+
+# ── THE BUG THAT ATE THREE LIVE RUNS ────────────────────────────────────────
+#
+# Every one of the writer's first three attempts came back "nothing could be
+# used", against three different models and two different sizes. The model was
+# answering correctly every time.
+#
+# `run_completion` does not return the provider's response. It parses the JSON
+# and returns the PARSED OBJECT, spread into a result dict. This route read
+# `result["choices"][0]["message"]["content"]` -- a shape that function has
+# never returned -- and so read an empty string, every time, from a perfect
+# answer.
+#
+# Two SHIPPED features had the identical line: the AI Importance Audit and the
+# audiobook speaker pass. Both silently returned nothing for their whole lives.
+#
+# Fixed at the seam rather than in the caller: run_completion now carries
+# `raw_text`, `finish_reason` and `usage`, because a caller should not have to
+# know that it returns something different from what the provider sent.
+
+def test_A_MODEL_ANSWERING_CORRECTLY_ACTUALLY_LANDS(project, monkeypatch):
+    """The end-to-end proof that was missing. Three live runs did not have it."""
+    import app.routers.extractor as extractor
+
+    answer = {
+        "entries": [{
+            "match": "Rosie", "type": "character", "name": "Rosie",
+            "sections": [{"id": "overview",
+                          "text": "She counts the exits in every room."}],
+        }],
+    }
+
+    async def good(**_kwargs):
+        # As run_completion really returns it: the parsed object spread in,
+        # plus the text and the transport facts.
+        return {**answer, "raw_text": json.dumps(answer),
+                "finish_reason": "stop", "usage": {"completion_tokens": 90},
+                "summary": "", "suggestions": [], "notes": []}
+
+    monkeypatch.setattr("app.ai.openrouter.run_completion", good)
+    monkeypatch.setattr(extractor, "_context_window",
+                        lambda *_a, **_k: _fake_window())
+
+    response = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dropped"] == []
+    assert body["progress"]["parts"] == 1
+    entry = body["run"]["entries"][0]
+    assert entry["name"] == "Rosie"
+    assert entry["entity_id"] == "e-rosie"
+    assert entry["parts"][0]["content"] == "She counts the exits in every room."
+
+
+def test_it_still_reads_the_TEXT_when_the_shape_is_not_what_we_asked_for(project, monkeypatch):
+    # A model that answers in JSON but not our JSON: run_completion cannot find
+    # "entries", so it falls back to its own schema and the entries have to be
+    # recovered from the raw text. Both doors, because models use both.
+    import app.routers.extractor as extractor
+
+    answer = {"entries": [{"type": "location", "name": "Huffington City",
+                           "sections": [{"id": "overview",
+                                         "text": "A port town."}]}]}
+
+    async def wrapped(**_kwargs):
+        return {"summary": "The assistant returned a response but not in the "
+                           "expected format.",
+                "suggestions": [{"label": "Raw response",
+                                 "content": json.dumps(answer)}],
+                "notes": [], "raw_text": json.dumps(answer),
+                "finish_reason": "stop", "usage": {}}
+
+    monkeypatch.setattr("app.ai.openrouter.run_completion", wrapped)
+    monkeypatch.setattr(extractor, "_context_window",
+                        lambda *_a, **_k: _fake_window())
+
+    response = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    })
+    names = [e["name"] for e in response.json()["run"]["entries"]]
+    assert names == ["Huffington City"]
+
+
+def test_NO_ROUTER_READS_A_SHAPE_run_completion_DOES_NOT_RETURN():
+    """
+    The contract that would have caught this on the day it was typed, and would
+    have caught it twice more in shipped code.
+
+    `run_completion` returns the PARSED answer. Reaching into `result["choices"]`
+    reads an empty string forever, from any model, with no error anywhere -- so
+    the feature simply never works and nothing says why.
+    """
+    from pathlib import Path
+
+    routers = Path(__file__).resolve().parents[1] / "app" / "routers"
+    offenders = []
+    for path in sorted(routers.glob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if "run_completion" not in text:
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
+            # Code only. The fixed call sites explain the bug in a comment that
+            # necessarily quotes it, and a check that flagged its own
+            # documentation would push the next person to delete the
+            # explanation rather than keep the fix.
+            if line.lstrip().startswith("#"):
+                continue
+            if 'result.get("choices"' in line or 'result["choices"]' in line:
+                offenders.append(f"{path.name}:{number}")
+
+    assert offenders == [], (
+        f"these read a transport shape run_completion never returns, so they "
+        f"read an empty answer from every model, forever: {offenders}. Use "
+        f"result['raw_text'] (or the parsed keys) instead."
+    )
