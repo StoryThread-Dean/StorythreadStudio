@@ -522,3 +522,90 @@ def test_the_run_records_when_it_was_made(tmp_path):
     run = store.new_run()
     assert run["created_at"]
     assert "scope" in run
+
+
+# ── "LEAVE THIS ONE ALONE" MEANS TWO DIFFERENT THINGS, AND ONLY ONE IS RIGHT ──
+#
+# Found by running the real route against the writer's own project rather than
+# by any test, which is why it is worth the space.
+#
+# The setup screen pre-ticks entries that are already written up, as "leave
+# alone". My first implementation took that to mean "do not send this entry to
+# the model", which is the obvious reading and the wrong one.
+#
+# On a well-kept project EVERY entry is written up enough to be ticked. So the
+# default would have hidden the entire world from the pass, the model would have
+# read the prose, met a cast it had never been told about, and proposed all of
+# them as NEW -- eleven duplicate proposals on a project whose only sin was
+# being well maintained. The feature would have failed worst exactly where it
+# was working best.
+#
+# "Leave alone" means propose no CHANGES to it. The entry is still named, so the
+# model recognises it in the prose and does not offer it back.
+
+def test_a_left_alone_entry_is_STILL_named_to_the_model():
+    message = extract.build_user_message(
+        [("One", "Rosie ran.")],
+        [{"name": "Rosie", "type": "character", "aliases": [],
+          "snippet": "A courier.", "leave_alone": True}],
+        TYPES)
+    assert "Rosie" in message
+
+
+def test_and_is_marked_so_the_model_knows_not_to_propose_for_it():
+    message = extract.build_user_message(
+        [("One", "Rosie ran.")],
+        [{"name": "Rosie", "type": "character", "aliases": [],
+          "snippet": "A courier.", "leave_alone": True}],
+        TYPES)
+    assert "[LEAVE ALONE]" in message
+    assert "Do not propose anything for them" in message
+    # And it says WHY they are listed at all, or the next reader of this prompt
+    # removes them again for the same reason I did.
+    assert "do not offer them back as new" in message
+
+
+def test_nothing_is_marked_when_nothing_was_excluded():
+    # The instruction must not appear when it applies to nobody: a prompt that
+    # explains a rule with no instances is spent budget teaching noise.
+    message = extract.build_user_message(
+        [("One", "Rosie ran.")],
+        [{"name": "Rosie", "type": "character", "aliases": [],
+          "snippet": "A courier."}],
+        TYPES)
+    assert "[LEAVE ALONE]" not in message
+
+
+def test_a_proposal_for_a_left_alone_entry_is_DROPPED_not_trusted():
+    """
+    The guarantee rather than the hope.
+
+    The prompt asks; a model sometimes proposes anyway. Filtering at assembly is
+    what makes the tick mean something -- the writer said do not touch this
+    entry, so nothing about it should reach a screen where one click could put
+    it into work they had already finished.
+    """
+    threads = [_thread("e-rosie", "Rosie"), _thread("e-lou", "Lou")]
+    proposals, _ = extract.parse_response(_answer([
+        {"match": "Rosie", "type": "character", "name": "Rosie",
+         "sections": [{"id": "overview", "text": "Ignore me."}]},
+        {"match": "Lou", "type": "character", "name": "Lou",
+         "sections": [{"id": "overview", "text": "Keep me."}]},
+    ]), TYPES)
+
+    run = extract.build_run(proposals, threads, leave_alone={"e-rosie"})
+    assert [e["name"] for e in run["entries"]] == ["Lou"]
+
+
+def test_leaving_an_entry_alone_does_not_suppress_a_genuinely_new_one():
+    # The filter is keyed on the matched entity, so a NEW proposal that happens
+    # to share nothing with the excluded entry must still come through. A
+    # filter that over-reached here would silently cost the writer the exact
+    # thing they ran the pass for.
+    threads = [_thread("e-rosie", "Rosie")]
+    proposals, _ = extract.parse_response(_answer([
+        {"type": "location", "name": "Huffington City",
+         "sections": [{"id": "overview", "text": "A port town."}]},
+    ]), TYPES)
+    run = extract.build_run(proposals, threads, leave_alone={"e-rosie"})
+    assert [e["name"] for e in run["entries"]] == ["Huffington City"]

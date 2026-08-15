@@ -177,13 +177,30 @@ def build_user_message(chapters: list[tuple[str, str]],
                      "what is missing rather than restating what is here, and "
                      "use \"match\" with the exact name to attach to one.")
         lines.append("")
+        # LEAVE-ALONE ENTRIES ARE STILL LISTED, and getting this wrong is a
+        # trap I walked into and only found by running the route against a real
+        # book. "Leave this one alone" means do not propose CHANGES to it. It
+        # does not mean hide it, and hiding it is actively harmful: the model
+        # reads the prose, sees a character it was never told about, and
+        # proposes them as NEW. On the writer's own project every entry was
+        # substantial enough to be ticked by default, so hiding them would have
+        # turned a sensible default into eleven duplicate proposals -- the
+        # feature failing worst exactly where it was working best.
         for item in known:
             snippet = item.get("snippet") or "(nothing written yet)"
             alias_note = ""
             if item.get("aliases"):
                 alias_note = "  [also called: " + ", ".join(item["aliases"]) + "]"
-            lines.append(f"- {item['name']} ({item['type']}){alias_note}: {snippet}")
+            mark = "  [LEAVE ALONE]" if item.get("leave_alone") else ""
+            lines.append(f"- {item['name']} ({item['type']}){alias_note}{mark}: "
+                         f"{snippet}")
         lines.append("")
+        if any(item.get("leave_alone") for item in known):
+            lines.append("Entries marked [LEAVE ALONE] are finished. Do not "
+                         "propose anything for them. They are listed so you "
+                         "recognise them in the prose and do not offer them "
+                         "back as new.")
+            lines.append("")
     else:
         # Said out loud so the model does not read the absence as "there is no
         # world" and propose one from nothing. It also matches what the setup
@@ -373,7 +390,8 @@ def _match_existing(proposal: dict, alias_map: dict, by_id: dict) -> str:
 
 
 def build_run(proposals: list[dict], threads: list[dict], *,
-              model_used: str = "", scope: dict | None = None) -> dict:
+              model_used: str = "", scope: dict | None = None,
+              leave_alone: set[str] | None = None) -> dict:
     """
     Assemble the storable run: proposals matched to the world, split into parts.
 
@@ -392,8 +410,18 @@ def build_run(proposals: list[dict], threads: list[dict], *,
     by_id = {str(t.get("entity_id") or ""): t for t in threads}
     by_name = {str(t.get("name") or "").strip().lower(): t for t in threads}
 
+    excluded = set(leave_alone or ())
+
     for proposal in proposals:
         entity_id = _match_existing(proposal, alias_map, by_id)
+
+        # THE GUARANTEE, not the hope. The prompt asks the model to leave these
+        # alone and a model will sometimes propose for them anyway. Filtering
+        # here is what makes the tick mean something: the writer said do not
+        # touch this entry, so nothing about it reaches the review screen where
+        # a click could put it into their finished work.
+        if entity_id and entity_id in excluded:
+            continue
 
         # "This described figure turns out to be somebody you have." Resolved to
         # an id here so the screen can offer the fold; left empty if it names

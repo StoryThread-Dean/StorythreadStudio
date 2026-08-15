@@ -265,15 +265,21 @@ async def post_run(body: RunBody):
 
     excluded = set(body.exclude or [])
     threads = _all_threads(project_path, registry)
+    # EVERY entry goes up, including the ones being left alone -- see the note
+    # in extract.build_user_message. "Leave alone" means propose no changes to
+    # it, not hide it: a model that is not told a character exists proposes
+    # them as new, and on a well-kept project (where every entry is written up
+    # enough to be ticked by default) that would turn the sensible default into
+    # a screen full of duplicates.
     known = [
         {
             "name": thread.get("name", ""),
             "type": thread.get("type", ""),
             "aliases": list(thread.get("aliases") or []),
             "snippet": extract.entry_snippet(thread),
+            "leave_alone": thread.get("entity_id") in excluded,
         }
         for thread in threads
-        if thread.get("entity_id") not in excluded
     ]
 
     provider, api_key, model_id = _resolve_model_and_key("long_context")
@@ -311,7 +317,7 @@ async def post_run(body: RunBody):
     proposals, dropped = extract.parse_response(raw, registry.get("types") or [])
 
     run = extract.build_run(
-        proposals, threads, model_used=model_id,
+        proposals, threads, model_used=model_id, leave_alone=excluded,
         scope={
             "chapter_ids": [c for c in (body.chapter_ids or [])],
             "chapter_count": len(chapters),

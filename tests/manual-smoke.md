@@ -938,6 +938,56 @@ means machine-specific state is being stored where it should not be.
 ---
 
 
+## 25. The Profile Extractor (v2.0.1) -- THE ONE THAT SPENDS REAL MONEY
+
+**Touches:** `POST /api/extractor/run`, the Long-context role, the saved run,
+and the only write path in the feature. This sends your whole manuscript to a
+paid model, so walk the free half first and stop before the button if anything
+is wrong.
+
+**Set up:** a project that has been through Weaving and has real entries.
+
+Steps:
+1. Open `The Weave > Profile Extractor` from the sidebar. Confirm it sits BESIDE
+   Weaving rather than inside it, and that it is a screen rather than a popup.
+2. Read the setup screen before spending. It must state: how many chapters and
+   entries the run covers, that this is the most expensive request the app
+   makes, and WHICH ROLE does the work. Press "Show me how this works" and
+   confirm page two is about running Weaving first.
+3. Check the "leave alone" ticks. Entries you have written up should be ticked
+   already; thin ones should not. Untick one and confirm it stays unticked.
+4. **On a project with no entries at all**, confirm the screen tells you to run
+   Weaving first and explains why. This is the failure that makes people think
+   the feature is bad, so the wording matters more than it looks.
+5. Now run it on a real book. Expect minutes, not seconds.
+6. **The result.** Every proposal must appear BESIDE what that entry currently
+   says. Confirm there is no accept-all, no "apply everything", and nothing
+   ticked when the list arrives.
+7. Take one section proposal and press **Add to what I wrote**. Open the entry's
+   `.md` file in Notepad: your original text must be there, unchanged, FIRST,
+   with the proposal after it. This is the button that must never lose a word.
+8. Take a trait proposal. Confirm "Fold in" is dead until you choose which of
+   your own traits it folds into, then fold one and check the file: your trait
+   keeps its name and gains the description.
+9. Find a character your book describes but never names, if the pass found one.
+   Confirm the description IS the name, that nothing invented one, and that its
+   pieces cannot be applied until you create the entry. Create it and confirm it
+   arrives as a Side character with nothing but a name.
+10. **Come back tomorrow.** Close the app entirely, reopen, and return to the
+    screen. The same list must be there with everything you dealt with still
+    ticked off.
+11. **The guard.** With proposals still unreviewed, run the pass again. It must
+    refuse, say HOW MANY you are about to lose, and offer a way back. Cancel and
+    confirm the saved run is untouched.
+
+Expected: nothing reaches a profile except by a button on that exact piece.
+The manuscript is never modified. If any single click writes more than one
+proposal, that is a release blocker -- with no evidence carried, the per-item
+click is the entire safeguard.
+
+---
+
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** -- verified separately by bumping a version and
