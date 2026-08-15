@@ -111,6 +111,26 @@ function mockApi(overrides: Record<string, unknown> = {}) {
         return respond(body);
       }
     }
+    // The Tie editor's world, for the disguise route. A node list rather than
+    // an empty object, because the code that reads it is the code under test.
+    if (url.includes("/api/codex/graph")) return respond({
+      nodes: [
+        { entity_id: "e-rosie", type: "character", name: "Rosie",
+          display_name: "", aliases: [], placeholder: false },
+        { entity_id: "e-altas", type: "character", name: "Altas",
+          display_name: "", aliases: [], placeholder: false },
+        { entity_id: "e-new", type: "character", name: "The tall man",
+          display_name: "", aliases: [], placeholder: false },
+      ], edges: [], hidden: 0 });
+    if (url.includes("/api/codex/ties")) return respond({ ties: [] });
+    // The real shape: groups the picker orders, plus the relations available
+    // between these two kinds. An empty object here crashed the editor, which
+    // is the mock lying about the API again -- see run_completion.
+    if (url.includes("/api/codex/relations")) return respond({
+      groups: ["Family", "Knows / Known", "Other"],
+      forward: [{ id: "connected_to", label: "connected to", group: "Other",
+                  universal: true, symmetric: true, inverse: "" }],
+      reverse: [], available: [] });
     if (url.includes("/api/extractor/models")) return respond({
       models: [
         { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4",
@@ -1190,18 +1210,53 @@ describe("a described character who may already exist", () => {
     });
   });
 
-  it("hands a disguise to Connections rather than building a second way", async () => {
-    // Two entries that relate is the Weave own job, it needs a reason line,
-    // and a second place to record one is how an idea gets two vocabularies.
+  it("OPENS THE WEAVE'S OWN TIE EDITOR WITH BOTH ENDS FILLED IN", async () => {
+    // Not a second way to record a connection -- the same one, reached from
+    // here. The writer has just answered "which two entries", and asking again
+    // would be the app forgetting what it was told a second ago.
     await openTallMan();
     await userEvent.click(screen.getByTestId("extractor-who-is-this"));
     const dialog = await screen.findByTestId("who-is-this-dialog");
     await userEvent.click(await within(dialog).findByRole("button", { name: /Altas/ }));
     await userEvent.click(screen.getByTestId("who-is-this-connection"));
 
-    const note = await screen.findByTestId("extractor-connect-note");
-    expect(note.textContent).toMatch(/Both entries stay/i);
-    expect(note.textContent).toMatch(/Connections/);
-    expect(note.textContent).toMatch(/Nothing here has been changed/i);
+    // The tie editor, already past the "who?" step.
+    await waitFor(() =>
+      expect(document.body.textContent).toMatch(/Altas/));
+    expect(calls.some(c => c.url.includes("/api/codex/graph"))).toBe(true);
+  });
+
+  it("CREATES THE MISSING END FIRST, because a tie needs two entries", async () => {
+    // The tall man has no entry at all. Opening a connection editor for an
+    // entry that does not exist would be a form that cannot be saved -- so the
+    // entry is made first, base-level, exactly as Create makes it.
+    await openTallMan();
+    await userEvent.click(screen.getByTestId("extractor-who-is-this"));
+    const dialog = await screen.findByTestId("who-is-this-dialog");
+    await userEvent.click(await within(dialog).findByRole("button", { name: /Altas/ }));
+    await userEvent.click(screen.getByTestId("who-is-this-connection"));
+
+    await waitFor(() => {
+      const made = calls.find(c => c.url.includes("/api/codex/thread/new"));
+      expect(made).toBeTruthy();
+      const sent = JSON.parse(String(made!.init!.body));
+      expect(sent.name).toBe("The tall man");
+      // Still base-level and still a Side character: the disguise route is
+      // not a back door around how new entries arrive.
+      expect(sent.character_kind).toBe("side");
+    });
+  });
+
+  it("does not create a second entry when one already exists", async () => {
+    // Rosie has an entry. Connecting her to somebody must not make another.
+    mockApi({ "/api/codex/list": { threads: [
+      { entity_id: "e-altas", type: "character", name: "Altas",
+        filename: "altas.md", status: "active" },
+    ] } });
+    render(<ExtractorReview projectPath={PROJECT} run={RUN}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+    // Rosie is selected by default and has entity_id e-rosie.
+    expect(calls.some(c => c.url.includes("/api/codex/thread/new"))).toBe(false);
   });
 });

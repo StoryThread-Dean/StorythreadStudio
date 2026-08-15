@@ -688,6 +688,23 @@ between two entries (the Weave already models this, with a reason line), plus
 optionally a fact anchored to where the disguise holds -- which is exactly what
 the Run editor exists for.
 
+**RULED 2026-08-15: the disguise case deep-links into the Tie editor** with
+both ends pre-filled, rather than telling the writer to go and record it
+themselves. It is the Weave's OWN editor opened from here, not a second way of
+making a connection -- the relation and the required reason line stay exactly
+where they were, and only the two facts this screen was just told are filled in.
+
+Two consequences worth keeping:
+
+- **The described character is CREATED first**, base-level, because a tie needs
+  two entries and "The Man in the Alley" has none. That is not a back door
+  around how new entries arrive; it is that rule applied on the way to what the
+  writer asked for. Still a Side character, still empty.
+- **The closed-world rule does not forbid this.** It governs the WALKTHROUGH,
+  where leaving a stop gives up your place. This is a review screen (decision
+  10), and a writer who says "these are two people" has asked for the connection
+  editor -- refusing to open it would be the rule cited against its own purpose.
+
 **The rule that falls out of it, worth stating on its own:** an alias is about
 WORDS, a tie is about THINGS. Two names for one person is an alias. Two people
 who are the same person is a story fact, and both of them keep their entries.

@@ -39,7 +39,11 @@ import {
 import { Explain } from "../../components/learn/Explain";
 import { ExtractorGuide } from "./ExtractorGuide";
 import { ExtractorWhoIsThis } from "./ExtractorWhoIsThis";
-import { CodexApiError, fetchThread, newThread, type ThreadDetail } from "./api";
+import { TieEditor } from "./TieEditor";
+import {
+  CodexApiError, fetchGraph, fetchThread, newThread,
+  type GraphNode, type ThreadDetail,
+} from "./api";
 import {
   applyPart, setEntryState,
   type ExtractionEntry, type ExtractionPart, type ExtractionProgress,
@@ -281,7 +285,13 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
   // wanted it, with reloading the screen as the only way out.
   const [reread, setReread] = useState(0);
   const [identifying, setIdentifying] = useState(false);
-  const [connectNote, setConnectNote] = useState(false);
+  // The disguise case, carried into the Tie editor with both ends already
+  // chosen. The writer has just answered "which two entries" -- asking again
+  // would be the app forgetting what it was told a second ago.
+  const [connecting, setConnecting] = useState<
+    { thread: GraphNode; other: GraphNode; candidates: GraphNode[] } | null
+  >(null);
+  const [connectError, setConnectError] = useState("");
 
   const targetId = entry.created_entity_id || entry.entity_id;
 
@@ -431,24 +441,77 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
             setIdentifying(false);
             setReread(n => n + 1);
           }}
-          onWantsConnection={() => {
-            // Deliberately a hand-off rather than a tie editor in here. Two
-            // entries that relate is the Weave's own job, it needs a reason
-            // line, and building a second way to record one is how an idea
-            // ends up with two vocabularies.
+          onWantsConnection={otherId => {
+            // STILL THE WEAVE'S OWN EDITOR, opened with both ends filled in.
+            // Not a second way to record a connection -- the same one, reached
+            // from here. The relation and the REASON stay the writer's to give;
+            // only the two facts this screen already knows are pre-filled.
             setIdentifying(false);
-            setConnectNote(true);
+            setConnectError("");
+            void (async () => {
+              try {
+                // BOTH ENDS HAVE TO EXIST BEFORE THEY CAN BE CONNECTED, and in
+                // this case one of them usually does not: the writer has just
+                // said "The Man in the Alley is a separate person from Altas",
+                // and The Man in the Alley has no entry at all yet.
+                //
+                // So it is created first, base-level, exactly as the Create
+                // button makes it. That is not a shortcut around the rule that
+                // new entries arrive empty -- it is that rule, applied on the
+                // way to the thing the writer actually asked for.
+                let mineId = targetId;
+                if (!mineId) {
+                  const { thread } = await newThread({
+                    project_path: projectPath,
+                    type: entry.type,
+                    name: entry.name,
+                    character_kind: entry.character_kind || undefined,
+                    aliases: entry.aliases,
+                  });
+                  mineId = thread.entity_id;
+                  await setEntryState({
+                    project_path: projectPath, item_id: entry.item_id,
+                    state: "open", created_entity_id: mineId,
+                  });
+                  onPatch({ created_entity_id: mineId });
+                }
+
+                const graph = await fetchGraph(projectPath,
+                                               { hideSpoilers: false });
+                const mine = graph.nodes.find(n => n.entity_id === mineId);
+                const other = graph.nodes.find(n => n.entity_id === otherId);
+                if (!mine || !other) {
+                  setConnectError("One of those entries could not be read.");
+                  return;
+                }
+                setConnecting({
+                  thread: mine, other,
+                  candidates: graph.nodes.filter(
+                    n => n.entity_id !== mine.entity_id),
+                });
+              } catch {
+                setConnectError("The world could not be read just now.");
+              }
+            })();
           }}
         />
       )}
 
-      {connectNote && (
-        <p className="rounded border border-border bg-surface px-2.5 py-1.5 text-[11px] text-text-muted"
-           data-testid="extractor-connect-note">
-          Both entries stay. Record how they relate from either one's page,
-          in Connections -- that is where a connection carries its reason, and
-          this screen deliberately does not keep a second way of making one.
-          Nothing here has been changed.
+      {connecting && (
+        <TieEditor
+          projectPath={projectPath}
+          thread={connecting.thread}
+          candidates={connecting.candidates}
+          startWith={connecting.other}
+          onClose={() => setConnecting(null)}
+          onChanged={() => { setConnecting(null); setReread(n => n + 1); }}
+        />
+      )}
+
+      {connectError && (
+        <p role="alert" className="text-[11px] text-rose-300"
+           data-testid="extractor-connect-error">
+          {connectError}
         </p>
       )}
 

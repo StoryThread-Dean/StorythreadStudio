@@ -130,19 +130,37 @@ interface TieEditorProps {
   onDone?: () => void;
   /** Re-read the world, so the map redraws with the new edge. */
   onChanged: () => void;
+  /**
+   * Open straight into the add form with BOTH ends already chosen.
+   *
+   * For the Profile Extractor's disguise case: the writer has just said "The
+   * Man in the Alley is really Altas, and they are two entries rather than two
+   * names". They have already answered the two questions this screen normally
+   * opens by asking -- which entry, and which other end -- so asking them again
+   * would be the app forgetting what it was just told.
+   *
+   * Everything else is unchanged, and deliberately so. The relation is still
+   * theirs to pick and the REASON is still required: this pre-fills the two
+   * facts it was given and nothing it would be guessing at.
+   */
+  startWith?: GraphNode;
 }
 
 export function TieEditor({
   projectPath, thread, candidates, likely, onClose, onDone, onChanged,
+  startWith,
 }: TieEditorProps) {
   const [ties, setTies] = useState<Tie[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const [adding, setAdding] = useState(false);
+  // Seeded from `startWith` when a caller already knows both ends. Initial
+  // state rather than an effect: the form should be open on the first paint,
+  // not flash the "who?" step and then replace it.
+  const [adding, setAdding] = useState(Boolean(startWith));
   const [query, setQuery] = useState("");
-  const [other, setOther] = useState<GraphNode | null>(null);
+  const [other, setOther] = useState<GraphNode | null>(startWith ?? null);
   const [options, setOptions] = useState<{
     forward: Relation[]; reverse: Relation[]; available: Relation[];
     // How long a reason may be. Sent by the backend, which is the thing that
