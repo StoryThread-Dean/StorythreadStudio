@@ -261,3 +261,87 @@ def mark_part(run: dict, item_id: str, part_id: str, state: str,
     part["state"] = state
     part["applied_as"] = applied_as
     return True
+
+
+# ── Putting several batches back together ───────────────────────────────────
+
+def _identity(entry: dict) -> tuple:
+    """
+    What makes two proposals the same thing across batches.
+
+    The entity id when the pass matched one, because that is certain. Otherwise
+    the kind and the name, folded for case and spacing -- "The Tall Man" and
+    "the tall man" from two different batches are one character.
+    """
+    entity_id = str(entry.get("entity_id") or "").strip()
+    if entity_id:
+        return ("id", entity_id)
+    name = " ".join(str(entry.get("name") or "").split()).lower()
+    return ("name", str(entry.get("type") or ""), name)
+
+
+def merge_entries(run: dict, new_entries: list[dict]) -> dict:
+    """
+    Fold a batch's entries into the run, combining rather than duplicating.
+
+    A character who appears in chapters one and six is proposed by both
+    batches. Appending blindly would give the writer the same person twice,
+    which is the failure the whole feature exists to avoid -- R11.6's grouping
+    problem, arriving by a different route.
+
+    THE RULE FOR PARTS: a batch's parts are ADDED to the entry, and a part the
+    writer has already dealt with is never disturbed. Two batches proposing an
+    overview for the same character give two overview proposals, and that is
+    correct -- they were written from different chapters and the writer picks.
+    What must not happen is a later batch resetting a part they already applied.
+
+    Returns counts: {"added": n, "merged": n, "parts": n}.
+    """
+    existing = {_identity(entry): entry for entry in run.get("entries") or []}
+    counts = {"added": 0, "merged": 0, "parts": 0}
+
+    for incoming in new_entries:
+        key = _identity(incoming)
+        target = existing.get(key)
+        if target is None:
+            run.setdefault("entries", []).append(incoming)
+            existing[key] = incoming
+            counts["added"] += 1
+            counts["parts"] += len(incoming.get("parts") or [])
+            continue
+
+        # Same thing, seen again. Keep what the writer has already done to it
+        # and add what this batch found.
+        counts["merged"] += 1
+        seen = {
+            (part.get("section_id"), part.get("form"),
+             (part.get("trait_name") or "").strip().lower(),
+             (part.get("content") or "").strip())
+            for part in target.get("parts") or []
+        }
+        for part in incoming.get("parts") or []:
+            signature = (part.get("section_id"), part.get("form"),
+                         (part.get("trait_name") or "").strip().lower(),
+                         (part.get("content") or "").strip())
+            # A batch that proposes word-for-word what another already did is
+            # not new information, and two identical cards is a worse screen.
+            if signature in seen:
+                continue
+            target.setdefault("parts", []).append(part)
+            seen.add(signature)
+            counts["parts"] += 1
+
+        # An entry the writer has ticked DONE stays done. A later batch adding
+        # something to it must not silently reopen a row they finished with --
+        # it would reappear at the bottom of their list with no explanation.
+        # The new parts are there when they choose to look.
+
+        # A reveal found by a later batch is worth keeping if the earlier one
+        # had none: it is an offer, and an offer is only ever additive.
+        if incoming.get("same_as") and not target.get("same_as"):
+            target["same_as"] = incoming["same_as"]
+        for alias in incoming.get("aliases") or []:
+            if alias not in (target.get("aliases") or []):
+                target.setdefault("aliases", []).append(alias)
+
+    return counts

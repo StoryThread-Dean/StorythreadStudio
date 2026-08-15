@@ -262,6 +262,11 @@ async def get_plan(project_path: str = Query(...)):
         # 0 means we could not find out, which is different from "it fits".
         "fits": (context_tokens == 0
                  or estimated_tokens < context_tokens * 0.8),
+        # HOW THE BOOK WILL BE SPLIT. A novel's worth of proposals does not fit
+        # in one reply and no budget fixes that, so the work is batched and the
+        # client walks them. Returned here so the screen can say "4 requests"
+        # before the writer commits to anything.
+        "batches": extract.plan_batches(chapters),
         # So the setup screen can say "you have 0 entries -- run Weaving first"
         # rather than letting the writer spend money discovering it.
         "has_world": bool(known),
@@ -415,6 +420,14 @@ class RunBody(BaseModel):
     # replace, and said go. Without this a run REFUSES rather than overwriting
     # work they paid for -- same shape as the accidental-close guard.
     replace_existing: bool = False
+    # ADD TO THE CURRENT RUN rather than starting one. This is how a book is
+    # covered in batches: the client walks the batches from /plan, and every
+    # one after the first appends. Each batch is SAVED as it lands, so a crash
+    # or a closed laptop three batches in keeps three batches of work.
+    append: bool = False
+    # Which batch this is, purely so the run can say "3 of 4" on screen.
+    batch_index: int = 0
+    batch_count: int = 1
 
 
 @router.post("/run")
@@ -439,7 +452,11 @@ async def post_run(body: RunBody):
     # asked for -- but silently discarding proposals they bought is not.
     existing = store.load(project_path)
     outstanding = store.unreviewed_count(existing)
-    if existing is not None and outstanding > 0 and not body.replace_existing:
+    # An append is the writer continuing the run they are already doing, so the
+    # replace guard would be asking whether they want to destroy their own work
+    # in progress. It applies only to STARTING one.
+    if (not body.append and existing is not None and outstanding > 0
+            and not body.replace_existing):
         raise CodexError(
             "extraction_would_replace",
             f"You have {outstanding} proposal{'s' if outstanding != 1 else ''} "
@@ -610,7 +627,7 @@ async def post_run(body: RunBody):
     if not proposals:
         raw_excerpt = (raw or "").strip()[:600]
 
-    run = extract.build_run(
+    fresh = extract.build_run(
         proposals, threads, model_used=model_id, leave_alone=excluded,
         scope={
             "chapter_ids": [c for c in (body.chapter_ids or [])],
@@ -619,10 +636,40 @@ async def post_run(body: RunBody):
             "excluded": sorted(excluded),
         },
     )
+
+    if body.append and existing is not None:
+        # MERGED, not appended. A character in chapters one and six is proposed
+        # by both batches, and two cards for one person is the exact failure
+        # this feature exists to prevent -- R11.6's grouping problem arriving by
+        # another road. See merge_entries for what happens to a part the writer
+        # has already dealt with: nothing.
+        run = existing
+        merged = store.merge_entries(run, fresh["entries"])
+        run["model_used"] = model_id
+        run.setdefault("batch_notes", [])
+    else:
+        run = fresh
+        merged = {"added": len(fresh["entries"]), "merged": 0,
+                  "parts": sum(len(e["parts"]) for e in fresh["entries"])}
+        run["batch_notes"] = []
+
+    # WHERE THE RUN HAS GOT TO, kept on the run so a writer who closes the app
+    # between batches can be told they stopped at three of four rather than
+    # being shown a partial world with no explanation.
+    run["batch_index"] = body.batch_index
+    run["batch_count"] = body.batch_count
+    run["batches_done"] = int(run.get("batches_done") or 0) + 1
     # Said out loud rather than hidden. A pass that quietly discarded half its
     # answer, with nothing in a position to notice, is the failure this repo
     # keeps finding.
-    run["dropped"] = dropped
+    # PER BATCH, appended rather than replaced: batch two truncating must not
+    # erase the note that batch one also did, or a writer reading the screen at
+    # the end would believe only the last request had a problem.
+    if dropped:
+        label = (f"Chapters {body.batch_index + 1} of {body.batch_count}: "
+                 if body.batch_count > 1 else "")
+        run.setdefault("batch_notes", []).extend(label + line for line in dropped)
+    run["dropped"] = list(run.get("batch_notes") or []) or dropped
     run["raw_excerpt"] = raw_excerpt
     run["finish_reason"] = finish_reason
     run["usage"] = {
@@ -632,8 +679,9 @@ async def post_run(body: RunBody):
     run["estimated_tokens"] = estimated
     run["context_tokens"] = context_tokens
     store.save(project_path, run)
-    return {"run": run, "progress": store.progress(run), "dropped": dropped,
-            "raw_excerpt": raw_excerpt}
+    return {"run": run, "progress": store.progress(run),
+            "dropped": run.get("dropped") or [],
+            "merged": merged, "raw_excerpt": raw_excerpt}
 
 
 # ── Applying one part, which is the only way anything is written ────────────

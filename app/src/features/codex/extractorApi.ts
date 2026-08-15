@@ -85,6 +85,10 @@ export interface ExtractorPlan {
   context_tokens: number;
   estimated_tokens: number;
   fits: boolean;
+  /** How the book will be split into requests that can actually be answered.
+   *  A novel's worth of proposals does not fit in one reply and no output
+   *  budget fixes that -- measured, not assumed. */
+  batches: string[][];
 }
 
 /** One clickable proposal: a section's prose, or a single trait. */
@@ -134,6 +138,13 @@ export interface ExtractionRun {
   raw_excerpt?: string;
   estimated_tokens?: number;
   context_tokens?: number;
+  /** Which batch this run reached, so a writer who closed the app between
+   *  batches is told they stopped at three of four rather than shown a
+   *  partial world with no explanation. */
+  batch_index?: number;
+  batch_count?: number;
+  batches_done?: number;
+  batch_notes?: string[];
 }
 
 export interface ExtractionProgress {
@@ -169,8 +180,14 @@ export function runExtraction(body: {
   exclude: string[];
   /** The writer has been told what a new run would replace and said go. */
   replace_existing: boolean;
+  /** Add to the run in progress rather than starting one. Every batch after
+   *  the first. Each is saved as it lands, so stopping halfway keeps half. */
+  append?: boolean;
+  batch_index?: number;
+  batch_count?: number;
 }): Promise<{ run: ExtractionRun; progress: ExtractionProgress;
-              dropped: string[]; raw_excerpt?: string }> {
+              dropped: string[]; raw_excerpt?: string;
+              merged?: { added: number; merged: number; parts: number } }> {
   return post("/run", body);
 }
 

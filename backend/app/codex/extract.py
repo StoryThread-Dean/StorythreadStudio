@@ -549,3 +549,64 @@ def build_run(proposals: list[dict], threads: list[dict], *,
             run["entries"].append(entry)
 
     return run
+
+
+# ── Splitting a book into requests that can be answered ─────────────────────
+#
+# A novel's worth of proposals does not fit in one reply, and no output budget
+# fixes that. Measured on the writer's own book: 44,227 input tokens produced
+# more than 32,000 output tokens and was still cut off. The answer is roughly
+# three quarters the size of the prose that produced it, and it grows with the
+# book while the reply budget does not.
+#
+# So the book is split. Each batch is one request, its results are merged into
+# one run, and the writer sees a single list at the end.
+
+# Input tokens per batch. Chosen from the measurement above with room to spare:
+# at roughly 0.75 output tokens per input token, 25,000 in should produce about
+# 19,000 out, comfortably inside a 64,000 budget even when a chapter is unusually
+# dense with new characters.
+#
+# DELIBERATELY CONSERVATIVE. Making batches too small costs a few more requests,
+# which is cheap and invisible. Making them too big costs a truncated answer,
+# which the writer pays for twice: once in tokens and once in the work of
+# noticing. When in doubt, more batches.
+BATCH_INPUT_TOKENS = 25_000
+
+# Never split so finely that a chapter is its own request purely because the
+# arithmetic said so. A chapter always travels whole -- half a scene tells a
+# model nothing useful about who is in it.
+CHARS_PER_TOKEN = 4
+
+
+def plan_batches(chapters: list[dict], *,
+                 budget_tokens: int = BATCH_INPUT_TOKENS) -> list[list[str]]:
+    """
+    [[chapter_id, ...], ...] -- the chapters grouped into answerable requests.
+
+    Chapters stay whole and stay in order: a batch is a run of consecutive
+    chapters, so the model reads a continuous stretch of the book rather than
+    an arbitrary selection of it. That matters for exactly the reason the
+    writer wanted whole-book runs in the first place -- a character introduced
+    in one chapter and returning three later is only visible if both are in the
+    same reading.
+
+    A single chapter larger than the budget still gets its own batch rather
+    than being split. It may truncate, and salvage handles that; cutting a
+    chapter in half would guarantee a worse answer.
+    """
+    batches: list[list[str]] = []
+    current: list[str] = []
+    current_tokens = 0
+
+    for chapter in chapters:
+        chapter_tokens = int(chapter.get("chars", 0)) // CHARS_PER_TOKEN
+        if current and current_tokens + chapter_tokens > budget_tokens:
+            batches.append(current)
+            current, current_tokens = [], 0
+        current.append(chapter["chapter_id"])
+        current_tokens += chapter_tokens
+
+    if current:
+        batches.append(current)
+    return batches

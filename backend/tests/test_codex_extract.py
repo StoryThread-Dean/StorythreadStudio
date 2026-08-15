@@ -645,3 +645,188 @@ def test_salvage_handles_a_COMPLETE_answer_identically():
     raw = _answer([{"type": "character", "name": "A"},
                    {"type": "character", "name": "B"}])
     assert [e["name"] for e in extract.salvage_entries(raw)] == ["A", "B"]
+
+
+# -- SPLITTING A BOOK INTO REQUESTS THAT CAN BE ANSWERED ---------------------
+#
+# Measured, not guessed: the writer's own run put 44,227 input tokens in and
+# produced more than 32,000 output tokens before being cut off. The answer is
+# roughly three quarters the size of the prose, and it grows with the book while
+# the reply budget does not. No single request can cover a novel.
+
+def _chapter(cid, chars):
+    return {"chapter_id": cid, "chars": chars}
+
+
+def test_a_short_book_is_one_request():
+    # Batching must not tax the ordinary case. A novella that fits should go up
+    # in one piece, because that is what lets the pass see the whole story.
+    batches = extract.plan_batches([_chapter("c1", 20000), _chapter("c2", 20000)])
+    assert batches == [["c1", "c2"]]
+
+
+def test_a_real_novel_is_split_into_answerable_pieces():
+    # Becoming a Hero: seven chapters, 275,535 characters.
+    chapters = [_chapter("c1", 49618), _chapter("c2", 34587),
+                _chapter("c3", 43902), _chapter("c4", 30597),
+                _chapter("c5", 30774), _chapter("c6", 32278),
+                _chapter("c7", 53779)]
+    batches = extract.plan_batches(chapters)
+    assert len(batches) == 4
+    # Every chapter travels exactly once.
+    assert [c for batch in batches for c in batch] == \
+        [c["chapter_id"] for c in chapters]
+
+
+def test_every_batch_is_inside_the_budget():
+    chapters = [_chapter(f"c{i}", 40000) for i in range(10)]
+    for batch in extract.plan_batches(chapters):
+        chars = 40000 * len(batch)
+        assert chars // extract.CHARS_PER_TOKEN <= extract.BATCH_INPUT_TOKENS
+
+
+def test_CHAPTERS_STAY_WHOLE_AND_IN_ORDER():
+    """
+    A batch is a run of CONSECUTIVE chapters, and no chapter is ever split.
+
+    Both halves matter. Consecutive, because the reason the writer wanted whole
+    book runs is that a character introduced in chapter two and returning in
+    chapter six is only visible when both are in one reading -- scattering
+    chapters across batches would destroy exactly that. Whole, because half a
+    scene tells a model nothing useful about who is in it.
+    """
+    chapters = [_chapter(f"c{i}", 30000) for i in range(6)]
+    batches = extract.plan_batches(chapters)
+    flat = [c for batch in batches for c in batch]
+    assert flat == [c["chapter_id"] for c in chapters]
+    for batch in batches:
+        numbers = [int(c[1:]) for c in batch]
+        assert numbers == list(range(numbers[0], numbers[0] + len(numbers)))
+
+
+def test_a_chapter_bigger_than_the_budget_still_travels_whole():
+    # It may truncate, and salvage handles that. Cutting a chapter in half would
+    # guarantee a worse answer rather than risk one.
+    batches = extract.plan_batches([_chapter("huge", 500000)])
+    assert batches == [["huge"]]
+
+
+def test_no_chapters_is_no_batches():
+    assert extract.plan_batches([]) == []
+
+
+# -- PUTTING THE BATCHES BACK TOGETHER ---------------------------------------
+
+def _entry_with(name, content, entity_id="", type_id="character"):
+    entry = store.new_entry(entity_id=entity_id, type_id=type_id, name=name)
+    entry["parts"].append(store.new_part(
+        section_id="overview", heading="Overview",
+        form=store.FORM_PROSE, content=content))
+    return entry
+
+
+def test_THE_SAME_CHARACTER_IN_TWO_BATCHES_IS_ONE_ENTRY():
+    """
+    The failure this exists to prevent, arriving by a new road.
+
+    A character in chapters one and six is proposed by both batches. Appending
+    blindly gives the writer the same person twice, which is R11.6's grouping
+    problem all over again -- and this time the app would have created it.
+    """
+    run = store.new_run()
+    run["entries"].append(_entry_with("Rosie", "From chapter one.",
+                                      entity_id="e-rosie"))
+    counts = store.merge_entries(
+        run, [_entry_with("Rosie", "From chapter six.", entity_id="e-rosie")])
+
+    assert len(run["entries"]) == 1
+    assert counts["merged"] == 1
+    # Both proposals are kept, because they were written from different
+    # chapters and the writer picks between them.
+    assert len(run["entries"][0]["parts"]) == 2
+
+
+def test_it_matches_on_the_name_when_there_is_no_entry_yet():
+    # A described character has no entity id in either batch. "The Tall Man"
+    # and "the tall man" are one person.
+    run = store.new_run()
+    run["entries"].append(_entry_with("The Tall Man", "Seen in chapter two."))
+    store.merge_entries(run, [_entry_with("the tall man", "Again in six.")])
+    assert len(run["entries"]) == 1
+
+
+def test_two_different_people_stay_two_entries():
+    run = store.new_run()
+    run["entries"].append(_entry_with("Rosie", "A courier."))
+    store.merge_entries(run, [_entry_with("Lou", "A mechanic.")])
+    assert [e["name"] for e in run["entries"]] == ["Rosie", "Lou"]
+
+
+def test_the_same_name_of_two_DIFFERENT_KINDS_stays_apart():
+    # A city and a faction can share a name, and folding them would be a
+    # silent, unrecoverable mistake in the writer's world.
+    run = store.new_run()
+    run["entries"].append(_entry_with("Ashfall", "A city.", type_id="location"))
+    store.merge_entries(run, [_entry_with("Ashfall", "A faction.",
+                                          type_id="faction")])
+    assert len(run["entries"]) == 2
+
+
+def test_a_batch_repeating_itself_word_for_word_adds_nothing():
+    # Two identical cards is a worse screen, and it is not new information.
+    run = store.new_run()
+    run["entries"].append(_entry_with("Rosie", "A courier.", entity_id="e-r"))
+    counts = store.merge_entries(
+        run, [_entry_with("Rosie", "A courier.", entity_id="e-r")])
+    assert len(run["entries"][0]["parts"]) == 1
+    assert counts["parts"] == 0
+
+
+def test_A_LATER_BATCH_NEVER_DISTURBS_WORK_THE_WRITER_HAS_DONE():
+    """
+    The rule that makes batching safe to leave running.
+
+    The writer works through batch one's proposals while batches two and three
+    are still arriving. A merge that reset a part they had already applied --
+    or reopened an entry they ticked done -- would undo their work in front of
+    them, and they would have no way to tell what had happened.
+    """
+    run = store.new_run()
+    entry = _entry_with("Rosie", "From chapter one.", entity_id="e-rosie")
+    entry["parts"][0]["state"] = store.PART_APPLIED
+    entry["parts"][0]["applied_as"] = "merge"
+    entry["state"] = store.ENTRY_DONE
+    run["entries"].append(entry)
+
+    store.merge_entries(
+        run, [_entry_with("Rosie", "From chapter six.", entity_id="e-rosie")])
+
+    survivor = run["entries"][0]
+    assert survivor["state"] == store.ENTRY_DONE
+    assert survivor["parts"][0]["state"] == store.PART_APPLIED
+    assert survivor["parts"][0]["applied_as"] == "merge"
+    # And the new proposal is there when they choose to look.
+    assert len(survivor["parts"]) == 2
+    assert survivor["parts"][1]["state"] == store.PART_OPEN
+
+
+def test_a_reveal_found_by_a_later_batch_is_kept():
+    # Chapter six is where "the hulking figure" turns out to be Altas. The
+    # earlier batch could not have known.
+    run = store.new_run()
+    run["entries"].append(_entry_with("The hulking figure", "Silent."))
+    incoming = _entry_with("The hulking figure", "Revealed.")
+    incoming["same_as"] = "e-altas"
+    store.merge_entries(run, [incoming])
+    assert run["entries"][0]["same_as"] == "e-altas"
+
+
+def test_aliases_accumulate_across_batches():
+    run = store.new_run()
+    first = _entry_with("Major Pain", "A hero.", entity_id="e-mp")
+    first["aliases"] = ["Pain"]
+    run["entries"].append(first)
+    later = _entry_with("Major Pain", "Retired.", entity_id="e-mp")
+    later["aliases"] = ["Pain", "The Major"]
+    store.merge_entries(run, [later])
+    assert run["entries"][0]["aliases"] == ["Pain", "The Major"]

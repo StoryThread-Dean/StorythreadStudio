@@ -69,6 +69,11 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
   // The model the picker last set, so the numbers below update at once
   // rather than after a round trip the writer has no reason to expect.
   const [chosenModel, setChosenModel] = useState<string>("");
+  // Which batch is in flight, so a run that takes several minutes says what it
+  // is doing rather than showing one spinner for ten minutes.
+  const [batchAt, setBatchAt] = useState(0);
+  const [batchTotal, setBatchTotal] = useState(0);
+  const [partial, setPartial] = useState<string>("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,20 +99,53 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
   const start = useCallback(async (replaceExisting: boolean) => {
     setRunning(true);
     setError(null);
+    setPartial("");
+
+    const exclude = (plan?.known ?? [])
+      .map(k => k.entity_id)
+      .filter(id => !included.has(id));
+
+    // ONE REQUEST PER BATCH, IN SEQUENCE, EACH SAVED AS IT LANDS.
+    //
+    // A novel cannot be answered in one reply, so the book is split. Walking
+    // the batches here rather than looping inside one HTTP call is deliberate:
+    // a ten-minute request that fails at minute nine loses everything, while
+    // this keeps every batch that landed. Same rule Sweep.tsx follows -- a
+    // partial failure keeps what worked and says how far it got.
+    const wanted = chapters.size === 0
+      ? null : (id: string) => chapters.has(id);
+    const batches = (plan?.batches ?? [])
+      .map(batch => wanted ? batch.filter(wanted) : batch)
+      .filter(batch => batch.length > 0);
+    const runs = batches.length > 0 ? batches : [[...chapters]];
+
+    setBatchTotal(runs.length);
+    // COUNTED IN A LOCAL, NOT FROM STATE. The catch below needs to know how far
+    // the loop got, and reading `batchAt` there reads the value captured when
+    // this callback was created -- always 0. Found by the test for a failing
+    // batch, which is exactly the path where the number matters.
+    let done = 0;
     try {
-      const body = await runExtraction({
-        project_path: projectPath,
-        chapter_ids: [...chapters],
-        // The wire still speaks in exclusions, because that is what the
-        // backend guarantees against. The screen speaks in inclusions. One
-        // translation, in one place, rather than two vocabularies.
-        exclude: (plan?.known ?? [])
-          .map(k => k.entity_id)
-          .filter(id => !included.has(id)),
-        replace_existing: replaceExisting,
-      });
+      let last = null;
+      for (let index = 0; index < runs.length; index += 1) {
+        setBatchAt(index + 1);
+        const body = await runExtraction({
+          project_path: projectPath,
+          chapter_ids: runs[index],
+          // The wire still speaks in exclusions, because that is what the
+          // backend guarantees against. The screen speaks in inclusions. One
+          // translation, in one place, rather than two vocabularies.
+          exclude,
+          replace_existing: replaceExisting,
+          append: index > 0,
+          batch_index: index,
+          batch_count: runs.length,
+        });
+        last = body.run;
+        done = index + 1;
+      }
       setConfirmReplace(null);
-      onExtracted(body.run);
+      if (last) onExtracted(last);
     } catch (e) {
       if (e instanceof CodexApiError && e.code === "extraction_would_replace") {
         // Not an error: a question. The count comes back in `detail` so the
@@ -116,8 +154,17 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       } else {
         setError(e instanceof Error ? e.message : "That did not run.");
       }
+      // A BATCH THAT FAILS DOES NOT DISCARD THE ONES THAT WORKED. They are
+      // already saved, so the writer keeps what they paid for and is told
+      // where it stopped.
+      if (done > 0) {
+        setPartial(`Stopped after ${done} of ${runs.length}. What ${done === 1
+                   ? "that part" : "those parts"} found is saved -- open it, `
+                   + `or run the rest again.`);
+      }
     } finally {
       setRunning(false);
+      setBatchAt(0);
     }
   }, [projectPath, chapters, included, plan, onExtracted]);
 
@@ -149,6 +196,10 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
   // fit answer is stale the moment the picker is used.
   const contextTokens = chosenModel ? 0 : (plan?.context_tokens ?? 0);
   const fits = contextTokens === 0 || estimatedTokens < contextTokens * 0.8;
+  const plannedBatches = (plan?.batches ?? [])
+    .map(batch => chapters.size === 0
+      ? batch : batch.filter(id => chapters.has(id)))
+    .filter(batch => batch.length > 0).length;
 
   return (
     <div className="space-y-4" data-testid="extractor-setup">
@@ -338,6 +389,13 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
             <span className="text-text-primary">{modelId}</span>.
           </>
         )}
+        {plannedBatches > 1 && (
+          <>
+            {" "}A book this size cannot be answered in one reply, so it goes
+            up as <span className="text-text-primary">{plannedBatches}</span>{" "}
+            requests and the results are combined into one list.
+          </>
+        )}
       </div>
 
       {/* WILL IT FIT. The first live run sent about 69,000 tokens to a model
@@ -426,8 +484,18 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       )}
 
       {running && (
-        <p className="text-[11px] text-faint">
-          A whole novel takes a few minutes. You can leave this screen open.
+        <p className="text-[11px] text-faint" data-testid="extractor-progress-line">
+          {batchTotal > 1
+            ? `Reading part ${batchAt} of ${batchTotal}. Each part is saved as `
+              + `it finishes, so nothing is lost if you stop.`
+            : "A whole novel takes a few minutes. You can leave this screen open."}
+        </p>
+      )}
+
+      {partial && (
+        <p className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200"
+           data-testid="extractor-partial-run">
+          {partial}
         </p>
       )}
     </div>

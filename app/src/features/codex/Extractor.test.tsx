@@ -40,6 +40,7 @@ const PLAN = {
   has_world: true,
   unreviewed: 0,
   has_current: false,
+  batches: [["c-1", "c-2"]],
   model_id: "anthropic/claude-sonnet-4",
   model_error: "",
   context_tokens: 200000,
@@ -256,14 +257,19 @@ describe("the setup screen", () => {
     expect(notice).toMatch(/build on/i);
   });
 
-  it("sends the whole book when no chapter is picked", async () => {
+  it("covers every chapter when none is picked", async () => {
+    // The request now NAMES its chapters rather than sending an empty list to
+    // mean everything, because a book is split into batches and each one has
+    // to say which part of the book it is. "All of it" is the union of the
+    // batches, and the whole-book default is that no batch is filtered out.
     await open();
     await userEvent.click(screen.getByTestId("extractor-run"));
     await waitFor(() => {
       const run = calls.find(c => c.url.includes("/api/extractor/run"));
       expect(run).toBeTruthy();
       const sent = JSON.parse(String(run!.init!.body));
-      expect(sent.chapter_ids).toEqual([]);
+      expect(sent.chapter_ids).toEqual(["c-1", "c-2"]);
+      expect(sent.append).toBe(false);
     });
   });
 
@@ -857,5 +863,148 @@ describe("a partial run", () => {
                             onChanged={() => {}} onStartOver={() => {}} />);
     await screen.findByTestId("extractor-review");
     expect(screen.queryByTestId("extractor-partial")).toBeNull();
+  });
+});
+
+
+// -- WALKING A BOOK IN BATCHES -----------------------------------------------
+//
+// A novel cannot be answered in one reply -- measured on the writer's own book,
+// where 44,227 input tokens produced more than 32,000 output tokens and was
+// still cut off. So the book is split, one request per batch, and the results
+// are merged into one list.
+//
+// The loop lives on the screen rather than inside one HTTP call on purpose. A
+// ten-minute request that fails at minute nine loses everything; this keeps
+// every batch that landed. Same rule Sweep.tsx follows.
+
+describe("a book that needs more than one request", () => {
+  const BOOK = {
+    ...PLAN,
+    chapters: [
+      { chapter_id: "c-1", filename: "01.md", title: "One", chars: 90000 },
+      { chapter_id: "c-2", filename: "02.md", title: "Two", chars: 90000 },
+      { chapter_id: "c-3", filename: "03.md", title: "Three", chars: 90000 },
+    ],
+    batches: [["c-1"], ["c-2"], ["c-3"]],
+    context_tokens: 1048576,
+  };
+
+  async function open(plan = BOOK) {
+    mockApi({ "/api/extractor/plan": plan });
+    render(<ExtractorSetup projectPath={PROJECT} onExtracted={() => {}} />);
+    await screen.findByTestId("extractor-setup");
+  }
+
+  function runCalls() {
+    return calls
+      .filter(c => c.url.includes("/api/extractor/run"))
+      .map(c => JSON.parse(String(c.init?.body)));
+  }
+
+  /** A stub that answers every route this screen touches, with the run route
+   *  under the test's control. The shared mockApi answers instantly, which is
+   *  right for most tests and useless for the two below: one needs to observe
+   *  a request in flight, the other needs a specific batch to fail. */
+  function stubRoutes({ run }: { run: () => Promise<unknown> }) {
+    calls = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      const ok = (payload: unknown) =>
+        new Response(JSON.stringify(payload), { status: 200 });
+      if (url.includes("/api/extractor/run")) {
+        try {
+          return ok(await run());
+        } catch {
+          return new Response(JSON.stringify({
+            detail: { code: "unknown", message: "The provider timed out." },
+          }), { status: 503 });
+        }
+      }
+      if (url.includes("/api/extractor/models")) return ok({ models: [], error: "" });
+      if (url.includes("/api/extractor/plan")) return ok(BOOK);
+      return ok({});
+    }));
+  }
+
+
+  it("says how many requests it will take, before the button", async () => {
+    // Money again: three requests is three times the cost of one, and a writer
+    // should know that before pressing rather than from their bill.
+    await open();
+    expect(body("extractor-summary")).toMatch(/3 requests/);
+  });
+
+  it("sends one request per batch, in reading order", async () => {
+    await open();
+    await userEvent.click(screen.getByTestId("extractor-run"));
+    await waitFor(() => expect(runCalls().length).toBe(3));
+    expect(runCalls().map(r => r.chapter_ids))
+      .toEqual([["c-1"], ["c-2"], ["c-3"]]);
+  });
+
+  it("STARTS the run once and APPENDS the rest", async () => {
+    // The distinction is what stops batch two wiping batch one, and what stops
+    // the replace guard firing on the writer own work in progress.
+    await open();
+    await userEvent.click(screen.getByTestId("extractor-run"));
+    await waitFor(() => expect(runCalls().length).toBe(3));
+    expect(runCalls().map(r => r.append)).toEqual([false, true, true]);
+    expect(runCalls().map(r => r.batch_index)).toEqual([0, 1, 2]);
+    expect(runCalls().every(r => r.batch_count === 3)).toBe(true);
+  });
+
+  it("says which part it is reading while it works", async () => {
+    // One spinner for ten minutes is indistinguishable from a hang. The stub
+    // holds each request open so the progress line exists to be read -- an
+    // instant mock would finish the whole loop before anything rendered, and
+    // the test would pass by never looking.
+    let release = () => {};
+    stubRoutes({
+      run: async () => {
+        await new Promise(resolve => { release = () => resolve(null); });
+        return { run: RUN, progress: {}, dropped: [] };
+      },
+    });
+    render(<ExtractorSetup projectPath={PROJECT} onExtracted={() => {}} />);
+    await screen.findByTestId("extractor-setup");
+    await userEvent.click(screen.getByTestId("extractor-run"));
+
+    await waitFor(() =>
+      expect(body("extractor-progress-line")).toMatch(/part 1 of 3/i));
+    expect(body("extractor-progress-line")).toMatch(/saved as it finishes/i);
+    release();
+  });
+
+  it("only sends the batches the writer ticked", async () => {
+    await open();
+    // Untick chapters one and three: they should drop out of the batch list
+    // entirely rather than being sent as empty requests.
+    await userEvent.click(screen.getByRole("button", { name: "One" }));
+    await userEvent.click(screen.getByRole("button", { name: "Three" }));
+    await userEvent.click(screen.getByTestId("extractor-run"));
+    await waitFor(() => expect(runCalls().length).toBe(1));
+    expect(runCalls()[0].chapter_ids).toEqual(["c-2"]);
+  });
+
+  it("A FAILED BATCH KEEPS THE ONES THAT WORKED", async () => {
+    // The whole reason the loop lives on the screen rather than inside one
+    // request. Those batches are already saved on disk; the writer keeps what
+    // they paid for and is told where it stopped.
+    let seen = 0;
+    stubRoutes({
+      run: async () => {
+        seen += 1;
+        if (seen === 3) throw new Response(null, { status: 503 });
+        return { run: RUN, progress: {}, dropped: [] };
+      },
+    });
+    render(<ExtractorSetup projectPath={PROJECT} onExtracted={() => {}} />);
+    await screen.findByTestId("extractor-setup");
+    await userEvent.click(screen.getByTestId("extractor-run"));
+
+    const notice = await screen.findByTestId("extractor-partial-run");
+    expect(notice.textContent).toMatch(/Stopped after 2 of 3/i);
+    expect(notice.textContent).toMatch(/is saved/i);
   });
 });
