@@ -62,8 +62,13 @@ function showUnplaced(stops = [unplaced(1, "Carries a scar."),
 }
 
 describe("which kinds get a list at all", () => {
-  it("is the two whose answer is the same shape every time", () => {
-    expect([...SWEEPABLE].sort()).toEqual(["loose_thread", "unplaced"]);
+  it("is the ones whose answer is the same shape every time", () => {
+    // Three now. `place` joined them because its answer is the same shape for
+    // every row -- "yes, those chapters" -- and because a world of sixty
+    // entries is sixty of them, which is exactly the count that made a
+    // tick-list necessary for the other two.
+    expect([...SWEEPABLE].sort())
+      .toEqual(["loose_thread", "place", "unplaced"]);
   });
 
   it("never a Snag", () => {
@@ -253,5 +258,107 @@ describe("not a forced march, in either direction", () => {
     const text = screen.getByTestId("sweep").textContent ?? "";
     expect(text).not.toContain("—");
     expect(text).not.toContain("–");
+  });
+});
+
+
+// ── PLACING A WHOLE WORLD AT ONCE ───────────────────────────────────────────
+//
+// Declared presence needs one answer per entry, and a long book has sixty of
+// them. Sixty screens is the thing the sweep exists to prevent -- the writer's
+// own words about the first version of this problem were "forty unplaced facts
+// should be a tick-list, not forty screens".
+//
+// The row's answer is the same shape every time ("yes, those chapters"), which
+// is what makes it sweepable at all. Changing WHICH chapters is a real decision
+// and stays one at a time.
+
+describe("the place sweep", () => {
+  const PLACE_STOPS = [
+    { key: "place|e-serena", kind: "place", entity_id: "e-serena",
+      title: "Where does Serena appear?", why: "",
+      detail: { name: "Serena", type: "character",
+                found: ["c-1", "c-2"], already: [] } },
+    { key: "place|e-lou", kind: "place", entity_id: "e-lou",
+      title: "Where does Lou appear?", why: "",
+      detail: { name: "Lou", type: "character",
+                found: ["c-2"], already: ["c-1"] } },
+  ] as never as Parameters<typeof Sweep>[0]["stops"];
+
+  function openPlace() {
+    const onRecordPlace = vi.fn().mockResolvedValue(undefined);
+    const onDismiss = vi.fn().mockResolvedValue(undefined);
+    const onDone = vi.fn();
+    render(
+      <Sweep stops={PLACE_STOPS} kind="place" chapters={CHAPTERS}
+             onPlace={vi.fn()} onRecordPlace={onRecordPlace}
+             onDismiss={onDismiss} onDone={onDone} onClose={vi.fn()} />,
+    );
+    return { onRecordPlace, onDismiss, onDone };
+  }
+
+  it("SHOWS WHICH CHAPTERS EACH ROW WOULD RECORD", () => {
+    // The whole decision is "does that look right", and it cannot be made
+    // without seeing the answer being offered.
+    openPlace();
+    const shown = screen.getAllByTestId("sweep-place-chapters");
+    // Resolved to the chapter's TITLE, not its id -- an anchor is a machine
+    // word and the writer is being asked to recognise their own book.
+    expect(shown[0].textContent).toMatch(/The Raid/);
+    expect(shown[0].textContent).toMatch(/North/);
+  });
+
+  it("ticks nothing on open", async () => {
+    // The sweep's own rule, and here it is the write boundary: nothing about
+    // the writer's world changes because a screen appeared.
+    openPlace();
+    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxes.every(b => !b.checked)).toBe(true);
+  });
+
+  it("records the ticked rows, and only those", async () => {
+    const { onRecordPlace } = openPlace();
+    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    fireEvent.click(boxes[0]);
+    fireEvent.click(screen.getByTestId("sweep-record-place"));
+    await waitFor(() => expect(onRecordPlace).toHaveBeenCalledTimes(1));
+    expect(onRecordPlace.mock.calls[0][1]).toEqual(["c-1", "c-2"]);
+  });
+
+  it("KEEPS WHAT THE WRITER ALREADY RECORDED", async () => {
+    // Accepting an offer must ADD to their statement rather than replace it.
+    // Lou is already placed in chapter one and the scan found chapter two;
+    // recording must not drop chapter one.
+    const { onRecordPlace } = openPlace();
+    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    fireEvent.click(boxes[1]);
+    fireEvent.click(screen.getByTestId("sweep-record-place"));
+    await waitFor(() => expect(onRecordPlace).toHaveBeenCalled());
+    expect(onRecordPlace.mock.calls[0][1]).toEqual(["c-1", "c-2"]);
+  });
+
+  it("counts what the button will do", async () => {
+    openPlace();
+    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    fireEvent.click(boxes[0]);
+    expect(screen.getByTestId("sweep-record-place").textContent)
+      .toMatch(/Record 1/);
+    fireEvent.click(boxes[1]);
+    expect(screen.getByTestId("sweep-record-place").textContent)
+      .toMatch(/Record 2/);
+  });
+
+  it("offers the permanent no in this kind's own words", () => {
+    openPlace();
+    expect(screen.getByTestId("sweep-dismiss").textContent)
+      .toMatch(/Do not place/);
+  });
+
+  it("says to deal with one alone to change its chapters", () => {
+    // The sweep accepts a suggestion wholesale. Editing which chapters is a
+    // real decision and belongs where each chapter is individually tickable.
+    openPlace();
+    expect(screen.getByTestId("sweep").textContent)
+      .toMatch(/deal with that one on its own/i);
   });
 });

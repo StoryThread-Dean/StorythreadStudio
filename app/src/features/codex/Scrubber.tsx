@@ -209,36 +209,59 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
       </div>
 
       {/* ── Chapter titles, with the resting one opened out ─────────────── */}
-      <ol className="mt-0.5 flex gap-px" aria-hidden="true">
+      {/* ON THE SAME GRID AS THE DOTS, which they were not.
+          ─────────────────────────────────────────────────────────────────
+          Reported: "the text titles for Chapters on the slider now appear out
+          of position. Visually appearing to slide more consistently to the
+          right instead of being aligned under the chapter representative Dot."
+
+          Two separate offsets, and the second is the one that made it look like
+          drift rather than a constant nudge:
+
+            1. The dots sit at fraction (i + 1) / N, because there are N + 1
+               stops once "before the book" is counted. The titles were N flex
+               cells across the full width, centring each at (i + 0.5) / N --
+               a constant half-cell to the left of its own dot.
+            2. The resting title had flexGrow: 3, so every title AFTER it was
+               pushed right by two cells' worth. That is why the error grew
+               along the track instead of staying put.
+
+          The old comment argued that centring each title on its tick would
+          overlap the neighbours. That is true of the expanded one and false of
+          the rest, so the answer is a width limit rather than a different
+          grid: each title is centred on its own dot and clipped to the space
+          between them, and the resting one is allowed to be wider and to wrap
+          because it is the one being read. */}
+      <div className="relative mt-0.5 h-7" aria-hidden="true">
         {chapters.map((chapter, i) => {
           const here = i === value;
           return (
-            <li
+            <span
               key={chapter.chapter_id}
               data-testid="scrubber-title"
               data-active={here ? "true" : "false"}
-              // The active chapter takes three times the room and wraps; the
-              // rest stay narrow and truncate. This is the whole point of the
-              // component: the handle visibly LANDS on a chapter.
-              //
-              // Left as a flex row rather than placed on the tick grid on
-              // purpose. Centring each title on its own tick would either
-              // overlap the neighbours or force every one of them to a single
-              // truncated character, and the expanded title is the thing the
-              // writer is actually reading.
-              style={{ flexGrow: here ? 3 : 1, flexBasis: 0 }}
-              className={`min-w-0 text-[10px] leading-tight ${
-                here ? "font-semibold text-violet-200"
-                     : "truncate text-faint"
+              style={{
+                left: at(i),
+                // The resting title gets three slots' worth; the others get
+                // one, less a hair so neighbours do not touch.
+                // One line: a newline inside calc() is invalid CSS and the
+                // whole declaration is dropped, which is a silent way to lose
+                // a layout rule.
+                width: `calc((100% - ${THUMB}px) / ${chapters.length} * ${here ? 3 : 1} - 2px)`,
+              }}
+              className={`absolute top-0 -translate-x-1/2 text-center text-[10px] leading-tight ${
+                here
+                  ? "z-10 font-semibold text-violet-200"
+                  : "truncate text-faint"
               }`}
               title={`${i + 1} - ${chapter.title}`}
             >
               <span className={here ? "" : "text-faint"}>{i + 1}</span>{" "}
               {chapter.title}
-            </li>
+            </span>
           );
         })}
-      </ol>
+      </div>
 
       {/* Standing before chapter one is a real position -- it is the world as
           the reader meets it, before anything has happened -- and the track has

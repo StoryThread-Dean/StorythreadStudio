@@ -63,6 +63,15 @@ function fractionOf(left: string): number {
 
 const ticks = () => screen.getAllByTestId("scrubber-tick");
 const titles = () => screen.getAllByTestId("scrubber-title");
+
+/** The multiplier out of a width calc, however jsdom chose to rearrange it.
+ *  The widths are `calc((100% - Npx) / count * slots - 2px)`, which jsdom
+ *  normalises to `calc(-2px + <factor> * (100% - Npx))`. Comparing factors
+ *  tests the intent; matching the literal would test the CSS parser. */
+function widthFactor(element: HTMLElement): number {
+  const match = /([\d.]+)\s*\*\s*\(100%/.exec(element.style.width);
+  return match ? parseFloat(match[1]) : 0;
+}
 const active = (nodes: HTMLElement[]) =>
   nodes.filter(n => n.getAttribute("data-active") === "true");
 
@@ -131,18 +140,59 @@ describe("the expansion is the cause and effect", () => {
   it("gives it the room to wrap, rather than truncating it", async () => {
     // The whole title, over as many lines as it needs. Truncating the ONE
     // chapter the writer is looking at would defeat the point.
+    //
+    // Asserted on the WIDTH rather than on flexGrow, which is what it used to
+    // be: the titles moved onto the tick grid so they line up under their own
+    // dots, and the mechanism changed with them. What must stay true is that
+    // the resting one is wider and is not clipped.
     open(0);
     const [resting] = active(titles());
-    expect(resting.style.flexGrow).toBe("3");
+    const other = titles().find(t => t.getAttribute("data-active") !== "true")!;
+    expect(widthFactor(resting)).toBeGreaterThan(widthFactor(other));
     expect(resting.className).not.toMatch(/truncate/);
   });
 
   it("keeps the neighbours narrow and truncated", async () => {
     open(0);
+    const [resting] = active(titles());
     const others = titles().filter(t => t.getAttribute("data-active") !== "true");
     for (const other of others) {
-      expect(other.style.flexGrow).toBe("1");
+      expect(widthFactor(other)).toBeLessThan(widthFactor(resting));
       expect(other.className).toMatch(/truncate/);
+    }
+  });
+
+  it("PUTS EVERY TITLE ON THE SAME GRID AS ITS OWN DOT", async () => {
+    /*
+     * The reported bug: "the text titles for Chapters on the slider now appear
+     * out of position. Visually appearing to slide more consistently to the
+     * right instead of being aligned under the chapter representative Dot."
+     *
+     * Two offsets were at work. The titles were flex cells across the full
+     * width, centring each half a cell left of its dot -- and the resting one
+     * grew to three cells, pushing every title after it further right again,
+     * which is why the error looked like drift rather than a fixed nudge.
+     */
+    open(2);
+    const dots = screen.getAllByTestId("scrubber-tick");
+    const labels = titles();
+    expect(labels.length).toBe(dots.length);
+    for (let i = 0; i < dots.length; i += 1) {
+      expect(labels[i].style.left).toBe(dots[i].style.left);
+    }
+  });
+
+  it("keeps them aligned wherever the handle rests", async () => {
+    // The drift depended on where the expansion was, so one position proves
+    // nothing. This is the regression the old layout could not have passed.
+    for (const position of [0, 1, 2]) {
+      cleanup();
+      open(position);
+      const dots = screen.getAllByTestId("scrubber-tick");
+      const labels = titles();
+      for (let i = 0; i < dots.length; i += 1) {
+        expect(labels[i].style.left).toBe(dots[i].style.left);
+      }
     }
   });
 

@@ -563,6 +563,28 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
     endpoint: "/api/codex/fact",
   },
+  "weaving.sweep-place": {
+    what: "Every entry your writing places, as one list, with the chapters it "
+      + "found beside each.",
+    why: "A long book has more characters, places and factions than fit in one "
+      + "AI request. Recording where each one appears lets the app send only "
+      + "what belongs in the chapter you are writing -- but a world of sixty "
+      + "entries is sixty questions, and nobody answers sixty questions one "
+      + "screen at a time. This is the same offer as a list.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Read the chapters beside each name. They are the ones your prose puts "
+        + "that entry in.",
+      "Tick the ones that look right and record them together.",
+      "To change WHICH chapters for one of them, leave it here and deal with "
+        + "it on its own -- there you can tick each chapter individually, and "
+        + "add one your prose never names them in.",
+      "Anything you leave is asked again next time. Nothing is written until "
+        + "you press the button.",
+    ],
+    endpoint: "/api/codex/place",
+  },
   "weaving.sweep-loose": {
     what: "Every entry that connects to nothing, as one list.",
     why: "Mentions of a name already find its entry on their own. What is "

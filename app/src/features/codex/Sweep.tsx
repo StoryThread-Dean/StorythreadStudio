@@ -41,7 +41,7 @@ import type { ChapterAnchor } from "./api";
 import type { Stop } from "./weavingApi";
 
 /** The kinds that read better as a list. Everything else stays a walk. */
-export const SWEEPABLE = new Set(["unplaced", "loose_thread"]);
+export const SWEEPABLE = new Set(["unplaced", "loose_thread", "place"]);
 
 /** What one row can carry, per kind. */
 interface Row {
@@ -59,6 +59,12 @@ interface SweepProps {
   chapters: ChapterAnchor[];
   /** Place a fact. Resolves when written. */
   onPlace: (stop: Stop, anchor: string) => Promise<void>;
+  /** `place` only: record where an entry appears. A LIST, not one anchor --
+   *  the question here is "which chapters is this in", and the scan has
+   *  already answered it. Ticking a row accepts that answer wholesale; a
+   *  writer who wants to change it deals with the stop one at a time, where
+   *  the chapters are individually tickable. */
+  onRecordPlace?: (stop: Stop, anchors: string[]) => Promise<void>;
   /** The permanent no, for the ticked rows. */
   onDismiss: (stop: Stop) => Promise<void>;
   /** Finished with these -- the walk skips every one of them. `settled` is the
@@ -80,8 +86,8 @@ function describe(stop: Stop, kind: string): string {
   return String(stop.detail?.name ?? stop.title);
 }
 
-export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
-                        onClose }: SweepProps) {
+export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
+                        onDismiss, onDone, onClose }: SweepProps) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [rows, setRows] = useState<Row[]>(
     () => stops.map(stop => ({ stop, what: describe(stop, kind), at: "" })));
@@ -92,6 +98,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
   const [settled, setSettled] = useState<Set<string>>(new Set());
 
   const unplaced = kind === "unplaced";
+  const placing = kind === "place";
   const open = rows.filter(r => !settled.has(r.stop.key));
 
   function toggle(key: string) {
@@ -117,6 +124,16 @@ export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
   // arithmetic that makes a writer stop trusting a count.
   const missingAnchor = unplaced ? chosen.filter(r => !r.at).length : 0;
   const placeable = unplaced ? chosen.filter(r => r.at) : chosen;
+
+  /** The chapters the scan found for one row, plus what was already recorded --
+   *  which is what accepting means: add to the writer's statement rather than
+   *  replace it, or accepting a suggestion about chapter six would silently
+   *  drop chapter one. */
+  const anchorsFor = (row: Row): string[] => {
+    const found = (row.stop.detail?.found as string[]) ?? [];
+    const already = (row.stop.detail?.already as string[]) ?? [];
+    return [...new Set([...already, ...found])];
+  };
 
   async function run(work: (row: Row) => Promise<void>, rowsToDo: Row[]) {
     setBusy(true);
@@ -144,7 +161,9 @@ export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
     }
   }
 
-  const label = kind === "unplaced" ? "unplaced fact" : "unconnected entry";
+  const label = unplaced ? "unplaced fact"
+    : placing ? "entry to place"
+    : "unconnected entry";
   const plural = open.length === 1 ? label : `${label}s`;
 
   return (
@@ -159,7 +178,9 @@ export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
           All {open.length} {plural}
         </h3>
         <span className="ml-auto shrink-0">
-          <Explain of={unplaced ? "weaving.sweep-unplaced" : "weaving.sweep-loose"} />
+          <Explain of={unplaced ? "weaving.sweep-unplaced"
+                       : placing ? "weaving.sweep-place"
+                       : "weaving.sweep-loose"} />
         </span>
       </div>
 
@@ -167,8 +188,12 @@ export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
         {unplaced
           ? "Tick the ones you want to place and choose a chapter for each. "
             + "Leave the rest; they come back next time."
-          : "These entries connect to nothing yet. Tick any that are fine as "
-            + "they are and say so in one go, or deal with one properly."}
+          : placing
+            ? "Your writing puts each of these in the chapters listed beside "
+              + "it. Tick the ones that look right and record them in one go. "
+              + "To change which chapters, deal with that one on its own."
+            : "These entries connect to nothing yet. Tick any that are fine as "
+              + "they are and say so in one go, or deal with one properly."}
       </p>
 
       {settled.size > 0 && (
@@ -201,6 +226,17 @@ export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
                   <span className="text-faint"> on {String(row.stop.detail.name)}</span>
                 ) : null}
               </span>
+              {/* WHICH CHAPTERS, on the row. The whole decision here is
+                  "does that look right", and it cannot be made without seeing
+                  the answer being offered. */}
+              {placing && (
+                <span className="shrink-0 text-[10px] text-blue-200/90"
+                      data-testid="sweep-place-chapters">
+                  {anchorsFor(row).map(anchor =>
+                    chapters.find(c => c.anchor === anchor)?.title ?? anchor)
+                    .join(", ")}
+                </span>
+              )}
               {unplaced && (
                 <select
                   value={row.at}
@@ -244,6 +280,19 @@ export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
             Place {placeable.length}
           </button>
         )}
+        {placing && onRecordPlace && (
+          <button
+            onClick={() => void run(
+              r => onRecordPlace(r.stop, anchorsFor(r)), chosen)}
+            disabled={busy || chosen.length === 0}
+            data-testid="sweep-record-place"
+            className="inline-flex items-center gap-1 rounded bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+          >
+            {busy ? <Loader size={11} className="animate-spin" />
+                  : <Check size={11} />}
+            Record {chosen.length}
+          </button>
+        )}
         <button
           onClick={() => void run(r => onDismiss(r.stop), chosen)}
           disabled={busy || chosen.length === 0}
@@ -252,7 +301,9 @@ export function Sweep({ stops, kind, chapters, onPlace, onDismiss, onDone,
         >
           {unplaced
             ? `Leave ${chosen.length} unplaced for good`
-            : `${chosen.length} need no connection`}
+            : placing
+              ? `Do not place ${chosen.length}`
+              : `${chosen.length} need no connection`}
         </button>
         <span className="flex-1" />
         {/* THE WAY BACK, always. The spec's words are "not a forced march", and

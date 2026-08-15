@@ -899,6 +899,12 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             // two-phase rule the one-at-a-time path follows.
             if (runId) await apply(projectPath, runId, target);
           }}
+          onRecordPlace={async (target, anchors) => {
+            // Same two-phase rule the one-at-a-time path follows: the file is
+            // written first, and only then is the stop answered for good.
+            await placeThread(projectPath, target.entity_id, anchors);
+            if (runId) await apply(projectPath, runId, target);
+          }}
           onDismiss={async target => {
             if (runId) await dismiss(projectPath, runId, target);
           }}
