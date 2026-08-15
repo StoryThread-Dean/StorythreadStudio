@@ -29,6 +29,7 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 import { WeaveScreen } from "./features/codex/WeaveScreen";
 import { WeaveNav } from "./features/codex/WeaveNav";
 import { WeavingPanel } from "./features/codex/WeavingPanel";
+import { ExtractorScreen } from "./features/codex/ExtractorScreen";
 import { WeaveContextBar } from "./features/codex/WeaveContextBar";
 import { ThreadEditor } from "./features/codex/ThreadEditor";
 
@@ -141,7 +142,7 @@ function App() {
   // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
   const [currentView, setCurrentView]   = useState<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
-    | "outline_planner" | "weave" | "thread"
+    | "outline_planner" | "weave" | "thread" | "extractor"
   >("editor");
   // Which Weave section the sidebar shows as active. Kept here rather than
   // inside WeaveNav because opening a section changes the VIEW, and the view
@@ -484,7 +485,7 @@ function App() {
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
   const currentViewRef = useRef<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
-    | "outline_planner" | "weave" | "thread"
+    | "outline_planner" | "weave" | "thread" | "extractor"
   >("editor");
 
   // Keep refs in sync with state on every render.
@@ -2438,6 +2439,7 @@ function App() {
             activeSection={weaveSection}
             onOpenWeave={() => setCurrentView("weave")}
             onOpenWeaving={() => setWeavingOpen(true)}
+            onOpenExtractor={() => setCurrentView("extractor")}
             onOpenSection={section => {
               setWeaveSection(section.id);
               if (section.kind === "note") {
@@ -2520,6 +2522,16 @@ function App() {
             onBack={() => setCurrentView("editor")}
             onDirtyChange={setIsDirty}
           />
+        </div>
+      ) : currentView === "extractor" ? (
+        // A SCREEN, not a popup, and roadmap decision 10 says so explicitly so
+        // nobody later moves it inside the walkthrough. The closed-world rule
+        // is about a WALK -- answering a stop must not send you away
+        // mid-question, because the walk gives up its place. A review screen
+        // has no place to give up: you arrive deliberately, work through a
+        // list over as many sittings as it takes, and leave when you choose.
+        <div className="flex-1 overflow-y-auto p-4">
+          <ExtractorScreen projectPath={currentProject.root_path} />
         </div>
       ) : currentView === "weave" ? (
         // Rendered here rather than as a full-screen takeover so the left

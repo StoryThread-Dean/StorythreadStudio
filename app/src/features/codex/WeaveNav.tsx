@@ -29,7 +29,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  ChevronDown, ChevronRight, Loader, MoreHorizontal, Network, Plus, Spool,
+  ChevronDown, ChevronRight, Loader, MoreHorizontal, Network, Plus, Sparkles,
+  Spool,
 } from "lucide-react";
 
 import { CONCEPTS, TONE_CLASSES, threadTypeEntry } from "./lexicon";
@@ -70,10 +71,15 @@ interface WeaveNavProps {
   onOpenSection: (section: SectionEntry) => void;
   onOpenWeave: () => void;
   onOpenWeaving?: () => void;
+  /** The Profile Extractor (v2.0.1): the AI pass that reads the manuscript
+   *  and proposes what the entries should SAY. A sibling of Weaving rather
+   *  than part of it, because Weaving has to be done FIRST -- the request
+   *  carries a snippet of each entry, so the entries must exist. */
+  onOpenExtractor?: () => void;
 }
 
 export function WeaveNav({
-  projectPath, activeSection, onOpenSection, onOpenWeave, onOpenWeaving,
+  projectPath, activeSection, onOpenSection, onOpenWeave, onOpenWeaving, onOpenExtractor,
 }: WeaveNavProps) {
   const [tree, setTree] = useState<SectionsTree | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,6 +178,22 @@ export function WeaveNav({
       >
         <Spool size={12} />
         Weaving...
+      </button>
+
+      {/* Beside Weaving, deliberately, and second. The ORDER is the feature:
+          Weaving finds the names for free, this fills them in for money, and a
+          writer who runs this first gets a world proposed from scratch with
+          nothing to match against. The screen it opens says so too. */}
+      <button
+        onClick={onOpenExtractor}
+        disabled={!onOpenExtractor}
+        title={onOpenExtractor
+          ? "Read your manuscript and propose what each entry should say. Run Weaving first."
+          : "The Profile Extractor is not available here."}
+        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-[11px] text-text-muted hover:text-violet-300 disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
+      >
+        <Sparkles size={12} />
+        Profile Extractor...
       </button>
 
       {tree?.groups.map(group => {

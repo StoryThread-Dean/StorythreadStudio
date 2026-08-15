@@ -1,0 +1,180 @@
+// features/codex/extractorApi.ts -- talking to /api/extractor
+// ===========================================================
+// The Profile Extractor's client. Its own file rather than more of api.ts
+// because the routes live under a different prefix, but it throws the SAME
+// CodexApiError -- the backend refuses with one shape everywhere, and a second
+// error type would mean every screen learning two ways to read a failure.
+
+import { CodexApiError } from "./api";
+
+const API_BASE = "http://localhost:8000";
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}/api/extractor${path}`, init);
+  if (!response.ok) {
+    let code = "unknown";
+    let message = `That could not be completed (${response.status}).`;
+    let detail = "";
+    try {
+      const body = await response.json();
+      const payload = body?.detail;
+      if (payload && typeof payload === "object") {
+        code = payload.code ?? code;
+        message = payload.message ?? message;
+        detail = payload.detail ?? "";
+      } else if (typeof payload === "string") {
+        message = payload;
+      }
+    } catch {
+      // Non-JSON body: keep the generic message rather than letting the parse
+      // failure mask the real status.
+    }
+    throw new CodexApiError(code, message, detail);
+  }
+  return response.json() as Promise<T>;
+}
+
+function post<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+// ── Shapes ───────────────────────────────────────────────────────────────────
+
+export interface PlanChapter {
+  chapter_id: string;
+  filename: string;
+  title: string;
+  chars: number;
+}
+
+export interface PlanEntry {
+  entity_id: string;
+  name: string;
+  type: string;
+  written_chars: number;
+  /** A SUGGESTION to leave this one alone, never an automatic skip. Nothing
+   *  here can know a character from chapter two has returned for the rest of
+   *  the book, so skipping would miss exactly the entry the writer wanted. */
+  suggest_exclude: boolean;
+}
+
+export interface ExtractorPlan {
+  chapters: PlanChapter[];
+  manuscript_chars: number;
+  known: PlanEntry[];
+  /** False means run Weaving first: with nothing to match against, the pass
+   *  proposes a world from scratch, which is the expensive way to get the
+   *  noisiest possible result. */
+  has_world: boolean;
+  /** How many proposals a new run would destroy. */
+  unreviewed: number;
+  has_current: boolean;
+}
+
+/** One clickable proposal: a section's prose, or a single trait. */
+export interface ExtractionPart {
+  part_id: string;
+  section_id: string;
+  heading: string;
+  form: "prose" | "trait";
+  trait_name: string;
+  content: string;
+  state: "open" | "applied" | "dismissed";
+  applied_as: string;
+}
+
+export interface ExtractionEntry {
+  item_id: string;
+  /** Empty means the pass found something the writer does not have yet. */
+  entity_id: string;
+  type: string;
+  name: string;
+  aliases: string[];
+  /** A character the prose describes without naming. The description IS the
+   *  name and must never be replaced by one the app invented. */
+  unnamed: boolean;
+  /** "this turns out to be that entry you already have" -- an offer only. */
+  same_as: string;
+  character_kind: string;
+  state: "open" | "done";
+  created_entity_id: string;
+  parts: ExtractionPart[];
+}
+
+export interface ExtractionRun {
+  run_id: string;
+  created_at: string;
+  model_used: string;
+  scope: {
+    chapter_ids?: string[];
+    chapter_count?: number;
+    whole_manuscript?: boolean;
+    excluded?: string[];
+  };
+  entries: ExtractionEntry[];
+  dropped?: string[];
+}
+
+export interface ExtractionProgress {
+  entries: number;
+  entries_done: number;
+  parts: number;
+  parts_open: number;
+  parts_applied: number;
+  parts_dismissed: number;
+  new_entries: number;
+}
+
+// ── Calls ────────────────────────────────────────────────────────────────────
+
+export function fetchPlan(projectPath: string): Promise<ExtractorPlan> {
+  return request(`/plan?project_path=${encodeURIComponent(projectPath)}`);
+}
+
+export function fetchCurrent(
+  projectPath: string,
+): Promise<{ run: ExtractionRun | null; progress: ExtractionProgress }> {
+  return request(`/current?project_path=${encodeURIComponent(projectPath)}`);
+}
+
+export function discardCurrent(projectPath: string): Promise<{ discarded: boolean }> {
+  return request(`/current?project_path=${encodeURIComponent(projectPath)}`,
+                 { method: "DELETE" });
+}
+
+export function runExtraction(body: {
+  project_path: string;
+  chapter_ids: string[];
+  exclude: string[];
+  /** The writer has been told what a new run would replace and said go. */
+  replace_existing: boolean;
+}): Promise<{ run: ExtractionRun; progress: ExtractionProgress; dropped: string[] }> {
+  return post("/run", body);
+}
+
+/** The ONLY route that writes to a profile. One part, one explicit action. */
+export function applyPart(body: {
+  project_path: string;
+  item_id: string;
+  part_id: string;
+  action: "overwrite" | "merge" | "add" | "merge_trait" | "dismiss";
+  entity_id?: string;
+  /** merge_trait only, and required: merging into a trait the app picked is
+   *  how a writer's own wording gets overwritten. */
+  merge_into?: string;
+}): Promise<{ ok: boolean; applied_as?: string; progress: ExtractionProgress }> {
+  return post("/part", body);
+}
+
+export function setEntryState(body: {
+  project_path: string;
+  item_id: string;
+  state: "open" | "done";
+  created_entity_id?: string;
+}): Promise<{ ok: boolean; entry: ExtractionEntry; progress: ExtractionProgress }> {
+  return post("/entry", body);
+}

@@ -443,3 +443,61 @@ export function deleteSection(
 export function reindex(projectPath: string): Promise<{ indexed: number }> {
   return request(`/reindex?${q({ project_path: projectPath })}`, { method: "POST" });
 }
+
+// ── One entry, in full ───────────────────────────────────────────────────────
+//
+// Added for the Profile Extractor's review screen, which shows a proposal
+// BESIDE what the entry currently says. That comparison is the whole design of
+// the screen: judging "here is a new overview" in the abstract is guesswork,
+// and a writer who cannot see what they already wrote cannot tell whether the
+// proposal adds anything.
+
+/** A section as stored: prose, plus trait blocks where the kind has them. */
+export interface ThreadSection {
+  heading: string;
+  content: string;
+  trait_blocks: Array<{
+    trait?: string;
+    name?: string;
+    description?: string;
+    importance?: string;
+    subtext?: boolean;
+  }>;
+  ai_summary?: string;
+}
+
+export interface ThreadDetail {
+  entity_id: string;
+  type: string;
+  name: string;
+  display_name?: string;
+  aliases?: string[];
+  character_kind?: string;
+  filename?: string;
+  sections: Record<string, ThreadSection>;
+  revision?: string;
+}
+
+export function fetchThread(projectPath: string, entityId: string):
+    Promise<ThreadDetail> {
+  return request(`/entity?project_path=${encodeURIComponent(projectPath)}`
+                 + `&entity_id=${encodeURIComponent(entityId)}`);
+}
+
+/** Create a base-level entry: a name, a kind, nothing else. What Quick Entry
+ *  makes, and what the Extractor's [Add] buttons make -- a new entry arrives
+ *  empty and its proposed pieces go in one click at a time. */
+export function newThread(body: {
+  project_path: string;
+  type: string;
+  name: string;
+  role?: string;
+  character_kind?: string;
+  aliases?: string[];
+}): Promise<{ thread: ThreadDetail }> {
+  return request("/thread/new", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}

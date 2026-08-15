@@ -830,6 +830,64 @@ export const EXPLAIN: Record<string, Explains> = {
     needed: "optional",
     cost: FREE,
   },
+  // ── The Profile Extractor (v2.0.1) ──────────────────────────────────────
+  //
+  // The honesty obligation is LOAD-BEARING here rather than decorative. This
+  // pass carries no evidence: an Overview is synthesis with no source sentence
+  // to quote, so nothing checked these proposals against anything. Where the
+  // speaker pass earns trust by showing a dropped count, this one has nothing
+  // to drop -- so the whole of that duty moves into these words.
+  "extractor.what": {
+    what: "The Profile Extractor reads your manuscript and proposes what your "
+      + "entries should say: an overview, traits, motivations, notes.",
+    why: "Filling in a story bible by hand means re-reading your own book and "
+      + "writing down what is already in it, which can take longer than "
+      + "writing the book. This does the reading and hands you a draft. It is "
+      + "a starting point to rewrite, not an answer -- nothing it proposes has "
+      + "been checked against anything, which is why every piece waits for you "
+      + "to accept it one at a time.",
+    needed: "optional",
+    cost: spends("One request that sends the chapters you tick, plus a short "
+      + "extract of each entry you already have. This is the most expensive "
+      + "single request the app makes -- a whole novel in one go. It uses the "
+      + "model you assigned to Long-context analysis in Settings."),
+    how: [
+      "Run Weaving first. This builds on the entries you already have, so with "
+        + "an empty world it proposes one from scratch and costs the most for "
+        + "the noisiest result.",
+      "Leave the chapter row alone to read the whole book, which is the usual "
+        + "run. Tick chapters instead when you are adding to a pass you have "
+        + "already done.",
+      "Check who to leave alone. Entries you have already written up are "
+        + "ticked to start with; untick anyone whose story has moved on since.",
+      "Press Read the manuscript. A novel takes a few minutes.",
+      "Work through the proposals whenever you like. They are saved, so you "
+        + "can close the app and come back to the same list.",
+    ],
+    endpoint: "/api/extractor/run",
+  },
+  "extractor.review": {
+    what: "Each proposal shown beside what that entry says now, so you can "
+      + "keep it, add it to your own words, replace them, or throw it away.",
+    why: "A proposal on its own is impossible to judge -- you cannot tell "
+      + "whether it adds anything without seeing what you already wrote. "
+      + "Nothing here has been verified, so your click on each piece is the "
+      + "only thing deciding what reaches your entry. That is deliberate: "
+      + "there is no accept-all, because there is nothing checking the work.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Pick an entry from the list on the left. New ones are marked.",
+      "For a section: Add to what I wrote keeps your words and puts the "
+        + "proposal after them. Replace mine swaps yours out.",
+      "For a trait: add it on its own, or fold it into one of your traits by "
+        + "choosing which. It never picks for you.",
+      "Not this throws one proposal away without touching your entry.",
+      "Mark done when you have finished with an entry, whether or not you took "
+        + "anything from it.",
+    ],
+    endpoint: "/api/extractor/part",
+  },
 };
 
 /** Every key, for contract tests and for finding an explanation by name. */

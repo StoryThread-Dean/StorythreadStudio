@@ -4,7 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## CURRENT STATE: the Weave is in recovery, Phase 1
+## CURRENT STATE: v2.0.0 SHIPPED. v2.0.1 (Profile Extractor) built, unreleased
+
+**v2.0.0 shipped 2026-08-14** (115 commits, tag v2.0.0, installer live). The
+recovery plan is 93 of 107 with the rest deferred by scope or blocked on a
+ruling; it is history now rather than a work queue.
+
+**v2.0.1 is BUILT and unreleased: the Profile Extractor.** Reads the manuscript
+and proposes what each entry should say. Its ten decisions and the reasoning
+behind each are in `docs/roadmap.md`; the section is the record, not a plan.
+The one thing to understand before touching it: **it carries no evidence on
+purpose** (an Overview is synthesis with no sentence to quote), so the writer's
+per-item click is the ONLY safeguard between a model's guess and their story
+bible. Any convenience that removes a click removes the whole protection --
+no accept-all, nothing pre-ticked, and a proposal for an entry that does not
+exist refuses rather than creating one.
 
 **Work the next unchecked task in `docs/weave-recovery-plan.md`.** Phase 0
 (documents and decisions) is complete and signed off; building is unblocked.
@@ -404,7 +418,7 @@ its place without relying on memory or conversation history.
 > test caught ITSELF first: it searched for the raw path only and passed while
 > project.json held the old location, because JSON escapes backslashes.
 > Phases 7 and 9 are deferred to v2.1.0.
-> Branch health: 1900 backend tests, 1379 frontend tests, ruff and tsc clean.
+> Branch health: 1963 backend tests, 1408 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

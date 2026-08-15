@@ -28,6 +28,24 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
+## [2.0.1] - UNRELEASED
+
+### Added
+
+- **The Profile Extractor.** `The Weave > Profile Extractor`. It reads your manuscript and proposes what each entry should say: an overview, physical and personality traits, motivations, notes. Filling in a story bible by hand means re-reading your own book and writing down what is already in it, which for a long novel can take longer than writing a chapter. This does the reading and hands you a draft.
+- **It is a draft to rewrite, and the screen says so.** Nothing it proposes is checked against anything, because an overview is a summary rather than a quote and there is no source sentence to check it against. So your eye on each individual piece is the only check there is, and the app is built around that: no accept-all, nothing ticked when the list arrives, and every proposal shown beside what that entry currently says so you are never judging one in the abstract.
+- **Add to what you wrote, or replace it.** Adding keeps your paragraphs exactly as they are and puts the new one after them -- nothing of yours is rewritten, reordered or blended in. Replacing is a separate button because it is a separate decision and the only one that can lose your words. A proposed trait either stands on its own or folds into one of your traits that **you** pick; the app never guesses which, because a wrongly folded trait still carries your own label and is easy to miss later.
+- **It finds two kinds of character Weaving structurally cannot.** People your prose describes without naming ("the tall man", "the hulking figure") come through with the description kept AS the name and never replaced by an invented one, and an unnamed character stays unnamed rather than being nagged into a decision you have not made. So do names that only ever appear as somebody being spoken to, like `"Duncan," he said`, which sit where a capital letter was required anyway and are invisible to a scan. Where the book reveals one of these to be somebody you already have, that arrives as an offer to fold them together, never as a merge.
+- **It works over as many sittings as you need.** A whole-novel pass is a job rather than a sitting, so the result is saved: close the app, come back next week, and the same list is there with everything you have dealt with ticked off. There is one saved read at a time and a new one replaces it -- and if you still have proposals you have not looked at, it says how many before it does anything, because you paid for those.
+- **Every kind, not just characters.** Whatever your project's types file holds, including kinds you invented yourself: locations, factions, creatures, religions, governments, deities, cultures, objects, events, languages.
+- **Long-context analysis is a role you can now use.** It has been in Settings since Model Roles shipped, marked as reserved with a note saying it arrived with the Weave's AI passes. This is that pass, and it is what the role exists to buy.
+
+### Changed
+
+- The setup screen states what the run will cost, how many chapters and entries it covers, and which model does the work, before the button. Entries you have already written up are ticked to be left alone, as a suggestion you can undo -- nothing here can know that a character who appeared once in chapter two has come back for the rest of the book.
+
+---
+
 ## [2.0.0] - 2026-08-14
 
 ### Added

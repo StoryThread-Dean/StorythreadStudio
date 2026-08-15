@@ -293,7 +293,19 @@ smaller and different gap from the one this paragraph described.
 
 Also open before release: the manual-smoke additions for each milestone.
 
-### Profile Extractor -- the v2.0.1 feature, immediately after the Weave
+### Profile Extractor -- BUILT, in v2.0.1
+
+**BUILT 2026-08-14.** All ten decisions below are implemented and the section is
+kept as the record of WHY each one is what it is. Where the build differs from a
+decision, the decision wins and the difference is noted inline; nothing here was
+quietly dropped.
+
+Shipped as: `app/codex/extract.py` (the prompt, the request, the parsing),
+`app/codex/extraction_store.py` (the one saved run), `app/routers/extractor.py`
+(the HTTP surface, and the only path that writes to a profile),
+`features/codex/ExtractorSetup.tsx` / `ExtractorReview.tsx` / `ExtractorScreen.tsx`
+/ `ExtractorGuide.tsx`. Pinned by `test_codex_extract.py` (38),
+`test_extractor_routes.py` (23) and `Extractor.test.tsx` (29).
 
 **SCHEDULED 2026-08-14, on the writer's ruling, which overrules an earlier
 recommendation of mine.** I had put this in v2.1.0 with the deferred AI passes on
