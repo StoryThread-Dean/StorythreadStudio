@@ -357,18 +357,40 @@ to 9 -- record that?") without ever being the source of truth. A suggestion the
 writer accepts becomes their statement; an unaccepted one is not stored, so
 nothing can drift.
 
-#### Open decisions -- for the writer
+#### RULED 2026-08-15
 
-1. **Chapters only, or scenes too?** Scene identity is Phase 7, deferred to
-   v2.1.0, so scene-level presence is blocked behind it. Chapters work today.
-2. **Does declared presence FILTER the brief or only RANK it?** Filtering gives
-   the tight control asked for and risks omitting something the scene needed;
-   ranking is safe and may still let a 60-character world crowd the budget.
-   A third option: filter, with the count of what was left out stated on the
-   inspect panel -- the rule this app already follows everywhere else.
-3. **Does the scan offer to fill it in?** Cheap, free, and the difference
-   between a feature a writer uses and one they have to populate by hand 60
-   times.
+1. **It FILTERS, and says what it left out.** Only entries tagged into this
+   chapter reach the brief, plus anything pinned or named in the text being
+   written -- both of which already outrank everything and must keep doing so.
+   The inspect panel states how many were held back, which is the rule this app
+   applies everywhere else: anything omitted is counted out loud, because a
+   silently shorter list is indistinguishable from a smaller world.
+
+   The two overrides are not exceptions to the filter, they are the reason it is
+   safe. A writer who pins a Thread has said "this one, now", and a name in the
+   prose is the strongest signal there is -- neither can be filtered out by a
+   tag the writer set last week.
+
+2. **The free scan offers, the writer confirms, one entry at a time.** It
+   already reads every chapter for Weaving, so the suggestion costs nothing and
+   calls no model. Only what is ACCEPTED is stored -- an unaccepted suggestion
+   is not data, so there is nothing to go stale, and the authored-not-derived
+   line holds.
+
+   Bulk accept-all was considered and rejected: accepting sixty unseen
+   suggestions is deriving them with an extra click, and it would put the app
+   back where R8.5 found it.
+
+3. **Chapters now, scenes when Phase 7 lands.** Chapter ids are stable today.
+   Scene-level presence needs stable scene identity, which is deferred to
+   v2.1.0, and blocking this behind it would leave the 60-character context
+   problem unsolved in the meantime. The field is a list of anchors, so scenes
+   extend it later rather than replacing it.
+
+#### Not scoped to a release yet
+
+This is the writer's next feature by intent but has no version. It is
+independent of the v2.0.1 Extractor work and does not block the release.
 
 ### Profile Extractor -- BUILT, in v2.0.1
 
