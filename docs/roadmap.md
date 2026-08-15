@@ -293,6 +293,83 @@ smaller and different gap from the one this paragraph described.
 
 Also open before release: the manual-smoke additions for each milestone.
 
+### Who is IN this chapter -- declared presence (proposed 2026-08-15)
+
+**Raised by the writer, not scoped yet.** Recorded the day it was made, because
+an unrecorded decision is the failure this whole programme exists to remember.
+
+**The ask, in their words:** "I want to make sure to include is where Profiles
+can be TAGGED within the story in Scenes and Chapters. Example: Serena the main
+protagonist of the story is in every Chapter. Newton is in Chapter 1,2,7,8,9 ...
+Lou is only in Chapter 2."
+
+**And the reason, which is the part that decides the design:** "An epic
+adventure story may have 30-60 character profiles with dozens of creatures,
+20-40 locations. Having to check and uncheck what the writer wants to attach as
+context can be tedious. We have the early ideas of auto attaching context
+through the [Inspect]=On buttons, I just want to make sure there is another
+method to do this manually in case the writer wants to have more control."
+
+**The larger frame they set, worth keeping because it is the product thesis:**
+the Weave, Weaving and the Profile Extractor are meant to be entered from any
+direction and to loop -- write, weave, generate, write again; or outline, weave,
+fill in by hand, draft with the lore constraining it, weave again. "There are
+countless variations of this process that should naturally become circular in
+its design."
+
+#### What exists today, exactly
+
+`context.assemble` ranks every visible Thread and trims to the token budget:
+
+    pinned  >  mentioned in the text being written  >  one Tie from those  >  rest
+
+`mentioned` is computed PER REQUEST from `body.text` -- the words on the writer's
+screen right now -- by `find_mentions`, and an ambiguous name is deliberately
+never bound. Visibility and anchors then filter by where in the story they are.
+
+So the app already knows who the CURRENT PARAGRAPH names. What it has no concept
+of is who is IN chapter seven.
+
+#### The trap, which is why this needs a decision rather than a patch
+
+The obvious implementation is to derive presence by scanning the manuscript and
+cache it. **That is exactly what R8.5 deleted `codex_mention` for.** Mentions
+derive from the MANUSCRIPT while the index fingerprints `codex/`, so every
+chapter the writer edited would leave the rows silently wrong while the
+freshness gate reported the index current -- a cache that answers confidently
+and wrongly with nothing in a position to notice.
+
+Deriving it again, by any mechanism, reintroduces that.
+
+#### The shape that fits
+
+**Presence is AUTHORED, not derived.** The same thing an anchor already is: a
+fact the writer states, living in their Markdown, travelling with the file, with
+no cache to go stale and nothing to rebuild. `appears_in: [chapter ids]` on the
+entry, exactly as `at:` works on a fact.
+
+That also answers the request as asked -- they wanted "another method to do this
+manually ... in case the writer wants to have more control", and authored data
+IS the manual method.
+
+The free scan can then OFFER what it sees ("your prose puts Serena in chapters 1
+to 9 -- record that?") without ever being the source of truth. A suggestion the
+writer accepts becomes their statement; an unaccepted one is not stored, so
+nothing can drift.
+
+#### Open decisions -- for the writer
+
+1. **Chapters only, or scenes too?** Scene identity is Phase 7, deferred to
+   v2.1.0, so scene-level presence is blocked behind it. Chapters work today.
+2. **Does declared presence FILTER the brief or only RANK it?** Filtering gives
+   the tight control asked for and risks omitting something the scene needed;
+   ranking is safe and may still let a 60-character world crowd the budget.
+   A third option: filter, with the count of what was left out stated on the
+   inspect panel -- the rule this app already follows everywhere else.
+3. **Does the scan offer to fill it in?** Cheap, free, and the difference
+   between a feature a writer uses and one they have to populate by hand 60
+   times.
+
 ### Profile Extractor -- BUILT, in v2.0.1
 
 **BUILT 2026-08-14.** All ten decisions below are implemented and the section is
