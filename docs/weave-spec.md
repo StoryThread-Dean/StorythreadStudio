@@ -65,13 +65,20 @@ superseded on each point.
    story beyond what this document described, and the migration is the most
    dangerous button in the programme.
 6. **Agency gating (`ACTIVE_TYPES`) is kept.** Only Characters and Creatures
-   are asked how they connect; Locations, Lore, Factions, Deities, Governments,
+   are asked how they connect; Locations, Lore, Factions, Deities, Ruling Authorities,
    Religions and Cultures are passive and get connected TO. From live use: "a
    location wouldn't know anyone or have anything to do with someone." An
    Untied pair with one active end stands its question on the active end.
    Writer-overridable per type via `"active": true|false`.
 7. **Five extra built-in types are kept**: government, deity, creature, culture,
    language.
+
+   *(Amended 2026-08-15: the `government` type is LABELLED **Ruling Authority**
+   on screen. Its id, folder and relation endpoints are unchanged. "Government"
+   was too specific for what the kind holds -- the writer's report: "A leader of
+   a party isn't a government. 'Ruling Authority' is more accurate." A project
+   seeded before the change is healed on load unless the writer had renamed the
+   label themselves, in which case theirs wins.)*
 
 Also accepted into the spec as intended behaviour, having been proven necessary
 by live testing rather than designed here:

@@ -90,7 +90,7 @@ describe("the real guides", () => {
     const terms = Array.from(container.querySelectorAll("p.pl-3"))
       .map(p => p.querySelector("span")?.textContent?.trim());
     expect(terms).toEqual([
-      "Factions", "Religions", "Governments", "Deities", "Creatures",
+      "Factions", "Religions", "Ruling Authorities", "Deities", "Creatures",
       "Cultures", "Relationships",
     ]);
   });

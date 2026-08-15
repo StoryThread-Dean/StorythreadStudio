@@ -319,3 +319,90 @@ def test_the_two_populations_of_a_kind_agree_after_reading():
     a = parse_thread(converted, default_registry())["sections"]
     b = parse_thread(made, default_registry())["sections"]
     assert set(a) == set(b) == {"hidden_and_foreshadowing_traits"}
+
+
+# ── A SHIPPED LABEL THAT WAS RENAMED ────────────────────────────────────────
+#
+# "Government" turned out to be too specific for what the kind holds. The
+# writer's report: "A leader of a party isn't a government. 'Ruling Authority'
+# is more accurate." A crown, a council, a corporate board, an occupying force
+# and a party boss are all ruling authorities; only some are governments.
+#
+# The change is a LABEL and nothing else -- the id stays `government` and the
+# folder stays `governments`, because renaming either would rewrite entity types
+# on disk and break every relation endpoint naming this kind, for a word on a
+# screen.
+#
+# The delicate part is projects seeded before the change: their own types.json
+# carries the old word and would say it forever.
+
+def test_the_shipped_label_is_the_new_one():
+    entry = next(t for t in default_registry()["types"] if t["id"] == "government")
+    assert entry["label"] == "Ruling Authorities"
+    # And the parts that must NOT move.
+    assert entry["id"] == "government"
+    assert entry["folder"] == "governments"
+
+
+def test_an_old_project_is_healed_on_load(tmp_path):
+    from app.codex.types_registry import load_registry, registry_path
+
+    registry = default_registry()
+    for entry in registry["types"]:
+        if entry["id"] == "government":
+            entry["label"] = "Governments"          # as it was seeded
+    path = registry_path(str(tmp_path))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(registry, handle)
+
+    loaded, from_file = load_registry(str(tmp_path))
+    assert from_file is True
+    label = next(t["label"] for t in loaded["types"] if t["id"] == "government")
+    assert label == "Ruling Authorities"
+
+
+def test_A_LABEL_THE_WRITER_CHOSE_IS_NEVER_OVERWRITTEN(tmp_path):
+    """
+    The rule that makes the heal safe, and the one worth the test.
+
+    R2.11 made renaming a kind a supported thing to do, and this app's standing
+    rule is that a types.json is never repaired over the writer's own
+    customisation. A writer who called this kind "The Crown" meant it, and
+    replacing that with "Ruling Authorities" would be the app overruling them
+    about the vocabulary of their own world.
+    """
+    from app.codex.types_registry import load_registry, registry_path
+
+    registry = default_registry()
+    for entry in registry["types"]:
+        if entry["id"] == "government":
+            entry["label"] = "The Crown"
+    path = registry_path(str(tmp_path))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(registry, handle)
+
+    loaded, _ = load_registry(str(tmp_path))
+    label = next(t["label"] for t in loaded["types"] if t["id"] == "government")
+    assert label == "The Crown"
+
+
+def test_the_heal_writes_nothing_to_disk(tmp_path):
+    # Applied to what is LOADED, not saved back. A project the writer never
+    # edits is never touched -- same lifecycle rule the registry already has,
+    # where an absent file yields defaults and writes nothing.
+    from app.codex.types_registry import load_registry, registry_path
+
+    registry = default_registry()
+    for entry in registry["types"]:
+        if entry["id"] == "government":
+            entry["label"] = "Governments"
+    path = registry_path(str(tmp_path))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(registry, handle)
+    before = open(path, encoding="utf-8").read()
+
+    load_registry(str(tmp_path))
+    assert open(path, encoding="utf-8").read() == before

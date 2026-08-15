@@ -418,7 +418,7 @@ its place without relying on memory or conversation history.
 > test caught ITSELF first: it searched for the raw path only and passed while
 > project.json held the old location, because JSON escapes backslashes.
 > Phases 7 and 9 are deferred to v2.1.0.
-> Branch health: 2012 backend tests, 1455 frontend tests, ruff and tsc clean.
+> Branch health: 2016 backend tests, 1455 frontend tests, ruff and tsc clean.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 

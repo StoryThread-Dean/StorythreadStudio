@@ -164,7 +164,13 @@ def test_the_export_appendix_worked_at_all(converted):
 def test_the_export_carries_the_newer_kinds(converted):
     # Four hardcoded types became every kind the world declares.
     text = _export(converted)
-    assert "## Governments" in text
+    # THE EXPORT HEADING IS THE TYPE'S LABEL, so renaming the kind renames
+    # the heading. Worth pinning deliberately rather than adjusting quietly:
+    # an export is a file a writer keeps, and a heading that silently changed
+    # between two exports of the same book would be a puzzle with no answer
+    # in it. The id and folder are untouched, so nothing about the DATA moved.
+    assert "## Ruling Authorities" in text
+    assert "## Governments" not in text
     assert "council that rules" in text
 
 

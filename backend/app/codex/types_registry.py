@@ -197,7 +197,17 @@ DEFAULT_TYPES: list[dict] = [
      "group": "profiles", "default_section": False,
      "sections": _sections("overview", "beliefs", "practices", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
-    {"id": "government", "label": "Governments", "folder": "governments", "icon": "Landmark",
+    # LABEL ONLY. The id stays `government` and the folder stays `governments`:
+    # renaming either would rewrite entity types on disk and break every
+    # relation endpoint that names this kind, for a word on a screen.
+    #
+    # "Government" turned out to be too specific a word for what this kind
+    # holds. The writer's own report: "A leader of a party isn't a government.
+    # 'Ruling Authority' is more accurate." A crown, a council, a corporate
+    # board, an occupying force and a party boss are all ruling authorities;
+    # only some of them are governments.
+    {"id": "government", "label": "Ruling Authorities", "folder": "governments",
+     "icon": "Landmark",
      "group": "profiles", "default_section": False,
      "sections": _sections("overview", "structure", "laws", "succession", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
@@ -775,7 +785,33 @@ def load_registry(folder_path: str) -> tuple[dict, bool]:
         raise TypesError(f"The file could not be read: {exc}") from exc
 
     validate_registry(data)
+    _heal_renamed_defaults(data)
     return data, True
+
+
+# Labels that were shipped, then renamed. A project seeded before the change
+# carries the old word in its own types.json, and would go on saying it forever.
+#
+# THE RULE HERE IS THE CAREFUL ONE. Only a label still EXACTLY equal to the old
+# default is updated. Anything else is the writer's own naming -- R2.11 made
+# renaming a kind a supported thing to do -- and this app's standing rule is
+# that a types.json is never repaired over the writer's customisation. So a
+# writer who called it "The Crown" keeps "The Crown".
+#
+# Not written back to disk either. The heal is applied to what is loaded, so
+# a project the writer never edits is never touched; if they change anything
+# else about their types, the new label saves along with it.
+_RENAMED_LABELS = {
+    # id -> (the label that shipped, the label now)
+    "government": ("Governments", "Ruling Authorities"),
+}
+
+
+def _heal_renamed_defaults(data: dict) -> None:
+    for type_entry in data.get("types") or []:
+        rename = _RENAMED_LABELS.get(str(type_entry.get("id") or ""))
+        if rename and str(type_entry.get("label") or "") == rename[0]:
+            type_entry["label"] = rename[1]
 
 
 def seed_registry(folder_path: str) -> dict:

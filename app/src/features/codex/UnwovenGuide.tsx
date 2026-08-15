@@ -135,7 +135,7 @@ const PAGES: Page[] = [
         </Answer>
         <p>
           That does not become a note in a pile. It becomes an entry in your
-          world, of a kind the rest of the app understands: a Government, with
+          world, of a kind the rest of the app understands: a Ruling Authority, with
           your sentence in its Succession section.
         </p>
         <p>
@@ -233,7 +233,7 @@ const PAGES: Page[] = [
           There are about a hundred of these across ten parts of a world, which
           is far too many to sit down and answer. So a sitting is deliberately
           short: a dozen questions, spread across your whole world rather than a
-          dozen about your government.
+          dozen about your ruling authority.
         </p>
         <p>
           The board is where you see the rest. Every part, with how much of it

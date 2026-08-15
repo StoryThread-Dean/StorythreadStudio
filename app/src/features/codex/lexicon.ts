@@ -160,12 +160,12 @@ export const GROUP_GUIDES: Record<string, GuideLine[]> = {
     { term: "PROFILES", text: "is the part that is about the things *in* it. A profile is an entry about one thing: a Character, a Location, a piece of Lore. Add more as your world grows." },
     { term: "Factions", text: "for groups with their own interests.", indent: true },
     { term: "Religions", text: "for what people believe.", indent: true },
-    { term: "Governments", text: "for who holds power and how it passes.", indent: true },
+    { term: "Ruling Authorities", text: "for who holds power and how it passes -- a crown, a council, a party boss, an occupying army.", indent: true },
     { term: "Deities", text: "for what is worshipped.", indent: true },
     { term: "Creatures", text: "for what lives out there.", indent: true },
     { term: "Cultures", text: "for how a people live: the food they eat, how they treat their neighbours, how they behave in a place that is not theirs.", indent: true },
     { term: "Relationships", text: "for how two people stand with each other.", indent: true },
-    { text: "You do not need all of them. A quiet domestic novel may never want a Government; an epic fantasy will want most of them. They stay out of your way until you ask for them." },
+    { text: "You do not need all of them. A quiet domestic novel may never want a Ruling Authority; an epic fantasy will want most of them. They stay out of your way until you ask for them." },
     { text: "What makes a profile more than a note is that it can *CHANGE*. A character who believes her father died in a raid, and learns otherwise in chapter fourteen, is a different person before and after -- and the Weave records both, pinned to where in the story each became true." },
     { term: "Something else...", text: "lets you add a kind of your own: a *Bloodline*, a *Guild*, a *Starship class*. It behaves exactly like the ones we ship with." },
     { text: "Each profile is a thread; the connections between them are ties. *WEAVING* is the step that pulls them tight -- it reads your chapters, spots the people your prose mentions but your world does not know about, the relationships your writing implies but nothing records, and the places two facts disagree. Stitch by stitch, the pieces become one cloth." },
@@ -360,6 +360,9 @@ const TYPE_TONES: Record<string, [Tone, string]> = {
   lore:         ["amber",   "History, myth, and background."],
   faction:      ["violet",  "Groups with interests of their own."],
   religion:     ["violet",  "Faiths and their practices."],
+  // The KEY stays `government`: it is the wire code the backend sends, and
+  // renaming it here would break the lookup for a word on a screen. Only the
+  // sentence the writer reads changed.
   government:   ["blue",    "Who holds power, and how it passes."],
   deity:        ["amber",   "Gods, and what they are gods of."],
   creature:     ["emerald", "Beasts and other living things."],

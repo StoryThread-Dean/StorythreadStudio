@@ -99,7 +99,7 @@ describe("the guide behind each group's What's this?", () => {
     // is unfindable.
     const kinds = GROUP_GUIDES.profiles.filter(l => l.indent).map(l => l.term);
     expect(kinds).toEqual([
-      "Factions", "Religions", "Governments", "Deities", "Creatures",
+      "Factions", "Religions", "Ruling Authorities", "Deities", "Creatures",
       "Cultures", "Relationships",
     ]);
   });
@@ -115,7 +115,7 @@ describe("the guide behind each group's What's this?", () => {
   it("names what actually lives in each group", () => {
     expect(flat("notes")).toMatch(/Outline/);
     expect(flat("notes")).toMatch(/Style Guide/);
-    expect(flat("profiles")).toMatch(/Governments/);
+    expect(flat("profiles")).toMatch(/Ruling Authorities/);
     expect(flat("other")).toMatch(/Languages/);
   });
 

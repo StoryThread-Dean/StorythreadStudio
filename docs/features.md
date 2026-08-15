@@ -470,7 +470,7 @@ it skips the rest of that kind in the current sitting too).
 **Only Characters and Creatures are asked how they connect.** Croft Manor's way
 into the story is through Lara -- she inherited it, lives in it, left it -- so
 the manor is never the subject of a connection question. Locations, lore,
-factions, deities, governments, religions, cultures and the rest are *passive*:
+factions, deities, ruling authorities, religions, cultures and the rest are *passive*:
 they become connected when someone active is tied to them, an unconnected one is
 not a problem, and a pair the scenes keep sharing stands its question on the
 active end, so the sentence reads "Lara lives in Croft Manor" rather than a
