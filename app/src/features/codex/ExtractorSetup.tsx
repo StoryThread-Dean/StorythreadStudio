@@ -46,7 +46,18 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
   // Whole manuscript is the recommended path; per-chapter is for addenda,
   // fixes and additions afterwards. Empty set means everything.
   const [chapters, setChapters] = useState<Set<string>>(new Set());
-  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  // TICKED MEANS SEND, which is the opposite of how this was first built.
+  // The writer's reaction to the first live version: "that was actually
+  // confusing to me and unnatural. Generally one would want to CHECK all the
+  // boxes they want to send and UNCHECK the ones they don't want."
+  //
+  // They are right, and it is worth being precise about why the first version
+  // was wrong even though it matched the original decision. A tick reads as
+  // "yes, this one", so a ticked list of names beside a Send button reads as
+  // the things being sent. Inverting that means every writer has to hold a
+  // negation in their head for the whole screen, and the cost of getting it
+  // backwards is money.
+  const [included, setIncluded] = useState<Set<string>>(new Set());
   // The count a new run would destroy, once the writer has asked to start one.
   const [confirmReplace, setConfirmReplace] = useState<number | null>(null);
   // MOUNTED HERE AND ON THE REVIEW SCREEN, both, and that is the R2.12f
@@ -62,7 +73,9 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       setPlan(body);
       // The smart default, applied ONCE on load rather than enforced: every
       // tick is the writer's to change, and re-applying it would fight them.
-      setExcluded(new Set(body.known.filter(k => k.suggest_exclude)
+      // Entries already written up start UNTICKED -- the suggestion is
+      // unchanged, only the direction it is expressed in.
+      setIncluded(new Set(body.known.filter(k => !k.suggest_exclude)
                                     .map(k => k.entity_id)));
       setError(null);
     } catch (e) {
@@ -81,7 +94,12 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       const body = await runExtraction({
         project_path: projectPath,
         chapter_ids: [...chapters],
-        exclude: [...excluded],
+        // The wire still speaks in exclusions, because that is what the
+        // backend guarantees against. The screen speaks in inclusions. One
+        // translation, in one place, rather than two vocabularies.
+        exclude: (plan?.known ?? [])
+          .map(k => k.entity_id)
+          .filter(id => !included.has(id)),
         replace_existing: replaceExisting,
       });
       setConfirmReplace(null);
@@ -97,7 +115,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
     } finally {
       setRunning(false);
     }
-  }, [projectPath, chapters, excluded, onExtracted]);
+  }, [projectPath, chapters, included, plan, onExtracted]);
 
   if (loading) {
     return (
@@ -109,7 +127,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
 
   const selectedChapters = chapters.size === 0
     ? (plan?.chapters.length ?? 0) : chapters.size;
-  const includedEntries = (plan?.known.length ?? 0) - excluded.size;
+  const includedEntries = included.size;
 
   return (
     <div className="space-y-4" data-testid="extractor-setup">
@@ -204,15 +222,28 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       {/* WHO TO LEAVE ALONE */}
       {(plan?.known.length ?? 0) > 0 && (
         <section>
-          <h4 className="text-xs font-semibold text-text-primary">
-            Entries to leave alone
+          <h4 className="flex flex-wrap items-center gap-2 text-xs font-semibold text-text-primary">
+            Which entries to work on
+            <button type="button" onClick={() => setIncluded(
+                      new Set((plan?.known ?? []).map(k => k.entity_id)))}
+                    className="rounded border border-border px-1.5 py-0.5 text-[10px] font-normal text-text-muted hover:text-text-primary">
+              Tick all
+            </button>
+            <button type="button" onClick={() => setIncluded(new Set())}
+                    className="rounded border border-border px-1.5 py-0.5 text-[10px] font-normal text-text-muted hover:text-text-primary">
+              Tick none
+            </button>
           </h4>
           <p className="mt-0.5 max-w-2xl text-[11px] text-faint">
-            Ticked ones are skipped. The ones you have already written up are
-            ticked to start with, because you probably do not want a model's
-            version of work you have finished. Untick any of them -- a character
-            who appeared once in chapter two and has come back matters again,
-            and nothing here can know that but you.
+            Ticked entries get proposals. The ones you have already written up
+            start unticked, because you probably do not want a model's version
+            of work you have finished -- tick any of them back on. A character
+            who appeared once in chapter two and has now returned matters
+            again, and nothing here can know that but you.
+          </p>
+          <p className="mt-0.5 max-w-2xl text-[11px] text-faint">
+            Unticked entries are still shown to the model so it recognises them
+            in your prose. It just will not propose anything for them.
           </p>
           <ul className="mt-1.5 max-h-48 space-y-0.5 overflow-y-auto"
               data-testid="extractor-exclusions">
@@ -221,8 +252,8 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
                 <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-[11px] hover:bg-white/5">
                   <input
                     type="checkbox"
-                    checked={excluded.has(entry.entity_id)}
-                    onChange={() => setExcluded(prev => {
+                    checked={included.has(entry.entity_id)}
+                    onChange={() => setIncluded(prev => {
                       const next = new Set(prev);
                       if (next.has(entry.entity_id)) next.delete(entry.entity_id);
                       else next.add(entry.entity_id);
@@ -245,14 +276,51 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       <div className="rounded border border-border bg-surface px-3 py-2 text-[11px] text-text-muted"
            data-testid="extractor-summary">
         Reading <span className="text-text-primary">{selectedChapters}</span>{" "}
-        {selectedChapters === 1 ? "chapter" : "chapters"} against{" "}
+        {selectedChapters === 1 ? "chapter" : "chapters"}, proposing for{" "}
         <span className="text-text-primary">{includedEntries}</span>{" "}
         {includedEntries === 1 ? "entry" : "entries"}.
         {" "}This sends your manuscript to your AI provider and is the most
-        expensive single request this app makes. It uses the model you assigned
-        to <span className="text-text-primary">Long-context analysis</span> in
-        Settings.
+        expensive single request this app makes.
+        {/* THE MODEL, NAMED, RESOLVED. The first live run was made by a model
+            the writer did not think they were using: Long-context analysis was
+            unassigned, so it fell through to the Default Model. Saying which
+            role it comes from was not enough -- it has to say which MODEL. */}
+        {plan?.model_id && (
+          <>
+            {" "}It will use{" "}
+            <span className="text-text-primary">{plan.model_id}</span>, from
+            your Long-context analysis role in Settings.
+          </>
+        )}
       </div>
+
+      {/* WILL IT FIT. The first live run sent about 69,000 tokens to a model
+          that holds 64,000, got an unreadable answer back, and spent the
+          request finding that out. */}
+      {plan && plan.model_id && !plan.fits && (
+        <div className="rounded border border-rose-800 bg-rose-950/30 px-3 py-2"
+             data-testid="extractor-too-big">
+          <p className="text-xs font-semibold text-rose-100">
+            This will not fit in {plan.model_id}.
+          </p>
+          <p className="mt-1 text-[11px] text-rose-200/80">
+            Your selection is roughly{" "}
+            {plan.estimated_tokens.toLocaleString()} tokens and that model holds{" "}
+            {plan.context_tokens.toLocaleString()}. Tick fewer chapters, or
+            assign a model with a bigger context window to Long-context
+            analysis in Settings. Nothing will be sent or charged until it fits.
+          </p>
+        </div>
+      )}
+
+      {plan?.model_error && (
+        <div className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+             data-testid="extractor-model-error">
+          <p className="text-[11px] text-amber-200">
+            No model can run this yet: {plan.model_error}
+          </p>
+        </div>
+      )}
 
       {error && <p role="alert" className="text-[11px] text-rose-300">{error}</p>}
 
@@ -293,7 +361,8 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
           <button
             type="button"
             onClick={() => void start(false)}
-            disabled={running || (plan?.chapters.length ?? 0) === 0}
+            disabled={running || (plan?.chapters.length ?? 0) === 0
+                      || (!!plan?.model_id && !plan.fits)}
             data-testid="extractor-run"
             className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
           >

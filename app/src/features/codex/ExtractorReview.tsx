@@ -186,11 +186,51 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
             onProgress={onChanged}
           />
         ) : (
-          <p className="text-xs text-text-muted">
-            Nothing was proposed. Pick a different range of chapters and try
-            again, or leave it -- an empty result usually means the book already
-            says what your entries say.
-          </p>
+          /* NOTHING CAME BACK, AND THE SCREEN MUST NOT GUESS WHY.
+             The first version of this said an empty result "usually means the
+             book already says what your entries say" -- a confident,
+             reassuring explanation offered with no evidence behind it. The
+             first real run hit it, and the actual cause was that the request
+             overflowed the model's context window and the answer came back
+             unreadable. A wrong reason is worse than none: it sends the writer
+             away satisfied while the feature is broken. */
+          <div className="space-y-2" data-testid="extractor-empty">
+            <p className="text-xs text-text-primary">Nothing came back that
+              could be used.</p>
+            {(run.dropped ?? []).length > 0 && (
+              <div className="rounded border border-amber-700/60 bg-amber-950/20 px-2.5 py-2">
+                <p className="text-[11px] font-semibold text-amber-200">
+                  What happened:
+                </p>
+                <ul className="mt-1 space-y-0.5 text-[11px] text-amber-200/80">
+                  {(run.dropped ?? []).slice(0, 8).map((line, index) => (
+                    <li key={index}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {run.estimated_tokens && run.context_tokens ? (
+              <p className="text-[11px] text-text-muted">
+                That run sent about {run.estimated_tokens.toLocaleString()}{" "}
+                tokens to {run.model_used}, which holds{" "}
+                {run.context_tokens.toLocaleString()}.
+              </p>
+            ) : null}
+            {run.raw_excerpt && (
+              <details className="rounded border border-border px-2.5 py-1.5">
+                <summary className="cursor-pointer text-[11px] text-text-muted">
+                  What the model actually said
+                </summary>
+                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] text-faint">
+                  {run.raw_excerpt}
+                </pre>
+              </details>
+            )}
+            <p className="text-[11px] text-text-muted">
+              Try fewer chapters, or a model with a larger context window
+              assigned to Long-context analysis in Settings.
+            </p>
+          </div>
         )}
       </div>
     </div>

@@ -40,6 +40,11 @@ const PLAN = {
   has_world: true,
   unreviewed: 0,
   has_current: false,
+  model_id: "anthropic/claude-sonnet-4",
+  model_error: "",
+  context_tokens: 200000,
+  estimated_tokens: 2250,
+  fits: true,
 };
 
 const RUN: ExtractionRun = {
@@ -155,23 +160,59 @@ describe("the setup screen", () => {
     expect(summary).toMatch(/1 entry/);
   });
 
-  it("ticks the already-written entries to leave alone, and NOT the thin one", async () => {
-    // The smart default. Deliberately a suggestion rather than an automatic
-    // skip: nothing here can know that a character from chapter two has come
-    // back, so skipping would miss exactly the entry the writer wanted.
+  it("TICKED MEANS SEND, which is the way round a writer expects", async () => {
+    // Flipped after the first live run. The writer's words: "that was actually
+    // confusing to me and unnatural. Generally one would want to CHECK all the
+    // boxes they want to send and UNCHECK the ones they don't want."
+    //
+    // The suggestion is unchanged -- an entry already written up is not worked
+    // on by default -- only the direction it is expressed in. A ticked list
+    // beside a Send button reads as the things being sent, and inverting that
+    // makes every writer hold a negation for the whole screen.
     await open();
     const boxes = within(screen.getByTestId("extractor-exclusions"))
       .getAllByRole("checkbox") as HTMLInputElement[];
-    expect(boxes[0].checked).toBe(true);   // Rosie, written up
-    expect(boxes[1].checked).toBe(false);  // Lou, thin
+    expect(boxes[0].checked).toBe(false);  // Rosie, already written up
+    expect(boxes[1].checked).toBe(true);   // Lou, thin, worth proposing for
   });
 
-  it("lets the writer untick a suggestion", async () => {
+  it("sends the UNTICKED entries as the ones to leave alone", async () => {
+    // The screen speaks in inclusions, the wire speaks in exclusions, and the
+    // translation happens once. Getting this backwards would silently invert
+    // the writer's intent on the one screen that spends money.
+    await open();
+    await userEvent.click(screen.getByTestId("extractor-run"));
+    await waitFor(() => {
+      const run = calls.find(c => c.url.includes("/api/extractor/run"));
+      const sent = JSON.parse(String(run!.init!.body));
+      expect(sent.exclude).toEqual(["e-rosie"]);
+    });
+  });
+
+  it("lets the writer tick a suggestion back on", async () => {
     await open();
     const boxes = within(screen.getByTestId("extractor-exclusions"))
       .getAllByRole("checkbox") as HTMLInputElement[];
     await userEvent.click(boxes[0]);
-    expect(boxes[0].checked).toBe(false);
+    expect(boxes[0].checked).toBe(true);
+  });
+
+  it("offers tick all and tick none", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: /Tick all/ }));
+    const boxes = within(screen.getByTestId("extractor-exclusions"))
+      .getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxes.every(b => b.checked)).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: /Tick none/ }));
+    expect(boxes.every(b => !b.checked)).toBe(true);
+  });
+
+  it("says an unticked entry is still shown to the model", async () => {
+    // Otherwise the writer reasonably assumes unticking hides it, and a model
+    // that is not told a character exists proposes them as new.
+    await open();
+    const text = screen.getByTestId("extractor-setup").textContent ?? "";
+    expect(text).toMatch(/still shown to the model/i);
   });
 
   it("says outright that nothing it proposes has been checked", async () => {
@@ -209,14 +250,33 @@ describe("the setup screen", () => {
     });
   });
 
-  it("sends the excluded entries so they are left alone", async () => {
+  it("NAMES THE MODEL THAT WILL ACTUALLY RUN IT", async () => {
+    // The first live run was made by a model the writer did not think they
+    // were using: Long-context analysis was unassigned, so it fell through to
+    // the Default Model. Naming the ROLE was not enough.
     await open();
-    await userEvent.click(screen.getByTestId("extractor-run"));
-    await waitFor(() => {
-      const run = calls.find(c => c.url.includes("/api/extractor/run"));
-      const sent = JSON.parse(String(run!.init!.body));
-      expect(sent.exclude).toContain("e-rosie");
-    });
+    expect(body("extractor-summary")).toMatch(/anthropic\/claude-sonnet-4/);
+  });
+
+  it("REFUSES TO SPEND when the book will not fit in that model", async () => {
+    // The first live run sent ~69,000 tokens to a model holding 64,000, got an
+    // unreadable answer, and paid for the privilege of finding out.
+    await open({ "/api/extractor/plan": {
+      ...PLAN, model_id: "deepseek/deepseek-chat",
+      context_tokens: 64000, estimated_tokens: 68883, fits: false } });
+    const warning = body("extractor-too-big");
+    expect(warning).toMatch(/will not fit/i);
+    expect(warning).toMatch(/68,883/);
+    expect(warning).toMatch(/64,000/);
+    expect(warning).toMatch(/Nothing will be sent or charged/i);
+    expect(screen.getByTestId("extractor-run").hasAttribute("disabled"))
+      .toBe(true);
+  });
+
+  it("says when no model can run it at all", async () => {
+    await open({ "/api/extractor/plan": {
+      ...PLAN, model_id: "", model_error: "No API key for OpenRouter." } });
+    expect(body("extractor-model-error")).toMatch(/No API key/);
   });
 
   it("ASKS BEFORE THROWING AWAY PROPOSALS THE WRITER PAID FOR", async () => {
@@ -496,5 +556,76 @@ describe("Show me how this works", () => {
       if (!next) break;
       await userEvent.click(next);
     }
+  });
+});
+
+
+// ── WHEN NOTHING CAME BACK ──────────────────────────────────────────────────
+//
+// The first real run of this feature returned nothing, and the screen said an
+// empty result "usually means the book already says what your entries say".
+// That was a confident explanation with nothing behind it, and it was wrong:
+// the request had overflowed the model's context window and the answer came
+// back unreadable.
+//
+// A wrong reason is worse than no reason. It sends the writer away satisfied
+// while the feature is broken, and it wastes the one piece of evidence that
+// would have explained everything.
+
+describe("an empty result", () => {
+  const emptyRun: ExtractionRun = {
+    run_id: "ext-empty", created_at: "2026-08-14T19:33:00Z",
+    model_used: "deepseek/deepseek-chat", scope: { whole_manuscript: true },
+    entries: [],
+    dropped: ["The model did not return readable JSON."],
+    raw_excerpt: "I'm sorry, I can't process a request that long.",
+    estimated_tokens: 68883,
+    context_tokens: 64000,
+  };
+
+  async function open(run = emptyRun) {
+    render(<ExtractorReview projectPath={PROJECT} run={run}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    return screen.findByTestId("extractor-empty");
+  }
+
+  it("never claims the book already matches the entries", async () => {
+    const panel = await open();
+    expect(panel.textContent).not.toMatch(/already says what your entries say/i);
+  });
+
+  it("says what actually went wrong", async () => {
+    const panel = await open();
+    expect(panel.textContent).toMatch(/did not return readable JSON/i);
+  });
+
+  it("shows the sizes, which is usually the whole answer", async () => {
+    const panel = await open();
+    expect(panel.textContent).toMatch(/68,883/);
+    expect(panel.textContent).toMatch(/64,000/);
+    expect(panel.textContent).toMatch(/deepseek/);
+  });
+
+  it("keeps what the model actually said", async () => {
+    // The difference between a five-second diagnosis and a mystery.
+    const panel = await open();
+    expect(panel.textContent).toMatch(/What the model actually said/i);
+    expect(panel.textContent).toMatch(/can't process a request that long/i);
+  });
+
+  it("says what to do next rather than leaving a dead end", async () => {
+    const panel = await open();
+    expect(panel.textContent).toMatch(/fewer chapters/i);
+    expect(panel.textContent).toMatch(/larger context window/i);
+  });
+
+  it("stays sane when there is no diagnosis to give", async () => {
+    // A genuinely empty result -- the model answered properly and found
+    // nothing. No invented reason here either.
+    const panel = await open({ ...emptyRun, dropped: [], raw_excerpt: "",
+                               estimated_tokens: undefined,
+                               context_tokens: undefined });
+    expect(panel.textContent).toMatch(/Nothing came back/i);
+    expect(panel.textContent).not.toMatch(/already says what your entries say/i);
   });
 });

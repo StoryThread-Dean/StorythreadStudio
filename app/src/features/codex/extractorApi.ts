@@ -73,6 +73,18 @@ export interface ExtractorPlan {
   /** How many proposals a new run would destroy. */
   unreviewed: number;
   has_current: boolean;
+  /** The model that will ACTUALLY run this, resolved. Shown before the button
+   *  because the first live run was made by a model the writer did not think
+   *  they were using: the role was unassigned, so it fell through to the
+   *  Default Model. */
+  model_id: string;
+  /** Why no model could be resolved, when that is the answer. */
+  model_error: string;
+  /** That model's context window. 0 means we could not find out, which is NOT
+   *  the same as "it fits". */
+  context_tokens: number;
+  estimated_tokens: number;
+  fits: boolean;
 }
 
 /** One clickable proposal: a section's prose, or a single trait. */
@@ -117,6 +129,11 @@ export interface ExtractionRun {
   };
   entries: ExtractionEntry[];
   dropped?: string[];
+  /** What the model actually said, when nothing could be read from it. Kept so
+   *  a failure is a five-second diagnosis rather than a mystery. */
+  raw_excerpt?: string;
+  estimated_tokens?: number;
+  context_tokens?: number;
 }
 
 export interface ExtractionProgress {
@@ -152,7 +169,8 @@ export function runExtraction(body: {
   exclude: string[];
   /** The writer has been told what a new run would replace and said go. */
   replace_existing: boolean;
-}): Promise<{ run: ExtractionRun; progress: ExtractionProgress; dropped: string[] }> {
+}): Promise<{ run: ExtractionRun; progress: ExtractionProgress;
+              dropped: string[]; raw_excerpt?: string }> {
   return post("/run", body);
 }
 

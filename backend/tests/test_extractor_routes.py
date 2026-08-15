@@ -440,3 +440,116 @@ def test_working_an_extraction_that_is_not_there_says_so(project):
         "action": "dismiss",
     })
     assert response.json()["detail"]["code"] == "extraction_missing"
+
+
+# ── WHAT THE FIRST LIVE RUN COST, AND WHAT NOW PREVENTS IT ──────────────────
+#
+# The Extractor's first real use, on a 275,000-character novel: the writer
+# believed they had chosen one model, the Long-context role was unassigned so
+# it fell through to the Default Model, the request was about 69,000 tokens
+# against that model's 64,000-token window, and the answer came back
+# unreadable. The screen then reported "nothing was proposed" and offered the
+# reassuring guess that the book probably already matched the entries.
+#
+# Four separate failures in one run, and only one of them was the model's:
+#   - the writer was never told WHICH model would run it
+#   - nothing checked whether the request could possibly fit
+#   - the raw answer was discarded, so the failure was undiagnosable
+#   - the screen invented a cause and stated it confidently
+#
+# The first two are prevented here. The other two are the frontend's.
+
+def test_the_plan_names_the_model_that_will_actually_run_it(project, monkeypatch):
+    import app.routers.extractor as extractor
+
+    async def fake_resolve():
+        return "deepseek/deepseek-chat", 64000, ""
+    monkeypatch.setattr(extractor, "_resolve_for_display", fake_resolve)
+
+    body = client.get("/api/extractor/plan",
+                      params={"project_path": project}).json()
+    assert body["model_id"] == "deepseek/deepseek-chat"
+    assert body["context_tokens"] == 64000
+
+
+def test_the_plan_says_whether_the_book_FITS(project, monkeypatch):
+    import app.routers.extractor as extractor
+
+    async def small_window():
+        # Small enough to be exceeded by this fixture's two short chapters.
+        # The real case was 69,000 against 64,000; the arithmetic is the same.
+        return "tiny/model", 10, ""
+    monkeypatch.setattr(extractor, "_resolve_for_display", small_window)
+
+    body = client.get("/api/extractor/plan",
+                      params={"project_path": project}).json()
+    assert body["estimated_tokens"] > 0
+    assert body["fits"] is False
+
+
+def test_an_unknown_context_window_is_NOT_reported_as_fitting(project, monkeypatch):
+    """
+    0 means "we could not find out", which is a different thing from "it fits".
+
+    Treating unknown as fine is how a writer ends up paying for a request that
+    overflows -- which is exactly what happened, and the reason this
+    distinction is a test rather than a comment.
+    """
+    import app.routers.extractor as extractor
+
+    async def unknown():
+        return "some/model", 0, ""
+    monkeypatch.setattr(extractor, "_resolve_for_display", unknown)
+
+    body = client.get("/api/extractor/plan",
+                      params={"project_path": project}).json()
+    assert body["context_tokens"] == 0
+    # Nothing is BLOCKED on an unknown window -- refusing every unlisted model
+    # would make the feature unusable on a local one -- but the screen is told
+    # the truth and warns rather than promising.
+    assert body["fits"] is True
+
+
+def test_the_plan_passes_on_why_no_model_could_be_resolved(project, monkeypatch):
+    import app.routers.extractor as extractor
+
+    async def broken():
+        return "", 0, "No API key for OpenRouter."
+    monkeypatch.setattr(extractor, "_resolve_for_display", broken)
+
+    body = client.get("/api/extractor/plan",
+                      params={"project_path": project}).json()
+    assert body["model_error"] == "No API key for OpenRouter."
+
+
+def test_A_RUN_THAT_CANNOT_FIT_IS_REFUSED_BEFORE_ANYTHING_IS_SENT(project, monkeypatch):
+    """
+    The money guard. Nothing is sent, so nothing is charged.
+
+    Note what is NOT asserted: that it refuses when the window is unknown. A
+    local model reports no context length and must stay usable.
+    """
+    import app.routers.extractor as extractor
+
+    async def small(_provider, _key, _model):
+        return 10
+    monkeypatch.setattr(extractor, "_context_window", small)
+
+    called = {"ran": False}
+
+    async def must_not_run(**_kwargs):
+        called["ran"] = True
+        raise AssertionError("a request was sent despite not fitting")
+
+    monkeypatch.setattr("app.ai.openrouter.run_completion", must_not_run)
+
+    response = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    })
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "extraction_too_long"
+    assert called["ran"] is False
+    message = response.json()["detail"]["message"]
+    assert "nothing has been spent" in message.lower()
+    # And it says what to do, not only what went wrong.
+    assert "fewer chapters" in message.lower() or "Settings" in message

@@ -115,6 +115,56 @@ def _written_chars(thread: dict) -> int:
 FULLY_WRITTEN_CHARS = 600
 
 
+async def _resolve_for_display() -> tuple[str, int, str]:
+    """
+    (model id, its context window in tokens, an error to show instead).
+
+    Read-only and best-effort: this runs on a screen that has not spent
+    anything yet, so every failure degrades to "we could not find out" rather
+    than blocking the writer.
+
+    A 0 window means unknown, which the caller must treat as different from
+    "it fits". Claiming a fit we did not verify is exactly how a writer ends up
+    paying for a request that overflows.
+    """
+    from app.routers.ai import _resolve_model_and_key
+
+    try:
+        provider, api_key, model_id = _resolve_model_and_key("long_context")
+    except Exception as exc:                      # noqa: BLE001 - see docstring
+        # An ASSIGNED role that cannot run raises rather than substituting, and
+        # that message is the useful one: it names the missing key or the
+        # unreachable server. Passed through rather than swallowed.
+        detail = getattr(exc, "detail", None)
+        return "", 0, str(detail or exc)
+
+    return model_id, await _context_window(provider, api_key, model_id), ""
+
+
+# Cached per process. This screen is opened repeatedly while a writer decides
+# what to tick, and a network round trip per open would make it feel broken for
+# something that changes about once a month.
+_CONTEXT_CACHE: dict[str, int] = {}
+
+
+async def _context_window(provider, api_key: str, model_id: str) -> int:
+    """How much the model can hold, in tokens. 0 when we cannot find out."""
+    if model_id in _CONTEXT_CACHE:
+        return _CONTEXT_CACHE[model_id]
+    window = 0
+    try:
+        from app.ai.openrouter import list_models
+
+        for entry in await list_models(api_key, provider):
+            if entry.get("id") == model_id:
+                window = int(entry.get("context_length") or 0)
+                break
+    except Exception:                             # noqa: BLE001 - best effort
+        window = 0
+    _CONTEXT_CACHE[model_id] = window
+    return window
+
+
 @router.get("/plan")
 async def get_plan(project_path: str = Query(...)):
     """
@@ -162,11 +212,37 @@ async def get_plan(project_path: str = Query(...)):
         })
     known.sort(key=lambda k: (k["type"], k["name"].lower()))
 
+    # WHICH MODEL, RESOLVED, AND WHETHER THE BOOK WILL EVEN FIT IN IT.
+    #
+    # Both added after the first live run, which failed in the worst possible
+    # way: the writer believed they were using one model, the unassigned role
+    # fell through to the Default Model, the request was about 69,000 tokens
+    # against a 64,000-token window, and the answer came back unreadable. The
+    # screen then said "an empty result usually means the book already says
+    # what your entries say" -- a confident, reassuring, wrong explanation for
+    # a request that had simply overflowed.
+    #
+    # Naming the model before the button is the fix for half of that. Sizing
+    # the request against its context window is the fix for the rest.
+    model_id, context_tokens, model_error = await _resolve_for_display()
+    # ~4 characters per token is the usual rough figure for English prose. It
+    # does not need to be exact: it needs to tell a 69k request from a 20k one.
+    estimated_tokens = total_chars // 4
+
     current = store.load(project_path)
     return {
         "chapters": chapters,
         "manuscript_chars": total_chars,
         "known": known,
+        # What will actually run this, so "which model just read my novel?" has
+        # an answer BEFORE it reads it rather than after.
+        "model_id": model_id,
+        "model_error": model_error,
+        "context_tokens": context_tokens,
+        "estimated_tokens": estimated_tokens,
+        # 0 means we could not find out, which is different from "it fits".
+        "fits": (context_tokens == 0
+                 or estimated_tokens < context_tokens * 0.8),
         # So the setup screen can say "you have 0 entries -- run Weaving first"
         # rather than letting the writer spend money discovering it.
         "has_world": bool(known),
@@ -284,6 +360,27 @@ async def post_run(body: RunBody):
 
     provider, api_key, model_id = _resolve_model_and_key("long_context")
 
+    # WILL IT EVEN FIT. Added after the first live run, which spent a request
+    # sending about 69,000 tokens to a model with a 64,000-token window and got
+    # back an unreadable answer. Nothing checked, so nothing could say why.
+    #
+    # The 0.8 is deliberate slack rather than timidity: the manuscript is not
+    # the whole request. The entry snippets, the prompt and the model's own
+    # answer all have to fit alongside it, and an answer that gets truncated
+    # halfway is indistinguishable from a model that could not do the job.
+    context_tokens = await _context_window(provider, api_key, model_id)
+    estimated = total // 4
+    if context_tokens and estimated > context_tokens * 0.8:
+        raise CodexError(
+            "extraction_too_long",
+            f"That is about {estimated:,} tokens of manuscript, and {model_id} "
+            f"holds {context_tokens:,}. It would not fit, so nothing has been "
+            f"sent and nothing has been spent. Run it over fewer chapters, or "
+            f"assign a model with a larger context window to Long-context "
+            f"analysis in Settings.",
+            str(estimated),
+        )
+
     try:
         result = await asyncio.wait_for(
             run_completion(
@@ -316,6 +413,15 @@ async def post_run(body: RunBody):
     raw = result.get("choices", [{}])[0].get("message", {}).get("content", "")
     proposals, dropped = extract.parse_response(raw, registry.get("types") or [])
 
+    # WHEN NOTHING SURVIVES, KEEP THE EVIDENCE. The first live failure threw the
+    # model's answer away and left the writer with "nothing was proposed", which
+    # is a description of the symptom offered as if it were the cause. A short
+    # excerpt of what actually came back is the difference between a mystery and
+    # a five-second diagnosis, and it costs nothing to keep.
+    raw_excerpt = ""
+    if not proposals:
+        raw_excerpt = (raw or "").strip()[:600]
+
     run = extract.build_run(
         proposals, threads, model_used=model_id, leave_alone=excluded,
         scope={
@@ -329,8 +435,12 @@ async def post_run(body: RunBody):
     # answer, with nothing in a position to notice, is the failure this repo
     # keeps finding.
     run["dropped"] = dropped
+    run["raw_excerpt"] = raw_excerpt
+    run["estimated_tokens"] = estimated
+    run["context_tokens"] = context_tokens
     store.save(project_path, run)
-    return {"run": run, "progress": store.progress(run), "dropped": dropped}
+    return {"run": run, "progress": store.progress(run), "dropped": dropped,
+            "raw_excerpt": raw_excerpt}
 
 
 # ── Applying one part, which is the only way anything is written ────────────
