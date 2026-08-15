@@ -67,7 +67,14 @@ EXTRACT_TIMEOUT = 600.0
 # on thinking before it writes a word -- so a default budget can be exhausted
 # mid-thought and return nothing at all, which arrives looking exactly like a
 # model that had nothing to say.
-EXTRACT_MAX_OUTPUT = 32_000
+#
+# RAISED FROM 32,000 AFTER THE FIFTH LIVE RUN, which spent all 32,000 and was
+# still cut off mid-sentence on a seven-chapter book. This is not a number that
+# can be made large enough for every manuscript -- a long novel's worth of
+# proposals will outgrow any single reply -- which is why `salvage_entries`
+# exists beside it and why the answer for a big book is fewer chapters at a
+# time. What this number buys is that an ordinary run finishes.
+EXTRACT_MAX_OUTPUT = 64_000
 
 
 # ── Reading the project ─────────────────────────────────────────────────────
@@ -559,12 +566,40 @@ async def post_run(body: RunBody):
         proposals, dropped = extract.parse_response(
             raw, registry.get("types") or [])
 
+    # CUT OFF PART WAY. The fifth live run used its whole reply budget and was
+    # truncated mid-sentence, and every complete entry before that point was
+    # thrown away with the broken one. The writer had paid for those.
+    truncated = False
+    if not proposals and finish_reason == "length" and (raw or "").strip():
+        salvaged = extract.salvage_entries(raw)
+        if salvaged:
+            proposals, dropped = extract.parse_proposals(
+                salvaged, registry.get("types") or [])
+            truncated = True
+
 
     # An empty answer is its own diagnosis and deserves its own words, rather
     # than the generic "did not return readable JSON" -- which is true, and
     # tells the writer nothing they can act on.
     if not proposals and not (raw or "").strip():
         dropped = [_empty_answer_reason(finish_reason, model_id, usage)]
+    elif finish_reason == "length":
+        # Whether anything was salvaged or not, a cut-off answer must SAY it was
+        # cut off. Reporting a partial result as a complete one is the version
+        # of this failure the writer could not detect: they would work through
+        # what came back and never know their last four chapters produced
+        # nothing.
+        spent = usage.get("completion_tokens") or 0
+        note = (f"{model_id} ran out of room to reply after {spent:,} tokens, "
+                f"so the answer was cut off part way through your book.")
+        if truncated and proposals:
+            note += (f" The {len(proposals)} complete "
+                     f"{'entry' if len(proposals) == 1 else 'entries'} before "
+                     f"the cut were kept. Run it again over the later chapters "
+                     f"to get the rest.")
+        else:
+            note += " Run it over fewer chapters at a time."
+        dropped = [note] + list(dropped)
 
     # WHEN NOTHING SURVIVES, KEEP THE EVIDENCE. The first live failure threw the
     # model's answer away and left the writer with "nothing was proposed", which

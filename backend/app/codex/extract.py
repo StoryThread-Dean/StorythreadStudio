@@ -262,6 +262,75 @@ def _section_index(types: list[dict]) -> dict[str, dict[str, dict]]:
     return index
 
 
+def salvage_entries(raw: str) -> list:
+    """
+    The complete entries out of an answer that was cut off part way.
+
+    WHY THIS EXISTS. A live run against a seven-chapter novel used its entire
+    32,000-token reply budget and was still truncated mid-sentence:
+
+        ... now works for the City Cleanup operation alongside Owen Hask
+
+    Everything before that point was perfectly good JSON describing a dozen
+    characters the writer had paid real money for, and the app threw all of it
+    away because the closing brackets were missing. An all-or-nothing parser
+    turns a partial success into a total loss at the exact moment the writer
+    can least afford it.
+
+    So: walk the text, take every entry object that CLOSED, and stop at the one
+    that did not. Deliberately conservative -- a half-written object is dropped
+    rather than repaired, because inventing the missing half of a proposal is
+    the one thing this feature must never do.
+    """
+    start = raw.find('"entries"')
+    if start == -1:
+        return []
+    bracket = raw.find("[", start)
+    if bracket == -1:
+        return []
+
+    entries = []
+    depth = 0
+    in_string = False
+    escaped = False
+    object_start = -1
+
+    for index in range(bracket + 1, len(raw)):
+        char = raw[index]
+
+        # Strings first: a brace inside a description is not structure, and a
+        # writer's prose is full of them.
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == chr(92):
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+
+        if char == "{":
+            if depth == 0:
+                object_start = index
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and object_start != -1:
+                chunk = raw[object_start:index + 1]
+                try:
+                    entries.append(json.loads(chunk))
+                except json.JSONDecodeError:
+                    pass
+                object_start = -1
+        elif char == "]" and depth == 0:
+            break
+
+    return entries
+
+
 def parse_response(raw: str, types: list[dict]) -> tuple[list[dict], list[str]]:
     """
     ([proposal dicts], [reasons things were dropped]).

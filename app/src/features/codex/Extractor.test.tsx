@@ -812,3 +812,50 @@ describe("choosing the model here", () => {
         .toMatch(/Pick a bigger one/i));
   });
 });
+
+
+// ── A RUN THAT ONLY COVERED PART OF THE BOOK ────────────────────────────────
+//
+// The fifth live run spent its entire reply budget and was cut off mid-word.
+// The complete entries before the cut are now kept -- the writer paid for them
+// -- and that creates a new way to mislead them: a partial result that looks
+// exactly like a complete one.
+//
+// Twelve entries from a book with twenty in it is a successful-looking screen.
+// They would work through it, tick it off, and never learn that their last four
+// chapters produced nothing at all.
+
+describe("a partial run", () => {
+  const partial: ExtractionRun = {
+    ...RUN,
+    dropped: ["google/gemini-2.5-flash-lite ran out of room to reply after "
+              + "32,000 tokens, so the answer was cut off part way through "
+              + "your book. The 2 complete entries before the cut were kept. "
+              + "Run it again over the later chapters to get the rest."],
+  };
+
+  it("SAYS the book was not fully covered, above the list", async () => {
+    render(<ExtractorReview projectPath={PROJECT} run={partial}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    const notice = await screen.findByTestId("extractor-partial");
+    expect(notice.textContent).toMatch(/did not cover your whole book/i);
+    expect(notice.textContent).toMatch(/cut off part way/i);
+    expect(notice.textContent).toMatch(/later chapters/i);
+  });
+
+  it("still shows the entries that did come back", async () => {
+    render(<ExtractorReview projectPath={PROJECT} run={partial}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+    expect(screen.getByRole("button", { name: /Rosie/ })).toBeTruthy();
+  });
+
+  it("says nothing of the sort on a clean run", async () => {
+    // A warning that appears on healthy runs is one the writer learns to
+    // ignore before the run where it matters.
+    render(<ExtractorReview projectPath={PROJECT} run={RUN}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+    expect(screen.queryByTestId("extractor-partial")).toBeNull();
+  });
+});

@@ -609,3 +609,39 @@ def test_leaving_an_entry_alone_does_not_suppress_a_genuinely_new_one():
     ]), TYPES)
     run = extract.build_run(proposals, threads, leave_alone={"e-rosie"})
     assert [e["name"] for e in run["entries"]] == ["Huffington City"]
+
+
+# ── Reading an answer that stops mid-word ───────────────────────────────────
+
+def test_salvage_takes_every_entry_that_closed():
+    raw = ('{"entries": ['
+           '{"type": "character", "name": "A"},'
+           '{"type": "character", "name": "B"},'
+           '{"type": "character", "name": "C')
+    assert [e["name"] for e in extract.salvage_entries(raw)] == ["A", "B"]
+
+
+def test_salvage_is_not_confused_by_braces_inside_the_writers_prose():
+    # A description is prose, and prose contains braces, quotes and backslashes.
+    # A brace-counting parser that did not understand strings would end an
+    # entry early and lose the rest of a perfectly good answer.
+    raw = ('{"entries": ['
+           '{"type": "character", "name": "A", "sections": '
+           '[{"id": "overview", "text": "He said {this} and \\"that\\"."}]},'
+           '{"type": "character", "name": "B')
+    got = extract.salvage_entries(raw)
+    assert [e["name"] for e in got] == ["A"]
+    assert "{this}" in got[0]["sections"][0]["text"]
+
+
+def test_salvage_returns_nothing_when_the_cut_came_too_early():
+    assert extract.salvage_entries('{"entries": [{"type": "cha') == []
+    assert extract.salvage_entries("not json at all") == []
+
+
+def test_salvage_handles_a_COMPLETE_answer_identically():
+    # It must not be a special path that behaves differently on healthy input,
+    # or the failure case becomes the only one anybody tests.
+    raw = _answer([{"type": "character", "name": "A"},
+                   {"type": "character", "name": "B"}])
+    assert [e["name"] for e in extract.salvage_entries(raw)] == ["A", "B"]

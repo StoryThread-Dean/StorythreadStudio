@@ -791,3 +791,107 @@ def test_NO_ROUTER_READS_A_SHAPE_run_completion_DOES_NOT_RETURN():
         f"read an empty answer from every model, forever: {offenders}. Use "
         f"result['raw_text'] (or the parsed keys) instead."
     )
+
+
+# ── AN ANSWER CUT OFF PART WAY ──────────────────────────────────────────────
+#
+# The fifth live run. Gemini Flash-Lite, 44,227 tokens in, and it spent every
+# one of the 32,000 output tokens it was given before being cut off
+# mid-sentence:
+#
+#     ... now works for the City Cleanup operation alongside Owen Hask
+#
+# Everything before that was perfectly good JSON describing a dozen characters,
+# and the app threw all of it away because the closing brackets were missing.
+# An all-or-nothing parser turns a partial success into a total loss at the
+# moment the writer can least afford it -- they had just paid for those tokens.
+
+def _truncated_answer(*, entries: int = 2) -> str:
+    """Valid JSON for `entries` entries, then a cut-off one."""
+    good = ",\n".join(
+        json.dumps({"type": "character", "name": f"Person {i}",
+                    "sections": [{"id": "overview", "text": "Someone."}]})
+        for i in range(entries)
+    )
+    return ('{"entries": [\n' + good
+            + ',\n{"type": "character", "name": "Cut off", "sections": '
+              '[{"id": "overview", "text": "alongside Owen Hask')
+
+
+def _run_returning(monkeypatch, raw, finish_reason="length", spent=32000):
+    import app.routers.extractor as extractor
+
+    async def answer(**_kwargs):
+        return {"raw_text": raw, "finish_reason": finish_reason,
+                "usage": {"completion_tokens": spent, "prompt_tokens": 44227},
+                "summary": "", "suggestions": [], "notes": []}
+
+    monkeypatch.setattr("app.ai.openrouter.run_completion", answer)
+    monkeypatch.setattr(extractor, "_context_window",
+                        lambda *_a, **_k: _fake_window())
+
+
+def test_THE_COMPLETE_ENTRIES_BEFORE_THE_CUT_ARE_KEPT(project, monkeypatch):
+    """The writer paid for these. They must not be thrown away."""
+    _run_returning(monkeypatch, _truncated_answer(entries=3))
+    response = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    })
+    assert response.status_code == 200
+    names = [e["name"] for e in response.json()["run"]["entries"]]
+    assert names == ["Person 0", "Person 1", "Person 2"]
+
+
+def test_the_half_written_entry_is_dropped_rather_than_repaired(project, monkeypatch):
+    # Inventing the missing half of a proposal is the one thing this feature
+    # must never do, and a truncated entry is exactly where the temptation is.
+    _run_returning(monkeypatch, _truncated_answer(entries=2))
+    names = [e["name"] for e in client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    }).json()["run"]["entries"]]
+    assert "Cut off" not in names
+
+
+def test_A_PARTIAL_RESULT_IS_NEVER_REPORTED_AS_A_COMPLETE_ONE(project, monkeypatch):
+    """
+    The version of this failure the writer could not detect for themselves.
+
+    Silently keeping twelve entries from a book with twenty in it looks exactly
+    like a successful run. They would work through what came back, tick it off,
+    and never learn that their last four chapters produced nothing.
+    """
+    _run_returning(monkeypatch, _truncated_answer(entries=3))
+    dropped = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    }).json()["dropped"]
+    assert dropped, "a cut-off answer reported nothing at all"
+    assert "cut off" in dropped[0].lower()
+    assert "3 complete" in dropped[0]
+    assert "32,000" in dropped[0]
+    # And what to do about it, not just what went wrong.
+    assert "later chapters" in dropped[0]
+
+
+def test_a_cut_off_answer_with_nothing_salvageable_still_says_so(project, monkeypatch):
+    _run_returning(monkeypatch, '{"entries": [{"type": "char')
+    body = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    }).json()
+    assert body["run"]["entries"] == []
+    assert "fewer chapters" in body["dropped"][0]
+
+
+def test_a_COMPLETE_answer_is_not_accused_of_being_cut_off(project, monkeypatch):
+    # The guard against crying wolf: finish_reason "stop" means it finished,
+    # and a warning that appears on healthy runs is one the writer learns to
+    # ignore before the run that matters.
+    answer = json.dumps({"entries": [
+        {"type": "character", "name": "Rosie", "match": "Rosie",
+         "sections": [{"id": "overview", "text": "A courier."}]},
+    ]})
+    _run_returning(monkeypatch, answer, finish_reason="stop", spent=900)
+    body = client.post("/api/extractor/run", json={
+        "project_path": project, "chapter_ids": [], "exclude": [],
+    }).json()
+    assert body["dropped"] == []
+    assert len(body["run"]["entries"]) == 1

@@ -177,6 +177,27 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
           </button>
         </header>
 
+        {/* A CUT-OFF ANSWER MUST SAY SO EVEN WHEN IT WORKED.
+            This is the version of the failure a writer cannot detect: keeping
+            twelve entries from a book with twenty in it looks exactly like a
+            successful run. They would work through what came back, tick it
+            off, and never learn that their last four chapters produced
+            nothing. So the warning sits above the list, not only in the empty
+            state where it started. */}
+        {(run.dropped ?? []).length > 0 && entries.length > 0 && (
+          <div className="mb-3 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+               data-testid="extractor-partial">
+            <p className="text-[11px] font-semibold text-amber-200">
+              This did not cover your whole book.
+            </p>
+            <ul className="mt-1 space-y-0.5 text-[11px] text-amber-200/80">
+              {(run.dropped ?? []).slice(0, 4).map((line, index) => (
+                <li key={index}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {selected ? (
           <EntryPanel
             key={selected.item_id}
