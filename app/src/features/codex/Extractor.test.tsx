@@ -854,6 +854,10 @@ describe("choosing the model here", () => {
 describe("a partial run", () => {
   const partial: ExtractionRun = {
     ...RUN,
+    // The flag, not the note. A note is raised for anything worth saying; only
+    // a CUT-OFF answer means the book was not covered, and conflating them put
+    // a false alarm above every profile for a whole session.
+    incomplete: true,
     dropped: ["google/gemini-2.5-flash-lite ran out of room to reply after "
               + "32,000 tokens, so the answer was cut off part way through "
               + "your book. The 2 complete entries before the cut were kept. "
@@ -874,6 +878,23 @@ describe("a partial run", () => {
                             onChanged={() => {}} onStartOver={() => {}} />);
     await screen.findByTestId("extractor-review");
     expect(screen.getByRole("button", { name: /Rosie/ })).toBeTruthy();
+  });
+
+  it("DOES NOT CRY WOLF over a section that simply did not map", async () => {
+    // Reported from live use: the model proposed `goals` for a government and
+    // `abilities` for a character. Neither means the book went uncovered, and
+    // the banner sat above every profile saying it did -- a persistent false
+    // alarm, which is the kind a writer learns to stop reading before the run
+    // where it is true.
+    const noted: ExtractionRun = {
+      ...RUN,
+      dropped: ["Chapters 1 of 2: Heroes Guild: 'goals' is not a section of "
+                + "government."],
+    };
+    render(<ExtractorReview projectPath={PROJECT} run={noted}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+    expect(screen.queryByTestId("extractor-partial")).toBeNull();
   });
 
   it("says nothing of the sort on a clean run", async () => {
@@ -1258,5 +1279,44 @@ describe("a described character who may already exist", () => {
     await screen.findByTestId("extractor-review");
     // Rosie is selected by default and has entity_id e-rosie.
     expect(calls.some(c => c.url.includes("/api/codex/thread/new"))).toBe(false);
+  });
+});
+
+
+// -- A SECTION THIS KIND DOES NOT HAVE ---------------------------------------
+//
+// Reported from live use: the model proposed `goals` for a government and
+// `abilities` for a character. Both were thrown away whole, and the writer lost
+// real observations about their own book to a schema mismatch they did not
+// make. The content is moved to the fallback now, and the card says so.
+
+describe("a proposal that did not fit where the model put it", () => {
+  const adapted: ExtractionRun = {
+    ...RUN,
+    entries: [{
+      ...RUN.entries[0],
+      parts: [{
+        part_id: "p-adapted", section_id: "notes", heading: "Notes",
+        form: "prose", trait_name: "",
+        content: "Keep the peace, visibly.",
+        state: "open", applied_as: "", adapted_from: "goals",
+      }],
+    }],
+  };
+
+  it("says where it was meant to go", async () => {
+    render(<ExtractorReview projectPath={PROJECT} run={adapted}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    const label = await screen.findByTestId("extractor-adapted");
+    expect(label.textContent).toMatch(/proposed as "goals"/i);
+    expect(label.textContent).toMatch(/does not have/i);
+  });
+
+  it("says nothing on an ordinary proposal", async () => {
+    // The label has to mean something. On every card it would mean nothing.
+    render(<ExtractorReview projectPath={PROJECT} run={RUN}
+                            onChanged={() => {}} onStartOver={() => {}} />);
+    await screen.findByTestId("extractor-review");
+    expect(screen.queryByTestId("extractor-adapted")).toBeNull();
   });
 });

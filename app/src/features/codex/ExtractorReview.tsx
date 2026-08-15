@@ -189,7 +189,7 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
             off, and never learn that their last four chapters produced
             nothing. So the warning sits above the list, not only in the empty
             state where it started. */}
-        {(run.dropped ?? []).length > 0 && entries.length > 0 && (
+        {run.incomplete && entries.length > 0 && (
           <div className="mb-3 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
                data-testid="extractor-partial">
             <p className="text-[11px] font-semibold text-amber-200">
@@ -599,6 +599,16 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
         {part.form === "trait" && (
           <span className="ml-1 normal-case tracking-normal text-text-muted">
             / {part.trait_name}
+          </span>
+        )}
+        {/* WHERE IT WAS MEANT TO GO. The model proposed a section this kind
+            does not have -- goals on a government, abilities on a character --
+            and the content was moved here rather than thrown away. Saying so
+            turns an odd-looking paragraph into an explained one. */}
+        {part.adapted_from && (
+          <span className="ml-1 normal-case tracking-normal text-amber-300/80"
+                data-testid="extractor-adapted">
+            (proposed as "{part.adapted_from}", which this kind does not have)
           </span>
         )}
       </p>

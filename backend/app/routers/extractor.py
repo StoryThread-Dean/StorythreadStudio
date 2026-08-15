@@ -656,6 +656,14 @@ async def post_run(body: RunBody):
     # WHERE THE RUN HAS GOT TO, kept on the run so a writer who closes the app
     # between batches can be told they stopped at three of four rather than
     # being shown a partial world with no explanation.
+    # DID THE BOOK GET COVERED, which is a different question from whether
+    # anything was noted. The banner used to fire on ANY note, so a model
+    # proposing `goals` for a government put "This did not cover your whole
+    # book" above every profile for the rest of the session -- a false alarm
+    # that persisted, which is the kind writers learn to stop reading.
+    if finish_reason == "length":
+        run["incomplete"] = True
+
     run["batch_index"] = body.batch_index
     run["batch_count"] = body.batch_count
     run["batches_done"] = int(run.get("batches_done") or 0) + 1

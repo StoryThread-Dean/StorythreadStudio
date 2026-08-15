@@ -101,6 +101,10 @@ export interface ExtractionPart {
   content: string;
   state: "open" | "applied" | "dismissed";
   applied_as: string;
+  /** The section the model ASKED for, when this kind has none. Empty normally.
+   *  Shown so a paragraph about a government's goals sitting in its Notes is
+   *  explained rather than merely odd. */
+  adapted_from?: string;
 }
 
 export interface ExtractionEntry {
@@ -145,6 +149,9 @@ export interface ExtractionRun {
   batch_count?: number;
   batches_done?: number;
   batch_notes?: string[];
+  /** The answer was CUT OFF, which is the only thing that means the book was
+   *  not fully covered. A note about a section that did not map is not that. */
+  incomplete?: boolean;
 }
 
 export interface ExtractionProgress {

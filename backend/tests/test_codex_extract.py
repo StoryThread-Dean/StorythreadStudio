@@ -108,24 +108,83 @@ def test_a_kind_this_project_does_not_have_is_dropped_BY_NAME():
     assert "The Kestrel" in dropped[0] and "spaceship" in dropped[0]
 
 
-def test_a_section_that_kind_does_not_have_is_dropped_and_the_rest_kept():
-    # Partial credit on purpose. One bad section should not cost the writer the
-    # other three they paid for.
+def test_A_SECTION_THAT_KIND_LACKS_IS_MOVED_NOT_DISCARDED():
+    """
+    Reported from live use: the model proposed `goals` for a government and
+    `abilities` for a character, and both were thrown away whole.
+
+    The writer lost real observations about their own book to a schema mismatch
+    they did not make -- and the model's mistake is a reasonable one, because
+    `goals` IS a section, on factions. No prompt reliably stops that, so the
+    content is kept and moved instead.
+    """
     proposals, dropped = extract.parse_response(_answer([{
         "type": "location", "name": "Huffington City",
         "sections": [
             {"id": "overview", "text": "A port town."},
-            {"id": "motivations", "traits": [{"name": "x", "description": "y"}]},
+            {"id": "motivations", "traits": [
+                {"name": "Trade", "description": "Everything moves through it."}]},
         ],
     }]), TYPES)
-    assert [s["id"] for s in proposals[0]["sections"]] == ["overview"]
-    assert any("motivations" in d for d in dropped)
+    # Nothing lost, and nothing reported as lost.
+    assert dropped == []
+    sections = proposals[0]["sections"]
+    assert [s["id"] for s in sections] == ["overview", "overview"]
+    # The traits became prose in the fallback, carrying their own labels ...
+    moved = sections[1]
+    assert "Trade" in moved["text"]
+    assert "Everything moves through it." in moved["text"]
+    # ... and it says where it was meant to go, so the writer is never left
+    # wondering why a paragraph about trade is sitting in the overview.
+    assert moved["adapted_from"] == "motivations"
 
 
-def test_an_entry_with_nothing_usable_left_is_dropped():
+def test_the_fallback_is_notes_when_the_kind_has_one():
+    # Notes is the section every shipped kind has, and it means "things about
+    # this that do not fit anywhere else" -- which is exactly what this is.
+    types = [{"id": "government", "label": "Governments", "folder": "gov",
+              "sections": [
+                  {"id": "overview", "heading": "Overview", "trait_blocks": False},
+                  {"id": "notes", "heading": "Notes", "trait_blocks": False},
+              ]}]
+    proposals, dropped = extract.parse_response(_answer([{
+        "type": "government", "name": "Heroes Guild",
+        "sections": [{"id": "goals", "text": "Keep the peace, visibly."}],
+    }]), types)
+    assert dropped == []
+    section = proposals[0]["sections"][0]
+    assert section["id"] == "notes"
+    assert section["adapted_from"] == "goals"
+    assert section["text"] == "Keep the peace, visibly."
+
+
+def test_a_real_section_is_not_marked_as_moved():
+    # The label has to mean something, so it must be absent on the ordinary
+    # path or the screen would say "proposed as Overview" on every card.
+    proposals, _ = extract.parse_response(_answer([{
+        "type": "character", "name": "Rosie",
+        "sections": [{"id": "overview", "text": "A courier."}],
+    }]), TYPES)
+    assert proposals[0]["sections"][0]["adapted_from"] == ""
+
+
+def test_an_entry_whose_only_section_was_unknown_still_survives():
+    # It used to be dropped whole. Now the text moves to the fallback, because
+    # the words were about the writer's book whatever the model called them.
     proposals, dropped = extract.parse_response(_answer([{
         "type": "character", "name": "Nobody",
-        "sections": [{"id": "not_a_section", "text": "..."}],
+        "sections": [{"id": "not_a_section", "text": "Seen once, in the rain."}],
+    }]), TYPES)
+    assert dropped == []
+    assert proposals[0]["sections"][0]["text"] == "Seen once, in the rain."
+
+
+def test_an_entry_with_genuinely_nothing_in_it_is_still_dropped():
+    # The adaptation must not resurrect empty proposals. There is a difference
+    # between content that landed in the wrong place and no content at all.
+    proposals, dropped = extract.parse_response(_answer([{
+        "type": "character", "name": "Nobody",
+        "sections": [{"id": "overview", "text": "   "}],
     }]), TYPES)
     assert proposals == []
     assert any("Nobody" in d for d in dropped)
@@ -830,3 +889,14 @@ def test_aliases_accumulate_across_batches():
     later["aliases"] = ["Pain", "The Major"]
     store.merge_entries(run, [later])
     assert run["entries"][0]["aliases"] == ["Pain", "The Major"]
+
+
+def test_the_prompt_warns_that_sections_differ_by_type():
+    # The live failure was the model using one type's sections on another --
+    # `goals` belongs to factions, not governments. The prompt now names both
+    # real examples and says where to put anything that fits nowhere, because
+    # "stay inside the ids" alone did not survive contact with a real book.
+    prompt = extract.EXTRACT_PROMPT
+    assert "own sections" in prompt.lower()
+    assert "abilities" in prompt and "goals" in prompt
+    assert '"notes"' in prompt

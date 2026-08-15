@@ -98,7 +98,7 @@ RULES
 
 6. TRAITS ARE SHORT. A trait is a label of two to five words and a description of one or two sentences. Not a paragraph.
 
-7. STAY INSIDE THE SECTION IDS AND TYPE IDS YOU ARE GIVEN. If something does not fit any of them, leave it out.
+7. STAY INSIDE THE SECTION IDS AND TYPE IDS YOU ARE GIVEN. Each type has its OWN sections and they are not the same: a character has no "abilities", a government has no "goals". Check the list for THAT type before you use a section id. If something you want to say does not fit any of that type's sections, put it in "notes".
 
 8. SPOILERS ARE FINE. This is the author's own reference, not a reader's. Say what happens.
 
@@ -251,6 +251,33 @@ def _loads(raw: str) -> dict | None:
         return None
 
 
+def _fallback_section(type_entry: dict) -> dict | None:
+    """
+    Where content lands when the model proposes a section this kind lacks.
+
+    THE PROBLEM THIS SOLVES, reported from live use: the model proposed `goals`
+    for a government and `abilities` for a character. Neither kind has those, so
+    the whole section was thrown away -- and the writer lost real observations
+    about their own book to a schema mismatch.
+
+    The mistake is a reasonable one, which is worth noticing before blaming the
+    model: `goals` IS a section, on factions. A government is close enough to a
+    faction that the confusion is almost sensible, and no prompt will reliably
+    stop it.
+
+    So the content is kept and MOVED rather than dropped. Notes first, because
+    it is the section every kind has and the one that means "things about this
+    that do not fit anywhere else" -- which is exactly what this is. Overview if
+    a custom kind has no notes; the first section if it somehow has neither.
+    """
+    sections = type_entry.get("sections") or []
+    for wanted in ("notes", "overview"):
+        for section in sections:
+            if section.get("id") == wanted:
+                return section
+    return sections[0] if sections else None
+
+
 def _section_index(types: list[dict]) -> dict[str, dict[str, dict]]:
     """{type id -> {section id -> section}}, so a proposal can be checked."""
     index: dict[str, dict[str, dict]] = {}
@@ -367,6 +394,7 @@ def parse_proposals(raw_entries: list, types: list[dict]) -> tuple[list[dict], l
     reading the answer out of the wrong place.
     """
     sections_for = _section_index(types)
+    type_by_id = {t["id"]: t for t in types}
     proposals: list[dict] = []
     dropped: list[str] = []
 
@@ -391,9 +419,42 @@ def parse_proposals(raw_entries: list, types: list[dict]) -> tuple[list[dict], l
                 continue
             section_id = str(section.get("id") or "").strip()
             known = sections_for[type_id].get(section_id)
+            adapted_from = ""
             if known is None:
-                dropped.append(f"{name}: '{section_id}' is not a section of "
-                               f"{type_id}.")
+                # MOVED, NOT LOST. See _fallback_section: a government has no
+                # `goals` and a character has no `abilities`, and throwing the
+                # content away costs the writer real observations about their
+                # own book over a schema mismatch they did not make.
+                known = _fallback_section(type_by_id.get(type_id) or {})
+                if known is None:
+                    dropped.append(f"{name}: nowhere to put '{section_id}'.")
+                    continue
+                adapted_from = section_id
+                section_id = known["id"]
+
+            if adapted_from and not known.get("trait_blocks"):
+                # A trait list proposed for a section this kind lacks becomes
+                # prose in the fallback. Guessing WHICH of the writer's real
+                # trait sections the model meant would be inventing structure
+                # they did not ask for, and a paragraph they can cut up is
+                # honest about where it came from.
+                lines = [str(section.get("text") or "").strip()]
+                for trait in section.get("traits") or []:
+                    if not isinstance(trait, dict):
+                        continue
+                    label = str(trait.get("name") or "").strip()
+                    body_text = str(trait.get("description") or "").strip()
+                    if label and body_text:
+                        lines.append(f"{label}: {body_text}")
+                    elif body_text:
+                        lines.append(body_text)
+                joined = chr(10).join(line for line in lines if line)
+                if joined:
+                    parsed_sections.append({
+                        "id": section_id, "heading": known["heading"],
+                        "traits": [], "text": joined, "trait_blocks": False,
+                        "adapted_from": adapted_from,
+                    })
                 continue
 
             if known.get("trait_blocks"):
@@ -416,6 +477,7 @@ def parse_proposals(raw_entries: list, types: list[dict]) -> tuple[list[dict], l
                         "id": section_id, "heading": known["heading"],
                         "traits": traits, "text": text,
                         "trait_blocks": True,
+                        "adapted_from": adapted_from,
                     })
             else:
                 text = str(section.get("text") or "").strip()
@@ -423,6 +485,7 @@ def parse_proposals(raw_entries: list, types: list[dict]) -> tuple[list[dict], l
                     parsed_sections.append({
                         "id": section_id, "heading": known["heading"],
                         "traits": [], "text": text, "trait_blocks": False,
+                        "adapted_from": adapted_from,
                     })
 
         if not parsed_sections:
@@ -537,6 +600,7 @@ def build_run(proposals: list[dict], threads: list[dict], *,
                 entry["parts"].append(new_part(
                     section_id=section["id"], heading=section["heading"],
                     form=FORM_PROSE, content=section["text"],
+                    adapted_from=section.get("adapted_from", ""),
                 ))
             for trait in section.get("traits") or []:
                 entry["parts"].append(new_part(

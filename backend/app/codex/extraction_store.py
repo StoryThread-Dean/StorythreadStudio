@@ -124,7 +124,7 @@ def new_entry(*, entity_id: str = "", type_id: str, name: str,
 
 
 def new_part(*, section_id: str, heading: str, form: str, content: str,
-             trait_name: str = "") -> dict:
+             trait_name: str = "", adapted_from: str = "") -> dict:
     """One clickable thing. See the module note on why nothing is bulk."""
     return {
         "part_id": "p-" + uuid.uuid4().hex[:10],
@@ -137,6 +137,10 @@ def new_part(*, section_id: str, heading: str, form: str, content: str,
         # How it landed: overwrite / merge / add / merged-into-<trait>. Kept so
         # the screen can say what was done rather than only that something was.
         "applied_as": "",
+        # The section the model ASKED for, when this kind does not have one.
+        # Empty on the ordinary path. Shown on the card so a paragraph about a
+        # government's goals sitting in its Notes is explained rather than odd.
+        "adapted_from": adapted_from,
     }
 
 
