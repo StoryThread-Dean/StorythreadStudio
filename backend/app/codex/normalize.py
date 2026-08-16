@@ -63,6 +63,91 @@ INFLUENCE_TO_IMPORTANCE: dict[str, str] = {
 INFLUENCE_MEANT_SECRET = frozenset({"foreshadowing"})
 
 
+# ── WHEN A TRAIT IS TRUE ─────────────────────────────────────────────────────
+#
+# A trait used to be a claim about a character full stop. That is wrong for any
+# character who changes, and the writer's own example is the plainest case
+# there is: Serena opens the book scrawny and average-looking, and after her
+# transformation she is taller and built like an athlete. Both descriptions are
+# true. Neither is true throughout, and sending both to a model at once
+# produces a character with two bodies.
+#
+# So a trait may carry `true_in`, a list of anchors, exactly as an ENTRY may
+# carry `appears_in`. Same shape, same authored-not-derived rule, same
+# chapter-level comparison -- because it is the same question one level down:
+# "where in the book does this hold?"
+#
+# THREE STATES, and the third is the one a `.get(key) or []` would destroy:
+#
+#   absent          always true. The default, and what every trait ever written
+#                   before today means. Nothing in an existing file changes.
+#   ["c-a", "c-b"]  true in those chapters and nowhere else.
+#   []              TRUE NOWHERE. The writer turned the switch off and has not
+#                   said where yet, or deliberately shelved the trait.
+#
+# That last one has to survive, which is why this returns None-or-list rather
+# than a list. Collapsing empty into absent would silently re-arm a trait the
+# writer had just switched off -- and it would do it on the save AFTER the one
+# they were watching, which is the worst kind of wrong.
+
+# THE WORDS A MODEL SEES when a trait is limited, and the reason they are a
+# constant rather than a literal in two files.
+#
+# A brief assembled AT a chapter can simply drop what is not true there. Two
+# paths cannot: the whole-book brief, and a profile the writer attached by hand
+# as a context chip, which carries no point in the story at all. Those paths
+# send both of Serena's builds, and if they send them as flat equals the model
+# has no way to know they are alternatives -- it will merge them, and describe
+# a scrawny woman with an athlete's shoulders.
+#
+# So they mark instead of filtering. Same shape as the SUBTEXT marker beside
+# it, for the same reason: one token for the prompt to recognise. R2.12g is
+# what happens when two serialisers of one idea drift -- a secret arrived
+# protected or exposed depending purely on which path had sent it.
+TRAIT_WINDOW_MARK = "ONLY IN"
+
+
+def normalize_trait_window(value) -> list[str] | None:
+    """
+    A trait's `true_in`, with "absent" and "empty" kept apart.
+
+    Anything that is not a list reads as absent: a hand-edited `true_in: yes`
+    means the writer was trying to say "always", and refusing to guess in the
+    restrictive direction would hide a trait they never meant to hide.
+    """
+    if value is None or isinstance(value, (str, bytes)):
+        return None
+    if not isinstance(value, (list, tuple, set)):
+        return None
+    return [text for text in (_clean(a) for a in value) if text]
+
+
+def chapter_of(anchor: str) -> str:
+    """The chapter half of an anchor. `c-abc/s-def` -> `c-abc`.
+
+    Presence and trait windows are both compared by CHAPTER even though both
+    are stored as anchors, so scene-level answers extend them later instead of
+    replacing them -- and so a writer who answers at a scene is not excluded
+    from every question asked about the chapter around it."""
+    return str(anchor or "").split("/", 1)[0]
+
+
+def trait_is_true_at(block: dict, at: str | None) -> bool:
+    """
+    Is this trait in force at this point in the story?
+
+    True when there is no window, which is the ordinary state of every trait
+    in every project that has never used this. True as well when `at` is None:
+    no point in the story means the question has no answer, and filtering on a
+    question with no answer is inventing one.
+    """
+    window = normalize_trait_window(block.get("true_in"))
+    if window is None or not at:
+        return True
+    here = chapter_of(at)
+    return any(chapter_of(anchor) == here for anchor in window)
+
+
 def _clean(value) -> str | None:
     """A trimmed string, or None for anything empty. Treats "" and "   " the
     same as absent -- a blank field in a hand-edited file means the writer

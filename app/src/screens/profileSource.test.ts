@@ -527,3 +527,92 @@ describe("where an entry appears", () => {
     expect(sent.thread.appears_in).toEqual(["c-4"]);
   });
 });
+
+describe("when a trait is true, and the secrecy that used to be lost", () => {
+  const ITEM = { entity_id: "e-lexa", filename: "lexa.md",
+                 name: "Alexandra Langford", type: "character",
+                 role: "protagonist", status: "active" };
+
+  const withTraits = (blocks: Record<string, unknown>[]) => ({
+    ...THREAD,
+    sections: {
+      ...THREAD.sections,
+      physical_traits: { heading: "Physical Traits", content: "",
+                         ai_summary: "", trait_blocks: blocks },
+    },
+  });
+
+  const traitsOf = (sent: Record<string, unknown>) =>
+    ((sent.thread as Record<string, never>)
+      .sections as Record<string, { trait_blocks: Record<string, unknown>[] }>)
+      .physical_traits.trait_blocks;
+
+  it("SUBTEXT SURVIVES A ROUND TRIP -- it did not, and the eye button proved nothing", async () => {
+    // A live bug, found while adding the field beside it. The trait card writes
+    // `subtext` on every click of the eye, and this loader never read it back:
+    // on a converted project the switch worked, looked correct, and was gone by
+    // the next load. Nothing raised anything, because a lost boolean is
+    // indistinguishable from one that was never set.
+    mockFetch(() => withTraits([
+      { trait: "keeps a locket", description: "Her mother's.",
+        importance: "core", subtext: true },
+    ]));
+    const loaded = await codexSource("/p", sectionsFor).load(ITEM);
+    expect(loaded.sections.physical_traits.trait_blocks[0].subtext).toBe(true);
+
+    calls = [];
+    mockFetch(() => ({ ok: true }));
+    await codexSource("/p", sectionsFor).save(loaded);
+    expect(traitsOf(JSON.parse(String(calls[0].init?.body)))[0].subtext).toBe(true);
+  });
+
+  it("carries a trait's chapters both ways", async () => {
+    mockFetch(() => withTraits([
+      { trait: "slight", description: "Small.", importance: "present",
+        true_in: ["c-1"] },
+    ]));
+    const loaded = await codexSource("/p", sectionsFor).load(ITEM);
+    expect(loaded.sections.physical_traits.trait_blocks[0].true_in)
+      .toEqual(["c-1"]);
+
+    calls = [];
+    mockFetch(() => ({ ok: true }));
+    await codexSource("/p", sectionsFor).save(loaded);
+    expect(traitsOf(JSON.parse(String(calls[0].init?.body)))[0].true_in).toEqual(["c-1"]);
+  });
+
+  it("KEEPS AN EMPTY WINDOW, which is not the same as no window", async () => {
+    // `[]` means the writer switched the trait off everywhere, and it has to
+    // arrive at the backend as `[]` rather than as nothing. (JavaScript happens
+    // to make this easy -- an empty array is truthy -- but the equivalent
+    // Python does not, and the two halves have to agree, so the state is
+    // pinned here as well as there.)
+    mockFetch(() => withTraits([
+      { trait: "shelved", description: "Not yet.", importance: "present",
+        true_in: [] },
+    ]));
+    const loaded = await codexSource("/p", sectionsFor).load(ITEM);
+    expect(loaded.sections.physical_traits.trait_blocks[0].true_in).toEqual([]);
+
+    calls = [];
+    mockFetch(() => ({ ok: true }));
+    await codexSource("/p", sectionsFor).save(loaded);
+    expect(traitsOf(JSON.parse(String(calls[0].init?.body)))[0].true_in).toEqual([]);
+  });
+
+  it("leaves an ordinary trait with no window at all", async () => {
+    // The default has to stay absent rather than become `[]`, or every trait in
+    // every existing project reads as true nowhere after one save.
+    mockFetch(() => withTraits([
+      { trait: "stubborn", description: "Very.", importance: "core" },
+    ]));
+    const loaded = await codexSource("/p", sectionsFor).load(ITEM);
+    expect(loaded.sections.physical_traits.trait_blocks[0].true_in)
+      .toBeUndefined();
+
+    calls = [];
+    mockFetch(() => ({ ok: true }));
+    await codexSource("/p", sectionsFor).save(loaded);
+    expect("true_in" in traitsOf(JSON.parse(String(calls[0].init?.body)))[0]).toBe(false);
+  });
+});

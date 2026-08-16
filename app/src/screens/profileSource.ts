@@ -212,8 +212,31 @@ function sectionsFromThread(thread: WeaveThread,
         trait: String(block.trait ?? ""),
         description: String(block.description ?? ""),
         importance: (block.importance ?? "background") as Profile["sections"][string]["trait_blocks"][number]["importance"],
+        // SECRECY, WHICH THIS PATH USED TO DROP ON THE FLOOR.
+        //
+        // The card edits it -- the eye button on every trait writes
+        // `subtext` -- and this loader never read it back, so on a converted
+        // project the switch worked, looked right, and was gone on the next
+        // load. Same class as every bug this recovery has found: a control
+        // wired to a field the round trip does not carry, which raises nothing
+        // because a lost boolean looks exactly like one never set.
+        ...(block.subtext ? { subtext: true } : {}),
         ...(block.ai_scope
           ? { ai_scope: block.ai_scope as "always" | "on-request" | "never" }
+          : {}),
+        // WHEN IT IS TRUE. `!= null` rather than a truthiness check, and the
+        // reason is worth stating precisely because the obvious reason is
+        // wrong: an empty array is TRUTHY in JavaScript, so `block.true_in ?`
+        // would in fact keep it. The guard is here to say what absent means
+        // and to keep it saying that -- absent is the only state that means
+        // "always", and `[]` means "true nowhere". They must never collapse
+        // into each other on the way through this screen.
+        //
+        // The equivalent code in Python is where the difference bites for
+        // real, since `[] or default` there DOES discard the answer. See
+        // normalize_trait_window.
+        ...(block.true_in != null
+          ? { true_in: (block.true_in as string[]).map(String) }
           : {}),
       })),
     };
@@ -284,7 +307,11 @@ function threadFromProfile(profile: Profile,
         // `ai_scope: on-request`, which is the mechanism that actually keeps it
         // out of a prompt -- dropping the field would undo that silently on the
         // first save of every converted character.
+        // Written back for the same reason it is now read: the card edits it.
+        ...(block.subtext ? { subtext: true } : {}),
         ...(block.ai_scope ? { ai_scope: block.ai_scope } : {}),
+        // Absent means always; `[]` means true nowhere. Both kept as found.
+        ...(block.true_in != null ? { true_in: block.true_in } : {}),
       })),
     };
   }

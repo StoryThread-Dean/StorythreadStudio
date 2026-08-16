@@ -51,13 +51,17 @@ from app.codex.normalize import (
     AI_SCOPE_ALWAYS,
     AI_SCOPE_NEVER,
     AI_SCOPE_ON_REQUEST,
+    TRAIT_WINDOW_MARK,
     TRUTH,
     normalize_fact,
+    normalize_trait_window,
+    trait_is_true_at,
 )
 
 __all__ = [
     "TRUTH", "AI_SCOPE_ALWAYS", "AI_SCOPE_NEVER", "AI_SCOPE_ON_REQUEST",
     "Ambiguity", "Resolution", "frames_for", "resolve_facts", "resolve_thread",
+    "window_label",
 ]
 
 
@@ -275,9 +279,19 @@ def resolve_thread(
     A Thread as it stands at one point in the story.
 
     Returns the base record with its Run replaced by only the facts in force,
-    plus what was withheld. The base sections (Overview, Physical Traits...)
-    pass through unchanged: they are the writer's own prose about someone,
-    not time-varying claims.
+    plus what was withheld.
+
+    THE SECTIONS USED TO PASS THROUGH UNTOUCHED, and this docstring used to
+    explain why: they were "the writer's own prose about someone, not
+    time-varying claims". That was true of prose and never true of traits, and
+    the writer's own book is the counter-example -- Serena is scrawny before
+    her transformation and built like an athlete after it, and both of those
+    are trait blocks in the same section of the same profile.
+
+    So a trait may now carry `true_in`, and one that names chapters is dropped
+    where it does not hold. Prose sections still pass through: a paragraph has
+    no place to hang a window off, and inventing one would mean guessing which
+    sentence stopped being true.
     """
     resolution = resolve_facts(
         thread.get("run") or [],
@@ -294,4 +308,108 @@ def resolve_thread(
     resolved["withheld_spoilers"] = resolution.withheld_spoilers
     resolved["withheld_by_scope"] = resolution.withheld_by_scope
     resolved["unplaced"] = resolution.unplaced
+    resolved["sections"], dropped = _sections_in_force(
+        thread.get("sections") or {}, index, at)
+    resolved["withheld_traits"] = dropped
     return resolved
+
+
+def _sections_in_force(sections: dict, index: AnchorIndex,
+                       at: str | None) -> tuple[dict, int]:
+    """
+    The sections, with out-of-window traits removed -- and counted.
+
+    Two jobs, decided by whether there is a point in the story to stand at:
+
+      AT AN ANCHOR, a trait that names chapters and does not name this one is
+      dropped, and the number dropped comes back so the brief can say so. A
+      shorter answer with no explanation is indistinguishable from a thinner
+      character, which is the rule this app applies to every other omission.
+
+      WITH NO ANCHOR -- the whole-book view, and every path that has no
+      "where" to work from -- nothing is dropped, because the question has no
+      answer here. Instead each windowed trait is LABELLED, so a reader (human
+      or model) getting both of Serena's builds at once is told that neither is
+      the whole book rather than being left to reconcile them.
+
+    Copied rather than edited in place: the caller handed us their Thread and
+    is entitled to get it back with its own traits still in it.
+    """
+    out: dict = {}
+    dropped = 0
+    for section_id, section in sections.items():
+        # A section that is not a mapping is a hand-edited file, an older
+        # shape, or a test fixture taking a shortcut. Whatever it is, it has no
+        # traits to window and this module must never be the thing that takes a
+        # writer's entry down -- it is on the read path for every AI request.
+        if not isinstance(section, dict):
+            out[section_id] = section
+            continue
+        blocks = section.get("trait_blocks") or []
+        if not blocks:
+            out[section_id] = section
+            continue
+
+        kept: list[dict] = []
+        for block in blocks:
+            window = normalize_trait_window(block.get("true_in"))
+            if window is None:
+                kept.append(block)
+                continue
+            if not window:
+                # SWITCHED OFF EVERYWHERE. Dropped whether or not there is a
+                # point in the story to stand at, because "true nowhere" has
+                # the same answer everywhere. Spending tokens to tell a model
+                # about a trait and then to disregard it is worse than silence,
+                # and it is still counted, so the brief can say it happened.
+                dropped += 1
+                continue
+            if at:
+                if trait_is_true_at(block, at):
+                    kept.append(block)
+                else:
+                    dropped += 1
+                continue
+            labelled = dict(block)
+            labelled["window_label"] = window_label(window, index)
+            kept.append(labelled)
+
+        copy = dict(section)
+        copy["trait_blocks"] = kept
+        out[section_id] = copy
+    return out, dropped
+
+
+def window_label(window: list[str], index: AnchorIndex) -> str:
+    """
+    A trait's window as a writer would say it: "chapter 1", "chapters 2-9".
+
+    Chapter NUMBERS rather than titles, because the number is what the index
+    already knows and a title is a second lookup that can disagree with it. A
+    run of consecutive chapters collapses into a range, since "chapters 2-9" is
+    one fact and "chapters 2, 3, 4, 5, 6, 7, 8, 9" is eight things to read.
+
+    An anchor that no longer resolves -- its chapter deleted, the commonest way
+    this goes stale -- is left out of the label rather than guessed at. If none
+    of them resolve the trait still says it is limited, because the limit is
+    real even when we can no longer name where.
+    """
+    numbers = sorted({
+        ordinal[0] + 1
+        for ordinal in (index.ordinal(anchor) for anchor in window)
+        if ordinal is not None
+    })
+    mark = TRAIT_WINDOW_MARK.lower()
+    if not numbers:
+        return f"{mark} some chapters"
+
+    runs: list[tuple[int, int]] = []
+    for number in numbers:
+        if runs and number == runs[-1][1] + 1:
+            runs[-1] = (runs[-1][0], number)
+        else:
+            runs.append((number, number))
+
+    parts = [str(lo) if lo == hi else f"{lo}-{hi}" for lo, hi in runs]
+    word = "chapter" if len(numbers) == 1 else "chapters"
+    return f"{mark} {word} {', '.join(parts)}"

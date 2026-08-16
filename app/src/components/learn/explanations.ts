@@ -368,6 +368,41 @@ export const EXPLAIN: Record<string, Explains> = {
         + "the entry's Run with the chapter attached instead.",
     ],
   },
+  "character.traitWindow": {
+    what: "Whether this trait is true for the whole book or only part of it.",
+    why: "Because characters change, and a profile that describes one "
+      + "unchanging person cannot hold both sides of it. A protagonist who is "
+      + "slight and unremarkable in chapter one and powerfully built after her "
+      + "transformation has two honest physical descriptions, and both are "
+      + "wrong half the time. Left as ordinary traits they both go to AI at "
+      + "once, which does not produce a character who changes -- it produces "
+      + "one who is somehow both, described in the same paragraph. Naming the "
+      + "chapters a trait holds in means the version of this character that "
+      + "reaches a model is the one in the chapter you are writing. It is a "
+      + "SEPARATE question from importance (how much it matters) and from "
+      + "subtext (whether it may be said out loud).",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Leave it on 'True all the way through' unless the trait actually stops "
+        + "or starts being true. That is the setting every trait already has, "
+        + "and most traits should keep it.",
+      "Turn it off and tick the chapters where it holds. The arrow beside a "
+        + "chapter ticks that one and every chapter after it, which is what "
+        + "'from the transformation onwards' usually means.",
+      "Write the before and after as TWO traits, each with its own chapters, "
+        + "rather than editing one trait when the change happens. The old "
+        + "description is still true of chapter one and the book still "
+        + "contains chapter one.",
+      "A trait with nothing ticked is true nowhere and is not sent to AI at "
+        + "all. That is a way to shelve a trait without deleting it, and the "
+        + "screen says so rather than leaving you to notice.",
+      "Attaching this profile as a context chip cannot know which chapter you "
+        + "mean, so a limited trait goes with its chapters named instead of "
+        + "being left out. The Weave's automatic context, which does know "
+        + "where you are, leaves it out and tells you how many it left.",
+    ],
+  },
   "character.template": {
     what: "Whether this character gets the full page or the simple one.",
     why: "Most people in a book are not viewpoint characters. A Main character "

@@ -47,6 +47,7 @@
 from dataclasses import dataclass, field
 
 from app.codex.anchors import AnchorIndex
+from app.codex.normalize import chapter_of
 from app.codex.resolve import resolve_thread
 from app.codex.visibility import VISIBLE, Lens, thread_visibility
 
@@ -165,6 +166,11 @@ class Brief:
     # explanation is indistinguishable from a smaller world, which is the rule
     # this app applies to every other omission it makes.
     withheld_not_present: int = 0
+    # Traits left out because the writer said WHEN they are true and this is
+    # not then. Counted for the same reason and reported the same way: a
+    # character who arrives thinner than the profile is must say why, or the
+    # writer reasonably concludes the brief is broken.
+    withheld_traits: int = 0
     budget: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
@@ -179,6 +185,16 @@ class Brief:
             "refusal": self.refusal,
             "withheld_spoilers": self.withheld_spoilers,
             "withheld_by_scope": self.withheld_by_scope,
+            # THIS LINE WAS MISSING and the omission is worth keeping a note
+            # about, because it is this programme's signature failure in
+            # miniature. `withheld_not_present` was computed correctly from the
+            # day presence shipped, tested at the dataclass, and read by
+            # WeaveContextBar -- which rendered "N you placed in other
+            # chapters" inside a branch that could never be true, because the
+            # count stopped at the edge of this function and never reached the
+            # wire. Nothing failed. The screen simply never said it.
+            "withheld_not_present": self.withheld_not_present,
+            "withheld_traits": self.withheld_traits,
             "budget": self.budget,
         }
 
@@ -224,6 +240,7 @@ def assemble(
     spoilers = 0
     by_scope = 0
     not_present = 0
+    not_true_here = 0
 
     for thread in threads:
         entity_id = str(thread.get("entity_id") or "")
@@ -271,6 +288,7 @@ def assemble(
                                   include_on_request=include_on_request)
         spoilers += int(resolved.get("withheld_spoilers") or 0)
         by_scope += int(resolved.get("withheld_by_scope") or 0)
+        not_true_here += int(resolved.get("withheld_traits") or 0)
 
         text = render_thread_brief(resolved)
         if not text.strip():
@@ -286,7 +304,8 @@ def assemble(
             pinned=entity_id in pinned,
         ))
 
-    return _fit(pieces, budget, at, spoilers, by_scope, not_present)
+    return _fit(pieces, budget, at, spoilers, by_scope, not_present,
+                not_true_here)
 
 
 def _connected_to(threads: list[dict], mentioned: set[str]) -> set[str]:
@@ -337,17 +356,20 @@ def _is_present(thread: dict, at: str, index) -> bool:
     placed = thread.get("appears_in") or []
     if not placed:
         return True
-    here = _chapter_of(at)
-    return any(_chapter_of(anchor) == here for anchor in placed)
+    here = chapter_of(at)
+    return any(chapter_of(anchor) == here for anchor in placed)
 
 
-def _chapter_of(anchor: str) -> str:
-    """The chapter half of an anchor. `c-abc/s-def` -> `c-abc`."""
-    return str(anchor or "").split("/", 1)[0]
+# `_chapter_of` used to be defined here as well. It is one line, which is
+# exactly why it was worth writing twice and exactly why it should not have
+# been: an entry's presence and a trait's window ask the same question of the
+# same anchors, so they have to answer it the same way forever, and two
+# one-liners are two places for that to stop being true.
 
 
 def _fit(pieces: list[Piece], budget: Budget, at: str | None,
-         spoilers: int, by_scope: int, not_present: int = 0) -> Brief:
+         spoilers: int, by_scope: int, not_present: int = 0,
+         not_true_here: int = 0) -> Brief:
     """
     Keep what fits, drop the least relevant, and say what was dropped.
 
@@ -359,7 +381,8 @@ def _fit(pieces: list[Piece], budget: Budget, at: str | None,
     """
     brief = Brief(as_of=at, withheld_spoilers=spoilers,
                   withheld_by_scope=by_scope,
-                  withheld_not_present=not_present, budget=budget.breakdown())
+                  withheld_not_present=not_present,
+                  withheld_traits=not_true_here, budget=budget.breakdown())
 
     required = [p for p in pieces if p.pinned]
     optional = [p for p in pieces if not p.pinned]
@@ -457,7 +480,14 @@ def render_thread_brief(resolved: dict) -> str:
             # Same shape as the chip path on purpose -- `[core, SUBTEXT]` -- so
             # there is one thing for the prompt to recognise.
             importance = str(block.get("importance") or "").strip()
-            marks = [m for m in (importance, "SUBTEXT" if block.get("subtext") else "") if m]
+            # WHEN, alongside how much and whether-out-loud. Present only on a
+            # brief with no anchor to stand at -- with one, the trait was
+            # either dropped or it holds here, and marking a trait that does
+            # hold here would be noise the model has to reason past.
+            window = str(block.get("window_label") or "").strip().upper()
+            marks = [m for m in (importance,
+                                 "SUBTEXT" if block.get("subtext") else "",
+                                 window) if m]
             label = f" [{', '.join(marks)}]" if marks else ""
             lines.append(f"- {block.get('trait', '')}{label}: "
                          f"{block.get('description', '')}")

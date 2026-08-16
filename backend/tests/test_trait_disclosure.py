@@ -243,15 +243,44 @@ def test_the_brief_carries_the_weight_too():
     assert "[core]" in text
 
 
-def test_the_two_serialisers_use_the_same_marker():
-    # Read from the frontend, so the two cannot drift into marking a secret two
-    # different ways -- the prompt recognises one word.
+def _chip_serialiser_source() -> str:
+    """The frontend's copy of "how a trait is written for a model"."""
     import os
-    import re
 
     formatter = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "app", "src", "utils", "profileFormat.ts")
     with open(formatter, "r", encoding="utf-8") as f:
-        source = f.read()
-    assert re.search(r"\$\{block\.importance\}, SUBTEXT", source),         "the chip path no longer marks a secret as SUBTEXT"
+        return f.read()
+
+
+def test_the_two_serialisers_use_the_same_marker():
+    """
+    Both paths mark a secret with the same word, and the prompt knows that word.
+
+    THIS TEST ONCE PINNED THE SPELLING OF THE LINE rather than the claim --
+    it matched the literal `${block.importance}, SUBTEXT`, so adding a third
+    marker beside the first two failed it while the promise it protects was
+    still perfectly kept. A contract test that breaks on refactors it should
+    not care about is one a future session will be tempted to delete, and that
+    session will not know it was the only thing standing between a secret and
+    a prompt. So it asserts the behaviour: the token is present, it is attached
+    to `subtext`, and it is the token the backend uses.
+    """
+    import re
+
+    source = _chip_serialiser_source()
+    assert "SUBTEXT" in source, "the chip path no longer marks a secret at all"
+    assert re.search(r"block\.subtext.*SUBTEXT", source, re.DOTALL), \
+        "the chip path's SUBTEXT marker is no longer driven by block.subtext"
+    # The same word the automatic brief uses, and the word ai/prompts.py reads.
+    from app.codex.context import render_thread_brief
+    marked = render_thread_brief({
+        "name": "X", "type": "character",
+        "sections": {"voice_notes": {
+            "heading": "Voice Notes", "content": "",
+            "trait_blocks": [{"trait": "avoids hospitals", "description": "He does.",
+                              "importance": "core", "subtext": True}],
+        }},
+    })
+    assert "SUBTEXT" in marked

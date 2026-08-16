@@ -22,8 +22,14 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **A trait can be true for only part of the book.** Every trait now has a "True all the way through" switch, on by default. Turn it off and tick the chapters where it holds. This is for characters who change: a protagonist who is slight and unremarkable in chapter one and powerfully built after her transformation has two honest physical descriptions, and until now a profile could hold one of them or hold both with nothing to say which was which -- so AI received both and wrote a character who was somehow both at once. An arrow beside each chapter ticks it and everything after it, which is what "from the transformation onwards" usually means. A trait with nothing ticked is true nowhere, which is a way to shelve one without deleting it, and the screen says so plainly rather than letting you find out later.
+- **Where you are in the book decides which version AI gets.** The Weave's automatic context leaves out traits that are not true in the chapter you are working on, and says how many it left. Attaching a profile as a context chip cannot know which chapter you mean, so there the limited traits go with their chapters named instead -- the model is told the two descriptions are alternatives rather than being left to merge them.
+- **Where an entry appears, edited from the entry itself.** The chapter list on a profile, and on the map's entry panel, alongside the Weaving walk that first asks the question. Entries you have placed elsewhere are greyed on the map rather than hidden, and left out of what the app sends AI unless you pin them or your writing names them.
+- **The map is a place to work.** Standing on an entry, you can open it, say where it appears, edit how it changes through the story, and make connections, without leaving the map. Plus a searchable list of every entry inside the map itself, and **Spread out dots** for when a large world gets crowded.
+
 ### Changed
 
+- **The context panel can now say what it left out because of where you are.** It was counting entries left out for being placed in other chapters and had no way to tell you -- the number was worked out correctly and never sent to the screen.
 - **Governments are called Ruling Authorities now.** "A leader of a party isn't a government" -- and neither is a crown, a corporate board or an occupying army, but all of them rule. Only the words on screen changed: your files, folders and connections are untouched, and if you had renamed the kind yourself your own name is kept.
 ### Fixed
 

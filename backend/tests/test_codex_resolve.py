@@ -325,8 +325,11 @@ def test_the_father_example_end_to_end():
 
 
 def test_resolve_thread_leaves_the_writers_own_prose_alone():
-    # Base sections are the writer's description of someone, not
-    # time-varying claims -- they pass through untouched.
+    # PROSE passes through untouched. This comment used to say "base sections
+    # are not time-varying claims", which was true of paragraphs and never true
+    # of traits -- a trait may now carry a window and be dropped where it does
+    # not hold. A paragraph cannot: there is nowhere to hang a window off it,
+    # and guessing which sentence stopped being true is not a thing to attempt.
     thread = {"name": "Elara", "sections": {"overview": "A tall woman."}, "run": []}
     resolved = resolve_thread(thread, INDEX, "c-bbb")
     assert resolved["sections"] == {"overview": "A tall woman."}

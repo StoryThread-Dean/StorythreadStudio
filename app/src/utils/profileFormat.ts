@@ -73,9 +73,61 @@ const LEGACY_INCLUDE: ChipIncludeOptions = {
  * skipped (no empty heading sent). If no buckets are selected, only the
  * profile header is emitted, which the writer would not normally do.
  */
+// THE MARKER FOR A TRAIT THAT IS ONLY TRUE FOR PART OF THE BOOK.
+//
+// It has to be the same token the backend's brief uses, because it is the same
+// instruction to the same model, and the prompt (READING IMPORTANCE LABELS, in
+// ai/prompts.py) keys on it. Two spellings would mean a trait was marked or
+// unmarked depending purely on which path had sent it -- which is exactly the
+// bug R2.12g found with SUBTEXT, where a secret arrived protected through the
+// chip picker and naked through the automatic brief.
+//
+// Bound to `TRAIT_WINDOW_MARK` in backend/app/codex/normalize.py by
+// test_trait_windows.py, which reads this file.
+export const TRAIT_WINDOW_MARK = "ONLY IN";
+
+/**
+ * A trait's window, said the way a writer would: "ONLY IN chapters 2-9".
+ *
+ * `chapters` is the book in reading order, so a position in that list is a
+ * chapter number. Without it the marker still goes on -- it just cannot say
+ * where -- because "this is not always true" is the load-bearing half. A model
+ * that knows two descriptions are alternatives will ask or write around them;
+ * one that thinks both are current will merge them.
+ *
+ * Consecutive chapters collapse into a range for the same reason the backend
+ * does it: "chapters 2-9" is one fact, "chapters 2, 3, 4, 5, 6, 7, 8, 9" is
+ * eight things to read and costs eight times the tokens.
+ */
+export function traitWindowLabel(
+  trueIn: string[],
+  chapters?: { anchor: string }[],
+): string {
+  const chapterOf = (anchor: string) => anchor.split("/", 1)[0];
+  const order = new Map(
+    (chapters ?? []).map((c, i) => [chapterOf(c.anchor), i + 1] as const));
+
+  const numbers = [...new Set(
+    trueIn.map(a => order.get(chapterOf(a))).filter((n): n is number => !!n),
+  )].sort((a, b) => a - b);
+
+  if (numbers.length === 0) return `${TRAIT_WINDOW_MARK} SOME CHAPTERS`;
+
+  const runs: [number, number][] = [];
+  for (const n of numbers) {
+    const last = runs[runs.length - 1];
+    if (last && n === last[1] + 1) last[1] = n;
+    else runs.push([n, n]);
+  }
+  const parts = runs.map(([lo, hi]) => (lo === hi ? `${lo}` : `${lo}-${hi}`));
+  const word = numbers.length === 1 ? "CHAPTER" : "CHAPTERS";
+  return `${TRAIT_WINDOW_MARK} ${word} ${parts.join(", ")}`;
+}
+
 export function formatProfileForAI(
   p: Profile,
   include: ChipIncludeOptions = LEGACY_INCLUDE,
+  chapters?: { anchor: string }[],
 ): string {
   // WHAT THE ENTRY ACTUALLY HOLDS, rather than what a hardcoded table said its
   // kind should hold. This used to walk SECTION_CONFIGS, which meant a Faction,
@@ -127,10 +179,18 @@ export function formatProfileForAI(
         // prompt (see READING IMPORTANCE LABELS in backend/app/ai/prompts.py)
         // enforces the second; dropping it here would leave a secret looking
         // like ordinary text, with nothing anywhere to notice.
-        const label = block.subtext
-          ? `${block.importance}, SUBTEXT`
-          : block.importance;
-        lines.push(`- ${block.trait} [${label}]: ${block.description}`);
+        // WHEN, added to how-much and whether-out-loud. A chip carries no
+        // point in the story, so unlike the automatic brief this path cannot
+        // drop what is out of window -- it can only say so.
+        // Switched off everywhere: the writer said "not always" and ticked
+        // nothing. Left out rather than sent with a label telling the model to
+        // ignore it -- the backend's brief drops it too, at every anchor.
+        if (block.true_in && block.true_in.length === 0) continue;
+
+        const marks: string[] = [block.importance];
+        if (block.subtext) marks.push("SUBTEXT");
+        if (block.true_in) marks.push(traitWindowLabel(block.true_in, chapters));
+        lines.push(`- ${block.trait} [${marks.join(", ")}]: ${block.description}`);
       }
     } else if (hasText) {
       lines.push(section.content);

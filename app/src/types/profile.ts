@@ -77,6 +77,31 @@ export interface TraitBlock {
    * Absent means the default, which is always.
    */
   ai_scope?: "always" | "on-request" | "never";
+  /**
+   * WHEN IT IS TRUE: the chapters this trait holds in, as anchors.
+   *
+   * The third axis, and the one a profile had no way to say. Weight says how
+   * much a trait matters, `subtext` says whether it may be spoken, and this
+   * says whether it applies here at all -- which a character who CHANGES needs
+   * and nothing else provides.
+   *
+   * The writer's own case: Serena is slight and unremarkable in chapter one
+   * and, after her transformation, tall and built like an athlete. Both are
+   * true descriptions of her. Neither is true of the book. A profile that can
+   * only hold one of them makes the writer choose which half of their
+   * protagonist the AI is allowed to know.
+   *
+   * THREE STATES, and the middle one is the whole point:
+   *   undefined   always true. Every trait ever written before this.
+   *   ["c-a"]     true in those chapters, and dropped from AI context
+   *               everywhere else.
+   *   []          true nowhere -- switched off without being deleted.
+   *
+   * Same shape as an entry's `appears_in` on purpose: it is the same question
+   * one level down, so it gets the same answer, the same chapter-level
+   * comparison, and the same room to grow scenes later.
+   */
+  true_in?: string[];
 }
 
 // One section of a profile (e.g. "Physical Traits", "Overview")

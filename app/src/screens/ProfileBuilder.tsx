@@ -89,6 +89,7 @@ import { ProfilePageGuide } from "./ProfilePageGuide";
 import { ProfileConnections } from "../features/codex/ProfileConnections";
 import { RunEditor } from "../features/codex/RunEditor";
 import { AppearsIn } from "../features/codex/AppearsIn";
+import { TraitWindow } from "../components/profiles/TraitWindow";
 import { fetchAnchors, fetchThreads, type ChapterAnchor } from "../features/codex/api";
 import type { EntriesHome, ProfileSource } from "./profileSource";
 
@@ -2338,7 +2339,7 @@ export function ProfileBuilder({
                 // component, and every AI summary the writer opened on the last
                 // character would still be open on this one -- exactly what
                 // "minimise upon opening the profile" asks it not to do.
-                return (
+                return (
                   <div key={`${profile.filename}:${cfg.key}`}>
                   <ProfileSectionEditor
                     sectionKey={cfg.key}
@@ -2360,6 +2361,7 @@ export function ProfileBuilder({
                     onAddTraitBlock={() => addTraitBlock(cfg.key)}
                     onUpdateTraitBlock={(id, updates) => updateTraitBlock(cfg.key, id, updates)}
                     onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
+                    chapters={chapters}
                     onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
                     generatingField={generatingField}
                     openTraits={openTraits}
@@ -2468,7 +2470,7 @@ export function ProfileBuilder({
                 // component, and every AI summary the writer opened on the last
                 // character would still be open on this one -- exactly what
                 // "minimise upon opening the profile" asks it not to do.
-                return (
+                return (
                   <div key={`${profile.filename}:${cfg.key}`}>
                   <ProfileSectionEditor
                     sectionKey={cfg.key}
@@ -2490,6 +2492,7 @@ export function ProfileBuilder({
                     onAddTraitBlock={() => addTraitBlock(cfg.key)}
                     onUpdateTraitBlock={(id, updates) => updateTraitBlock(cfg.key, id, updates)}
                     onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
+                    chapters={chapters}
                     onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
                     generatingField={generatingField}
                     openTraits={openTraits}
@@ -2900,6 +2903,9 @@ interface ProfileSectionEditorProps {
   // side-character assembly -- output stays editable and unsaved.
   onGenerateOverview?: () => void;
   generatingOverview?: boolean;
+  /** The book in reading order, passed through to each trait's "when is this
+   *  true" control. */
+  chapters: ChapterAnchor[];
 }
 
 function ProfileSectionEditor({
@@ -2926,6 +2932,7 @@ function ProfileSectionEditor({
   showAiSummary = true,
   onGenerateOverview,
   generatingOverview = false,
+  chapters,
 }: ProfileSectionEditorProps) {
   // Open state for the walkthrough offered beside the heading.
   const [guideOpen, setGuideOpen] = useState(false);
@@ -3081,6 +3088,7 @@ function ProfileSectionEditor({
               sectionHeading={heading}
               onUpdate={updates => onUpdateTraitBlock(block.id, updates)}
               onRemove={() => onRemoveTraitBlock(block.id)}
+              chapters={chapters}
             />
           ))}
           <button
@@ -3340,9 +3348,12 @@ interface TraitBlockCardProps {
   sectionHeading: string;
   onUpdate: (updates: Partial<TraitBlock>) => void;
   onRemove: () => void;
+  /** The book in reading order, for "when is this true". Empty for a project
+   *  with no chapters yet, which the control says rather than hiding. */
+  chapters: ChapterAnchor[];
 }
 
-function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove }: TraitBlockCardProps) {
+function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profileType, sectionKey, sectionHeading, onUpdate, onRemove, chapters }: TraitBlockCardProps) {
   const wordCount = countWords(block.description);
 
   // AI Trim tool -- suggests a concise rewrite when description is wordy/bloated
@@ -3562,6 +3573,20 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
           </button>
         )}
       </div>
+
+      {/* WHEN THIS IS TRUE. Below the description because it is a question
+          about the words above it: you write the trait, then say where it
+          holds. Above the AI panels because it changes what those panels are
+          talking about -- a trait limited to chapter one is not what AI
+          receives while the writer is in chapter twelve. */}
+      <TraitWindow
+        trueIn={block.true_in}
+        chapters={chapters}
+        onChange={true_in => onUpdate({ true_in })}
+        unavailable={chapters.length === 0
+          ? "No chapters yet. Write one and this trait can be tied to it."
+          : undefined}
+      />
 
       {/* AI Trim suggestion -- expandable area */}
       {trimOpen && (

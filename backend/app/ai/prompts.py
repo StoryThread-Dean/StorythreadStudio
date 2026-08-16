@@ -141,6 +141,14 @@ A trait may carry `SUBTEXT` in addition to its importance label, e.g. `[core, SU
 - If you find yourself about to write a SUBTEXT trait's name, or a paraphrase that reveals it, stop and rewrite it as observable behavior instead.
 - The two axes are genuinely independent, and the pair is common: something can be the single most load-bearing fact about a person AND the thing they would never say. A villain who avoids hospitals because he watched his parents die in one is `[core, SUBTEXT]`: it dictates where he will and will not go, and he never explains it.
 
+TRAITS THAT ARE ONLY TRUE FOR PART OF THE BOOK
+A trait may carry `ONLY IN chapter 1` or `ONLY IN chapters 2-9` alongside its importance label, e.g. `[present, ONLY IN chapter 1]`. That is a third, independent instruction: it says WHEN the trait holds, not how much it matters or whether it may be said out loud.
+
+- A character who changes will have traits that contradict each other on purpose, and both are correct. A protagonist may be slight and unremarkable `[present, ONLY IN chapter 1]` and tall and powerfully built `[present, ONLY IN chapters 2-9]`. These are the same person before and after something happened to her.
+- Do NOT merge them, average them, or try to make them consistent with each other. Merging produces a person who never existed in the book.
+- Use whichever one covers the chapter being written. If the writer has not said which chapter that is, ask, or write around the difference rather than guessing -- describing the wrong body is the kind of error a reader notices immediately.
+- A trait with no `ONLY IN` label is true throughout, which is the ordinary case.
+
 Importance is a guide, not a quota. A `[core]` trait does not need to appear every paragraph; a `[background]` one may legitimately drive a moment if the scene leans that way. The labels tell you the default weight, not a strict rule. Exception: a `[core]` voice or mannerism trait is a constant -- it colors every line of that character's dialogue and action even when nothing calls attention to it.
 
 VOICE FIDELITY

@@ -33,7 +33,9 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.codex.normalize import INFLUENCE_MEANT_SECRET, INFLUENCE_TO_IMPORTANCE
+from app.codex.normalize import (
+    INFLUENCE_MEANT_SECRET, INFLUENCE_TO_IMPORTANCE, normalize_trait_window,
+)
 from app.codex.types_registry import DEFAULT_TYPES
 from app.progress_store import record_save_event
 from app.settings_store import get_rollover_hour
@@ -189,6 +191,19 @@ class TraitBlock(BaseModel):
     # READING IMPORTANCE LABELS in ai/prompts.py, which has enforced exactly
     # this the whole time.
     subtext: bool = False
+    # WHEN IT IS TRUE, which is a third question again -- not how much it
+    # matters and not whether it may be said, but whether it holds here at all.
+    #
+    # A character who changes has traits that stop being true and traits that
+    # start. Serena is scrawny in chapter one and built like an athlete after
+    # her transformation; both are honest descriptions and neither is the
+    # character. Without this, a profile can only hold one of them, or holds
+    # both and hands a model two bodies.
+    #
+    # None means always, which is what every trait written before this meant
+    # and still means. An empty list is NOT the same thing -- see
+    # normalize_trait_window.
+    true_in: list[str] | None = None
 
 
 class ProfileSection(BaseModel):
@@ -508,6 +523,11 @@ def _parse_trait_blocks(content: str) -> list[TraitBlock]:
                 description=str(item.get("description", "")),
                 importance=importance,
                 subtext=secret,
+                # Absent means always. `.get` returns None for a trait that
+                # never had the key and `[]` for one the writer switched off
+                # everywhere, and those two must not become the same value on
+                # the way in -- one is "no answer", the other is an answer.
+                true_in=normalize_trait_window(item.get("true_in")),
             ))
         return blocks
     except yaml.YAMLError:
@@ -706,6 +726,17 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
                     # and a resave produces no diff for files without secrets.
                     if block.subtext:
                         lines += ["  subtext: true"]
+                    # WHEN IT IS TRUE. Written only once the writer has taken
+                    # the switch off "all the way through", so an ordinary
+                    # profile resaves with no diff. `[]` is written out rather
+                    # than skipped: it means true nowhere, which is a decision,
+                    # and dropping it would quietly switch the trait back on.
+                    if block.true_in is not None:
+                        if block.true_in:
+                            lines += ["  true_in:"]
+                            lines += [f"    - {a}" for a in block.true_in]
+                        else:
+                            lines += ["  true_in: []"]
                     lines += [""]
             elif section.content:
                 # Side-character template: the section is plain paragraphs

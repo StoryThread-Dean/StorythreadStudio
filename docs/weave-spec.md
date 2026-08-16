@@ -102,6 +102,47 @@ An edge is as present as its less present end, the same rule visibility already
 uses for whether to draw it at all. An entry the writer never placed is present
 everywhere, so a project that has not used this draws exactly as before.
 
+**AMENDED 2026-08-16: A TRAIT MAY BE TRUE FOR ONLY PART OF THE BOOK.** A trait
+block may carry `true_in`, a list of anchors, which is `appears_in` one level
+down: an entry says where it appears, a trait says where it holds. Same shape,
+same authored-not-derived rule, same chapter-level comparison, same room for
+scenes in Phase 7.
+
+From live use, and it is the plainest counter-example there is to what this
+document originally assumed: "Serena in Chapter 1 ... is a scrawny, average
+looking young woman. But after her transformation, she's physically taller,
+built like a fitness supermodel." Both descriptions are honest and neither is
+true of the book. This spec treated a Thread's SECTIONS as fixed and its RUN as
+the only time-varying part -- true of prose, never true of traits, and a profile
+that can hold only one of Serena's two bodies makes the writer choose which half
+of their protagonist AI is allowed to know.
+
+Three states, and the third is load-bearing:
+
+| `true_in` | Means |
+|---|---|
+| absent | Always true. Every trait written before this, unchanged. |
+| `[c-a, c-b]` | True in those chapters; left out of AI context elsewhere. |
+| `[]` | True nowhere -- shelved without being deleted. |
+
+`resolve_thread` drops out-of-window traits and COUNTS them, reported on the
+brief as `withheld_traits` per the rule that anything omitted is said out loud.
+An empty window is dropped at every anchor, since "true nowhere" has the same
+answer everywhere and paying tokens to describe a trait and then disown it is
+worse than silence.
+
+Two paths have no anchor to stand at -- the whole-book brief, and a profile
+attached by hand as a context chip. Those MARK instead of filtering, with
+`ONLY IN chapter 1` alongside the existing weight and `SUBTEXT` markers, so a
+model receiving both descriptions is told they are alternatives rather than
+left to merge them. One token, defined once (`TRAIT_WINDOW_MARK`), used by both
+serialisers and bound by a cross-language test -- R2.12g is what happens when
+two serialisers of one idea drift.
+
+Prose sections are still untouched: there is nowhere to hang a window off a
+paragraph, and guessing which sentence stopped being true is not a thing to
+attempt.
+
 Also accepted into the spec as intended behaviour, having been proven necessary
 by live testing rather than designed here:
 

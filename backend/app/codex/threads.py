@@ -58,7 +58,7 @@ import yaml
 
 from app.codex.normalize import (
     INFLUENCE_MEANT_SECRET, INFLUENCE_TO_IMPORTANCE,
-    normalize_ai_scope, normalize_fact, normalize_tie,
+    normalize_ai_scope, normalize_fact, normalize_tie, normalize_trait_window,
 )
 
 RUN_HEADING = "Run"
@@ -72,7 +72,10 @@ TIE_KEYS = ("rel", "rel_inverse", "target", "reason", "reason_inverse",
 # `subtext` is disclosure -- may this be said out loud -- and is separate
 # from `ai_scope`, which is availability. Conflating them is what made a
 # secret unimportant: see the note on TraitBlock in routers/profiles.py.
-TRAIT_KEYS = ("trait", "description", "importance", "ai_scope", "subtext")
+# `true_in` is WHEN -- the chapters a trait holds in, absent meaning always.
+# See normalize_trait_window for why absent and empty must stay different.
+TRAIT_KEYS = ("trait", "description", "importance", "ai_scope", "subtext",
+              "true_in")
 
 _SECTION_SPLIT_RE = re.compile(r"^# (.+)$", re.MULTILINE)
 _AI_SUMMARY_RE = re.compile(r"^## AI Summary:.*$", re.MULTILINE)
@@ -423,6 +426,15 @@ def _normalize_trait(block: dict) -> dict:
     if was_hidden:
         out["importance"] = "present"
     out["subtext"] = bool(out.get("subtext")) or was_hidden
+
+    # WHEN IT IS TRUE. Set only when the key was there: a trait with no window
+    # must come back out of here without one, or every trait in every existing
+    # file would gain `true_in: []` on its next save and read as true nowhere.
+    if "true_in" in out:
+        out["true_in"] = normalize_trait_window(out.get("true_in"))
+        if out["true_in"] is None:
+            del out["true_in"]
+
     if was_hidden and str(out.get("ai_scope") or "") == "on-request":
         # CLEARED rather than set to "always". An absent ai_scope already means
         # always for a trait, so clearing it leaves a healed trait
@@ -676,6 +688,17 @@ def render_thread(
             # other trait, and is instructed never to name it.
             if block.get("subtext"):
                 lines.append("  subtext: true")
+            # WHEN IT IS TRUE, written only when the writer has said. An empty
+            # window is written as `[]` and MEANS something -- true nowhere --
+            # so it is not the same as leaving the key out, and the reader
+            # tells them apart.
+            if "true_in" in block and block["true_in"] is not None:
+                window = list(block["true_in"])
+                if window:
+                    lines.append("  true_in:")
+                    lines += [f"    - {a}" for a in window]
+                else:
+                    lines.append("  true_in: []")
             # Only written when it is not the default, so an ordinary trait
             # block round-trips exactly as the profile format wrote it.
             if block.get("ai_scope") and block["ai_scope"] != "always":
