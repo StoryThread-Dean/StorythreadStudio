@@ -369,7 +369,13 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
                     // The writer is looking at their own future book, not a
                     // reader's view.
                     strokeDasharray={edge.active ? undefined : "4 3"}
-                    opacity={edge.expired ? 0.35 : 1}
+                    // THREE THINGS CAN DIM A LINE and they compound: it has
+                    // ended, or one of its ends is not in this chapter. The
+                    // second is declared presence -- an edge is only as present
+                    // as its less present end, the same rule visibility already
+                    // uses for whether to draw it at all.
+                    opacity={(edge.expired ? 0.35 : 1)
+                             * (edge.present === false ? 0.3 : 1)}
                   />
                   {view.edges.length <= EDGE_LABEL_THRESHOLD && (
                     <text
@@ -401,6 +407,14 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
                   key={node.entity_id}
                   transform={`translate(${point.x} ${point.y})`}
                   className="cursor-pointer"
+                  data-testid="map-node"
+                  data-present={node.present === false ? "false" : "true"}
+                  // GREY, NOT GONE. The writer's own word, and the right one:
+                  // hiding an absent character would lose the shape of the
+                  // world around the scene, and a connection to them would
+                  // have nowhere to land. Dimming says "exists, not here",
+                  // which is the true statement.
+                  opacity={node.present === false ? 0.3 : 1}
                   onMouseDown={e => startDrag(e, node.entity_id)}
                   onClick={() => onNodeClick(node)}
                   onDoubleClick={() => onOpenThread?.(node.entity_id)}
@@ -409,6 +423,8 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
                     {node.placeholder
                       ? `${node.name} -- nothing in it yet. Click to say what it is.`
                       : `${nodeLabel(node)} -- ${entry.term}`}
+                    {node.present === false
+                      && " -- not in this chapter"}
                   </title>
                   {/* A BARE DOT means an entry with nothing in it: hollow and
                       dashed, so a map full of them reads as work to do rather

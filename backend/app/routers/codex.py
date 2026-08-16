@@ -1339,6 +1339,27 @@ def _edge_rank(edge: dict, ordinal) -> tuple:
     return (0, position)
 
 
+def _is_here(thread: dict, at) -> bool:
+    """
+    Has the writer said this entry appears at this point in the story?
+
+    True when they have said nothing, which is the ordinary state of a project
+    that has never used declared presence -- turning the feature on must not
+    grey out an entire world nobody has placed.
+
+    Compared by CHAPTER, because a placement is stored as an anchor so scenes
+    can extend it later, and a scene-level placement still answers for the
+    chapter around it.
+    """
+    if not at:
+        return True
+    placed = thread.get("appears_in") or []
+    if not placed:
+        return True
+    here = str(at).split("/", 1)[0]
+    return any(str(anchor).split("/", 1)[0] == here for anchor in placed)
+
+
 @router.get("/graph")
 async def get_graph(
     project_path: str = Query(...),
@@ -1422,9 +1443,35 @@ async def get_graph(
             # yet. Derived, never recorded -- it stops being one the moment the
             # writer puts something in it.
             "placeholder": codex_store.is_placeholder(thread),
+            # -- IS THIS ONE ACTUALLY IN THIS CHAPTER --------------------
+            #
+            # Three states on the map, where there used to be two. Reported
+            # from live use after the writer placed their whole cast and saw
+            # nothing change: "Chapter 1 just has the characters Serena, Rosie
+            # and Newton present ... Wouldn't/Shouldn't that mean that ALL dot
+            # shows every connection but Chapter 1 greys out everyone but those
+            # three?"
+            #
+            # Yes -- and it did not, because the map derives "introduced" from
+            # anchored FACTS, and an entry with nothing anchored is treated as
+            # always present. Most entries have no anchored facts, so every dot
+            # showed at every position and the scrubber looked inert.
+            #
+            #   not yet introduced  -> HIDDEN, unchanged. That is the spoiler
+            #                          rule and it still runs first.
+            #   exists, elsewhere   -> present: false. Drawn grey.
+            #   here                -> present: true.
+            #
+            # An entry the writer has never placed is true: silence means "not
+            # said", not "nowhere", exactly as the context filter reads it.
+            "present": _is_here(thread, at),
         })
 
     visible_ids = {n["entity_id"] for n in nodes}
+    # None when nothing is placed anywhere, so an unplaced world draws exactly
+    # as it did before rather than every edge going grey at once.
+    present_ids = ({n["entity_id"] for n in nodes if n.get("present")}
+                   if any(not n.get("present") for n in nodes) else None)
     # ONE EDGE PER PAIR, whatever the story does to it.
     #
     # A relationship that goes acquaintances -> friends -> real friends is three
@@ -1469,6 +1516,14 @@ async def get_graph(
                 # here would be one more thing that can disagree with the
                 # scrubber, and _label_lookup yields filenames anyway.
                 "at": tie.get("at"),
+                # AS PRESENT AS THE LESS PRESENT END, which is the same rule
+                # visibility already uses for whether an edge is drawn at all:
+                # "an edge is only as visible as the least visible thing it
+                # touches". A line to somebody who is not in this chapter is
+                # not a line in this chapter.
+                "present": (present_ids is None
+                            or (entity_id in present_ids
+                                and target_id in present_ids)),
             }
             # A connection is only ever recorded from one end, but the writer's
             # own belief and the objective truth are separate lines on the map --

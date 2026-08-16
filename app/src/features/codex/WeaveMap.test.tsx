@@ -492,3 +492,61 @@ describe("what a line between two dots says", () => {
     expect(screen.getByText("mentored by")).toBeTruthy();
   });
 });
+
+
+// ── WHO IS IN THIS CHAPTER ──────────────────────────────────────────────────
+//
+// Reported after the writer tagged their whole cast and saw the map do nothing:
+// "Chapter 1 just has the characters Serena, Rosie and Newton present ...
+// Wouldn't/Shouldn't that mean that ALL dot shows every connection but Chapter
+// 1 greys out everyone but those three?"
+//
+// Yes. Three states now, where the map had two:
+//   not yet introduced -> hidden. The spoiler rule, unchanged, running first.
+//   exists, elsewhere  -> grey.
+//   here               -> full colour.
+
+describe("an entry that exists but is not in this chapter", () => {
+  const CAST = [
+    { entity_id: "e-serena", type: "character", name: "Serena",
+      display_name: "", aliases: [], placeholder: false, present: true },
+    { entity_id: "e-lou", type: "character", name: "Lou",
+      display_name: "", aliases: [], placeholder: false, present: false },
+  ];
+
+  it("IS GREYED RATHER THAN REMOVED", async () => {
+    // The writer's own word. Hiding would lose the shape of the world around
+    // the scene, and a connection to them would have nowhere to land.
+    mockApi(graph({ nodes: CAST, edges: [] }));
+    await renderMap();
+    const nodes = screen.getAllByTestId("map-node");
+    expect(nodes).toHaveLength(2);
+    const lou = nodes.find(n => n.getAttribute("data-present") === "false")!;
+    expect(lou).toBeTruthy();
+    expect(Number(lou.getAttribute("opacity"))).toBeLessThan(1);
+  });
+
+  it("leaves the ones who are here at full strength", async () => {
+    mockApi(graph({ nodes: CAST, edges: [] }));
+    await renderMap();
+    const here = screen.getAllByTestId("map-node")
+      .find(n => n.getAttribute("data-present") === "true")!;
+    expect(Number(here.getAttribute("opacity"))).toBe(1);
+  });
+
+  it("says why it is dim, on hover", async () => {
+    // A dimmed dot with no explanation is a rendering bug to the reader.
+    mockApi(graph({ nodes: CAST, edges: [] }));
+    await renderMap();
+    expect(document.body.textContent).toMatch(/not in this chapter/i);
+  });
+
+  it("treats an unplaced world exactly as before", async () => {
+    // Silence means "not said", not "nowhere". Turning this on must not grey
+    // out every project that has never used it.
+    await renderMap();
+    for (const node of screen.getAllByTestId("map-node")) {
+      expect(Number(node.getAttribute("opacity"))).toBe(1);
+    }
+  });
+});

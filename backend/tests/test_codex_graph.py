@@ -412,3 +412,115 @@ def test_a_tie_pointing_at_nothing_draws_nothing(tmp_path):
     graph = _graph(str(root))
     assert _names(graph) == {"Ana"}
     assert graph["edges"] == []
+
+
+# -- WHO IS IN THIS CHAPTER, ON THE MAP --------------------------------------
+#
+# Reported after the writer placed their whole cast in Weave the Chapters and
+# saw the map do nothing: "Chapter 1 just has the characters Serena, Rosie and
+# Newton present ... Wouldn't/Shouldn't that mean that ALL dot shows every
+# connection but Chapter 1 greys out everyone but those three?"
+#
+# Yes. It did not, because the map derives "introduced" from anchored FACTS and
+# an entry with nothing anchored counts as always present -- so every dot showed
+# at every position and the scrubber looked inert.
+#
+# THREE STATES NOW, and the order matters:
+#   not yet introduced -> hidden. The spoiler rule, unchanged, and it runs first.
+#   exists, elsewhere  -> present: false. Grey.
+#   here               -> present: true.
+
+def _place(path, entity_id, anchors):
+    response = client.post("/api/codex/place", json={
+        "project_path": path, "entity_id": entity_id,
+        "appears_in": list(anchors)})
+    assert response.status_code == 200, response.text
+
+
+def _by_id(body):
+    return {n["entity_id"]: n for n in body["nodes"]}
+
+
+def test_an_entry_placed_here_is_present(project):
+    path, c1, _c2, _c3 = project
+    _place(path, "e-elara", [c1])
+    nodes = _by_id(_graph(path, at=c1, hide_spoilers="false"))
+    assert nodes["e-elara"]["present"] is True
+
+
+def test_AN_ENTRY_PLACED_ELSEWHERE_IS_GREY_NOT_GONE(project):
+    """
+    The writer's own word was "grey out", and it is the right one.
+
+    Hiding an absent character would lose the shape of the world around the
+    scene -- and a connection from somebody present to somebody absent would
+    have nowhere to land. Dimming says "exists, not here", which is the true
+    statement.
+    """
+    path, c1, _c2, c3 = project
+    _place(path, "e-elara", [c1])
+    nodes = _by_id(_graph(path, at=c3, hide_spoilers="false"))
+    assert "e-elara" in nodes                 # still on the map
+    assert nodes["e-elara"]["present"] is False
+
+
+def test_AN_ENTRY_NOBODY_PLACED_IS_STILL_PRESENT(project):
+    """
+    Silence means "not said", not "nowhere".
+
+    Otherwise turning this on would grey out an entire world that had never
+    used it, and the map would look broken on every existing project.
+    """
+    path, c1, _c2, _c3 = project
+    nodes = _by_id(_graph(path, at=c1, hide_spoilers="false"))
+    assert nodes and all(n["present"] is True for n in nodes.values())
+
+
+def test_the_whole_book_view_has_everyone_present(project):
+    # No point in the story means "is it here?" has no answer, and filtering on
+    # it would be inventing one.
+    path, _c1, _c2, _c3 = project
+    body = _graph(path, hide_spoilers="false")
+    assert all(n["present"] is True for n in body["nodes"])
+
+
+def test_an_edge_is_only_as_present_as_its_ends(project):
+    # The same rule visibility already uses for whether an edge is drawn at
+    # all: a line to somebody who is not in this chapter is not a line in this
+    # chapter.
+    # Read at chapter THREE, because that is where this connection becomes
+    # true -- a tie anchored later is not drawn at all before it, which is a
+    # different rule and already tested above.
+    path, c1, _c2, c3 = project
+    _place(path, "e-elara", [c1])
+    _place(path, "e-garrick", [c3])
+    body = _graph(path, at=c3, hide_spoilers="false")
+    edges = [e for e in body["edges"]
+             if {e["src_id"], e["dst_id"]} == {"e-elara", "e-garrick"}]
+    assert edges, "the fixture's connection went missing"
+    # Garrick is here, Elara is not, so the line between them is not.
+    assert all(e["present"] is False for e in edges)
+
+
+def test_an_edge_between_two_present_ends_stays_lit(project):
+    path, _c1, _c2, c3 = project
+    _place(path, "e-elara", [c3])
+    _place(path, "e-garrick", [c3])
+    body = _graph(path, at=c3, hide_spoilers="false")
+    edges = [e for e in body["edges"]
+             if {e["src_id"], e["dst_id"]} == {"e-elara", "e-garrick"}]
+    assert edges and all(e["present"] is True for e in edges)
+
+
+def test_A_PLACEMENT_NEVER_MAKES_A_HIDDEN_ENTRY_VISIBLE(project):
+    """
+    Presence NARROWS what is visible; it never widens it.
+
+    Garrick is not introduced until chapter three -- every anchor on him is
+    there. Placing him in chapter one must not drag him onto a chapter-one map,
+    or a feature about tidiness becomes a spoiler leak.
+    """
+    path, c1, _c2, _c3 = project
+    _place(path, "e-garrick", [c1])
+    body = _graph(path, at=c1)
+    assert "e-garrick" not in {n["entity_id"] for n in body["nodes"]}

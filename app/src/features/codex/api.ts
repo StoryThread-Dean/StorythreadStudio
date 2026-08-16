@@ -67,6 +67,13 @@ export interface GraphNode {
   aliases: string[];
   /** An entry Weaving made from a name, with nothing in it yet: a bare dot. */
   placeholder: boolean;
+  /** Is this one IN the chapter being looked at?
+   *
+   *  Three states on the map, not two. Not-yet-introduced is HIDDEN (the
+   *  spoiler rule, which runs first and is unchanged); this separates
+   *  "exists, but is elsewhere" from "here". An entry the writer has never
+   *  placed is true -- silence means "not said", not "nowhere". */
+  present?: boolean;
 }
 
 /** What a node is called on screen: the story's word, or its name. */
@@ -123,6 +130,9 @@ export function addAlias(
 
 
 export interface GraphEdge {
+  /** As present as its less present end -- a line to somebody who is not in
+   *  this chapter is not a line in this chapter. */
+  present?: boolean;
   src_id: string;
   dst_id: string;
   rel: string;

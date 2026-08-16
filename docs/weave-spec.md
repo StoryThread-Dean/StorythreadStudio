@@ -95,6 +95,13 @@ with no placement is never filtered -- silence means "not said", not "nowhere".
 Chapters now; the field is a list of anchors so scene-level presence extends it
 when Phase 7 lands rather than replacing it.
 
+The MAP reads it too, as a third state rather than a second. Not-yet-introduced
+stays HIDDEN -- that is the spoiler rule and it runs first. Among what is left,
+an entry placed elsewhere is drawn GREY and one placed here is drawn in full.
+An edge is as present as its less present end, the same rule visibility already
+uses for whether to draw it at all. An entry the writer never placed is present
+everywhere, so a project that has not used this draws exactly as before.
+
 Also accepted into the spec as intended behaviour, having been proven necessary
 by live testing rather than designed here:
 
