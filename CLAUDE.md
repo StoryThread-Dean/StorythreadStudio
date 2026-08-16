@@ -4,13 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## CURRENT STATE: v2.0.0 SHIPPED. v2.0.1 (Profile Extractor) built, unreleased
+## CURRENT STATE: v2.0.1 SHIPPED 2026-08-16
 
 **v2.0.0 shipped 2026-08-14** (115 commits, tag v2.0.0, installer live). The
 recovery plan is 93 of 107 with the rest deferred by scope or blocked on a
 ruling; it is history now rather than a work queue.
 
-**v2.0.1 is BUILT and unreleased: the Profile Extractor.** Reads the manuscript
+**v2.0.1 shipped 2026-08-16** (tag v2.0.1, installer live, updater manifest
+verified against the live endpoint). It carries the Profile Extractor, trait
+validity windows (`true_in`), declared presence (`appears_in`), the map
+workbench, and the Smart Advisor Context pass finally receiving the Weave's
+brief. Two long-broken features were fixed on the way, both silent: the
+Importance Audit and the audiobook speaker pass had been reading `run_completion`
+results from the wrong key since they shipped.
+
+**The Profile Extractor, for reference.** Reads the manuscript
 and proposes what each entry should say. Its ten decisions and the reasoning
 behind each are in `docs/roadmap.md`; the section is the record, not a plan.
 The one thing to understand before touching it: **it carries no evidence on
