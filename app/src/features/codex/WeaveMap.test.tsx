@@ -648,3 +648,112 @@ describe("the workbench and the toolbar share a corner", () => {
     expect(screen.queryByTestId("node-workbench")).toBeNull();
   });
 });
+
+
+// ── FINDING A DOT WITHOUT HUNTING FOR IT ────────────────────────────────────
+//
+// "This will allow some additional functionality when the graph becomes a
+// cluster of chaotic dots due to the size of the story."
+//
+// That is the honest limit of any node map: excellent at showing the shape of
+// something you are already looking at, useless for finding one thing among two
+// hundred. So the list lives on the same screen rather than behind a toggle.
+
+describe("the map's own entry list", () => {
+  it("is closed until asked for, and says how many there are", async () => {
+    await renderMap();
+    expect(screen.queryByTestId("map-entry-list-items")).toBeNull();
+    expect(screen.getByTestId("map-entry-list-toggle").textContent)
+      .toMatch(/3/);
+  });
+
+  it("groups by kind and sorts inside each", async () => {
+    await renderMap();
+    fireEvent.click(screen.getByTestId("map-entry-list-toggle"));
+    const items = await screen.findByTestId("map-entry-list-items");
+    const text = items.textContent ?? "";
+    // Elara before Garrick within Characters.
+    expect(text.indexOf("Elara")).toBeLessThan(text.indexOf("Garrick"));
+    // And the location is under its own heading rather than mixed in.
+    expect(text).toMatch(/Ravensmoor/);
+  });
+
+  it("PICKING ONE DOES WHAT CLICKING ITS DOT DOES", async () => {
+    // The whole point: the same focus, reached a different way. Two ways to do
+    // one thing, one implementation of it.
+    await renderMap();
+    fireEvent.click(screen.getByTestId("map-entry-list-toggle"));
+    const items = await screen.findByTestId("map-entry-list-items");
+    fireEvent.click(within(items).getByRole("button", { name: /Ravensmoor/ }));
+    // Focusing is what a dot click does, and it reveals the entry toolbar.
+    expect(await screen.findByTestId("map-open-workbench")).toBeTruthy();
+  });
+
+  it("searches by name", async () => {
+    await renderMap();
+    fireEvent.click(screen.getByTestId("map-entry-list-toggle"));
+    fireEvent.change(screen.getByLabelText("Search entries"),
+                     { target: { value: "raven" } });
+    const items = screen.getByTestId("map-entry-list-items");
+    expect(items.textContent).toMatch(/Ravensmoor/);
+    expect(items.textContent).not.toMatch(/Elara/);
+  });
+
+  it("SCROLLS RATHER THAN CAPPING, because a big world is the point", async () => {
+    // The mistake WordFix made with its slice of 8: a list built for a world
+    // too large to see, that silently showed the first few.
+    await renderMap();
+    fireEvent.click(screen.getByTestId("map-entry-list-toggle"));
+    const items = screen.getByTestId("map-entry-list-items");
+    expect(items.className).toMatch(/overflow-y-auto/);
+  });
+
+  it("still offers the full list view, which does jobs this cannot", async () => {
+    // WeaveList exists for keyboard-only use, screen readers, low vision and
+    // scale. A dropdown of buttons over an SVG does none of those four things,
+    // so removing the toggle must not remove the way in.
+    await renderMap({ onOpenListView: vi.fn() });
+    fireEvent.click(screen.getByTestId("map-entry-list-toggle"));
+    expect(await screen.findByTestId("map-open-list-view")).toBeTruthy();
+  });
+});
+
+
+describe("spreading the dots out", () => {
+  it("ASKS FIRST, and says what it costs", async () => {
+    // Every dragged position is replaced and there is no history of where they
+    // were -- the positions ARE the record of the writer's arrangement.
+    await renderMap({ onPin: vi.fn() });
+    fireEvent.click(screen.getByTestId("map-spread"));
+    const confirm = await screen.findByTestId("map-spread-confirm");
+    expect(confirm.textContent).toMatch(/no way back/i);
+    expect(confirm.textContent).toMatch(/wherever you have dragged/i);
+  });
+
+  it("does nothing if the writer backs out", async () => {
+    const onPin = vi.fn();
+    await renderMap({ onPin });
+    fireEvent.click(screen.getByTestId("map-spread"));
+    fireEvent.click(await screen.findByRole("button",
+                                            { name: /Leave them as they are/ }));
+    expect(onPin).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("map-spread-confirm")).toBeNull();
+  });
+
+  it("hands back new positions for every dot", async () => {
+    const onPin = vi.fn();
+    await renderMap({ onPin });
+    fireEvent.click(screen.getByTestId("map-spread"));
+    fireEvent.click(await screen.findByTestId("map-spread-go"));
+    expect(onPin).toHaveBeenCalledTimes(1);
+    const positions = onPin.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(positions)).toHaveLength(3);
+  });
+
+  it("is not offered where positions cannot be saved", async () => {
+    // Without onPin there is nowhere to put the result, and a button that
+    // silently does nothing is worse than no button.
+    await renderMap();
+    expect(screen.queryByTestId("map-spread")).toBeNull();
+  });
+});

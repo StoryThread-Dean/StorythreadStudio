@@ -16,6 +16,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  spreadOut,
+  type Point,
   degrees,
   hashUnit,
   layoutNodes,
@@ -248,5 +250,89 @@ describe("a dragged position cannot hide a node", () => {
     const view = layoutNodes(nodes, { width: 1000, height: 620,
                                  pinned: { "e-1": { x: 640, y: 300 } } });
     expect(view["e-1"]).toEqual({ x: 640, y: 300 });
+  });
+});
+
+
+// ── SPREADING A CLUMP ───────────────────────────────────────────────────────
+//
+// "automatically spreads out the dots so they are visually less clustered but
+// not out of screens viewable region." Both halves are the specification -- a
+// node pushed off the edge is worse than a node in a clump, because at least
+// the clump is visible.
+
+describe("spreadOut", () => {
+  const bounds = { width: 800, height: 600, margin: 40 };
+
+  function distances(points: Record<string, Point>): number[] {
+    const ids = Object.keys(points);
+    const out: number[] = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        out.push(Math.hypot(points[ids[i]].x - points[ids[j]].x,
+                            points[ids[i]].y - points[ids[j]].y));
+      }
+    }
+    return out;
+  }
+
+  it("pushes a clump apart", () => {
+    const clumped = {
+      a: { x: 400, y: 300 }, b: { x: 404, y: 302 },
+      c: { x: 398, y: 305 }, d: { x: 402, y: 297 },
+    };
+    const before = Math.min(...distances(clumped));
+    const after = Math.min(...distances(spreadOut(clumped, bounds)));
+    expect(after).toBeGreaterThan(before);
+    expect(after).toBeGreaterThan(30);
+  });
+
+  it("KEEPS EVERY DOT INSIDE THE VIEWPORT", () => {
+    // The half that makes it usable. A dot pushed off the edge is lost, and
+    // the writer has no way to know it is out there.
+    const edge = {
+      a: { x: 42, y: 42 }, b: { x: 44, y: 44 }, c: { x: 46, y: 41 },
+      d: { x: 758, y: 558 }, e: { x: 756, y: 556 },
+    };
+    const after = spreadOut(edge, bounds);
+    for (const point of Object.values(after)) {
+      expect(point.x).toBeGreaterThanOrEqual(bounds.margin);
+      expect(point.x).toBeLessThanOrEqual(bounds.width - bounds.margin);
+      expect(point.y).toBeGreaterThanOrEqual(bounds.margin);
+      expect(point.y).toBeLessThanOrEqual(bounds.height - bounds.margin);
+    }
+  });
+
+  it("IS DETERMINISTIC, so pressing it twice says the same thing", () => {
+    // A button whose result varied would be a dice roll, and the writer could
+    // not tell what it had done to their map.
+    const clumped = { a: { x: 100, y: 100 }, b: { x: 102, y: 101 },
+                      c: { x: 101, y: 103 } };
+    expect(spreadOut(clumped, bounds)).toEqual(spreadOut(clumped, bounds));
+  });
+
+  it("survives two dots at exactly the same point", () => {
+    // No direction to push along, and a naive version divides by zero, sends
+    // both to NaN and empties the map.
+    const stacked = { a: { x: 300, y: 300 }, b: { x: 300, y: 300 } };
+    const after = spreadOut(stacked, bounds);
+    for (const point of Object.values(after)) {
+      expect(Number.isFinite(point.x)).toBe(true);
+      expect(Number.isFinite(point.y)).toBe(true);
+    }
+    expect(Math.hypot(after.a.x - after.b.x, after.a.y - after.b.y))
+      .toBeGreaterThan(0);
+  });
+
+  it("leaves a map that is already comfortable alone", () => {
+    // Nothing overlapping means nothing to do. A spread that shuffled a tidy
+    // map would punish the writer for pressing it to check.
+    const roomy = { a: { x: 100, y: 100 }, b: { x: 400, y: 300 },
+                    c: { x: 700, y: 500 } };
+    expect(spreadOut(roomy, bounds)).toEqual(roomy);
+  });
+
+  it("handles an empty map without complaint", () => {
+    expect(spreadOut({}, bounds)).toEqual({});
   });
 });

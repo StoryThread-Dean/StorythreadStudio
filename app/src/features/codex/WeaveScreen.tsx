@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  AlertTriangle, FileText, List, Loader, Network, RefreshCw,
+  AlertTriangle, FileText, Loader, Network, RefreshCw,
 } from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
@@ -96,27 +96,31 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
           The Weave
         </h2>
 
-        {/* Neither is the "real" one. Two ways of reading, plainly offered. */}
-        <div className="flex overflow-hidden rounded border border-border" role="tablist">
+        {/* THE TOGGLE IS GONE, THE LIST IS NOT.
+            ─────────────────────────────────────────────────────────────
+            Reported: "the list is a fraction of the functionality" -- true, and
+            a permanent switch to a lesser view earns its space badly. The map
+            now carries its own entry list in the corner, which is the thing the
+            writer actually wanted it for: finding one dot among two hundred.
+
+            WeaveList itself stays, and stays reachable, because the reasons at
+            the top of that file are not about convenience: keyboard-only use,
+            screen readers, low vision, and worlds too large to draw. A dropdown
+            of buttons over an SVG does none of those four jobs. So the way in
+            moved from a permanent tab to a line inside the map's own list --
+            one fewer control on screen, nothing actually removed.
+
+            When the list IS open, the way back is here rather than hidden. */}
+        {view === "list" && (
           <button
-            type="button" role="tab" aria-selected={view === "map"}
+            type="button"
             onClick={() => setView("map")}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] ${
-              view === "map" ? "bg-violet-600 text-white" : "text-text-muted hover:text-text-primary"
-            }`}
+            data-testid="weave-back-to-map"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary"
           >
-            <Network size={11} /> Map
+            <Network size={11} /> Back to the map
           </button>
-          <button
-            type="button" role="tab" aria-selected={view === "list"}
-            onClick={() => setView("list")}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] ${
-              view === "list" ? "bg-violet-600 text-white" : "text-text-muted hover:text-text-primary"
-            }`}
-          >
-            <List size={11} /> List
-          </button>
-        </div>
+        )}
 
         {report && (
           <button
@@ -179,7 +183,8 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
 
           {view === "map"
             ? <WeaveMap projectPath={projectPath} pinned={pinned} onPin={onPin}
-                        onOpenThread={onOpenThread} />
+                        onOpenThread={onOpenThread}
+                        onOpenListView={() => setView("list")} />
             : <WeaveList projectPath={projectPath} onOpenThread={onOpenThread} />}
         </>
       )}

@@ -271,3 +271,85 @@ export function degrees(edges: GraphEdge[]): Record<string, number> {
   }
   return counts;
 }
+
+// ── Pushing a cluster apart ─────────────────────────────────────────────────
+//
+// Asked for after the map got busy: "a feature that has [spread out dots]
+// functionality that automatically spreads out the dots so they are visually
+// less clustered but not out of screens viewable region."
+//
+// Both halves of that sentence are the specification. Spreading is easy;
+// spreading WITHIN THE VIEWPORT is the part that makes it usable, because a
+// node pushed off the edge is worse than a node in a clump -- at least the
+// clump is visible.
+//
+// Deliberately simple: a few rounds of "if two dots are too close, push them
+// apart", each round clamped back inside the bounds. Not a force-directed
+// layout with springs and settling time. This runs on a button press, has to
+// finish instantly, and has to be DETERMINISTIC -- pressing it twice on the
+// same world must give the same answer, or the writer cannot tell what it did.
+
+/** How far apart two dots should be before they read as separate. */
+const COMFORTABLE_GAP = 46;
+
+/** Enough rounds to unpick a real clump, few enough to be instant. */
+const SPREAD_ROUNDS = 60;
+
+export function spreadOut(
+  positions: Record<string, Point>,
+  options: { width?: number; height?: number; margin?: number } = {},
+): Record<string, Point> {
+  const width = options.width ?? 1000;
+  const height = options.height ?? 700;
+  // Room for a dot's radius and its label, so "inside the viewport" means
+  // visible rather than merely on the canvas.
+  const margin = options.margin ?? 40;
+
+  // Sorted, so the result does not depend on object key order. Two runs on one
+  // world must agree, or the button is a dice roll.
+  const ids = Object.keys(positions).sort();
+  const next: Record<string, Point> = {};
+  for (const id of ids) next[id] = { ...positions[id] };
+
+  const clamp = (point: Point): Point => ({
+    x: Math.min(width - margin, Math.max(margin, point.x)),
+    y: Math.min(height - margin, Math.max(margin, point.y)),
+  });
+
+  for (let round = 0; round < SPREAD_ROUNDS; round += 1) {
+    let moved = false;
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const a = next[ids[i]];
+        const b = next[ids[j]];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let distance = Math.hypot(dx, dy);
+
+        if (distance >= COMFORTABLE_GAP) continue;
+
+        // EXACTLY ON TOP OF EACH OTHER has no direction to push along, and
+        // dividing by zero would send both to NaN and empty the map. Nudge
+        // them apart along a direction derived from their ids, so even this
+        // case is deterministic.
+        if (distance === 0) {
+          const angle = hashUnit(ids[i] + ids[j]) * Math.PI * 2;
+          dx = Math.cos(angle);
+          dy = Math.sin(angle);
+          distance = 1;
+        }
+
+        const push = (COMFORTABLE_GAP - distance) / 2;
+        const ux = (dx / distance) * push;
+        const uy = (dy / distance) * push;
+        next[ids[i]] = clamp({ x: a.x - ux, y: a.y - uy });
+        next[ids[j]] = clamp({ x: b.x + ux, y: b.y + uy });
+        moved = true;
+      }
+    }
+    // Nothing overlapped this round, so nothing will next round either.
+    if (!moved) break;
+  }
+
+  return next;
+}

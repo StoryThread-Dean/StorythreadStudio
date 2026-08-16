@@ -24,7 +24,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Eye, EyeOff, Link2, Loader, Pencil, RotateCcw, Wrench,
+  AlertTriangle, Eye, EyeOff, Link2, Loader, Pencil, RotateCcw, Shuffle,
+  Wrench,
 } from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
@@ -40,7 +41,9 @@ import {
   type ChapterAnchor, type GraphNode, type TypeRegistry, type WeaveGraph,
 } from "./api";
 import { BindDot } from "./BindDot";
+import { spreadOut } from "./layout";
 import { NodeWorkbench } from "./NodeWorkbench";
+import { MapEntryList } from "./MapEntryList";
 import { EntryTools } from "./EntryTools";
 import { Scrubber } from "./Scrubber";
 import { TieEditor } from "./TieEditor";
@@ -57,9 +60,13 @@ interface WeaveMapProps {
   pinned?: Record<string, Point>;
   onPin?: (positions: Record<string, Point>) => void;
   onOpenThread?: (entityId: string) => void;
+  /** Show the full, accessible list. Offered from inside the map now that the
+   *  top-level Map/List toggle is gone. */
+  onOpenListView?: () => void;
 }
 
-export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapProps) {
+export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
+                          onOpenListView }: WeaveMapProps) {
   const [graph, setGraph] = useState<WeaveGraph | null>(null);
   const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
   const [registry, setRegistry] = useState<TypeRegistry | null>(null);
@@ -72,6 +79,8 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
   const [hideSpoilers, setHideSpoilers] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
   const [working, setWorking] = useState<GraphNode | null>(null);
+  // The spread is destructive to dragged positions, so it asks first.
+  const [confirmSpread, setConfirmSpread] = useState(false);
   // The bare dot the writer clicked, waiting to be told what it is.
   const [binding, setBinding] = useState<GraphNode | null>(null);
   // The established entry whose connections are being edited.
@@ -325,8 +334,67 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
             {hideSpoilers ? <EyeOff size={11} /> : <Eye size={11} />}
             {hideSpoilers ? "Hiding what the reader does not know yet" : "Showing everything"}
           </button>
+          {/* SPREAD THEM OUT. Offered next to the other persistent controls
+              rather than inside the focus toolbar, because the moment a writer
+              wants it is when the map is an unreadable clump -- which is
+              exactly when they have not managed to click a dot. */}
+          {onPin && (
+            <button
+              type="button"
+              onClick={() => setConfirmSpread(true)}
+              data-testid="map-spread"
+              className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-[11px] text-text-muted transition-colors hover:border-violet-600 hover:text-text-primary"
+            >
+              <Shuffle size={11} /> Spread the dots out
+            </button>
+          )}
           {loading && <Loader size={11} className="animate-spin text-faint" />}
         </div>
+
+        {/* IT CANNOT BE UNDONE, so it asks. Every position the writer dragged
+            is replaced, and there is no history of where they were -- the
+            positions are the only record of their own arrangement. Same shape
+            as every other destructive confirm in this app: the cost stated in
+            the writer's terms, before the button that pays it. */}
+        {confirmSpread && (
+          <div className="mb-2 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+               data-testid="map-spread-confirm">
+            <p className="text-xs font-semibold text-amber-100">
+              Move every dot?
+            </p>
+            <p className="mt-1 max-w-xl text-[11px] text-amber-200/80">
+              This pushes the dots apart so they stop overlapping, keeping them
+              all on screen. It replaces wherever you have dragged things to,
+              and there is no way back -- the positions are the only record of
+              how you had arranged your world.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-testid="map-spread-go"
+                onClick={() => {
+                  // The SAME coordinate space the layout uses. Measuring the
+                  // rendered box instead would spread against screen pixels
+                  // while the map draws in viewBox units, and the dots would
+                  // land outside the picture -- the one thing this must not do.
+                  onPin?.(spreadOut(view?.positions ?? {},
+                                    { width: WIDTH, height: HEIGHT }));
+                  setConfirmSpread(false);
+                }}
+                className="rounded bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-500"
+              >
+                Spread them out
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmSpread(false)}
+                className="rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary"
+              >
+                Leave them as they are
+              </button>
+            </div>
+          </div>
+        )}
 
         <Scrubber chapters={chapters} value={chapterIndex}
                   onChange={setChapterIndex} />
@@ -519,6 +587,19 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
             }}
           />
         )}
+
+        {/* FINDING A DOT WITHOUT HUNTING FOR IT. A graph is excellent at
+            showing the shape of something you are already looking at and
+            useless for finding one thing among two hundred -- so the list
+            lives on the same screen rather than behind a toggle. */}
+        <MapEntryList
+          nodes={graph?.nodes ?? []}
+          focus={focus}
+          typeLabels={typeLabels}
+          iconNames={iconNames}
+          onPick={node => setFocus(node.entity_id)}
+          onOpenListView={onOpenListView}
+        />
 
         {focus && (
           <div className="absolute right-2 top-2 flex items-center gap-1.5">
