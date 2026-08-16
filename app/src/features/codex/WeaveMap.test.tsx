@@ -550,3 +550,71 @@ describe("an entry that exists but is not in this chapter", () => {
     }
   });
 });
+
+
+// ── THE MAP AS A PLACE TO WORK ──────────────────────────────────────────────
+//
+// Reported: "The Weave is a great graphical means to show the connections to
+// each character. But currently, it functions as a visual means with minor
+// basic functionality ... It should be more."
+//
+// And the principle behind it, which decides HOW rather than what: "important
+// features like Connections, Creating a profile, Building a profile,
+// Extracting a Profile shouldn't be limited to a single location or area within
+// the application."
+//
+// So the workbench owns nothing. Every section is a second MOUNT of a component
+// already tested elsewhere -- a second implementation would be two vocabularies
+// for one idea, which is the failure this recovery kept finding.
+
+describe("standing on an entry", () => {
+  async function focusFirst() {
+    await renderMap();
+    const node = screen.getAllByTestId("map-node")[0];
+    fireEvent.click(node);
+  }
+
+  it("offers to edit it, beside the tools that were already there", async () => {
+    // Added to the toolbar that already holds Connections and Fix or remove,
+    // rather than as a rival panel. One more way to reach what exists.
+    await focusFirst();
+    expect(screen.getByTestId("map-open-workbench")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Connections/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Fix or remove/ })).toBeTruthy();
+  });
+
+  it("opens a panel BESIDE the map rather than over it", async () => {
+    // The map is the context. A modal would hide the neighbourhood the writer
+    // clicked from, and that neighbourhood is usually why they are editing.
+    await focusFirst();
+    fireEvent.click(screen.getByTestId("map-open-workbench"));
+    const panel = await screen.findByTestId("node-workbench");
+    expect(panel.tagName.toLowerCase()).toBe("aside");
+  });
+
+  it("carries WHERE IT APPEARS and HOW IT CHANGES, the same two components", async () => {
+    await focusFirst();
+    fireEvent.click(screen.getByTestId("map-open-workbench"));
+    await screen.findByTestId("node-workbench");
+    expect(await screen.findByTestId("appears-in")).toBeTruthy();
+    expect(screen.getByTestId("workbench-run")).toBeTruthy();
+  });
+
+  it("offers the way through to the full entry", async () => {
+    // The map is a second route to these capabilities, never a replacement for
+    // the page that owns them.
+    await renderMap({ onOpenThread: vi.fn() });
+    fireEvent.click(screen.getAllByTestId("map-node")[0]);
+    fireEvent.click(screen.getByTestId("map-open-workbench"));
+    expect(await screen.findByTestId("workbench-open")).toBeTruthy();
+  });
+
+  it("says nothing about opening it when the host cannot navigate", async () => {
+    // The map is embedded in places with nowhere to go. A button that leads
+    // nowhere is worse than no button.
+    await focusFirst();
+    fireEvent.click(screen.getByTestId("map-open-workbench"));
+    await screen.findByTestId("node-workbench");
+    expect(screen.queryByTestId("workbench-open")).toBeNull();
+  });
+});

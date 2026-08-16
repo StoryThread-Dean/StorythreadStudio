@@ -24,7 +24,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Eye, EyeOff, Link2, Loader, RotateCcw, Wrench,
+  AlertTriangle, Eye, EyeOff, Link2, Loader, Pencil, RotateCcw, Wrench,
 } from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
@@ -40,6 +40,7 @@ import {
   type ChapterAnchor, type GraphNode, type TypeRegistry, type WeaveGraph,
 } from "./api";
 import { BindDot } from "./BindDot";
+import { NodeWorkbench } from "./NodeWorkbench";
 import { EntryTools } from "./EntryTools";
 import { Scrubber } from "./Scrubber";
 import { TieEditor } from "./TieEditor";
@@ -70,6 +71,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
   const [chapterIndex, setChapterIndex] = useState(-1);
   const [hideSpoilers, setHideSpoilers] = useState(true);
   const [focus, setFocus] = useState<string | null>(null);
+  const [working, setWorking] = useState<GraphNode | null>(null);
   // The bare dot the writer clicked, waiting to be told what it is.
   const [binding, setBinding] = useState<GraphNode | null>(null);
   // The established entry whose connections are being edited.
@@ -463,6 +465,19 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
           </svg>
         )}
 
+        {working && (
+          <NodeWorkbench
+            projectPath={projectPath}
+            node={working}
+            chapters={chapters}
+            people={(graph?.nodes ?? []).map(n => ({
+              entity_id: n.entity_id, name: nodeLabel(n) }))}
+            onClose={() => setWorking(null)}
+            onOpenThread={onOpenThread}
+            onChanged={() => setRedraw(n => n + 1)}
+          />
+        )}
+
         {tying && (
           <TieEditor
             projectPath={projectPath}
@@ -510,6 +525,24 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread }: WeaveMapP
             {/* Offered here because focusing is exactly when a writer is
                 looking at what a thing touches, and noticing what it does
                 not. */}
+            {/* THE MAP AS A PLACE TO WORK. Reported: "The Weave is a great
+                graphical means to show the connections to each character. But
+                currently, it functions as a visual means with minor basic
+                functionality ... It should be more."
+                Added to the toolbar that already holds Connections and Fix or
+                remove, rather than as a rival panel: this is one more way to
+                reach capabilities that exist, which is the whole ask. */}
+            <button
+              type="button"
+              onClick={() => {
+                const node = (graph?.nodes ?? []).find(n => n.entity_id === focus);
+                if (node) setWorking(node);
+              }}
+              data-testid="map-open-workbench"
+              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            >
+              <Pencil size={11} /> Edit this entry
+            </button>
             <button
               type="button"
               onClick={() => {

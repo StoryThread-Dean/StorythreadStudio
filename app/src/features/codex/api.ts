@@ -486,6 +486,11 @@ export interface ThreadDetail {
   filename?: string;
   sections: Record<string, ThreadSection>;
   revision?: string;
+  /** Facts anchored to points in the story -- how this changes as the book
+   *  goes on. Edited by RunEditor, wherever that is mounted. */
+  run?: unknown[];
+  /** Which chapters the writer says this appears in. */
+  appears_in?: string[];
 }
 
 export function fetchThread(projectPath: string, entityId: string):
@@ -523,5 +528,17 @@ export function placeThread(projectPath: string, entityId: string,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ project_path: projectPath, entity_id: entityId,
                            appears_in: appearsIn }),
+  });
+}
+
+/** Save a whole entry, refusing if somebody wrote since it was read.
+ *  The same POST /entity the Thread editor uses -- one route, one refusal. */
+export function saveThreadDetail(projectPath: string, thread: ThreadDetail,
+                                 baseRevision?: string): Promise<ThreadDetail> {
+  return request("/entity", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_path: projectPath, thread,
+                           base_revision: baseRevision ?? null }),
   });
 }
