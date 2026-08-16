@@ -10,8 +10,10 @@
 - Use AI as a reviewer and contextual assistant, not a ghostwriter.
 - Keep every file local and human-readable.
 - Treat each chapter as its own file during drafting; combine into a manuscript at export.
-- Build reusable project context through profiles, summaries, notes, and scene context.
-- Support adult content via task- and content-aware model selection through OpenRouter.
+- Build reusable project context through the Weave -- a linked, time-aware world
+  model -- plus summaries, notes, and scene context.
+- Support adult content via task- and content-aware model selection, across any
+  of the three supported AI providers.
 - Forbid em dashes in any AI output, project-wide.
 
 ## Writing philosophy
@@ -49,7 +51,16 @@ Brainstorming, writer's block help, next-beat suggestions, dialogue authenticity
 Character consistency, relationship continuity, location consistency, lore consistency, timeline continuity, scene-goal alignment.
 
 ### Project memory
-Character profiles, relationship profiles, location profiles, lore profiles, chapter summaries, scene summaries, style guide, outline and theme notes.
+**The Weave** is the project's memory: a set of Threads (fourteen kinds shipped,
+plus any kind the writer invents) linked by connections that must state WHY they
+exist, each Thread holding facts anchored to points in the story. What the app
+tells an AI is therefore true AS OF the chapter being written, rather than true
+of the finished book.
+
+Alongside it: chapter summaries, scene summaries, the style guide, and outline
+and theme notes. The four original profile folders (characters, relationships,
+locations, lore) remain a live home for projects that have not been converted --
+conversion is an offer, not a toll gate.
 
 ## Out of scope
 
@@ -71,9 +82,14 @@ The writer can:
 
 1. Create and open a local project.
 2. Write chapters in Markdown, with manual save and session undo.
-3. Build structured profiles for characters, relationships, locations, and lore.
+3. Build structured entries for any kind of thing in their world, connect them
+   with a stated reason, and record facts that change across the book.
 4. Ask AI for targeted help on selected text.
-5. Attach context explicitly via context chips.
+5. Attach context explicitly via context chips, AND read, cut, or switch off the
+   brief the Weave assembles on their behalf.
 6. Generate AI-facing summaries into dedicated Markdown sections.
 7. Import character profiles from other projects as independent forks.
-8. Export a combined manuscript with optional summaries, notes, and profiles.
+8. Export a combined manuscript with optional summaries, notes, and profiles, and
+   export the Weave itself in a form a person or a program can read.
+9. Turn a finished manuscript into an audiobook, free and offline.
+10. Run AI features through OpenRouter, NanoGPT, or a model on their own machine.

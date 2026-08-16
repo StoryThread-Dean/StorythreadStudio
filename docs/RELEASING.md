@@ -126,19 +126,31 @@ git push origin main --tags
 
 ### 5. Create the GitHub Release
 
-Either via the website (paste the release notes, drag the three files
-from `release-artifacts/` onto the upload zone) or via the `gh` CLI:
+**Write `release-artifacts/vX.Y.Z-notes.md` first** -- one file per release,
+holding only that release's notes. This step used to say `--notes-file
+CHANGELOG.md`, which would publish the ENTIRE history as one release's notes:
+every version back to v1.0.0, on the page a first-time visitor lands on. The
+per-version file is also what `latest.json` is checked against, so the in-app
+update banner and the GitHub page say the same thing.
+
+Then either via the website (paste the notes, drag the three files from
+`release-artifacts/` onto the upload zone) or via the `gh` CLI:
 
 ```powershell
 gh release create vX.Y.Z `
   --title "Storythread Studio vX.Y.Z" `
-  --notes-file CHANGELOG.md `
+  --notes-file release-artifacts/vX.Y.Z-notes.md `
   release-artifacts/Storythread*.msi `
   release-artifacts/Storythread*.msi.sig `
   release-artifacts/latest.json
 ```
 
 The exact installer filename varies; the script prints it at the end.
+
+> **Check for a stray tag before you start.** If `git tag -l vX.Y.Z` finds one
+> from an aborted attempt, `gh release create` will attach the release to that
+> old commit rather than the one you just built. Delete it locally and on the
+> remote first.
 
 ### 6. Verify the update flow
 

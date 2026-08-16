@@ -695,10 +695,111 @@ is sent until the writer starts an AI action. Each of those four is a test in
 `WeaveContextBar.test.tsx`, and so is the clause most likely to rot: that
 assembling a brief transmits nothing.
 
-**Reaches the Writing Companion only.** The Smart Advisor, the summary and
-profile tools and the rest still use manual chips; extending the brief to them
-is roadmap work, and each surface needs its own inspect control before it gets
-automatic context.
+**Where the brief actually goes.** The Writing Companion, in every mode --
+ordinary chat, Draft, Enhance and Reasoning are one request underneath -- and
+**Smart Advisor's Context pass**, which is the pass that checks the writing
+against the story rather than against the language.
+
+Readability and Structure do not get it. They read prose mechanics and shape;
+sending them a brief would cost a brief's worth of tokens per run to be ignored.
+The summary and profile tools still use manual chips.
+
+That split is stated on the context bar itself, because it was reported as a
+question the screen could not answer: attached profiles DO reach all three Smart
+Advisor passes, through the same request, so assuming the Threads did too was the
+reasonable reading. The pass that receives the brief is named once on each side
+of the wire and bound by a cross-language test.
+
+### Where an entry appears
+
+An entry may carry `appears_in`, a list of the chapters it is in. **Authored,
+never derived**: the free scan OFFERS what the prose shows and only an accepted
+offer is written, because presence computed from the manuscript and cached goes
+silently wrong the moment a chapter is edited.
+
+Context assembly filters on it and reports the count, per the rule that anything
+omitted is said out loud. Two things outrank a placement, and they are what make
+filtering safe rather than merely tight: a **pinned** Thread, and a Thread
+**named in the text being written**. An entry with no placement is never
+filtered -- silence means "not said", not "nowhere" -- so a project that has
+never used this behaves exactly as before.
+
+The map reads it as a third state rather than a second. Not-yet-introduced stays
+HIDDEN (the spoiler rule, which runs first); among what is left, an entry placed
+elsewhere is drawn grey and one placed here is drawn in full. An edge is as
+present as its less present end.
+
+Editable from the entry itself, from the map's entry panel, and from the Weaving
+walk -- one component mounted in three places, because a walk is a good place to
+answer a question once and a bad place to change the answer later.
+
+### Traits that are only true for part of the book
+
+Every trait has a **True all the way through** switch, on by default. Turn it off
+and tick the chapters where it holds.
+
+This exists for characters who change, and the case that produced it is the
+plainest one there is: a protagonist who is slight and unremarkable in chapter
+one and, after her transformation, tall and powerfully built. Both are honest
+descriptions. Neither is true of the book. A profile that can hold only one makes
+the writer choose which half of their protagonist the AI is allowed to know; one
+holding both, with nothing to tell them apart, hands a model two bodies.
+
+Three states:
+
+| `true_in` | Means |
+|---|---|
+| absent | Always true. Every trait written before this, unchanged. |
+| a list of chapters | True there; left out of AI context elsewhere. |
+| empty | True nowhere -- shelved without being deleted, and the card says so. |
+
+The arrow beside a chapter ticks it and every chapter after it, which is what
+"from the transformation onwards" usually means.
+
+Two paths have no chapter to stand at -- the whole-book brief, and a profile
+attached by hand as a context chip. Those MARK instead of filtering, with
+`ONLY IN chapter 1` beside the existing weight and `SUBTEXT` markers, so a model
+receiving both descriptions is told they are alternatives rather than left to
+merge them. One token, defined once, used by both serialisers.
+
+Prose sections are untouched: there is nowhere to hang a window off a paragraph.
+
+### Profile Extractor
+
+`The Weave > Weaving | Profile Extractor`. The Weave's first AI pass. It reads
+the manuscript and proposes what each entry should say -- an overview, physical
+and personality traits, motivations, notes -- so that filling in a story bible
+does not mean re-reading your own book and writing down what is already in it.
+
+**It carries no evidence, and that is deliberate.** An Overview is synthesis;
+there is no sentence to quote against it. So the writer's per-item click is the
+only safeguard between a model's guess and their story bible, and the screen is
+built around protecting it: no accept-all, nothing ticked when the list arrives,
+every proposal shown beside what that entry currently says, and a proposal for an
+entry that does not exist REFUSES rather than creating one.
+
+**Add or replace, never blend.** Adding keeps the writer's paragraphs exactly as
+they are and puts the new one after them. Replacing is a separate button because
+it is the only action that can lose words. A proposed trait either stands alone
+or folds into a trait the writer picks -- the app never guesses which, because a
+wrongly folded trait carries the writer's own label and is easy to miss later.
+
+**It finds two kinds of character the scan structurally cannot**: people the
+prose describes without naming ("the tall man", "the hulking figure"), whose
+description is kept AS the name rather than replaced by an invented one; and
+names that only ever appear as someone being addressed (`"Duncan," he said`),
+which sit where a capital was required anyway and are invisible to a name scan.
+
+**A novel is read in parts and comes back as one list.** The book is split by
+input tokens, chapters whole and consecutive; a character appearing in chapters
+one and six is one entry with two proposals, not two entries. The screen states
+how many requests it will take before the writer commits, and each part is saved
+as it lands, so a failure at part four of five keeps the first three. The saved
+read survives closing the app; starting a new one says how many unreviewed
+proposals it would discard first, because those were paid for.
+
+Requires Weaving to have been run first: the request carries a snippet of each
+established entry, so the entries have to exist.
 
 ## Audiobook Converter
 

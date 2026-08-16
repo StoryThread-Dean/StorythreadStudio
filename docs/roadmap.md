@@ -808,6 +808,135 @@ Two consequences worth keeping:
 WORDS, a tie is about THINGS. Two names for one person is an alias. Two people
 who are the same person is a story fact, and both of them keep their entries.
 
+### The Guided Tour -- a layered walkthrough of the whole application
+
+**NOT STARTED. Requested by the writer 2026-08-16.** Tier 2 by the versioning
+rule: a whole new surface that does not disturb existing data or behaviour.
+
+#### The problem
+
+The app now has the Weave, Weaving, the Profile Extractor, the Profile Builder,
+Smart Advisor, the Writing Companion with three modes, series and arcs, exports,
+Model Roles across three providers, and an audiobook converter with its own
+dashboard. Every one of those explains itself once you are looking at it. None
+of them tells a writer who just installed the app **which of them to open
+first**, or that most of them are optional.
+
+That is a different question from the two kinds of help already built, and it
+needs a third kind:
+
+| Existing | Answers | Triggered by |
+|---|---|---|
+| `<Explain of="..." />` | "what is this thing I am looking at?" | the writer asking |
+| `GuidedWalk` | "how do I do this task?" | the writer asking, inside one feature |
+| **The Guided Tour** | **"what is all this, and in what order?"** | **offered on first run** |
+
+The first two are useless to someone who does not yet know what to ask. A new
+writer's screen is almost entirely empty state, which is exactly the condition
+under which this app has already shipped one invisible guide (see R2.12f in
+`CLAUDE.md`: a walkthrough hung off a panel that hides itself when there is
+nothing to list).
+
+#### The shape
+
+**An overlay over the real application, not a slideshow.** The writer sees the
+actual screen, with the actual buttons in their actual positions, dimmed except
+for what the current step is talking about. Screenshots go stale; a rebuilt
+mock of the UI is a second implementation of the UI. Neither is acceptable here.
+
+**It reveals a few things at a time.** The first step is a nearly bare
+interface: where a project comes from, where chapters live, where you type. As
+the process of writing a book becomes clearer, more of the interface is
+un-dimmed and explained. A writer meets the Weave when they have chapters for it
+to compare against, not on the screen where they name their project.
+
+**Two depths per step.** A large, brief description of what the highlighted
+thing is -- one or two sentences, in the writer's terms -- and an expandable
+**[> Know more]** that goes into why it exists, when it is worth using, and what
+it costs. The short form is the tour; the long form is there for the writer who
+stops on a step because it matters to them.
+
+**Exitable at any point, and resumable.** A named exit that says what it does,
+per the continuous-flow rule. The writer's position is remembered, so leaving to
+try something is not a punishment. It never blocks the app.
+
+#### The running order
+
+The order IS the content. This is the app's opinion about how a book gets
+written, and each step says whether the feature is required, recommended, or
+optional -- and most of them are optional, which is the thing a new writer most
+needs to hear.
+
+1. **A project is a folder.** Creating one, what lands in it, the fact that it is
+   plain Markdown and yours. Where chapters live and how one is opened.
+2. **Writing.** The editor, manual save and what the unsaved marker means, one
+   chapter at a time and why. The Passage Check, because it is free, offline, and
+   useful on day one.
+3. **Notes and the outline.** Optional, and the first place the tour should say
+   so plainly.
+4. **Getting AI working at all.** Settings, the three providers, that a local
+   model needs no key and no account, and the Default Model. Nothing above this
+   step needs it.
+5. **The Writing Companion.** Chat first, then Draft, then Enhance. Context chips
+   -- attaching something by hand, which is the mental model everything later
+   builds on.
+6. **Smart Advisor.** The three passes, what an inline highlight is, and that
+   accepting a suggestion is always the writer's click.
+7. **Profiles.** What a trait block is, importance versus subtext, the two
+   character templates, and why a background character should not cost a full
+   page.
+8. **The Weave.** The step that most needs the "why" before the "how": a profile
+   is one unchanging paragraph, and a story is not. Threads, facts anchored in
+   time, connections that state a reason, traits true for only part of the book.
+9. **Weaving.** The free scan first -- it costs nothing and produces a real
+   count -- then what each stop kind is asking and the four ways to answer.
+10. **The Profile Extractor.** What it proposes, why it carries no evidence, and
+    why there is no accept-all. Requires Weaving to have run first, and the tour
+    should say so rather than let the writer find the refusal.
+11. **World context.** The bar, Inspect, dropping a Thread, and which surfaces
+    the brief reaches. This is where a writer learns they can stop pasting.
+12. **Summaries, exports and series.** Optional, grouped, brief.
+13. **The Audiobook Converter.** Its own dashboard and its own order: import,
+    markers, pronunciation, cast, narration, assembly, export. Free and offline
+    first, paid voices as a final pass with the cost quoted before anything is
+    spent.
+14. **Settings in full.** Model Roles and what each role covers, prompt caching,
+    content modes, what is worth changing and what is worth leaving alone.
+
+#### Design constraints, most of them learned the hard way
+
+- **Every step answers the four questions** the `Explain` registry already
+  requires: what it is, why it exists, whether it is necessary
+  (required / recommended / optional), and what it spends. A tour step that
+  cannot answer "do I need this?" is an advertisement.
+- **It must work on an empty project.** The commonest state for its audience, and
+  the one that hides half the interface. A step whose anchor does not exist yet
+  must say what would be there and why it is not, rather than pointing at
+  nothing. This is the single most likely way for this feature to ship broken.
+- **Anchors need a stable contract.** Highlighting a real button means naming it,
+  and a renamed or removed element would leave the tour pointing at empty space
+  with no error. A registry of tour anchor ids, plus a source-read test that
+  fails the build when a step names an anchor no component renders -- the same
+  pattern as `test_codex_icon_keywords.py` and the Explain contract test.
+- **Reuse the existing components.** `components/learn/` already holds
+  `GuidedWalk`, `Explain`, and `useAttemptClose`. The tour is a new shell around
+  them, not a fourth vocabulary for the same ideas.
+- **Never mutate the writer's project.** No demo project, no sample chapter
+  written into their folder, nothing created to have something to point at.
+- **Progress is per install, not per project**, since it is about learning the
+  app rather than about one book. Offered on first run; findable afterwards from
+  Help, because the writer who skipped it on day one is exactly the writer who
+  wants it in week two.
+
+#### Relationship to the existing per-feature guides
+
+This does not replace them, and the split is worth stating so a future session
+does not collapse the two. The tour gives ORIENTATION -- what exists, in what
+order, and whether you need it. `GuidedWalk` gives PROCEDURE -- the numbered
+steps for one task, read while doing it. A step in the tour should be able to
+hand off to the matching walkthrough rather than restating it, which also keeps
+the tour short enough to finish.
+
 ### Audiobook Converter -- SHIPPED as v1.1.0 (2026-08-03)
 
 *Kept in this section for its open follow-ups only. The feature itself is

@@ -377,9 +377,18 @@ it is doing. The roles and the resolver live in `backend/app/ai/roles.py`.
 
 Precedence, highest first:
 
-1. `project.json` → `model_roles[role]` (supported by the resolver; no UI yet)
-2. settings → `model_roles[role]`
-3. `project.default_model` → settings `default_model` → `provider.fallback_model`
+1. settings → `model_roles[role]`
+2. `project.default_model` → settings `default_model` → `provider.fallback_model`
+
+**There used to be a third level above these -- a per-book `model_roles` in
+`project.json` -- and this document described it as "supported by the resolver;
+no UI yet". It was not supported.** `_resolve_model_and_key` never read
+`project.json` at all: it synthesises `{"default_model": override}` from one
+frontend field, so a per-book role assignment could not have arrived however
+faithfully it was stored. The test that appeared to prove it worked passed by
+handing in a project dict no caller can produce. Deleted on the writer's ruling
+(recovery task R8.6); roles are app-wide, and the per-book **Default Model** is
+untouched and still works.
 
 A role assignment is `{provider, model}` rather than a bare model id, because
 different roles may live on different services. That makes the provider a
@@ -445,6 +454,7 @@ Time
 GET    /anchors                chapters + scenes with ids, in reading order
 GET    /resolve                a Thread AS OF an anchor
 GET    /graph                  nodes + edges at an anchor, spoiler-aware
+POST   /place                  which chapters an entry appears in (the WHOLE list, not a delta)
 
 Weaving
 POST   /scan                   the free deterministic pass -- no role, no model, no cost
@@ -468,6 +478,33 @@ Two properties worth knowing before reading the code:
   writer can inspect it, remove Threads from it, exclude categories, or turn it
   off entirely. A writer-initiated action does the sending, later and elsewhere.
   See the context rule in `docs/product-scope.md`.
+
+### Profile Extractor — `/api/extractor`
+
+The Weave's first AI pass, and the only router that proposes CONTENT for an
+entry rather than structure. Kept separate from `/api/codex` because it is the
+one part of the Weave that spends money and can be wrong.
+
+```
+GET    /plan                   how many requests, how many tokens, which model -- before anything is spent
+GET    /models                 what the long-context role could run
+POST   /model                  assign it
+GET    /current                the saved read     DELETE /current
+POST   /run                    read the book in batches; each batch saved as it lands
+POST   /part                   THE ONLY WRITE PATH: apply one proposed piece
+POST   /entry                  fold a discovered name into an entry that already exists
+```
+
+Two properties that decide its shape:
+
+- **It carries no evidence, on purpose.** An Overview is synthesis; there is no
+  sentence in the manuscript to quote against it. So the writer's per-item click
+  is the only safeguard between a model's guess and their story bible, and
+  `POST /part` applies exactly one piece per call. There is no accept-all, and a
+  proposal for an entry that does not exist REFUSES rather than creating one.
+- **A novel does not fit in one request.** `plan_batches` splits the book by
+  input tokens, chapters whole and consecutive, and each batch is persisted as it
+  finishes -- so a failure at part four of five keeps the first three.
 
 ### Export — `/api/export`
 ```

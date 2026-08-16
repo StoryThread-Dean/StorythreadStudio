@@ -22,21 +22,13 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
-- **A trait can be true for only part of the book.** Every trait now has a "True all the way through" switch, on by default. Turn it off and tick the chapters where it holds. This is for characters who change: a protagonist who is slight and unremarkable in chapter one and powerfully built after her transformation has two honest physical descriptions, and until now a profile could hold one of them or hold both with nothing to say which was which -- so AI received both and wrote a character who was somehow both at once. An arrow beside each chapter ticks it and everything after it, which is what "from the transformation onwards" usually means. A trait with nothing ticked is true nowhere, which is a way to shelve one without deleting it, and the screen says so plainly rather than letting you find out later.
-- **Where you are in the book decides which version AI gets.** The Weave's automatic context leaves out traits that are not true in the chapter you are working on, and says how many it left. Attaching a profile as a context chip cannot know which chapter you mean, so there the limited traits go with their chapters named instead -- the model is told the two descriptions are alternatives rather than being left to merge them.
-- **Where an entry appears, edited from the entry itself.** The chapter list on a profile, and on the map's entry panel, alongside the Weaving walk that first asks the question. Entries you have placed elsewhere are greyed on the map rather than hidden, and left out of what the app sends AI unless you pin them or your writing names them.
-- **The map is a place to work.** Standing on an entry, you can open it, say where it appears, edit how it changes through the story, and make connections, without leaving the map. Plus a searchable list of every entry inside the map itself, and **Spread out dots** for when a large world gets crowded.
-
 ### Changed
 
-- **Smart Advisor's Context pass now gets your world.** It was checking your writing for continuity and character consistency while knowing nothing about your world -- the profiles you attached by hand reached it, the Weave's Threads did not, and nothing on screen said so. Readability and Structure still do not get it, because they read the language rather than the story, and sending it would mean paying for tokens they never look at. The bar now states which passes use it, so it is not something you have to find out by asking.
-- **The context panel can now say what it left out because of where you are.** It was counting entries left out for being placed in other chapters and had no way to tell you -- the number was worked out correctly and never sent to the screen.
-- **Governments are called Ruling Authorities now.** "A leader of a party isn't a government" -- and neither is a crown, a corporate board or an occupying army, but all of them rule. Only the words on screen changed: your files, folders and connections are untouched, and if you had renamed the kind yourself your own name is kept.
 ### Fixed
 
 ---
 
-## [2.0.1] - UNRELEASED
+## [2.0.1] - 2026-08-16
 
 ### Added
 
@@ -47,6 +39,10 @@ entry while working on a feature, append it under Unreleased.
 - **A long book is read in parts, and you get one list.** A novel's worth of proposals cannot come back in a single reply from any model, so the book is split into requests that can actually be answered, and the results are combined. A character who appears in chapters one and six is one entry with two proposals against it, not two entries. The screen says how many requests it will take before you commit, says which part it is reading while it works, and saves each part as it finishes -- so a failure at part four of five keeps the first three.
 - **It works over as many sittings as you need.** A whole-novel pass is a job rather than a sitting, so the result is saved: close the app, come back next week, and the same list is there with everything you have dealt with ticked off. There is one saved read at a time and a new one replaces it -- and if you still have proposals you have not looked at, it says how many before it does anything, because you paid for those.
 - **Every kind, not just characters.** Whatever your project's types file holds, including kinds you invented yourself: locations, factions, creatures, religions, ruling authorities, deities, cultures, objects, events, languages.
+- **A trait can be true for only part of the book.** Every trait now has a "True all the way through" switch, on by default. Turn it off and tick the chapters where it holds. This is for characters who change: a protagonist who is slight and unremarkable in chapter one and powerfully built after her transformation has two honest physical descriptions, and until now a profile could hold one of them or hold both with nothing to say which was which -- so AI received both and wrote a character who was somehow both at once. An arrow beside each chapter ticks it and everything after it, which is what "from the transformation onwards" usually means. A trait with nothing ticked is true nowhere, which is a way to shelve one without deleting it, and the screen says so plainly rather than letting you find out later.
+- **Where you are in the book decides which version AI gets.** The Weave's automatic context leaves out traits that are not true in the chapter you are working on, and says how many it left. Attaching a profile as a context chip cannot know which chapter you mean, so there the limited traits go with their chapters named instead -- the model is told the two descriptions are alternatives rather than being left to merge them.
+- **Where an entry appears, edited from the entry itself.** The chapter list on a profile, and on the map's entry panel, alongside the Weaving walk that first asks the question. Entries you have placed elsewhere are greyed on the map rather than hidden, and left out of what the app sends AI unless you pin them or your writing names them.
+- **The map is a place to work.** Standing on an entry, you can open it, say where it appears, edit how it changes through the story, and make connections, without leaving the map. Plus a searchable list of every entry inside the map itself, and **Spread out dots** for when a large world gets crowded.
 - **Long-context analysis is a role you can now use.** It has been in Settings since Model Roles shipped, marked as reserved with a note saying it arrived with the Weave's AI passes. This is that pass, and it is what the role exists to buy.
 
 
@@ -57,6 +53,9 @@ entry while working on a feature, append it under Unreleased.
 
 ### Changed
 
+- **Smart Advisor's Context pass now gets your world.** It was checking your writing for continuity and character consistency while knowing nothing about your world -- the profiles you attached by hand reached it, the Weave's Threads did not, and nothing on screen said so. Readability and Structure still do not get it, because they read the language rather than the story, and sending it would mean paying for tokens they never look at. The bar now states which passes use it, so it is not something you have to find out by asking.
+- **The context panel can now say what it left out because of where you are.** It was counting entries left out for being placed in other chapters and had no way to tell you -- the number was worked out correctly and never sent to the screen.
+- **Governments are called Ruling Authorities now.** "A leader of a party isn't a government" -- and neither is a crown, a corporate board or an occupying army, but all of them rule. Only the words on screen changed: your files, folders and connections are untouched, and if you had renamed the kind yourself your own name is kept.
 - The setup screen states what the run will cost, how many chapters and entries it covers, and which model does the work, before the button. Entries you have already written up are ticked to be left alone, as a suggestion you can undo -- nothing here can know that a character who appeared once in chapter two has come back for the rest of the book.
 
 ---
