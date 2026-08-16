@@ -474,3 +474,56 @@ describe("what a half-converted project is told", () => {
     expect(screen).toMatch(/made\s*\n?\s*in the Weave and .* not shown here/);
   });
 });
+
+
+// ── WHERE AN ENTRY APPEARS, THROUGH THE ROUND TRIP ──────────────────────────
+//
+// `appears_in` is unlike everything else this screen holds: it is written the
+// moment the writer presses Record, by POST /place, and is NOT part of the
+// page's manual-save buffer.
+//
+// That creates a hazard the rest of the fields do not have. The profile was
+// loaded with the OLD list in its pass-through blob, so an ordinary save
+// afterwards would hand that back and silently undo the placement made two
+// minutes earlier -- with nothing on screen to show it happened. It is the R2.1
+// failure exactly: a save dropping something the form did not display.
+
+describe("where an entry appears", () => {
+  const ITEM = { entity_id: "e-lexa", filename: "lexa.md",
+                 name: "Alexandra Langford", type: "character",
+                 role: "protagonist", status: "active" };
+
+  it("is surfaced on load, not left in the blob", async () => {
+    mockFetch(() => ({ ...THREAD, appears_in: ["c-1", "c-3"] }));
+    const profile = await codexSource("/p", sectionsFor).load(ITEM);
+    expect(profile.appears_in).toEqual(["c-1", "c-3"]);
+  });
+
+  it("THE EDITED VALUE BEATS THE STALE BLOB ON SAVE", async () => {
+    // The hazard, stated as a test. The blob says one chapter; the writer has
+    // since placed it in two, through POST /place, which is not part of this
+    // page's save buffer. Saving the profile must not roll that back.
+    mockFetch(() => ({ ...THREAD, appears_in: ["c-1"] }));
+    const loaded = await codexSource("/p", sectionsFor).load(ITEM);
+
+    calls = [];
+    mockFetch(() => ({ ok: true }));
+    await codexSource("/p", sectionsFor)
+      .save({ ...loaded, appears_in: ["c-1", "c-2"] });
+    const sent = JSON.parse(String(calls[0].init?.body));
+    expect(sent.thread.appears_in).toEqual(["c-1", "c-2"]);
+  });
+
+  it("keeps what the file had when this screen never touched it", async () => {
+    // The other direction, and the rule every field here follows: a screen
+    // that does not edit something hands back exactly what it was given.
+    mockFetch(() => ({ ...THREAD, appears_in: ["c-4"] }));
+    const loaded = await codexSource("/p", sectionsFor).load(ITEM);
+
+    calls = [];
+    mockFetch(() => ({ ok: true }));
+    await codexSource("/p", sectionsFor).save(loaded);
+    const sent = JSON.parse(String(calls[0].init?.body));
+    expect(sent.thread.appears_in).toEqual(["c-4"]);
+  });
+});

@@ -155,6 +155,10 @@ export interface Profile {
    * now found five times.
    */
   run?: Fact[];
+  /** Which chapters this entry appears in -- anchors, the writer's own
+   *  statement. Filters what the AI brief carries and greys the map where it
+   *  is absent. Empty means "not said", which is treated as everywhere. */
+  appears_in?: string[];
   /**
    * What an import left behind, in the writer's words.
    *

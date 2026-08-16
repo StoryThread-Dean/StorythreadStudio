@@ -88,6 +88,7 @@ import { ProfilePageGuide } from "./ProfilePageGuide";
 // the Weaving panel, rendered inside a branch that never ran).
 import { ProfileConnections } from "../features/codex/ProfileConnections";
 import { RunEditor } from "../features/codex/RunEditor";
+import { AppearsIn } from "../features/codex/AppearsIn";
 import { fetchAnchors, fetchThreads, type ChapterAnchor } from "../features/codex/api";
 import type { EntriesHome, ProfileSource } from "./profileSource";
 
@@ -2270,6 +2271,30 @@ export function ProfileBuilder({
               {/* Wrapped for the same gap every other block on this page has.
                   Without it the Run and Connections sat directly on top of each
                   other and read as one thing. */}
+              {/* WHERE IT APPEARS, on the entry itself.
+                  Reported: "the only current way to add to and make changes to
+                  when a Profile ... pops up in Weave a Chapter [is the walk].
+                  There needs to be a way to do this from the Profiles
+                  themselves." A walk is a good place to answer a question once
+                  and a bad place to change the answer later -- getting back to
+                  one stop means starting a pass and walking to it, and a writer
+                  fixing Serena's chapters is looking at Serena. */}
+              <div className="mb-6">
+                <AppearsIn
+                  projectPath={project.root_path}
+                  entityId={profile.entity_id}
+                  appearsIn={profile.appears_in ?? []}
+                  chapters={chapters}
+                  name={profile.name}
+                  onChanged={next => setProfile(
+                    prev => (prev ? { ...prev, appears_in: next } : prev))}
+                  unavailable={home === "profiles"
+                    ? "Recording where an entry appears needs this project "
+                      + "brought into the Weave first."
+                    : undefined}
+                />
+              </div>
+
               <div className="mb-6">
               <RunEditor
                 run={profile.run ?? []}

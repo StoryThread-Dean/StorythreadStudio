@@ -243,6 +243,10 @@ function profileFromThread(thread: WeaveThread,
     // so a screen that does not touch it hands it back untouched -- this field
     // is what the editor reads and writes, and threadFromProfile prefers it.
     run: (thread.run ?? []) as Profile["run"],
+    // Where the writer says this appears. Surfaced for the same reason `run`
+    // is: a screen edits it, so it needs a field rather than living only in
+    // the pass-through blob.
+    appears_in: (thread.appears_in ?? []) as string[],
     // The revision this was opened at, so a save can be refused rather than
     // silently overwriting somebody else's -- or the writer's own work in
     // another window.
@@ -291,6 +295,16 @@ function threadFromProfile(profile: Profile,
     // Thread is carried through for everything this screen does NOT edit; the
     // Run is now one of the things it does.
     run: profile.run ?? previous.run ?? [],
+    // THE EDITED VALUE WINS OVER THE BLOB, exactly as `run` does above, and
+    // here it closes a real hazard rather than a theoretical one.
+    //
+    // `appears_in` is written by POST /place the moment the writer presses
+    // Record -- it is not part of this page's manual-save buffer. So the blob
+    // this profile was loaded with still holds the OLD list. Handing that back
+    // on the next ordinary save would silently undo the placement they made
+    // two minutes ago, with nothing on screen to show it happened. That is the
+    // R2.1 failure exactly: a save dropping something the form did not display.
+    appears_in: profile.appears_in ?? previous.appears_in ?? [],
     type: profile.type,
     entity_id: profile.entity_id,
     name: profile.name,
