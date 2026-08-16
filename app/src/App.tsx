@@ -2705,6 +2705,7 @@ function App() {
             chapterText={chapterContent}
             chapterFilename={currentChapter?.filename ?? null}
             contextChips={contextChips}
+            weaveBrief={weaveBrief}
             modelId={currentProject?.default_model || null}
             contentMode={currentProject?.content_mode_default ?? "general"}
             projectPath={currentProject?.root_path ?? null}

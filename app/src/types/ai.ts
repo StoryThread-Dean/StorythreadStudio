@@ -311,6 +311,11 @@ export interface EditorPassRequest {
   content_mode?:    string;
   project_path?:    string | null;
   chapter_filename?: string | null;       // for Writing Progress logging: which chapter file the writer is reviewing
+  // What the Weave assembled. Sent on the Context pass only -- the pass that
+  // checks the writing against the STORY. The backend ignores it on the other
+  // two regardless of what arrives, so a stale client cannot spend the
+  // writer's tokens on world neither of them reads.
+  weave_brief?:     string;
 }
 
 export interface EditorPassResponse {

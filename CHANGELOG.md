@@ -29,6 +29,7 @@ entry while working on a feature, append it under Unreleased.
 
 ### Changed
 
+- **Smart Advisor's Context pass now gets your world.** It was checking your writing for continuity and character consistency while knowing nothing about your world -- the profiles you attached by hand reached it, the Weave's Threads did not, and nothing on screen said so. Readability and Structure still do not get it, because they read the language rather than the story, and sending it would mean paying for tokens they never look at. The bar now states which passes use it, so it is not something you have to find out by asking.
 - **The context panel can now say what it left out because of where you are.** It was counting entries left out for being placed in other chapters and had no way to tell you -- the number was worked out correctly and never sent to the screen.
 - **Governments are called Ruling Authorities now.** "A leader of a party isn't a government" -- and neither is a crown, a corporate board or an occupying army, but all of them rule. Only the words on screen changed: your files, folders and connections are untouched, and if you had renamed the kind yourself your own name is kept.
 ### Fixed

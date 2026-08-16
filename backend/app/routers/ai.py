@@ -2072,6 +2072,26 @@ async def editor_chat(request: EditorChatRequest):
 #   what the suggested rewrite is. JSON lets us hand all three pieces over
 #   in one round trip without screen-scraping prose.
 
+# WHICH SMART ADVISOR PASS GETS THE WEAVE'S WORLD CONTEXT.
+#
+# Reported as a question that turned out to be a defect: "if its On and I use
+# any of the SMART ADVISOR buttons and features including Context, does the N
+# threads get sent as well?" It did not -- and attached PROFILES did, through
+# this same endpoint, which is what made the gap so easy to miss. The chips
+# arrived and the world did not, while the control above them said "the part of
+# your world the AI is told about, before you ask it anything".
+#
+# Only the Context pass. It is the one that checks the writing against the story
+# rather than against the language: continuity, established facts, whether a
+# character is behaving like themselves. Readability is prose mechanics and
+# Structure is shape -- neither reads the world, so sending it to them would be
+# paying a brief's worth of tokens on every run to be ignored.
+#
+# Named here rather than spelled out at each end, so the screen that decides
+# what to send and the route that decides what to use cannot disagree.
+WEAVE_BRIEF_PASS = "context"
+
+
 class EditorPassRequest(BaseModel):
     category:         str                          # "readability" | "structure" | "context"
     subcategories:    list[str] = []               # subcategory keys; empty = all of them
@@ -2082,6 +2102,11 @@ class EditorPassRequest(BaseModel):
     content_mode:     str = "general"
     project_path:     str | None = None
     chapter_filename: str | None = None            # for Writing Progress logging; the chapter file the writer is reviewing
+    # WHAT THE WEAVE ASSEMBLED, on the Context pass only (WEAVE_BRIEF_PASS).
+    # Same field, same meaning and same guarantee as on editor-chat: built by
+    # POST /api/codex/context, which sends nothing anywhere, and arriving here
+    # only because the writer pressed a button.
+    weave_brief:      str = ""
 
 
 class EditorIssueModel(BaseModel):
@@ -2234,10 +2259,26 @@ async def editor_pass(request: EditorPassRequest):
     if story_context:
         system_prompt = story_context + system_prompt
 
+    # THE WORLD, AND ONLY WHERE IT CHANGES THE ANSWER. Enforced here rather
+    # than trusted from the caller: an older frontend, or a future one that
+    # forgets, would otherwise spend the writer's tokens sending a world to a
+    # readability check that has no use for it. The screen decides not to send
+    # it; this decides not to use it. Both, because it costs money.
+    weave_brief = (request.weave_brief
+                   if request.category == WEAVE_BRIEF_PASS else "")
+    if len(weave_brief) > 60_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The world context is too long ({len(weave_brief):,} chars, "
+                   f"max 60,000). Drop some Threads in Inspect, or switch "
+                   f"world context off for this pass.",
+        )
+
     materials = _build_materials_message(
         text_content    = request.chapter_text,
         is_full_chapter = not request.is_selection,
         context_chips   = request.context_chips,
+        weave_brief     = weave_brief,
     )
     messages = [materials]
 

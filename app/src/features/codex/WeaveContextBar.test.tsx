@@ -480,3 +480,37 @@ describe("the shape of the brief, not only its contents (R1.3)", () => {
     expect(within(panel).getByTestId("brief-threads")).toBeTruthy();
   });
 });
+
+describe("WHERE the world actually goes", () => {
+  // Reported as a question the screen could not answer: "if its On and I use
+  // any of the SMART ADVISOR buttons and features including Context, does the
+  // N threads get sent as well?"
+  //
+  // It did not -- while attached PROFILES did, from this same panel, through
+  // the same request. So the reasonable assumption was wrong and nothing on
+  // screen contradicted it. The behaviour is fixed (Context gets the world
+  // now); this pins the half that stops the question being asked again.
+
+  it("names the surfaces that read it", async () => {
+    await open();
+    const scope = await screen.findByTestId("weave-context-scope");
+    expect(scope.textContent).toMatch(/Smart Advisor/i);
+    expect(scope.textContent).toMatch(/Context/);
+  });
+
+  it("says which passes do NOT get it, and why that is in your favour", async () => {
+    // Not just an omission -- a saving. A writer reading "Readability does not
+    // get this" should understand they are not being charged for it, rather
+    // than that a feature is missing.
+    await open();
+    const scope = await screen.findByTestId("weave-context-scope");
+    expect(scope.textContent).toMatch(/Readability/i);
+    expect(scope.textContent).toMatch(/Structure/i);
+  });
+
+  it("says nothing about scope when there is nothing to send", async () => {
+    // A line explaining where an empty brief would go is noise.
+    await open({ off: true });
+    expect(screen.queryByTestId("weave-context-scope")).toBeNull();
+  });
+});

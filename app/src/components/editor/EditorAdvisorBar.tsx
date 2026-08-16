@@ -21,11 +21,17 @@ import type {
 } from "../../types/ai";
 import {
   addIssuesEffect, clearIssuesEffect, locateQuoteInDoc, type LocatedIssue,
-} from "./issueOverlay";
+} from "./issueOverlay";
 import { Explain } from "../../components/learn/Explain";
 
 
 const API_BASE = "http://localhost:8000";
+
+// The one pass the Weave's world context is sent to. Kept as a named constant
+// on both sides of the wire (backend: WEAVE_BRIEF_PASS in routers/ai.py), so
+// the screen deciding what to send and the route deciding what to use cannot
+// drift into disagreeing about which pass reads the world.
+const WEAVE_BRIEF_PASS = "context";
 
 
 // Subcategory definitions. MUST match EDITOR_PASS_SUBCATEGORIES in
@@ -110,6 +116,11 @@ export interface EditorAdvisorBarProps {
   // that state anyway).
   chapterFilename: string | null;
   contextChips:  ContextChip[];
+  /** What the Weave assembled, already inspectable by the writer in the bar
+   *  above the chat. Empty when world context is off, has nothing to say, or
+   *  the writer emptied it. Used on the Context pass only -- see
+   *  WEAVE_BRIEF_PASS. */
+  weaveBrief:    string;
   modelId:       string | null;
   contentMode:   string;
   projectPath:   string | null;
@@ -133,7 +144,7 @@ export interface EditorAdvisorBarProps {
 
 
 export function EditorAdvisorBar({
-  view, chapterText, chapterFilename, contextChips, modelId, contentMode, projectPath,
+  view, chapterText, chapterFilename, contextChips, weaveBrief, modelId, contentMode, projectPath,
   issueCount, onClearIssues, onAddIssues,
   profileChipCount, onOpenProfilePicker,
 }: EditorAdvisorBarProps) {
@@ -321,6 +332,20 @@ export function EditorAdvisorBar({
       content_mode:     contentMode,
       project_path:     projectPath,
       chapter_filename: chapterFilename,
+      // THE WEAVE'S WORLD, ON THE CONTEXT PASS ONLY.
+      //
+      // Context is the pass that checks the writing against the STORY --
+      // continuity, established facts, whether somebody is behaving like
+      // themselves -- so it is the only one the world can change the answer
+      // for. Readability is prose mechanics and Structure is shape; sending
+      // them a brief would be paying for tokens neither reads.
+      //
+      // This gap was reported rather than found: attached profiles already
+      // reached all three passes through this same request, so a writer
+      // reasonably assumed the Threads did too. The backend refuses it for
+      // the other two as well -- one of us deciding is a rule, both of us
+      // deciding is a guarantee.
+      weave_brief:      category === WEAVE_BRIEF_PASS ? weaveBrief : "",
     };
 
     try {

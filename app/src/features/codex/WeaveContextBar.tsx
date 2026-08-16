@@ -219,6 +219,23 @@ export function WeaveContextBar({
           )}
         </span>
 
+        {/* WHERE IT GOES, said on the bar rather than left to be assumed.
+            Reported as a question: "if its On and I use any of the SMART
+            ADVISOR buttons and features including Context, does the N threads
+            get sent as well?" It did not, and there was nothing on screen that
+            could have answered it either way -- while attached profiles DID
+            reach Smart Advisor through the same panel, which made assuming
+            otherwise the reasonable read. It goes to Context now, and this
+            line says which passes read the world and which do not. */}
+        {!off && threads.length > 0 && (
+          <span className="basis-full text-[10px] text-faint"
+                data-testid="weave-context-scope">
+            Sent with chat, Draft and Enhance -- and with Smart Advisor's
+            Context pass. Readability and Structure do not read your world, so
+            they are not charged for it.
+          </span>
+        )}
+
         {!off && (
           <button
             onClick={() => {

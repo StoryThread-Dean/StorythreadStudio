@@ -492,16 +492,24 @@ export const EXPLAIN: Record<string, Explains> = {
     endpoint: "/api/codex/entity/kind",
   },
   "weave.context": {
-    what: "The part of your world the AI is told about, before you ask it "
-      + "anything.",
+    what: "The part of your world sent with what you ask the AI to do.",
     why: "So you do not have to paste a character profile into the chat to be "
       + "understood. The Weave picks out what your writing names and what "
       + "connects to it, AS OF where you are in the book -- so the AI knows "
       + "what your story knows so far, and not what happens later. You can "
-      + "read every word of it, drop anything from it, or switch it off.",
+      + "read every word of it, drop anything from it, or switch it off. "
+      + "WHERE IT GOES: the chat panel, in every mode -- ordinary chat, Draft, "
+      + "Enhance and Reasoning are the same request underneath -- and Smart "
+      + "Advisor's Context pass, which is the pass that checks your writing "
+      + "against your story rather than against the language. Readability and "
+      + "Structure do not read your world, so they are not sent it and you do "
+      + "not pay for it there.",
     needed: "optional",
     cost: FREE,
     how: [
+      "Attaching a profile by hand is separate and always works: an attached "
+        + "profile goes to every AI action in the editor, including all three "
+        + "Smart Advisor passes.",
       "Inspect shows each Thread, why it is there, and roughly what it costs.",
       "The x beside a Thread drops it. Removed Threads are listed underneath "
         + "so you can put one back.",
