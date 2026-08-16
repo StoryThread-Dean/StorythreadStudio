@@ -79,11 +79,65 @@ Once the keypair is set up and the public key is embedded, follow the
 
 Every subsequent release follows the same steps.
 
+### 0. Update the documentation -- BEFORE anything else
+
+**This is step zero because it kept being step never.** Every release so far has
+needed the writer to ask "did you update the docs?", and by v2.0.1 the README
+did not mention the Weave at all -- the headline feature of the previous major
+version, missing from the page every new visitor lands on. `architecture.md`
+described a per-book model-roles level that had been deleted. `features.md`
+claimed the Weave brief reached one surface when it reached two.
+
+Documentation drift raises no error, fails no test, and is invisible until
+somebody reads it and is misled. So it is a gate, not a courtesy.
+
+Walk this list. For each one, either update it or be able to say why it needed
+nothing:
+
+| File | Ask |
+|---|---|
+| `README.md` | Would a stranger learn this feature exists? Are the requirements still true (providers, keys, disk space)? |
+| `docs/features.md` | Is the new behaviour described, and is anything it CHANGED still described the old way? |
+| `docs/architecture.md` | New routes, new folders, new files on disk, changed resolution order? |
+| `docs/product-scope.md` | Does this change what the product IS, or any locked rule? |
+| `docs/roadmap.md` | Move what shipped out of Scheduled; record what was decided against and why. |
+| The feature's own spec | If it has one, the behaviour change goes in the SAME commit as the spec change. |
+| `CHANGELOG.md` | Step 1 below. |
+
+The rule behind the rule: **where a doc and the code disagree, the code is right
+and the doc is a bug.** Never fix a doc by describing the drift -- that erases
+the evidence and leaves build, tests and docs mutually consistent and all three
+wrong.
+
 ### 1. Update CHANGELOG.md
 
 Move entries from `## [Unreleased]` into a new `## [X.Y.Z] - YYYY-MM-DD`
 section just below it. Leave the `## [Unreleased]` heading in place with
 empty subsections for the next round of work.
+
+### 1b. Write `release-artifacts/vX.Y.Z-notes.md`
+
+The CHANGELOG is for the repo. This file is for the **writer**, and it is what
+they read in the update banner and on the GitHub Release page. `release.ps1`
+picks it up automatically for `latest.json`.
+
+**Keep it short and keep it human.** The v2.0.0 notes ran to nine thousand
+characters and the update banner showed all of it. Nobody reads that.
+
+- **Aim for a page.** If it is longer than the reader's patience, the important
+  part is the part they did not reach.
+- **Plain language, around a fifth-grade reading level.** "Your hero is small in
+  chapter one and stronger later" beats "trait validity windows scoped by
+  anchor". The writer is a novelist, not an engineer.
+- **Personable, casual but professional.** Write like a person telling somebody
+  what changed, not like a compliance document.
+- **Lead with what they GET**, then how to reach it. Skip the reasoning, the
+  internals, the file names and the task ids -- those live in the commit
+  message and the spec, where somebody looking for them will find them.
+- **One short paragraph per thing**, with a heading they can skim.
+- Fixes can be one line each. "It never worked. Now it does." is a complete
+  and honest entry.
+- `--`, never an em dash, same as everywhere else in this project.
 
 ### 2. Export your signing key
 
@@ -140,12 +194,18 @@ Then either via the website (paste the notes, drag the three files from
 gh release create vX.Y.Z `
   --title "Storythread Studio vX.Y.Z" `
   --notes-file release-artifacts/vX.Y.Z-notes.md `
-  release-artifacts/Storythread*.msi `
-  release-artifacts/Storythread*.msi.sig `
+  "release-artifacts/Storythread Studio_X.Y.Z_x64_en-US.msi" `
+  "release-artifacts/Storythread Studio_X.Y.Z_x64_en-US.msi.sig" `
   release-artifacts/latest.json
 ```
 
-The exact installer filename varies; the script prints it at the end.
+**Name the files exactly. Do not use a wildcard.** This step used to say
+`release-artifacts/Storythread*.msi`, and that folder accumulates every
+installer you have ever built -- ten of them by v2.0.1. The wildcard would have
+attached three hundred megabytes of superseded versions to the new release.
+`release.ps1` now moves old installers into `release-artifacts/archive/` on
+every run, so the folder cannot punish a wildcard, but the exact name is still
+the right thing to type. The script prints it at the end.
 
 > **Check for a stray tag before you start.** If `git tag -l vX.Y.Z` finds one
 > from an aborted attempt, `gh release create` will attach the release to that

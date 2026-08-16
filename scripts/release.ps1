@@ -214,9 +214,37 @@ Step "Generating latest.json"
 #   paragraph. (We hit this bug in v1.0.1: the preamble text mentions
 #   "## [Unreleased]" inside backticks, and the un-anchored regex
 #   captured everything from that mention through the next real heading.)
+#
+# WHAT THE UPDATE BANNER SHOWS, and why the notes FILE wins over the CHANGELOG.
+#
+# `notes` here is what a writer reads inside the app when an update is offered.
+# For v2.0.0 that was thirteen thousand characters -- the entire changelog
+# section, every bullet, pasted into a banner. Nobody reads that in a banner.
+#
+# So `release-artifacts/v<Version>-notes.md` is preferred when it exists: it is
+# the short, plain-language version written for the writer, and it is the same
+# text the GitHub Release page gets. One source, two places, no drift and no
+# manual swap afterwards (which is what this used to need, and what kept being
+# forgotten).
+#
+# The CHANGELOG remains the fallback, so a release cut without a notes file
+# still says something true rather than "Bug fixes and improvements."
+$notesFile = Join-Path $repoRoot "release-artifacts\v$Version-notes.md"
 $changelogPath = Join-Path $repoRoot "CHANGELOG.md"
 $notesBody = "Bug fixes and improvements."
-if (Test-Path $changelogPath) {
+if (Test-Path $notesFile) {
+    $fromFile = (Get-Content $notesFile -Raw).Trim()
+    if ($fromFile) {
+        $notesBody = $fromFile
+        OK "Notes: release-artifacts\v$Version-notes.md"
+    }
+}
+elseif (Test-Path $changelogPath) {
+    Write-Host "  ! No release-artifacts\v$Version-notes.md -- falling back to the" -ForegroundColor Yellow
+    Write-Host "    CHANGELOG section, which is written for the repo rather than" -ForegroundColor Yellow
+    Write-Host "    for the update banner. Consider writing the notes file." -ForegroundColor Yellow
+}
+if ($notesBody -eq "Bug fixes and improvements." -and (Test-Path $changelogPath)) {
     $changelogText = Get-Content $changelogPath -Raw
     $versionPattern = '(?ms)^## \[' + [regex]::Escape($Version) + '\][^\n]*\n(.*?)(?=\n## \[|\z)'
     $versionMatch = [regex]::Match($changelogText, $versionPattern)
@@ -266,6 +294,34 @@ $manifestPath = Join-Path $repoRoot "release-artifacts\latest.json"
 $artifactsDir = Split-Path $manifestPath
 if (-not (Test-Path $artifactsDir)) {
     New-Item -ItemType Directory -Path $artifactsDir | Out-Null
+}
+
+# ── EVERY PREVIOUS RELEASE'S INSTALLER MOVES OUT OF THE WAY ──────────────────
+#
+# This folder accumulated ten superseded .msi files, and the runbook told you to
+# upload with a WILDCARD:
+#
+#     gh release create vX.Y.Z release-artifacts/Storythread*.msi ...
+#
+# Run as written, that attaches every installer back to v1.0.1 -- three hundred
+# megabytes of old versions -- to the new release. The wildcard is gone from the
+# docs, but a wildcard is the natural thing to type, so the folder should not be
+# able to punish it. After this step only the version being released is at the
+# top level.
+#
+# MOVED, never deleted. They are the only copies of shipped binaries outside
+# GitHub, and this script has no business destroying them.
+$archiveDir = Join-Path $artifactsDir "archive"
+$stale = @(Get-ChildItem $artifactsDir -File -Filter "Storythread*" -ErrorAction SilentlyContinue |
+           Where-Object { $_.Name -notlike "*_${Version}_*" })
+if ($stale.Count -gt 0) {
+    if (-not (Test-Path $archiveDir)) {
+        New-Item -ItemType Directory -Path $archiveDir | Out-Null
+    }
+    foreach ($old in $stale) {
+        Move-Item $old.FullName (Join-Path $archiveDir $old.Name) -Force
+    }
+    OK "Archived $($stale.Count) file(s) from previous releases into release-artifacts\archive\"
 }
 # BOM-less UTF-8 write -- Set-Content -Encoding UTF8 in Windows PowerShell 5.1
 # emits a BOM, which Tauri's JSON parser rejects on latest.json (the auto-

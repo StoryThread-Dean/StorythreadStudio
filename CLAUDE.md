@@ -420,6 +420,27 @@ its place without relying on memory or conversation history.
 > Phases 7 and 9 are deferred to v2.1.0.
 > Branch health: 2045 backend tests, 1505 frontend tests, ruff and tsc clean.
 
+### Release discipline (three rules the writer had to ask for repeatedly)
+
+1. **Documentation is a GATE, not a courtesy.** `/pre-release` Stage 4 checks
+   README, features, architecture, product-scope, roadmap, the feature's spec,
+   CHANGELOG and the release notes file, and a gap FAILS the run. This exists
+   because the writer had to ask "did you update the docs?" on every release,
+   and by v2.0.1 the README did not mention the Weave AT ALL -- the headline
+   feature of the previous major version. Doc drift raises no error and fails
+   no test; only a gate catches it.
+2. **Release notes are for the writer, not the repo.** One page, plain language,
+   roughly a fifth-grade reading level, personable and casual but professional.
+   Lead with what they GET. No internals, no file names, no task ids -- those
+   belong in the commit message. `release-artifacts/vX.Y.Z-notes.md` is the
+   file; `release.ps1` now feeds it straight into `latest.json`, so it is also
+   what the in-app update banner shows. v2.0.0's notes were 9,312 characters in
+   that banner. v2.0.1's are 2,793. Full style rules in `docs/RELEASING.md`.
+3. **Never name release assets with a wildcard.** `release-artifacts/` keeps
+   every installer ever built, so `Storythread*.msi` matches ten of them.
+   `release.ps1` archives superseded ones on every run and the runbook names
+   files exactly.
+
 ### Spec discipline (applies to every feature, not just the Weave)
 
 1. **A feature's spec belongs in `docs/`, checked in, from the start.** The
