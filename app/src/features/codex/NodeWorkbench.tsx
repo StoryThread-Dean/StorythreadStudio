@@ -118,7 +118,17 @@ export function NodeWorkbench({
   return (
     <aside
       data-testid="node-workbench"
-      className="absolute right-2 top-2 flex max-h-[calc(100%-1rem)] w-80 flex-col rounded border border-border bg-bg-primary shadow-lg"
+      // BELOW THE TOOLBAR, not under it.
+      //
+      // This sat at top-2, which is exactly where the focus toolbar sits, so
+      // the buttons landed on top of the panel's own header and swallowed its
+      // X. Reported as: "the window pops up directly behind the other buttons
+      // ... the [X] close button is currently hidden."
+      //
+      // top-12 clears a row of py-1 buttons at top-2 with room to spare, and
+      // the height allowance drops by the same amount so a long entry still
+      // scrolls inside the map rather than off the bottom of it.
+      className="absolute right-2 top-12 flex max-h-[calc(100%-3.5rem)] w-80 flex-col rounded border border-border bg-bg-primary shadow-lg"
     >
       <header className="flex items-start gap-2 border-b border-border px-3 py-2">
         <div className="min-w-0">

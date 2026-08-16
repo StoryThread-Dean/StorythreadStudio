@@ -14,7 +14,7 @@
 //      like a world with less in it than the writer built.
 //   4. An empty map teaches instead of looking broken.
 
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -616,5 +616,35 @@ describe("standing on an entry", () => {
     fireEvent.click(screen.getByTestId("map-open-workbench"));
     await screen.findByTestId("node-workbench");
     expect(screen.queryByTestId("workbench-open")).toBeNull();
+  });
+});
+
+
+describe("the workbench and the toolbar share a corner", () => {
+  it("DOES NOT SIT UNDER THE BUTTONS THAT OPENED IT", async () => {
+    // Reported: "the window pops up directly behind the other buttons ... the
+    // [X] close button is currently hidden." Both were at top-2, so the
+    // toolbar landed on the panel's own header -- and the one control a writer
+    // needs when a panel is in the way is the one it covered.
+    await renderMap();
+    fireEvent.click(screen.getAllByTestId("map-node")[0]);
+    fireEvent.click(screen.getByTestId("map-open-workbench"));
+    const panel = await screen.findByTestId("node-workbench");
+
+    const toolbar = screen.getByTestId("map-open-workbench").parentElement!;
+    const topOf = (el: HTMLElement) =>
+      /top-(\d+)/.exec(el.className)?.[1] ?? "";
+    expect(topOf(panel)).not.toBe(topOf(toolbar));
+    expect(Number(topOf(panel))).toBeGreaterThan(Number(topOf(toolbar)));
+  });
+
+  it("keeps its close button reachable", async () => {
+    await renderMap();
+    fireEvent.click(screen.getAllByTestId("map-node")[0]);
+    fireEvent.click(screen.getByTestId("map-open-workbench"));
+    const panel = await screen.findByTestId("node-workbench");
+    const close = within(panel).getByLabelText("Close");
+    fireEvent.click(close);
+    expect(screen.queryByTestId("node-workbench")).toBeNull();
   });
 });
