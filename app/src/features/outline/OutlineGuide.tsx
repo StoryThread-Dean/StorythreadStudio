@@ -26,7 +26,10 @@
 // House style: no em dashes anywhere a writer reads.
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Dialog } from "../../components/ui/Dialog";
+import { Button } from "../../components/ui/Button";
+import { Panel } from "../../components/ui/Panel";
 
 interface Example {
   /** The book, so the writer can place the example instantly. */
@@ -383,98 +386,76 @@ export function OutlineGuide({ onClose }: OutlineGuideProps) {
   const last = index === PAGES.length - 1;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        role="dialog"
-        aria-label="How the Outline works"
-        data-testid="outline-guide"
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg border border-border-strong bg-bg-panel shadow-e4"
-      >
-        <header className="flex items-center gap-2 border-b border-border px-4 py-2">
-          <div className="min-w-0">
-            {page.group && (
-              <p className="text-micro uppercase tracking-label text-accent">
-                {page.group}
-              </p>
-            )}
-            <h2 className="truncate text-sm font-semibold text-text-primary">
-              {page.title}
-            </h2>
-          </div>
+    <Dialog
+      label="How the Outline works"
+      testId="outline-guide"
+      size="lg"
+      onClose={onClose}
+      title={
+        <div className="min-w-0">
+          {page.group && (
+            <p className="text-micro uppercase tracking-label text-accent">
+              {page.group}
+            </p>
+          )}
+          <span className="block truncate">{page.title}</span>
+        </div>
+      }
+      footer={
+        <>
+          <Button
+            variant="bare"
+            size="sm"
+            icon={<ChevronLeft size={11} />}
+            disabled={index === 0}
+            onClick={() => setIndex(i => Math.max(0, i - 1))}
+          >
+            Back
+          </Button>
           <span
-            className="ml-auto shrink-0 text-mini text-text-muted"
+            className="ml-auto text-mini text-text-muted"
             data-testid="outline-guide-progress"
           >
             Page {index + 1} of {PAGES.length}
           </span>
-          <button
-            type="button" onClick={onClose} aria-label="Close"
-            className="shrink-0 rounded p-0.5 text-text-muted hover:text-text-primary"
-          >
-            <X size={14} />
-          </button>
-        </header>
-
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 text-xs text-text-muted [&>p]:leading-relaxed">
-          {page.body}
-
-          {page.what && (
-            <p className="text-text-primary">{page.what}</p>
-          )}
-          {page.why && <p>{page.why}</p>}
-
-          {page.examples && (
-            <div className="space-y-2 pt-1">
-              <p className="text-micro uppercase tracking-label text-text-muted">
-                How three books you know answer it
-              </p>
-              {page.examples.map(ex => (
-                <div
-                  key={ex.book}
-                  className="rounded border border-border bg-bg-surface px-2.5 py-2"
-                >
-                  <p className="mb-1 text-micro font-semibold text-accent">
-                    {ex.book}
-                  </p>
-                  <p className="text-mini leading-relaxed text-text-primary">
-                    {ex.text}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <footer className="flex items-center gap-2 border-t border-border px-4 py-2">
-          <button
-            type="button"
-            onClick={() => setIndex(i => Math.max(0, i - 1))}
-            disabled={index === 0}
-            className="inline-flex items-center gap-1 rounded px-2 py-1 text-mini text-text-muted hover:text-text-primary disabled:opacity-30"
-          >
-            <ChevronLeft size={11} /> Back
-          </button>
           {last ? (
-            <button
-              type="button" onClick={onClose}
-              className="ml-auto rounded bg-accent-fill px-3 py-1 text-mini font-semibold text-on-accent hover:bg-accent-muted"
-            >
-              Done
-            </button>
+            <Button variant="primary" size="sm" onClick={onClose}>Done</Button>
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => setIndex(i => Math.min(PAGES.length - 1, i + 1))}
-              className="ml-auto inline-flex items-center gap-1 rounded bg-accent-fill px-3 py-1 text-mini font-semibold text-on-accent hover:bg-accent-muted"
             >
               Next <ChevronRight size={11} />
-            </button>
+            </Button>
           )}
-        </footer>
+        </>
+      }
+    >
+      <div className="space-y-3 text-xs text-text-muted [&>p]:leading-relaxed">
+        {page.body}
+
+        {page.what && <p className="text-text-primary">{page.what}</p>}
+        {page.why && <p>{page.why}</p>}
+
+        {page.examples && (
+          <div className="space-y-2 pt-1">
+            <p className="text-micro uppercase tracking-label text-text-muted">
+              How three books you know answer it
+            </p>
+            {page.examples.map(ex => (
+              <Panel key={ex.book} level="inset" padding="sm">
+                <p className="mb-1 text-micro font-semibold text-accent">
+                  {ex.book}
+                </p>
+                <p className="text-mini leading-relaxed text-text-primary">
+                  {ex.text}
+                </p>
+              </Panel>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }
