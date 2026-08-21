@@ -22,6 +22,16 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+---
+
+## [2.0.2] - 2026-08-21
+
+### Added
+
 - **A new look, in both themes.** Charcoal surfaces with a cool grey cast, a proper accent blue, and colours that mean something: the same blue always means "you can act on this", the same red always means "careful". Light mode is a warm paper palette rather than dark-mode colours on a pale background, which is what it had quietly been.
 - **Line spacing, in Settings.** Single, 1.5 lines, Double, or a custom multiple, named and measured the way a word processor does it. The editor had been fixed at one spacing since it was written.
 - **Paragraph spacing, in Settings.** Space before and after each paragraph, in points, defaulting to 0 and 8. This is the one that separates paragraphs -- line spacing only opens up the lines *inside* a paragraph, so on its own it cannot put a gap between them.
