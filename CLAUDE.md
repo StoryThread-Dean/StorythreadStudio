@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## CURRENT STATE: v2.0.1 SHIPPED 2026-08-16
+## CURRENT STATE: v2.0.2 SHIPPED 2026-08-21
 
 **v2.0.0 shipped 2026-08-14** (115 commits, tag v2.0.0, installer live). The
 recovery plan is 93 of 107 with the rest deferred by scope or blocked on a
@@ -18,6 +18,67 @@ brief. Two long-broken features were fixed on the way, both silent: the
 Importance Audit and the audiobook speaker pass had been reading `run_completion`
 results from the wrong key since they shipped.
 
+**v2.0.2 shipped 2026-08-21** (tag v2.0.2, installer live, updater endpoint
+verified serving 2.0.2 with the per-release notes rather than the CHANGELOG).
+Two pieces: a facelift and the Outline rebuild. The version is the writer's
+ruling, taken knowing it departs from the tier rule -- two major updates in
+three releases was enough. Branch health at the cut: 2157 backend tests, 1632
+frontend tests across 76 files, ruff and tsc clean.
+
+**The facelift was not a palette swap, and the audit is the useful part.** The
+app had no design system: colour was 2,431 raw Tailwind classes with no meaning
+attached, twelve text sizes above `text-sm` in the whole app, and 48 shadow
+utilities in 46,000 lines. One size of text, in one size of box, with a 1px
+border -- no palette would have fixed that. Role tokens (`--st-*`) live in
+`app/src/App.css` and every call site is converted onto them. The conversion was
+made provably zero-delta by a temporary BRIDGE mapping palette shades to the new
+tokens, so while it existed `text-indigo-300` and `text-accent` resolved to the
+identical value and renaming a call site could not move a pixel. It was deleted
+in the last phase; `App.css.test.ts` now fails the build if a raw palette class
+appears outside the audiobook. **`.audiobook-theme` was referenced by the
+audiobook spec and defined in NO CSS file** -- that separation had been
+convention only, and is now a real token boundary.
+
+**Three silent bugs the audit found, all older than the work that found them.**
+`useUiScale` sets `html { font-size }`, which only moves rem utilities, and 847
+sizes were hardcoded pixels -- so roughly 45% of the app's text, including most
+of the smallest, ignored the writer's Interface size setting entirely. Light mode
+adjusted two of fourteen colour families, so most of it rendered dark-tuned
+shades on cream, and it never set `color-scheme: light`. And **line spacing had
+never worked**: CodeMirror's baseTheme sets `.cm-scroller { line-height: 1.4 }`,
+which blocks inheritance from the editor root where the value was being set, so
+the editor had rendered at one fixed spacing since it was written whatever the
+code said. It is set on `.cm-content` now. Paragraph spacing is a SEPARATE
+control because it is a separate job: line spacing only opens up the lines
+INSIDE a paragraph, so on its own it can never put a gap between them, which is
+what the writer was actually asking for both times they reported it.
+
+**The Outline is a second main editor**, spec at `docs/outline-spec.md`. A
+ten-line worksheet replaces the YAML tracking block; eight of its lines are a
+one-way copy of Book Details and are NEVER read back, so `project.json` stays the
+single master for everything the AI sees and the same fact cannot disagree with
+itself in two places. Only the two targets are mastered in the outline. Nineteen
+opt-in preset sections, greyed from the LIVE EDITOR BUFFER rather than the file,
+so an unsaved insert greys immediately and Ctrl+Z un-greys it. No preset body
+contains an invented proper noun -- enforced by test, because a model would adopt
+one as canon and the Weave's scan would raise it as a planned name. The five
+templates retire, and with them `_reconstruct_outline`, which is what kills the
+whole outline-corruption class. Healing is subtractive and refuses when unsure:
+it removes one region, inserts one block, carries the body through as an opaque
+slice, and verifies every original line still appears IN ORDER before writing
+anything at all.
+
+**The change nobody would think of, and the one worth keeping.**
+`_template_vocabulary()` renders the templates and subtracts their words from
+planned-name candidates -- worth 53 planned names down to 23 on the writer's real
+outlines. Deleting the renderers would have silently undone R11.7 for every
+EXISTING project, because their files still contain a full template body while
+the scan would have stopped subtracting its words: the noise jumps straight back
+to 53 and nothing raises anything. The vocabulary is frozen to
+`backend/app/data/retired_outline_vocabulary.txt` and unioned in permanently, in
+the same commit as the deletion. Re-extracting it instead of freezing it lost a
+third of the list on the first attempt.
+
 **The Profile Extractor, for reference.** Reads the manuscript
 and proposes what each entry should say. Its ten decisions and the reasoning
 behind each are in `docs/roadmap.md`; the section is the record, not a plan.
@@ -28,8 +89,13 @@ bible. Any convenience that removes a click removes the whole protection --
 no accept-all, nothing pre-ticked, and a proposal for an entry that does not
 exist refuses rather than creating one.
 
-**Work the next unchecked task in `docs/weave-recovery-plan.md`.** Phase 0
-(documents and decisions) is complete and signed off; building is unblocked.
+**The Weave recovery is CLOSED as a work queue.** Every in-scope phase shipped
+in v2.0.0 and v2.0.1; phase 7 (scene identity) and phase 9 (the remaining AI
+passes) are deferred to v2.1.0, so `docs/weave-recovery-plan.md` is history now
+rather than a list to work from. Two items stay blocked on the same ruling and
+are not oversights: R1.5b and the R11.3 deletion both wait on `profiles/`
+ceasing to be a live home for unconverted projects, which is the writer's
+decision rather than a side effect of a task.
 
 Why: the Weave was built for weeks against a specification that was never in
 the repository (it sat in gitignored `local/updateplan.md`). Nothing was ever
@@ -426,7 +492,8 @@ its place without relying on memory or conversation history.
 > test caught ITSELF first: it searched for the raw path only and passed while
 > project.json held the old location, because JSON escapes backslashes.
 > Phases 7 and 9 are deferred to v2.1.0.
-> Branch health: 2045 backend tests, 1505 frontend tests, ruff and tsc clean.
+> Branch health AT THE v2.0.1 CUT: 2045 backend tests, 1505 frontend tests,
+> ruff and tsc clean. Current numbers are in the v2.0.2 section above.
 
 ### Release discipline (three rules the writer had to ask for repeatedly)
 
@@ -448,6 +515,20 @@ its place without relying on memory or conversation history.
    every installer ever built, so `Storythread*.msi` matches ten of them.
    `release.ps1` archives superseded ones on every run and the runbook names
    files exactly.
+4. **A stale smoke scenario manufactures false findings.** `tests/manual-smoke.md`
+   drifts like any other document but FAILS DIFFERENTLY: a human walking a
+   scenario that describes retired behaviour marks a CORRECT build as broken and
+   files a bug against working code. v2.0.2 nearly shipped with scenario 2 still
+   expecting the outline's `# OUTLINE TRACKING DATA` block. `/pre-release` Stage 4
+   caught it; check the smoke against the same commit list as the docs.
+5. **On Windows, fetch before you switch branches.** `git checkout main` followed
+   by `git pull` checks out the OLD main first, so every file added on the branch
+   is deleted and then recreated -- and a deletion that the indexer, a watcher or
+   an open editor blocks leaves git sitting at an interactive `(y/n)` prompt
+   holding `.git/index.lock`, with the working tree half-emptied. `git checkout -B
+   main origin/main` after a fetch moves the pointer straight to the merged commit
+   and touches no files at all. Same family as the problem `replace_atomic` exists
+   for.
 
 ### Spec discipline (applies to every feature, not just the Weave)
 
@@ -472,7 +553,7 @@ its place without relying on memory or conversation history.
 
 ## Project Status
 
-**Status: shipped.** The current release is **v1.1.0** -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+**Status: shipped.** The current release is **v2.0.2** (2026-08-21) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
 
 **Versioning is a three-tier rule, not semver.** Tier 3 (`v1.1.x`) = enhancements to existing features. Tier 2 (`v1.x.0`) = additions, like the Audiobook Converter. Tier 1 (`vX.0.0`) = major restructuring -- a change needing its own dashboard, or one that alters multiple existing features at once. Judge the tier by what the RELEASE delivers, not by the size of the programme it belongs to.
 
@@ -661,7 +742,9 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
 - `backend/tests/` -- pytest + pytest-asyncio. Uses FastAPI's `TestClient` for HTTP-level tests and `async with open_db(tmp_path)` for store-level tests. Test files named `test_*.py`. Current files:
   - `test_db_migrations.py` -- the app.db migration ladder, and the only thing that finds this class of bug: an UPGRADE. Every other test builds its database from scratch, where an ALTER smuggled into an already-applied migration looks perfectly correct -- which is how a real project came to die on `no such column`. Pins that a v2 or v3 database ends up byte-identical to a fresh one, and that each rung runs on the one before it
   - `test_explain_costs.py` -- does the help text tell the truth about MONEY: Python reads the TypeScript explanation registry, finds each named route's handler, and fails if one that calls `_resolve_model_and_key` is described as free (or the reverse). A "free" claim is a promise about the writer's credit, and the `universal` incident proved a frontend claim about the backend is only as good as something checking it
-  - `test_outline_frontmatter.py` -- outline YAML frontmatter parser
+  - `test_yaml_frontmatter.py` -- the YAML frontmatter parser. Renamed from `test_outline_frontmatter.py` in v2.0.2 because the module was never outline-specific: `progress.py` uses it to read a PROFILE's `name:` field, which is why the outline rebuild could not simply delete it
+  - `test_outline_worksheet.py` -- the worksheet and the healer. The healing tests are the ones that matter: the transform is a text edit rather than a parse-and-reconstruct, every original line survives in order, an injected post-condition failure leaves the file BYTE-IDENTICAL, malformed YAML is refused rather than guessed at, and healing twice produces the same bytes. Also the guard on the guard -- the no-line-lost check excused whatever the seed-comment regex matched, so an over-matching regex would have approved deleting the whole outline
+  - `test_outline_presets.py` -- the nineteen presets: no invented proper nouns (a model would adopt one as canon and the scan would raise it), no em dashes, ids and headings unique
   - `test_outline_sections.py` -- outline section parsing / reconstruction (Planner corruption regressions)
   - `test_progress_store.py` -- word counting, night-owl rollover, event recording
   - `test_progress_routes.py` -- `/api/progress/summary` and `/api/progress/daily` HTTP endpoints
@@ -743,6 +826,10 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_world_rules.py` -- the Unwoven corpus: every unlock and crosslink resolves, a crosslink always leaves its domain, every answer lands somewhere the app understands
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
+  - `src/App.css.test.ts` -- the design system's own contract: both themes declare the same `--st-*` tokens, the audiobook block overrides every one of them, an inset surface is never lighter than the panel holding it, and NO raw Tailwind palette class survives outside `features/audiobook/`. It reads App.css off disk with `readFileSync` rather than `import.meta.glob(..., "?raw")`, which returns an empty string for stylesheets and would have passed every assertion vacuously
+  - `src/components/editorSpacing.test.tsx` -- line spacing and paragraph spacing reach the editor: each named option maps to its documented multiplier, Multiple clamps at both ends and rejects garbage, and the values land on `.cm-content` and `.cm-line` rather than the editor root, where CodeMirror's own baseTheme overrides them
+  - `src/components/icons/icons.test.tsx` -- the app's own marks keep lucide's contract (24x24, `fill="none"`, `stroke="currentColor"`, `aria-hidden`), so they drop into the existing tinting call sites unchanged. Also pins that the favicon and the `NeedleThread` component draw the same paths -- two copies of one drawing, because a favicon is a static file and cannot import a component
+  - `src/features/outline/outline.test.tsx` -- the Outline toolbar: presets grey from the buffer and un-grey on undo, a greyed one scrolls rather than dead-ends, insertion appends in one transaction, and Fill from Book Details touches only blank lines
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
   - `src/components/sidebar/ActGroup.test.tsx` -- acts tree pieces (ActGroup + RowMenu)
   - `src/hooks/useProjectUiState.test.ts` -- per-book UI-state hook (load guard, debounce)
@@ -1019,6 +1106,7 @@ evidence of drift.
 |---|---|
 | `docs/weave-spec.md` | **Source of truth for the Weave** (v2.0.0): the world model, anchors, Ties, stop kinds, Weaving, context assembly, Model Roles |
 | `docs/audiobook-converter-spec.md` | Source of truth for the Audiobook Converter (shipped v1.1.0); tests cite it by section number |
+| `docs/outline-spec.md` | Source of truth for the Outline (shipped v2.0.2): the worksheet format and parse rules, the ruling that Book Details stays the master, the preset catalog, the greying rule, the healing contract, the gauge weights |
 | `docs/product-scope.md` | Core goals, writing philosophy, locked product rules, in/out-of-scope |
 | `docs/architecture.md` | Three-layer architecture, dual storage model, folder layout, current API surface |
 | `docs/features.md` | What the product does today: editor, Profile Builder, Smart Advisor, Writing Companion, series, exports, settings |
