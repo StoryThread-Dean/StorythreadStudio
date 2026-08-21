@@ -31,6 +31,7 @@
 import ReactMarkdown from "react-markdown";
 import { memo } from "react";
 import type React from "react";
+import { StitchRule } from "./icons";
 
 interface ChatMarkdownProps {
   content: string;
@@ -176,7 +177,9 @@ const MARKDOWN_COMPONENTS = {
   ul: ({ children }: { children?: React.ReactNode }) => <ul className="mb-2 ml-4 list-disc last:mb-0">{children}</ul>,
   ol: ({ children }: { children?: React.ReactNode }) => <ol className="mb-2 ml-4 list-decimal last:mb-0">{children}</ol>,
   li: ({ children }: { children?: React.ReactNode }) => <li className="mb-0.5">{children}</li>,
-  hr: () => <hr className="my-2 border-border" />,
+  // A rule in prose, as a line of running stitch. Same single element,
+  // same currentColor, and it says which app you are in.
+  hr: () => <StitchRule className="my-3" />,
   blockquote: ({ children }: { children?: React.ReactNode }) => (
     <blockquote className="my-1 border-l-2 border-accent-fill/50 pl-2 text-text-primary">
       {children}

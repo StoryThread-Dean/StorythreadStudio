@@ -1,52 +1,60 @@
-// components/Wordmark.tsx -- Storythread Studio Dashboard Wordmark
-// =================================================================
-// Renders the official Storythread Studio logo as a wide banner across
-// the top of the ProjectHome dashboard.
+// components/Wordmark.tsx -- the name, set rather than photographed
+// ===================================================================
+// This used to render app/public/storythreadstudio.png: dark indigo artwork
+// on near-white, which meant it needed an ivory plate underneath to stay
+// visible on a dark page. That plate was the app's last hardcoded colour, and
+// on a charcoal dashboard it read as a sheet of paper taped to the window.
 //
-// Asset: app/public/storythreadstudio.png
-//   Vite serves anything in app/public/ at the site root, so this loads as
-//   /storythreadstudio.png. Replace that file to swap the artwork; no code
-//   change needed.
+// So the mark is drawn and the name is set as text. Three things follow, and
+// they are why this is worth doing rather than commissioning a nicer picture:
 //
-// About the layout:
-//   The logo is a wide horizontal mark (cursive "Storythread" + Studio +
-//   quill glyph). To read as a banner rather than a boxed thumbnail it
-//   needs to stretch across the panel with minimal vertical padding -- the
-//   logo's natural aspect ratio carries the banner shape on its own.
+//   IT IS THEME-AWARE. Everything here is currentColor and role tokens, so
+//   the wordmark is dark on paper and light on charcoal with no second asset
+//   and no plate to hide the mismatch.
 //
-//   The artwork is dark indigo on near-white. To stay visible in dark mode
-//   (where the panel is dark navy) the banner sits on an ivory strip that
-//   spans the full width in both themes. In light mode the strip blends
-//   gracefully into the surrounding paper palette; in dark mode it stands
-//   out as a deliberate "frontispiece" band, the way a book cover detail
-//   sits on a printed dust jacket.
+//   IT IS SHARP AT ANY SIZE. A raster fixed at one width is either soft or
+//   oversized on somebody else's display.
+//
+//   IT SCALES WITH THE WRITER'S SETTINGS, because it is type. A raster
+//   ignores Interface size exactly the way 847 pixel font sizes used to.
+//
+// Set in the system serif rather than an embedded face: a webfont for one
+// word is a real download on every launch, and this app runs offline.
+
+import { NeedleThread } from "./icons";
 
 interface WordmarkProps {
-  /** Max width the logo image is allowed to render at. The banner strip
-   *  itself is full-width; this just caps the image so it doesn't bloom
-   *  oversized on very wide windows. */
-  maxImageWidth?: number;
-  /** Optional className applied to the outer banner. */
+  /** Smaller variant, for a title bar rather than a dashboard band. */
+  compact?: boolean;
   className?: string;
 }
 
-
-export function Wordmark({ maxImageWidth = 520, className = "" }: WordmarkProps) {
+export function Wordmark({ compact = false, className = "" }: WordmarkProps) {
   return (
-    // Full-width ivory strip with NO vertical padding -- the image's own
-    // aspect ratio sets the banner height. Any padding here just adds
-    // wasted landscape above and below the artwork.
     <div
-      className={`flex w-full items-center justify-center bg-paper ${className}`}
+      className={`flex items-center justify-center gap-3 ${compact ? "py-2" : "py-5"} ${className}`}
     >
-      <img
-        src="/storythreadstudio.png"
-        alt="Storythread Studio"
-        style={{ maxWidth: `${maxImageWidth}px`, width: "100%", height: "auto" }}
-        // Stop the browser's default image-drag behavior; clicking near the
-        // logo shouldn't kick off a drag-and-drop ghost image.
-        draggable={false}
+      <NeedleThread
+        size={compact ? 22 : 34}
+        className="shrink-0 text-accent"
+        strokeWidth={1.75}
       />
+      <span className="flex items-baseline gap-2">
+        <span
+          className={`font-serif tracking-tight text-text-primary ${
+            compact ? "text-lg" : "text-2xl"
+          }`}
+        >
+          Storythread
+        </span>
+        <span
+          className={`uppercase tracking-label text-text-muted ${
+            compact ? "text-micro" : "text-xs"
+          }`}
+        >
+          Studio
+        </span>
+      </span>
     </div>
   );
 }

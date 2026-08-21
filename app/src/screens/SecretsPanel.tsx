@@ -21,7 +21,11 @@
 // finite job.
 
 import { useMemo, useState } from "react";
-import { BookOpen, EyeOff } from "lucide-react";
+import { BookOpen } from "lucide-react";
+// A thimble rather than a struck-through eye: protection, not
+// prohibition. There is nothing wrong with a secret -- it simply is
+// not for saying out loud -- and a "hidden" icon reads as a warning.
+import { Thimble } from "../components/icons";
 
 import type { ImportanceLevel, Profile } from "../types/profile";
 import { IMPORTANCE_LABELS } from "../types/profile";
@@ -66,7 +70,7 @@ export function SecretsPanel({ profile, sections, onSetWeight }: SecretsPanelPro
       className="mb-6 rounded border border-weave-soft/60 bg-weave-soft/10 p-3"
     >
       <div className="mb-2 flex items-center gap-2">
-        <EyeOff size={13} className="text-weave" />
+        <Thimble size={13} className="text-weave" />
         <p className="flex-1 text-xs font-medium text-weave-strong">
           {secrets.length} thing{secrets.length === 1 ? "" : "s"} AI will never
           say out loud

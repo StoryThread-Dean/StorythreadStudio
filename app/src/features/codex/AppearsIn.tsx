@@ -20,7 +20,8 @@
 // is the thing they are asking for.
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader, MapPin } from "lucide-react";
+import { Loader } from "lucide-react";
+import { PinStitch } from "../../components/icons";
 
 import { placeThread, type ChapterAnchor } from "./api";
 
@@ -81,7 +82,7 @@ export function AppearsIn({
   return (
     <section data-testid="appears-in">
       <h4 className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
-        <MapPin size={12} className="text-accent" /> Where this appears
+        <PinStitch size={12} className="text-accent" /> Where this appears
       </h4>
 
       <p className="mt-0.5 max-w-xl text-mini text-faint">

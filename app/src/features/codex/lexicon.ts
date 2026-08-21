@@ -27,12 +27,13 @@ import {
   Drama, Eye, Feather, FileSearch, FileText, Fish, Flag, Flame, FlaskConical,
   Footprints, Gem, Ghost, GitMerge, Hammer, Heart, History, Key,
   Landmark, Languages, Leaf, Lightbulb, Link2, ListTree, Map, MapPin, Moon,
-  Mountain, Music, Network, NotebookPen, Package, Paintbrush, PawPrint,
+  Mountain, Music, NotebookPen, Package, Paintbrush, PawPrint,
   Pickaxe, Rocket, Scale, ScrollText, Shield, Ship, Skull, Snowflake, Sparkles,
-  Pin, Scissors, Spline, Spool, Star, Sun, Sword, Swords, Tent, Trees, Unlink,
+  Pin, Scissors, Spline, Star, Sun, Sword, Swords, Tent, Trees, Unlink,
   User, Users, Wand, Waves, Wheat, Zap,
-  type LucideIcon,
 } from "lucide-react";
+import { Loom, SpoolMark } from "../../components/icons";
+import type { AppIcon } from "../../components/icons";
 
 export type Tone = "emerald" | "amber" | "rose" | "blue" | "violet" | "zinc";
 
@@ -41,7 +42,7 @@ export interface LexEntry {
   term: string;
   /** What the code calls it. Never shown. */
   code: string;
-  Icon: LucideIcon;
+  Icon: AppIcon;
   tone: Tone;
   /** One line -- tooltips, legend rows, collapsed lists. */
   short: string;
@@ -52,7 +53,7 @@ export interface LexEntry {
 }
 
 function entry(
-  code: string, term: string, Icon: LucideIcon, tone: Tone,
+  code: string, term: string, Icon: AppIcon, tone: Tone,
   short: string, does: string, whatsThis: string,
 ): LexEntry {
   return { code, term, Icon, tone, short, does, whatsThis };
@@ -62,7 +63,7 @@ function entry(
 
 export const CONCEPTS: Record<string, LexEntry> = {
   weave: entry(
-    "codex", "the Weave", Network, "violet",
+    "codex", "the Weave", Loom, "violet",
     "Everything in your world, and how it all connects.",
     "It holds your characters, places, factions and ideas in one place, and knows how they relate to each other.",
     "The Weave is your world model. Every character, place, faction, object and idea is a Thread in it, and the connections between them are Ties. "
@@ -93,7 +94,7 @@ export const CONCEPTS: Record<string, LexEntry> = {
     + "you get the truth. Nothing else in the app works this way, and it is the whole reason the Weave exists.",
   ),
   weaving: entry(
-    "walkthrough", "Weaving", Spool, "violet",
+    "walkthrough", "Weaving", SpoolMark, "violet",
     "A guided session that helps you fill the Weave in.",
     "It reads what you have written, finds what is missing or contradictory, and walks you through it one decision at a time.",
     "Weaving is optional. It looks at your manuscript and your Weave together and offers you things to decide: a name that has no Thread, "
@@ -345,7 +346,7 @@ export const STOP_KINDS: Record<string, LexEntry> = {
 // object and fails if the backend can emit a name it does not contain,
 // because a cross-language contract nothing verifies is one that quietly
 // breaks.
-const ICONS: Record<string, LucideIcon> = {
+const ICONS: Record<string, AppIcon> = {
   // Shipped kinds and note documents
   User, Heart, MapPin, BookOpen, Flag, Sparkles, Landmark, Sun, PawPrint,
   Drama, Package, Lightbulb, CalendarClock, Languages,
@@ -390,7 +391,7 @@ const DEFAULT_ICON_NAMES: Record<string, string> = {
   concept: "Lightbulb", event: "CalendarClock", language: "Languages",
 };
 
-export function iconByName(name?: string): LucideIcon {
+export function iconByName(name?: string): AppIcon {
   return (name && ICONS[name]) || CircleDashed;
 }
 

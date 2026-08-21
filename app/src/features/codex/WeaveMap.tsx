@@ -47,6 +47,7 @@ import { MapEntryList } from "./MapEntryList";
 import { EntryTools } from "./EntryTools";
 import { Scrubber } from "./Scrubber";
 import { TieEditor } from "./TieEditor";
+import { WarpWeft } from "../../components/icons";
 
 /** How far the cursor may travel before a press stops being a click. */
 const DRAG_SLOP = 4;
@@ -717,6 +718,10 @@ function EmptyMap({ hasWorld, atLabel }: { hasWorld: boolean; atLabel: string })
   // nothing exists YET at this point in the story.
   return (
     <div className="flex h-[60vh] flex-col items-center justify-center gap-2 px-8 text-center">
+      {/* Cloth with nothing on it. An empty state with a mark in it reads as
+          a place that is waiting; an empty state with only text reads as a
+          screen that failed to load. */}
+      <WarpWeft size={40} className="mb-1 text-border-strong" strokeWidth={1.5} />
       <p className="text-sm text-text-primary">
         {hasWorld
           ? `Nothing in your world has appeared by ${atLabel}.`
