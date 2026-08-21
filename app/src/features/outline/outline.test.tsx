@@ -15,10 +15,25 @@ import { headingsIn, normaliseHeading, findHeadingOffset } from "./headings";
 import { appendPreset, fillWorksheet } from "./outlineEdits";
 import { OutlineGuide } from "./OutlineGuide";
 
-afterEach(cleanup);
+// Editors made by the helper below, torn down after each test. An EditorView
+// that is never destroyed keeps its measure loop alive past the end of the
+// test that made it, so its errors land on no test at all -- which is how
+// they end up as unhandled ones that fail the run without failing a case.
+const views: EditorView[] = [];
+
+afterEach(() => {
+  cleanup();
+  while (views.length) views.pop()!.destroy();
+});
 
 function editor(doc: string): EditorView {
-  return new EditorView({ state: EditorState.create({ doc }) });
+  // Mounted into the document rather than detached, because CodeMirror only
+  // measures what it can find in a tree.
+  const parent = document.createElement("div");
+  document.body.appendChild(parent);
+  const view = new EditorView({ state: EditorState.create({ doc }), parent });
+  views.push(view);
+  return view;
 }
 
 // ── Which sections the outline already has ───────────────────────────────
