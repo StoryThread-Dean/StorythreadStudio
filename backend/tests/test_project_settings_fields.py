@@ -66,7 +66,7 @@ def test_put_settings_partial_update_leaves_other_fields(client: TestClient, tmp
     assert on_disk["tone"] == "Wry"
 
 
-# ── target_word_count → outline frontmatter, not project.json ───────────────
+# ── the targets live in the outline worksheet, not project.json ─────────────
 
 def test_target_word_count_patches_outline_not_project_json(client: TestClient, tmp_path: Path):
     root = _create_project(client, tmp_path)
@@ -83,9 +83,17 @@ def test_target_word_count_patches_outline_not_project_json(client: TestClient, 
     on_disk = json.loads((Path(root) / "project.json").read_text(encoding="utf-8"))
     assert "target_word_count" not in on_disk
 
-    # The outline frontmatter carries the new value...
+    # The outline WORKSHEET carries the new value. This used to assert the
+    # YAML spelling `target_word_count: 120000`; the outline no longer has
+    # frontmatter, and the writer reads this line rather than a machine one.
     outline = (Path(root) / "notes" / "outline.md").read_text(encoding="utf-8")
-    assert "target_word_count: 120000" in outline
+    assert "Target Word Count: 120000" in outline
+
+    # And ONE number claims to be the target. The setter heals a legacy file
+    # before writing precisely so a worksheet line cannot end up sitting above
+    # a stale YAML block that still says something else.
+    assert "target_word_count:" not in outline
+    assert outline.count("120000") == 1
 
     # ...and GET /settings serves it as the computed field.
     res = client.get("/api/projects/settings", params={"root_path": root})

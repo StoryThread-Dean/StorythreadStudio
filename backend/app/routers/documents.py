@@ -24,7 +24,7 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.outline_frontmatter import parse_outline_frontmatter, strip_outline_frontmatter
+from app.yaml_frontmatter import parse_yaml_frontmatter, strip_yaml_frontmatter
 from app.progress_store import record_save_event, migrate_file_relpath
 from app.settings_store import get_rollover_hour
 from app.utils.structure_store import (
@@ -1581,7 +1581,7 @@ async def get_outline(folder_path: str):
 
     # Auto-heal before any parsing. The _FUSED_SEPARATOR_RE check in
     # _parse_outline_sections catches fusions in the body, but only AFTER
-    # strip_outline_frontmatter runs. If the fusion is at the YAML closing
+    # strip_yaml_frontmatter runs. If the fusion is at the YAML closing
     # position (e.g. "---## Setting in One Paragraph"), the frontmatter regex
     # mis-fires and absorbs section content into the YAML body, losing both
     # section visibility AND YAML field values. Healing the raw bytes here
@@ -1596,8 +1596,8 @@ async def get_outline(folder_path: str):
             pass  # Non-fatal: serve healed version in memory even if write fails
         raw = healed_raw
 
-    fm_data = parse_outline_frontmatter(raw)
-    body    = strip_outline_frontmatter(raw)
+    fm_data = parse_yaml_frontmatter(raw)
+    body    = strip_yaml_frontmatter(raw)
     preamble, sections = _parse_outline_sections(body)
 
     fm = OutlineFrontmatterData(

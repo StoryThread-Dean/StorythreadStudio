@@ -26,7 +26,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.outline_frontmatter import parse_outline_frontmatter
+from app.yaml_frontmatter import parse_yaml_frontmatter
 from app.outline_templates import TEMPLATE_DEFAULTS
 from app.progress_store import count_words, local_date_for, open_db
 from app.routers.documents import _title_from_file
@@ -180,7 +180,7 @@ def _read_outline(project_path: str) -> tuple[str | None, dict[str, Any]]:
             text = f.read()
     except OSError:
         return None, {}
-    return text, parse_outline_frontmatter(text)
+    return text, parse_yaml_frontmatter(text)
 
 
 def _profile_name_from_file(filepath: str) -> str | None:
@@ -200,7 +200,7 @@ def _profile_name_from_file(filepath: str) -> str | None:
 
     # Profiles use the same `---\n...\n---` frontmatter convention as the
     # outline. Reuse the outline parser for the extraction.
-    fm = parse_outline_frontmatter(text)
+    fm = parse_yaml_frontmatter(text)
     name = fm.get("name")
     return str(name).strip() if isinstance(name, str) and name.strip() else None
 

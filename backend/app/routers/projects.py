@@ -21,7 +21,9 @@ import re
 from fastapi import APIRouter, HTTPException
 from app.recent_projects import load_recent, track_project, remove_project
 from app.outline_templates import render_outline, OutlineMetadata
-from app.outline_frontmatter import parse_outline_frontmatter, set_target_word_count
+from app.outline_worksheet import (
+    read_project_targets, set_target_chapter_count, set_target_word_count,
+)
 from app.settings_store import get_vault_root
 from pydantic import BaseModel
 
@@ -634,6 +636,9 @@ class UpdateProjectSettingsRequest(BaseModel):
     # frontmatter is the single source of truth (the Progress gauge reads
     # it from there). When provided, we patch notes/outline.md instead.
     target_word_count:    int | None = None
+    # How many chapters the writer is planning. Stored in the outline
+    # worksheet beside the word target, not in project.json.
+    target_chapter_count: int | None = None
 
 
 @router.get("/recent", response_model=list[RecentProjectItem])
@@ -650,23 +655,20 @@ async def remove_recent_project(project_id: str):
     return {"status": "ok"}
 
 
-def _read_outline_target(root_path: str) -> int | None:
+def _read_outline_targets(root_path: str) -> tuple[int | None, int | None]:
     """
-    Read target_word_count from notes/outline.md frontmatter, or None.
+    The word and chapter targets from notes/outline.md, or (None, None).
 
-    The Book Details panel shows the project word target alongside the
-    project.json fields, but the target actually lives in the outline (the
-    Progress gauge's source of truth). This helper lets GET /settings serve
-    everything from one request.
+    Both live in the outline worksheet rather than project.json, because the
+    Writing Progress gauge reads them and two masters for one number always
+    drift. Book Details edits them through the setters for the same reason.
+
+    read_project_targets falls back to the OLD yaml frontmatter when a
+    project has not been converted yet, so this keeps answering correctly
+    for a book the writer has not opened since upgrading.
     """
-    outline_path = os.path.join(root_path, "notes", "outline.md")
-    try:
-        with open(outline_path, "r", encoding="utf-8") as f:
-            frontmatter = parse_outline_frontmatter(f.read())
-    except OSError:
-        return None
-    value = frontmatter.get("target_word_count")
-    return value if isinstance(value, int) else None
+    targets = read_project_targets(root_path)
+    return targets.word_count, targets.chapter_count
 
 
 @router.get("/settings")
@@ -676,7 +678,9 @@ async def get_project_settings(root_path: str):
     data["root_path"] = root_path
     # Computed field: the word target from the outline frontmatter, so the
     # Book Details form has a single read surface (see _read_outline_target).
-    data["target_word_count"] = _read_outline_target(root_path)
+    word_target, chapter_target = _read_outline_targets(root_path)
+    data["target_word_count"] = word_target
+    data["target_chapter_count"] = chapter_target
     return data
 
 
@@ -946,11 +950,15 @@ async def update_project_settings(request: UpdateProjectSettingsRequest):
     # outline.md is missing the helper logs a warning and we carry on.
     if request.target_word_count is not None:
         set_target_word_count(root_path, request.target_word_count)
+    if request.target_chapter_count is not None:
+        set_target_chapter_count(root_path, request.target_chapter_count)
 
     data["root_path"] = root_path
     # Echo the effective target back so the Book Details form can show it
     # without a second request.
-    data["target_word_count"] = _read_outline_target(root_path)
+    word_target, chapter_target = _read_outline_targets(root_path)
+    data["target_word_count"] = word_target
+    data["target_chapter_count"] = chapter_target
     return data
 
 
