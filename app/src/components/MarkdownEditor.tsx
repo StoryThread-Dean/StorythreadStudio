@@ -42,22 +42,38 @@ const fontCompartment = new Compartment();
 // here, and var(--st-...) is a plain CSS value.
 function buildFontTheme(fontFamily: string, lineHeight: number) {
   return EditorView.theme({
-    // The root editor element.
-    //
-    // lineHeight comes from the writer's Line spacing setting rather than
-    // being fixed here. It arrives already resolved -- Single / 1.5 lines /
-    // Double / a custom multiple have all been turned into one number by
-    // useLineSpacing, so the arithmetic that decides what "1.5 lines" means
-    // lives in exactly one place and the editor cannot disagree with the
-    // figure the Settings screen printed next to the option.
+    // The root editor element. font-size inherits all the way down from here.
     "&": {
       fontSize: "16px",
-      lineHeight: String(lineHeight),
     },
     // The typing area -- minimal styling here so CodeMirror's coordinate
     // system stays accurate. Centering is handled by the wrapper div in JSX.
+    //
+    // LINE HEIGHT MUST BE SET HERE, NOT ON "&", AND THAT IS NOT A STYLE
+    // PREFERENCE. CodeMirror's own baseTheme contains:
+    //
+    //     ".cm-scroller": { lineHeight: 1.4, ... }
+    //
+    // .cm-scroller sits between .cm-editor and the text, and an explicit
+    // line-height there BLOCKS inheritance from the root. So a line-height
+    // declared on "&" is never seen by a single line of prose.
+    //
+    // This editor was written with `"&": { lineHeight: "1.8" }` and rendered
+    // at 1.4 for its entire life. Nothing failed and nothing looked broken --
+    // 1.4 is a perfectly plausible number -- so the dead declaration sat there
+    // being read as the answer to "what is the line spacing?". It surfaced
+    // only when the writer got a control that visibly did nothing: "the Line
+    // spacing doesn't actually work ... currently 1.5 line spacing yet
+    // nothing is showing."
+    //
+    // Setting it on .cm-content puts it INSIDE .cm-scroller, on the element
+    // that actually holds the .cm-line children, so it wins and inherits.
+    // useLineSpacing has already resolved Single / 1.5 lines / Double / a
+    // custom multiple into one number, so the arithmetic lives in one place
+    // and the editor cannot disagree with the figure Settings printed.
     ".cm-content": {
       fontFamily,
+      lineHeight: String(lineHeight),
       caretColor: "var(--st-accent)",
       padding: "2rem 1rem",  // Small padding only -- wrapper handles centering
     },

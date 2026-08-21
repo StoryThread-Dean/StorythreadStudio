@@ -34,7 +34,7 @@
  *
  * ELEVATION: A RAISED SURFACE MOVES AWAY FROM THE PAGE, AND THE DIRECTION
  * DEPENDS ON THE THEME. In dark mode surfaces climb toward light -- page
- * #1E1E1E, card #23232A, dialog #2A2A31, hover #33333A. In light mode they
+ * #1E1E1E, card #23232D, dialog #2A2A34, hover #33333D. In light mode they
  * climb toward white -- #F5F2EC, #FBF9F4, #FFFFFF -- while HOVER goes the
  * other way and tints down (#EDE9E0), because on paper a darker patch is
  * what reads as "the pointer is here".
@@ -46,7 +46,7 @@
  * THE DARK SURFACES ARE COOL AND THE PAGE BEHIND THEM IS NEUTRAL. That is
  * deliberate: a raised panel reads as lifted partly because it is lighter and
  * partly because it is a slightly different temperature from the window it
- * sits on. The blue is 7 points on the B channel, held CONSTANT up the ramp
+ * sits on. The blue is 10 points on the B channel, held CONSTANT up the ramp
  * so a dialog opening over a card belongs to the same family rather than
  * looking grey against it. The borders carry the same cast for the same
  * reason -- a neutral line around a cool panel reads brown.
@@ -65,10 +65,15 @@
  *   entirely on its border, so a quiet border leaves it with nothing.
  *
  *   Then: "L1 needs to be slightly cooler with a cool grey to it", naming
- *   #232330 with #23232A as a backup. #232330 (13 points of blue) overshot --
- *   "the cool grey tone is the correct move, but it went over the mark just a
- *   bit" -- so the backup is what ships. #232330 is parked in
- *   --st-bg-panel-alt, one swap away in the other direction.
+ *   #232330 with #23232A as a backup. Both were tried on the real screen and
+ *   both missed: #232330 (13 points of blue) "went over the mark just a bit",
+ *   #23232A (7 points) "doesn't look right now". Settled at 10 -- "lets do ~10
+ *   as the happy medium". #23232A is parked in --st-bg-panel-alt.
+ *
+ *   Worth noting for anyone retuning this: the two rejected values were both
+ *   picked by eye off a screenshot, and the one that worked was arrived at by
+ *   splitting them. The channel offset, not the hex, is the thing to reason
+ *   about.
  *
  * The rule all this replaced said elevation was carried by line and shadow and
  * NEVER by lightness. It is written down here because it was wrong rather
@@ -93,10 +98,10 @@
 
   /* Surfaces */
   --st-bg-primary:   #1E1E1E;   /* the window itself        */
-  --st-bg-panel:     #23232A;   /* L1 -- cards, sidebars    */
-  --st-bg-surface:   #2A2A31;   /* L2 -- dialogs, inputs    */
-  --st-bg-raised:    #33333A;   /* L3 -- hover, menus       */
-  --st-bg-panel-alt: #232330;   /* unused: the bolder cool L1 */
+  --st-bg-panel:     #23232D;   /* L1 -- cards, sidebars    */
+  --st-bg-surface:   #2A2A34;   /* L2 -- dialogs, inputs    */
+  --st-bg-raised:    #33333D;   /* L3 -- hover, menus       */
+  --st-bg-panel-alt: #23232A;   /* unused: the cooler-by-7 L1 */
   --st-scrim:        rgb(0 0 0 / 0.66);
   --st-paper:        #FBF8F1;   /* the wordmark plate, both themes */
   --st-brand-deep:   #070724;   /* Black Russian: brand fills only */
@@ -111,8 +116,8 @@
 
   /* Lines -- opaque, because border-border/60 is a real call site and
      alpha-on-alpha would compound to something invisible. */
-  --st-border:        #3F3F46;
-  --st-border-strong: #5A5A61;
+  --st-border:        #3F3F49;
+  --st-border-strong: #5A5A64;
   --st-focus:         #90CAF9;
 
   /* Accent -- links, primary action, focus, "you are here". */

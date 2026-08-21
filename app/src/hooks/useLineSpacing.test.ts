@@ -156,3 +156,66 @@ describe("the Settings screen actually offers it", () => {
     expect(SOURCE).toContain('spacing === "multiple" &&');
   });
 });
+
+describe("the editor puts line-height where CodeMirror will honour it", () => {
+  // THIS IS THE TEST THAT WOULD HAVE CAUGHT THE ORIGINAL BUG.
+  //
+  // CodeMirror's baseTheme contains `.cm-scroller { line-height: 1.4 }`.
+  // .cm-scroller sits between .cm-editor and the text, and an explicit
+  // line-height there blocks inheritance from the root -- so a line-height
+  // declared on the "&" selector is never seen by a single line of prose.
+  //
+  // MarkdownEditor was written that way and rendered at 1.4 for its whole
+  // life while the source said 1.8. Nothing errored, nothing looked broken,
+  // and the dead declaration read as the answer to "what is the spacing?".
+  // It only surfaced when the writer got a control that visibly did nothing:
+  // "the Line spacing doesn't actually work ... currently 1.5 line spacing
+  // yet nothing is showing."
+  //
+  // A rendering test cannot catch this -- jsdom does not apply CodeMirror's
+  // baseTheme or do layout. So the selector is pinned as source.
+  const SOURCE = Object.values(
+    import.meta.glob("../components/MarkdownEditor.tsx", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>,
+  )[0];
+
+  /** The `"&": { ... }` block of buildFontTheme. */
+  function rootBlock(): string {
+    const at = SOURCE.indexOf('"&": {');
+    expect(at, 'no "&" block found in buildFontTheme').toBeGreaterThan(-1);
+    return SOURCE.slice(at, SOURCE.indexOf("}", at));
+  }
+
+  /** The `".cm-content": { ... }` block. */
+  function contentBlock(): string {
+    const at = SOURCE.indexOf('".cm-content": {');
+    expect(at, "no .cm-content block found").toBeGreaterThan(-1);
+    return SOURCE.slice(at, SOURCE.indexOf("}", at));
+  }
+
+  it("read the editor source at all", () => {
+    expect(SOURCE?.length ?? 0).toBeGreaterThan(1000);
+  });
+
+  it("sets lineHeight on .cm-content, where it survives .cm-scroller", () => {
+    expect(contentBlock()).toContain("lineHeight");
+  });
+
+  it("does NOT set lineHeight on the root selector, where it dies silently", () => {
+    expect(
+      rootBlock(),
+      'a lineHeight on "&" is overridden by CodeMirror\'s own ' +
+        '.cm-scroller { line-height: 1.4 } and has no effect on the text',
+    ).not.toContain("lineHeight");
+  });
+
+  it("takes the value as an argument rather than hardcoding one", () => {
+    expect(SOURCE).toContain("buildFontTheme(fontFamily: string, lineHeight: number)");
+    // And re-applies it when the setting changes, or the writer would have to
+    // reopen the chapter to see their own choice.
+    expect(SOURCE).toContain("}, [font, lineHeight]);");
+  });
+});
