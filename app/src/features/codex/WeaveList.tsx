@@ -150,7 +150,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
 
       {/* ── The same controls as the map, in forms you can reach by keyboard ── */}
       <div className="flex flex-wrap items-end gap-3 rounded border border-border bg-bg-primary px-3 py-2">
-        <label className="flex flex-col gap-1 text-[11px] text-text-muted">
+        <label className="flex flex-col gap-1 text-mini text-text-muted">
           Point in the story
           {/* A select rather than the map's slider: a range input is a poor
               keyboard control, and this view exists to be reachable. Same
@@ -167,7 +167,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-[11px] text-text-muted">
+        <label className="flex flex-col gap-1 text-mini text-text-muted">
           Kind
           <select
             value={typeFilter}
@@ -181,7 +181,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
           </select>
         </label>
 
-        <label className="flex min-w-[10rem] flex-1 flex-col gap-1 text-[11px] text-text-muted">
+        <label className="flex min-w-[10rem] flex-1 flex-col gap-1 text-mini text-text-muted">
           Find
           <span className="relative">
             <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-faint" />
@@ -198,7 +198,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
           type="button"
           onClick={() => setHideSpoilers(v => !v)}
           aria-pressed={hideSpoilers}
-          className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[11px] text-text-muted hover:border-violet-600 hover:text-text-primary"
+          className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-mini text-text-muted hover:border-violet-600 hover:text-text-primary"
         >
           {hideSpoilers ? <EyeOff size={11} /> : <Eye size={11} />}
           {hideSpoilers ? "Hiding what the reader does not know yet" : "Showing everything"}
@@ -207,7 +207,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
         {loading && <Loader size={12} className="animate-spin text-faint" />}
       </div>
 
-      <p className="text-[11px] text-faint">
+      <p className="text-mini text-faint">
         Your world as of <span className="text-violet-300">{atLabel}</span>
         {" -- "}{rows.length} {rows.length === 1 ? "entry" : "entries"}.
       </p>
@@ -222,7 +222,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
             Every entry in your world as of {atLabel}, with how many connections each has.
           </caption>
           <thead>
-            <tr className="border-b border-border text-[11px] text-text-muted">
+            <tr className="border-b border-border text-mini text-text-muted">
               <SortHeader label="Name" active={sortKey === "name"} ascending={ascending}
                           onClick={() => toggleSort("name")} />
               <SortHeader label="Kind" active={sortKey === "type"} ascending={ascending}
@@ -275,7 +275,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
       )}
 
       {graph && (graph.hidden_nodes > 0 || graph.hidden_edges > 0) && (
-        <p data-testid="weave-list-hidden" className="text-[11px] text-faint">
+        <p data-testid="weave-list-hidden" className="text-mini text-faint">
           Not shown: {graph.hidden_nodes} {graph.hidden_nodes === 1 ? "entry" : "entries"}
           {graph.hidden_edges > 0 && ` and ${graph.hidden_edges} connection${graph.hidden_edges === 1 ? "" : "s"}`}
           {" "}not introduced yet, or kept from AI.
@@ -368,7 +368,7 @@ function TieList({ graph, entityId, registry }: {
 
   if (ties.length === 0) {
     return (
-      <p className="mt-1 text-[11px] text-faint">
+      <p className="mt-1 text-mini text-faint">
         Nothing connects to this yet.
       </p>
     );
@@ -381,7 +381,7 @@ function TieList({ graph, entityId, registry }: {
         const otherId = outgoing ? tie.dst_id : tie.src_id;
         const { phrase, prefix } = tiePhrase(tie.rel, outgoing, registry);
         return (
-          <li key={`${tie.rel}-${otherId}-${i}`} className="text-[11px] text-text-muted">
+          <li key={`${tie.rel}-${otherId}-${i}`} className="text-mini text-text-muted">
             {prefix}
             <span className="text-violet-300">{phrase}</span>
             {" "}

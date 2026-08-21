@@ -116,7 +116,7 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
             type="button"
             onClick={() => setView("map")}
             data-testid="weave-back-to-map"
-            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:text-text-primary"
           >
             <Network size={11} /> Back to the map
           </button>
@@ -126,7 +126,7 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
           <button
             type="button"
             onClick={() => setShowReport(v => !v)}
-            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-mini text-text-muted hover:text-text-primary"
           >
             <FileText size={11} />
             {showReport ? "Hide the conversion" : "What did the conversion do?"}
@@ -164,7 +164,7 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
       ) : (
         <>
           {health?.index_dirty && (
-            <p className="flex flex-wrap items-center gap-2 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-1.5 text-[11px] text-amber-200/90">
+            <p className="flex flex-wrap items-center gap-2 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-1.5 text-mini text-amber-200/90">
               <AlertTriangle size={11} className="text-amber-400/80" />
               Your files have changed since the Weave last read them, so it is
               re-reading as you look.
@@ -207,7 +207,7 @@ function Broken({ health }: { health: WeaveHealth }) {
         It has been left exactly as it is -- nothing was changed or replaced.
         Fix the line named below and reopen.
       </p>
-      <pre className="mt-2 overflow-x-auto rounded bg-black/40 px-2 py-1 text-[11px] text-rose-200">
+      <pre className="mt-2 overflow-x-auto rounded bg-black/40 px-2 py-1 text-mini text-rose-200">
         {health.registry_error}
       </pre>
     </div>

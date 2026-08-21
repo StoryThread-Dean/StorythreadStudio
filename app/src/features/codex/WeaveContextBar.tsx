@@ -197,7 +197,7 @@ export function WeaveContextBar({
     <div className="border-t border-border px-3 py-1.5">
       <div className="flex items-center gap-2">
         <Globe size={12} className={off ? "text-faint" : "text-violet-300"} />
-        <span className="min-w-0 flex-1 truncate text-[11px] text-text-muted">
+        <span className="min-w-0 flex-1 truncate text-mini text-text-muted">
           {off ? (
             "World context off -- only what you attach is sent."
           ) : busy && !brief ? (
@@ -228,7 +228,7 @@ export function WeaveContextBar({
             otherwise the reasonable read. It goes to Context now, and this
             line says which passes read the world and which do not. */}
         {!off && threads.length > 0 && (
-          <span className="basis-full text-[10px] text-faint"
+          <span className="basis-full text-micro text-faint"
                 data-testid="weave-context-scope">
             Sent with chat, Draft and Enhance -- and with Smart Advisor's
             Context pass. Readability and Structure do not read your world, so
@@ -251,7 +251,7 @@ export function WeaveContextBar({
                 .then(g => setEdges(g.edges ?? []))
                 .catch(() => setEdges([]));
             }}
-            className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary"
+            className="shrink-0 rounded border border-border px-1.5 py-0.5 text-micro text-text-muted hover:text-text-primary"
           >
             Inspect
           </button>
@@ -263,7 +263,7 @@ export function WeaveContextBar({
           onClick={() => setPrefs({ off: !off })}
           aria-pressed={!off}
           aria-label="Send world context"
-          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+          className={`shrink-0 rounded px-1.5 py-0.5 text-micro ${
             off ? "border border-border text-faint hover:text-text-primary"
                 : "border border-violet-700 bg-violet-950/40 text-violet-200"
           }`}
@@ -273,7 +273,7 @@ export function WeaveContextBar({
       </div>
 
       {error && (
-        <p role="alert" className="mt-1 text-[10px] text-rose-300">{error}</p>
+        <p role="alert" className="mt-1 text-micro text-rose-300">{error}</p>
       )}
 
       {open && (
@@ -307,7 +307,7 @@ export function WeaveContextBar({
                   chapter four deliberately does not know chapter nineteen,
                   and a writer who does not know that would read a short list
                   as the app having lost half their world. */}
-              <p className="mb-2 text-[11px] text-text-muted">
+              <p className="mb-2 text-mini text-text-muted">
                 Assembled as of{" "}
                 <span className="text-text-primary">
                   {brief?.as_of ? "where you are writing" : "the end of the book"}
@@ -318,7 +318,7 @@ export function WeaveContextBar({
 
               {brief?.refused && (
                 <p role="alert"
-                   className="mb-2 rounded border border-amber-700/60 bg-amber-950/20 px-2 py-1.5 text-[11px] text-amber-200/90">
+                   className="mb-2 rounded border border-amber-700/60 bg-amber-950/20 px-2 py-1.5 text-mini text-amber-200/90">
                   {brief.refusal} Nothing from your world is being sent this
                   turn -- half a profile reads as a whole one, so it is
                   refused rather than cut short.
@@ -326,7 +326,7 @@ export function WeaveContextBar({
               )}
 
               {busy && (
-                <p className="mb-2 flex items-center gap-1.5 text-[11px] text-text-muted">
+                <p className="mb-2 flex items-center gap-1.5 text-mini text-text-muted">
                   <Loader size={11} className="animate-spin" /> Working it out...
                 </p>
               )}
@@ -343,7 +343,7 @@ export function WeaveContextBar({
               )}
 
               {threads.length === 0 && !busy ? (
-                <p className="mb-2 text-[11px] text-faint">
+                <p className="mb-2 text-mini text-faint">
                   Nothing from your world is being sent. That is ordinary early
                   on: Threads arrive here once your writing names them, or once
                   they connect to something it names.
@@ -365,12 +365,12 @@ export function WeaveContextBar({
                           {/* WHY it is here. This is the line that makes the
                               panel worth opening -- a list of names answers
                               "what" and leaves "why on earth" unanswered. */}
-                          <span className="block text-[10px] text-faint">
+                          <span className="block text-micro text-faint">
                             {piece.reason}
                             {piece.pinned ? " -- you attached it, so it is never dropped" : ""}
                           </span>
                         </span>
-                        <span className="shrink-0 text-[10px] text-faint">
+                        <span className="shrink-0 text-micro text-faint">
                           ~{piece.tokens.toLocaleString()}
                         </span>
                         <button
@@ -391,7 +391,7 @@ export function WeaveContextBar({
               {/* ── Put one back ───────────────────────────────────────── */}
               {excludedIds.length > 0 && (
                 <div className="mb-2 rounded border border-border p-2">
-                  <p className="mb-1 text-[10px] text-text-muted">
+                  <p className="mb-1 text-micro text-text-muted">
                     Removed by you, and staying removed until you say otherwise:
                   </p>
                   <div className="flex flex-wrap gap-1">
@@ -401,7 +401,7 @@ export function WeaveContextBar({
                         onClick={() => setPrefs({
                           excludedIds: excludedIds.filter(x => x !== id),
                         })}
-                        className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary"
+                        className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-micro text-text-muted hover:text-text-primary"
                       >
                         <Undo2 size={9} /> {id}
                       </button>
@@ -413,7 +413,7 @@ export function WeaveContextBar({
               {/* ── A whole category at a time ─────────────────────────── */}
               {kinds.length > 0 && (
                 <div className="mb-2">
-                  <p className="mb-1 text-[10px] text-text-muted">
+                  <p className="mb-1 text-micro text-text-muted">
                     Or leave out a whole kind of thing:
                   </p>
                   <div className="flex flex-wrap gap-1">
@@ -429,7 +429,7 @@ export function WeaveContextBar({
                               : [...excludedTypes, kind],
                           })}
                           aria-pressed={dropped}
-                          className={`rounded border px-1.5 py-0.5 text-[10px] ${
+                          className={`rounded border px-1.5 py-0.5 text-micro ${
                             dropped
                               ? "border-border text-faint line-through"
                               : "border-violet-800 bg-violet-950/30 text-violet-200"
@@ -446,7 +446,7 @@ export function WeaveContextBar({
               {/* ── What was dropped to fit ────────────────────────────── */}
               {brief && brief.omitted.length > 0 && (
                 <details className="mb-2">
-                  <summary className="cursor-pointer text-[11px] text-violet-300 hover:text-violet-200">
+                  <summary className="cursor-pointer text-mini text-violet-300 hover:text-violet-200">
                     {brief.omitted.length} left out to fit
                   </summary>
                   {/* Reported rather than silently dropped: a brief that
@@ -454,7 +454,7 @@ export function WeaveContextBar({
                       never assembled, because the writer would trust it. */}
                   <ul className="mt-1 space-y-0.5">
                     {brief.omitted.map(o => (
-                      <li key={o.entity_id} className="text-[10px] text-faint">
+                      <li key={o.entity_id} className="text-micro text-faint">
                         {o.name} -- {o.reason}
                       </li>
                     ))}
@@ -464,7 +464,7 @@ export function WeaveContextBar({
 
               {(brief?.withheld_spoilers || brief?.withheld_by_scope
                 || brief?.withheld_not_present) ? (
-                <p className="mb-2 text-[10px] text-faint"
+                <p className="mb-2 text-micro text-faint"
                    data-testid="brief-withheld">
                   {brief.withheld_spoilers > 0 && (
                     <>{brief.withheld_spoilers} held back as not yet revealed
@@ -488,13 +488,13 @@ export function WeaveContextBar({
               {/* ── Where the window went ──────────────────────────────── */}
               {brief && (
                 <details className="mb-2">
-                  <summary className="cursor-pointer text-[11px] text-violet-300 hover:text-violet-200">
+                  <summary className="cursor-pointer text-mini text-violet-300 hover:text-violet-200">
                     Where the room went
                   </summary>
                   <ul className="mt-1 space-y-0.5">
                     {Object.entries(brief.budget).map(([name, value]) => (
                       <li key={name}
-                          className="flex justify-between text-[10px] text-faint">
+                          className="flex justify-between text-micro text-faint">
                         <span>{name.replace(/_/g, " ")}</span>
                         <span>{Number(value).toLocaleString()}</span>
                       </li>
@@ -506,16 +506,16 @@ export function WeaveContextBar({
               {/* ── The words themselves ───────────────────────────────── */}
               {brief?.brief && (
                 <details className="mb-2">
-                  <summary className="cursor-pointer text-[11px] text-violet-300 hover:text-violet-200">
+                  <summary className="cursor-pointer text-mini text-violet-300 hover:text-violet-200">
                     Read it exactly as the AI will
                   </summary>
-                  <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-border bg-bg-surface px-2 py-1 text-[10px] text-text-muted">
+                  <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-border bg-bg-surface px-2 py-1 text-micro text-text-muted">
                     {brief.brief}
                   </pre>
                 </details>
               )}
 
-              <p className="mb-2 text-[10px] text-faint">
+              <p className="mb-2 text-micro text-faint">
                 Working this out sends nothing anywhere -- it is arithmetic on
                 files already on your machine. It travels only when you ask
                 the AI for something, and only then.
@@ -527,7 +527,7 @@ export function WeaveContextBar({
                   className="inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
                 >
                   <span>Looks right</span>
-                  <span className="text-[10px] font-normal text-faint">
+                  <span className="text-micro font-normal text-faint">
                     back to writing, with this ready to send
                   </span>
                 </button>
@@ -543,7 +543,7 @@ export function WeaveContextBar({
                   className="inline-flex flex-col items-start rounded border border-border px-2.5 py-1 text-left text-xs text-text-muted hover:text-text-primary"
                 >
                   <span>Turn world context off</span>
-                  <span className="text-[10px] text-faint">
+                  <span className="text-micro text-faint">
                     only what you attach by hand gets sent
                   </span>
                 </button>
@@ -551,7 +551,7 @@ export function WeaveContextBar({
 
               {prefs.off === false && excludedIds.length === 0
                && excludedTypes.length === 0 && (
-                <p className="mt-2 flex items-center gap-1 text-[10px] text-faint">
+                <p className="mt-2 flex items-center gap-1 text-micro text-faint">
                   <Check size={9} /> Nothing removed -- this is everything the
                   Weave thinks is worth saying here.
                 </p>

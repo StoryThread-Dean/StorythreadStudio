@@ -243,15 +243,15 @@ export function AudiobookSettingsDialog({
 
         <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800 px-5 py-3">
           {error && (
-            <p className="min-w-0 flex-1 truncate text-[11px] text-rose-300" title={error}>
+            <p className="min-w-0 flex-1 truncate text-mini text-rose-300" title={error}>
               {error}
             </p>
           )}
           {!error && saved && !dirty && (
-            <p className="flex-1 text-[11px] text-emerald-300">Settings saved.</p>
+            <p className="flex-1 text-mini text-emerald-300">Settings saved.</p>
           )}
           {!error && !saved && dirty && (
-            <p className="flex-1 text-[11px] text-amber-300">Unsaved changes.</p>
+            <p className="flex-1 text-mini text-amber-300">Unsaved changes.</p>
           )}
           {!error && !saved && !dirty && <span className="flex-1" />}
           <button

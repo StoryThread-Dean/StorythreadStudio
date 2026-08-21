@@ -110,12 +110,12 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
         <h4 className="text-xs font-semibold text-text-primary">
           Which model reads your book
         </h4>
-        <span className="text-[11px] text-text-muted" data-testid="extractor-current-model">
+        <span className="text-mini text-text-muted" data-testid="extractor-current-model">
           {current || "none chosen"}
           {currentModel ? ` (holds ${tokens(currentModel.context_length)})` : ""}
         </span>
         {currentModel?.supports_reasoning && (
-          <span className="rounded border border-amber-700/60 px-1.5 py-0.5 text-[10px] text-amber-200"
+          <span className="rounded border border-amber-700/60 px-1.5 py-0.5 text-micro text-amber-200"
                 title="Reasoning models spend part of their reply budget thinking before they write, and can return an empty answer.">
             reasoning
           </span>
@@ -124,20 +124,20 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
           type="button"
           onClick={() => setOpen(v => !v)}
           data-testid="extractor-change-model"
-          className="ml-auto rounded border border-border px-2 py-0.5 text-[11px] text-text-muted hover:text-text-primary"
+          className="ml-auto rounded border border-border px-2 py-0.5 text-mini text-text-muted hover:text-text-primary"
         >
           {open ? "Close" : "Change"}
         </button>
       </div>
 
-      <p className="mt-1 text-[10px] text-faint">
+      <p className="mt-1 text-micro text-faint">
         This sets Long-context analysis for the whole app, the same as Settings
         does. Listed biggest first, because on this screen the limit is the
         thing that decides whether it works.
       </p>
 
       {tooSmall && (
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-rose-300"
+        <p className="mt-1 flex items-center gap-1.5 text-mini text-rose-300"
            data-testid="extractor-model-too-small">
           <AlertTriangle size={11} />
           This one holds {tokens(currentModel!.context_length)} and the run needs
@@ -154,20 +154,20 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
               onChange={event => setQuery(event.target.value)}
               placeholder="Search all models, or pick from the ones that fit"
               aria-label="Search models"
-              className="w-full bg-transparent text-[11px] text-text-primary outline-none"
+              className="w-full bg-transparent text-mini text-text-primary outline-none"
             />
           </label>
 
           {loading && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-text-muted">
+            <p className="mt-1.5 flex items-center gap-1.5 text-mini text-text-muted">
               <Loader size={11} className="animate-spin" /> Reading the model list...
             </p>
           )}
-          {error && <p className="mt-1.5 text-[11px] text-rose-300">{error}</p>}
+          {error && <p className="mt-1.5 text-mini text-rose-300">{error}</p>}
 
           {!loading && !error && (
             <>
-              <p className="mt-1.5 text-[10px] text-faint">
+              <p className="mt-1.5 text-micro text-faint">
                 {query
                   ? `${shown.length} matching`
                   : `${shown.length} that can hold this run`}
@@ -183,7 +183,7 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
                         type="button"
                         onClick={() => void pick(model.id)}
                         disabled={saving !== ""}
-                        className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11px] hover:bg-white/5 disabled:opacity-40"
+                        className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-mini hover:bg-white/5 disabled:opacity-40"
                       >
                         {model.id === current
                           ? <Check size={11} className="shrink-0 text-emerald-400" />
@@ -201,7 +201,7 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
                             : `${money(model.cost_input_per_million)} / ${money(model.cost_output_per_million)}`}
                         </span>
                         {model.supports_reasoning && (
-                          <span className="shrink-0 text-[9px] text-amber-300/80">
+                          <span className="shrink-0 text-2xs text-amber-300/80">
                             reasoning
                           </span>
                         )}
@@ -211,7 +211,7 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
                 })}
               </ul>
               {!query && (
-                <p className="mt-1 text-[10px] text-faint">
+                <p className="mt-1 text-micro text-faint">
                   Models too small for this run are hidden. Search to see all of
                   them.
                 </p>

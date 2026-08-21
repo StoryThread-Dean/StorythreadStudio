@@ -190,7 +190,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
         <button
           type="button"
           onClick={() => rerollRow(kind)}
-          className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+          className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
           title={`Reroll ${label.toLowerCase()}`}
         >
           <Dices size={11} />
@@ -203,7 +203,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
             key={name}
             type="button"
             onClick={() => setPicked(picked === name ? null : name)}
-            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+            className={`rounded-full border px-2.5 py-1 text-mini transition-colors ${
               picked === name
                 ? "border-indigo-500 bg-indigo-950/40 text-indigo-200"
                 : "border-border bg-bg-surface text-text-muted hover:border-indigo-500 hover:text-text-primary"
@@ -225,7 +225,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
         <Explain of="names.what" />
       </div>
       {loadError && (
-        <p className="mb-2 text-[11px] text-amber-400">
+        <p className="mb-2 text-mini text-amber-400">
           Could not load the name lists from the backend -- fantasy races still work.
         </p>
       )}
@@ -280,7 +280,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
       </div>
 
       {showFallbackNote && (
-        <p className="mb-2 text-[11px] text-amber-400">
+        <p className="mb-2 text-mini text-amber-400">
           Showing {eraLabel(usedEra)} -- closest available for this culture.
         </p>
       )}
@@ -306,7 +306,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
           </div>
         </>
       ) : (
-        <p className="text-[11px] text-faint">
+        <p className="text-mini text-faint">
           Pick a culture (grouped by region) or a fantasy race, then roll.
           Given names and surnames select independently -- a character can go
           by just one.

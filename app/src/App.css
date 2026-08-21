@@ -291,6 +291,60 @@
 
 
 /*
+ * Type scale, elevation, tracking
+ * ================================
+ * THE POINT OF THE TYPE SCALE IS THAT IT IS IN REM.
+ *
+ * useUiScale works by setting font-size on <html>, which moves rem-based
+ * utilities and nothing else. This app had 847 hardcoded pixel sizes against
+ * 1,044 rem-based ones -- 540 of them text-[11px], 270 text-[10px] -- so
+ * roughly 45% of the interface quietly ignored the writer's Interface size
+ * setting. Not a style preference: the control did not work, and the smallest
+ * text in the app was the part that refused to grow.
+ *
+ * The three new steps below are the sizes the app was ALREADY using as raw
+ * pixels, expressed as rem at the default 16px root. At the default scale
+ * they render identically -- text-mini is 11px exactly. The difference is
+ * that now they move when the writer asks them to.
+ *
+ * DELIBERATELY ADDITIVE. --text-xs, --text-sm and --text-base keep Tailwind's
+ * values. Retuning those would resize 1,038 existing call sites, which is a
+ * design decision that belongs in the polish phase where it can be looked at,
+ * not smuggled in under a mechanical find-and-replace.
+ */
+@theme {
+  --text-2xs:   0.5625rem;   /*  9px -- badges, counters                  */
+  --text-micro: 0.625rem;    /* 10px -- dense labels, hints               */
+  --text-mini:  0.6875rem;   /* 11px -- the app's real body size          */
+
+  --text-2xs--line-height:   1.35;
+  --text-micro--line-height: 1.4;
+  --text-mini--line-height:  1.45;
+
+  /* Elevation. There were 48 shadow utilities in 46,000 lines, essentially
+     all of them on modals, which is why every other surface reads as a flat
+     box. These are the ladder; applying them is the polish phase.
+
+     Light mode is softer AND warmer on purpose: a black shadow over warm
+     paper reads as dirt rather than as depth. */
+  --shadow-e1: 0 1px 2px rgb(0 0 0 / 0.20);
+  --shadow-e2: 0 2px 8px rgb(0 0 0 / 0.28), 0 1px 2px rgb(0 0 0 / 0.20);
+  --shadow-e3: 0 8px 28px rgb(0 0 0 / 0.38), 0 2px 6px rgb(0 0 0 / 0.24);
+  --shadow-e4: 0 18px 56px rgb(0 0 0 / 0.46), 0 4px 12px rgb(0 0 0 / 0.28);
+
+  /* The uppercase section headings the app uses everywhere. */
+  --tracking-label: 0.06em;
+}
+
+[data-theme="light"] {
+  --shadow-e1: 0 1px 2px rgb(74 62 45 / 0.08);
+  --shadow-e2: 0 2px 8px rgb(74 62 45 / 0.10), 0 1px 2px rgb(74 62 45 / 0.06);
+  --shadow-e3: 0 8px 28px rgb(74 62 45 / 0.14), 0 2px 6px rgb(74 62 45 / 0.08);
+  --shadow-e4: 0 18px 56px rgb(74 62 45 / 0.18), 0 4px 12px rgb(74 62 45 / 0.10);
+}
+
+
+/*
  * LAYER 2 -- THE BRIDGE.  Generated; temporary.
  * ======================================================================
  * Tailwind ships its own --color-indigo-300 and friends, and this app has

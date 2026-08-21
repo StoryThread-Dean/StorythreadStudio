@@ -289,7 +289,7 @@ export function SayEditor({
               title={spoken.trim()
                 ? "Hear the word with your spoken form applied"
                 : "Hear the engine's current reading of the word"}
-              className="ml-auto inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+              className="ml-auto inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
             >
               {previewing ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
               Preview
@@ -301,7 +301,7 @@ export function SayEditor({
               whether the text was right and the ENGINE read it oddly,
               or the text never made it through intact. */}
           {heard && (
-            <p className="mb-2 truncate font-mono text-[10px] text-zinc-500"
+            <p className="mb-2 truncate font-mono text-micro text-zinc-500"
                title={heard}>
               engine heard: {heard}
             </p>
@@ -310,7 +310,7 @@ export function SayEditor({
           {/* Tips: the vetted respelling tricks, expandable. */}
           <button
             onClick={() => setShowTips(v => !v)}
-            className="mb-1 inline-flex items-center gap-1 text-[11px] text-blue-300 hover:text-blue-200"
+            className="mb-1 inline-flex items-center gap-1 text-mini text-blue-300 hover:text-blue-200"
           >
             {showTips ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
             Tips: ways writers use this
@@ -322,7 +322,7 @@ export function SayEditor({
                 { heading: "Additional useful information", tips: TIPS.filter(t => !t.important) },
               ].map(section => (
                 <div key={section.heading}>
-                  <p className="border-b border-zinc-800/60 bg-zinc-900/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <p className="border-b border-zinc-800/60 bg-zinc-900/60 px-2 py-1 text-micro font-semibold uppercase tracking-wider text-zinc-500">
                     {section.heading}
                   </p>
                   <ul>
@@ -333,7 +333,7 @@ export function SayEditor({
                           <button
                             type="button"
                             onClick={() => setOpenTip(prev => (prev === index ? null : index))}
-                            className={"flex w-full items-center gap-1 px-2 py-1.5 text-left text-[11px] font-medium "
+                            className={"flex w-full items-center gap-1 px-2 py-1.5 text-left text-mini font-medium "
                               + (tip.important
                                 ? "text-blue-300 hover:text-blue-100"   // the essential five
                                 : "text-zinc-300 hover:text-blue-200")}
@@ -344,7 +344,7 @@ export function SayEditor({
                             {tip.title}
                           </button>
                           {openTip === index && (
-                            <p className="px-3 pb-2 pl-6 text-[11px] leading-relaxed text-zinc-400">
+                            <p className="px-3 pb-2 pl-6 text-mini leading-relaxed text-zinc-400">
                               {tip.body}
                             </p>
                           )}
@@ -361,7 +361,7 @@ export function SayEditor({
             <button
               onClick={handleAccept}
               disabled={!spoken.trim()}
-              className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-1 text-mini font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
             >
               <Check size={11} /> Accept
             </button>
@@ -369,13 +369,13 @@ export function SayEditor({
               onClick={handleNext}
               disabled={remaining.length <= 1}
               title={`Skip to the next "${word}"`}
-              className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+              className="rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
             >
               Next ({position} of {occurrences.length})
             </button>
             <button
               onClick={onClose}
-              className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-zinc-500"
+              className="rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-400 hover:border-zinc-500"
             >
               Cancel
             </button>
@@ -387,7 +387,7 @@ export function SayEditor({
         </>
       )}
       {error && (
-        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-[10px] text-rose-300">
+        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-micro text-rose-300">
           {error}
         </p>
       )}

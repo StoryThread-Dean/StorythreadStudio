@@ -56,7 +56,7 @@ export function DomainBoard({ domains, chosen, onChoose,
         <h3 className="text-xs font-semibold text-text-primary">
           Your world, part by part
         </h3>
-        <span className="ml-auto text-[11px] text-faint">
+        <span className="ml-auto text-mini text-faint">
           {openTotal} still open
         </span>
         <Explain of="weaving.board" />
@@ -66,14 +66,14 @@ export function DomainBoard({ domains, chosen, onChoose,
           safe to look at. A hundred open questions is alarming if it reads as a
           list of mistakes and unalarming if it reads as a world with room in
           it. */}
-      <p className="mt-1 text-[11px] text-faint">
+      <p className="mt-1 text-mini text-faint">
         Nothing here is wrong or overdue. These are ground rules your story
         stands on that you have not had to decide yet, and you never have to
         decide all of them.
       </p>
       <button
         onClick={onShowGuide}
-        className="mt-1 text-[11px] text-violet-300 underline-offset-2 hover:underline"
+        className="mt-1 text-mini text-violet-300 underline-offset-2 hover:underline"
       >
         Show me how this works
       </button>
@@ -95,10 +95,10 @@ export function DomainBoard({ domains, chosen, onChoose,
               }`}
             >
               <span className="flex w-full items-baseline gap-1.5">
-                <span className="text-[11px] font-medium text-text-primary">
+                <span className="text-mini font-medium text-text-primary">
                   {domain.label}
                 </span>
-                <span className="ml-auto shrink-0 text-[10px] text-faint">
+                <span className="ml-auto shrink-0 text-micro text-faint">
                   {done ? <Check size={11} className="text-emerald-400" />
                         : domain.open}
                 </span>
@@ -124,13 +124,13 @@ export function DomainBoard({ domains, chosen, onChoose,
       </div>
 
       {finished > 0 && (
-        <p className="mt-1.5 text-[11px] text-emerald-300/90">
+        <p className="mt-1.5 text-mini text-emerald-300/90">
           {finished} {finished === 1 ? "part is" : "parts are"} fully decided.
         </p>
       )}
 
       {chosen && (
-        <p className="mt-1.5 text-[11px] text-violet-300" data-testid="board-chosen">
+        <p className="mt-1.5 text-mini text-violet-300" data-testid="board-chosen">
           This sitting will ask about{" "}
           {domains.find(d => d.id === chosen)?.label ?? "that part"} only.
           Choose it again to go back to all of it.

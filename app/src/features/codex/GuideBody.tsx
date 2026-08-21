@@ -32,7 +32,7 @@ export function GuideBody({ lines }: { lines: GuideLine[] }) {
       {lines.map((line, i) => (
         <p
           key={i}
-          className={`text-[11px] leading-relaxed ${
+          className={`text-mini leading-relaxed ${
             // A kind within the group sits under the lines above it, so the
             // list reads as a list rather than as more sentences.
             line.indent ? "pl-3 text-text-muted" : "text-text-muted"

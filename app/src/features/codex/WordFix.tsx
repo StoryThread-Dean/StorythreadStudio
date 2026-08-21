@@ -142,7 +142,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                     answered to that. Nothing needed changing.
                   </>}
             </p>
-            <p className="mt-1 text-[11px] text-text-muted">
+            <p className="mt-1 text-mini text-text-muted">
               Every mention of it in your writing now finds that entry.
             </p>
             {/* SAID OUT LOUD, because it is permanent and the writer did not
@@ -150,7 +150,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                 statement that the flagged phrase was not a thing, but they
                 should see that the app took it that way. */}
             {corrected && (
-              <p className="mt-1.5 text-[11px] text-amber-200/90"
+              <p className="mt-1.5 text-mini text-amber-200/90"
                  data-testid="word-fix-retired">
                 &quot;{word}&quot; was not right, so it will not be raised again.
               </p>
@@ -160,7 +160,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
               className="mt-3 inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
             >
               <span>Carry on</span>
-              <span className="text-[10px] font-normal text-faint">
+              <span className="text-micro font-normal text-faint">
                 takes you to the next thing in the walk
               </span>
             </button>
@@ -170,7 +170,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
             {/* ── The word itself, first ─────────────────────────────────── */}
             <div>
               <label htmlFor="wf-word"
-                     className="mb-1 block text-[11px] text-text-muted">
+                     className="mb-1 block text-mini text-text-muted">
                 The word Weaving found. Fix it if it split the wrong way.
               </label>
               <input
@@ -181,7 +181,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                 className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
               />
               {corrected && (
-                <p className="mt-1 text-[11px] text-amber-200/90"
+                <p className="mt-1 text-mini text-amber-200/90"
                    data-testid="word-fix-changed">
                   Recording &quot;{text.trim()}&quot;. The original,
                   &quot;{word}&quot;, will not be raised again.
@@ -191,7 +191,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
 
             {/* ── Which entry it belongs to ──────────────────────────────── */}
             <div>
-              <p className="mb-1 flex items-baseline gap-2 text-[11px] text-text-muted">
+              <p className="mb-1 flex items-baseline gap-2 text-mini text-text-muted">
                 <span>Which entry is this another name for?</span>
                 {/* HOW MANY THERE ARE, so the search box reads as a shortcut
                     rather than the only way through. A writer whose world has
@@ -218,7 +218,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                 />
               </div>
               {matches.length === 0 ? (
-                <p className="text-[11px] text-faint">
+                <p className="text-mini text-faint">
                   {attachable.length === 0
                     ? "Nothing in your world can take another name yet. Make it an entry instead."
                     : "Nothing matches that. Clear the box to see all of them, or make it an entry instead."}
@@ -246,7 +246,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                           <span className="min-w-0 flex-1 truncate text-text-primary">
                             {nodeLabel(node)}
                           </span>
-                          <span className="shrink-0 text-[10px] text-faint">
+                          <span className="shrink-0 text-micro text-faint">
                             {kind.term}
                           </span>
                         </button>
@@ -258,7 +258,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
             </div>
 
             {chosen && (
-              <label className="flex items-start gap-1.5 text-[11px] text-text-muted">
+              <label className="flex items-start gap-1.5 text-mini text-text-muted">
                 <input
                   type="checkbox"
                   checked={asLabel}
@@ -274,7 +274,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
             )}
 
             {error && (
-              <p role="alert" className="text-[11px] text-rose-300">{error}</p>
+              <p role="alert" className="text-mini text-rose-300">{error}</p>
             )}
 
             <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
@@ -303,7 +303,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
               <span className="flex-1" />
               <button
                 onClick={attemptClose}
-                className="text-[11px] text-faint hover:text-text-primary"
+                className="text-mini text-faint hover:text-text-primary"
               >
                 Back to the stop
               </button>

@@ -111,7 +111,7 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
 
   if (chapters.length === 0) {
     return (
-      <p className="text-[11px] text-faint">
+      <p className="text-mini text-faint">
         This project has no chapters yet, so there is no story to move through.
       </p>
     );
@@ -135,7 +135,7 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
                 data-testid="scrubber-act"
                 style={{ left: at(first - 1),
                          width: `calc(${at(last)} - ${at(first - 1)})` }}
-                className={`absolute top-0 min-w-0 truncate rounded-sm px-1 py-0.5 text-[10px] uppercase tracking-wide ${
+                className={`absolute top-0 min-w-0 truncate rounded-sm px-1 py-0.5 text-micro uppercase tracking-wide ${
                   band.id
                     ? "bg-violet-500/15 text-violet-200"
                     : "bg-bg-surface text-faint"
@@ -249,7 +249,7 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
                 // a layout rule.
                 width: `calc((100% - ${THUMB}px) / ${chapters.length} * ${here ? 3 : 1} - 2px)`,
               }}
-              className={`absolute top-0 -translate-x-1/2 text-center text-[10px] leading-tight ${
+              className={`absolute top-0 -translate-x-1/2 text-center text-micro leading-tight ${
                 here
                   ? "z-10 font-semibold text-violet-200"
                   : "truncate text-faint"
@@ -267,7 +267,7 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
           the reader meets it, before anything has happened -- and the track has
           nowhere to show that, so it is said in words. */}
       {value === BEFORE_THE_BOOK && (
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-violet-200">
+        <p className="mt-1 flex items-center gap-1.5 text-mini text-violet-200">
           <History size={11} />
           Before the book begins: nothing has happened yet.
         </p>

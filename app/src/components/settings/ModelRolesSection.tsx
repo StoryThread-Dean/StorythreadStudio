@@ -181,7 +181,7 @@ export function ModelRolesSection({
 
                 <span
                   data-testid={`role-summary-${role.id}`}
-                  className={`flex w-44 shrink-0 items-center justify-between gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] ${
+                  className={`flex w-44 shrink-0 items-center justify-between gap-1 rounded border border-border px-1.5 py-0.5 text-mini ${
                     isAssigned ? "text-emerald-300" : "text-text-muted"
                   }`}
                 >
@@ -195,7 +195,7 @@ export function ModelRolesSection({
 
                 {/* Truncated, not wrapped: rows stay one line tall so the
                     whole list is scannable at a glance. */}
-                <span className="min-w-0 flex-1 truncate text-[11px] text-faint">
+                <span className="min-w-0 flex-1 truncate text-mini text-faint">
                   {role.reserved ? role.reserved_note : role.blurb}
                 </span>
               </button>
@@ -203,7 +203,7 @@ export function ModelRolesSection({
               {/* Expanded: the explanation and the actual controls. */}
               {isOpen && (
                 <div className="border-t border-border/60 bg-bg-primary/40 px-6 py-3">
-                  <p className="mb-1 text-[11px] leading-relaxed text-text-muted">
+                  <p className="mb-1 text-mini leading-relaxed text-text-muted">
                     {role.blurb}
                   </p>
                   <div className="mb-3">
@@ -220,7 +220,7 @@ export function ModelRolesSection({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                    <label className="flex items-center gap-1.5 text-mini text-text-muted">
                       From Source:
                       <select
                         aria-label={`${role.label} provider`}
@@ -253,7 +253,7 @@ export function ModelRolesSection({
                     </label>
 
                     {assignment?.provider && (
-                      <label className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] text-text-muted">
+                      <label className="flex min-w-0 flex-1 items-center gap-1.5 text-mini text-text-muted">
                         Model:
                         {catalog.length > 0 ? (
                           <select
@@ -304,7 +304,7 @@ export function ModelRolesSection({
                   {providerBroken && (
                     <p
                       data-testid={`role-warning-${role.id}`}
-                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-amber-600/70 bg-amber-950/20 px-2 py-1 text-[10.5px] leading-relaxed text-amber-200/90"
+                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-amber-600/70 bg-amber-950/20 px-2 py-1 text-micro leading-relaxed text-amber-200/90"
                     >
                       <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
                       <span>
@@ -319,7 +319,7 @@ export function ModelRolesSection({
                   {noCaching && (
                     <p
                       data-testid={`role-no-caching-${role.id}`}
-                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-border bg-bg-surface px-2 py-1 text-[10.5px] leading-relaxed text-text-muted"
+                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-border bg-bg-surface px-2 py-1 text-micro leading-relaxed text-text-muted"
                     >
                       <Info size={11} className="mt-0.5 shrink-0 text-faint" />
                       <span>

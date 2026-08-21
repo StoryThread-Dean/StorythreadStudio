@@ -232,7 +232,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                 {chaptersExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 Chapters
               </span>
-              <span className="text-[11px] text-text-muted">
+              <span className="text-mini text-text-muted">
                 {chaptersLoadError
                   ? "load failed"
                   : chapters.length === 0
@@ -253,7 +253,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   <p className="text-xs text-text-muted">No chapters found in manuscript/.</p>
                 ) : (
                   <>
-                    <div className="mb-2 flex items-center gap-2 text-[11px]">
+                    <div className="mb-2 flex items-center gap-2 text-mini">
                       <button
                         type="button"
                         onClick={selectAll}
@@ -270,7 +270,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                       >
                         Clear
                       </button>
-                      <span className="ml-auto text-[10px] text-text-muted">
+                      <span className="ml-auto text-micro text-text-muted">
                         {selectedFilenames.size}/{chapters.length}
                       </span>
                     </div>
@@ -292,7 +292,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                               className="accent-indigo-500"
                             />
                             <span className="flex-1 truncate" title={c.title}>{c.title}</span>
-                            <span className="shrink-0 font-mono text-[10px] text-text-muted">
+                            <span className="shrink-0 font-mono text-micro text-text-muted">
                               {c.filename}
                             </span>
                           </label>
@@ -328,7 +328,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
               ))}
             </div>
             {!extrasAvailable && (
-              <p className="mt-2 text-[10px] text-text-muted">
+              <p className="mt-2 text-micro text-text-muted">
                 {exportFormat.toUpperCase()} export is prose-only -- extras are not included.
               </p>
             )}
@@ -352,7 +352,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Chapter summaries</span>
-                <span className="text-[10px] text-text-muted">summaries/chapters/</span>
+                <span className="text-micro text-text-muted">summaries/chapters/</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
@@ -363,7 +363,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Scene summaries</span>
-                <span className="text-[10px] text-text-muted">summaries/scenes/</span>
+                <span className="text-micro text-text-muted">summaries/scenes/</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
@@ -374,7 +374,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Notes</span>
-                <span className="text-[10px] text-text-muted">notes/ (outline, style guide)</span>
+                <span className="text-micro text-text-muted">notes/ (outline, style guide)</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
@@ -385,7 +385,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-indigo-500"
                 />
                 <span>Profiles</span>
-                <span className="text-[10px] text-text-muted">every entry, as you wrote it</span>
+                <span className="text-micro text-text-muted">every entry, as you wrote it</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input
@@ -396,7 +396,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   className="accent-violet-500"
                 />
                 <span>The Weave</span>
-                <span className="text-[10px] text-text-muted">
+                <span className="text-micro text-text-muted">
                   connections, and what changes through the story
                 </span>
               </label>

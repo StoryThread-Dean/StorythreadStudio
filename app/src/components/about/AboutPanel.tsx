@@ -56,7 +56,7 @@ export function AboutPanel({
           <p className="text-lg font-semibold text-text-primary">Storythread Studio</p>
           <p className="text-xs text-text-muted">Version {version}</p>
           {hasDonated && (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-pink-700 bg-pink-900/30 px-2.5 py-0.5 text-[11px] text-pink-200">
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-pink-700 bg-pink-900/30 px-2.5 py-0.5 text-mini text-pink-200">
               <Heart size={11} fill="currentColor" />
               Thank you for donating!
             </div>
@@ -95,7 +95,7 @@ export function AboutPanel({
 
           {/* Donor self-attest. Honor system. Toggling clears all donation
               prompts in the app and lights up the badge above. */}
-          <div className="mt-3 rounded border border-border bg-bg-primary p-2.5 text-[11px] text-text-muted">
+          <div className="mt-3 rounded border border-border bg-bg-primary p-2.5 text-mini text-text-muted">
             {hasDonated ? (
               <div className="flex items-center justify-between gap-2">
                 <span>Marked as donor.</span>
@@ -133,7 +133,7 @@ export function AboutPanel({
           >
             {checking ? "Checking..." : "Check for updates"}
           </button>
-          <p className="mt-1.5 text-[11px] text-faint">
+          <p className="mt-1.5 text-mini text-faint">
             Storythread checks for updates on launch. You always confirm before
             anything downloads or installs.
           </p>
@@ -170,7 +170,7 @@ export function AboutPanel({
               Apache License 2.0 <ExternalLink size={10} />
             </button>
           </div>
-          <p className="mt-3 text-[11px] text-faint">
+          <p className="mt-3 text-mini text-faint">
             Built with Tauri, React, CodeMirror, FastAPI, and OpenRouter.
           </p>
         </div>

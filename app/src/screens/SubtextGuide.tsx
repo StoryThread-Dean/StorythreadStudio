@@ -36,7 +36,7 @@ interface Page {
 function Example({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded border border-border bg-bg-panel p-2">
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">{label}</p>
+      <p className="mb-1 text-micro uppercase tracking-wide text-faint">{label}</p>
       <div className="space-y-1.5 text-xs italic leading-relaxed text-text-primary">
         {children}
       </div>
@@ -47,7 +47,7 @@ function Example({ label, children }: { label: string; children: React.ReactNode
 /** One trait, as the model receives it. */
 function AsSent({ line }: { line: string }) {
   return (
-    <pre className="overflow-x-auto rounded bg-bg-surface px-2 py-1.5 text-[11px] not-italic text-emerald-200">
+    <pre className="overflow-x-auto rounded bg-bg-surface px-2 py-1.5 text-mini not-italic text-emerald-200">
       {line}
     </pre>
   );
@@ -374,7 +374,7 @@ export function SubtextGuide({ onClose }: SubtextGuideProps) {
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] uppercase tracking-wide text-faint">
+            <p className="text-micro uppercase tracking-wide text-faint">
               Page {index + 1} of {PAGES.length}
             </p>
             <h2 className="truncate text-xs font-semibold text-text-primary">

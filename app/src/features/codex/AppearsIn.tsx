@@ -58,7 +58,7 @@ export function AppearsIn({
 
   if (unavailable) {
     return (
-      <p className="text-[11px] text-faint" data-testid="appears-in-unavailable">
+      <p className="text-mini text-faint" data-testid="appears-in-unavailable">
         {unavailable}
       </p>
     );
@@ -84,7 +84,7 @@ export function AppearsIn({
         <MapPin size={12} className="text-blue-300" /> Where this appears
       </h4>
 
-      <p className="mt-0.5 max-w-xl text-[11px] text-faint">
+      <p className="mt-0.5 max-w-xl text-mini text-faint">
         {ticked.size === 0
           ? `Nothing recorded, so ${name ?? "this entry"} is treated as being `
             + "everywhere: it can go into any chapter's AI context and stays "
@@ -98,7 +98,7 @@ export function AppearsIn({
           data-testid="appears-in-chapters">
         {chapters.map(chapter => (
           <li key={chapter.anchor}>
-            <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-[11px] hover:bg-white/5">
+            <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-mini hover:bg-white/5">
               <input
                 type="checkbox"
                 checked={ticked.has(chapter.anchor)}
@@ -127,19 +127,19 @@ export function AppearsIn({
           onClick={() => void save()}
           disabled={busy || !dirty}
           data-testid="appears-in-save"
-          className="rounded bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+          className="rounded bg-blue-600 px-2.5 py-1 text-mini font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
         >
           {busy ? <Loader size={11} className="inline animate-spin" /> : null}
           {" "}Record {ticked.size} {ticked.size === 1 ? "chapter" : "chapters"}
         </button>
         {dirty && (
           <button type="button" onClick={() => setTicked(new Set(appearsIn))}
-                  className="text-[11px] text-faint hover:text-text-muted">
+                  className="text-mini text-faint hover:text-text-muted">
             Undo
           </button>
         )}
         {!dirty && saved && (
-          <span className="text-[11px] text-emerald-300"
+          <span className="text-mini text-emerald-300"
                 data-testid="appears-in-saved">
             Saved.
           </span>
@@ -147,7 +147,7 @@ export function AppearsIn({
       </div>
 
       {error && (
-        <p role="alert" className="mt-1 text-[11px] text-rose-300">{error}</p>
+        <p role="alert" className="mt-1 text-mini text-rose-300">{error}</p>
       )}
     </section>
   );

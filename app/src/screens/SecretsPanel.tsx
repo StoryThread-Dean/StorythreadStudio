@@ -73,7 +73,7 @@ export function SecretsPanel({ profile, sections, onSetWeight }: SecretsPanelPro
         </p>
         <button
           onClick={() => setGuideOpen(true)}
-          className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-800 px-1.5 py-0.5 text-[10px] text-violet-200 hover:border-violet-500"
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-800 px-1.5 py-0.5 text-micro text-violet-200 hover:border-violet-500"
         >
           <BookOpen size={10} /> Show me how this works
         </button>

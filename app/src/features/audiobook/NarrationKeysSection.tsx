@@ -39,7 +39,7 @@ export function NarrationKeysSection({
 }: NarrationKeysSectionProps) {
   return (
     <section>
-      <h3 className="mb-1 border-b border-zinc-800 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+      <h3 className="mb-1 border-b border-zinc-800 pb-2 text-mini font-semibold uppercase tracking-wider text-zinc-500">
         Narration API Keys
       </h3>
 
@@ -55,7 +55,7 @@ export function NarrationKeysSection({
 
       {settings.use_writing_keys ? (
         <div className="mt-2 space-y-1 rounded border border-zinc-800 bg-zinc-950/60 px-2.5 py-2">
-          <p className="text-[10px] leading-relaxed text-zinc-400">
+          <p className="text-micro leading-relaxed text-zinc-400">
             Narration borrows whichever key the engine needs from your
             writing settings.
           </p>
@@ -64,7 +64,7 @@ export function NarrationKeysSection({
               ? settings.writing_openrouter_key_set
               : settings.writing_nanogpt_key_set;
             return (
-              <p key={provider.id} className="text-[10px]">
+              <p key={provider.id} className="text-micro">
                 <span className="text-zinc-300">{provider.label}: </span>
                 {connected
                   ? <span className="text-emerald-400">writing key connected</span>
@@ -78,7 +78,7 @@ export function NarrationKeysSection({
         </div>
       ) : (
         <div className="mt-2 space-y-3">
-          <p className="text-[10px] leading-relaxed text-zinc-400">
+          <p className="text-micro leading-relaxed text-zinc-400">
             Narration will use only the keys below. Your writing key is
             deliberately not a fallback, so a narration run can never
             spend from the wrong account.
@@ -91,12 +91,12 @@ export function NarrationKeysSection({
             return (
               <div key={provider.id}>
                 <label
-                  className="mb-1 block text-[10px] font-medium text-zinc-300"
+                  className="mb-1 block text-micro font-medium text-zinc-300"
                   htmlFor={`audiobook-key-${provider.id}`}
                 >
                   {provider.label} key for narration
                 </label>
-                <p className="mb-1 text-[10px] text-zinc-500">
+                <p className="mb-1 text-micro text-zinc-500">
                   {isSet
                     ? `Current key: ${masked} -- enter a new key to replace it`
                     : `No key saved. Get one at ${provider.hint}`}
@@ -123,7 +123,7 @@ export function NarrationKeysSection({
                   <button
                     type="button"
                     onClick={() => onClearKey(provider.id)}
-                    className="mt-1 text-[10px] text-rose-400 hover:text-rose-300 hover:underline"
+                    className="mt-1 text-micro text-rose-400 hover:text-rose-300 hover:underline"
                   >
                     Remove this key
                   </button>

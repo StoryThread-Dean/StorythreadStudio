@@ -344,7 +344,7 @@ export function QuickEntry({
         {made ? (
           // ── WHAT HAPPENED, AND WHAT IS NEXT -- the continuous-flow rule. ──
           <div className="p-3">
-            <p className="flex items-start gap-1.5 text-[11px] text-emerald-200">
+            <p className="flex items-start gap-1.5 text-mini text-emerald-200">
               <Check size={12} className="mt-0.5 shrink-0" />
               <span>
                 {appended ? (
@@ -384,7 +384,7 @@ export function QuickEntry({
                 className="inline-flex flex-col items-start rounded border border-border px-2.5 py-1 text-left text-xs text-text-muted hover:border-text-muted hover:text-text-primary"
               >
                 <span>No, I am good for now</span>
-                <span className="text-[10px] text-faint">
+                <span className="text-micro text-faint">
                   takes you to the next thing in the walk
                 </span>
               </button>
@@ -393,7 +393,7 @@ export function QuickEntry({
         ) : (
           <div className="p-3">
             {asking && (
-              <p className="mb-2 rounded border border-border bg-bg-surface px-2 py-1.5 text-[11px] text-text-muted">
+              <p className="mb-2 rounded border border-border bg-bg-surface px-2 py-1.5 text-mini text-text-muted">
                 {asking}
               </p>
             )}
@@ -407,7 +407,7 @@ export function QuickEntry({
                 question about how it works. */}
             {existing.length > 0 && !addingTo && (
               <div className="mb-3 rounded border border-border p-2">
-                <p className="mb-1 text-[11px] text-text-muted">
+                <p className="mb-1 text-mini text-text-muted">
                   Your world already has{" "}
                   {existing.length === 1
                     ? `a ${kindEntry.term}`
@@ -432,7 +432,7 @@ export function QuickEntry({
             {addingTo ? (
               <>
                 <label htmlFor="qe-text"
-                       className="mb-1 block text-[11px] text-text-muted">
+                       className="mb-1 block text-mini text-text-muted">
                   Add to {nodeLabel(addingTo)}
                   {landing ? ` under ${landing.heading}` : ""}. Anything already
                   written there is kept -- this goes after it.
@@ -466,7 +466,7 @@ export function QuickEntry({
             ) : (
               <>
                 <label htmlFor="qe-name"
-                       className="mb-1 block text-[11px] text-text-muted">
+                       className="mb-1 block text-mini text-text-muted">
                   What is it called?
                 </label>
                 <input
@@ -483,7 +483,7 @@ export function QuickEntry({
                     it. */}
                 {kind === "character" && (
                   <fieldset className="mb-2">
-                    <legend className="mb-1 text-[11px] text-text-muted">
+                    <legend className="mb-1 text-mini text-text-muted">
                       How much of a character are they?
                     </legend>
                     <div className="flex gap-1.5">
@@ -498,7 +498,7 @@ export function QuickEntry({
                         <label
                           key={option.value}
                           title={option.hint}
-                          className={`flex-1 cursor-pointer rounded border px-2 py-1.5 text-[11px] ${
+                          className={`flex-1 cursor-pointer rounded border px-2 py-1.5 text-mini ${
                             characterKind === option.value
                               ? "border-violet-500 bg-violet-600/15 text-text-primary"
                               : "border-border text-text-muted hover:border-violet-700"
@@ -516,7 +516,7 @@ export function QuickEntry({
                         </label>
                       ))}
                     </div>
-                    <p className="mt-1 text-[11px] text-faint">
+                    <p className="mt-1 text-mini text-faint">
                       {characterKind === "side"
                         ? "You can make them a Main character later without "
                           + "losing anything."
@@ -529,7 +529,7 @@ export function QuickEntry({
                 {!kindLocked && (
                   <>
                     <label htmlFor="qe-kind"
-                           className="mb-1 block text-[11px] text-text-muted">
+                           className="mb-1 block text-mini text-text-muted">
                       What kind of thing is it?
                     </label>
                     <select
@@ -551,7 +551,7 @@ export function QuickEntry({
                 )}
 
                 <label htmlFor="qe-text"
-                       className="mb-1 block text-[11px] text-text-muted">
+                       className="mb-1 block text-mini text-text-muted">
                   {asking
                     ? "Your answer, in a line or two"
                     : landing
@@ -568,7 +568,7 @@ export function QuickEntry({
                   className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
                 />
                 {prefill && (
-                  <p className="mt-1 text-[10px] text-faint">
+                  <p className="mt-1 text-micro text-faint">
                     Prefilled from your own writing -- edit it or clear it.
                   </p>
                 )}
@@ -594,7 +594,7 @@ export function QuickEntry({
             )}
 
             {error && (
-              <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>
+              <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>
             )}
           </div>
         )}

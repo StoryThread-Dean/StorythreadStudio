@@ -38,13 +38,13 @@ export function UpdateBanner({ update, onViewDetails }: UpdateBannerProps) {
       </span>
       <button
         onClick={onViewDetails}
-        className="ml-2 rounded border border-indigo-600 bg-indigo-700/40 px-2 py-0.5 text-[11px] text-indigo-100 transition-colors hover:bg-indigo-700/60"
+        className="ml-2 rounded border border-indigo-600 bg-indigo-700/40 px-2 py-0.5 text-mini text-indigo-100 transition-colors hover:bg-indigo-700/60"
       >
         View details
       </button>
       <button
         onClick={() => setDismissed(true)}
-        className="ml-auto rounded px-2 py-0.5 text-[11px] text-indigo-300/70 hover:text-indigo-200"
+        className="ml-auto rounded px-2 py-0.5 text-mini text-indigo-300/70 hover:text-indigo-200"
         title="Hide for this session"
       >
         Later

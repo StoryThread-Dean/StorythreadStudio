@@ -112,7 +112,7 @@ export function SectionMenu({
               ) : (
                 /* Said rather than hidden. A missing button teaches nothing;
                    this teaches how the app is put together. */
-                <p className="rounded bg-bg-surface/60 px-2 py-1.5 text-[11px] text-text-muted">
+                <p className="rounded bg-bg-surface/60 px-2 py-1.5 text-mini text-text-muted">
                   {section.label} is a document the app opens by name, so its
                   name is fixed. Everything you write in it is yours.
                 </p>
@@ -124,7 +124,7 @@ export function SectionMenu({
                 <Trash2 size={12} className="text-rose-400" />
                 {removal === "hide" ? "Hide this section" : "Remove it"}
               </button>
-              <p className="px-2 pt-1 text-[11px] text-faint">
+              <p className="px-2 pt-1 text-mini text-faint">
                 {section.count > 0
                   ? `${section.count} ${section.count === 1 ? "entry" : "entries"} in here.`
                   : "Nothing in here yet."}
@@ -134,7 +134,7 @@ export function SectionMenu({
 
           {mode === "rename" && (
             <div>
-              <label className="mb-1 block text-[11px] text-text-muted">
+              <label className="mb-1 block text-mini text-text-muted">
                 What should it be called?
               </label>
               <div className="flex items-start gap-2">
@@ -162,13 +162,13 @@ export function SectionMenu({
                 </button>
               </div>
               {check.problem && (
-                <p role="alert" className="mt-1.5 text-[11px] text-amber-200/90">
+                <p role="alert" className="mt-1.5 text-mini text-amber-200/90">
                   {check.problem}
                 </p>
               )}
               {/* Said plainly, because a rename that quietly moved files
                   would be alarming to notice afterwards. */}
-              <p className="mt-1.5 text-[11px] text-faint">
+              <p className="mt-1.5 text-mini text-faint">
                 {rename === "label"
                   ? "Only the name changes. This is one of the sections the app "
                     + "is built around, so its folder and everything in it stay "
@@ -188,7 +188,7 @@ export function SectionMenu({
                 <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-400/80" />
                 {removal === "hide" ? "Hide" : "Remove"} {section.label}?
               </p>
-              <p className="mt-1.5 text-[11px] text-faint">
+              <p className="mt-1.5 text-mini text-faint">
                 {removal === "hide"
                   ? section.count > 0
                     // Hiding turns off "show even when empty". A section with
@@ -231,7 +231,7 @@ export function SectionMenu({
           )}
 
           {error && (
-            <p role="alert" className="mt-2.5 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200">
+            <p role="alert" className="mt-2.5 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-mini text-rose-200">
               {error}
             </p>
           )}

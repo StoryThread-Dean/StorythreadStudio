@@ -71,8 +71,8 @@ export function RunField({ label, hint, children }: {
 }) {
   return (
     <label className="mt-2 block">
-      <span className="block text-[11px] font-medium text-text-muted">{label}</span>
-      {hint && <span className="mb-0.5 block text-[10px] text-faint">{hint}</span>}
+      <span className="block text-mini font-medium text-text-muted">{label}</span>
+      {hint && <span className="mb-0.5 block text-micro text-faint">{hint}</span>}
       {children}
     </label>
   );
@@ -200,7 +200,7 @@ export function RunEditor({
         </h4>
         <Explain of="thread.run" compact />
       </div>
-      <p className="mt-0.5 text-[11px] text-faint">
+      <p className="mt-0.5 text-mini text-faint">
         Anything that becomes true at a point in the book rather than being true
         throughout. This is what lets the app tell your AI who someone was in
         chapter seven instead of who they end up being.
@@ -219,20 +219,20 @@ export function RunEditor({
         <button
           onClick={() => setWalking(true)}
           data-testid="run-walk-open"
-          className="mt-1 text-[11px] text-violet-300 underline-offset-2 hover:underline"
+          className="mt-1 text-mini text-violet-300 underline-offset-2 hover:underline"
         >
           Show me how this works
         </button>
       )}
 
       {unavailable ? (
-        <p className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-200">
+        <p className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-mini text-amber-200">
           {unavailable}
         </p>
       ) : (
         <>
           {run.length === 0 ? (
-            <p className="mt-2 text-[11px] text-faint">
+            <p className="mt-2 text-mini text-faint">
               Nothing yet. The sections above are for what is true throughout.
             </p>
           ) : (
@@ -251,7 +251,7 @@ export function RunEditor({
                   <button
                     onClick={() => setOpenId(open ? null : fact.id)}
                     aria-expanded={open}
-                    className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-[11px] text-violet-100/80 hover:text-violet-100"
+                    className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-mini text-violet-100/80 hover:text-violet-100"
                   >
                     {open ? <ChevronDown size={11} className="mt-0.5 shrink-0" />
                           : <ChevronRight size={11} className="mt-0.5 shrink-0" />}
@@ -390,7 +390,7 @@ export function RunEditor({
                     <button
                       onClick={() => setZoomed(fact.id)}
                       data-testid={`fact-zoom-${i}`}
-                      className="mt-2 self-end text-[11px] text-violet-300 underline-offset-2 hover:underline"
+                      className="mt-2 self-end text-mini text-violet-300 underline-offset-2 hover:underline"
                     >
                       What does this do?
                     </button>
@@ -412,7 +412,7 @@ export function RunEditor({
 
           <button
             onClick={add}
-            className="mt-2 inline-flex items-center gap-1.5 rounded border border-violet-700 px-2 py-1 text-[11px] font-medium text-violet-200 transition-colors hover:border-violet-500 hover:bg-violet-900/30"
+            className="mt-2 inline-flex items-center gap-1.5 rounded border border-violet-700 px-2 py-1 text-mini font-medium text-violet-200 transition-colors hover:border-violet-500 hover:bg-violet-900/30"
           >
             <Plus size={11} /> Something that changes
           </button>

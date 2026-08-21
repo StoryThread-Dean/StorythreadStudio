@@ -184,7 +184,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
         </span>
       </div>
 
-      <p className="mt-1 text-[11px] text-faint">
+      <p className="mt-1 text-mini text-faint">
         {unplaced
           ? "Tick the ones you want to place and choose a chapter for each. "
             + "Leave the rest; they come back next time."
@@ -197,7 +197,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
       </p>
 
       {settled.size > 0 && (
-        <p className="mt-1 text-[11px] text-emerald-300" data-testid="sweep-done">
+        <p className="mt-1 text-mini text-emerald-300" data-testid="sweep-done">
           {settled.size} settled. {open.length} left.
         </p>
       )}
@@ -218,7 +218,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
               />
               <KindIcon size={12}
                         className={`mt-0.5 shrink-0 ${TONE_CLASSES[type.tone].text}`} />
-              <span className="min-w-0 flex-1 text-[11px] text-text-primary">
+              <span className="min-w-0 flex-1 text-mini text-text-primary">
                 {row.what}
                 {/* Which entry an unplaced fact belongs to. Without it a list of
                     forty fact texts is forty sentences with no owner. */}
@@ -230,7 +230,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
                   "does that look right", and it cannot be made without seeing
                   the answer being offered. */}
               {placing && (
-                <span className="shrink-0 text-[10px] text-blue-200/90"
+                <span className="shrink-0 text-micro text-blue-200/90"
                       data-testid="sweep-place-chapters">
                   {anchorsFor(row).map(anchor =>
                     chapters.find(c => c.anchor === anchor)?.title ?? anchor)
@@ -242,7 +242,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
                   value={row.at}
                   onChange={e => setAnchor(row.stop.key, e.target.value)}
                   aria-label={`Chapter for ${row.what}`}
-                  className="shrink-0 rounded border border-border bg-bg-surface px-1 py-0.5 text-[11px] text-text-primary outline-none focus:border-indigo-500"
+                  className="shrink-0 rounded border border-border bg-bg-surface px-1 py-0.5 text-mini text-text-primary outline-none focus:border-indigo-500"
                 >
                   <option value="">chapter ...</option>
                   {chapters.map(c => (
@@ -256,11 +256,11 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
       </ul>
 
       {error && (
-        <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>
+        <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>
       )}
 
       {missingAnchor > 0 && (
-        <p className="mt-1.5 text-[11px] text-amber-200" data-testid="sweep-no-chapter">
+        <p className="mt-1.5 text-mini text-amber-200" data-testid="sweep-no-chapter">
           {missingAnchor} ticked {missingAnchor === 1 ? "row has" : "rows have"} no
           chapter chosen, so {missingAnchor === 1 ? "it" : "they"} cannot be
           placed yet.
@@ -311,7 +311,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
         <button
           onClick={onClose}
           data-testid="sweep-one-at-a-time"
-          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-faint hover:text-text-primary"
+          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-mini text-faint hover:text-text-primary"
         >
           <X size={10} /> Go one at a time instead
         </button>

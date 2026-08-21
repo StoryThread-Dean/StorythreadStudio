@@ -107,7 +107,7 @@ export function AddNewDialog({
               role="tab"
               aria-selected={entry.id === current?.id}
               onClick={() => { setGroup(entry.id); setShowCustom(false); }}
-              className={`rounded px-2.5 py-1 text-[11px] ${
+              className={`rounded px-2.5 py-1 text-mini ${
                 entry.id === current?.id
                   ? "bg-violet-600 text-white"
                   : "text-text-muted hover:text-text-primary"
@@ -119,7 +119,7 @@ export function AddNewDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <p className="mb-1 text-[11px] text-faint">
+          <p className="mb-1 text-mini text-faint">
             {GROUP_BLURBS[current?.id ?? ""] ?? ""}
           </p>
           {/* The long answer, per group. One line tells a writer WHICH group
@@ -166,18 +166,18 @@ export function AddNewDialog({
             {!showCustom ? (
               <button
                 onClick={() => setShowCustom(true)}
-                className="text-[11px] text-violet-300 hover:text-violet-200"
+                className="text-mini text-violet-300 hover:text-violet-200"
               >
                 Something else...
               </button>
             ) : (
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-primary">
+                <label className="mb-1 block text-mini font-medium text-text-primary">
                   {current?.id === "notes"
                     ? "What is this note called?"
                     : "What kind of thing is it?"}
                 </label>
-                <p className="mb-1.5 text-[11px] text-faint">
+                <p className="mb-1.5 text-mini text-faint">
                   {current?.id === "notes"
                     ? "For example: Dungeon Rules, Magic Costs."
                     : "For example: Bloodline, Guild, Starship."}
@@ -208,14 +208,14 @@ export function AddNewDialog({
                 </div>
 
                 {check.problem && (
-                  <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-200/90">
+                  <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-mini text-amber-200/90">
                     <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
                     {check.problem}
                   </p>
                 )}
                 {check.ok && (
                   // Shown so the folder name is never a surprise later.
-                  <p className="mt-1.5 text-[11px] text-faint">
+                  <p className="mt-1.5 text-mini text-faint">
                     Saved as <code className="text-text-muted">{check.id}</code> on your computer.
                   </p>
                 )}
@@ -224,7 +224,7 @@ export function AddNewDialog({
           </div>
 
           {error && (
-            <p role="alert" className="mt-3 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200">
+            <p role="alert" className="mt-3 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-mini text-rose-200">
               {error}
             </p>
           )}

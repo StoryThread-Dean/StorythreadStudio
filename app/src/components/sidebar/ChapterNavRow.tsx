@@ -251,7 +251,7 @@ export function ChapterNavRow({
                           {hasBeats && (
                             <button
                               onClick={() => toggleBeats(scene.index)}
-                              className="flex w-4 shrink-0 items-center justify-center text-[10px] text-text-muted hover:text-indigo-300"
+                              className="flex w-4 shrink-0 items-center justify-center text-micro text-text-muted hover:text-indigo-300"
                               title={beatsOpen ? "Hide beats" : `Show beats (${beatsDone}/${scene.beats.length} done)`}
                               aria-label={beatsOpen ? "Hide beats" : "Show beats"}
                             >
@@ -269,7 +269,7 @@ export function ChapterNavRow({
                             <span className="mx-1 text-faint">&mdash;</span>
                             {scene.title}
                             {hasBeats && (
-                              <span className="ml-1 text-[10px] text-faint">
+                              <span className="ml-1 text-micro text-faint">
                                 ({beatsDone}/{scene.beats.length})
                               </span>
                             )}
@@ -294,7 +294,7 @@ export function ChapterNavRow({
                               <button
                                 key={bi}
                                 onClick={() => onOpenScene(scene.index)}
-                                className="flex w-full items-start gap-1.5 rounded px-1.5 py-0.5 text-left text-[11px] transition-colors hover:bg-bg-surface"
+                                className="flex w-full items-start gap-1.5 rounded px-1.5 py-0.5 text-left text-mini transition-colors hover:bg-bg-surface"
                                 title="Open the scene summary to edit beats"
                               >
                                 <span className={`shrink-0 ${beat.done ? "text-emerald-500" : "text-faint"}`}>

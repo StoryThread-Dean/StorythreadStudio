@@ -167,7 +167,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
     <div data-testid="guided-walk" className={`rounded border px-3 py-2.5 ${c.box}`}>
       <div className="mb-1.5 flex items-center gap-2">
         <GraduationCap size={13} className={`shrink-0 ${c.icon}`} />
-        <span className={`flex-1 text-[12px] font-semibold ${c.title}`}>
+        <span className={`flex-1 text-xs font-semibold ${c.title}`}>
           {index + 1}. {step.title}
         </span>
         <button
@@ -179,10 +179,10 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
         </button>
       </div>
 
-      <p className={`text-[11px] leading-relaxed ${c.body}`}>{step.body}</p>
+      <p className={`text-mini leading-relaxed ${c.body}`}>{step.body}</p>
 
       {step.example && (
-        <p className={`mt-1.5 rounded border bg-zinc-950/60 px-2 py-1 font-mono text-[10px] leading-relaxed text-zinc-400 ${c.example}`}>
+        <p className={`mt-1.5 rounded border bg-zinc-950/60 px-2 py-1 font-mono text-micro leading-relaxed text-zinc-400 ${c.example}`}>
           {step.example}
         </p>
       )}
@@ -191,7 +191,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
         // Set apart by a left accent rather than a filled box: it has to
         // read as a different KIND of sentence without competing with the
         // step it belongs to.
-        <p className="mt-1.5 flex items-start gap-1.5 rounded-r border-l-2 border-amber-600/70 bg-amber-950/20 px-2 py-1 text-[10.5px] leading-relaxed text-amber-200/90">
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-r border-l-2 border-amber-600/70 bg-amber-950/20 px-2 py-1 text-micro leading-relaxed text-amber-200/90">
           <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
           <span>{step.note}</span>
         </p>
@@ -206,7 +206,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
                   button beside it would be the clearest possible way to say
                   "this feature does not understand what it is showing you". */}
               {demo.play === "shown" ? (
-                <span className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                <span className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-micro uppercase tracking-wide text-zinc-500">
                   {demo.label}
                 </span>
               ) : (
@@ -214,7 +214,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
                   onClick={() => void playDemo(demo.kind)}
                   disabled={loading !== null}
                   aria-label={`Play: ${demo.label}`}
-                  className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
                 >
                   {loading === demo.kind
                     ? <Loader2 size={11} className="animate-spin" />
@@ -222,7 +222,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
                   Play
                 </button>
               )}
-              <span className="min-w-0 flex-1 text-[11px] leading-tight text-zinc-300">
+              <span className="min-w-0 flex-1 text-mini leading-tight text-zinc-300">
                 {demo.play === "shown" ? demo.body : demo.label}
               </span>
             </div>
@@ -231,7 +231,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
       )}
 
       {demoError && (
-        <p className="mt-1.5 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-[10px] text-rose-300">
+        <p className="mt-1.5 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-micro text-rose-300">
           {demoError}
         </p>
       )}
@@ -241,7 +241,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
           onClick={() => setIndex(i => Math.max(0, i - 1))}
           disabled={index === 0}
           aria-label="Previous step"
-          className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] disabled:opacity-40 ${c.back}`}
+          className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-mini disabled:opacity-40 ${c.back}`}
         >
           <ChevronLeft size={11} /> Back
         </button>
@@ -249,7 +249,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
           <button
             onClick={() => setIndex(i => i + 1)}
             aria-label="Next step"
-            className={`inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-[11px] font-semibold text-white ${c.next}`}
+            className={`inline-flex items-center gap-1 rounded px-2.5 py-0.5 text-mini font-semibold text-white ${c.next}`}
           >
             Next <ChevronRight size={11} />
             <span data-testid="tutorial-progress">
@@ -259,7 +259,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
         ) : (
           <button
             onClick={onClose}
-            className="rounded bg-emerald-600 px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-500"
+            className="rounded bg-emerald-600 px-2.5 py-0.5 text-mini font-semibold text-white hover:bg-emerald-500"
           >
             Done --{" "}
             <span data-testid="tutorial-progress">
@@ -267,7 +267,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
             </span>
           </button>
         )}
-        <span className={`text-[10px] ${c.hint}`}>
+        <span className={`text-micro ${c.hint}`}>
           Everything below stays usable while this is open.
         </span>
       </div>

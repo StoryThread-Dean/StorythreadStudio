@@ -223,11 +223,11 @@ export function BindDot({
                 notes -- finds them from now on.
               </span>
             </p>
-            <p className="mt-2 text-[11px] text-text-muted">
+            <p className="mt-2 text-mini text-text-muted">
               {done.label} answers to:{" "}
               <span className="text-text-primary">{done.words.join(", ")}</span>
             </p>
-            <p className="mt-2 text-[11px] text-faint">
+            <p className="mt-2 text-mini text-faint">
               The bare dot has gone because it was only standing in for the
               word, and the word is theirs now. Nothing in{" "}
               {done.label}&rsquo;s own entry was changed.
@@ -241,7 +241,7 @@ export function BindDot({
           </div>
         ) : (
           <>
-            <p className="px-3 pt-2 text-[11px] text-text-muted">
+            <p className="px-3 pt-2 text-mini text-text-muted">
               Weaving found this word in your writing and made a placeholder
               for it. If it means something you already have an entry for, say
               which -- the word becomes one of its names, and nothing in that
@@ -250,13 +250,13 @@ export function BindDot({
 
             {promoting ? (
               <div className="px-3 py-3">
-                <p className="text-[11px] text-text-muted">
+                <p className="text-mini text-text-muted">
                   What kind of thing is it, and what is it really called? The
                   prose says &ldquo;{dot.name}&rdquo;; the entry can have a
                   fuller name and still answer to that.
                 </p>
 
-                <label className="mt-2 block text-[11px] text-text-muted">
+                <label className="mt-2 block text-mini text-text-muted">
                   What kind?
                 </label>
                 <select
@@ -275,7 +275,7 @@ export function BindDot({
                   ))}
                 </select>
 
-                <label className="mt-2 block text-[11px] text-text-muted">
+                <label className="mt-2 block text-mini text-text-muted">
                   Called what?
                 </label>
                 <input
@@ -284,13 +284,13 @@ export function BindDot({
                   aria-label="Called what"
                   className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
                 />
-                <p className="mt-1 text-[10px] text-faint">
+                <p className="mt-1 text-micro text-faint">
                   &ldquo;The Foot&rdquo; in the manuscript, &ldquo;The Foot
                   Clan&rdquo; as the entry. Both find it afterwards.
                 </p>
 
                 {error && (
-                  <p role="alert" className="mt-2 text-[11px] text-rose-200">
+                  <p role="alert" className="mt-2 text-mini text-rose-200">
                     {error}
                   </p>
                 )}
@@ -341,7 +341,7 @@ export function BindDot({
                    that looked like a next step. The way forward was already
                    there -- it just read as a rejection rather than an answer,
                    so it says so now. */
-                <li className="px-3 py-3 text-[11px] text-text-muted">
+                <li className="px-3 py-3 text-mini text-text-muted">
                   <p className="mb-1 text-text-primary">
                     {candidates.some(n => !n.placeholder)
                       ? "No entry matches that."
@@ -393,7 +393,7 @@ export function BindDot({
                 {/* The label question. Only worth asking once there is a
                     choice to make, which is why it appears here rather than
                     sitting greyed out from the start. */}
-                <label className="flex cursor-pointer items-start gap-2 text-[11px] text-text-muted">
+                <label className="flex cursor-pointer items-start gap-2 text-mini text-text-muted">
                   <input
                     type="checkbox"
                     checked={asLabel}
@@ -414,7 +414,7 @@ export function BindDot({
 
             {error && (
               <p role="alert"
-                 className="mx-3 mb-2 flex items-start gap-1.5 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200">
+                 className="mx-3 mb-2 flex items-start gap-1.5 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-mini text-rose-200">
                 <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                 {error}
               </p>
@@ -447,7 +447,7 @@ export function BindDot({
               {onWrong && (
                 <button
                   onClick={onWrong}
-                  className="ml-auto text-[11px] text-faint hover:text-rose-300"
+                  className="ml-auto text-mini text-faint hover:text-rose-300"
                 >
                   It is nothing -- remove it
                 </button>

@@ -176,11 +176,11 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
           where it stopped, or put everything back the way it was.
         </p>
         {plan?.backup_path && (
-          <p className="mt-1 text-[11px] text-amber-200/70">
+          <p className="mt-1 text-mini text-amber-200/70">
             The copy is at <span className="text-amber-100">{plan.backup_path}</span>.
           </p>
         )}
-        {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             onClick={() => void act("resume")} disabled={busy !== ""}
@@ -220,7 +220,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
       </p>
 
       {error && (
-        <p role="alert" className="mt-2 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200">
+        <p role="alert" className="mt-2 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-mini text-rose-200">
           {error}
         </p>
       )}
@@ -296,7 +296,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
 
           {/* Named BEFORE the button, so the writer can go and look at the
               folder with their own file manager while deciding. */}
-          <p className="flex items-start gap-1.5 rounded border border-border bg-bg-surface px-2 py-1.5 text-[11px] text-text-muted">
+          <p className="flex items-start gap-1.5 rounded border border-border bg-bg-surface px-2 py-1.5 text-mini text-text-muted">
             <Info size={11} className="mt-0.5 shrink-0 text-violet-300" />
             <span>
               Your profiles are copied to{" "}
@@ -359,7 +359,7 @@ function Section({ title, tone = "zinc", children }: {
     : tone === "rose" ? "text-rose-200/90" : "text-faint";
   return (
     <div>
-      <p className={`text-[11px] font-semibold uppercase tracking-wide ${colour}`}>
+      <p className={`text-mini font-semibold uppercase tracking-wide ${colour}`}>
         {title}
       </p>
       <div className="mt-1">{children}</div>

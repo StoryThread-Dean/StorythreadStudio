@@ -253,7 +253,7 @@ export function ThesaurusPopover({
               Mark for Weaving
             </button>
           ) : (
-            <p className="px-3 py-2 text-[11px] text-text-muted">
+            <p className="px-3 py-2 text-mini text-text-muted">
               {marked === "done"
                 ? "Marked. Weaving will ask you about it -- nothing was changed in your text."
                 : marked === "already"
@@ -328,7 +328,7 @@ function Section({ label, words, onSelect, word, accentSelection }: SectionProps
           <span className="font-medium text-accent truncate">{word}</span>
         </div>
       ) : (
-        <div className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+        <div className="px-3 pt-2 pb-0.5 text-micro font-semibold text-text-muted uppercase tracking-wider">
           {label}
         </div>
       )}

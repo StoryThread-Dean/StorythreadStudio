@@ -95,6 +95,7 @@ import { useBackendHealth } from "./hooks/useBackendHealth";
 import { useProjectUiState } from "./hooks/useProjectUiState";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
+import { initLineSpacing } from "./hooks/useLineSpacing";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { Bot, Send, ChevronDown, CornerDownRight, PenLine, Sparkles, HelpCircle, Brain } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
@@ -1922,6 +1923,7 @@ function App() {
   useEffect(() => {
     void initTheme();
     void initUiScale();
+    void initLineSpacing();
   }, []);
 
 
@@ -1966,7 +1968,7 @@ function App() {
           <span className="font-semibold">Backend not responding.</span>{" "}
           Storythread Studio can't reach the local API at <span className="font-mono">localhost:8000</span>.
           Start it with{" "}
-          <span className="rounded border border-red-800 bg-red-900/70 px-1 font-mono text-[10px] text-red-200">
+          <span className="rounded border border-red-800 bg-red-900/70 px-1 font-mono text-micro text-red-200">
             uv run uvicorn app.main:app --reload --port 8000
           </span>
           {" "}from the <span className="font-mono">backend/</span> folder.
@@ -2399,7 +2401,7 @@ function App() {
                   {/* Unassigned bucket -- only labeled when acts exist;
                       an act-less project reads as a plain chapter list. */}
                   {structure.acts.length > 0 && structure.unassigned.length > 0 && (
-                    <p className="mb-0.5 mt-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                    <p className="mb-0.5 mt-2 px-2 text-micro font-semibold uppercase tracking-wider text-faint">
                       Unassigned
                     </p>
                   )}
@@ -2836,7 +2838,7 @@ function App() {
               <button
                 onClick={handleSummarizeAsScene}
                 disabled={!currentChapter}
-                className="shrink-0 rounded border border-indigo-700/50 bg-indigo-950/40 px-2 py-0.5 text-[10px] text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
+                className="shrink-0 rounded border border-indigo-700/50 bg-indigo-950/40 px-2 py-0.5 text-micro text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
                 title="Generate an AI scene summary from this selection (opens a preview modal)"
               >
                 Summarize as Scene
@@ -2952,7 +2954,7 @@ function App() {
                     title={tooltip}
                   >
                     {chip.name}
-                    <span className="text-[10px] opacity-60">({sizeLabel})</span>
+                    <span className="text-micro opacity-60">({sizeLabel})</span>
                     <button
                       onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
                       className="text-faint hover:text-red-400"
@@ -3040,7 +3042,7 @@ function App() {
               {askBoundaries.includes(i) && (
                 <div className="my-3 flex items-center gap-2" aria-label="new ask">
                   <div className="h-px flex-1 bg-violet-800/50" />
-                  <span className="text-[10px] uppercase tracking-wide text-violet-400">New ask</span>
+                  <span className="text-micro uppercase tracking-wide text-violet-400">New ask</span>
                   <div className="h-px flex-1 bg-violet-800/50" />
                 </div>
               )}
@@ -3067,10 +3069,10 @@ function App() {
                         the reply stays the focus; native <details> needs no state. */}
                     {msg.reasoning && (
                       <details className="mb-2 rounded border border-sky-900/60 bg-sky-950/20 px-2 py-1">
-                        <summary className="cursor-pointer text-[11px] text-sky-400">
+                        <summary className="cursor-pointer text-mini text-sky-400">
                           Reasoning
                         </summary>
-                        <p className="mt-1 whitespace-pre-wrap text-[11px] text-text-muted">
+                        <p className="mt-1 whitespace-pre-wrap text-mini text-text-muted">
                           {msg.reasoning}
                         </p>
                       </details>
@@ -3128,7 +3130,7 @@ function App() {
               {chatCanCancel && (
                 <button
                   onClick={cancelEditorChat}
-                  className="ml-1 rounded border border-red-800/60 bg-red-950/30 px-2 py-0.5 text-[11px] text-red-300 transition-colors hover:border-red-600 hover:bg-red-900/40 hover:text-red-200"
+                  className="ml-1 rounded border border-red-800/60 bg-red-950/30 px-2 py-0.5 text-mini text-red-300 transition-colors hover:border-red-600 hover:bg-red-900/40 hover:text-red-200"
                   title="Cancel this request"
                 >
                   Cancel
@@ -3256,7 +3258,7 @@ function App() {
                 Reasoning and when a writer would reach for each. */}
             <button
               onClick={() => setShowModeHelp(v => !v)}
-              className="flex items-center gap-1 text-[11px] text-text-muted transition-colors hover:text-indigo-300"
+              className="flex items-center gap-1 text-mini text-text-muted transition-colors hover:text-indigo-300"
               title="What do these modes do?"
             >
               <HelpCircle size={12} />
@@ -3264,7 +3266,7 @@ function App() {
             </button>
 
             {draftMode && (
-              <span className="text-[10px] text-faint">AI writes prose &middot; use Continue to extend</span>
+              <span className="text-micro text-faint">AI writes prose &middot; use Continue to extend</span>
             )}
 
             {/* New ask: start a fresh AI context without erasing the transcript.
@@ -3274,7 +3276,7 @@ function App() {
               <button
                 onClick={startNewAsk}
                 title="Start a new ask: the AI gets a clean slate (your attachments stay). Your transcript is kept."
-                className={`ml-auto flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] transition-colors ${
+                className={`ml-auto flex items-center gap-1 rounded border px-2 py-0.5 text-micro transition-colors ${
                   selectedText.trim() !== "" && selectedText !== lastSentSelection
                     ? "border-violet-500 bg-violet-950/50 text-violet-200"
                     : "border-border text-faint hover:border-violet-700 hover:text-violet-300"
@@ -3290,7 +3292,7 @@ function App() {
               language for writers new to AI tools -- what each mode does and
               the situation where it earns its keep. */}
           {showModeHelp && (
-            <div className="mb-2 space-y-2 rounded border border-border bg-bg-surface/60 px-2.5 py-2 text-[11px] leading-relaxed text-text-muted">
+            <div className="mb-2 space-y-2 rounded border border-border bg-bg-surface/60 px-2.5 py-2 text-mini leading-relaxed text-text-muted">
               <div>
                 <span className="font-semibold text-text-primary">Chat (both toggles off)</span>
                 <p>
@@ -3344,7 +3346,7 @@ function App() {
           {/* Enhance level: how much to expand the highlighted passage. */}
           {enhanceMode && (
             <div className="mb-2 flex items-center gap-1.5">
-              <span className="text-[10px] text-faint">Amount:</span>
+              <span className="text-micro text-faint">Amount:</span>
               {([
                 { value: "restate",  label: "Restate",  hint: "Rework the wording, about the same length" },
                 { value: "default",  label: "Default",  hint: "Richer pass, about 1.5x to 2.2x" },
@@ -3354,7 +3356,7 @@ function App() {
                   key={opt.value}
                   onClick={() => setEnhanceLevel(opt.value)}
                   title={opt.hint}
-                  className={`rounded border px-2 py-0.5 text-[10px] transition-colors ${
+                  className={`rounded border px-2 py-0.5 text-micro transition-colors ${
                     enhanceLevel === opt.value
                       ? "border-violet-500 bg-violet-950/50 text-violet-200"
                       : "border-border text-faint hover:border-violet-700 hover:text-violet-300"
@@ -4388,9 +4390,9 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                     onClick={() => toggleSceneGroup(group.chapter_filename)}
                     className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-text-muted hover:bg-emerald-600/10"
                   >
-                    <span className="font-mono text-[10px] text-faint">{expanded ? "▾" : "▸"}</span>
+                    <span className="font-mono text-micro text-faint">{expanded ? "▾" : "▸"}</span>
                     <span className="truncate">{group.chapter_title}</span>
-                    <span className="ml-auto text-[10px] text-faint">{group.scenes.length}</span>
+                    <span className="ml-auto text-micro text-faint">{group.scenes.length}</span>
                   </button>
                   {expanded && (
                     <div className="ml-3 flex flex-col gap-0.5 border-l border-emerald-800/30 pl-2">
@@ -4467,9 +4469,9 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
             if (sides.length === 0) return profiles.map(renderProfileRow);
             return (
               <>
-                <p className="px-2 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-faint">Main</p>
+                <p className="px-2 pt-0.5 text-micro font-semibold uppercase tracking-wide text-faint">Main</p>
                 {mains.map(renderProfileRow)}
-                <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">Side / Background</p>
+                <p className="px-2 pt-1 text-micro font-semibold uppercase tracking-wide text-faint">Side / Background</p>
                 {sides.map(renderProfileRow)}
               </>
             );
@@ -4531,7 +4533,7 @@ function ConfigureAttachPanel({
         <p className="text-xs font-semibold text-indigo-300">What to include</p>
         <button
           onClick={onShowHelp}
-          className="rounded-full border border-indigo-600 px-1.5 py-0 text-[10px] text-indigo-300 hover:bg-indigo-800/40"
+          className="rounded-full border border-indigo-600 px-1.5 py-0 text-micro text-indigo-300 hover:bg-indigo-800/40"
           title="Detailed explanation of each option and combinations"
         >
           ?
@@ -4569,7 +4571,7 @@ function ConfigureAttachPanel({
 
       {/* Token estimate -- updates live as the writer flips checkboxes.
           Color escalates from neutral to amber to red as the chip grows. */}
-      <p className={`mb-2 text-[11px] ${isHuge ? "text-red-400" : isLarge ? "text-amber-400" : "text-faint"}`}>
+      <p className={`mb-2 text-mini ${isHuge ? "text-red-400" : isLarge ? "text-amber-400" : "text-faint"}`}>
         Estimated cost: ~{tokens.toLocaleString()} tokens
         {isHuge ? " (very heavy -- consider trimming)" : isLarge ? " (heavy)" : ""}
       </p>
@@ -4592,20 +4594,20 @@ function ConfigureAttachPanel({
           </label>
           <button
             onClick={() => setShowCanonHelp(v => !v)}
-            className="flex items-center gap-1 text-[11px] text-text-muted transition-colors hover:text-indigo-300"
+            className="flex items-center gap-1 text-mini text-text-muted transition-colors hover:text-indigo-300"
             title="What does this do?"
           >
             <HelpCircle size={12} />
             {showCanonHelp ? "Hide" : "What's this?"}
           </button>
         </div>
-        <p className="mt-1 text-[11px] text-text-muted">
+        <p className="mt-1 text-mini text-text-muted">
           {treatAsCanon
             ? "Attachments are treated as established truth; the AI keeps your writing consistent with them."
             : "Attachments are reference only; your typed instructions take precedence over them."}
         </p>
         {showCanonHelp && (
-          <div className="mt-2 space-y-2 border-t border-indigo-800/40 pt-2 text-[11px] leading-relaxed text-text-muted">
+          <div className="mt-2 space-y-2 border-t border-indigo-800/40 pt-2 text-mini leading-relaxed text-text-muted">
             <p>
               <span className="font-semibold text-indigo-300">Toggle (On) Canon:</span> the AI treats attached
               profiles, outline, and locations as established truth and keeps your writing consistent with
@@ -4669,7 +4671,7 @@ function CheckboxRow({ label, checked, disabled = false, disabledHint, onToggle 
       />
       <span>{label}</span>
       {disabled && disabledHint && (
-        <span className="text-[10px] text-faint">{disabledHint}</span>
+        <span className="text-micro text-faint">{disabledHint}</span>
       )}
     </label>
   );

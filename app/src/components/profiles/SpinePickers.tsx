@@ -50,7 +50,7 @@ function SpineSelect({
         <button
           type="button"
           onClick={() => setShowHelp(h => !h)}
-          className={`flex items-center gap-0.5 text-[11px] transition-colors ${
+          className={`flex items-center gap-0.5 text-mini transition-colors ${
             showHelp ? "text-indigo-300" : "text-faint hover:text-indigo-300"
           }`}
           title={`What do the ${label} options mean?`}
@@ -63,7 +63,7 @@ function SpineSelect({
       {showHelp && (
         <div className="mb-2 rounded border border-indigo-800/40 bg-indigo-950/20 p-2">
           {options.map(o => (
-            <p key={o.id} className="mb-1 text-[11px] leading-snug text-text-muted">
+            <p key={o.id} className="mb-1 text-mini leading-snug text-text-muted">
               <span className="font-medium text-indigo-300">{o.label}:</span> {o.help}
             </p>
           ))}
@@ -130,9 +130,9 @@ export function SpinePickers({ onInsert, onRolePicked }: SpinePickersProps) {
         />
       </div>
       {notice ? (
-        <p className="mt-1.5 text-[11px] text-emerald-400">{notice}</p>
+        <p className="mt-1.5 text-mini text-emerald-400">{notice}</p>
       ) : (
-        <p className="mt-1.5 text-[11px] text-faint">
+        <p className="mt-1.5 text-mini text-faint">
           Starting points, not verdicts -- fill in the blanks and ask what
           makes this character NOT a textbook type.
         </p>

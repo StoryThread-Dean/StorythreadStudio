@@ -221,7 +221,7 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
 
         {/* The five-step staircase: each step steps further in, so the
             eye walks down the workflow and lands on the button. */}
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-sky-300">
+        <p className="mb-2 text-mini font-semibold uppercase tracking-wider text-sky-300">
           Five steps from page to playback
         </p>
         <ol className="mb-5 space-y-1.5">
@@ -293,7 +293,7 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
               >
                 <Sparkles size={16} /> Let's Get Started
               </button>
-              <p className="mt-1.5 text-[11px] text-zinc-300">
+              <p className="mt-1.5 text-mini text-zinc-300">
                 A guided walkthrough that sets everything up for you.
               </p>
             </div>
@@ -367,13 +367,13 @@ export function AudiobookDashboard({ onNewAudiobook, onOpenWorkspace }: Audioboo
                   {typeof r.progress === "number" && (
                     <span className="mt-1.5 flex items-center gap-2">
                       <ProgressWave progress={r.progress} status={r.status} />
-                      <span className="text-[10px] text-zinc-500">
+                      <span className="text-micro text-zinc-500">
                         {Math.round(r.progress * 100)}% narrated
                       </span>
                     </span>
                   )}
                 </button>
-                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusClasses(r.status)}`}>
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-micro ${statusClasses(r.status)}`}>
                   {AUDIOBOOK_STATUS_LABELS[r.status] ?? r.status}
                 </span>
                 {/* Spec 5.4: the two very different kinds of "remove".

@@ -62,7 +62,7 @@ export function DonationPrompt({
           <span className="font-semibold text-pink-300">{appOpenCount}</span> times.
           If it's helping your writing, consider chipping in to keep development going.
         </p>
-        <p className="mb-3 text-[11px] text-faint">
+        <p className="mb-3 text-mini text-faint">
           Donations cover the Claude API costs of ongoing development. The app stays
           free for everyone either way -- this is purely optional.
         </p>
@@ -70,19 +70,19 @@ export function DonationPrompt({
         <div className="flex flex-col gap-1.5">
           <button
             onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
-            className="rounded border border-pink-700 bg-pink-900/30 px-2 py-1 text-[11px] font-medium text-pink-200 hover:bg-pink-900/50"
+            className="rounded border border-pink-700 bg-pink-900/30 px-2 py-1 text-mini font-medium text-pink-200 hover:bg-pink-900/50"
           >
             Support on GitHub Sponsors
           </button>
           <button
             onClick={() => openLink("https://ko-fi.com/storythreadstudio")}
-            className="rounded border border-cyan-700 bg-cyan-900/30 px-2 py-1 text-[11px] font-medium text-cyan-200 hover:bg-cyan-900/50"
+            className="rounded border border-cyan-700 bg-cyan-900/30 px-2 py-1 text-mini font-medium text-cyan-200 hover:bg-cyan-900/50"
           >
             Tip on Ko-fi
           </button>
         </div>
 
-        <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-[11px]">
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-mini">
           <button
             onClick={() => { onMarkDonated(); onDismiss(); }}
             className="text-pink-300 underline hover:text-pink-200"

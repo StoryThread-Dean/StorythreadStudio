@@ -645,12 +645,12 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
                     dependency without locking anything: dressing the loom is
                     never finished, so a gate would never open. */}
                 {option.step && (
-                  <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-violet-300/80">
+                  <span className="ml-auto shrink-0 text-micro uppercase tracking-wide text-violet-300/80">
                     {option.step}
                   </span>
                 )}
               </span>
-              <span className="text-[11px] text-faint">{option.blurb}</span>
+              <span className="text-mini text-faint">{option.blurb}</span>
             </button>
           ))}
         </div>
@@ -711,17 +711,17 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             className="mt-2 rounded border border-border bg-surface px-2.5 py-2"
             data-testid="weaving-nothing-open"
           >
-            <p className="text-[11px] text-text-muted">
+            <p className="text-mini text-text-muted">
               {total === 0
                 ? "That does not mean your book and your world agree. It means this pass has run out of things it can find."
                 : "Nothing new since your last session, so there is nothing to walk."}
             </p>
-            <p className="mt-1.5 text-[11px] text-faint">
+            <p className="mt-1.5 text-mini text-faint">
               This pass reads NAMES: a capitalised name your prose uses more
               than once, and names you wrote in your outline or notes. Three
               things it cannot see, all of them normal in a novel:
             </p>
-            <ul className="mt-1 space-y-0.5 pl-3 text-[11px] text-faint">
+            <ul className="mt-1 space-y-0.5 pl-3 text-mini text-faint">
               <li>
                 A character described rather than named. "The tall man" and
                 "the hulking figure" are characters, and to this pass they are
@@ -737,7 +737,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
                 anyway, at the start of a sentence or a line of dialogue.
               </li>
             </ul>
-            <p className="mt-1.5 text-[11px] text-faint">
+            <p className="mt-1.5 text-mini text-faint">
               What to do next: try another pass above, since each one asks a
               different question. For characters your prose describes without
               naming, that is the Profile Extractor's job rather than this one.
@@ -745,20 +745,20 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           </div>
         )}
         {!scanning && open > 0 && settled > 0 && (
-          <p className="mt-1 text-[11px] text-faint">
+          <p className="mt-1 text-mini text-faint">
             {settled} more {settled === 1 ? "was" : "were"} answered for good
             in earlier sessions and will not be asked again.
           </p>
         )}
         {!scanning && open > 60 && (
-          <p className="mt-1 text-[11px] text-amber-200/90">
+          <p className="mt-1 text-mini text-amber-200/90">
             That is many sessions of work. Your answers save as you go, and
             you can stop anywhere and come back.
           </p>
         )}
 
         {result?.unreadable?.length ? (
-          <p className="mt-2 text-[11px] text-amber-200/90">
+          <p className="mt-2 text-mini text-amber-200/90">
             {result.unreadable.length} chapter
             {result.unreadable.length === 1 ? "" : "s"} could not be read and
             {result.unreadable.length === 1 ? " was" : " were"} left out:{" "}
@@ -766,7 +766,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           </p>
         ) : null}
 
-        {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>}
 
         {/* CARRY ON, OR START FRESH -- and the difference stated, because it
             is not obvious. Anything applied or permanently declined lives in
@@ -786,7 +786,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
                 {busy ? <Loader size={12} className="animate-spin" /> : null}
                 Carry on where you left off
               </span>
-              <span className="text-[10px] font-normal text-violet-100/80">
+              <span className="text-micro font-normal text-violet-100/80">
                 keeps what you put off last time
               </span>
             </button>
@@ -806,7 +806,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
               {earlier.length > 0 ? "Start fresh" : "Start"}
             </span>
             {earlier.length > 0 && (
-              <span className="text-[10px] font-normal text-faint">
+              <span className="text-micro font-normal text-faint">
                 asks again about anything you put off
               </span>
             )}
@@ -814,7 +814,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         </div>
 
         {earlier.length > 0 && (
-          <p className="mt-2 text-[11px] text-faint">
+          <p className="mt-2 text-mini text-faint">
             You have {earlier.length} earlier session
             {earlier.length === 1 ? "" : "s"}. Either way, nothing you have
             already applied or permanently declined comes back.
@@ -836,7 +836,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             ? "That is everything in the chapters you narrowed to."
             : "That is everything this pass found."}
         </p>
-        <p className="mt-1.5 text-[11px] text-text-muted">
+        <p className="mt-1.5 text-mini text-text-muted">
           Anything you put off comes back next time. Anything you applied, or
           said was not a connection, does not. Nothing here is stored about
           your book itself -- it is worked out fresh every time, so as you
@@ -1126,7 +1126,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           Found by reading the two mount points against the two callers. */}
       {guiding && <UnwovenGuide onClose={() => setGuiding(false)} />}
 
-      <div className="flex items-center gap-2 text-[11px] text-faint">
+      <div className="flex items-center gap-2 text-mini text-faint">
         <button
           onClick={() => setAt(i => Math.max(0, i - 1))}
           disabled={at === 0}
@@ -1151,7 +1151,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           be about what is missing rather than about what is not. */}
       {standingOn(stop).length > 0 && (
         <p data-testid="standing-on"
-           className="mb-1 flex items-center gap-1.5 text-[11px] text-text-muted">
+           className="mb-1 flex items-center gap-1.5 text-mini text-text-muted">
           {standingOn(stop).map((on, i) => {
             const kind = threadTypeEntry(on.type);
             const KindIcon = kind.Icon;
@@ -1172,7 +1172,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       <div className="mt-2 flex items-start gap-2">
         <Icon size={18} className={`mt-0.5 shrink-0 ${tone.text}`} />
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] uppercase tracking-wide text-faint">
+          <p className="text-mini uppercase tracking-wide text-faint">
             {lex?.term ?? stop.kind}
             {lex && (
               <span className="ml-1 normal-case tracking-normal">
@@ -1187,7 +1187,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       {/* The evidence. Shown before the buttons, because a decision made
           without seeing what prompted it is not a decision. */}
       {stop.quote && (
-        <p className="mt-2 flex gap-1.5 rounded border-l-2 border-border bg-bg-surface px-2 py-1.5 text-[11px] italic text-text-muted">
+        <p className="mt-2 flex gap-1.5 rounded border-l-2 border-border bg-bg-surface px-2 py-1.5 text-mini italic text-text-muted">
           <Quote size={10} className="mt-0.5 shrink-0 text-faint" />
           <span>{stop.quote}</span>
         </p>
@@ -1201,7 +1201,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         <ol className="mt-2 space-y-0.5 rounded border-l-2 border-rose-900/70 bg-bg-surface px-2 py-1.5"
             data-testid="tangle-members">
           {tangleMembers(stop).map((m, i) => (
-            <li key={m.key ?? i} className="text-[11px] text-text-muted">
+            <li key={m.key ?? i} className="text-mini text-text-muted">
               {i + 1}. {m.summary}
             </li>
           ))}
@@ -1209,17 +1209,17 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       )}
 
       <details className="mt-2">
-        <summary className="cursor-pointer text-[11px] text-violet-300 hover:text-violet-200">
+        <summary className="cursor-pointer text-mini text-violet-300 hover:text-violet-200">
           Why am I seeing this?
         </summary>
-        <p className="mt-1 text-[11px] text-text-muted">{stop.why}</p>
+        <p className="mt-1 text-mini text-text-muted">{stop.why}</p>
       </details>
 
       {/* One entry covering several words is the part a writer would
           otherwise be surprised by, so it is shown before the button and not
           only explained behind "why am I seeing this?". */}
       {alsoCalled(stop).length > 0 && (
-        <p className="mt-2 text-[11px] text-text-muted">
+        <p className="mt-2 text-mini text-text-muted">
           One entry, answering to{" "}
           <span className="text-text-primary">
             {[String(stop.detail.name ?? ""), ...alsoCalled(stop)].join(", ")}
@@ -1231,7 +1231,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           with no address -- and an answer that lands nowhere in particular is
           a note, not part of the world. */}
       {stop.kind === "unwoven" && (
-        <div className="mt-2 space-y-1 text-[11px] text-faint">
+        <div className="mt-2 space-y-1 text-mini text-faint">
           <p>
             Your answer belongs in{" "}
             <span className="text-text-muted">
@@ -1240,7 +1240,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           </p>
           <button
             onClick={() => setGuiding(true)}
-            className="text-[11px] text-violet-300 underline-offset-2 hover:underline"
+            className="text-mini text-violet-300 underline-offset-2 hover:underline"
           >
             Show me how this works
           </button>
@@ -1268,9 +1268,9 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         </div>
       )}
 
-      {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>}
       {notice && (
-        <p role="status" className="mt-2 text-[11px] text-amber-200/90">
+        <p role="status" className="mt-2 text-mini text-amber-200/90">
           {notice}
         </p>
       )}
@@ -1278,7 +1278,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           "carry on" should see that it took -- and a resumed walk is shorter
           than a fresh one, which would otherwise look like something missing. */}
       {resumed && at === 0 && (
-        <p className="mt-2 text-[11px] text-violet-300" data-testid="resumed-note">
+        <p className="mt-2 text-mini text-violet-300" data-testid="resumed-note">
           Carrying on from your last sitting -- anything you put off then is
           still put off.
         </p>
@@ -1342,12 +1342,12 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             setFixingWord(true);
           })()}
           data-testid="word-fix-offer"
-          className="mt-2 w-full rounded border border-violet-800 bg-violet-950/25 px-2.5 py-1.5 text-left text-[11px] text-violet-100 hover:border-violet-600"
+          className="mt-2 w-full rounded border border-violet-800 bg-violet-950/25 px-2.5 py-1.5 text-left text-mini text-violet-100 hover:border-violet-600"
         >
           <span className="font-medium">
             Not right? Fix the word, or say who it belongs to
           </span>
-          <span className="block text-[10px] text-faint">
+          <span className="block text-micro text-faint">
             correct what was flagged, or make it another name for an entry you
             already have
           </span>
@@ -1364,12 +1364,12 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         <button
           onClick={() => setSweeping(stop.kind)}
           data-testid="sweep-offer"
-          className="mt-2 w-full rounded border border-violet-800 bg-violet-950/25 px-2.5 py-1.5 text-left text-[11px] text-violet-100 hover:border-violet-600"
+          className="mt-2 w-full rounded border border-violet-800 bg-violet-950/25 px-2.5 py-1.5 text-left text-mini text-violet-100 hover:border-violet-600"
         >
           <span className="font-medium">
             Work through all {sweepable[stop.kind].length} at once
           </span>
-          <span className="block text-[10px] text-faint">
+          <span className="block text-micro text-faint">
             {stop.kind === "unplaced"
               ? "one list, a chapter each, rather than one screen each"
               : "tick the ones that are fine unconnected and say so in one go"}
@@ -1380,7 +1380,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       {settledAs ? (
         <div data-testid="already-answered"
              className="mt-3 rounded border border-emerald-800 bg-emerald-950/20 p-2.5">
-          <p className="flex items-start gap-1.5 text-[11px] text-emerald-200">
+          <p className="flex items-start gap-1.5 text-mini text-emerald-200">
             <Check size={12} className="mt-0.5 shrink-0" />
             <span>
               You answered this one this sitting:{" "}
@@ -1392,7 +1392,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             className="mt-2 inline-flex flex-col items-start rounded border border-border px-2.5 py-1 text-left text-xs text-text-muted hover:border-text-muted hover:text-text-primary"
           >
             <span>Carry on</span>
-            <span className="text-[10px] text-faint">
+            <span className="text-micro text-faint">
               back to the next thing still waiting
             </span>
           </button>
@@ -1507,7 +1507,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       {muting && (
         <div className="mt-2 rounded border border-border bg-bg-surface p-2"
              data-testid="mute-scope">
-          <p className="text-[11px] text-text-primary">
+          <p className="text-mini text-text-primary">
             Stop being asked about {lex?.term ?? stop.kind} -- how widely?
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -1529,7 +1529,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
                 className="inline-flex flex-col items-start rounded border border-violet-700 bg-violet-500/10 px-2.5 py-1 text-left text-xs text-text-primary hover:border-violet-500 disabled:opacity-40"
               >
                 <span>About {muteTargetName(stop)} only</span>
-                <span className="text-[10px] font-normal text-faint">
+                <span className="text-micro font-normal text-faint">
                   the rest of your book is still checked
                 </span>
               </button>
@@ -1551,18 +1551,18 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
               className="inline-flex flex-col items-start rounded border border-border px-2.5 py-1 text-left text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
             >
               <span>Anywhere in the book</span>
-              <span className="text-[10px] font-normal text-faint">
+              <span className="text-micro font-normal text-faint">
                 this kind of question stops entirely
               </span>
             </button>
             <button
               onClick={() => setMuting(false)}
-              className="self-start rounded px-2 py-1 text-[11px] text-faint hover:text-text-primary"
+              className="self-start rounded px-2 py-1 text-mini text-faint hover:text-text-primary"
             >
               Back
             </button>
           </div>
-          <p className="mt-1.5 text-[10px] text-faint">
+          <p className="mt-1.5 text-micro text-faint">
             Either one is reversible. It is a preference about what you want to
             be asked, not a judgement about your book.
           </p>
@@ -1577,7 +1577,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           const entry = lexFor(kind);
           const KindIcon = entry?.Icon ?? CircleHelp;
           return (
-            <li key={kind} className="flex items-center gap-1 text-[11px] text-faint"
+            <li key={kind} className="flex items-center gap-1 text-mini text-faint"
                 title={entry?.short}>
               <KindIcon size={12}
                         className={TONE_CLASSES[entry?.tone ?? "zinc"].text} />

@@ -18,6 +18,10 @@ import { X, CheckCircle, Star, Folder, Sun, Moon } from "lucide-react";
 import type { AppSettings, ModelInfo } from "../types/ai";
 import { useTheme } from "../hooks/useTheme";
 import { useUiScale, UI_SCALE_PX, type UiScale } from "../hooks/useUiScale";
+import {
+  useLineSpacing, LINE_SPACING_OPTIONS, resolveLineHeight, clampMultiple,
+  MULTIPLE_MIN, MULTIPLE_MAX,
+} from "../hooks/useLineSpacing";
 // Content-mode filter, cost tiers, media filter, and the curated recommended
 // list all live in a shared util so Settings and ProjectSettings can't drift
 // apart (see utils/modelFiltering.ts).
@@ -131,6 +135,18 @@ export function Settings({ onClose }: SettingsProps) {
   // (menus, chat box, Settings, About, profile labels). The manuscript
   // editor has its own font picker and is unaffected by this control.
   const [uiScale, setUiScaleLocal] = useUiScale();
+  // Line spacing. `multipleDraft` is the text in the number box while the
+  // writer is still typing it; the applied value only changes on blur, so
+  // typing "2" on the way to "2.5" does not reflow the manuscript twice.
+  const { spacing, multiple: spacingMultiple, set: setSpacing } = useLineSpacing();
+  const [multipleDraft, setMultipleDraft] = useState(String(spacingMultiple));
+  // Keep the draft in step when the stored value arrives or changes from
+  // elsewhere. initLineSpacing() resolves AFTER this screen can mount, so
+  // without this the box would show the default while the editor was
+  // already using the writer's saved number.
+  useEffect(() => {
+    setMultipleDraft(String(spacingMultiple));
+  }, [spacingMultiple]);
 
   // UI state
   const [loading, setLoading]             = useState(true);
@@ -562,7 +578,7 @@ export function Settings({ onClose }: SettingsProps) {
                       >
                         <span className="flex w-full items-center justify-between">
                           <span className="text-xs font-medium text-text-primary">{p.label}</span>
-                          <span className={`text-[10px] ${
+                          <span className={`text-micro ${
                             isActiveSaved ? "text-emerald-400" : keySet ? "text-indigo-300" : "text-faint"
                           }`}>
                             {status}
@@ -1031,6 +1047,101 @@ export function Settings({ onClose }: SettingsProps) {
                     Scales menus, chat, Settings, and other interface text. The
                     manuscript editor's font is controlled separately by the
                     font picker in the editor toolbar. Saved globally.
+                  </p>
+                </div>
+
+                {/* ── Line spacing ────────────────────────────────────────
+                    Sits beside Interface size and does a DIFFERENT job, which
+                    the help text has to make obvious or the two get confused:
+                    Interface size sizes the app's chrome, this spaces the
+                    writer's own prose. Wanting compact menus above a roomy
+                    manuscript is an ordinary preference, so they are separate
+                    controls rather than one.
+
+                    Named the way a word processor names it. A writer who has
+                    spent years in Word knows what "1.5 lines" looks like; they
+                    have no feel at all for "1.75". The number is shown anyway,
+                    in brackets, because it is the thing actually applied and
+                    hiding it would make Multiple impossible to reason about. */}
+                <div className="mt-6">
+                  <label className="mb-2 block text-xs font-medium text-text-primary">
+                    Line spacing
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {LINE_SPACING_OPTIONS.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setSpacing(opt.id, spacingMultiple)}
+                        type="button"
+                        aria-pressed={spacing === opt.id}
+                        className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
+                          spacing === opt.id
+                            ? "border-indigo-500 bg-bg-surface text-text-primary"
+                            : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                        }`}
+                      >
+                        <span className="font-medium">{opt.label}</span>
+                        {/* The resolved line-height, to two decimals. Same
+                            number the editor is handed, so what this says and
+                            what the page does cannot drift. */}
+                        <span className="text-text-muted">
+                          {resolveLineHeight(opt.id, spacingMultiple).toFixed(2)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* The custom multiplier. Only meaningful for Multiple, so it
+                      only appears then -- a permanently visible input that does
+                      nothing three times out of four is a question the writer
+                      has to answer and then discover was irrelevant. */}
+                  {spacing === "multiple" && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <label
+                        htmlFor="line-spacing-multiple"
+                        className="text-xs text-text-muted"
+                      >
+                        Multiple of a single line
+                      </label>
+                      <input
+                        id="line-spacing-multiple"
+                        type="number"
+                        min={MULTIPLE_MIN}
+                        max={MULTIPLE_MAX}
+                        step={0.05}
+                        value={multipleDraft}
+                        onChange={e => setMultipleDraft(e.target.value)}
+                        /* Committed on blur rather than per keystroke: typing
+                           "2" on the way to "2.5" would otherwise apply 2 and
+                           reflow the manuscript underneath the writer. */
+                        onBlur={() => {
+                          const parsed = Number(multipleDraft);
+                          if (!Number.isFinite(parsed)) {
+                            // Not a number: put the live value back rather than
+                            // silently substituting one, so nothing is applied
+                            // that the writer did not ask for.
+                            setMultipleDraft(String(spacingMultiple));
+                            return;
+                          }
+                          const clamped = clampMultiple(parsed);
+                          setMultipleDraft(String(clamped));
+                          setSpacing("multiple", clamped);
+                        }}
+                        className="w-20 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-xs text-faint">
+                        = {resolveLineHeight("multiple", spacingMultiple).toFixed(2)} line height
+                      </span>
+                    </div>
+                  )}
+
+                  <p className="mt-2 text-xs text-faint">
+                    Spaces the lines in the manuscript, outline, notes and
+                    summary editors -- your writing, not the app around it.
+                    Measured the way a word processor measures it, so Single is
+                    the font's own natural line height rather than a flat 1.0.
+                    Interface size above is the separate control for menus and
+                    labels. Saved globally.
                   </p>
                 </div>
               </section>

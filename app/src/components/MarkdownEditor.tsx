@@ -24,6 +24,7 @@ import { createTheme } from "@uiw/codemirror-themes";
 import { tags as t } from "@lezer/highlight";
 import type { FontValue } from "./EditorToolbar";
 import { useTheme } from "../hooks/useTheme";
+import { useLineSpacing } from "../hooks/useLineSpacing";
 import { issueOverlayExtension } from "./editor/issueOverlay";
 import { ThesaurusPopover } from "./editor/ThesaurusPopover";
 
@@ -39,12 +40,19 @@ const fontCompartment = new Compartment();
 // active-line highlight) it uses CSS variables so the colors flip with
 // the app theme automatically. CodeMirror lets us write plain CSS values
 // here, and var(--st-...) is a plain CSS value.
-function buildFontTheme(fontFamily: string) {
+function buildFontTheme(fontFamily: string, lineHeight: number) {
   return EditorView.theme({
-    // The root editor element
+    // The root editor element.
+    //
+    // lineHeight comes from the writer's Line spacing setting rather than
+    // being fixed here. It arrives already resolved -- Single / 1.5 lines /
+    // Double / a custom multiple have all been turned into one number by
+    // useLineSpacing, so the arithmetic that decides what "1.5 lines" means
+    // lives in exactly one place and the editor cannot disagree with the
+    // figure the Settings screen printed next to the option.
     "&": {
       fontSize: "16px",
-      lineHeight: "1.8",
+      lineHeight: String(lineHeight),
     },
     // The typing area -- minimal styling here so CodeMirror's coordinate
     // system stays accurate. Centering is handled by the wrapper div in JSX.
@@ -480,17 +488,21 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
   // and changing it triggers @uiw/react-codemirror to rebuild the view --
   // exactly what we want when the palette changes.
   const [appTheme]    = useTheme();
+  const { lineHeight } = useLineSpacing();
   const editorTheme   = appTheme === "light" ? storythreadLightTheme : storythreadDarkTheme;
 
-  // When the font prop changes, hot-swap only the font compartment.
-  // This avoids rebuilding the entire editor (which would reset the cursor).
+  // When the font OR the line spacing changes, hot-swap only that compartment.
+  // This avoids rebuilding the entire editor (which would reset the cursor) --
+  // which matters more for spacing than for font, because a writer comparing
+  // Double against 1.5 lines will flip between them repeatedly and would
+  // otherwise lose their place in the manuscript every time.
   useEffect(() => {
     if (editorViewRef.current) {
       editorViewRef.current.dispatch({
-        effects: fontCompartment.reconfigure(buildFontTheme(font)),
+        effects: fontCompartment.reconfigure(buildFontTheme(font, lineHeight)),
       });
     }
-  }, [font]);
+  }, [font, lineHeight]);
 
   // Static extensions -- built once, never change.
   //
@@ -507,7 +519,7 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
       autocorrect: "off",
       autocapitalize: "off",
     }),
-    fontCompartment.of(buildFontTheme(font)),
+    fontCompartment.of(buildFontTheme(font, lineHeight)),
     // HR scene-break decoration: paints a horizontal stripe across any line
     // that is just `---` (or `***`). The text remains editable; only the
     // visual presentation changes.

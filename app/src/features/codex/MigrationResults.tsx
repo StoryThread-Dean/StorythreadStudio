@@ -100,7 +100,7 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
       </p>
 
       {report.arcs_absorbed > 0 && (
-        <p className="text-[11px] text-text-muted">
+        <p className="text-mini text-text-muted">
           {report.arcs_absorbed} series arc
           {report.arcs_absorbed === 1 ? "" : "s"} became dated facts on the
           entries they belong to, rather than separate entries of their own.
@@ -108,7 +108,7 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
       )}
 
       {report.backup_path && (
-        <p className="text-[11px] text-faint">
+        <p className="text-mini text-faint">
           Your originals were copied to{" "}
           <span className="text-text-muted">{report.backup_path}</span> before
           anything was written, and are still there. Your{" "}
@@ -121,7 +121,7 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
           world -- not by the order the conversion happened to walk folders. */}
       {groups.map(group => (
         <div key={group.type}>
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
+          <p className="flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wide text-faint">
             <group.Icon size={11} className={group.tone} />
             {group.label}
           </p>
@@ -138,7 +138,7 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
                   </span>
                   {/* The path, on the row. A writer should be able to go and
                       look at the file without asking the app where it is. */}
-                  <span className="hidden shrink-0 text-[10px] text-faint group-hover:inline">
+                  <span className="hidden shrink-0 text-micro text-faint group-hover:inline">
                     {entry.converted_to}
                   </span>
                 </button>
@@ -150,10 +150,10 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
 
       {(report.warnings?.length ?? 0) > 0 && (
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">
+          <p className="text-mini font-semibold uppercase tracking-wide text-amber-200/90">
             Worth knowing
           </p>
-          <ul className="mt-1 space-y-0.5 text-[11px] text-amber-200/80">
+          <ul className="mt-1 space-y-0.5 text-mini text-amber-200/80">
             {report.warnings.map(w => <li key={w}>{w}</li>)}
           </ul>
         </div>
@@ -161,10 +161,10 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
 
       {(report.unconvertible?.length ?? 0) > 0 && (
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-200/90">
+          <p className="text-mini font-semibold uppercase tracking-wide text-rose-200/90">
             Left alone
           </p>
-          <ul className="mt-1 space-y-0.5 text-[11px] text-rose-200/80">
+          <ul className="mt-1 space-y-0.5 text-mini text-rose-200/80">
             {report.unconvertible.map(u => (
               <li key={`${u.folder}/${u.file ?? ""}`}>
                 {u.folder}{u.file ? `/${u.file}` : ""} -- {u.reason}
@@ -174,7 +174,7 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
         </div>
       )}
 
-      <p className="border-t border-border pt-2 text-[11px] text-faint">
+      <p className="border-t border-border pt-2 text-mini text-faint">
         Click any entry above to see it before and after, field by field.
       </p>
     </div>
@@ -216,14 +216,14 @@ function Detail({ projectPath, entry, onBack }: {
   return (
     <div data-testid="migration-detail" className="space-y-3">
       <button onClick={onBack}
-              className="inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-200">
+              className="inline-flex items-center gap-1 text-mini text-violet-300 hover:text-violet-200">
         <ArrowLeft size={11} /> Back to everything that was converted
       </button>
 
       <h3 className="text-sm font-semibold text-text-primary">{entry.name}</h3>
 
       {error && (
-        <p role="alert" className="rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200">
+        <p role="alert" className="rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-mini text-rose-200">
           {error}
         </p>
       )}
@@ -255,14 +255,14 @@ function Detail({ projectPath, entry, onBack }: {
             )}
           </p>
 
-          <p className="text-[10px] text-faint">
+          <p className="text-micro text-faint">
             Left: {diff.original_path}<br />Right: {diff.converted_path}
           </p>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] table-fixed border-collapse text-xs">
               <thead>
-                <tr className="border-b border-border text-left text-[11px] text-faint">
+                <tr className="border-b border-border text-left text-mini text-faint">
                   <th className="w-32 py-1 pr-2 font-medium">Field</th>
                   <th className="py-1 pr-2 font-medium">What you wrote</th>
                   <th className="py-1 font-medium">In the Weave</th>
@@ -279,9 +279,9 @@ function Detail({ projectPath, entry, onBack }: {
                       <td className="py-1.5 pr-2 text-text-muted">
                         {label}
                         {row.missing ? (
-                          <span className="ml-1 text-[10px] text-rose-300">missing</span>
+                          <span className="ml-1 text-micro text-rose-300">missing</span>
                         ) : row.changed ? (
-                          <span className="ml-1 text-[10px] text-amber-300/80">changed</span>
+                          <span className="ml-1 text-micro text-amber-300/80">changed</span>
                         ) : null}
                       </td>
                       <td className="whitespace-pre-wrap py-1.5 pr-2 text-text-muted">
@@ -299,7 +299,7 @@ function Detail({ projectPath, entry, onBack }: {
 
           <button
             onClick={() => setRaw(v => !v)}
-            className="inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-200"
+            className="inline-flex items-center gap-1 text-mini text-violet-300 hover:text-violet-200"
           >
             <FileText size={11} />
             {raw ? "Hide the files themselves" : "Show me the files themselves"}
@@ -309,10 +309,10 @@ function Detail({ projectPath, entry, onBack }: {
               writer is entitled to the thing itself. */}
           {raw && (
             <div className="grid gap-2 md:grid-cols-2">
-              <pre className="max-h-64 overflow-auto rounded border border-border bg-black/40 p-2 text-[10px] text-text-muted">
+              <pre className="max-h-64 overflow-auto rounded border border-border bg-black/40 p-2 text-micro text-text-muted">
                 {diff.original_raw}
               </pre>
-              <pre className="max-h-64 overflow-auto rounded border border-border bg-black/40 p-2 text-[10px] text-text-muted">
+              <pre className="max-h-64 overflow-auto rounded border border-border bg-black/40 p-2 text-micro text-text-muted">
                 {diff.converted_raw}
               </pre>
             </div>

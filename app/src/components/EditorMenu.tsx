@@ -72,7 +72,7 @@ function MenuItem({
 // A tiny uppercase group label, matching the sidebar's NavSection styling.
 function MenuGroupLabel({ children }: { children: string }) {
   return (
-    <p className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
+    <p className="px-3 pb-0.5 pt-2 text-micro font-semibold uppercase tracking-wider text-faint">
       {children}
     </p>
   );

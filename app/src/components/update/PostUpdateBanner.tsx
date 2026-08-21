@@ -55,7 +55,7 @@ export function PostUpdateBanner({
         </p>
 
         {!hasDonated && (
-          <p className="mt-0.5 text-[11px] text-emerald-300/80">
+          <p className="mt-0.5 text-mini text-emerald-300/80">
             Enjoying the updates? Consider{" "}
             <button
               onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
@@ -77,13 +77,13 @@ export function PostUpdateBanner({
 
       <button
         onClick={onAcknowledge}
-        className="rounded border border-emerald-600 bg-emerald-700/40 px-2 py-0.5 text-[11px] text-emerald-100 hover:bg-emerald-700/60"
+        className="rounded border border-emerald-600 bg-emerald-700/40 px-2 py-0.5 text-mini text-emerald-100 hover:bg-emerald-700/60"
       >
         Got it
       </button>
       <button
         onClick={() => setHidden(true)}
-        className="rounded px-1.5 py-0.5 text-[11px] text-emerald-300/70 hover:text-emerald-200"
+        className="rounded px-1.5 py-0.5 text-mini text-emerald-300/70 hover:text-emerald-200"
         title="Hide for now (will return on next launch)"
       >
         âœ•

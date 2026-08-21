@@ -486,7 +486,7 @@ function IssueCard({
 
       {/* Header row: severity badge + category label. */}
       <div className="mb-1.5 flex items-center gap-2">
-        <span className={`rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${severityClass(sev)}`}>
+        <span className={`rounded border px-1.5 py-0.5 text-micro uppercase tracking-wide ${severityClass(sev)}`}>
           {sev}
         </span>
         <span className="text-xs font-semibold text-indigo-200">{label}</span>
@@ -514,7 +514,7 @@ function IssueCard({
             <Explain of="issue.what" label="What am I looking at?" />
           </div>
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <p className="text-[10px] uppercase tracking-wide text-faint">
+            <p className="text-micro uppercase tracking-wide text-faint">
               Try a different angle
             </p>
             {/* PER PRESS, and that is the thing to say out loud. Cycling four
@@ -535,7 +535,7 @@ function IssueCard({
                   onClick={() => onRevise(m.key)}
                   disabled={disabled}
                   title={m.help}
-                  className="rounded border border-border bg-bg-primary px-1.5 py-0.5 text-[11px] text-text-primary transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded border border-border bg-bg-primary px-1.5 py-0.5 text-mini text-text-primary transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {busyModifier === m.key ? "..." : m.label}
                 </button>
@@ -546,7 +546,7 @@ function IssueCard({
       )}
 
       {/* Inline error from a failed revise call. */}
-      {error && <p className="mb-2 text-[11px] text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-mini text-red-400">{error}</p>}
 
       {/* Action row: Accept / Ignore. Praise entries get only Dismiss. */}
       <div className="flex justify-end gap-2">

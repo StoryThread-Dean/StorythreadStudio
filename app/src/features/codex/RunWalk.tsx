@@ -26,7 +26,7 @@ import { GuidedWalk, type WalkStep } from "../../components/learn/GuidedWalk";
 
 /** A line of the brief, as the model would receive it. */
 function Brief({ children }: { children: React.ReactNode }) {
-  return <span className="font-mono text-[10px] leading-relaxed">{children}</span>;
+  return <span className="font-mono text-micro leading-relaxed">{children}</span>;
 }
 
 const STEPS: WalkStep[] = [

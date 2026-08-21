@@ -217,7 +217,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
           <Explain of="extractor.what" />
           <button type="button" onClick={() => setGuiding(true)}
                   data-testid="extractor-show-me"
-                  className="rounded border border-border px-2 py-0.5 text-[11px] text-text-muted hover:text-text-primary">
+                  className="rounded border border-border px-2 py-0.5 text-mini text-text-muted hover:text-text-primary">
             Show me how this works
           </button>
         </div>
@@ -230,7 +230,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
           <p className="flex items-center gap-2 text-xs font-semibold text-amber-200">
             <AlertTriangle size={12} /> Run Weaving first.
           </p>
-          <p className="mt-1 max-w-2xl text-[11px] text-amber-200/80">
+          <p className="mt-1 max-w-2xl text-mini text-amber-200/80">
             You have no entries yet. This pass works by building on what you
             already have -- it sends a short extract of each entry so it can
             add to them rather than start over. With nothing to build on it will
@@ -243,7 +243,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
 
       {/* WHAT THIS IS, said before it is bought rather than after. */}
       <div className="rounded border border-border bg-surface px-3 py-2">
-        <p className="text-[11px] text-text-muted">
+        <p className="text-mini text-text-muted">
           <span className="font-semibold text-text-primary">
             This is a first draft, not an answer.
           </span>{" "}
@@ -283,7 +283,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       {/* WHAT TO READ */}
       <section>
         <h4 className="text-xs font-semibold text-text-primary">What to read</h4>
-        <p className="mt-0.5 text-[11px] text-faint">
+        <p className="mt-0.5 text-mini text-faint">
           The whole book is the recommended run, and the ticked chapters go up
           as ONE request either way -- that is what lets it notice a character
           from chapter two coming back in chapter eleven. Pick chapters when you
@@ -306,7 +306,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
                   return next.size === (plan?.chapters.length ?? 0)
                     ? new Set() : next;
                 })}
-                className={`rounded border px-2 py-0.5 text-[11px] ${
+                className={`rounded border px-2 py-0.5 text-mini ${
                   on ? "border-violet-600 bg-violet-500/10 text-text-primary"
                      : "border-border text-faint hover:text-text-muted"}`}
               >
@@ -324,22 +324,22 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
             Which entries to work on
             <button type="button" onClick={() => setIncluded(
                       new Set((plan?.known ?? []).map(k => k.entity_id)))}
-                    className="rounded border border-border px-1.5 py-0.5 text-[10px] font-normal text-text-muted hover:text-text-primary">
+                    className="rounded border border-border px-1.5 py-0.5 text-micro font-normal text-text-muted hover:text-text-primary">
               Tick all
             </button>
             <button type="button" onClick={() => setIncluded(new Set())}
-                    className="rounded border border-border px-1.5 py-0.5 text-[10px] font-normal text-text-muted hover:text-text-primary">
+                    className="rounded border border-border px-1.5 py-0.5 text-micro font-normal text-text-muted hover:text-text-primary">
               Tick none
             </button>
           </h4>
-          <p className="mt-0.5 max-w-2xl text-[11px] text-faint">
+          <p className="mt-0.5 max-w-2xl text-mini text-faint">
             Ticked entries get proposals. The ones you have already written up
             start unticked, because you probably do not want a model's version
             of work you have finished -- tick any of them back on. A character
             who appeared once in chapter two and has now returned matters
             again, and nothing here can know that but you.
           </p>
-          <p className="mt-0.5 max-w-2xl text-[11px] text-faint">
+          <p className="mt-0.5 max-w-2xl text-mini text-faint">
             Unticked entries are still shown to the model so it recognises them
             in your prose. It just will not propose anything for them.
           </p>
@@ -347,7 +347,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
               data-testid="extractor-exclusions">
             {(plan?.known ?? []).map(entry => (
               <li key={entry.entity_id}>
-                <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-[11px] hover:bg-white/5">
+                <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-mini hover:bg-white/5">
                   <input
                     type="checkbox"
                     checked={included.has(entry.entity_id)}
@@ -371,7 +371,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       )}
 
       {/* WHAT IT WILL DO, in counts, before the button. */}
-      <div className="rounded border border-border bg-surface px-3 py-2 text-[11px] text-text-muted"
+      <div className="rounded border border-border bg-surface px-3 py-2 text-mini text-text-muted"
            data-testid="extractor-summary">
         Reading <span className="text-text-primary">{selectedChapters}</span>{" "}
         {selectedChapters === 1 ? "chapter" : "chapters"}, proposing for{" "}
@@ -407,7 +407,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
           <p className="text-xs font-semibold text-rose-100">
             This will not fit in {modelId}.
           </p>
-          <p className="mt-1 text-[11px] text-rose-200/80">
+          <p className="mt-1 text-mini text-rose-200/80">
             Your selection is roughly{" "}
             {estimatedTokens.toLocaleString()} tokens and that model holds{" "}
             {contextTokens.toLocaleString()}. Tick fewer chapters, or
@@ -420,13 +420,13 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       {plan?.model_error && (
         <div className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
              data-testid="extractor-model-error">
-          <p className="text-[11px] text-amber-200">
+          <p className="text-mini text-amber-200">
             No model can run this yet: {plan.model_error}
           </p>
         </div>
       )}
 
-      {error && <p role="alert" className="text-[11px] text-rose-300">{error}</p>}
+      {error && <p role="alert" className="text-mini text-rose-300">{error}</p>}
 
       {/* THE GUARD. Not an error -- a question, with the number in it. */}
       {confirmReplace !== null && (
@@ -437,7 +437,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
             you have not looked at yet. Starting a new run throws{" "}
             {confirmReplace === 1 ? "it" : "them"} away.
           </p>
-          <p className="mt-1 text-[11px] text-amber-200/70">
+          <p className="mt-1 text-mini text-amber-200/70">
             There is only ever one extraction at a time, so the new one replaces
             the old one entirely. You paid for those proposals.
           </p>
@@ -484,7 +484,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       )}
 
       {running && (
-        <p className="text-[11px] text-faint" data-testid="extractor-progress-line">
+        <p className="text-mini text-faint" data-testid="extractor-progress-line">
           {batchTotal > 1
             ? `Reading part ${batchAt} of ${batchTotal}. Each part is saved as `
               + `it finishes, so nothing is lost if you stop.`
@@ -493,7 +493,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       )}
 
       {partial && (
-        <p className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200"
+        <p className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2 text-mini text-amber-200"
            data-testid="extractor-partial-run">
           {partial}
         </p>
@@ -513,7 +513,7 @@ function Stat({ label, value, tone = "plain", testId }: {
 }) {
   return (
     <div className="bg-bg-primary px-2.5 py-1.5" data-testid={testId}>
-      <p className="text-[10px] uppercase tracking-wide text-faint">{label}</p>
+      <p className="text-micro uppercase tracking-wide text-faint">{label}</p>
       <p className={`text-xs tabular-nums ${
         tone === "bad" ? "text-rose-300" : "text-text-primary"}`}>
         {value}

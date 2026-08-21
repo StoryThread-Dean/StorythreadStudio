@@ -2763,7 +2763,7 @@ export function ProfileBuilder({
             AI knows which rounds of questions to run next. */}
         {behaviorMode === "interview" && profile && (
           <div className="border-t border-border px-3 py-2">
-            <p className="mb-1.5 text-[11px] text-faint">
+            <p className="mb-1.5 text-mini text-faint">
               Expand on next send:
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -2779,7 +2779,7 @@ export function ProfileBuilder({
                       else next.add(c.heading);
                       return next;
                     })}
-                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                    className={`rounded-full border px-2 py-0.5 text-mini transition-colors ${
                       checked
                         ? "border-indigo-500 bg-indigo-950/40 text-indigo-200"
                         : "border-border bg-bg-surface text-faint hover:border-indigo-500 hover:text-text-muted"
@@ -2970,7 +2970,7 @@ function ProfileSectionEditor({
             <Explain of="character.subtext" />
             <button
               onClick={() => setGuideOpen(true)}
-              className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-800 px-1.5 py-0.5 text-[10px] text-violet-200 transition-colors hover:border-violet-500"
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-800 px-1.5 py-0.5 text-micro text-violet-200 transition-colors hover:border-violet-500"
             >
               <BookOpen size={10} /> Show me how this works
             </button>

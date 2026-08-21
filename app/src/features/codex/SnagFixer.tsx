@@ -337,7 +337,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
             <p className="text-xs text-text-primary">
               This was already sorted out somewhere else.
             </p>
-            <p className="mt-1 text-[11px] text-text-muted">
+            <p className="mt-1 text-mini text-text-muted">
               The walk&apos;s list is from when the scan ran, and what this
               pointed at is no longer there -- fixed through the editor,
               absorbed, or settled by another stop. The next scan will not
@@ -348,7 +348,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
               className="mt-2 inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
             >
               <span>Carry on</span>
-              <span className="text-[10px] font-normal text-faint">
+              <span className="text-micro font-normal text-faint">
                 takes you to the next thing in the walk
               </span>
             </button>
@@ -363,7 +363,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           {tangle && (
             <div className="mb-2 rounded border border-rose-900/60 bg-rose-950/20 p-2"
                  data-testid="tangle-group">
-              <p className="text-[11px] text-rose-100">
+              <p className="text-mini text-rose-100">
                 {members.length} problems here all concern{" "}
                 <span className="font-medium text-text-primary">
                   {String(stop.detail?.axis ?? "one thing")}
@@ -374,7 +374,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
               <ol className="mt-1.5 space-y-0.5">
                 {members.map((m, i) => (
                   <li key={m.key}
-                      className={`text-[11px] ${
+                      className={`text-mini ${
                         i === memberAt ? "text-text-primary"
                         : i < memberAt ? "text-faint line-through"
                         : "text-text-muted"
@@ -383,7 +383,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                   </li>
                 ))}
               </ol>
-              <p className="mt-1.5 text-[10px] text-faint"
+              <p className="mt-1.5 text-micro text-faint"
                  data-testid="tangle-progress">
                 Working on {memberAt + 1} of {members.length}.
               </p>
@@ -403,7 +403,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                   }, { all: true })}
                   disabled={busy}
                   data-testid="tangle-all-deliberate"
-                  className="mt-2 rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary disabled:opacity-40"
+                  className="mt-2 rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:text-text-primary disabled:opacity-40"
                 >
                   All {members.length} are deliberate -- never ask about any of
                   them again
@@ -415,7 +415,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           {/* ── Unplaced: one fact, one picker ─────────────────────────── */}
           {unplaced && sides[0] && (
             <>
-              <p className="mb-1.5 text-[11px] text-text-muted">
+              <p className="mb-1.5 text-mini text-text-muted">
                 This never takes effect, because nothing says when it became
                 true:
               </p>
@@ -441,17 +441,17 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           {/* ── Early mention: move an anchor to where the prose starts ── */}
           {early && (
             <>
-              <p className="mb-1.5 text-[11px] text-text-muted">
+              <p className="mb-1.5 text-mini text-text-muted">
                 The prose names this in {chapterLabel(stop.chapter_id)}, and
                 everything recorded about it happens later. If the prose is
                 right, the earliest of these should move:
               </p>
               {run === null ? (
-                <p className="flex items-center gap-2 text-[11px] text-text-muted">
+                <p className="flex items-center gap-2 text-mini text-text-muted">
                   <Loader size={11} className="animate-spin" /> Reading the entry...
                 </p>
               ) : run.length === 0 ? (
-                <p className="mb-2 text-[11px] text-text-muted">
+                <p className="mb-2 text-mini text-text-muted">
                   Nothing anchored was found on the entry -- the timing may come
                   from a connection. If the early naming is deliberate
                   foreshadowing, use{" "}
@@ -466,14 +466,14 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                       <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
                         {fact.value}
                       </span>
-                      <span className="shrink-0 text-[10px] text-faint">
+                      <span className="shrink-0 text-micro text-faint">
                         {chapterLabel(fact.at)}
                       </span>
                       <button
                         onClick={() => void act(() =>
                           patchFact(String(fact.id), { at: stop.chapter_id }))}
                         disabled={busy}
-                        className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary disabled:opacity-40"
+                        className="shrink-0 rounded border border-border px-1.5 py-0.5 text-micro text-text-muted hover:text-text-primary disabled:opacity-40"
                       >
                         Move to {chapterLabel(stop.chapter_id)}
                       </button>
@@ -487,7 +487,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           {/* ── Snag over connections: remove the wrong one ────────────── */}
           {(stop.kind === "snag" || tangle) && tieBased && (
             <>
-              <p className="mb-1.5 text-[11px] text-text-muted">
+              <p className="mb-1.5 text-mini text-text-muted">
                 These connections clash. Remove the one that is wrong -- or if
                 the clash IS the story (a disputed throne, a marriage nobody
                 annulled), dismiss the stop and it stays.
@@ -501,7 +501,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                       {side.target_name ?? side.target}
                     </span>
                     {side.where && (
-                      <span className="shrink-0 text-[10px] text-faint">{side.where}</span>
+                      <span className="shrink-0 text-micro text-faint">{side.where}</span>
                     )}
                     <button
                       onClick={() => void act(() => deleteTie(side))}
@@ -524,7 +524,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                   single fact whose own two anchors disagree, and "These
                   disagree. Keep the right one" offers a choice that is not
                   there. */}
-              <p className="mb-1.5 text-[11px] text-text-muted">
+              <p className="mb-1.5 text-mini text-text-muted">
                 {sides.length > 1
                   ? "These disagree. Keep the right one, fix one in place, or "
                     + "say the disagreement is deliberate:"
@@ -552,7 +552,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                           {side.revealed_at !== undefined
                             && side.revealed_at !== null && (
                             <>
-                              <span className="text-[10px] text-faint">
+                              <span className="text-micro text-faint">
                                 reader learns it in
                               </span>
                               {chapterPicker(draftRevealed, setDraftRevealed,
@@ -566,13 +566,13 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                               ...(draftRevealed ? { revealed_at: draftRevealed } : {}),
                             }))}
                             disabled={busy || !draftValue.trim()}
-                            className="inline-flex items-center gap-1 rounded bg-violet-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                            className="inline-flex items-center gap-1 rounded bg-violet-600 px-2 py-1 text-mini font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
                           >
                             <Check size={10} /> Save the fix
                           </button>
                           <button
                             onClick={() => setEditing(null)}
-                            className="rounded border border-border px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+                            className="rounded border border-border px-2 py-1 text-mini text-text-muted hover:text-text-primary"
                           >
                             Back
                           </button>
@@ -583,7 +583,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                         <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
                           {side.value}
                         </span>
-                        <span className="shrink-0 text-[10px] text-faint">
+                        <span className="shrink-0 text-micro text-faint">
                           {side.where ?? chapterLabel(side.at)}
                         </span>
                         {/* Only when there is something to keep it INSTEAD
@@ -605,7 +605,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                               }
                             })}
                             disabled={busy}
-                            className="shrink-0 rounded border border-emerald-800 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
+                            className="shrink-0 rounded border border-emerald-800 px-1.5 py-0.5 text-micro text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
                           >
                             Keep this one
                           </button>
@@ -650,12 +650,12 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           )}
 
           {error && (
-            <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>
+            <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>
           )}
 
           <button
             onClick={onClose}
-            className="mt-3 block text-[11px] text-faint hover:text-text-primary"
+            className="mt-3 block text-mini text-faint hover:text-text-primary"
           >
             Back to the stop
           </button>

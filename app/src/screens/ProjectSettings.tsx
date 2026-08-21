@@ -339,14 +339,14 @@ function ChipGroup({
   return (
     <div>
       <div className="mb-1 flex items-center gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+        <p className="text-micro font-semibold uppercase tracking-wider text-faint">
           {group.label}
         </p>
         {group.help && (
           <button
             type="button"
             onClick={() => setShowHelp(h => !h)}
-            className={`text-[10px] transition-colors ${helpLinkClass}`}
+            className={`text-micro transition-colors ${helpLinkClass}`}
             title="Explain each option in this group"
             aria-expanded={showHelp}
           >
@@ -358,7 +358,7 @@ function ChipGroup({
       {/* Definitions, shown above the chips so the reader has context before
           clicking. Only the options that actually have help text appear. */}
       {showHelp && group.help && (
-        <dl className="mb-1.5 space-y-0.5 rounded bg-bg-panel/60 px-2 py-1.5 text-[11px] leading-snug">
+        <dl className="mb-1.5 space-y-0.5 rounded bg-bg-panel/60 px-2 py-1.5 text-mini leading-snug">
           {group.options.filter(opt => group.help?.[opt]).map(opt => (
             <div key={opt}>
               <dt className={`inline font-semibold ${helpTermClass}`}>{opt}</dt>
@@ -376,7 +376,7 @@ function ChipGroup({
               key={opt}
               type="button"
               onClick={() => onChange(togglePart(value, opt))}
-              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors ${
+              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-mini transition-colors ${
                 checked
                   ? checkedClass
                   : "border-border bg-bg-panel text-text-muted hover:border-faint hover:text-text-primary"
@@ -420,7 +420,7 @@ function SuggestionPicker({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="text-[11px] text-indigo-300/80 transition-colors hover:text-indigo-300"
+        className="text-mini text-indigo-300/80 transition-colors hover:text-indigo-300"
         title="Common choices -- click to add or remove them from the box above"
       >
         {open ? "Hide suggestions" : "Show suggestions..."}
@@ -439,7 +439,7 @@ function SuggestionPicker({
               <button
                 type="button"
                 onClick={() => setNsfwOpen(o => !o)}
-                className="text-[11px] font-medium text-red-400/90 transition-colors hover:text-red-400"
+                className="text-mini font-medium text-red-400/90 transition-colors hover:text-red-400"
                 title="Adult / erotica classification labels -- optional, for mature fiction"
               >
                 {nsfwOpen ? "Hide NSFW suggestions" : "Show NSFW suggestions..."}
@@ -447,7 +447,7 @@ function SuggestionPicker({
 
               {nsfwOpen && (
                 <div className="mt-1.5 space-y-2 rounded border border-red-900/50 bg-red-950/20 p-2">
-                  <p className="text-[10px] text-red-400/70">
+                  <p className="text-micro text-red-400/70">
                     Adult / erotica labels for classifying mature fiction. Optional, and separate from your AI content-mode setting.
                   </p>
                   {nsfwGroups.map(group => (
@@ -919,7 +919,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     <button
                       type="button"
                       onClick={() => setShowPovHelp(h => !h)}
-                      className={`flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] transition-colors ${
+                      className={`flex items-center gap-0.5 rounded px-1 py-0.5 text-micro transition-colors ${
                         showPovHelp
                           ? "text-indigo-300"
                           : "text-faint hover:text-indigo-300"

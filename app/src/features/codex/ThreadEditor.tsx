@@ -250,7 +250,7 @@ export function ThreadEditor({
 
         <div className="min-h-0 flex-1 overflow-y-auto py-1">
           {list.length === 0 ? (
-            <p className="px-3 py-2 text-[11px] text-faint">
+            <p className="px-3 py-2 text-mini text-faint">
               Nothing here yet.
             </p>
           ) : list.map(item => (
@@ -288,7 +288,7 @@ export function ThreadEditor({
           ) : (
             <button
               onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-violet-300 hover:text-violet-200"
+              className="inline-flex items-center gap-1.5 text-mini text-violet-300 hover:text-violet-200"
             >
               <Plus size={11} /> Add {lex.term.toLowerCase()}
             </button>
@@ -320,16 +320,16 @@ export function ThreadEditor({
               </h3>
               {dirty && (
                 <span data-testid="unsaved"
-                      className="text-[11px] text-amber-300">Unsaved changes</span>
+                      className="text-mini text-amber-300">Unsaved changes</span>
               )}
               {saved && !dirty && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
+                <span className="inline-flex items-center gap-1 text-mini text-emerald-300">
                   <Check size={11} /> Saved
                 </span>
               )}
               <button
                 onClick={() => setTying(true)}
-                className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+                className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-mini text-text-muted hover:text-text-primary"
               >
                 <Link2 size={11} /> Connections
               </button>

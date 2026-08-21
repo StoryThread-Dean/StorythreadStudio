@@ -142,7 +142,7 @@ export function ImportPanel({ onBack, onImported }: ImportPanelProps) {
           <BookOpen size={15} /> Import from a Storythread Project
         </button>
       </div>
-      <p className="mb-1 text-[11px] text-zinc-600">
+      <p className="mb-1 text-mini text-zinc-600">
         DOCX, EPUB, Markdown, TXT, or PDF. A PDF has to contain real text
         rather than page images -- a scanned book will say so and stop.
       </p>
@@ -167,24 +167,24 @@ export function ImportPanel({ onBack, onImported }: ImportPanelProps) {
             <span className="break-all" title={workspacePath}>{workspacePath}</span>
           </p>
           {suggestion && !chosenByWriter && (
-            <p className="pl-5 text-[11px] leading-relaxed text-zinc-500">
+            <p className="pl-5 text-mini leading-relaxed text-zinc-500">
               {suggestion.reason}
               {suggestion.collision
                 && " That name was taken, so the next free folder is suggested."}
             </p>
           )}
           {chosenByWriter && (
-            <p className="pl-5 text-[11px] text-zinc-500">Your chosen folder.</p>
+            <p className="pl-5 text-mini text-zinc-500">Your chosen folder.</p>
           )}
           <button
             onClick={() => void pickWorkspaceFolder()}
-            className="mt-2 inline-flex items-center gap-1.5 pl-5 text-[11px] text-blue-400 hover:text-blue-300 hover:underline"
+            className="mt-2 inline-flex items-center gap-1.5 pl-5 text-mini text-blue-400 hover:text-blue-300 hover:underline"
           >
             <FolderOpen size={11} /> Choose a different folder
           </button>
         </div>
       )}
-      <p className="mt-1 text-[11px] text-zinc-600">
+      <p className="mt-1 text-mini text-zinc-600">
         Everything for this audiobook lives here: the copied source, the
         narration text, generated audio, and final exports.
       </p>

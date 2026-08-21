@@ -445,7 +445,7 @@ export function SceneSummaryView({
           here", the summary below is "what does happen". Each control saves
           immediately through /scene-beats (never the summary body). */}
       <div className="shrink-0 border-b border-border bg-bg-panel/30 px-4 py-2">
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-faint"
+        <p className="mb-1 text-micro font-semibold uppercase tracking-wider text-faint"
           title="Planning checkpoints for this scene. Check them off as the prose covers them. Stored with the scene summary -- never in your manuscript.">
           Beats
           {beats.length > 0 && (
@@ -463,7 +463,7 @@ export function SceneSummaryView({
                   onClick={() => void saveBeats(beats.map((b, bi) =>
                     bi === i ? { ...b, done: !b.done } : b
                   ))}
-                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] transition-colors ${
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-micro transition-colors ${
                     beat.done
                       ? "border-emerald-600 bg-emerald-900/40 text-emerald-400"
                       : "border-border text-transparent hover:border-emerald-600"
@@ -500,18 +500,18 @@ export function SceneSummaryView({
                   <button
                     onClick={() => moveBeat(i, -1)}
                     disabled={i === 0}
-                    className="px-0.5 text-[10px] text-faint hover:text-text-primary disabled:opacity-30"
+                    className="px-0.5 text-micro text-faint hover:text-text-primary disabled:opacity-30"
                     title="Move beat up" aria-label="Move beat up"
                   >▲</button>
                   <button
                     onClick={() => moveBeat(i, +1)}
                     disabled={i === beats.length - 1}
-                    className="px-0.5 text-[10px] text-faint hover:text-text-primary disabled:opacity-30"
+                    className="px-0.5 text-micro text-faint hover:text-text-primary disabled:opacity-30"
                     title="Move beat down" aria-label="Move beat down"
                   >▼</button>
                   <button
                     onClick={() => void saveBeats(beats.filter((_, bi) => bi !== i))}
-                    className="px-0.5 text-[10px] text-faint hover:text-red-400"
+                    className="px-0.5 text-micro text-faint hover:text-red-400"
                     title="Delete beat" aria-label="Delete beat"
                   >✕</button>
                 </div>

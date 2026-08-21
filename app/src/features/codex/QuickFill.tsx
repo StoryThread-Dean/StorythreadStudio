@@ -199,7 +199,7 @@ export function QuickFill({
           </div>
 
           {!thread && !error && (
-            <p className="flex items-center gap-2 text-[11px] text-text-muted">
+            <p className="flex items-center gap-2 text-mini text-text-muted">
               <Loader size={11} className="animate-spin" /> Reading the entry...
             </p>
           )}
@@ -209,10 +209,10 @@ export function QuickFill({
               reads as a broken loop -- which is exactly how it was reported. */}
           {done.map(box => (
             <div key={box.id} className="mb-2">
-              <p className="mb-0.5 flex items-center gap-1 text-[11px] text-emerald-300">
+              <p className="mb-0.5 flex items-center gap-1 text-mini text-emerald-300">
                 <Check size={10} /> {box.heading} already has writing
               </p>
-              <p className="rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted">
+              <p className="rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted">
                 {box.text}
               </p>
             </div>
@@ -229,7 +229,7 @@ export function QuickFill({
                 className="inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
               >
                 <span>Carry on</span>
-                <span className="text-[10px] font-normal text-faint">
+                <span className="text-micro font-normal text-faint">
                   takes you to the next thing in the walk
                 </span>
               </button>
@@ -239,7 +239,7 @@ export function QuickFill({
           {boxes.map((box, i) => (
             <div key={box.id} className="mb-2">
               <label htmlFor={`qf-${box.id}`}
-                     className="mb-1 block text-[11px] text-text-muted">
+                     className="mb-1 block text-mini text-text-muted">
                 {box.heading}
               </label>
               <textarea
@@ -254,7 +254,7 @@ export function QuickFill({
           ))}
 
           {error && (
-            <p role="alert" className="mb-2 text-[11px] text-rose-300">{error}</p>
+            <p role="alert" className="mb-2 text-mini text-rose-300">{error}</p>
           )}
 
           {/* The entry could not be read at all -- on a stale stop this
@@ -269,7 +269,7 @@ export function QuickFill({
                 className="inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
               >
                 <span>Nothing to do here -- carry on</span>
-                <span className="text-[10px] font-normal text-faint">
+                <span className="text-micro font-normal text-faint">
                   takes you to the next thing in the walk
                 </span>
               </button>
@@ -287,7 +287,7 @@ export function QuickFill({
           {thread && wordName && onAbsorbInstead && (
             <button
               onClick={onAbsorbInstead}
-              className="mb-2 block text-[11px] text-violet-300 hover:text-violet-200"
+              className="mb-2 block text-mini text-violet-300 hover:text-violet-200"
             >
               &ldquo;{wordName}&rdquo; is actually another name for an entry I
               already have

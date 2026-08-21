@@ -168,7 +168,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
                 <button
                   type="button"
                   onClick={() => onInsertRoleSummary(`Story role: ${chosenArchetype.label}`, chosenArchetype.summary)}
-                  className="shrink-0 rounded border border-border px-2 py-1.5 text-[11px] text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+                  className="shrink-0 rounded border border-border px-2 py-1.5 text-mini text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
                   title="Add this role's summary to the Personality section"
                 >
                   + Add role summary
@@ -217,7 +217,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
                 <button
                   type="button"
                   onClick={() => rollRow(row.section)}
-                  className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+                  className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
                   title={`Reroll the ${row.label} options -- pages through the pool without repeating`}
                 >
                   <Dices size={11} />
@@ -230,7 +230,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
                     key={option}
                     type="button"
                     onClick={() => onInsert(row.targetSectionKey, option)}
-                    className={`rounded-lg border px-2.5 py-1 text-left text-[11px] leading-snug transition-colors ${
+                    className={`rounded-lg border px-2.5 py-1 text-left text-mini leading-snug transition-colors ${
                       nsfw
                         ? "border-red-800/50 bg-red-950/20 text-red-300 hover:border-red-500 hover:text-red-200"
                         : "border-border bg-bg-surface text-text-muted hover:border-indigo-500 hover:text-text-primary"
@@ -244,7 +244,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
             </div>
           ))}
 
-          <p className="text-[11px] text-faint">
+          <p className="text-mini text-faint">
             Each click adds the line to the matching section below -- edit
             freely and fill any ____ blanks with your own specifics.
           </p>

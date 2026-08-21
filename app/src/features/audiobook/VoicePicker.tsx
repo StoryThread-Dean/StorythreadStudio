@@ -111,7 +111,7 @@ export function VoicePicker({
     return (
       <div className="space-y-2">
         <div>
-          <span className={`mb-1 block text-[10px] ${labelColor}`}>
+          <span className={`mb-1 block text-micro ${labelColor}`}>
             {axes.voice_label}
           </span>
           <select
@@ -130,7 +130,7 @@ export function VoicePicker({
           </select>
         </div>
         <div>
-          <span className={`mb-1 block text-[10px] ${labelColor}`}>
+          <span className={`mb-1 block text-micro ${labelColor}`}>
             {axes.accent_label}
           </span>
           <select
@@ -146,7 +146,7 @@ export function VoicePicker({
             ))}
           </select>
           {accent?.note && (
-            <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+            <p className="mt-1 text-micro leading-relaxed text-zinc-500">
               {accent.note}
             </p>
           )}

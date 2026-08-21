@@ -163,7 +163,7 @@ export function StorageDialog({
             </p>
           ) : (
             <div className="space-y-5">
-              <p className="text-[11px] leading-relaxed text-zinc-400">
+              <p className="text-mini leading-relaxed text-zinc-400">
                 This audiobook is using{" "}
                 <span className="font-semibold text-zinc-200">
                   {formatBytes(report.total_bytes)}
@@ -176,11 +176,11 @@ export function StorageDialog({
                   audio is gone but the finished book is not. */}
               {report.export_only && (
                 <div className="rounded border border-amber-800 bg-amber-950/40 px-3 py-2">
-                  <p className="flex items-start gap-1.5 text-[11px] font-medium text-amber-300">
+                  <p className="flex items-start gap-1.5 text-mini font-medium text-amber-300">
                     <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                     Export only
                   </p>
-                  <p className="mt-1 text-[10px] leading-relaxed text-amber-200/90">
+                  <p className="mt-1 text-micro leading-relaxed text-amber-200/90">
                     {report.export_only_note}
                   </p>
                 </div>
@@ -208,18 +208,18 @@ export function StorageDialog({
                       />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
-                          <span className="text-[11px] font-medium text-zinc-100">
+                          <span className="text-mini font-medium text-zinc-100">
                             {category.label}
                           </span>
-                          <span className="shrink-0 text-[10px] tabular-nums text-zinc-400">
+                          <span className="shrink-0 text-micro tabular-nums text-zinc-400">
                             {empty ? "nothing here" : formatBytes(category.bytes)}
                           </span>
                         </span>
-                        <span className="block text-[10px] leading-relaxed text-zinc-400">
+                        <span className="block text-micro leading-relaxed text-zinc-400">
                           {category.description}
                         </span>
                         {category.consequence && (
-                          <span className={"mt-0.5 block text-[10px] leading-relaxed "
+                          <span className={"mt-0.5 block text-micro leading-relaxed "
                             + (category.protected ? "text-rose-300/90" : "text-amber-300/80")}>
                             {category.consequence}
                           </span>
@@ -231,10 +231,10 @@ export function StorageDialog({
               </div>
 
               <section>
-                <h3 className="mb-1 border-b border-zinc-800 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                <h3 className="mb-1 border-b border-zinc-800 pb-2 text-mini font-semibold uppercase tracking-wider text-zinc-500">
                   Intermediate Audio
                 </h3>
-                <p className="mb-2 mt-2 text-[11px] leading-relaxed text-zinc-400">
+                <p className="mb-2 mt-2 text-mini leading-relaxed text-zinc-400">
                   What should happen to the segment files once this book
                   exports successfully?
                 </p>
@@ -252,10 +252,10 @@ export function StorageDialog({
                         onChange={() => void changeRetention(option.value)}
                       />
                       <span>
-                        <span className="block text-[11px] text-zinc-200">
+                        <span className="block text-mini text-zinc-200">
                           {option.label}
                         </span>
-                        <span className="block text-[10px] leading-relaxed text-zinc-500">
+                        <span className="block text-micro leading-relaxed text-zinc-500">
                           {option.hint}
                         </span>
                       </span>
@@ -279,15 +279,15 @@ export function StorageDialog({
 
         <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800 px-5 py-3">
           {error && (
-            <p className="min-w-0 flex-1 truncate text-[11px] text-rose-300" title={error}>
+            <p className="min-w-0 flex-1 truncate text-mini text-rose-300" title={error}>
               {error}
             </p>
           )}
           {!error && note && (
-            <p className="min-w-0 flex-1 text-[11px] text-emerald-300">{note}</p>
+            <p className="min-w-0 flex-1 text-mini text-emerald-300">{note}</p>
           )}
           {!error && !note && (
-            <p className="min-w-0 flex-1 text-[11px] text-zinc-500">
+            <p className="min-w-0 flex-1 text-mini text-zinc-500">
               {chosen.length === 0
                 ? "Nothing selected."
                 : `Frees about ${formatBytes(freeing)}.`}

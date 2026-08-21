@@ -30,7 +30,7 @@ function Ask({ prompt, why }: { prompt: string; why: string }) {
   return (
     <div className="rounded border border-violet-900/60 bg-violet-500/5 p-2">
       <p className="text-xs font-medium text-text-primary">{prompt}</p>
-      <p className="mt-1 text-[11px] text-faint">{why}</p>
+      <p className="mt-1 text-mini text-faint">{why}</p>
     </div>
   );
 }
@@ -40,7 +40,7 @@ function Ask({ prompt, why }: { prompt: string; why: string }) {
 function Answer({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded border border-border bg-bg-panel p-2">
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">
+      <p className="mb-1 text-micro uppercase tracking-wide text-faint">
         What you type
       </p>
       <p className="text-xs italic leading-relaxed text-text-primary">{children}</p>
@@ -51,7 +51,7 @@ function Answer({ children }: { children: React.ReactNode }) {
 function Prose({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded border border-border bg-bg-surface p-2">
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">{label}</p>
+      <p className="mb-1 text-micro uppercase tracking-wide text-faint">{label}</p>
       <p className="text-xs italic leading-relaxed text-text-primary">{children}</p>
     </div>
   );
@@ -315,7 +315,7 @@ export function UnwovenGuide({ onClose }: UnwovenGuideProps) {
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] uppercase tracking-wide text-faint">
+            <p className="text-micro uppercase tracking-wide text-faint">
               Page {index + 1} of {PAGES.length}
             </p>
             <h2 className="truncate text-xs font-semibold text-text-primary">

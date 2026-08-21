@@ -133,6 +133,28 @@ DEFAULT_SETTINGS: dict = {
     # "default" | "larger" | "larger_plus" | "largest"
     # Drives the root <html> font-size so Tailwind rem utilities scale.
     "ui_scale":            "default",
+    # line_spacing: how far apart lines sit in the Markdown editors, named
+    # the way a word processor names it. One of:
+    #   "single" | "one_half" | "double" | "multiple"
+    #
+    # Word measures Single from the font's own metrics (ascender + descender
+    # + line gap), which lands around 116% of the font size for the faces
+    # writers use. CSS line-height: normal does the same thing, but "normal"
+    # cannot be multiplied by 1.5, so the app needs one explicit basis
+    # number. It lives in the frontend next to the dropdown that uses it
+    # (SINGLE_BASIS in hooks/useLineSpacing.ts); the backend only stores the
+    # writer's choice.
+    #
+    # Default "one_half" rather than "single": the editor shipped at a
+    # line-height of 1.8 for its whole life, and 1.5 lines works out at 1.75,
+    # so nobody's manuscript reflows on upgrade. It also means the default is
+    # a name a writer recognises instead of a number nobody chose.
+    "line_spacing":           "one_half",
+    # line_spacing_multiple: the custom multiplier used when line_spacing is
+    # "multiple". Read for that value alone and otherwise left sitting, so
+    # switching to Double and back does not lose what was typed. Clamped
+    # 0.8-5.0 at the edge: under about 0.8 the lines physically collide.
+    "line_spacing_multiple":  1.15,
     # writing_skill_level: drives the daily word + task targets shown in the
     # Writing Progress tracker. Values: "newbie" | "beginner" | "novice"
     # | "amateur" | "experienced" | "fulltime" | "professional".

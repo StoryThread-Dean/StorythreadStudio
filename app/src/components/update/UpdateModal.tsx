@@ -73,7 +73,7 @@ export function UpdateModal({
               </span>
             </h2>
             {update.date && (
-              <p className="text-[11px] text-faint">Released {new Date(update.date).toLocaleDateString()}</p>
+              <p className="text-mini text-faint">Released {new Date(update.date).toLocaleDateString()}</p>
             )}
           </div>
           <button
@@ -121,13 +121,13 @@ export function UpdateModal({
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
-                  className="rounded border border-pink-700 bg-pink-900/30 px-2 py-0.5 text-[11px] text-pink-200 hover:bg-pink-900/50"
+                  className="rounded border border-pink-700 bg-pink-900/30 px-2 py-0.5 text-mini text-pink-200 hover:bg-pink-900/50"
                 >
                   GitHub Sponsors
                 </button>
                 <button
                   onClick={() => openLink("https://ko-fi.com/storythreadstudio")}
-                  className="rounded border border-cyan-700 bg-cyan-900/30 px-2 py-0.5 text-[11px] text-cyan-200 hover:bg-cyan-900/50"
+                  className="rounded border border-cyan-700 bg-cyan-900/30 px-2 py-0.5 text-mini text-cyan-200 hover:bg-cyan-900/50"
                 >
                   Ko-fi
                 </button>
@@ -148,7 +148,7 @@ export function UpdateModal({
                   style={{ width: progress.percent != null ? `${progress.percent * 100}%` : "100%" }}
                 />
               </div>
-              <p className="mt-1 text-[11px] text-faint">
+              <p className="mt-1 text-mini text-faint">
                 {formatBytes(progress.downloaded)}
                 {progress.total != null && ` / ${formatBytes(progress.total)}`}
                 {progress.percent != null && ` (${Math.round(progress.percent * 100)}%)`}
@@ -179,7 +179,7 @@ export function UpdateModal({
         <div className="flex shrink-0 items-center justify-between border-t border-border bg-bg-primary px-5 py-3">
           <button
             onClick={() => openLink(`https://github.com/StoryThread-Dean/StorythreadStudio/releases/tag/v${update.version}`)}
-            className="text-[11px] text-indigo-300 underline hover:text-indigo-200"
+            className="text-mini text-indigo-300 underline hover:text-indigo-200"
           >
             View on GitHub
           </button>

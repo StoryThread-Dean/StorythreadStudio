@@ -92,7 +92,7 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
         aria-expanded={open}
         aria-label={compact ? (label ?? "What's this?") : undefined}
         title={compact ? (label ?? "What's this?") : undefined}
-        className="inline-flex shrink-0 items-center gap-1 rounded text-[10px] text-text-muted transition-colors hover:text-blue-300"
+        className="inline-flex shrink-0 items-center gap-1 rounded text-micro text-text-muted transition-colors hover:text-blue-300"
       >
         <HelpCircle size={compact ? 13 : 11} />
         {!compact && (label ?? "What's this?")}
@@ -102,7 +102,7 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
         <div
           data-testid="explain-panel"
           role="note"
-          className={`absolute top-full z-50 mt-1 w-[min(30rem,80vw)] space-y-1.5 rounded border border-border bg-bg-panel px-2.5 py-2 text-[10px] leading-relaxed text-text-muted shadow-xl ${
+          className={`absolute top-full z-50 mt-1 w-[min(30rem,80vw)] space-y-1.5 rounded border border-border bg-bg-panel px-2.5 py-2 text-micro leading-relaxed text-text-muted shadow-xl ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >
@@ -138,7 +138,7 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
               width. */}
           {info.how && info.how.length > 0 && (
             <div data-testid="explain-how" className="border-t border-border pt-1.5">
-              <p className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-faint">
+              <p className="mb-1 flex items-center gap-1 text-micro uppercase tracking-wide text-faint">
                 <ListOrdered size={10} /> How to do this
               </p>
               <ol className="list-decimal space-y-0.5 pl-4">
