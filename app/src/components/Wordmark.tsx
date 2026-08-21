@@ -1,60 +1,65 @@
-// components/Wordmark.tsx -- the name, set rather than photographed
-// ===================================================================
-// This used to render app/public/storythreadstudio.png: dark indigo artwork
-// on near-white, which meant it needed an ivory plate underneath to stay
-// visible on a dark page. That plate was the app's last hardcoded colour, and
-// on a charcoal dashboard it read as a sheet of paper taped to the window.
+// components/Wordmark.tsx -- the writer's own logo, on either background
+// ========================================================================
+// app/public/storythreadstudio.png is CUSTOM ARTWORK: the script lettering,
+// the quill, and the thread looping through the "d" were drawn for this app.
+// It is not a placeholder and it is not the app's to replace.
 //
-// So the mark is drawn and the name is set as text. Three things follow, and
-// they are why this is worth doing rather than commissioning a nicer picture:
+// (It WAS replaced, briefly, with a drawn lockup during the icon pass. That
+// was wrong -- recolouring a palette is not licence to redraw somebody's
+// logo -- and it is recorded here so the next person does not repeat it.)
 //
-//   IT IS THEME-AWARE. Everything here is currentColor and role tokens, so
-//   the wordmark is dark on paper and light on charcoal with no second asset
-//   and no plate to hide the mismatch.
+// THE PLATE IS GONE, AND IT TURNS OUT IT NEVER NEEDED TO BE THERE.
 //
-//   IT IS SHARP AT ANY SIZE. A raster fixed at one width is either soft or
-//   oversized on somebody else's display.
+// The file has a fully transparent background: the corners are (0,0,0,0) and
+// only about six per cent of it is opaque at all. The ink is navy rgb(7,15,30).
+// The ivory strip existed for exactly one reason -- navy ink is invisible on a
+// dark page -- and it solved that by putting a rectangle of daylight behind
+// the logo, which on a charcoal dashboard read as a sheet of paper taped to
+// the window.
 //
-//   IT SCALES WITH THE WRITER'S SETTINGS, because it is type. A raster
-//   ignores Interface size exactly the way 847 pixel font sizes used to.
+// So instead: invert the INK, and only in dark mode.
 //
-// Set in the system serif rather than an embedded face: a webfont for one
-// word is a real download on every launch, and this app runs offline.
+//   filter: invert(1) flips RGB and leaves alpha alone. The transparent
+//   background stays transparent; the navy becomes a warm cream (248,240,225)
+//   that sits on the grey-blue panel like ink on a page rather than a pasted
+//   picture. Every tonal detail survives, including the grey shading on the
+//   feather -- which a flat tint or an alpha mask would have crushed to one
+//   solid colour.
+//
+//   Light mode gets no filter at all. The artwork was drawn for a pale ground
+//   and the warm paper theme is one.
+//
+// Driven off the theme rather than a prefers-color-scheme media query,
+// because the theme here is a stored choice and does not follow the OS.
 
-import { NeedleThread } from "./icons";
+import { useTheme } from "../hooks/useTheme";
 
 interface WordmarkProps {
-  /** Smaller variant, for a title bar rather than a dashboard band. */
-  compact?: boolean;
+  /** Caps how wide the artwork renders. Its own aspect ratio sets the height. */
+  maxImageWidth?: number;
   className?: string;
 }
 
-export function Wordmark({ compact = false, className = "" }: WordmarkProps) {
+export function Wordmark({ maxImageWidth = 460, className = "" }: WordmarkProps) {
+  const [theme] = useTheme();
+
   return (
-    <div
-      className={`flex items-center justify-center gap-3 ${compact ? "py-2" : "py-5"} ${className}`}
-    >
-      <NeedleThread
-        size={compact ? 22 : 34}
-        className="shrink-0 text-accent"
-        strokeWidth={1.75}
+    <div className={`flex w-full items-center justify-center py-4 ${className}`}>
+      <img
+        src="/storythreadstudio.png"
+        alt="Storythread Studio"
+        data-testid="wordmark"
+        style={{
+          maxWidth: `${maxImageWidth}px`,
+          width: "100%",
+          height: "auto",
+          // Dark mode only. In light mode the ink is already right.
+          filter: theme === "dark" ? "invert(1)" : undefined,
+        }}
+        // Stop the browser's default image drag; clicking near the logo
+        // should not start a drag-and-drop ghost.
+        draggable={false}
       />
-      <span className="flex items-baseline gap-2">
-        <span
-          className={`font-serif tracking-tight text-text-primary ${
-            compact ? "text-lg" : "text-2xl"
-          }`}
-        >
-          Storythread
-        </span>
-        <span
-          className={`uppercase tracking-label text-text-muted ${
-            compact ? "text-micro" : "text-xs"
-          }`}
-        >
-          Studio
-        </span>
-      </span>
     </div>
   );
 }

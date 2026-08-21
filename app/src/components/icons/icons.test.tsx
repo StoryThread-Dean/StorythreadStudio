@@ -76,10 +76,17 @@ describe("the stitch rule", () => {
   });
 });
 
-describe("the favicon is the same mark", () => {
-  // The tab icon and the in-app brand mark drifting apart is the sort of
-  // thing nobody notices for a year. They are two files by necessity -- one
-  // is static and cannot import the other -- so the paths are compared here.
+describe("the browser tab and the About panel show the same mark", () => {
+  // TWO MARKS EXIST, ON PURPOSE, and it is worth saying which is which.
+  //
+  // The BRAND is app/public/storythreadstudio.png -- custom artwork, a wide
+  // script lockup with the quill. It cannot be a 16px browser tab icon and it
+  // cannot sit in a narrow panel, so it is not used for either.
+  //
+  // NeedleThread is the square mark for those two places. It is drawn twice
+  // by necessity -- the favicon is a static file and cannot import a
+  // component -- so the paths are compared here. Two copies of a drawing
+  // drifting apart is the sort of thing nobody notices for a year.
   const SOURCE = Object.values(
     import.meta.glob("./index.tsx", { query: "?raw", import: "default", eager: true }),
   )[0] as string;

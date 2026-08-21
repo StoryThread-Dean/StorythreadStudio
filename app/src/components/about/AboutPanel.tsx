@@ -15,6 +15,7 @@
 
 import { Heart, ExternalLink, Coffee } from "lucide-react";
 import type { UpdateStatus } from "../../hooks/useAppUpdate";
+import { NeedleThread } from "../icons";
 
 
 export interface AboutPanelProps {
@@ -51,8 +52,12 @@ export function AboutPanel({
           <button onClick={onClose} className="text-faint hover:text-text-muted">✕</button>
         </div>
 
-        {/* Identity block: app name, version, donor badge */}
+        {/* Identity block: mark, app name, version, donor badge.
+            The mark here is the app's own square one -- the same drawing as
+            the browser-tab icon. The full wordmark is a wide lockup and does
+            not fit a narrow panel or a 16px tab, which is why there are two. */}
         <div className="border-b border-border px-5 py-4 text-center">
+          <NeedleThread size={30} className="mx-auto mb-2 text-accent" strokeWidth={1.75} />
           <p className="text-lg font-semibold text-text-primary">Storythread Studio</p>
           <p className="text-xs text-text-muted">Version {version}</p>
           {hasDonated && (
