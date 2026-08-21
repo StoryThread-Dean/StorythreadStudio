@@ -60,11 +60,51 @@ The Tauri scaffold default, a yellow and cyan swirl, dated to the day the
 project was created and never touched. There was no source file, which is
 part of why it survived so long.
 
-## Before you ship a change to this
+## Regenerating the files is not enough. THE APP WILL STILL SHOW THE OLD ICON.
 
-Regenerating changes the installer and the Windows taskbar entry, so it wants
-a look at the real installed app and not just at these files.
+This one costs an afternoon if you do not know it.
 
-WINDOWS CACHES SHELL ICONS HARD. A rebuilt app can keep showing the previous
-icon in the taskbar and in Explorer until the icon cache is cleared or the
-machine restarts. During testing, "it did not change" is not evidence.
+The icon is not read at runtime. It is compiled INTO the executable as a
+Windows resource, by `tauri_build::build()` in `build.rs` at compile time. So
+a new `icon.ico` on disk changes nothing until the Rust binary is rebuilt --
+and cargo does not rebuild it, because cargo only re-runs a build script when
+something it was told to watch changes. A `.ico` under `icons/` is not on that
+list. Nothing errors; the build succeeds; the app opens wearing the old icon.
+
+The full sequence, from `app/`:
+
+    npm run tauri icon src-tauri/icon-source/app-icon.svg
+    rm -rf src-tauri/icons/android src-tauri/icons/ios
+
+    # Make the build script re-run. tauri-build DOES watch tauri.conf.json,
+    # so touching it is enough and takes seconds.
+    #   PowerShell:  (Get-Item src-tauri/tauri.conf.json).LastWriteTime = Get-Date
+    #   Git Bash:    touch src-tauri/tauri.conf.json
+
+    npm run tauri dev        # or: npm run tauri build
+
+If it somehow still shows the old one, `cargo clean -p storythread-studio`
+from `src-tauri/` and rebuild. That is the hammer and it is rarely needed.
+
+### Checking it actually worked
+
+Do not trust your eyes for this, because of the cache warning below. The
+images inside an `.ico` are stored byte-identically inside the PE, so you can
+just look for them:
+
+    python -c "
+    import pathlib,struct
+    exe=pathlib.Path('src-tauri/target/debug/storythread-studio.exe').read_bytes()
+    ico=pathlib.Path('src-tauri/icons/icon.ico').read_bytes()
+    n=struct.unpack('<H',ico[4:6])[0]
+    hits=sum(ico[struct.unpack('<I',ico[6+i*16+12:6+i*16+16])[0]:][:struct.unpack('<I',ico[6+i*16+8:6+i*16+12])[0]] in exe for i in range(n))
+    print(f'{hits}/{n} icon images embedded')"
+
+### And then Windows lies to you
+
+WINDOWS CACHES SHELL ICONS HARD. A correctly rebuilt app can keep showing the
+previous icon in the taskbar, in Explorer, and on a pinned shortcut until the
+icon cache is cleared or the machine restarts. The window's own title-bar and
+alt-tab icon update immediately, so check there first.
+
+During testing, "it did not change" is not evidence.
