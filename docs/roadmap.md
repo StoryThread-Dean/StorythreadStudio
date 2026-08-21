@@ -10,6 +10,30 @@ For shipped releases see [`../CHANGELOG.md`](../CHANGELOG.md).
 
 Committed work for the near-term roadmap.
 
+### The facelift and the Outline rebuild -- the v2.0.2 release
+
+Two pieces of work shipped together, on the writer's ruling that the tier
+rule could bend once: "we just had two MAJOR updates in 3 releases".
+
+**The facelift.** The app had no design system. Colour was 2,431 raw Tailwind
+palette classes on top of ten semantic tokens, and only two of the fourteen
+colour families were adjusted for light mode -- so most of light mode was
+dark-mode shades on cream. `app/src/App.css` now holds `--st-*` role tokens
+for both themes, a generated bridge that re-aims Tailwind's own palette at
+them, and a real `.audiobook-theme` scope that keeps the Audiobook Converter's
+charcoal world out of it. Two bugs fell out of the audit: the Interface size
+setting was ignored by roughly half the app's text, and line spacing had never
+reached the page at all.
+
+**The Outline** stopped being a form. See `docs/outline-spec.md` for the whole
+design; the short version is that it is a second main editor with a drawer of
+nineteen opt-in sections, and the five whole-document templates are gone.
+Every existing outline is converted on first open, subtractively, with a
+backup and a post-condition that aborts rather than write a shorter file.
+
+Still open at the time of writing: the shared UI primitives, converting the
+remaining raw palette call sites onto role tokens, the icon set, and deleting
+the bridge once nothing needs it.
 ### The Weave -- the v2.0.0 feature
 
 One linked, time-aware world model, replacing the four hardcoded profile folders.

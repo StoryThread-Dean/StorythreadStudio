@@ -22,9 +22,30 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **A new look, in both themes.** Charcoal surfaces with a cool grey cast, a proper accent blue, and colours that mean something: the same blue always means "you can act on this", the same red always means "careful". Light mode is a warm paper palette rather than dark-mode colours on a pale background, which is what it had quietly been.
+- **Line spacing, in Settings.** Single, 1.5 lines, Double, or a custom multiple, named and measured the way a word processor does it. The editor had been fixed at one spacing since it was written.
+- **Paragraph spacing, in Settings.** Space before and after each paragraph, in points, defaulting to 0 and 8. This is the one that separates paragraphs -- line spacing only opens up the lines *inside* a paragraph, so on its own it cannot put a gap between them.
+- **The Outline is a real editor now.** Click Outline and you get the same editor you write chapters in. Type and go; nothing is required.
+- **A drawer of ready-made sections.** Nineteen of them -- Premise, Story Promise, Central Conflict, Crisis, Climax, act beats, world rules, a chapter plan and more -- added one at a time from a dropdown, each with a prompt and an example. A section you already have is greyed out, and clicking it takes you there.
+- **Show me how, for the Outline.** A twenty-one page walkthrough, one page per section, each showing how The Lord of the Rings, Harry Potter and Dungeon Crawler Carl answer it.
+- **Fill from Book Details** puts your title, genre, tone and targets into the outline header. It only fills lines that are empty, so nothing you have written is replaced.
+- **Chapter Count target** in Book Details, beside the word count target.
+
 ### Changed
 
+- **Your outline gets converted the first time you open it**, from the old tracking block to plain lines you can read and edit. Your outline itself is untouched -- only the machine block at the top changes -- and a copy of the original is saved under `.storythread/snapshots/outline-heal/` in case you want it. Anything you had typed into the old expected-characters lists is kept, as a section at the end.
+- **The five outline templates are gone.** They filled a new book with somebody else's three-act novel, and the only way to start fresh was a button that erased everything you had written. Sections are opt-in now.
+- **Writing Progress is weighted 60 manuscript / 20 outline / 20 notes.** The outline slice used to be all-or-nothing on something invisible; it now moves as you fill in the header. The profiles slice is gone rather than left unfillable -- it scored against the outline's expected-characters lists, which no longer exist, and leaving it would have capped every book at 70%.
+- **A book with a hand-written outline** (one that never had a tracking block) now uses the weighted gauge instead of counting manuscript words alone.
+- **Text scales with your Interface size setting.** About half the app ignored it before, including most of the smallest text, which is the part that most needed to grow.
+
 ### Fixed
+
+- **Line spacing had never worked.** The editor set it on the wrong element, where the setting was overridden before it reached a single line of prose. It had been rendering at a fixed spacing since the editor was written, whatever the code said.
+- **Light mode was largely unreadable.** Only two of the fourteen colour families were adjusted for it, so most text rendered at dark-mode shades on a cream background. All of them are handled now.
+- **Muted text in light mode failed contrast** at 4.33:1, across most of the app.
+- **Dropdowns, cards and text fields** sat lighter than the dialogs holding them. Inputs now sink into the surface they are on rather than floating above it.
+- Native scrollbars and dropdown popups stayed dark in light mode.
 
 ---
 

@@ -554,8 +554,8 @@ A **Windows desktop, local-first Markdown writing app** for fiction writers. The
 |---|---|---|
 | Desktop shell | Tauri v2 | Packages the app as a Windows `.msi` installer; bridges OS features (file dialogs, window management) to the web UI |
 | Frontend | React + TypeScript (Vite) | All UI panels and screens |
-| UI components | shadcn/ui + Tailwind CSS v4 | Pre-built, dark-mode-ready components the developer can understand and modify |
-| State management | Zustand | Simple, beginner-friendly global state for React |
+| UI components | Tailwind CSS v4, styled directly | No component library. Colour comes from `--st-*` role tokens in `app/src/App.css`; there is no shadcn/ui and never has been |
+| State management | Module-level stores | A `let` plus a subscriber `Set` per concern (`useTheme`, `useUiScale`, `useEditorSpacing`). No Zustand -- the table claimed it for a long time and it has never been a dependency |
 | Backend | Python + FastAPI | Local service running on `localhost`; handles file I/O, AI routing, and database access |
 | Package manager | uv | Python dependency management (replaces pip/poetry) |
 | Database | SQLite via aiosqlite | Stores metadata, settings, cache -- Markdown files remain source of truth |
@@ -964,7 +964,7 @@ Favor **longer, clearly annotated code** over compact, clever code. A function w
 ## UI Design Direction
 
 - **Dark mode** -- Charcoal-black background #0F172A (approximately `#1A1A1A`), off-white `#F0F0F0`/light `#E0E0E0` text, secondary text `#60A5FA`, Accent: #22C55E, high contrast. 
-- **shadcn/ui** with Tailwind CSS for all components -- clean, modern, fully customizable
+- **Tailwind CSS v4** with the app's own `--st-*` role tokens (`app/src/App.css`). A component names a ROLE (`bg-bg-panel`, `text-accent`, `border-danger`), never a colour, so both themes follow from one file
 - **Three-panel layout** on the main writing screen: left navigation panel, center Markdown editor, right AI assistant panel
 - **Embedded UX hints** are a first-class design feature: tooltips, contextual help text, and onboarding cues built into the UI from the start -- both to help the fiction writer use the app and to help the developer understand what each UI piece does
 - The **writer's text** is always the visual focus. UI chrome should be minimal and non-intrusive.

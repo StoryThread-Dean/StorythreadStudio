@@ -24,7 +24,11 @@ Tauri provides the native window, OS integration (file dialogs, opener), and pac
 
 ### Frontend — React + TypeScript (Vite)
 
-Renders the entire UI. Communicates with the backend over `fetch` to `http://127.0.0.1:8000`. Uses CodeMirror 6 for the Markdown editor, Zustand for shared state, and shadcn/ui + Tailwind CSS v4 for components. Theme support (light + dark) is application-wide.
+Renders the entire UI. Communicates with the backend over `fetch` to `http://127.0.0.1:8000`. Uses CodeMirror 6 for the Markdown editor and Tailwind CSS v4 for styling.
+
+There is no component library and no state-management library. This paragraph claimed Zustand and shadcn/ui for a long time and neither has ever been a dependency; shared state is a handful of module-level stores with subscriber sets (`hooks/useTheme.ts`, `useUiScale.ts`, `useEditorSpacing.ts`), and components are styled directly.
+
+Colour lives in one place: `app/src/App.css` defines `--st-*` role tokens for the dark and light themes, bridges them into Tailwind, and scopes the Audiobook Converter's separate charcoal palette behind `.audiobook-theme`. Theme support (light + dark) is application-wide and swaps at runtime via `data-theme` on `<html>`.
 
 ### Backend — Python + FastAPI (managed by uv)
 
@@ -263,9 +267,12 @@ Book Details fields (`genre`, `tone`, `theme`, `setting`, `point_of_view`,
 writer fills them in the sidebar's Book Details panel; all of them are
 auto-injected into AI prompts as the STORY CONTEXT block (book values
 override series values). The Word Count target is deliberately NOT stored
-here -- it lives in `notes/outline.md` frontmatter (`target_word_count`),
-the Writing Progress gauge's single source of truth; the Book Details panel
-reads and writes it through the settings endpoints.
+here -- it lives in the `notes/outline.md` worksheet, on a plain
+`Target Word Count:` line, which is the Writing Progress gauge's single
+source of truth. `Target Chapter Count:` sits beside it. The Book Details
+panel reads and writes both through the settings endpoints. Outlines written
+before v2.0.2 carried the same numbers in YAML frontmatter; those are still
+read, and converted the first time the outline is opened.
 
 ## Editor behavior
 
@@ -295,7 +302,6 @@ GET    /settings
 PUT    /settings
 GET    /ui-state               PUT    /ui-state    (per-book sidebar memory)
 GET    /inspect-folder
-POST   /apply-outline-template
 ```
 
 ### Series — `/api/series`
@@ -313,7 +319,7 @@ POST   /create-chapter
 POST   /rename-chapter         (renames the file + cascades summaries/structure/progress)
 GET    /manuscript-content
 GET    /note                   POST   /note
-GET    /outline                POST   /outline
+GET    /outline/presets        GET    /outline/worksheet
 GET    /chapter-summary        POST   /chapter-summary        DELETE /chapter-summary
 GET    /chapter-summaries
 GET    /scene-summary          POST   /scene-summary          DELETE /scene-summary

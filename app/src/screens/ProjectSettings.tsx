@@ -522,6 +522,9 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   // The backend stores it in notes/outline.md frontmatter (the Progress
   // gauge's source of truth), never in project.json.
   const [targetWordCount, setTargetWordCount] = useState("");
+  // Both targets live in the outline worksheet rather than project.json, so
+  // the Writing Progress gauge has one place to read them from.
+  const [targetChapterCount, setTargetChapterCount] = useState("");
   const [contentMode, setContentMode] = useState(project.content_mode_default);
   const [costTier, setCostTier]       = useState("standard");
   const [projectModel, setProjectModel] = useState(project.default_model ?? "");
@@ -569,6 +572,9 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           setTargetAudience(data.target_audience ?? "");
           setTargetWordCount(
             data.target_word_count != null ? String(data.target_word_count) : ""
+          );
+          setTargetChapterCount(
+            data.target_chapter_count != null ? String(data.target_chapter_count) : ""
           );
           setCostTier(data.cost_tier ?? "standard");
           setProjectModel(data.default_model ?? "");
@@ -619,6 +625,15 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
       return;
     }
 
+    // Same rule for the chapter target: blank leaves it alone.
+    const parsedChapters = parseInt(targetChapterCount.replace(/[,\s]/g, ""), 10);
+    if (targetChapterCount.trim() !== ""
+        && (!Number.isFinite(parsedChapters) || parsedChapters < 0)) {
+      setError("Chapter Count target must be a number.");
+      setSaving(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/projects/settings`, {
         method: "PUT",
@@ -635,6 +650,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           tense:                tense,
           target_audience:      targetAudience,
           ...(targetWordCount.trim() !== "" ? { target_word_count: parsedTarget } : {}),
+          ...(targetChapterCount.trim() !== ""
+            ? { target_chapter_count: parsedChapters } : {}),
           content_mode_default: contentMode,
           cost_tier:            costTier,
           default_model:        projectModel || null,  // empty string = use global
@@ -865,6 +882,25 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={targetWordCount}
                   onChange={e => setTargetWordCount(e.target.value)}
                   placeholder="e.g. 90000"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Chapter target. Stored beside the word target in the outline
+                  worksheet, for the same reason: the gauge reads one place. */}
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Chapter Count Target</label>
+                <p className="mb-1 text-xs text-faint">
+                  How many chapters you are planning. Shown beside your word
+                  count in the Writing Progress gauge (stored in the outline,
+                  not project settings). Leave blank to keep the current target.
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={targetChapterCount}
+                  onChange={e => setTargetChapterCount(e.target.value)}
+                  placeholder="e.g. 30"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
                 />
               </div>

@@ -14,7 +14,15 @@ export interface ManuscriptSummary {
 
 export interface OutlineSummary {
   present:         boolean;
-  has_frontmatter: boolean;
+  /** How many of the ten worksheet labels have a value, and out of how many.
+   *  Replaced has_frontmatter, which was a yes/no about a machine block the
+   *  writer never saw and could not deliberately create. */
+  fields_filled:   number;
+  fields_total:    number;
+  /** True while this outline still carries the pre-v2.0.2 yaml block. The
+   *  numbers are correct either way; this only says whether it has been
+   *  converted yet. */
+  legacy:          boolean;
   weight:          number;
 }
 

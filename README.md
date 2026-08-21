@@ -17,7 +17,7 @@ A local-first Markdown writing app for fiction writers. The writer does the draf
 - **Export** -- full manuscript, dated snapshots, optional inclusion of summaries, notes, and profiles, and the Weave itself as Markdown for a person, JSON for a program, or CSV for a spreadsheet
 - **Audiobook Converter** -- turn a finished manuscript into a real audiobook: per-chapter MP3s, a combined MP3, and an M4B with navigable chapter marks. Import from DOCX, EPUB, PDF, Markdown, TXT, or a Storythread project. Narrate the whole book **free and offline** with a local voice engine (54 voices, downloaded on demand), then optionally regenerate once with a paid premium voice when the book is final, with the exact cost quoted before anything is spent. Guided walkthroughs help place pauses, fix the words the narrator would mispronounce, and give individual characters their own voices
 - **Passage / Dialogue Check** -- hear any passage read aloud while you write. Free, offline, and often the fastest way to catch a repeated word or a sentence that only parses on the second read
-- **Light + dark themes**
+- **Light + dark themes** -- a charcoal workspace or a warm paper one, with your own line spacing, paragraph spacing and interface size
 
 ---
 

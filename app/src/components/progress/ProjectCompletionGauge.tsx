@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type {
+  OutlineSummary,
   ProgressSummary,
   ProgressDaily,
   TaskCreditEntry,
@@ -48,6 +49,38 @@ interface Props {
   onToggle:    () => void;
 }
 
+
+/**
+ * What the Outline row says on the right.
+ *
+ * A COUNT, not a yes/no. This used to read "tracked" or "no tracking data"
+ * off whether the file carried yaml frontmatter -- a machine block the writer
+ * never saw and had no way to deliberately create, so the row was reporting
+ * on something they could not act on. The worksheet is ten visible lines, and
+ * how many are filled in is both the score and the instruction.
+ */
+function outlineRight(outline: OutlineSummary): string {
+  if (!outline.present) return "-no entry-";
+  if (outline.fields_filled === 0) return "empty";
+  if (outline.fields_filled >= outline.fields_total) return "complete";
+  return `${outline.fields_filled} of ${outline.fields_total}`;
+}
+
+/** And the line underneath, which is where the next step goes. */
+function outlineDetail(outline: OutlineSummary): string {
+  if (!outline.present) {
+    return "No outline yet. The Outline is where the book gets decided.";
+  }
+  if (outline.fields_filled === 0) {
+    return "Fill in the header at the top. Title, Genre and Target Word "
+      + "Count do the most.";
+  }
+  if (outline.fields_filled >= outline.fields_total) {
+    return "Nothing left to fill in here.";
+  }
+  return `${outline.fields_total - outline.fields_filled} more `
+    + "header lines to fill in.";
+}
 
 export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props) {
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
@@ -246,18 +279,8 @@ function SummaryBreakdown({ summary }: { summary: ProgressSummary | null }) {
       <SegmentRow
         label="Outline"
         weight={summary.outline.weight}
-        rightLabel={
-          summary.outline.has_frontmatter
-            ? "tracked"
-            : summary.outline.present
-            ? "no tracking data"
-            : "-no entry-"
-        }
-        detail={
-          summary.outline.has_frontmatter
-            ? "frontmatter parsed"
-            : "Add YAML frontmatter to outline.md for richer tracking"
-        }
+        rightLabel={outlineRight(summary.outline)}
+        detail={outlineDetail(summary.outline)}
       />
 
       {/* Profiles bucket */}

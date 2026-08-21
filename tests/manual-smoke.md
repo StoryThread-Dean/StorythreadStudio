@@ -988,6 +988,104 @@ click is the entire safeguard.
 ---
 
 
+## 26. The look, in both themes
+
+Automated tests can prove a token exists in both themes. They cannot see a
+button that has become invisible against the surface behind it.
+
+1. Open a project. Sidebar > **Settings** > Appearance.
+2. Switch to **Light**, then back to **Dark**. Both should apply instantly,
+   with no flash of the other one.
+3. In LIGHT mode, walk: ProjectHome, the editor, Book Details, Weaving, the
+   Profile Extractor, Concepts, Profiles, Global Search, Export.
+   - [ ] No text that is too pale to read. Muted labels especially.
+   - [ ] No leftover dark-mode panel on a cream page.
+   - [ ] Scrollbars and any `<select>` dropdown are light, not dark.
+4. Repeat the same walk in DARK.
+   - [ ] Cards read as raised off the window; inputs read as sunk into the
+         card holding them.
+   - [ ] Hovering a sidebar row lightens it.
+5. **The audiobook side must look UNCHANGED.** Open the Audiobook Converter
+   in both themes.
+   - [ ] Still charcoal with jewel accents in both. It does not follow the
+         light theme, on purpose.
+   - [ ] Compare against a screenshot from the previous release if there is
+         any doubt.
+
+## 27. Text sizing and spacing
+
+1. Settings > Appearance > **Interface size**. Step through all four.
+   - [ ] EVERY label grows, including the smallest ones. Roughly half of the
+         app ignored this before v2.0.2, so this is the check that matters.
+2. **Line spacing**: set Single, then Double, with a chapter open.
+   - [ ] The gap between wrapped lines inside a paragraph changes visibly.
+   - [ ] The number shown beside each option matches what you see.
+3. **Multiple**: type 2.5, click away.
+   - [ ] Applies on blur, not per keystroke.
+   - [ ] Typing something silly (0.1, 900, "abc") does not break the editor.
+4. **Paragraph spacing**: set After to 24pt.
+   - [ ] The gap BETWEEN paragraphs opens up, while the lines inside a
+         paragraph stay where they were. These are separate measurements and
+         this is the check that they are.
+5. Restart the app.
+   - [ ] All three settings survived.
+
+## 28. Converting an existing outline -- THE OTHER DANGEROUS ONE
+
+Like scenario 18, this rewrites a file the writer owns. Use a REAL project
+made before v2.0.2, and copy the folder first.
+
+1. Note what `notes/outline.md` contains before you start. Keep a copy
+   outside the project.
+2. Open the project and click **Outline**.
+   - [ ] It opens the ordinary editor, not a form.
+   - [ ] A notice says the outline was converted and names where the backup
+         went.
+3. Compare the file against your copy.
+   - [ ] The YAML block at the top is gone, replaced by plain `Label:` lines.
+   - [ ] **Every line of your own outline body is still there.** This is the
+         one that matters; the healer aborts rather than write a shorter
+         file, so a missing line is a real failure.
+   - [ ] If the old file had expected-characters or chapter lists with
+         anything in them, they are preserved in a "Kept from your old
+         outline" section at the end.
+4. Check the backup exists at the path the notice gave, and matches your copy.
+5. Close and reopen the Outline.
+   - [ ] No second conversion notice. Converting twice is a no-op.
+6. On a project with a HAND-WRITTEN outline that never had a tracking block:
+   - [ ] Opening it changes nothing at all and shows no notice.
+
+## 29. The Outline as an editor
+
+1. Open Outline on any project. **Add a section** > Premise.
+   - [ ] A horizontal rule and a `## Premise` section appear at the end.
+   - [ ] The example line says "delete this" in the example itself.
+   - [ ] The unsaved indicator appears. Nothing has been written to disk yet.
+2. Ctrl+Z once.
+   - [ ] The whole section goes, not part of it.
+   - [ ] Reopen the menu: Premise is selectable again.
+3. Add Premise again, then rename the heading to `## My Premise`.
+   - [ ] Reopen the menu: Premise is selectable again, because the list reads
+         your outline rather than remembering what it gave you.
+4. Add **Identity** twice.
+   - [ ] It never greys out. Character sections are per-person.
+5. Add a section you already have.
+   - [ ] It is greyed, says so, and clicking it scrolls you to that heading.
+6. **Fill from Book Details**, on an outline with some header lines filled and
+   some blank.
+   - [ ] Blank lines get values; lines you had written are untouched.
+   - [ ] It says how many it filled. If there was nothing to do it explains
+         why rather than just reporting success.
+7. **Show me how**.
+   - [ ] Opens as its own window, Page 1 of 21.
+   - [ ] Every page after the first names a section and shows three examples.
+   - [ ] Back works, Done closes.
+8. Save, close the project, reopen.
+   - [ ] Everything you added is on disk.
+9. Writing Progress gauge.
+   - [ ] The Outline row shows a count like "4 of 10", not a yes/no.
+   - [ ] Filling in another header line moves it.
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** -- verified separately by bumping a version and
