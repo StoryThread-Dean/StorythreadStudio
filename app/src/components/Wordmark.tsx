@@ -37,7 +37,7 @@ export function Wordmark({ maxImageWidth = 520, className = "" }: WordmarkProps)
     // aspect ratio sets the banner height. Any padding here just adds
     // wasted landscape above and below the artwork.
     <div
-      className={`flex w-full items-center justify-center bg-[#FBF8F1] ${className}`}
+      className={`flex w-full items-center justify-center bg-paper ${className}`}
     >
       <img
         src="/storythreadstudio.png"

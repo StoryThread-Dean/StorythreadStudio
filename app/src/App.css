@@ -13,139 +13,744 @@
  */
 @import "tailwindcss";
 
-
 /*
  * Theme Tokens -- Storythread Studio Design System
  * ==================================================
- * Design tokens are named values for colors, spacing, etc. that you
- * define once and reuse everywhere. Changing a token here updates it
- * across the whole app instantly.
+ * Three layers, in this order, and the order matters:
  *
- * Two layers work together:
+ *   LAYER 1  Role tokens (:root and [data-theme="light"])
+ *            The ONLY colours a component is allowed to name. A role says
+ *            what a colour is FOR -- accent, danger, the Weave -- never what
+ *            it looks like. Swap a role here and every screen follows.
  *
- *   1. CSS variables on :root and [data-theme="light"]
- *      - These are runtime-swappable. The frontend sets
- *        document.documentElement.setAttribute('data-theme', 'light')
- *        to flip every color in the app at once.
+ *   LAYER 2  The bridge (generated)
+ *            Tailwind's own palette variables, aimed at this app's roles, so
+ *            that ~2,400 call sites written as `text-indigo-300` take the new
+ *            look without being edited. Temporary; see the block itself.
  *
- *   2. @theme block (Tailwind v4)
- *      - References the CSS variables via var(--color-*).
- *      - Tailwind v4 auto-generates utility classes like bg-bg-primary,
- *        text-text-primary, border-border, bg-accent from these tokens.
- *      - Components use those classes (NOT hardcoded hex values), so the
- *        runtime variable swap actually takes effect.
+ *   LAYER 3  .audiobook-theme
+ *            The Audiobook Converter's charcoal world, pinned so neither
+ *            layer above can reach into it.
  *
- * Adding a new color: declare it in BOTH :root and [data-theme="light"],
- * then expose it through @theme so Tailwind generates a utility class.
+ * ELEVATION IS CARRIED BY LINE AND SHADOW, NEVER BY LIGHTNESS.
+ * This is the one rule that holds in both themes. In dark mode the L1 card
+ * (#1D1D1D) is a step DARKER than the page (#1E1E1E); in light mode the L3
+ * hover (#EDE9E0) is likewise darker than the page (#F5F2EC). A system that
+ * said "higher = lighter" would be wrong in one theme or the other, so it
+ * says neither: --st-border-* and --shadow-* do the depth.
+ *
+ * Adding a colour: declare it in BOTH :root and [data-theme="light"], then
+ * expose it through @theme inline. App.css.test.ts fails the build if a
+ * token exists in one theme and not the other -- that used to be a comment
+ * asking nicely, and nothing checked it.
  */
 
-/* ── Dark theme (default) ─────────────────────────────────────────────
- * Three levels of dark navy create visual depth without bright contrast.
- * Inspired by Quarkle.ai's dark mode design.
- *   primary  = outermost window background (darkest)
- *   panel    = sidebars and panel surfaces
- *   surface  = cards, input fields, inner boxes (lightest of the three)
- */
+/* -- Dark theme (default) --------------------------------------------- */
 :root {
   /*
    * Native controls follow the OS palette unless told otherwise, and a
-   * dropdown is drawn by the OS, not by us. On Windows in light mode
-   * that gave a <select> popup LIGHT grey panels with our white option
-   * text on top -- an option was only readable while it was
-   * highlighted. One declaration fixes every select, scrollbar, date
-   * picker and context menu in the app, and it is the only way to
-   * reach a popup that lives outside the page.
+   * dropdown is drawn by the OS, not by us. One declaration fixes every
+   * select, scrollbar, date picker and context menu, and it is the only
+   * way to reach a popup that lives outside the page.
    */
   color-scheme: dark;
 
-  --color-bg-primary:   #070724;
-  --color-bg-panel:     #0d0d2b;
-  --color-bg-surface:   #12122e;
-  --color-border:       #1e1e4a;
-  --color-text-primary: #f0f0f5;
-  --color-text-muted:   #8888aa;
-  /* Faint = even dimmer than muted; used for placeholders, hint text, and
-     low-emphasis labels. ~114 places use this shade in dark mode. */
-  --color-faint:        #3f3f7a;
-  --color-accent:       #6366f1;
+  /* Surfaces */
+  --st-bg-primary:   #1E1E1E;   /* the window itself        */
+  --st-bg-panel:     #1D1D1D;   /* L1 -- cards, sidebars    */
+  --st-bg-surface:   #242424;   /* L2 -- dialogs, inputs    */
+  --st-bg-raised:    #2C2C2C;   /* L3 -- hover, menus       */
+  --st-bg-panel-alt: #232323;   /* unused: the L1 nudge, if wanted */
+  --st-scrim:        rgb(0 0 0 / 0.66);
+  --st-paper:        #FBF8F1;   /* the wordmark plate, both themes */
+  --st-brand-deep:   #070724;   /* Black Russian: brand fills only */
 
-  /* Selection layer colors (used by CodeMirror + native ::selection) */
-  --color-selection:        #3a5bbf;
-  --color-active-line:      rgba(13, 13, 43, 0.5);
+  /* Ink -- 87 / 60 / 38% white, the Material dark ladder.
+     These carry alpha and are never used with a Tailwind /NN modifier;
+     the tokens that ARE (border, the surfaces) are opaque on purpose. */
+  --st-text-primary: rgb(255 255 255 / 0.87);
+  --st-text-muted:   rgb(255 255 255 / 0.60);
+  --st-faint:        rgb(255 255 255 / 0.38);
+  --st-on-accent:    #10202E;   /* ink ON a filled accent button */
+
+  /* Lines -- opaque, because border-border/60 is a real call site and
+     alpha-on-alpha would compound to something invisible. */
+  --st-border:        #333333;
+  --st-border-strong: #4A4A4A;
+  --st-focus:         #90CAF9;
+
+  /* Accent -- links, primary action, focus, "you are here". */
+  --st-accent:        #90CAF9;
+  --st-accent-strong: #BBDEFB;
+  --st-accent-muted:  #64B5F6;
+  --st-accent-fill:   #42A5F5;
+  --st-accent-soft:   rgb(144 202 249 / 0.14);
+
+  --st-secondary:        #80CBC4;
+  --st-secondary-strong: #B2DFDB;
+  --st-secondary-muted:  #4DB6AC;
+  --st-secondary-fill:   #26A69A;
+  --st-secondary-soft:   rgb(128 203 196 / 0.14);
+
+  --st-success:        #81C784;
+  --st-success-strong: #A5D6A7;
+  --st-success-muted:  #66BB6A;
+  --st-success-fill:   #43A047;
+  --st-success-soft:   rgb(129 199 132 / 0.14);
+
+  --st-warn:        #FFD54F;
+  --st-warn-strong: #FFE082;
+  --st-warn-muted:  #FFCA28;
+  --st-warn-fill:   #FFA726;
+  --st-warn-soft:   rgb(255 213 79 / 0.13);
+
+  --st-danger:        #E57373;
+  --st-danger-strong: #EF9A9A;
+  --st-danger-muted:  #EF5350;
+  --st-danger-fill:   #E53935;
+  --st-danger-soft:   rgb(229 115 115 / 0.14);
+
+  /* Feature identity. Violet is the Weave's colour everywhere in this app
+     (lexicon.ts, sectionRegistry.SHADOWED) and emerald is the audiobook's.
+     Neither is a status, so neither collapses onto accent. */
+  --st-weave:        #B39DDB;
+  --st-weave-strong: #D1C4E9;
+  --st-weave-muted:  #9575CD;
+  --st-weave-fill:   #7E57C2;
+  --st-weave-soft:   rgb(179 157 219 / 0.14);
+  --st-audio:        #81C784;
+
+  /* Categorical -- sectionRegistry's positional stripes. A scale, not a set
+     of meanings: index 3 signifies no more than index 1. */
+  --st-kind-1: #4FC3F7;  --st-kind-2: #81C784;
+  --st-kind-3: #FFD54F;  --st-kind-4: #E57373;
+  --st-kind-5: #80CBC4;  --st-kind-6: #BA68C8;
+  --st-kind-7: #AED581;  --st-kind-8: #4DD0E1;
+
+  /* Editor layers (CodeMirror + native ::selection) */
+  --st-selection:   #2E5C8A;
+  --st-active-line: rgb(255 255 255 / 0.04);
 }
 
-/* ── Light theme (paper feel) ─────────────────────────────────────────
- * Warm off-white palette evoking a real paper page. Indigo accent kept
- * identical so brand identity carries over. Activated by setting
- * data-theme="light" on the <html> element.
- */
+/* -- Light theme (warm paper) ----------------------------------------- */
 [data-theme="light"] {
-  --color-bg-primary:   #F4F1EA;  /* warm paper */
-  --color-bg-panel:     #EAE6DC;  /* slightly darker paper for sidebars */
-  --color-bg-surface:   #FBF8F1;  /* near-white for cards/inputs */
-  --color-border:       #D6D0C2;  /* soft tan */
-  --color-text-primary: #1A1A1A;  /* near-black for body text */
-  --color-text-muted:   #6B6B6B;  /* warm grey for labels */
-  --color-faint:        #9A9485;  /* very light tan for placeholders/hints */
-  --color-accent:       #6366f1;  /* indigo, unchanged */
+  /* WAS MISSING. Without it, native scrollbars, <select> popups and context
+     menus stayed dark-chrome on a cream page. */
+  color-scheme: light;
 
-  /* Selection: lighter, more subtle on paper */
-  --color-selection:        #c7d2fe;
-  --color-active-line:      rgba(99, 102, 241, 0.08);
+  --st-bg-primary:   #F5F2EC;
+  --st-bg-panel:     #FBF9F4;
+  --st-bg-surface:   #FFFFFF;
+  --st-bg-raised:    #EDE9E0;
+  --st-bg-panel-alt: #FBF9F4;
+  --st-scrim:        rgb(26 26 26 / 0.42);
+  --st-paper:        #FBF8F1;
+  --st-brand-deep:   #070724;
 
-  /* Override Tailwind's lighter indigo shades in light mode.
-     ============================================================
-     The codebase uses text-indigo-200 / -300 / -400 to mark "selected" or
-     "highlighted" UI items (active chapter, active tab, primary buttons).
-     Those shades were picked to read against a DARK navy background --
-     on the cream paper background they fade out and become hard to read.
-     Overriding the same Tailwind tokens here means every existing
-     text-indigo-300 etc. instantly becomes readable in light mode,
-     without refactoring ~80 occurrences across the app.
-     Dark-mode shades aren't affected because these overrides only apply
-     under [data-theme="light"]. */
-  --color-indigo-200:   #4338ca;  /* was #c7d2fe -- dark enough to read on cream */
-  --color-indigo-300:   #3730a3;  /* was #a5b4fc -- the main "highlight" shade */
-  --color-indigo-400:   #4338ca;  /* was #818cf8 -- icons / accent text */
+  /* 0.90 / 0.65 / 0.45, not 0.87 / 0.60 / 0.38. Black at 60% on #F5F2EC is
+     4.33:1 -- under AA, across 517 text-text-muted call sites. Measured,
+     not guessed. */
+  --st-text-primary: rgb(26 26 26 / 0.90);
+  --st-text-muted:   rgb(26 26 26 / 0.65);
+  --st-faint:        rgb(26 26 26 / 0.45);
+  --st-on-accent:    #FFFFFF;
 
-  /* Override Tailwind's teal palette for light mode.
-     ============================================================
-     Teal is the accent color used in the Profile Builder AI panel
-     ("Mode:" bar, mode list) and on Location chips. The default
-     light teal shades fade out on cream; we darken the text shades
-     and lighten the dark-bg shades so:
-       - Default text (was teal-300/400): now medium-dark teal -- readable
-       - Hover text (was teal-100/200): now even darker teal -- "couple
-         of tones darker on hover" as the user requested
-       - The "Mode:" bar (bg-teal-950/40) stops being a dark grey patch:
-         teal-950 is overridden to a pale teal so 40% over cream reads
-         as a faint tint instead of a heavy dark band.
-     Border shades (teal-700/800) are left as Tailwind defaults --
-     dark teal borders work fine on cream. */
-  --color-teal-100:     #042f2e;  /* was #ccfbf1 -- for active-mode label */
-  --color-teal-200:     #115e59;  /* was #99f6e4 -- hover emphasis */
-  --color-teal-300:     #0f766e;  /* was #5eead4 -- main highlight */
-  --color-teal-400:     #0d9488;  /* was #2dd4bf -- default action text */
-  --color-teal-500:     #0f766e;  /* was #14b8a6 -- "Mode:" label */
-  --color-teal-600:     #115e59;  /* was #0d9488 -- chevrons / labels */
-  --color-teal-900:     #ccfbf1;  /* was #134e4a -- semi-transparent bg patches */
-  --color-teal-950:     #ccfbf1;  /* was #042f2e -- the AI panel bar */
+  --st-border:        #D9D3C7;
+  --st-border-strong: #BFB8A8;
+  --st-focus:         #1565C0;
+
+  --st-accent:        #1565C0;
+  --st-accent-strong: #0D47A1;
+  --st-accent-muted:  #1976D2;
+  --st-accent-fill:   #1565C0;
+  --st-accent-soft:   rgb(21 101 192 / 0.10);
+
+  --st-secondary:        #00796B;
+  --st-secondary-strong: #004D40;
+  --st-secondary-muted:  #00897B;
+  --st-secondary-fill:   #00796B;
+  --st-secondary-soft:   rgb(0 121 107 / 0.10);
+
+  --st-success:        #2E7D32;
+  --st-success-strong: #1B5E20;
+  --st-success-muted:  #388E3C;
+  --st-success-fill:   #2E7D32;
+  --st-success-soft:   rgb(46 125 50 / 0.10);
+
+  /* NOT an amber. Amber text on cream always fails contrast; this is a
+     dark ochre at 5.31:1. It will look less "amber" than the dark side --
+     that is deliberate, not a mistake to be reverted. */
+  --st-warn:        #8A5A00;
+  --st-warn-strong: #6B4500;
+  --st-warn-muted:  #A66B00;
+
+  --st-warn-fill:   #E65100;
+  --st-warn-soft:   rgb(230 81 0 / 0.10);
+
+  --st-danger:        #C62828;
+  --st-danger-strong: #8E0000;
+  --st-danger-muted:  #D32F2F;
+  --st-danger-fill:   #C62828;
+  --st-danger-soft:   rgb(198 40 40 / 0.09);
+
+  --st-weave:        #5E35B1;
+  --st-weave-strong: #4527A0;
+  --st-weave-muted:  #673AB7;
+  --st-weave-fill:   #5E35B1;
+  --st-weave-soft:   rgb(94 53 177 / 0.09);
+  --st-audio:        #2E7D32;
+
+  --st-kind-1: #0277BD;  --st-kind-2: #2E7D32;
+  --st-kind-3: #8A5A00;  --st-kind-4: #C62828;
+  --st-kind-5: #00796B;  --st-kind-6: #6A1B9A;
+  --st-kind-7: #558B2F;  --st-kind-8: #00838F;
+
+  --st-selection:   #BBDEFB;
+  --st-active-line: rgb(21 101 192 / 0.07);
 }
+
 
 /*
- * Bridge CSS variables into Tailwind v4's design system.
- * Each entry here makes the variable available as a utility class,
- * e.g. --color-bg-primary becomes bg-bg-primary / text-bg-primary / etc.
+ * Bridge CSS variables into Tailwind v4.
+ *
+ * `@theme inline` rather than `@theme`. The plain form emitted
+ * `--st-bg-primary: var(--st-bg-primary)` into :root inside Tailwind's
+ * theme layer, which resolved only because the author block above happens to
+ * be unlayered -- a circular definition that any future @layer tidy-up would
+ * have broken silently. `inline` substitutes the var() into the generated
+ * utility and declares nothing, which is what was meant all along.
  */
-@theme {
-  --color-bg-primary:   var(--color-bg-primary);
-  --color-bg-panel:     var(--color-bg-panel);
-  --color-bg-surface:   var(--color-bg-surface);
-  --color-border:       var(--color-border);
-  --color-text-primary: var(--color-text-primary);
-  --color-text-muted:   var(--color-text-muted);
-  --color-faint:        var(--color-faint);
-  --color-accent:       var(--color-accent);
+@theme inline {
+  --color-bg-primary:   var(--st-bg-primary);
+  --color-bg-panel:     var(--st-bg-panel);
+  --color-bg-surface:   var(--st-bg-surface);
+  --color-bg-raised:    var(--st-bg-raised);
+  --color-bg-panel-alt: var(--st-bg-panel-alt);
+  --color-scrim:        var(--st-scrim);
+  --color-paper:        var(--st-paper);
+  --color-brand-deep:   var(--st-brand-deep);
+
+  --color-text-primary: var(--st-text-primary);
+  --color-text-muted:   var(--st-text-muted);
+  --color-faint:        var(--st-faint);
+  --color-on-accent:    var(--st-on-accent);
+
+  --color-border:        var(--st-border);
+  --color-border-strong: var(--st-border-strong);
+  --color-focus:         var(--st-focus);
+
+  --color-accent:        var(--st-accent);
+  --color-accent-strong: var(--st-accent-strong);
+  --color-accent-muted:  var(--st-accent-muted);
+  --color-accent-fill:   var(--st-accent-fill);
+  --color-accent-soft:   var(--st-accent-soft);
+
+  --color-secondary:        var(--st-secondary);
+  --color-secondary-strong: var(--st-secondary-strong);
+  --color-secondary-muted:  var(--st-secondary-muted);
+  --color-secondary-fill:   var(--st-secondary-fill);
+  --color-secondary-soft:   var(--st-secondary-soft);
+
+  --color-success:        var(--st-success);
+  --color-success-strong: var(--st-success-strong);
+  --color-success-muted:  var(--st-success-muted);
+  --color-success-fill:   var(--st-success-fill);
+  --color-success-soft:   var(--st-success-soft);
+
+  --color-warn:        var(--st-warn);
+  --color-warn-strong: var(--st-warn-strong);
+  --color-warn-muted:  var(--st-warn-muted);
+  --color-warn-fill:   var(--st-warn-fill);
+  --color-warn-soft:   var(--st-warn-soft);
+
+  --color-danger:        var(--st-danger);
+  --color-danger-strong: var(--st-danger-strong);
+  --color-danger-muted:  var(--st-danger-muted);
+  --color-danger-fill:   var(--st-danger-fill);
+  --color-danger-soft:   var(--st-danger-soft);
+
+  --color-weave:        var(--st-weave);
+  --color-weave-strong: var(--st-weave-strong);
+  --color-weave-muted:  var(--st-weave-muted);
+  --color-weave-fill:   var(--st-weave-fill);
+  --color-weave-soft:   var(--st-weave-soft);
+  --color-audio:        var(--st-audio);
+
+  --color-kind-1: var(--st-kind-1);
+  --color-kind-2: var(--st-kind-2);
+  --color-kind-3: var(--st-kind-3);
+  --color-kind-4: var(--st-kind-4);
+  --color-kind-5: var(--st-kind-5);
+  --color-kind-6: var(--st-kind-6);
+  --color-kind-7: var(--st-kind-7);
+  --color-kind-8: var(--st-kind-8);
+
+  --color-selection:   var(--st-selection);
+  --color-active-line: var(--st-active-line);
+}
+
+
+/*
+ * LAYER 2 -- THE BRIDGE.  Generated; temporary.
+ * ======================================================================
+ * Tailwind ships its own --color-indigo-300 and friends, and this app has
+ * ~2,400 call sites written against them. Rather than edit all of those to
+ * land the new palette, this block re-aims Tailwind's own variables at this
+ * app's ROLE tokens. Three things follow:
+ *
+ *   - The whole facelift takes effect without touching a component.
+ *   - Light mode becomes correct everywhere. Before this, only indigo and
+ *     teal were re-declared for light, so 473 pale text classes in the main
+ *     app rendered at dark-tuned shades on cream.
+ *   - The semantic conversion that follows is PROVABLY invisible: while this
+ *     block exists, text-indigo-300 and text-accent resolve to the same
+ *     value, so renaming a call site cannot move a pixel.
+ *
+ * A shade key maps to one value whatever property uses it, so a shade used
+ * as both an ink and a solid fill has to pick a side. The band rule is
+ * "400 and below reads as ink, 500 and above reads as fill"; the ~25 call
+ * sites on the minority side are fixed by hand.
+ *
+ * Declared for BOTH themes: the roles it points at are already theme-aware,
+ * so the mappings are identical, but Tailwind's dark defaults have to be
+ * displaced under [data-theme="light"] too.
+ *
+ * DELETED once every call site names a role directly. Gate:
+ *   grep -rE "(bg|text|border|ring)-(indigo|violet|teal|emerald|amber|rose|
+ *   red|blue|zinc|sky|pink|cyan|lime|fuchsia)-[0-9]" app/src
+ *   | grep -v features/audiobook   ->   0
+ */
+:root,
+[data-theme="light"] {
+  /* indigo -> accent */
+  --color-indigo-50: var(--st-accent-soft);
+  --color-indigo-100: var(--st-accent-strong);
+  --color-indigo-200: var(--st-accent-strong);
+  --color-indigo-300: var(--st-accent);
+  --color-indigo-400: var(--st-accent-muted);
+  --color-indigo-500: var(--st-accent-fill);
+  --color-indigo-600: var(--st-accent-fill);
+  --color-indigo-700: var(--st-accent-fill);
+  --color-indigo-800: var(--st-accent-fill);
+  --color-indigo-900: var(--st-accent-soft);
+  --color-indigo-950: var(--st-accent-soft);
+
+  /* violet -> weave */
+  --color-violet-50: var(--st-weave-soft);
+  --color-violet-100: var(--st-weave-strong);
+  --color-violet-200: var(--st-weave-strong);
+  --color-violet-300: var(--st-weave);
+  --color-violet-400: var(--st-weave-muted);
+  --color-violet-500: var(--st-weave-fill);
+  --color-violet-600: var(--st-weave-fill);
+  --color-violet-700: var(--st-weave-fill);
+  --color-violet-800: var(--st-weave-fill);
+  --color-violet-900: var(--st-weave-soft);
+  --color-violet-950: var(--st-weave-soft);
+
+  /* teal -> secondary */
+  --color-teal-50: var(--st-secondary-soft);
+  --color-teal-100: var(--st-secondary-strong);
+  --color-teal-200: var(--st-secondary-strong);
+  --color-teal-300: var(--st-secondary);
+  --color-teal-400: var(--st-secondary-muted);
+  --color-teal-500: var(--st-secondary-fill);
+  --color-teal-600: var(--st-secondary-fill);
+  --color-teal-700: var(--st-secondary-fill);
+  --color-teal-800: var(--st-secondary-fill);
+  --color-teal-900: var(--st-secondary-soft);
+  --color-teal-950: var(--st-secondary-soft);
+
+  /* emerald -> success */
+  --color-emerald-50: var(--st-success-soft);
+  --color-emerald-100: var(--st-success-strong);
+  --color-emerald-200: var(--st-success-strong);
+  --color-emerald-300: var(--st-success);
+  --color-emerald-400: var(--st-success-muted);
+  --color-emerald-500: var(--st-success-fill);
+  --color-emerald-600: var(--st-success-fill);
+  --color-emerald-700: var(--st-success-fill);
+  --color-emerald-800: var(--st-success-fill);
+  --color-emerald-900: var(--st-success-soft);
+  --color-emerald-950: var(--st-success-soft);
+
+  /* amber -> warn */
+  --color-amber-50: var(--st-warn-soft);
+  --color-amber-100: var(--st-warn-strong);
+  --color-amber-200: var(--st-warn-strong);
+  --color-amber-300: var(--st-warn);
+  --color-amber-400: var(--st-warn-muted);
+  --color-amber-500: var(--st-warn-fill);
+  --color-amber-600: var(--st-warn-fill);
+  --color-amber-700: var(--st-warn-fill);
+  --color-amber-800: var(--st-warn-fill);
+  --color-amber-900: var(--st-warn-soft);
+  --color-amber-950: var(--st-warn-soft);
+
+  /* rose -> danger */
+  --color-rose-50: var(--st-danger-soft);
+  --color-rose-100: var(--st-danger-strong);
+  --color-rose-200: var(--st-danger-strong);
+  --color-rose-300: var(--st-danger);
+  --color-rose-400: var(--st-danger-muted);
+  --color-rose-500: var(--st-danger-fill);
+  --color-rose-600: var(--st-danger-fill);
+  --color-rose-700: var(--st-danger-fill);
+  --color-rose-800: var(--st-danger-fill);
+  --color-rose-900: var(--st-danger-soft);
+  --color-rose-950: var(--st-danger-soft);
+
+  /* red -> danger */
+  --color-red-50: var(--st-danger-soft);
+  --color-red-100: var(--st-danger-strong);
+  --color-red-200: var(--st-danger-strong);
+  --color-red-300: var(--st-danger);
+  --color-red-400: var(--st-danger-muted);
+  --color-red-500: var(--st-danger-fill);
+  --color-red-600: var(--st-danger-fill);
+  --color-red-700: var(--st-danger-fill);
+  --color-red-800: var(--st-danger-fill);
+  --color-red-900: var(--st-danger-soft);
+  --color-red-950: var(--st-danger-soft);
+
+  /* blue -> accent */
+  --color-blue-50: var(--st-accent-soft);
+  --color-blue-100: var(--st-accent-strong);
+  --color-blue-200: var(--st-accent-strong);
+  --color-blue-300: var(--st-accent);
+  --color-blue-400: var(--st-accent-muted);
+  --color-blue-500: var(--st-accent-fill);
+  --color-blue-600: var(--st-accent-fill);
+  --color-blue-700: var(--st-accent-fill);
+  --color-blue-800: var(--st-accent-fill);
+  --color-blue-900: var(--st-accent-soft);
+  --color-blue-950: var(--st-accent-soft);
+
+  /* zinc -> neutral surfaces and ink */
+  --color-zinc-50: var(--st-text-primary);
+  --color-zinc-100: var(--st-text-primary);
+  --color-zinc-200: var(--st-text-primary);
+  --color-zinc-300: var(--st-text-primary);
+  --color-zinc-400: var(--st-text-muted);
+  --color-zinc-500: var(--st-faint);
+  --color-zinc-600: var(--st-border-strong);
+  --color-zinc-700: var(--st-border);
+  --color-zinc-800: var(--st-bg-raised);
+  --color-zinc-900: var(--st-bg-surface);
+  --color-zinc-950: var(--st-bg-panel);
+
+  /* sky -> accent */
+  --color-sky-50: var(--st-accent-soft);
+  --color-sky-100: var(--st-accent-strong);
+  --color-sky-200: var(--st-accent-strong);
+  --color-sky-300: var(--st-accent);
+  --color-sky-400: var(--st-accent-muted);
+  --color-sky-500: var(--st-accent-fill);
+  --color-sky-600: var(--st-accent-fill);
+  --color-sky-700: var(--st-accent-fill);
+  --color-sky-800: var(--st-accent-fill);
+  --color-sky-900: var(--st-accent-soft);
+  --color-sky-950: var(--st-accent-soft);
+
+  /* pink -> weave */
+  --color-pink-50: var(--st-weave-soft);
+  --color-pink-100: var(--st-weave-strong);
+  --color-pink-200: var(--st-weave-strong);
+  --color-pink-300: var(--st-weave);
+  --color-pink-400: var(--st-weave-muted);
+  --color-pink-500: var(--st-weave-fill);
+  --color-pink-600: var(--st-weave-fill);
+  --color-pink-700: var(--st-weave-fill);
+  --color-pink-800: var(--st-weave-fill);
+  --color-pink-900: var(--st-weave-soft);
+  --color-pink-950: var(--st-weave-soft);
+
+  /* cyan -> secondary */
+  --color-cyan-50: var(--st-secondary-soft);
+  --color-cyan-100: var(--st-secondary-strong);
+  --color-cyan-200: var(--st-secondary-strong);
+  --color-cyan-300: var(--st-secondary);
+  --color-cyan-400: var(--st-secondary-muted);
+  --color-cyan-500: var(--st-secondary-fill);
+  --color-cyan-600: var(--st-secondary-fill);
+  --color-cyan-700: var(--st-secondary-fill);
+  --color-cyan-800: var(--st-secondary-fill);
+  --color-cyan-900: var(--st-secondary-soft);
+  --color-cyan-950: var(--st-secondary-soft);
+
+  /* lime -> success */
+  --color-lime-50: var(--st-success-soft);
+  --color-lime-100: var(--st-success-strong);
+  --color-lime-200: var(--st-success-strong);
+  --color-lime-300: var(--st-success);
+  --color-lime-400: var(--st-success-muted);
+  --color-lime-500: var(--st-success-fill);
+  --color-lime-600: var(--st-success-fill);
+  --color-lime-700: var(--st-success-fill);
+  --color-lime-800: var(--st-success-fill);
+  --color-lime-900: var(--st-success-soft);
+  --color-lime-950: var(--st-success-soft);
+
+  /* fuchsia -> weave */
+  --color-fuchsia-50: var(--st-weave-soft);
+  --color-fuchsia-100: var(--st-weave-strong);
+  --color-fuchsia-200: var(--st-weave-strong);
+  --color-fuchsia-300: var(--st-weave);
+  --color-fuchsia-400: var(--st-weave-muted);
+  --color-fuchsia-500: var(--st-weave-fill);
+  --color-fuchsia-600: var(--st-weave-fill);
+  --color-fuchsia-700: var(--st-weave-fill);
+  --color-fuchsia-800: var(--st-weave-fill);
+  --color-fuchsia-900: var(--st-weave-soft);
+  --color-fuchsia-950: var(--st-weave-soft);
+}
+
+
+/*
+ * THE AUDIOBOOK BOUNDARY -- jewel tones on charcoal
+ * ==================================================
+ * AudiobookConverter.tsx has carried `className="audiobook-theme"` since the
+ * day it was written, with a comment calling it "the boundary". The class has
+ * never existed in any stylesheet. It does now, and it has two jobs:
+ *
+ *   1. PIN Tailwind's own palette back to its stock values, so the bridge
+ *      above cannot reach in here. Every variable the bridge touches is
+ *      re-declared below at the value Tailwind ships. App.css.test.ts asserts
+ *      the two lists match, so a family added to the bridge in six months
+ *      cannot silently repaint this side of the app.
+ *
+ *   2. Point the ROLE tokens at the charcoal ramp, so a shared component
+ *      converted to semantic tokens -- GuidedWalk and WhatsThis are imported
+ *      by BOTH sides -- renders here exactly as it renders today. The values
+ *      are the zinc shades those components already use, which is why this
+ *      block changes nothing on screen.
+ *
+ * Custom properties inherit, so this class on a descendant div beats
+ * [data-theme="light"] on <html> for its whole subtree. No specificity games.
+ *
+ * THIS BLOCK IS DELIBERATELY NOT REPEATED UNDER [data-theme="light"].
+ * Charcoal in both themes is the point: the writer should always know which
+ * side of the app they are standing in. See audiobook-converter-spec.md 5.0,
+ * which specified this class and never got it.
+ */
+.audiobook-theme {
+  color-scheme: dark;
+
+  --st-bg-primary:   #09090b;   /* zinc-950 */
+  --st-bg-panel:     #18181b;   /* zinc-900 */
+  --st-bg-surface:   #27272a;   /* zinc-800 */
+  --st-bg-raised:    #3f3f46;   /* zinc-700 */
+  --st-bg-panel-alt: #18181b;
+  --st-scrim:        rgb(0 0 0 / 0.70);
+
+  --st-text-primary: #f4f4f5;   /* zinc-100 */
+  --st-text-muted:   #a1a1aa;   /* zinc-400 */
+  --st-faint:        #71717a;   /* zinc-500 */
+  --st-on-accent:    #ffffff;
+
+  --st-border:        #3f3f46;
+  --st-border-strong: #52525b;
+  --st-focus:         #10b981;
+
+  /* Emerald = primary action and success. Sapphire = information and
+     progress. Ruby = cost, warning and failure. Spec 5.0, unchanged. */
+  --st-accent:        #6ee7b7;
+  --st-accent-strong: #a7f3d0;
+  --st-accent-muted:  #34d399;
+  --st-accent-fill:   #059669;
+  --st-accent-soft:   rgb(16 185 129 / 0.14);
+
+  --st-secondary:        #7dd3fc;
+  --st-secondary-strong: #bae6fd;
+  --st-secondary-muted:  #38bdf8;
+  --st-secondary-fill:   #0284c7;
+  --st-secondary-soft:   rgb(56 189 248 / 0.14);
+
+  --st-success:        #6ee7b7;
+  --st-success-strong: #a7f3d0;
+  --st-success-muted:  #34d399;
+  --st-success-fill:   #059669;
+  --st-success-soft:   rgb(16 185 129 / 0.14);
+
+  --st-warn:        #fcd34d;
+  --st-warn-strong: #fde68a;
+  --st-warn-muted:  #fbbf24;
+  --st-warn-fill:   #d97706;
+  --st-warn-soft:   rgb(251 191 36 / 0.14);
+
+  --st-danger:        #fda4af;
+  --st-danger-strong: #fecdd3;
+  --st-danger-muted:  #fb7185;
+  --st-danger-fill:   #e11d48;
+  --st-danger-soft:   rgb(251 113 133 / 0.14);
+
+  --st-weave:        #c4b5fd;
+  --st-weave-strong: #ddd6fe;
+  --st-weave-muted:  #a78bfa;
+  --st-weave-fill:   #7c3aed;
+  --st-weave-soft:   rgb(167 139 250 / 0.14);
+  --st-audio:        #6ee7b7;
+
+  --st-selection:   #1e3a5f;
+  --st-active-line: rgb(255 255 255 / 0.04);
+
+  /* -- Pinned back to stock: everything the bridge above remaps. --------
+     Generated from node_modules/tailwindcss/theme.css so it cannot drift
+     from what Tailwind actually ships. */
+  --color-red-50: oklch(97.1% 0.013 17.38);
+  --color-red-100: oklch(93.6% 0.032 17.717);
+  --color-red-200: oklch(88.5% 0.062 18.334);
+  --color-red-300: oklch(80.8% 0.114 19.571);
+  --color-red-400: oklch(70.4% 0.191 22.216);
+  --color-red-500: oklch(63.7% 0.237 25.331);
+  --color-red-600: oklch(57.7% 0.245 27.325);
+  --color-red-700: oklch(50.5% 0.213 27.518);
+  --color-red-800: oklch(44.4% 0.177 26.899);
+  --color-red-900: oklch(39.6% 0.141 25.723);
+  --color-red-950: oklch(25.8% 0.092 26.042);
+  --color-amber-50: oklch(98.7% 0.022 95.277);
+  --color-amber-100: oklch(96.2% 0.059 95.617);
+  --color-amber-200: oklch(92.4% 0.12 95.746);
+  --color-amber-300: oklch(87.9% 0.169 91.605);
+  --color-amber-400: oklch(82.8% 0.189 84.429);
+  --color-amber-500: oklch(76.9% 0.188 70.08);
+  --color-amber-600: oklch(66.6% 0.179 58.318);
+  --color-amber-700: oklch(55.5% 0.163 48.998);
+  --color-amber-800: oklch(47.3% 0.137 46.201);
+  --color-amber-900: oklch(41.4% 0.112 45.904);
+  --color-amber-950: oklch(27.9% 0.077 45.635);
+  --color-lime-50: oklch(98.6% 0.031 120.757);
+  --color-lime-100: oklch(96.7% 0.067 122.328);
+  --color-lime-200: oklch(93.8% 0.127 124.321);
+  --color-lime-300: oklch(89.7% 0.196 126.665);
+  --color-lime-400: oklch(84.1% 0.238 128.85);
+  --color-lime-500: oklch(76.8% 0.233 130.85);
+  --color-lime-600: oklch(64.8% 0.2 131.684);
+  --color-lime-700: oklch(53.2% 0.157 131.589);
+  --color-lime-800: oklch(45.3% 0.124 130.933);
+  --color-lime-900: oklch(40.5% 0.101 131.063);
+  --color-lime-950: oklch(27.4% 0.072 132.109);
+  --color-emerald-50: oklch(97.9% 0.021 166.113);
+  --color-emerald-100: oklch(95% 0.052 163.051);
+  --color-emerald-200: oklch(90.5% 0.093 164.15);
+  --color-emerald-300: oklch(84.5% 0.143 164.978);
+  --color-emerald-400: oklch(76.5% 0.177 163.223);
+  --color-emerald-500: oklch(69.6% 0.17 162.48);
+  --color-emerald-600: oklch(59.6% 0.145 163.225);
+  --color-emerald-700: oklch(50.8% 0.118 165.612);
+  --color-emerald-800: oklch(43.2% 0.095 166.913);
+  --color-emerald-900: oklch(37.8% 0.077 168.94);
+  --color-emerald-950: oklch(26.2% 0.051 172.552);
+  --color-teal-50: oklch(98.4% 0.014 180.72);
+  --color-teal-100: oklch(95.3% 0.051 180.801);
+  --color-teal-200: oklch(91% 0.096 180.426);
+  --color-teal-300: oklch(85.5% 0.138 181.071);
+  --color-teal-400: oklch(77.7% 0.152 181.912);
+  --color-teal-500: oklch(70.4% 0.14 182.503);
+  --color-teal-600: oklch(60% 0.118 184.704);
+  --color-teal-700: oklch(51.1% 0.096 186.391);
+  --color-teal-800: oklch(43.7% 0.078 188.216);
+  --color-teal-900: oklch(38.6% 0.063 188.416);
+  --color-teal-950: oklch(27.7% 0.046 192.524);
+  --color-cyan-50: oklch(98.4% 0.019 200.873);
+  --color-cyan-100: oklch(95.6% 0.045 203.388);
+  --color-cyan-200: oklch(91.7% 0.08 205.041);
+  --color-cyan-300: oklch(86.5% 0.127 207.078);
+  --color-cyan-400: oklch(78.9% 0.154 211.53);
+  --color-cyan-500: oklch(71.5% 0.143 215.221);
+  --color-cyan-600: oklch(60.9% 0.126 221.723);
+  --color-cyan-700: oklch(52% 0.105 223.128);
+  --color-cyan-800: oklch(45% 0.085 224.283);
+  --color-cyan-900: oklch(39.8% 0.07 227.392);
+  --color-cyan-950: oklch(30.2% 0.056 229.695);
+  --color-sky-50: oklch(97.7% 0.013 236.62);
+  --color-sky-100: oklch(95.1% 0.026 236.824);
+  --color-sky-200: oklch(90.1% 0.058 230.902);
+  --color-sky-300: oklch(82.8% 0.111 230.318);
+  --color-sky-400: oklch(74.6% 0.16 232.661);
+  --color-sky-500: oklch(68.5% 0.169 237.323);
+  --color-sky-600: oklch(58.8% 0.158 241.966);
+  --color-sky-700: oklch(50% 0.134 242.749);
+  --color-sky-800: oklch(44.3% 0.11 240.79);
+  --color-sky-900: oklch(39.1% 0.09 240.876);
+  --color-sky-950: oklch(29.3% 0.066 243.157);
+  --color-blue-50: oklch(97% 0.014 254.604);
+  --color-blue-100: oklch(93.2% 0.032 255.585);
+  --color-blue-200: oklch(88.2% 0.059 254.128);
+  --color-blue-300: oklch(80.9% 0.105 251.813);
+  --color-blue-400: oklch(70.7% 0.165 254.624);
+  --color-blue-500: oklch(62.3% 0.214 259.815);
+  --color-blue-600: oklch(54.6% 0.245 262.881);
+  --color-blue-700: oklch(48.8% 0.243 264.376);
+  --color-blue-800: oklch(42.4% 0.199 265.638);
+  --color-blue-900: oklch(37.9% 0.146 265.522);
+  --color-blue-950: oklch(28.2% 0.091 267.935);
+  --color-indigo-50: oklch(96.2% 0.018 272.314);
+  --color-indigo-100: oklch(93% 0.034 272.788);
+  --color-indigo-200: oklch(87% 0.065 274.039);
+  --color-indigo-300: oklch(78.5% 0.115 274.713);
+  --color-indigo-400: oklch(67.3% 0.182 276.935);
+  --color-indigo-500: oklch(58.5% 0.233 277.117);
+  --color-indigo-600: oklch(51.1% 0.262 276.966);
+  --color-indigo-700: oklch(45.7% 0.24 277.023);
+  --color-indigo-800: oklch(39.8% 0.195 277.366);
+  --color-indigo-900: oklch(35.9% 0.144 278.697);
+  --color-indigo-950: oklch(25.7% 0.09 281.288);
+  --color-violet-50: oklch(96.9% 0.016 293.756);
+  --color-violet-100: oklch(94.3% 0.029 294.588);
+  --color-violet-200: oklch(89.4% 0.057 293.283);
+  --color-violet-300: oklch(81.1% 0.111 293.571);
+  --color-violet-400: oklch(70.2% 0.183 293.541);
+  --color-violet-500: oklch(60.6% 0.25 292.717);
+  --color-violet-600: oklch(54.1% 0.281 293.009);
+  --color-violet-700: oklch(49.1% 0.27 292.581);
+  --color-violet-800: oklch(43.2% 0.232 292.759);
+  --color-violet-900: oklch(38% 0.189 293.745);
+  --color-violet-950: oklch(28.3% 0.141 291.089);
+  --color-fuchsia-50: oklch(97.7% 0.017 320.058);
+  --color-fuchsia-100: oklch(95.2% 0.037 318.852);
+  --color-fuchsia-200: oklch(90.3% 0.076 319.62);
+  --color-fuchsia-300: oklch(83.3% 0.145 321.434);
+  --color-fuchsia-400: oklch(74% 0.238 322.16);
+  --color-fuchsia-500: oklch(66.7% 0.295 322.15);
+  --color-fuchsia-600: oklch(59.1% 0.293 322.896);
+  --color-fuchsia-700: oklch(51.8% 0.253 323.949);
+  --color-fuchsia-800: oklch(45.2% 0.211 324.591);
+  --color-fuchsia-900: oklch(40.1% 0.17 325.612);
+  --color-fuchsia-950: oklch(29.3% 0.136 325.661);
+  --color-pink-50: oklch(97.1% 0.014 343.198);
+  --color-pink-100: oklch(94.8% 0.028 342.258);
+  --color-pink-200: oklch(89.9% 0.061 343.231);
+  --color-pink-300: oklch(82.3% 0.12 346.018);
+  --color-pink-400: oklch(71.8% 0.202 349.761);
+  --color-pink-500: oklch(65.6% 0.241 354.308);
+  --color-pink-600: oklch(59.2% 0.249 0.584);
+  --color-pink-700: oklch(52.5% 0.223 3.958);
+  --color-pink-800: oklch(45.9% 0.187 3.815);
+  --color-pink-900: oklch(40.8% 0.153 2.432);
+  --color-pink-950: oklch(28.4% 0.109 3.907);
+  --color-rose-50: oklch(96.9% 0.015 12.422);
+  --color-rose-100: oklch(94.1% 0.03 12.58);
+  --color-rose-200: oklch(89.2% 0.058 10.001);
+  --color-rose-300: oklch(81% 0.117 11.638);
+  --color-rose-400: oklch(71.2% 0.194 13.428);
+  --color-rose-500: oklch(64.5% 0.246 16.439);
+  --color-rose-600: oklch(58.6% 0.253 17.585);
+  --color-rose-700: oklch(51.4% 0.222 16.935);
+  --color-rose-800: oklch(45.5% 0.188 13.697);
+  --color-rose-900: oklch(41% 0.159 10.272);
+  --color-rose-950: oklch(27.1% 0.105 12.094);
+  --color-zinc-50: oklch(98.5% 0 0);
+  --color-zinc-100: oklch(96.7% 0.001 286.375);
+  --color-zinc-200: oklch(92% 0.004 286.32);
+  --color-zinc-300: oklch(87.1% 0.006 286.286);
+  --color-zinc-400: oklch(70.5% 0.015 286.067);
+  --color-zinc-500: oklch(55.2% 0.016 285.938);
+  --color-zinc-600: oklch(44.2% 0.017 285.786);
+  --color-zinc-700: oklch(37% 0.013 285.805);
+  --color-zinc-800: oklch(27.4% 0.006 286.033);
+  --color-zinc-900: oklch(21% 0.006 285.885);
+  --color-zinc-950: oklch(14.1% 0.005 285.823);
 }
 
 
@@ -185,13 +790,13 @@
 /* CodeMirror drawn selection: force visible above line backgrounds.
    Uses the --color-selection variable so it adapts to dark/light themes. */
 .cm-selectionLayer .cm-selectionBackground {
-  background-color: var(--color-selection) !important;
+  background-color: var(--st-selection) !important;
 }
 
 /* The active line highlight must not be fully opaque or it covers the selection.
    Use a semi-transparent version so selection shows through. */
 .cm-activeLine {
-  background-color: var(--color-active-line) !important;
+  background-color: var(--st-active-line) !important;
 }
 
 /* Ensure .cm-line backgrounds don't cover the selection layer */
@@ -201,12 +806,12 @@
 
 /* Browser native selection: fallback for text outside CodeMirror */
 ::selection {
-  background-color: var(--color-selection);
+  background-color: var(--st-selection);
   color: inherit;
 }
 
 ::-webkit-selection {
-  background-color: var(--color-selection);
+  background-color: var(--st-selection);
   color: inherit;
 }
 
@@ -382,17 +987,17 @@
 select,
 option,
 optgroup {
-  background-color: var(--color-bg-panel);
-  color: var(--color-text-primary);
+  background-color: var(--st-bg-panel);
+  color: var(--st-text-primary);
 }
 
 optgroup {
-  color: var(--color-text-muted);
+  color: var(--st-text-muted);
   font-style: normal;
 }
 
 option:disabled {
-  color: var(--color-faint);
+  color: var(--st-faint);
 }
 
 

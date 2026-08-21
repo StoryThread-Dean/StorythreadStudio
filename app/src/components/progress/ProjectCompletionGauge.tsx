@@ -116,7 +116,7 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
               className="h-full w-full"
               style={{
                 backgroundImage:
-                  "repeating-linear-gradient(135deg, var(--color-bg-surface) 0 4px, var(--color-border) 4px 8px)",
+                  "repeating-linear-gradient(135deg, var(--st-bg-surface) 0 4px, var(--st-border) 4px 8px)",
               }}
             />
           ) : (

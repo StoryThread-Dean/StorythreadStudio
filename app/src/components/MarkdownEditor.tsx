@@ -38,7 +38,7 @@ const fontCompartment = new Compartment();
 // the dark/light color themes below. Where this DOES set colors (caret,
 // active-line highlight) it uses CSS variables so the colors flip with
 // the app theme automatically. CodeMirror lets us write plain CSS values
-// here, and var(--color-...) is a plain CSS value.
+// here, and var(--st-...) is a plain CSS value.
 function buildFontTheme(fontFamily: string) {
   return EditorView.theme({
     // The root editor element
@@ -50,7 +50,7 @@ function buildFontTheme(fontFamily: string) {
     // system stays accurate. Centering is handled by the wrapper div in JSX.
     ".cm-content": {
       fontFamily,
-      caretColor: "var(--color-accent)",
+      caretColor: "var(--st-accent)",
       padding: "2rem 1rem",  // Small padding only -- wrapper handles centering
     },
     ".cm-line": {
@@ -195,23 +195,23 @@ const findReplaceKeymap = Prec.high(keymap.of([
 // inline/block layout lets the <br> break the line the way the panel expects.
 const searchPanelTheme = EditorView.theme({
   ".cm-panels": {
-    backgroundColor: "var(--color-bg-panel)",
-    color:           "var(--color-text-primary)",
+    backgroundColor: "var(--st-bg-panel)",
+    color:           "var(--st-text-primary)",
   },
   ".cm-panels.cm-panels-bottom": {
-    borderTop: "1px solid var(--color-border)",
+    borderTop: "1px solid var(--st-border)",
   },
   ".cm-panels.cm-panels-top": {
-    borderBottom: "1px solid var(--color-border)",
+    borderBottom: "1px solid var(--st-border)",
   },
   ".cm-search": {
     padding: "6px 10px",
     fontSize: "12px",
   },
   ".cm-search input.cm-textfield": {
-    backgroundColor: "var(--color-bg-surface)",
-    color:           "var(--color-text-primary)",
-    border:          "1px solid var(--color-border)",
+    backgroundColor: "var(--st-bg-surface)",
+    color:           "var(--st-text-primary)",
+    border:          "1px solid var(--st-border)",
     borderRadius:    "3px",
     padding:         "3px 6px",
     margin:          "2px 4px 2px 0",
@@ -219,13 +219,13 @@ const searchPanelTheme = EditorView.theme({
     fontSize:        "12px",
   },
   ".cm-search input.cm-textfield:focus": {
-    borderColor: "var(--color-accent)",
+    borderColor: "var(--st-accent)",
   },
   ".cm-search button.cm-button": {
-    backgroundColor: "var(--color-bg-surface)",
+    backgroundColor: "var(--st-bg-surface)",
     backgroundImage: "none",          // override default gradient
-    color:           "var(--color-text-primary)",
-    border:          "1px solid var(--color-border)",
+    color:           "var(--st-text-primary)",
+    border:          "1px solid var(--st-border)",
     borderRadius:    "3px",
     padding:         "2px 8px",
     margin:          "0 2px",
@@ -233,10 +233,10 @@ const searchPanelTheme = EditorView.theme({
     cursor:          "pointer",
   },
   ".cm-search button.cm-button:hover": {
-    borderColor: "var(--color-accent)",
+    borderColor: "var(--st-accent)",
   },
   ".cm-search label": {
-    color:       "var(--color-text-muted)",
+    color:       "var(--st-text-muted)",
     margin:      "0 6px 0 0",
     fontSize:    "12px",
   },
@@ -254,7 +254,7 @@ const searchPanelTheme = EditorView.theme({
     right: "4px",
     background: "transparent",
     border: "none",
-    color: "var(--color-text-muted)",
+    color: "var(--st-text-muted)",
     fontSize: "14px",
     cursor: "pointer",
   },
@@ -273,65 +273,72 @@ const searchPanelTheme = EditorView.theme({
 //   complete dark theme and a complete light theme, then the component
 //   picks the matching one based on the current app theme.
 //
-// The dark theme uses the navy palette; the light theme uses the paper palette.
-// Both keep the same indigo accent so syntax cues feel consistent across modes.
+// Dark is the charcoal ground, light is the warm paper. Each keeps its own
+// theme's accent, so a link reads as a link in both.
+//
+// KEEP THESE IN STEP WITH App.css BY HAND. They are the one place in the app
+// that cannot read a token, so they are also the one place that can silently
+// fall behind one: change a role there and the manuscript editor goes on
+// wearing the old palette inside the new app. Every value below is the
+// corresponding --st-* token flattened against this theme's background,
+// because the ink tokens carry alpha and CodeMirror needs an opaque colour.
 
 const storythreadDarkTheme = createTheme({
   theme: "dark",
   settings: {
-    background:      "#070724",   // bg-primary
-    foreground:      "#f0f0f5",   // text-primary
-    caret:           "#6366f1",   // accent
-    selection:       "#3a5bbf",   // Visible indigo-blue selection
-    selectionMatch:  "#1e3464",   // Dimmer for secondary matches
-    lineHighlight:   "#0d0d2b",   // bg-panel
-    gutterBackground: "#070724",
-    gutterForeground: "#8888aa",
+    background:      "#1E1E1E",   // bg-primary
+    foreground:      "#E2E2E2",   // text-primary
+    caret:           "#90CAF9",   // accent
+    selection:       "#2E5C8A",   // Visible indigo-blue selection
+    selectionMatch:  "#24405C",   // Dimmer for secondary matches
+    lineHighlight:   "#232323",   // bg-panel
+    gutterBackground: "#1E1E1E",
+    gutterForeground: "#A5A5A5",
   },
   styles: [
-    { tag: t.heading1,              color: "#f0f0f5", fontWeight: "bold", fontSize: "1.5em" },
-    { tag: t.heading2,              color: "#f0f0f5", fontWeight: "bold", fontSize: "1.3em" },
-    { tag: t.heading3,              color: "#ddddf5", fontWeight: "bold", fontSize: "1.1em" },
+    { tag: t.heading1,              color: "#E2E2E2", fontWeight: "bold", fontSize: "1.5em" },
+    { tag: t.heading2,              color: "#E2E2E2", fontWeight: "bold", fontSize: "1.3em" },
+    { tag: t.heading3,              color: "#CFCFCF", fontWeight: "bold", fontSize: "1.1em" },
     { tag: t.emphasis,              fontStyle: "italic"  },
     { tag: t.strong,                fontWeight: "bold"   },
-    { tag: t.link,                  color: "#818cf8"     },
-    { tag: t.url,                   color: "#818cf8"     },
-    { tag: t.quote,                 color: "#8888aa", fontStyle: "italic" },
-    { tag: t.monospace,             color: "#a5b4fc"     },
-    { tag: t.meta,                  color: "#3f3f7a"     }, // **, ##, etc.
-    { tag: t.processingInstruction, color: "#3f3f7a"     },
-    { tag: t.strikethrough,         textDecoration: "line-through", color: "#8888aa" },
+    { tag: t.link,                  color: "#90CAF9"     },
+    { tag: t.url,                   color: "#90CAF9"     },
+    { tag: t.quote,                 color: "#A5A5A5", fontStyle: "italic" },
+    { tag: t.monospace,             color: "#BBDEFB"     },
+    { tag: t.meta,                  color: "#737373"     }, // **, ##, etc.
+    { tag: t.processingInstruction, color: "#737373"     },
+    { tag: t.strikethrough,         textDecoration: "line-through", color: "#A5A5A5" },
   ],
 });
 
 const storythreadLightTheme = createTheme({
   theme: "light",
   settings: {
-    background:      "#F4F1EA",   // bg-primary (warm paper)
-    foreground:      "#1A1A1A",   // text-primary (near-black)
-    caret:           "#6366f1",   // accent (kept indigo)
-    selection:       "#c7d2fe",   // soft indigo for selection on paper
-    selectionMatch:  "#e0e7ff",   // even softer for secondary matches
-    lineHighlight:   "#EAE6DC",   // bg-panel (slightly darker paper)
-    gutterBackground: "#F4F1EA",
-    gutterForeground: "#6B6B6B",
+    background:      "#F5F2EC",   // bg-primary (warm paper)
+    foreground:      "#30302F",   // text-primary (near-black)
+    caret:           "#1565C0",   // accent (kept indigo)
+    selection:       "#BBDEFB",   // soft indigo for selection on paper
+    selectionMatch:  "#DCEBF9",   // even softer for secondary matches
+    lineHighlight:   "#EDE9E0",   // bg-panel (slightly darker paper)
+    gutterBackground: "#F5F2EC",
+    gutterForeground: "#676664",
   },
   styles: [
     // Headings stay near-black on paper -- bold weight already gives the
     // hierarchy, no need to lighten the color.
-    { tag: t.heading1,              color: "#1A1A1A", fontWeight: "bold", fontSize: "1.5em" },
-    { tag: t.heading2,              color: "#1A1A1A", fontWeight: "bold", fontSize: "1.3em" },
-    { tag: t.heading3,              color: "#2A2A2A", fontWeight: "bold", fontSize: "1.1em" },
+    { tag: t.heading1,              color: "#30302F", fontWeight: "bold", fontSize: "1.5em" },
+    { tag: t.heading2,              color: "#30302F", fontWeight: "bold", fontSize: "1.3em" },
+    { tag: t.heading3,              color: "#3D3C3B", fontWeight: "bold", fontSize: "1.1em" },
     { tag: t.emphasis,              fontStyle: "italic"  },
     { tag: t.strong,                fontWeight: "bold"   },
     // Links use a slightly darker indigo so they pass AA contrast on paper.
-    { tag: t.link,                  color: "#4F46E5"     },
-    { tag: t.url,                   color: "#4F46E5"     },
-    { tag: t.quote,                 color: "#6B6B6B", fontStyle: "italic" },
-    { tag: t.monospace,             color: "#4F46E5"     },
-    { tag: t.meta,                  color: "#9A9485"     }, // **, ##, etc. -- soft tan
-    { tag: t.processingInstruction, color: "#9A9485"     },
-    { tag: t.strikethrough,         textDecoration: "line-through", color: "#6B6B6B" },
+    { tag: t.link,                  color: "#1565C0"     },
+    { tag: t.url,                   color: "#1565C0"     },
+    { tag: t.quote,                 color: "#676664", fontStyle: "italic" },
+    { tag: t.monospace,             color: "#0D47A1"     },
+    { tag: t.meta,                  color: "#92918E"     }, // **, ##, etc. -- soft tan
+    { tag: t.processingInstruction, color: "#92918E"     },
+    { tag: t.strikethrough,         textDecoration: "line-through", color: "#676664" },
   ],
 });
 
