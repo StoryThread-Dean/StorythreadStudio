@@ -9,17 +9,10 @@
 // These types mirror the Pydantic models in backend/app/routers/projects.py
 // so both sides agree on what data looks like.
 
-// --- OutlineTemplateType ---
-// The scaffolds available for notes/outline.md. Extended in Phase 6 with
-// novella, novelette, and serial_fiction so each story type has its own
-// dedicated default scaffold. Keep in sync with VALID_OUTLINE_TEMPLATES in
-// backend/app/routers/projects.py.
-export type OutlineTemplateType =
-  | "novel"
-  | "novella"
-  | "novelette"
-  | "short_story"
-  | "serial_fiction";
+// OutlineTemplateType used to live here: the five scaffolds that could be
+// rendered over notes/outline.md. The Outline is a plain editor now and its
+// sections are opt-in from a dropdown, so there is nothing to choose between.
+// StoryType survives and still sets the default word target.
 
 
 // --- StoryType ---
@@ -61,9 +54,10 @@ export interface ProjectInfo {
   // Story type. Defaults to "novel" for legacy projects via the backend's
   // read-time fallback -- the frontend never sees null/undefined here.
   story_type:           StoryType;
-  // Which outline scaffold was last applied. May be null on older projects
-  // created before this field existed -- treat null as unknown (not an error).
-  outline_template:     OutlineTemplateType | null;
+  // NOTE: project.json may still carry an `outline_template` key on any book
+  // made before v2.0.2. It is deliberately left on disk rather than stripped
+  // -- unknown keys must survive, and test_project_portability.py depends on
+  // that -- but nothing reads it any more.
   created_at:           string;   // ISO datetime string
   updated_at:           string;
 }
@@ -112,7 +106,6 @@ export interface CreateBookInSeriesPayload {
   folder_name?: string;
   // Story type drives the default outline template on the backend.
   story_type?:    StoryType;
-  template_type?: OutlineTemplateType;  // Optional override; backend defaults from story_type
 }
 
 
@@ -133,22 +126,12 @@ export interface CreateProjectPayload {
   description: string;
   // Story type drives the default outline template on the backend.
   story_type?:    StoryType;
-  template_type?: OutlineTemplateType;  // Optional override; backend defaults from story_type
 }
 
-// --- ApplyOutlineTemplatePayload / Response ---
-// POST /api/projects/apply-outline-template -- overwrites notes/outline.md
-// with a freshly-rendered scaffold of the chosen type. Used by the editor
-// toolbar [+ New Template] button and the same control in Project Settings.
-export interface ApplyOutlineTemplatePayload {
-  root_path:     string;
-  template_type: OutlineTemplateType;
-}
-
-export interface ApplyOutlineTemplateResponse {
-  content:          string;                // New outline.md body (for editor refresh)
-  template_applied: OutlineTemplateType;   // Echo of what got written
-}
+// ApplyOutlineTemplatePayload / Response used to live here. The route they
+// described overwrote notes/outline.md with no backup and was reachable from
+// two different screens. Fill from Book Details replaces it and returns text
+// for the editor BUFFER instead, so nothing is written until the writer saves.
 
 // --- OpenProjectPayload ---
 // What we send to POST /api/projects/open

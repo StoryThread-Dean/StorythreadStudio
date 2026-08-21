@@ -269,6 +269,30 @@ export const EXPLAIN: Record<string, Explains> = {
   },
 
   // ── Weaving, the walkthrough ───────────────────────────────────────────────
+  "outline.worksheet": {
+    what: "The Outline is a page you type on, plus a drawer of ready-made "
+      + "sections you can pull in when you want one.",
+    why: "Every book needs different things written down, so this asks for "
+      + "nothing. The header at the top is the handful of facts the app can "
+      + "use -- the two targets feed your Writing Progress -- and the rest is "
+      + "yours. It used to hand you a whole novel-shaped form with example "
+      + "text in every field, and the only way to start fresh was a button "
+      + "that erased what you had written.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Just type. It is a normal editor and it saves the same way a chapter "
+        + "does.",
+      "Add a section picks from the drawer and puts it at the end. One "
+        + "Ctrl+Z takes it back out if it was not what you wanted.",
+      "A section you already have is greyed out, because the list reads your "
+        + "outline. Rename or delete the heading and it comes back. Character "
+        + "sections never grey out -- you need those once per person.",
+      "Fill from Book Details copies your title, genre and tone into the "
+        + "header. It only fills BLANK lines, so nothing you typed is "
+        + "replaced.",
+    ],
+  },
   "weaving.what": {
     what: "Weaving: four passes over your book and your world, each asking a "
       + "different question.",

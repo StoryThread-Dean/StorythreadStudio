@@ -27,6 +27,7 @@ import { ProfileBuilder } from "./screens/ProfileBuilder";
 // The Weave: a self-contained island under features/codex/, opened from the
 // sidebar. This file only knows how to show it.
 import { WeaveScreen } from "./features/codex/WeaveScreen";
+import { OutlineToolbar } from "./features/outline/OutlineToolbar";
 import { WeaveNav } from "./features/codex/WeaveNav";
 import { WeavingPanel } from "./features/codex/WeavingPanel";
 import { ExtractorScreen } from "./features/codex/ExtractorScreen";
@@ -37,7 +38,6 @@ import { ThreadEditor } from "./features/codex/ThreadEditor";
  *  edited by the Thread editor -- named once so the three places that route on
  *  it cannot drift apart. */
 const PROFILE_KINDS = ["character", "relationship", "location", "lore"];
-import { OutlinePlanner } from "./screens/OutlinePlanner";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
 import { SceneSummaryPreviewModal } from "./components/SceneSummaryPreviewModal";
@@ -47,7 +47,7 @@ import { ProjectSettings } from "./screens/ProjectSettings";
 import { ExportModal } from "./components/ExportModal";
 import { EditorMenu } from "./components/EditorMenu";
 import { DialogueCheck } from "./components/DialogueCheck";
-import type { ProjectInfo, ChapterInfo, RecentProject, OutlineTemplateType } from "./types/project";
+import type { ProjectInfo, ChapterInfo, RecentProject } from "./types/project";
 import { toPutPayload } from "./types/structure";
 import type { StructureManifest } from "./types/structure";
 import type { ProfileType, Profile, ProfileListItem } from "./types/profile";
@@ -143,7 +143,7 @@ function App() {
   // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
   const [currentView, setCurrentView]   = useState<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
-    | "outline_planner" | "weave" | "thread" | "extractor"
+    | "weave" | "thread" | "extractor"
   >("editor");
   // Which Weave section the sidebar shows as active. Kept here rather than
   // inside WeaveNav because opening a section changes the VIEW, and the view
@@ -247,10 +247,6 @@ function App() {
   const [globalReplaceBanner, setGlobalReplaceBanner] = useState<string | null>(null);
 
   // Outline template switcher dialog -- triggered by [+ New Template] in the
-  // toolbar when notes/outline.md is the active file.
-  const [showTemplateDialog, setShowTemplateDialog]       = useState(false);
-  const [templateDialogChoice, setTemplateDialogChoice]   = useState<OutlineTemplateType>("novel");
-  const [templateDialogLoading, setTemplateDialogLoading] = useState(false);
 
   // Project switcher dropdown
   const [showSwitcher, setShowSwitcher]   = useState(false);
@@ -451,6 +447,7 @@ function App() {
 
   // The content loaded from disk for the current note.
   const [noteContent, setNoteContent] = useState<string>("");
+  const [outlineHealedBackup, setOutlineHealedBackup] = useState<string | null>(null);
 
   // True while a note is being fetched from the backend.
   const [isLoadingNote, setIsLoadingNote] = useState(false);
@@ -486,7 +483,7 @@ function App() {
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
   const currentViewRef = useRef<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
-    | "outline_planner" | "weave" | "thread" | "extractor"
+    | "weave" | "thread" | "extractor"
   >("editor");
 
   // Keep refs in sync with state on every render.
@@ -591,6 +588,10 @@ function App() {
 
       setNoteContent(data.content);
       setCurrentNote({ filename, title });
+      // Set only when THIS read converted a pre-v2.0.2 outline. The toolbar
+      // shows a one-off notice naming where the original went -- a rewrite
+      // the writer did not ask for has to be reversible by hand.
+      setOutlineHealedBackup(data.healed ? (data.healed_backup ?? null) : null);
       setCurrentView("notes");
       setIsDirty(false);
       setWordCount(countWords(data.content));
@@ -1567,47 +1568,6 @@ function App() {
   }, [selectedText]);
 
 
-  // --- Apply a new outline template (overwrites notes/outline.md) ---
-  // Called from the template-switch confirmation dialog. Sends the chosen
-  // template type to the backend, which regenerates outline.md and returns
-  // the new content so we can reload the editor without a full refresh.
-  const handleApplyTemplate = useCallback(async () => {
-    const project = currentProjectRef.current;
-    if (!project) return;
-
-    setTemplateDialogLoading(true);
-    setEditorError(null);
-
-    try {
-      const res = await fetch(`${API_BASE}/api/projects/apply-outline-template`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          root_path:     project.root_path,
-          template_type: templateDialogChoice,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to apply template.");
-      }
-
-      const data = await res.json();
-
-      // Reload the outline in the notes editor. Setting noteContent + toggling
-      // currentNote triggers a MarkdownEditor remount via the key prop.
-      setNoteContent(data.content);
-      setCurrentNote({ filename: "outline.md", title: "Outline" });
-      setIsDirty(false);
-      setShowTemplateDialog(false);
-
-    } catch (err) {
-      setEditorError(err instanceof Error ? err.message : "Could not apply template.");
-    } finally {
-      setTemplateDialogLoading(false);
-    }
-  }, [templateDialogChoice]);
 
 
   // --- Send a message in the Writing Companion chat ---
@@ -2445,7 +2405,6 @@ function App() {
             onOpenSection={section => {
               setWeaveSection(section.id);
               if (section.kind === "note") {
-                if (section.id === "outline") { setCurrentView("outline_planner"); return; }
                 loadNote(section.filename ?? `${section.id}.md`,
                          section.label, currentProject);
                 return;
@@ -2548,13 +2507,6 @@ function App() {
             onPin={positions => projectUi.update({ weaveNodePositions: positions })}
           />
         </div>
-      ) : currentView === "outline_planner" ? (
-        <OutlinePlanner
-          project={currentProject}
-          onBack={() => setCurrentView("editor")}
-          onDirtyChange={setIsDirty}
-          onSwitchToRaw={() => loadNote("outline.md", "Outline", currentProject)}
-        />
       ) : currentView === "chapter_summary" && currentSummaryChapter ? (
         <SummaryView
           project={currentProject}
@@ -2682,19 +2634,15 @@ function App() {
           </div>
         )}
 
-        {/* Formatting toolbar -- onNewTemplate only passed when outline.md is
-            the active file so the [+ New Template] button appears contextually.
-            The one-off feature buttons (scene summaries, Reader Mode, ...)
-            moved from here into the Tools menu in the title bar above. */}
+        {/* Formatting toolbar. The one-off feature buttons (scene summaries,
+            Reader Mode, ...) moved from here into the Tools menu above. It
+            used to grow a [+ New Template] button when outline.md was open,
+            which is how the only way to start a fresh outline ended up hidden
+            inside the editor of the thing you wanted to replace. */}
         <EditorToolbar
           editorView={editorView}
           currentFont={currentFont}
           onFontChange={setCurrentFont}
-          onNewTemplate={
-            currentView === "notes" && currentNote?.filename === "outline.md"
-              ? () => setShowTemplateDialog(true)
-              : undefined
-          }
         />
 
         {/* Smart Advisor toolbar -- only relevant for chapter editing.
@@ -2729,25 +2677,43 @@ function App() {
         <div className="flex-1 overflow-hidden">
           {currentView === "notes" ? (
             // ── Notes editor ──
+            //
+            // The Outline is a note like any other now -- same editor, same
+            // Save, same unsaved indicator. It used to open a bespoke FORM
+            // screen, which is why "+ New Template" ended up hidden behind a
+            // Raw view button in the corner of the thing you were leaving.
+            // Its section drawer is a strip of chrome above the same editor.
             isLoadingNote ? (
               <div className="flex h-full items-center justify-center">
                 <p className="text-sm text-text-muted">Loading note...</p>
               </div>
             ) : currentNote ? (
-              // key includes "note-" prefix so switching between a chapter and note
-              // with the same filename still triggers a remount.
-              <MarkdownEditor
-                key={`note-${currentNote.filename}`}
-                defaultValue={noteContent}
-                onChange={handleContentChange}
-                font={currentFont}
-                projectPath={currentProject.root_path}
-                onEditorReady={(view) => {
-                  setEditorView(view);
-                  editorViewRef.current = view;
-                }}
-                onSelectionChange={setSelectedText}
-              />
+              <div className="flex h-full flex-col">
+                {currentNote.filename === "outline.md" && (
+                  <OutlineToolbar
+                    projectPath={currentProject.root_path}
+                    view={editorView}
+                    onEdited={handleContentChange}
+                    healedBackup={outlineHealedBackup}
+                  />
+                )}
+                {/* key includes "note-" prefix so switching between a chapter
+                    and note with the same filename still triggers a remount. */}
+                <div className="min-h-0 flex-1">
+                  <MarkdownEditor
+                    key={`note-${currentNote.filename}`}
+                    defaultValue={noteContent}
+                    onChange={handleContentChange}
+                    font={currentFont}
+                    projectPath={currentProject.root_path}
+                    onEditorReady={(view) => {
+                      setEditorView(view);
+                      editorViewRef.current = view;
+                    }}
+                    onSelectionChange={setSelectedText}
+                  />
+                </div>
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center">
                 <p className="text-sm text-text-muted">
@@ -3488,8 +3454,6 @@ function App() {
               ? `manuscript/${currentChapter.filename}`
               : currentView === "notes" && currentNote
               ? `notes/${currentNote.filename}`
-              : currentView === "outline_planner"
-              ? "notes/outline.md"
               : null
           }
           isDirty={isDirty}
@@ -3618,77 +3582,6 @@ function App() {
             <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
             {autoSplitProgress}
           </p>
-        </div>
-      )}
-
-      {/* Outline template switch dialog -- shown when the writer clicks
-          [+ New Template] in the toolbar while editing notes/outline.md.
-          Lets them pick Novel or Short Story, warns about overwrite, and
-          calls the backend to regenerate the outline file. */}
-      {showTemplateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm rounded-lg border border-border bg-bg-panel p-6 shadow-xl">
-            <h2 className="mb-1 text-sm font-semibold text-text-primary">
-              Apply Outline Template
-            </h2>
-            <p className="mb-4 text-xs text-text-muted">
-              Choose a template to regenerate <span className="text-text-primary">notes/outline.md</span>.
-            </p>
-
-            {/* Warning banner */}
-            <div className="mb-4 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
-              <p className="text-xs font-medium text-amber-400">
-                This will overwrite the current outline.
-              </p>
-              <p className="mt-0.5 text-xs text-amber-600">
-                Any existing content in outline.md will be replaced. This cannot be undone.
-              </p>
-            </div>
-
-            {/* Template radio options */}
-            <div className="mb-4 flex flex-col gap-1.5">
-              {([
-                { value: "novel" as OutlineTemplateType, label: "Novel", hint: "Full novel scaffold with three-act structure. Good for fiction and fantasy." },
-                { value: "short_story" as OutlineTemplateType, label: "Short Story", hint: "Tight 2k-10k scaffold with Seven-Point, Freytag, and more. Pick one, delete the rest." },
-              ]).map(opt => (
-                <label
-                  key={opt.value}
-                  className="flex cursor-pointer items-start gap-2 rounded border border-border bg-bg-surface p-2 transition-colors hover:border-faint"
-                >
-                  <input
-                    type="radio"
-                    name="templateSwitch"
-                    value={opt.value}
-                    checked={templateDialogChoice === opt.value}
-                    onChange={() => setTemplateDialogChoice(opt.value)}
-                    className="mt-0.5 accent-indigo-500"
-                  />
-                  <div>
-                    <p className="text-xs font-medium text-text-primary">{opt.label}</p>
-                    <p className="text-xs text-text-muted">{opt.hint}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={handleApplyTemplate}
-                disabled={templateDialogLoading}
-                className="flex-1 rounded bg-indigo-600 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {templateDialogLoading ? "Applying..." : "Apply Template"}
-              </button>
-              <button
-                onClick={() => setShowTemplateDialog(false)}
-                disabled={templateDialogLoading}
-                className="rounded border border-border px-4 py-2 text-sm text-text-muted transition-colors hover:border-faint hover:text-text-primary"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
