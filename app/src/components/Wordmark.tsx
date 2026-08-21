@@ -37,14 +37,30 @@ import { useTheme } from "../hooks/useTheme";
 interface WordmarkProps {
   /** Caps how wide the artwork renders. Its own aspect ratio sets the height. */
   maxImageWidth?: number;
+  /**
+   * Tight vertical padding, for a banner that has other things under it.
+   *
+   * A prop rather than a className override: Tailwind resolves conflicting
+   * utilities by the order they appear in the generated stylesheet, not by
+   * the order they are written in a string, so passing "py-1" alongside a
+   * hardcoded "py-4" wins or loses depending on which Tailwind emitted first.
+   * That is a coin toss, not an override.
+   */
+  compact?: boolean;
   className?: string;
 }
 
-export function Wordmark({ maxImageWidth = 460, className = "" }: WordmarkProps) {
+export function Wordmark({
+  maxImageWidth = 460, compact = false, className = "",
+}: WordmarkProps) {
   const [theme] = useTheme();
 
   return (
-    <div className={`flex w-full items-center justify-center py-4 ${className}`}>
+    <div
+      className={`flex w-full items-center justify-center ${
+        compact ? "pt-2 pb-0" : "py-4"
+      } ${className}`}
+    >
       <img
         src="/storythreadstudio.png"
         alt="Storythread Studio"

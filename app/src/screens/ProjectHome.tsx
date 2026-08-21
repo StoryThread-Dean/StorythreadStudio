@@ -417,9 +417,9 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
           run still opens on the story-type picker rather than on an empty
           promise. */}
       <div className="shrink-0 border-b border-border bg-bg-panel shadow-e1">
-        <Wordmark />
+        <Wordmark compact maxImageWidth={420} />
 
-        <div className="flex flex-wrap items-center gap-4 px-8 py-3">
+        <div className="flex flex-wrap items-center gap-4 px-8 pb-2.5 pt-1">
           <div className="min-w-0">
             <p className="text-xs text-text-muted">Your local writing workspace</p>
           </div>
