@@ -102,7 +102,12 @@ def _bundled_icon_names() -> set[str]:
     for several commits.
     """
     source = LEXICON.read_text(encoding="utf-8")
-    match = re.search(r"const ICONS: Record<string, LucideIcon> = \{(.*?)\n\};",
+    # The VALUE TYPE is deliberately not pinned. It was LucideIcon, and became
+    # AppIcon when the app started shipping its own drawn marks beside the
+    # borrowed ones. This test failed on that rename -- not because the
+    # vocabulary had drifted, which is the thing it exists to catch, but
+    # because it was also matching an implementation detail on the way past.
+    match = re.search(r"const ICONS: Record<string,\s*\w+> = \{(.*?)\n\};",
                       source, re.DOTALL)
     assert match, "could not find the ICONS map in lexicon.ts"
     body = re.sub(r"//[^\n]*", "", match.group(1))          # drop comments

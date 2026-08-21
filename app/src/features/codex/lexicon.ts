@@ -207,13 +207,17 @@ export function guidePlainText(lines: GuideLine[]): string {
 // passes" -- both are ordinary deterministic scan producers too: Untied from
 // shared scenes, Unwoven from the world-rules corpus.)
 
-// THE ICONS ARE THE LOOM, DELIBERATELY. Weaving is a Spool, Unspun is a sheaf
+// THE ICONS ARE THE LOOM, DELIBERATELY. Weaving is a spool, Unspun is a sheaf
 // of unspun fibre, Frayed is a sewing implement, Loose thread is a curve
 // with its end hanging free. The first set reached for whatever was nearest --
 // a circuit-board Waypoints for Weaving, a car-dashboard Gauge for Frayed, a
 // power plug for Loose thread -- and a writer reads those as some other app's
 // vocabulary leaking through. The metaphor is the whole point of the feature's
 // name; the icons have to carry it.
+//
+// Two of them are the app's OWN drawings now rather than borrowed ones:
+// the Weave is a Loom, and Weaving a SpoolMark. See components/icons.
+// The registry holds AppIcon rather than LucideIcon so it can carry both.
 export const STOP_KINDS: Record<string, LexEntry> = {
   "unspun": entry(
     "unspun", "Unspun", Wheat, "blue",
