@@ -48,6 +48,10 @@ export function Panel({
       data-testid={testId}
       className={
         `overflow-hidden rounded ${LEVELS[level]} `
+        // A raised card gets the first rung of the elevation ladder. An inset
+        // deliberately does not: it is a well, and a shadow would argue with
+        // the thing it is sunk into.
+        + (level === "raised" ? "shadow-e1 " : "")
         + (borderless ? "" : "border border-border ")
         + className
       }

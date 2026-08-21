@@ -396,20 +396,53 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
   }
 
 
+  // The book to offer on the hero: the most recently opened one that is
+  // still where it was. `exists` is false when the folder has been moved or
+  // deleted, and offering a button that cannot work is worse than offering
+  // none. Recents arrive newest-first from the backend.
+  const mostRecent = recentProjects.find(rp => rp.exists);
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen flex-col bg-bg-primary text-text-primary">
 
-      {/* Title bar -- a full-width logo banner with the tagline beneath.
-          Wordmark renders the dashed-thin ivory strip carrying the official
-          logo art. The tagline sits below it on the regular bg-bg-panel
-          background so the banner reads as the focal point and the tagline
-          as supporting copy. */}
-      <div className="shrink-0 border-b border-border bg-bg-panel">
+      {/* ── The hero ─────────────────────────────────────────────────────
+          The dashboard used to be a logo strip, a tagline, and two columns of
+          boxes -- reported as generic and plain, which it was: nothing on it
+          said what to do next, so a returning writer had to find their book
+          in a list before they could start.
+
+          So the band leads with the thing they came for. It is built ONLY
+          from what this screen already fetched -- the recents list -- and it
+          hides itself entirely when there is nothing to continue, so a first
+          run still opens on the story-type picker rather than on an empty
+          promise. */}
+      <div className="shrink-0 border-b border-border bg-bg-panel shadow-e1">
         <Wordmark />
-        <p className="py-2 text-center text-xs text-text-muted">
-          Your local writing workspace
-        </p>
+
+        <div className="flex flex-wrap items-center gap-4 px-8 py-3">
+          <div className="min-w-0">
+            <p className="text-xs text-text-muted">Your local writing workspace</p>
+          </div>
+
+          {mostRecent && (
+            <button
+              type="button"
+              onClick={() => void handleOpenRecent(mostRecent)}
+              data-testid="hero-continue"
+              className="ml-auto flex min-w-0 items-center gap-3 rounded-lg border border-border bg-bg-surface px-4 py-2 text-left transition-colors hover:border-accent hover:bg-bg-raised"
+            >
+              <BookOpen size={18} className="shrink-0 text-accent" />
+              <span className="min-w-0">
+                <span className="block text-micro uppercase tracking-label text-text-muted">
+                  Continue where you left off
+                </span>
+                <span className="block truncate text-sm font-semibold text-text-primary">
+                  {mostRecent.title}
+                </span>
+              </span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Two-column body. min-h-0 + overflow on inner scrolls keeps the two

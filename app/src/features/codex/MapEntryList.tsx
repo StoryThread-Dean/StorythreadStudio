@@ -89,7 +89,7 @@ export function MapEntryList({
       </button>
 
       {open && (
-        <div className="mt-1 rounded border border-border bg-bg-primary shadow-lg">
+        <div className="mt-1 rounded border border-border bg-bg-primary shadow-e2">
           <label className="flex items-center gap-1.5 border-b border-border px-2 py-1">
             <Search size={11} className="shrink-0 text-faint" />
             <input

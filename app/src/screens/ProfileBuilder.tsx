@@ -3220,7 +3220,7 @@ function ImportanceHelpPopover({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-6 z-30 w-72 rounded-lg border border-border bg-bg-primary p-3 shadow-xl">
+        <div className="absolute left-0 top-6 z-30 w-72 rounded-lg border border-border bg-bg-primary p-3 shadow-e3">
           {/* Header */}
           <div className="mb-2 flex items-start justify-between">
             <p className="text-xs font-semibold text-accent">
@@ -3285,7 +3285,7 @@ function SectionHelpPopover({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-6 z-30 max-h-[28rem] w-80 overflow-y-auto rounded-lg border border-border bg-bg-primary p-3 shadow-xl">
+        <div className="absolute left-0 top-6 z-30 max-h-[28rem] w-80 overflow-y-auto rounded-lg border border-border bg-bg-primary p-3 shadow-e3">
           {/* Header */}
           <div className="mb-2 flex items-start justify-between">
             <p className="text-xs font-semibold text-accent">Writing Tips</p>

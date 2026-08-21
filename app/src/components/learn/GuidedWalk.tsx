@@ -164,9 +164,18 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
     // the panel behind it -- several step titles are also control labels
     // out there, which is how an assertion ends up passing on the wrong
     // element.
-    <div data-testid="guided-walk" className={`rounded border px-3 py-2.5 ${c.box}`}>
-      <div className="mb-1.5 flex items-center gap-2">
+    <div
+      data-testid="guided-walk"
+      className={`overflow-hidden rounded-lg border shadow-e2 ${c.box}`}
+    >
+      <div className="flex items-center gap-2 border-b border-border/60 bg-bg-surface/40 px-3 py-1.5">
         <GraduationCap size={13} className={`shrink-0 ${c.icon}`} />
+        {/* THE NUMBER STAYS IN FRONT OF THE TITLE. Moving it to a separate
+            counter on the right looked tidier and broke eleven tests, which
+            is the useful part: they navigate by "3. Title" because a bare
+            title ALSO matches the mute-checkbox labels sitting behind this
+            card. The prefix is what makes the heading unambiguous, for a
+            test and for anyone reading the screen. */}
         <span className={`flex-1 text-xs font-semibold ${c.title}`}>
           {index + 1}. {step.title}
         </span>
@@ -179,6 +188,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
         </button>
       </div>
 
+      <div className="px-3 py-2.5">
       <p className={`text-mini leading-relaxed ${c.body}`}>{step.body}</p>
 
       {step.example && (
@@ -236,7 +246,9 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
         </p>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 bg-bg-surface/40 px-3 py-2">
         <button
           onClick={() => setIndex(i => Math.max(0, i - 1))}
           disabled={index === 0}

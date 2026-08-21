@@ -197,7 +197,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal card */}
-      <div className="relative flex max-h-[90vh] w-full max-w-md flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-md flex-col rounded-lg border border-border bg-bg-panel shadow-e4">
 
         {/* Header */}
         <div

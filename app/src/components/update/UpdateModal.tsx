@@ -59,7 +59,7 @@ export function UpdateModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded border border-accent-fill/60 bg-bg-panel shadow-xl flex flex-col"
+        className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded border border-accent-fill/60 bg-bg-panel shadow-e3 flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

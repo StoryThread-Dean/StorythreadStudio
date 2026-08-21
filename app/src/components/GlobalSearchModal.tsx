@@ -347,7 +347,7 @@ export function GlobalSearchModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal panel */}
-      <div className="flex w-full max-w-3xl flex-col rounded border border-border bg-bg-panel shadow-2xl"
+      <div className="flex w-full max-w-3xl flex-col rounded border border-border bg-bg-panel shadow-e4"
            style={{ maxHeight: "85vh" }}>
 
         {/* ── Header ── */}

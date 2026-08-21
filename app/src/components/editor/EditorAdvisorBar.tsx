@@ -445,7 +445,7 @@ export function EditorAdvisorBar({
 
         {/* Subcategory dropdown. Anchored to the button. */}
         {isMenuOpen && (
-          <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded border border-border bg-bg-panel p-2 text-xs shadow-lg">
+          <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded border border-border bg-bg-panel p-2 text-xs shadow-e2">
             <p className="mb-1 text-micro uppercase tracking-wide text-faint">
               Look for
             </p>
@@ -553,7 +553,7 @@ export function EditorAdvisorBar({
               i
             </button>
             {showContextInfo && (
-              <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded border border-secondary-fill bg-bg-panel p-2.5 shadow-lg">
+              <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded border border-secondary-fill bg-bg-panel p-2.5 shadow-e2">
                 <p className="mb-1 text-mini font-semibold text-secondary">Context needs profiles</p>
                 <p className="text-mini text-text-muted">
                   Context checks the chapter against your attached character,

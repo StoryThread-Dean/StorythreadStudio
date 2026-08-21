@@ -1632,7 +1632,7 @@ function Shell({ children, onClose, guard }: {
         role="dialog"
         aria-label="Weaving"
         data-testid="weaving-panel"
-        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel p-4 shadow-2xl"
+        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel p-4 shadow-e4"
       >
         <header className="mb-3 flex items-center gap-2">
           <Spool size={15} className="text-weave" />

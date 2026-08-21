@@ -11,7 +11,7 @@
 // help. So the registry is typed and this walks all of it -- a screen cannot
 // explain itself badly, only completely or not at all.
 
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -131,7 +131,10 @@ describe("what the writer sees", () => {
     await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
     const box = screen.getByTestId("explain-panel");
     expect(box.textContent).toContain("A thing that does a thing.");
-    expect(box.textContent).toContain("Why:");
+    // WHY is still labelled -- that is the point of the assertion, and the
+    // part writers ask for. It is a heading now rather than an inline "Why:"
+    // prefix, so the panel reads as four answers rather than one paragraph.
+    expect(within(box).getByText("Why")).toBeTruthy();
     expect(box.textContent).toContain(NEED_WORDING.recommended);
     expect(box.textContent).toMatch(/costs nothing/);
   });

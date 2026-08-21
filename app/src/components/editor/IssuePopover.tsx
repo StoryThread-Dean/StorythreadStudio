@@ -406,7 +406,7 @@ export function IssuePopover({
       onClick={onClose}
     >
       <div
-        className="absolute rounded-lg border border-accent-fill/60 bg-bg-panel shadow-xl text-sm text-text-primary"
+        className="absolute rounded-lg border border-accent-fill/60 bg-bg-panel shadow-e3 text-sm text-text-primary"
         style={{
           // Hidden until the first layout pass has measured the anchor.
           // Avoids a one-frame flash at (0, 0) on mount.

@@ -40,7 +40,7 @@ export function DonationPrompt({
       // Bottom-right corner, above any normal status bars. Limited width
       // so it never crowds the writing surface; the entire card is
       // dismissable with the X button.
-      className="fixed bottom-4 right-4 z-40 w-80 rounded-lg border border-weave-fill/60 bg-bg-panel shadow-xl"
+      className="fixed bottom-4 right-4 z-40 w-80 rounded-lg border border-weave-fill/60 bg-bg-panel shadow-e3"
     >
       <div className="flex items-start justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-weave">

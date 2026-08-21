@@ -550,7 +550,7 @@ export function Settings({ onClose }: SettingsProps) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal -- wider and scrollable for expanded content */}
-      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-e4">
 
         {/* Sticky header -- inline padding to bypass Tailwind purge */}
         <div

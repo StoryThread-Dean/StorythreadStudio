@@ -177,7 +177,7 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
           scroll for long breakdowns. */}
       {isOpen && (
         <div
-          className="absolute left-0 right-0 bottom-full z-20 mb-1 max-h-[80vh] overflow-y-auto rounded border border-border bg-bg-panel shadow-xl"
+          className="absolute left-0 right-0 bottom-full z-20 mb-1 max-h-[80vh] overflow-y-auto rounded border border-border bg-bg-panel shadow-e3"
         >
           <SlideOverHeader onClose={onToggle} />
           {error && (

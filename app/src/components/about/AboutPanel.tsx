@@ -42,7 +42,7 @@ export function AboutPanel({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded border border-accent-fill/60 bg-bg-panel shadow-xl"
+        className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded border border-accent-fill/60 bg-bg-panel shadow-e3"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

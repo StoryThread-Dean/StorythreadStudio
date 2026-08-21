@@ -128,7 +128,7 @@ export function NodeWorkbench({
       // top-12 clears a row of py-1 buttons at top-2 with room to spare, and
       // the height allowance drops by the same amount so a long entry still
       // scrolls inside the map rather than off the bottom of it.
-      className="absolute right-2 top-12 flex max-h-[calc(100%-3.5rem)] w-80 flex-col rounded border border-border bg-bg-primary shadow-lg"
+      className="absolute right-2 top-12 flex max-h-[calc(100%-3.5rem)] w-80 flex-col rounded border border-border bg-bg-primary shadow-e2"
     >
       <header className="flex items-start gap-2 border-b border-border px-3 py-2">
         <div className="min-w-0">

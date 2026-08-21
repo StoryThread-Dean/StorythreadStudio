@@ -211,7 +211,7 @@ export function DialogueCheck({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex w-full max-w-lg flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+      <div className="flex w-full max-w-lg flex-col rounded-lg border border-border bg-bg-panel shadow-e4">
         <div className="flex items-center gap-2 border-b border-border px-5 py-3">
           <Headphones size={15} className="text-accent" />
           <h2 className="flex-1 text-sm font-semibold text-text-primary">

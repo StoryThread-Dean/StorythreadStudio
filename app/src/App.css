@@ -398,6 +398,16 @@
   --shadow-e3: 0 8px 28px rgb(0 0 0 / 0.38), 0 2px 6px rgb(0 0 0 / 0.24);
   --shadow-e4: 0 18px 56px rgb(0 0 0 / 0.46), 0 4px 12px rgb(0 0 0 / 0.28);
 
+  /* Corners. Tailwind bakes `rounded` at 4px, which across 850 call sites is
+     what made every surface in the app read as the same hard little box.
+     6px is still restrained -- it is the difference between "a box" and "a
+     card" -- and it applies everywhere without touching a component.
+
+     Dialogs go further, because a modal wants to look like a separate object
+     rather than a bigger version of the panel underneath it. */
+  --radius:    0.375rem;   /* 6px  -- the app default            */
+  --radius-lg: 0.625rem;   /* 10px -- dialogs, hero cards        */
+
   /* The uppercase section headings the app uses everywhere. */
   --tracking-label: 0.06em;
 }

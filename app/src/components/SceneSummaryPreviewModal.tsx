@@ -203,7 +203,7 @@ export function SceneSummaryPreviewModal({
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-bg-panel shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-bg-panel shadow-e4"
         onClick={(e) => e.stopPropagation()}
       >
 

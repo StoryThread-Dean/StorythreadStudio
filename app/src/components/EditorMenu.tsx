@@ -146,7 +146,7 @@ export function EditorMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-30 mt-1 w-60 rounded border border-border bg-bg-panel py-1 shadow-xl"
+          className="absolute right-0 top-full z-30 mt-1 w-60 rounded border border-border bg-bg-panel py-1 shadow-e3"
         >
           {hasAiGroup && (
             <>

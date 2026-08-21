@@ -203,7 +203,7 @@ export function ThesaurusPopover({
       style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 9999 }}
       className="
         min-w-[200px] max-w-[280px] max-h-80 overflow-y-auto
-        rounded-lg border border-border shadow-2xl
+        rounded-lg border border-border shadow-e4
         bg-bg-panel text-text-primary text-sm
         flex flex-col
       "

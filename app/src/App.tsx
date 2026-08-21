@@ -1919,7 +1919,7 @@ function App() {
     (backendBannerDismissedAt === null || backendBannerDismissedAt < (backendHealth.lastSeen ?? 0));
   const backendDownBanner = showBackendBanner ? (
     <div
-      className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-danger-fill bg-danger-soft/95 px-4 py-2 shadow-lg backdrop-blur-sm"
+      className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-danger-fill bg-danger-soft/95 px-4 py-2 shadow-e2 backdrop-blur-sm"
       role="alert"
     >
       <div className="flex items-center gap-2">
@@ -2104,7 +2104,7 @@ function App() {
 
             {/* Project switcher dropdown */}
             {showSwitcher && (
-              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded border border-border bg-bg-panel shadow-xl">
+              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded border border-border bg-bg-panel shadow-e3">
                 {switcherProjects.length === 0 ? (
                   <p className="px-3 py-2 text-xs text-faint">No recent projects</p>
                 ) : (
@@ -3478,7 +3478,7 @@ function App() {
       {/* Global Replace banner -- briefly shown after the open chapter is
           modified by a replace, so the writer knows why their text changed. */}
       {globalReplaceBanner && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded border border-accent-fill bg-accent-soft/90 px-4 py-2 text-xs text-accent-strong shadow-lg backdrop-blur-sm">
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded border border-accent-fill bg-accent-soft/90 px-4 py-2 text-xs text-accent-strong shadow-e2 backdrop-blur-sm">
           {globalReplaceBanner}
         </div>
       )}
@@ -3539,7 +3539,7 @@ function App() {
           promise and the loop continues. */}
       {sceneOverwritePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm rounded-lg border border-border bg-bg-panel p-5 shadow-xl">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-bg-panel p-5 shadow-e3">
             <h2 className="mb-1 text-sm font-semibold text-text-primary">
               Overwrite Scene {sceneOverwritePrompt.index}?
             </h2>
@@ -3577,7 +3577,7 @@ function App() {
         </div>
       )}
       {autoSplitProgress && !sceneOverwritePrompt && (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-40 rounded-lg border border-accent-fill bg-bg-panel px-4 py-2 shadow-lg">
+        <div className="pointer-events-none fixed bottom-4 right-4 z-40 rounded-lg border border-accent-fill bg-bg-panel px-4 py-2 shadow-e2">
           <p className="text-xs text-accent">
             <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-accent-muted" />
             {autoSplitProgress}
@@ -4590,7 +4590,7 @@ function ChipIncludeHelp({ onClose }: ChipIncludeHelpProps) {
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] max-w-2xl overflow-y-auto rounded border border-accent-fill/50 bg-bg-panel p-5 text-sm text-text-primary shadow-xl"
+        className="max-h-[85vh] max-w-2xl overflow-y-auto rounded border border-accent-fill/50 bg-bg-panel p-5 text-sm text-text-primary shadow-e3"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
