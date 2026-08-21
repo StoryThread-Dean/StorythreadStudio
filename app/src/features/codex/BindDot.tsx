@@ -370,7 +370,7 @@ export function BindDot({
                       onClick={() => setChosen(picked ? null : node)}
                       className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
                         picked ? "bg-violet-500/15 text-text-primary"
-                               : "text-text-muted hover:bg-bg-surface"
+                               : "text-text-muted hover:bg-bg-raised"
                       }`}
                     >
                       <Icon size={12}

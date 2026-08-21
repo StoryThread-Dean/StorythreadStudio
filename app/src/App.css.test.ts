@@ -164,3 +164,70 @@ describe("App.css -- the audiobook boundary holds", () => {
     expect(CSS).not.toMatch(/\.audiobook-theme\s*\[data-theme="light"\]/);
   });
 });
+
+describe("App.css -- surfaces alternate, they do not climb", () => {
+  /** Parse `--st-name: #rrggbb;` out of a block. */
+  function hex(body: string, name: string): number[] {
+    // [ \t]* rather than \s* on purpose: this regex is built from a template
+    // literal, where a lone backslash-s is silently just "s".
+    const m = body.match(new RegExp(`--st-${name}:[ \t]*#([0-9A-Fa-f]{6})`));
+    expect(m, `--st-${name} not found or not a 6-digit hex`).toBeTruthy();
+    const v = m![1];
+    return [0, 2, 4].map(i => parseInt(v.slice(i, i + 2), 16));
+  }
+
+  /** Rough perceptual lightness. Exact weighting does not matter here. */
+  function lightness(rgb: number[]): number {
+    return 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+  }
+
+  for (const [themeName, body] of [["dark", DARK], ["light", LIGHT]] as const) {
+    it(`${themeName}: an inset never floats above the panel it sits in`, () => {
+      // THE RULE, in the writer's words: "The grey-blue on top of charcoal and
+      // charcoal on top of grey-blue." An input is a well you type INTO, not a
+      // tile sitting on top of the dialog. The first build made bg-surface a
+      // LIGHTER grey than the panel and that is exactly what was rejected:
+      // "the text windows are a lighter shade ... not appealing."
+      const panel = lightness(hex(body, "bg-panel"));
+      const inset = lightness(hex(body, "bg-surface"));
+      expect(
+        inset,
+        `--st-bg-surface is lighter than --st-bg-panel in ${themeName}, so ` +
+          `inputs would float above the dialog instead of sinking into it`,
+      ).toBeLessThanOrEqual(panel);
+    });
+
+    it(`${themeName}: hover is the one surface that really does lift`, () => {
+      // In light mode "lift" means tint DOWN -- on cream, a darker patch is
+      // what reads as "the pointer is here" -- so this only checks that hover
+      // is distinct from the panel, not which direction it went.
+      const panel = lightness(hex(body, "bg-panel"));
+      const raised = lightness(hex(body, "bg-raised"));
+      expect(Math.abs(raised - panel)).toBeGreaterThan(4);
+    });
+  }
+});
+
+describe("hover uses the token that exists for it", () => {
+  const SOURCES = import.meta.glob("./**/*.tsx", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>;
+
+  it("never reaches for bg-bg-surface on hover", () => {
+    // bg-bg-surface is now the RECESSED inset. Hovering with it would darken
+    // the row instead of lifting it. 53 call sites did exactly that while
+    // bg-bg-raised -- the token that exists for hover -- had zero users, and
+    // that mismatch is what made changing bg-surface risky in the first place.
+    //
+    // features/audiobook is excluded: it pins its own values behind
+    // .audiobook-theme and its hover behaviour is not ours to change.
+    const offenders = Object.entries(SOURCES)
+      .filter(([path]) => !path.includes("/audiobook/"))
+      .filter(([, src]) => /hover:bg-bg-surface\b/.test(src))
+      .map(([path]) => path);
+
+    expect(offenders, "use hover:bg-bg-raised instead").toEqual([]);
+  });
+});

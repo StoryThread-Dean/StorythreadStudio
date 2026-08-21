@@ -32,16 +32,41 @@
  *            The Audiobook Converter's charcoal world, pinned so neither
  *            layer above can reach into it.
  *
- * ELEVATION: A RAISED SURFACE MOVES AWAY FROM THE PAGE, AND THE DIRECTION
- * DEPENDS ON THE THEME. In dark mode surfaces climb toward light -- page
- * #1E1E1E, card #23232D, dialog #2A2A34, hover #33333D. In light mode they
- * climb toward white -- #F5F2EC, #FBF9F4, #FFFFFF -- while HOVER goes the
- * other way and tints down (#EDE9E0), because on paper a darker patch is
- * what reads as "the pointer is here".
+ * SURFACES ALTERNATE. THEY DO NOT CLIMB. This is the rule, and it came from
+ * the writer looking at the build and naming the two places it already
+ * happened by accident:
  *
- * Each step is roughly a 7-point jump, which is enough to read as a distinct
- * surface without turning the window into a stack of grey boxes. Borders do
- * the fine separation on top of that, not instead of it.
+ *     "BOOK DETAILS popout color is good for background, but the text windows
+ *      are a lighter shade. This color of the text window is not appealing.
+ *      In the same window at the bottom there is a Model Choosing Guide. The
+ *      color for this card is perfect for the text windows. Inside that
+ *      dropdown section [there are] two cards ... These card colors are a
+ *      perfect blend of counterbalance to each other. The grey-blue on top of
+ *      charcoal and charcoal on top of grey-blue."
+ *
+ * So there are TWO surface colours in dark mode and nesting swaps between
+ * them, rather than a ramp that gets lighter the higher you go:
+ *
+ *     page      #1E1E1E  charcoal
+ *       panel   #23232D  grey-blue   (dialogs, cards, sidebars)
+ *         inset #1E1E1E  charcoal    (inputs, wells, inner cards)
+ *           ... and a card inside THAT goes back to grey-blue.
+ *
+ * --st-bg-surface is deliberately the same value as --st-bg-primary. It is
+ * not a redundant token: it means "recessed", where bg-primary means "the
+ * page", and an input is a well you type INTO rather than a tile sitting on
+ * top of something. The old value (#2A2A34, a lighter grey) tried to make
+ * inputs float above the dialog and is exactly what the writer rejected.
+ *
+ * Light mode mirrors it: page #F5F2EC, panel #FBF9F4, inset back to #F5F2EC.
+ *
+ * HOVER IS THE ONE THING THAT REALLY DOES LIFT -- --st-bg-raised, #33333D in
+ * dark and #EDE9E0 in light (darker on paper, because on cream a darker patch
+ * is what reads as "the pointer is here"). 53 call sites were using
+ * hover:bg-bg-surface for this while bg-bg-raised, which exists for exactly
+ * that job, had zero users. They are on the right token now; without that
+ * move, changing bg-surface to a recessed colour would have made every hover
+ * in the app go dark instead of light.
  *
  * THE DARK SURFACES ARE COOL AND THE PAGE BEHIND THEM IS NEUTRAL. That is
  * deliberate: a raised panel reads as lifted partly because it is lighter and
@@ -99,7 +124,7 @@
   /* Surfaces */
   --st-bg-primary:   #1E1E1E;   /* the window itself        */
   --st-bg-panel:     #23232D;   /* L1 -- cards, sidebars    */
-  --st-bg-surface:   #2A2A34;   /* L2 -- dialogs, inputs    */
+  --st-bg-surface:   #1E1E1E;   /* inset -- inputs, wells   */
   --st-bg-raised:    #33333D;   /* L3 -- hover, menus       */
   --st-bg-panel-alt: #23232A;   /* unused: the cooler-by-7 L1 */
   --st-scrim:        rgb(0 0 0 / 0.66);
@@ -181,7 +206,7 @@
 
   --st-bg-primary:   #F5F2EC;
   --st-bg-panel:     #FBF9F4;
-  --st-bg-surface:   #FFFFFF;
+  --st-bg-surface:   #F5F2EC;
   --st-bg-raised:    #EDE9E0;
   --st-bg-panel-alt: #FBF9F4;
   --st-scrim:        rgb(26 26 26 / 0.42);

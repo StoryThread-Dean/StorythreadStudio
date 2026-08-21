@@ -104,7 +104,7 @@ export function SectionMenu({
               {canRename ? (
                 <button
                   onClick={() => setMode("rename")}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-surface"
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-raised"
                 >
                   <Pencil size={12} className="text-violet-300" />
                   {rename === "label" ? "Change what it is called" : "Rename this section"}
@@ -119,7 +119,7 @@ export function SectionMenu({
               )}
               <button
                 onClick={() => setMode("confirm")}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-surface"
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-raised"
               >
                 <Trash2 size={12} className="text-rose-400" />
                 {removal === "hide" ? "Hide this section" : "Remove it"}

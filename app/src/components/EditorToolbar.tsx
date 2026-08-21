@@ -472,7 +472,7 @@ function ToolbarButton({
         onAction(saved);                 // 4. Format with saved selection
       }}
       title={label}
-      className="flex h-6 w-6 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+      className="flex h-6 w-6 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
     >
       {icon}
     </button>

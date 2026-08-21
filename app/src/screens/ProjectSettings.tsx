@@ -801,7 +801,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           <h2 className="text-base font-semibold text-text-primary">Book Details</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
           >
             <X size={16} />
           </button>

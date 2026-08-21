@@ -207,7 +207,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           <h2 className="text-base font-semibold text-text-primary">Export Manuscript</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="Close"
           >
             <X size={16} />
@@ -282,7 +282,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                         {chapters.map((c) => (
                           <label
                             key={c.filename}
-                            className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-text-primary hover:bg-bg-surface"
+                            className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-text-primary hover:bg-bg-raised"
                           >
                             <input
                               type="checkbox"
@@ -437,7 +437,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           <button
             onClick={() => handleExport("full-manuscript")}
             disabled={isExporting || noneSelected}
-            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FileText size={20} className="mt-0.5 shrink-0 text-indigo-400" />
             <div>
@@ -457,7 +457,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           <button
             onClick={() => handleExport("snapshot")}
             disabled={isExporting || noneSelected}
-            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Camera size={20} className="mt-0.5 shrink-0 text-indigo-400" />
             <div>

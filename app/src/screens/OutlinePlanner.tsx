@@ -148,7 +148,7 @@ function SectionCard({ section, expanded, onToggle, onChange }: SectionCardProps
       {/* Section header */}
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-bg-surface transition-colors"
+        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-bg-raised transition-colors"
       >
         {expanded ? (
           <ChevronDown className="h-4 w-4 shrink-0 text-text-muted" />
@@ -382,7 +382,7 @@ export function OutlinePlanner({ project, onBack, onDirtyChange, onSwitchToRaw }
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="rounded p-1 text-text-muted hover:bg-bg-surface hover:text-text-primary transition-colors"
+            className="rounded p-1 text-text-muted hover:bg-bg-raised hover:text-text-primary transition-colors"
             title="Back to editor"
           >
             <ArrowLeft className="h-4 w-4" />

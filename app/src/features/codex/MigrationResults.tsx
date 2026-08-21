@@ -130,7 +130,7 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
               <li key={entry.converted_to}>
                 <button
                   onClick={() => setOpen(entry)}
-                  className="group flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-bg-surface"
+                  className="group flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-bg-raised"
                 >
                   <ChevronRight size={11} className="shrink-0 text-faint" />
                   <span className="min-w-0 flex-1 truncate text-xs text-text-primary">

@@ -169,7 +169,7 @@ export function ModelRolesSection({
                 onClick={() => setOpenRole(isOpen ? null : role.id)}
                 aria-expanded={isOpen}
                 aria-label={`${role.label} settings`}
-                className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors hover:bg-bg-surface/60"
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors hover:bg-bg-raised/60"
               >
                 {isOpen
                   ? <ChevronDown size={12} className="shrink-0 text-faint" />

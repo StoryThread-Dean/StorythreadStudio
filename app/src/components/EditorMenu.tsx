@@ -61,7 +61,7 @@ function MenuItem({
       onClick={onClick}
       disabled={disabled}
       title={hint}
-      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-primary transition-colors hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-primary transition-colors hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span className="shrink-0 text-text-muted">{icon}</span>
       <span className="truncate">{label}</span>

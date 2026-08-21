@@ -20,7 +20,7 @@ export function NavItem({
     <button
       onClick={onClick}
       className={`mb-0.5 w-full rounded px-2 py-1.5 text-left text-sm transition-colors ${
-        active ? "bg-indigo-600/20 text-indigo-300" : "text-text-primary hover:bg-bg-surface"
+        active ? "bg-indigo-600/20 text-indigo-300" : "text-text-primary hover:bg-bg-raised"
       }`}
       title={hint}
     >

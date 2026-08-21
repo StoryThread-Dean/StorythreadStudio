@@ -2134,7 +2134,7 @@ function App() {
                   }
                   setShowSwitcher(s => !s);
                 }}
-                className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-bg-surface"
+                className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-bg-raised"
                 title="Switch to a different project"
               >
                 <span className="truncate text-xs text-text-muted">{currentProject.title}</span>
@@ -2168,7 +2168,7 @@ function App() {
                           setCurrentProject(null);
                         }
                       }}
-                      className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-bg-surface ${
+                      className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-bg-raised ${
                         rp.root_path === currentProject.root_path
                           ? "text-indigo-300"
                           : "text-text-primary"
@@ -2184,7 +2184,7 @@ function App() {
                 <div className="border-t border-border">
                   <button
                     onClick={() => { setShowSwitcher(false); setCurrentProject(null); }}
-                    className="w-full px-3 py-2 text-left text-xs text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
+                    className="w-full px-3 py-2 text-left text-xs text-faint transition-colors hover:bg-bg-raised hover:text-text-muted"
                   >
                     Back to Dashboard
                   </button>
@@ -2203,7 +2203,7 @@ function App() {
               ProjectHome screen. */}
           <button
             onClick={() => setCurrentProject(null)}
-            className="mb-4 flex w-full items-center gap-2 rounded border border-border bg-bg-panel px-2 py-1.5 text-left text-xs text-text-muted transition-colors hover:border-indigo-500 hover:bg-bg-surface hover:text-indigo-300"
+            className="mb-4 flex w-full items-center gap-2 rounded border border-border bg-bg-panel px-2 py-1.5 text-left text-xs text-text-muted transition-colors hover:border-indigo-500 hover:bg-bg-raised hover:text-indigo-300"
             title="Return to the main menu (does not affect any open work on disk)"
           >
             <span aria-hidden="true">&larr;</span>
@@ -2219,7 +2219,7 @@ function App() {
           <div className="mb-4">
             <button
               onClick={() => setShowProjectSettings(true)}
-              className="flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs font-semibold uppercase tracking-wider text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+              className="flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs font-semibold uppercase tracking-wider text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
               title="Title, genre, tone, POV, word target, AI model... everything about this book"
             >
               <span>Book Details</span>
@@ -2482,14 +2482,14 @@ function App() {
         <div className="border-t border-border px-4 py-3">
           <button
             onClick={() => setShowSettings(true)}
-            className="w-full rounded px-2 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="w-full rounded px-2 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="Open settings (API key, model selection)"
           >
             ⚙ Settings
           </button>
           <button
             onClick={() => setShowAboutPanel(true)}
-            className="mt-1 flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="mt-1 flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="About Storythread Studio: version, license, donations"
           >
             <span>ℹ About</span>

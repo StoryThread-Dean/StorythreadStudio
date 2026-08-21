@@ -535,7 +535,7 @@ export function Settings({ onClose }: SettingsProps) {
           <h2 className="text-base font-semibold text-text-primary">Settings</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="Close settings"
           >
             <X size={16} />

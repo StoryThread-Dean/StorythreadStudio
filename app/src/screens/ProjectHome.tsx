@@ -440,7 +440,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                       onClick={() => handlePickStoryType(opt.value)}
                       disabled={loading}
                       title={opt.hint}
-                      className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Icon size={22} className="text-indigo-400" />
                       <p className="mt-1 text-sm font-semibold text-text-primary">
@@ -462,7 +462,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               <button
                 onClick={handleOpen}
                 disabled={loading}
-                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-indigo-500 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                 title="Open an existing project or series folder"
               >
                 <p className="text-sm font-semibold text-text-primary">Open Project</p>
@@ -484,7 +484,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               <button
                 onClick={onOpenAudiobooks}
                 disabled={loading}
-                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-emerald-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-emerald-500 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                 title="Convert a manuscript into MP3 and M4B audiobooks"
               >
                 <p className="text-sm font-semibold text-emerald-400">Audiobook Converter</p>
@@ -644,7 +644,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                       key={book.project_id || book.folder_name}
                       onClick={() => handleOpenBookFromBrowser(book)}
                       disabled={loading}
-                      className="rounded border border-border bg-bg-panel px-4 py-3 text-left transition-colors hover:border-teal-600 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded border border-border bg-bg-panel px-4 py-3 text-left transition-colors hover:border-teal-600 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <p className="text-sm font-medium text-text-primary">{book.title}</p>
                       <p className="mt-0.5 text-xs text-faint">{book.folder_name}</p>
@@ -691,7 +691,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                           onClick={() => setSelectedStoryType(opt.value)}
                           disabled={loading}
                           title={opt.hint}
-                          className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-teal-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-teal-500 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Icon size={22} className="text-teal-300" />
                           <p className="mt-1 text-sm font-semibold text-text-primary">
@@ -831,7 +831,7 @@ function RecentProjectRow({
       className={`group relative rounded border px-3 py-2 transition-colors ${
         isMissing
           ? "border-border bg-bg-primary opacity-60"
-          : "border-border bg-bg-panel hover:border-indigo-500 hover:bg-bg-surface"
+          : "border-border bg-bg-panel hover:border-indigo-500 hover:bg-bg-raised"
       }`}
     >
       {/* Open button covers the whole row except the X. We use a wrapping

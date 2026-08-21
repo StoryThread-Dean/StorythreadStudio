@@ -134,7 +134,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
           setOpen(next);
           if (next && rolls.physical.length === 0) rollAll();
         }}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-bg-surface"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-bg-raised"
       >
         {open ? <ChevronDown size={14} className="text-faint" /> : <ChevronRight size={14} className="text-faint" />}
         <span className="text-xs font-medium text-text-primary">Quick Build</span>

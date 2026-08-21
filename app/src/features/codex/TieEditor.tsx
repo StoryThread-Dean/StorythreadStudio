@@ -650,7 +650,7 @@ function relOptionLabel(rel: Relation): string {
                 const Icon = lex.Icon;
                 return (
                   <li key={`${tie.src_id}|${tie.rel}|${tie.dst_id}`}
-                      className="group rounded px-1 py-1 hover:bg-bg-surface">
+                      className="group rounded px-1 py-1 hover:bg-bg-raised">
                     <div className="flex items-center gap-2">
                       <span className="shrink-0 text-mini text-emerald-300">
                         {tie.reads_as}
@@ -801,7 +801,7 @@ function relOptionLabel(rel: Relation): string {
                         <li key={node.entity_id}>
                           <button
                             onClick={() => setOther(node)}
-                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-text-muted hover:bg-bg-surface hover:text-text-primary"
+                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-text-muted hover:bg-bg-raised hover:text-text-primary"
                           >
                             <Icon size={11}
                                   className={`shrink-0 ${TONE_CLASSES[lex.tone].text}`} />

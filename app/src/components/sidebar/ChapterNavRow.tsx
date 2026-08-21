@@ -110,7 +110,7 @@ export function ChapterNavRow({
           each other. `group` lets the trash icon stay hidden until hover. */}
       <div
         className={`group flex items-stretch rounded transition-colors ${
-          isActiveChapter ? "bg-indigo-600/20" : `hover:bg-bg-surface ${parentGhostBg}`
+          isActiveChapter ? "bg-indigo-600/20" : `hover:bg-bg-raised ${parentGhostBg}`
         }`}
       >
         <button
@@ -180,7 +180,7 @@ export function ChapterNavRow({
         <div className="ml-6 mt-0.5 border-l border-border pl-2">
           <div
             className={`group flex items-stretch rounded transition-colors ${
-              isChapterSummaryActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
+              isChapterSummaryActive ? "bg-indigo-600/20" : "hover:bg-bg-raised"
             }`}
           >
             <button
@@ -209,7 +209,7 @@ export function ChapterNavRow({
           <div className="mt-0.5">
             <button
               onClick={onToggleScenesExpanded}
-              className="group flex w-full items-stretch rounded text-left text-sm text-text-primary transition-colors hover:bg-bg-surface"
+              className="group flex w-full items-stretch rounded text-left text-sm text-text-primary transition-colors hover:bg-bg-raised"
               title="Per-scene AI summaries (click to expand)"
             >
               <span className="flex w-5 shrink-0 items-center justify-center text-xs text-text-muted group-hover:text-indigo-300">
@@ -243,7 +243,7 @@ export function ChapterNavRow({
                       <div key={scene.index}>
                         <div
                           className={`group flex items-stretch rounded transition-colors ${
-                            isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
+                            isActive ? "bg-indigo-600/20" : "hover:bg-bg-raised"
                           }`}
                         >
                           {/* Beat caret -- only when the scene has beats, so
@@ -294,7 +294,7 @@ export function ChapterNavRow({
                               <button
                                 key={bi}
                                 onClick={() => onOpenScene(scene.index)}
-                                className="flex w-full items-start gap-1.5 rounded px-1.5 py-0.5 text-left text-mini transition-colors hover:bg-bg-surface"
+                                className="flex w-full items-start gap-1.5 rounded px-1.5 py-0.5 text-left text-mini transition-colors hover:bg-bg-raised"
                                 title="Open the scene summary to edit beats"
                               >
                                 <span className={`shrink-0 ${beat.done ? "text-emerald-500" : "text-faint"}`}>

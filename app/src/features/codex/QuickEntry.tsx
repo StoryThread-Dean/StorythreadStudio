@@ -419,7 +419,7 @@ export function QuickEntry({
                     <li key={node.entity_id}>
                       <button
                         onClick={() => setAddingTo(node)}
-                        className="w-full rounded px-1 py-0.5 text-left text-xs text-text-muted hover:bg-bg-surface hover:text-text-primary"
+                        className="w-full rounded px-1 py-0.5 text-left text-xs text-text-muted hover:bg-bg-raised hover:text-text-primary"
                       >
                         {nodeLabel(node)}
                       </button>

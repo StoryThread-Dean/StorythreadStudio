@@ -174,7 +174,7 @@ function SlideOverHeader({ onClose }: { onClose: () => void }) {
       <button
         type="button"
         onClick={onClose}
-        className="rounded p-1 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
+        className="rounded p-1 text-faint transition-colors hover:bg-bg-raised hover:text-text-muted"
         title="Close"
       >
         <X size={12} />

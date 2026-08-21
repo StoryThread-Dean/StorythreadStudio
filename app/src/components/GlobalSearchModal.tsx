@@ -359,7 +359,7 @@ export function GlobalSearchModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-faint transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="rounded p-1 text-faint transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="Close (Esc)"
           >
             <X size={14} />

@@ -53,7 +53,7 @@ export function ActGroup({
   return (
     <div className="mb-1.5">
       {/* Act header row: caret + title + count + hover menu */}
-      <div className="group flex items-stretch rounded transition-colors hover:bg-bg-surface">
+      <div className="group flex items-stretch rounded transition-colors hover:bg-bg-raised">
         <button
           onClick={onToggleCollapsed}
           className="flex w-5 shrink-0 items-center justify-center text-xs text-text-muted hover:text-indigo-300"

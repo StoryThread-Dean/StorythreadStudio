@@ -247,7 +247,7 @@ export function ThesaurusPopover({
               type="button"
               onClick={() => void mark()}
               disabled={marked === "saving"}
-              className="flex items-center gap-2 px-3 py-2 text-left text-xs text-text-primary hover:bg-bg-surface disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 text-left text-xs text-text-primary hover:bg-bg-raised disabled:opacity-50"
             >
               <Pin size={12} className="text-violet-300" />
               Mark for Weaving
@@ -338,7 +338,7 @@ function Section({ label, words, onSelect, word, accentSelection }: SectionProps
           onClick={() => onSelect(w)}
           className={`
             w-full text-left px-4 py-1.5 text-sm
-            text-text-primary hover:bg-bg-surface hover:text-accent
+            text-text-primary hover:bg-bg-raised hover:text-accent
             transition-colors duration-75
             ${accentSelection ? "font-medium" : ""}
           `}

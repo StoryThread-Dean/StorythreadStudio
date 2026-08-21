@@ -1421,7 +1421,7 @@ export function ProfileBuilder({
         <div className="border-b border-border px-3 py-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="Return to the writing editor"
           >
             <ChevronLeft size={13} />
@@ -1442,7 +1442,7 @@ export function ProfileBuilder({
                 className={`rounded px-2 py-1.5 text-left text-sm transition-colors ${
                   profileType === type
                     ? "bg-indigo-600/20 text-indigo-300"
-                    : "text-text-primary hover:bg-bg-surface"
+                    : "text-text-primary hover:bg-bg-raised"
                 }`}
               >
                 {labelFor(type)}
@@ -1461,7 +1461,7 @@ export function ProfileBuilder({
               {source?.canImport && (
                 <button
                   onClick={handleImport}
-                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
+                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-raised hover:text-indigo-300"
                   title="Bring an entry in from another book"
                 >
                   <Download size={12} /> Import
@@ -1469,7 +1469,7 @@ export function ProfileBuilder({
               )}
               <button
                 onClick={() => { setShowCreateForm(true); setNewName(""); setNewRole(""); }}
-                className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
+                className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-raised hover:text-indigo-300"
                 title={`Create a new ${profileType} profile`}
               >
                 <Plus size={12} /> New
@@ -1544,7 +1544,7 @@ export function ProfileBuilder({
                 <div
                   key={item.filename}
                   className={`group mb-0.5 flex items-stretch rounded transition-colors ${
-                    isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
+                    isActive ? "bg-indigo-600/20" : "hover:bg-bg-raised"
                   }`}
                 >
                   <button
@@ -1580,7 +1580,7 @@ export function ProfileBuilder({
             const groupHeader = (label: string, count: number, collapsed: boolean, onToggle: () => void) => (
               <button
                 onClick={onToggle}
-                className="mb-0.5 mt-1 flex w-full items-center gap-1 rounded px-1 py-1 text-left text-xs font-semibold uppercase tracking-wide text-text-muted transition-colors hover:bg-bg-surface"
+                className="mb-0.5 mt-1 flex w-full items-center gap-1 rounded px-1 py-1 text-left text-xs font-semibold uppercase tracking-wide text-text-muted transition-colors hover:bg-bg-raised"
               >
                 {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
                 {label} <span className="font-normal text-faint">({count})</span>
@@ -2599,7 +2599,7 @@ export function ProfileBuilder({
         {chatCollapsed ? (
           <button
             onClick={() => setChatCollapsed(false)}
-            className="flex h-full w-full flex-col items-center justify-center gap-2 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
+            className="flex h-full w-full flex-col items-center justify-center gap-2 text-faint transition-colors hover:bg-bg-raised hover:text-text-muted"
             title="Expand the Profile Chat panel"
           >
             <span className="text-xs font-medium" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
@@ -2635,7 +2635,7 @@ export function ProfileBuilder({
               )}
               <button
                 onClick={() => setChatCollapsed(true)}
-                className="rounded p-0.5 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
+                className="rounded p-0.5 text-faint transition-colors hover:bg-bg-raised hover:text-text-muted"
                 title="Collapse the chat panel"
               >
                 <ChevronRight size={14} />
