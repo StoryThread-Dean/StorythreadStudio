@@ -20,19 +20,14 @@ from datetime import datetime, timezone
 import re
 from fastapi import APIRouter, HTTPException
 from app.recent_projects import load_recent, track_project, remove_project
-from app.outline_templates import render_outline, OutlineMetadata
 from app.outline_worksheet import (
+    OutlineMetadata, write_worksheet,
     read_project_targets, set_target_chapter_count, set_target_word_count,
 )
 from app.settings_store import get_vault_root
 from pydantic import BaseModel
 
 
-# Valid outline template values. Kept here (not in outline_templates.py) so
-# the Pydantic request validation lives next to the endpoints that use it.
-# When we add Save the Cat, Hero's Journey, etc., update both this tuple and
-# the TEMPLATES dict in outline_templates.py.
-VALID_OUTLINE_TEMPLATES = ("novel", "novella", "novelette", "short_story", "serial_fiction")
 
 
 # Valid story_type values. The story type is the writer-facing label for
@@ -44,16 +39,6 @@ VALID_STORY_TYPES = ("novel", "novella", "novelette", "short_story", "serial_fic
 
 
 # Default outline template per story type. Used when the frontend sends a
-# story_type but no explicit template_type. This mapping mirrors the writer's
-# stated preference (Novel/Novella/Novelette/Short Story/Serial Fiction each
-# have their own dedicated scaffold).
-STORY_TYPE_DEFAULT_TEMPLATE: dict[str, str] = {
-    "novel":          "novel",
-    "novella":        "novella",
-    "novelette":      "novelette",
-    "short_story":    "short_story",
-    "serial_fiction": "serial_fiction",
-}
 
 
 # --- Router ---
@@ -81,10 +66,9 @@ PROJECT_FOLDERS = [
 # Default starter files created in a new project.
 #
 # NOTE: notes/outline.md is intentionally NOT in this dict -- its content
-# depends on the template the writer picked (novel vs short_story) and on
-# the project's metadata (title, genre, etc.). It's generated per-project
-# inside create_project() and create_book_in_series() using the
-# outline_templates module.
+# depends on the project's metadata (title, genre, tone) and on the story
+# type, which sets the default word target. It is written per-project by
+# _write_outline_worksheet() from create_project() and create_book_in_series().
 STARTER_FILES = {
     # The first chapter -- ready to write. Numeric ("Chapter 1", not
     # "Chapter One") so it matches the default the new-chapter dialog
@@ -164,21 +148,24 @@ def _resolve_create_folder(requested: str | None, title: str) -> str:
     return _unique_folder(vault, _slugify_folder_name(title))
 
 
-def _write_outline_template(
+def _write_outline_worksheet(
     project_root: str,
-    template_type: str,
+    story_type: str,
     metadata: OutlineMetadata,
 ) -> None:
     """
-    Render the chosen outline template and write it to notes/outline.md.
+    Write the starting notes/outline.md: a ten-line worksheet, and space.
 
-    Small helper so create_project and create_book_in_series don't
-    duplicate the same four lines of file I/O.
+    This used to render one of five whole-document templates -- three acts,
+    worldbuilding hooks, a chapter plan, every field carrying an invented
+    italic example. A first-time novelist opened their brand-new book and
+    found somebody else's. Sections are opt-in from a dropdown now; see
+    outline_presets.py and docs/outline-spec.md.
+
+    story_type rather than template_type: the templates are gone, but the
+    story type still decides the default word target.
     """
-    content = render_outline(template_type, metadata)
-    outline_path = os.path.join(project_root, "notes", "outline.md")
-    with open(outline_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    write_worksheet(project_root, metadata, story_type)
 
 
 # --- Pydantic Models ---
@@ -203,9 +190,6 @@ class CreateProjectRequest(BaseModel):
     story_type: str = "novel"
     # Which outline template to seed notes/outline.md with. When omitted the
     # backend picks the matching template for the chosen story_type via
-    # STORY_TYPE_DEFAULT_TEMPLATE. The writer can override this later via
-    # the [+ New Template] button in the editor toolbar.
-    template_type: str | None = None
 
 
 class OpenProjectRequest(BaseModel):
@@ -224,7 +208,6 @@ class CreateBookInSeriesRequest(BaseModel):
     story_type: str = "novel"
     # Optional. When None the backend picks the default template matching
     # story_type. The writer can swap later via [+ New Template].
-    template_type: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -331,17 +314,6 @@ async def create_project(request: CreateProjectRequest):
                    f"Valid options: {', '.join(VALID_STORY_TYPES)}."
         )
 
-    # If the frontend didn't pin a specific template, pick the default for
-    # the chosen story_type. Writers who want a non-matching scaffold can
-    # explicitly send template_type from the form, or swap later via the
-    # [+ New Template] toolbar button.
-    template_type = request.template_type or STORY_TYPE_DEFAULT_TEMPLATE[request.story_type]
-    if template_type not in VALID_OUTLINE_TEMPLATES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown outline template '{template_type}'. "
-                   f"Valid options: {', '.join(VALID_OUTLINE_TEMPLATES)}."
-        )
 
     # -- Create the folder structure --
     # os.makedirs creates nested folders in one call.
@@ -355,13 +327,13 @@ async def create_project(request: CreateProjectRequest):
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-    # -- Generate the outline from the chosen template --
-    # Standalone projects don't have genre/tone/series metadata yet -- we only
-    # know title + description from the creation form. The template handles
-    # missing fields gracefully (shows "(not set)" in the seed metadata block).
-    _write_outline_template(
+    # -- The outline worksheet --
+    # A standalone project only knows title + description at this point. The
+    # rest of the worksheet ships as bare labels for the writer to fill in,
+    # or to pull across later with Fill from Book Details.
+    _write_outline_worksheet(
         project_root=folder,
-        template_type=template_type,
+        story_type=request.story_type,
         metadata={
             "title":       request.title,
             "description": request.description,
@@ -386,9 +358,6 @@ async def create_project(request: CreateProjectRequest):
         # Story type chosen at creation. Drives display in the recent-projects
         # list and lets future features filter or scaffold by kind.
         "story_type":           request.story_type,
-        # Which outline template is currently applied to notes/outline.md.
-        # Updated when the writer uses the "+ New Template" button later.
-        "outline_template":     template_type,
         "created_at":           now,
         "updated_at":           now,
     }
@@ -517,13 +486,6 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
             detail=f"Unknown story type '{request.story_type}'. "
                    f"Valid options: {', '.join(VALID_STORY_TYPES)}."
         )
-    template_type = request.template_type or STORY_TYPE_DEFAULT_TEMPLATE[request.story_type]
-    if template_type not in VALID_OUTLINE_TEMPLATES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown outline template '{template_type}'. "
-                   f"Valid options: {', '.join(VALID_OUTLINE_TEMPLATES)}."
-        )
 
     # Create the standard project folders + arcs subfolder for per-book character arcs
     book_folders = PROJECT_FOLDERS + [
@@ -539,12 +501,11 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-    # Generate the outline from the chosen template. For books-in-series we
-    # have richer metadata (series name, genre, tone) which lets the template
-    # seed the HTML comment block with more context than a standalone project.
-    _write_outline_template(
+    # A book in a series knows more at creation -- series name, genre, tone --
+    # so more of the worksheet arrives already filled in.
+    _write_outline_worksheet(
         project_root=book_folder,
-        template_type=template_type,
+        story_type=request.story_type,
         metadata={
             "title":       request.title,
             "description": request.description,
@@ -575,7 +536,6 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
         "active_style_guide":   "notes/style-guide.md",
         "story_type":           request.story_type,
         # Track which scaffold was last applied -- same field as standalone.
-        "outline_template":     template_type,
         "created_at":           now,
         "updated_at":           now,
     }
@@ -784,116 +744,11 @@ async def inspect_folder(path: str):
         )
 
     return InspectFolderResponse(kind="unknown", path=path)
-
-
-# ── Apply Outline Template ─────────────────────────────────────────────────
-#
-# Called when the writer clicks "+ New Template" in the editor toolbar (or
-# from Project Settings). Overwrites notes/outline.md with the chosen
-# scaffold. The frontend shows a confirmation warning before calling this
-# because the existing outline contents are destroyed (hard overwrite --
-# no automatic backup by design).
-#
-# We read metadata from project.json (and series.json if this is a
-# book-in-series) so the rendered template's HTML comment header has
-# the right seed values.
-
-class ApplyOutlineTemplateRequest(BaseModel):
-    root_path:     str   # Which project -- same identifier pattern as /settings
-    template_type: str   # "novel" | "short_story"
-
-
-class ApplyOutlineTemplateResponse(BaseModel):
-    content:          str   # The new outline.md contents, so the editor can refresh
-    template_applied: str   # Echo of which template was used (for UI feedback)
-
-
-@router.post("/apply-outline-template", response_model=ApplyOutlineTemplateResponse)
-async def apply_outline_template(request: ApplyOutlineTemplateRequest):
-    """
-    Overwrite notes/outline.md with the selected template, pre-filled
-    with whatever metadata we can pull from project.json + series.json.
-
-    Returns the new content so the editor can reload without an extra
-    GET call. Also records the template choice in project.json so other
-    parts of the app can know what scaffold is currently in play.
-    """
-    # Validate the template choice up front so we don't touch any files
-    # if the value is bogus.
-    if request.template_type not in VALID_OUTLINE_TEMPLATES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown outline template '{request.template_type}'. "
-                   f"Valid options: {', '.join(VALID_OUTLINE_TEMPLATES)}."
-        )
-
-    root = request.root_path
-    if not os.path.isdir(root):
-        raise HTTPException(status_code=400, detail=f"Not a folder: {root}")
-
-    project_json_path = os.path.join(root, "project.json")
-    if not os.path.isfile(project_json_path):
-        raise HTTPException(
-            status_code=404,
-            detail="project.json not found -- can't apply a template to a "
-                   "folder that isn't a Storythread Studio project."
-        )
-
-    # Read the project's own metadata
-    try:
-        with open(project_json_path, "r", encoding="utf-8") as f:
-            project_data = json.load(f)
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"project.json is malformed: {e}")
-
-    # If this book is part of a series, fold in the series's genre/tone too.
-    # The creation flow does this already; the toolbar button needs the same
-    # logic so re-applying a template captures the current series context.
-    series_name = ""
-    genre = ""
-    tone = ""
-    series_path = project_data.get("series_path") or ""
-    if series_path:
-        series_json_path = os.path.join(series_path, "series.json")
-        if os.path.isfile(series_json_path):
-            try:
-                with open(series_json_path, "r", encoding="utf-8") as f:
-                    series_data = json.load(f)
-                series_name = series_data.get("name", "") or ""
-                genre       = series_data.get("genre", "") or ""
-                tone        = series_data.get("tone", "") or ""
-            except (json.JSONDecodeError, OSError):
-                # Series file unreadable -- just render without its metadata.
-                # Better to succeed with less pre-fill than to fail entirely.
-                pass
-
-    metadata: OutlineMetadata = {
-        "title":       project_data.get("title", "") or "",
-        "description": project_data.get("description", "") or "",
-        "series_name": series_name,
-        "genre":       genre,
-        "tone":        tone,
-    }
-
-    # Render + write. We overwrite outline.md in place with no backup
-    # because the frontend's confirmation dialog already warned the user.
-    content = render_outline(request.template_type, metadata)
-    outline_path = os.path.join(root, "notes", "outline.md")
-    os.makedirs(os.path.dirname(outline_path), exist_ok=True)
-    with open(outline_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    # Record the new template choice in project.json so settings UIs and
-    # future features can tell what scaffold is in play.
-    project_data["outline_template"] = request.template_type
-    project_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    with open(project_json_path, "w", encoding="utf-8") as f:
-        json.dump(project_data, f, indent=2)
-
-    return ApplyOutlineTemplateResponse(
-        content=content,
-        template_applied=request.template_type,
-    )
+# The Outline is no longer templated. POST /apply-outline-template rendered
+# one of five whole-document scaffolds over notes/outline.md -- a hard
+# overwrite, deliberately without a backup, reachable from two different
+# screens. Sections are opt-in from a dropdown now and the writer's own text
+# is never replaced. See docs/outline-spec.md.
 
 
 @router.put("/settings")

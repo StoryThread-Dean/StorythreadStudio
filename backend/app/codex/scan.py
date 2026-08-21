@@ -348,6 +348,36 @@ _METADATA_LINE_RE = re.compile(
 
 
 @lru_cache(maxsize=1)
+def _retired_template_words() -> frozenset[str]:
+    """
+    The words the five deleted outline templates used to contain.
+
+    Generated once, on the commit that removed outline_templates.py, and
+    committed as data because the renderers no longer exist to regenerate it.
+    Returned as text so it flows through the same extractor as everything
+    else rather than needing its own path.
+
+    Returned as a SET, already lower-cased, and unioned in directly rather
+    than pushed back through the extractor. The file was PRODUCED by that
+    extractor, so re-running it would be re-deriving a known answer -- and
+    the first attempt did exactly that and lost a third of the list: joined
+    into one line, adjacent capitalised words merge into multi-word names, so
+    "Logline" disappeared inside a longer phrase and stopped being subtracted.
+
+    A missing file costs noise, not a crash -- same contract as the rest of
+    this function.
+    """
+    from pathlib import Path
+    path = Path(__file__).resolve().parent.parent / "data" / "retired_outline_vocabulary.txt"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return frozenset()
+    return frozenset(
+        w.strip().lower() for w in lines if w.strip() and not w.startswith("#")
+    )
+
+@lru_cache(maxsize=1)
 def _template_vocabulary() -> frozenset[str]:
     """
     Every name the SHIPPED outline templates contain, lower-cased.
@@ -378,11 +408,27 @@ def _template_vocabulary() -> frozenset[str]:
     """
     words: set[str] = set()
     try:
-        from app.outline_templates import TEMPLATES, render_outline
-        for template_type in TEMPLATES:
-            try:
-                rendered = render_outline(template_type, None)
-            except Exception:          # noqa: BLE001 -- see the docstring
+        # THREE SOURCES, and the middle one is the one nobody would think of.
+        #
+        #   1. The presets a writer can add today.
+        #   2. The FIVE RETIRED TEMPLATES, frozen to a data file. Every
+        #      project created before v2.0.2 still has a full template body
+        #      sitting in notes/outline.md. Deleting the renderers without
+        #      keeping their vocabulary would stop the subtraction for all of
+        #      those books at once -- the writer's noise measured back up from
+        #      23 planned names to 53 -- and nothing would have failed.
+        #   3. The worksheet labels the app writes at the top of every new
+        #      outline.
+        from app.outline_presets import all_preset_text
+        from app.outline_worksheet import WORKSHEET_FIELDS, render_worksheet
+        words.update(_retired_template_words())
+        sources = [
+            all_preset_text(),
+            render_worksheet(None),
+            " ".join(WORKSHEET_FIELDS),
+        ]
+        for rendered in sources:
+            if not rendered:
                 continue
             # HARVESTED RAW, and that is the whole trick. Running the planning
             # strip over the template first is the obvious thing to write and it

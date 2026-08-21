@@ -1,0 +1,217 @@
+# outline_presets.py -- the sections a writer can drop into their outline
+# ========================================================================
+# The Outline is a blank page you type into. This is the drawer of ready-made
+# sections beside it: pick "Premise" and a Premise section is appended, with a
+# prompt telling you what belongs there and one example showing the shape.
+#
+# It replaces the five whole-document templates. Those handed a first-time
+# novelist somebody else's book -- three acts, worldbuilding hooks, a chapter
+# plan, every field carrying an italic example -- and the only way to get a
+# fresh one was a button that overwrote everything. A writer wants the Premise
+# box, not the novel-shaped form.
+#
+#
+# THE RULE THAT GOVERNS EVERY BODY BELOW
+# --------------------------------------
+# NO PRESET CONTAINS AN INVENTED PROPER NOUN. Not one name, place, faction or
+# title. Examples are built out of role words: "a disgraced soldier", "the
+# heir", "the winter road".
+#
+# This is not a style preference. Preset text lands in notes/outline.md, and
+# that file is read by two things that will believe it:
+#
+#   THE WEAVE'S SCAN treats a capitalised word in a planning document as a
+#   name the writer has DECIDED on -- no frequency floor, because deciding a
+#   name once is enough. An example reading "Kael must reach Ironhold" would
+#   put two people's worth of fiction into the writer's world and then ask
+#   them about it.
+#
+#   AI CONTEXT can carry the outline as an attached chip. A model reading a
+#   fabricated example alongside the writer's real material has no way to tell
+#   which is which.
+#
+# The old templates needed a whole <!-- TREAT AS SEED METADATA --> banner to
+# warn the AI off their invented values. Ship no invented values and the
+# warning is unnecessary. test_outline_presets.py enforces it.
+#
+#
+# WHY THIS IS PYTHON AND NOT A TYPESCRIPT REGISTRY
+# ------------------------------------------------
+# codex/scan.py has to subtract these words from planned-name candidates, and
+# it runs inside the PACKAGED backend, where a relative path into the renderer
+# bundle may not exist. A missing path there costs the writer their
+# planned-name filter silently -- which is the exact R11.7 failure mode. The
+# frontend fetches these over HTTP and holds no copy of the text.
+
+from __future__ import annotations
+
+from typing import TypedDict
+
+
+class Preset(TypedDict):
+    id:         str
+    group:      str
+    label:      str
+    #: Exactly the H2 written into the file. The greying rule matches on this.
+    heading:    str
+    body:       str
+    #: True for sections a writer needs once PER CHARACTER. These never grey
+    #: out, because "already in your outline" is the wrong answer when the
+    #: writer is on their fourth character.
+    repeatable: bool
+
+
+def _p(id_: str, group: str, label: str, heading: str, body: str,
+       repeatable: bool = False) -> Preset:
+    return {
+        "id": id_, "group": group, "label": label,
+        "heading": heading, "body": body.strip() + "\n",
+        "repeatable": repeatable,
+    }
+
+
+PRESETS: list[Preset] = [
+    # ── Story Core ───────────────────────────────────────────────────────────
+    _p("premise", "Story Core", "Premise", "Premise", """
+One or two sentences: who wants what, and what stands in the way.
+
+_Example: a disgraced soldier has to escort the heir she once tried to kill,
+before the winter road closes._
+"""),
+    _p("story_promise", "Story Core", "Story Promise", "Story Promise", """
+What the first chapter promises the reader, and how the last one pays it off.
+
+_Example: promised a locked-room mystery in a house nobody can leave. Paid off
+by the culprit turning out to be the house._
+"""),
+    _p("central_conflict", "Story Core", "Central Conflict", "Central Conflict", """
+The one pressure the whole book runs on. Name both sides of it.
+
+_Example: the survivors need the well; the people who own the well need them
+gone._
+"""),
+    _p("protagonist", "Story Core", "Protagonist", "Protagonist", """
+Goals: what they are trying to get.
+
+Motivations: why they want it badly enough to pay for it.
+
+Main obstacle: the thing that will not move.
+
+Stakes: what it costs them if they fail.
+"""),
+
+    # ── Story Overview ───────────────────────────────────────────────────────
+    _p("story_summary", "Story Overview", "Story Summary", "Story Summary", """
+The whole book in a paragraph, ending included. Write it the way you would
+tell a friend what happens.
+"""),
+    _p("beginning_state", "Story Overview", "Beginning State", "Beginning State", """
+How things stand before the story disturbs them. The ordinary that is about to
+break.
+"""),
+    _p("inciting_change", "Story Overview", "Inciting Change", "Inciting Change", """
+The event that makes the story necessary. After it, going back is no longer an
+option.
+"""),
+    _p("escalating_change", "Story Overview", "Escalating Change", "Escalating Change", """
+What gets worse, and in what order. Three or four steps is usually enough.
+"""),
+    _p("crisis", "Story Overview", "Crisis", "Crisis", """
+The worst moment. The plan fails and the cost of carrying on becomes clear.
+"""),
+    _p("climax", "Story Overview", "Climax", "Climax", """
+The confrontation everything has been aimed at. Say what is decided, and by
+whom.
+"""),
+    _p("resolution", "Story Overview", "Resolution", "Resolution", """
+The new ordinary. What changed, what did not, and what the reader is left
+holding.
+"""),
+
+    # ── Character Module ─────────────────────────────────────────────────────
+    # Both repeatable: a book has more than one character, and greying these
+    # out after the first would make the drawer useless from character two on.
+    _p("identity", "Character Module", "Identity", "Identity -- (name)", """
+Name:
+
+Role in the story:
+
+Age:
+
+Race / gender:
+
+Species / culture / faction:
+""", repeatable=True),
+    _p("story_function", "Character Module", "Story Function", "Story Function -- (name)", """
+What this character is for. What would break in the story if you cut them.
+""", repeatable=True),
+
+    # ── Structure ────────────────────────────────────────────────────────────
+    # Salvaged from the three-act scaffold in the retired novel template.
+    _p("act_beats", "Structure", "Act Beats", "Act Beats", """
+Act One: setup, then the inciting change. Roughly the first quarter.
+
+Act Two: escalation and the crisis. Roughly the middle half.
+
+Act Three: climax and resolution. Roughly the last quarter.
+"""),
+    _p("midpoint", "Structure", "Midpoint", "Midpoint", """
+The turn in the middle. Something is learned or lost that changes what the
+protagonist is TRYING to do, not just how hard it is.
+"""),
+
+    # ── World Module ─────────────────────────────────────────────────────────
+    # "Setting Sketch" rather than "Setting", so the H2 is visibly distinct
+    # from the worksheet's `Setting:` line at the top of the same file.
+    _p("setting_sketch", "World Module", "Setting Sketch", "Setting Sketch", """
+Where and when. The three or four facts a reader needs before anything else
+makes sense.
+"""),
+    _p("rules_and_limits", "World Module", "Rules and Limits", "Rules and Limits", """
+What can and cannot happen here, and what it costs. Magic, technology, law,
+weather -- whatever the story leans on.
+"""),
+    _p("factions_and_powers", "World Module", "Factions and Powers", "Factions and Powers", """
+Who holds power, who wants it, and what each of them would do to keep or take
+it.
+"""),
+
+    # ── Chapter Plan ─────────────────────────────────────────────────────────
+    _p("chapter_plan", "Chapter Plan", "Chapter Plan", "Chapter Plan", """
+One or two lines per chapter. You do not have to plan them all -- some writers
+plan the next three and no further.
+
+Chapter 1:
+
+Chapter 2:
+
+Chapter 3:
+"""),
+]
+
+#: Group order for the dropdown. Roughly the order the questions are worth
+#: answering in, which is not the same as alphabetical.
+GROUP_ORDER: list[str] = [
+    "Story Core",
+    "Story Overview",
+    "Character Module",
+    "Structure",
+    "World Module",
+    "Chapter Plan",
+]
+
+
+def render_preset(preset: Preset) -> str:
+    """The Markdown a preset appends: its H2, then its body."""
+    return f"## {preset['heading']}\n\n{preset['body']}"
+
+
+def all_preset_text() -> str:
+    """
+    Every preset rendered, for the Weave's scaffolding vocabulary.
+
+    codex/scan.py subtracts these words from planned-name candidates so a
+    writer is never asked about "Protagonist" or "Midpoint" as though they had
+    invented it.
+    """
+    return "\n\n".join(render_preset(p) for p in PRESETS)
