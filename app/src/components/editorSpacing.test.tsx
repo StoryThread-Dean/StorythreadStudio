@@ -24,7 +24,9 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { MarkdownEditor } from "./MarkdownEditor";
-import { resolveLineHeight } from "../hooks/useLineSpacing";
+import {
+  resolveLineHeight, PARAGRAPH_BEFORE_DEFAULT, PARAGRAPH_AFTER_DEFAULT,
+} from "../hooks/useEditorSpacing";
 
 afterEach(cleanup);
 
@@ -82,7 +84,7 @@ describe("paragraphs are separated from each other", () => {
     mount();
     const rule = ruleFor(".cm-line");
     expect(rule, "the editor emitted no .cm-line rule").toBeTruthy();
-    expect(rule).toMatch(/padding: 0 2px [\d.]+em 6px/);
+    expect(rule).toMatch(/padding: [\d.]+pt 2px [\d.]+pt 6px/);
   });
 
   it("writes the full padding shorthand, not just padding-bottom", () => {
@@ -94,14 +96,23 @@ describe("paragraphs are separated from each other", () => {
     expect(rule).not.toMatch(/padding-bottom/);
   });
 
-  it("scales the gap with the setting, so Double opens paragraphs too", () => {
+  it("uses the writer's own Before and After, in points", () => {
+    // A derived half-line was tried first and overshot -- "its doing a bit
+    // more than I hadn't anticipated". The gap is a decision now, not
+    // arithmetic off the line height, and it ships at Word's 0 / 8.
     mount();
     const rule = ruleFor(".cm-line")!;
-    const gap = Number(rule.match(/padding: 0 2px ([\d.]+)em 6px/)![1]);
-    // Half a line at the shipped default, to the same 2dp the theme emits.
-    const expected = Number((resolveLineHeight("one_half", 1) * 0.5).toFixed(2));
-    expect(gap).toBe(expected);
-    // And enough to actually see.
-    expect(gap).toBeGreaterThan(0.3);
+    const m = rule.match(/padding: ([\d.]+)pt 2px ([\d.]+)pt 6px/)!;
+    expect(Number(m[1])).toBe(PARAGRAPH_BEFORE_DEFAULT);
+    expect(Number(m[2])).toBe(PARAGRAPH_AFTER_DEFAULT);
+  });
+
+  it("keeps the paragraph gap independent of the line height", () => {
+    // The two are separate measurements. If the gap were still derived from
+    // line height, changing one would silently move the other.
+    mount();
+    const rule = ruleFor(".cm-line")!;
+    const after = Number(rule.match(/padding: [\d.]+pt 2px ([\d.]+)pt 6px/)![1]);
+    expect(after).not.toBeCloseTo(resolveLineHeight("one_half", 1) * 0.5, 2);
   });
 });

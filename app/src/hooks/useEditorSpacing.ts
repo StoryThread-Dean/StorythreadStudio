@@ -1,4 +1,4 @@
-// hooks/useLineSpacing.ts -- how far apart the writer's lines sit
+// hooks/useEditorSpacing.ts -- how far apart the writer's lines sit
 // =================================================================
 // Line spacing for the Markdown editors, named the way a word processor names
 // it: Single, 1.5 lines, Double, Multiple. A writer who has spent years in
@@ -22,10 +22,22 @@
 // with a subscriber set, saved to ~/.storythread/settings.json through the
 // backend, so the choice carries across every project.
 //
+// TWO MEASUREMENTS, NOT ONE, and conflating them cost two rounds of "the line
+// spacing doesn't work":
+//
+//   LINE SPACING  the gap between the wrapped lines INSIDE a paragraph.
+//   PARAGRAPH     the gap BETWEEN one paragraph and the next, in points,
+//   SPACING       0pt before and 8pt after by default, as a word processor.
+//
+// A manuscript that ends paragraphs with a single newline -- which is how real
+// ones are written -- has no blank line for line spacing to stretch. So no
+// amount of it will ever separate two paragraphs, and a writer reasonably
+// reads that as the control being broken. It was the missing measurement.
+//
 // SCOPE. This spaces PROSE -- the manuscript editor, the outline, notes, and
 // the summary editors, all of which are MarkdownEditor. It deliberately does
 // not touch the chrome (that is Interface size) and it does not touch Reader
-// Mode, which has its own line-spacing control for a different job: reading a
+// Mode, which has its own spacing controls for a different job: reading a
 // finished page rather than editing a draft.
 
 import { useEffect, useState } from "react";
@@ -46,6 +58,26 @@ export type LineSpacing = "single" | "one_half" | "double" | "multiple";
  * one knob that says how generous this app's idea of "single" is.
  */
 export const SINGLE_BASIS = 1.166;
+
+/**
+ * Paragraph spacing bounds, in typography points.
+ *
+ * 72pt is an inch, which is far more than anyone wants and still a real
+ * answer; the point of the ceiling is that a typo cannot push the next
+ * paragraph off the screen.
+ */
+export const PARAGRAPH_PT_MIN = 0;
+export const PARAGRAPH_PT_MAX = 72;
+
+/** Word's defaults, and therefore ours. */
+export const PARAGRAPH_BEFORE_DEFAULT = 0;
+export const PARAGRAPH_AFTER_DEFAULT = 8;
+
+/** Keep a typed-in paragraph gap inside the usable range. */
+export function clampParagraphPt(value: number): number {
+  if (Number.isNaN(value)) return 0;
+  return Math.min(PARAGRAPH_PT_MAX, Math.max(PARAGRAPH_PT_MIN, value));
+}
 
 /** Hard floor and ceiling for a custom multiple. */
 export const MULTIPLE_MIN = 0.8;   // below this, descenders collide
@@ -100,12 +132,26 @@ export function resolveLineHeight(
 
 let currentSpacing:  LineSpacing = "one_half";
 let currentMultiple: number      = 1.15;
+let currentBefore:   number      = PARAGRAPH_BEFORE_DEFAULT;
+let currentAfter:    number      = PARAGRAPH_AFTER_DEFAULT;
 
-interface Value { spacing: LineSpacing; multiple: number; }
+interface Value {
+  spacing:  LineSpacing;
+  multiple: number;
+  /** Points above each paragraph. */
+  before:   number;
+  /** Points below each paragraph. */
+  after:    number;
+}
 const subscribers = new Set<(v: Value) => void>();
 
 function snapshot(): Value {
-  return { spacing: currentSpacing, multiple: currentMultiple };
+  return {
+    spacing:  currentSpacing,
+    multiple: currentMultiple,
+    before:   currentBefore,
+    after:    currentAfter,
+  };
 }
 
 function notify(): void {
@@ -143,9 +189,17 @@ export async function initLineSpacing(): Promise<void> {
       ? clampMultiple(rawMultiple)
       : currentMultiple;
 
-    if (spacing !== currentSpacing || multiple !== currentMultiple) {
+    const before = Number.isFinite(Number(data.paragraph_space_before))
+      ? clampParagraphPt(Number(data.paragraph_space_before)) : currentBefore;
+    const after = Number.isFinite(Number(data.paragraph_space_after))
+      ? clampParagraphPt(Number(data.paragraph_space_after)) : currentAfter;
+
+    if (spacing !== currentSpacing || multiple !== currentMultiple
+        || before !== currentBefore || after !== currentAfter) {
       currentSpacing  = spacing;
       currentMultiple = multiple;
+      currentBefore   = before;
+      currentAfter    = after;
       notify();
     }
   } catch {
@@ -192,16 +246,56 @@ export async function setLineSpacing(
 
 
 /**
+ * Change the paragraph gaps, in points.
+ *
+ * Separate from setLineSpacing because they are separate decisions: a writer
+ * picks "1.5 lines" once and then fiddles with the space after a paragraph,
+ * and making one call carry both would mean every paragraph tweak re-sent a
+ * line-spacing choice nobody touched.
+ */
+export async function setParagraphSpacing(
+  before: number,
+  after: number,
+): Promise<void> {
+  const b = clampParagraphPt(before);
+  const a = clampParagraphPt(after);
+  if (b === currentBefore && a === currentAfter) return;
+
+  currentBefore = b;
+  currentAfter  = a;
+  notify();
+
+  try {
+    await fetch(`${API_BASE}/api/settings`, {
+      method:  "PUT",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        paragraph_space_before: b,
+        paragraph_space_after:  a,
+      }),
+    });
+  } catch {
+    // Non-fatal: the session keeps the new spacing, next boot re-reads.
+  }
+}
+
+
+/**
  * React hook. Returns the choice, the resolved line-height, and the setter.
  *
  * `lineHeight` is handed back already resolved so no caller has to know about
  * SINGLE_BASIS -- there is one place that arithmetic happens.
  */
-export function useLineSpacing(): {
+export function useEditorSpacing(): {
   spacing:    LineSpacing;
   multiple:   number;
   lineHeight: number;
+  /** Points above each paragraph. */
+  before:     number;
+  /** Points below each paragraph. */
+  after:      number;
   set:        (spacing: LineSpacing, multiple?: number) => void;
+  setParagraph: (before: number, after: number) => void;
 } {
   const [value, setValue] = useState<Value>(snapshot);
 
@@ -209,7 +303,8 @@ export function useLineSpacing(): {
     subscribers.add(setValue);
     // Reconcile in case init resolved between render and effect.
     const now = snapshot();
-    if (now.spacing !== value.spacing || now.multiple !== value.multiple) {
+    if (now.spacing !== value.spacing || now.multiple !== value.multiple
+        || now.before !== value.before || now.after !== value.after) {
       setValue(now);
     }
     return () => { subscribers.delete(setValue); };
@@ -221,6 +316,9 @@ export function useLineSpacing(): {
     spacing:    value.spacing,
     multiple:   value.multiple,
     lineHeight: resolveLineHeight(value.spacing, value.multiple),
-    set:        (spacing, multiple) => void setLineSpacing(spacing, multiple),
+    before:     value.before,
+    after:      value.after,
+    set:         (spacing, multiple) => void setLineSpacing(spacing, multiple),
+    setParagraph: (before, after) => void setParagraphSpacing(before, after),
   };
 }

@@ -24,7 +24,7 @@ import { createTheme } from "@uiw/codemirror-themes";
 import { tags as t } from "@lezer/highlight";
 import type { FontValue } from "./EditorToolbar";
 import { useTheme } from "../hooks/useTheme";
-import { useLineSpacing } from "../hooks/useLineSpacing";
+import { useEditorSpacing } from "../hooks/useEditorSpacing";
 import { issueOverlayExtension } from "./editor/issueOverlay";
 import { ThesaurusPopover } from "./editor/ThesaurusPopover";
 
@@ -40,7 +40,12 @@ const fontCompartment = new Compartment();
 // active-line highlight) it uses CSS variables so the colors flip with
 // the app theme automatically. CodeMirror lets us write plain CSS values
 // here, and var(--st-...) is a plain CSS value.
-function buildFontTheme(fontFamily: string, lineHeight: number) {
+function buildFontTheme(
+  fontFamily: string,
+  lineHeight: number,
+  spaceBefore: number,
+  spaceAfter: number,
+) {
   return EditorView.theme({
     // The root editor element. font-size inherits all the way down from here.
     "&": {
@@ -92,8 +97,11 @@ function buildFontTheme(fontFamily: string, lineHeight: number) {
     // about paragraph gaps, and no line-height can produce one when a
     // paragraph break is just another line.
     //
-    // Half a line, scaled with the setting, so Double opens paragraphs up
-    // as well as lines. PADDING rather than margin on purpose: CodeMirror
+    // The writer's own Before/After, in points, defaulting to Word's 0 and 8.
+    // A derived half-line was tried first and overshot: "its doing a bit more
+    // than I hadn't anticipated". Spacing this is a decision, not arithmetic.
+    //
+    // PADDING rather than margin on purpose: CodeMirror
     // measures a line with getBoundingClientRect, which includes padding
     // and excludes margin, so margin here would desync its scroll height
     // from reality on a long chapter.
@@ -104,7 +112,7 @@ function buildFontTheme(fontFamily: string, lineHeight: number) {
       // would only survive as long as this rule is injected after that one.
       // Restating its left/right keeps the gap independent of style order --
       // the same class of ordering assumption that hid the line-height bug.
-      padding: `0 2px ${(lineHeight * 0.5).toFixed(2)}em 6px`,
+      padding: `${spaceBefore}pt 2px ${spaceAfter}pt 6px`,
     },
     // Hide the line-number gutter (not useful in a prose editor)
     ".cm-gutters": {
@@ -530,7 +538,7 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
   // and changing it triggers @uiw/react-codemirror to rebuild the view --
   // exactly what we want when the palette changes.
   const [appTheme]    = useTheme();
-  const { lineHeight } = useLineSpacing();
+  const { lineHeight, before: spaceBefore, after: spaceAfter } = useEditorSpacing();
   const editorTheme   = appTheme === "light" ? storythreadLightTheme : storythreadDarkTheme;
 
   // When the font OR the line spacing changes, hot-swap only that compartment.
@@ -541,10 +549,10 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
   useEffect(() => {
     if (editorViewRef.current) {
       editorViewRef.current.dispatch({
-        effects: fontCompartment.reconfigure(buildFontTheme(font, lineHeight)),
+        effects: fontCompartment.reconfigure(buildFontTheme(font, lineHeight, spaceBefore, spaceAfter)),
       });
     }
-  }, [font, lineHeight]);
+  }, [font, lineHeight, spaceBefore, spaceAfter]);
 
   // Static extensions -- built once, never change.
   //
@@ -561,7 +569,7 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
       autocorrect: "off",
       autocapitalize: "off",
     }),
-    fontCompartment.of(buildFontTheme(font, lineHeight)),
+    fontCompartment.of(buildFontTheme(font, lineHeight, spaceBefore, spaceAfter)),
     // HR scene-break decoration: paints a horizontal stripe across any line
     // that is just `---` (or `***`). The text remains editable; only the
     // visual presentation changes.

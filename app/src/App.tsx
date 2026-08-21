@@ -95,7 +95,7 @@ import { useBackendHealth } from "./hooks/useBackendHealth";
 import { useProjectUiState } from "./hooks/useProjectUiState";
 import { initTheme } from "./hooks/useTheme";
 import { initUiScale } from "./hooks/useUiScale";
-import { initLineSpacing } from "./hooks/useLineSpacing";
+import { initLineSpacing } from "./hooks/useEditorSpacing";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { Bot, Send, ChevronDown, CornerDownRight, PenLine, Sparkles, HelpCircle, Brain } from "lucide-react";
 import type { EditorView } from "@codemirror/view";

@@ -155,6 +155,24 @@ DEFAULT_SETTINGS: dict = {
     # switching to Double and back does not lose what was typed. Clamped
     # 0.8-5.0 at the edge: under about 0.8 the lines physically collide.
     "line_spacing_multiple":  1.15,
+    # paragraph_space_before / paragraph_space_after: the gap above and below
+    # each paragraph, in TYPOGRAPHY POINTS, named and defaulted the way a word
+    # processor does it (0pt before, 8pt after).
+    #
+    # Separate from line_spacing because they answer different questions.
+    # Line spacing is the gap between the wrapped lines INSIDE a paragraph;
+    # this is the gap BETWEEN paragraphs. A manuscript that ends paragraphs
+    # with a single newline -- which is how real ones are written -- has no
+    # blank line for line spacing to stretch, so no amount of it will ever
+    # separate two paragraphs. That was reported as the line spacing control
+    # being broken, twice, and it was the missing measurement rather than a
+    # broken one.
+    #
+    # Points rather than pixels or ems because a writer who has set paragraph
+    # spacing before has set it in points, and 8pt means the same thing here
+    # as it does in the document they are used to. CSS takes pt natively.
+    "paragraph_space_before": 0.0,
+    "paragraph_space_after":  8.0,
     # writing_skill_level: drives the daily word + task targets shown in the
     # Writing Progress tracker. Values: "newbie" | "beginner" | "novice"
     # | "amateur" | "experienced" | "fulltime" | "professional".

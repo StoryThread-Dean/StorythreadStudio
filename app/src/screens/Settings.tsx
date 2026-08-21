@@ -19,9 +19,11 @@ import type { AppSettings, ModelInfo } from "../types/ai";
 import { useTheme } from "../hooks/useTheme";
 import { useUiScale, UI_SCALE_PX, type UiScale } from "../hooks/useUiScale";
 import {
-  useLineSpacing, LINE_SPACING_OPTIONS, resolveLineHeight, clampMultiple,
-  MULTIPLE_MIN, MULTIPLE_MAX,
-} from "../hooks/useLineSpacing";
+  useEditorSpacing, LINE_SPACING_OPTIONS, resolveLineHeight, clampMultiple,
+  MULTIPLE_MIN, MULTIPLE_MAX, clampParagraphPt,
+  PARAGRAPH_PT_MIN, PARAGRAPH_PT_MAX,
+  PARAGRAPH_BEFORE_DEFAULT, PARAGRAPH_AFTER_DEFAULT,
+} from "../hooks/useEditorSpacing";
 // Content-mode filter, cost tiers, media filter, and the curated recommended
 // list all live in a shared util so Settings and ProjectSettings can't drift
 // apart (see utils/modelFiltering.ts).
@@ -138,8 +140,26 @@ export function Settings({ onClose }: SettingsProps) {
   // Line spacing. `multipleDraft` is the text in the number box while the
   // writer is still typing it; the applied value only changes on blur, so
   // typing "2" on the way to "2.5" does not reflow the manuscript twice.
-  const { spacing, multiple: spacingMultiple, set: setSpacing } = useLineSpacing();
+  const {
+    spacing, multiple: spacingMultiple, set: setSpacing,
+    before: paraBefore, after: paraAfter, setParagraph,
+  } = useEditorSpacing();
   const [multipleDraft, setMultipleDraft] = useState(String(spacingMultiple));
+  // Paragraph gaps are drafted the same way as the custom multiple: typing
+  // "1" on the way to "12" must not reflow the manuscript at 1pt.
+  const [beforeDraft, setBeforeDraft] = useState(String(paraBefore));
+  const [afterDraft,  setAfterDraft]  = useState(String(paraAfter));
+
+  /** Apply both gaps, falling back to the live value for anything unreadable. */
+  const commitParagraph = useCallback(() => {
+    const b = Number(beforeDraft);
+    const a = Number(afterDraft);
+    const nextBefore = Number.isFinite(b) ? clampParagraphPt(b) : paraBefore;
+    const nextAfter  = Number.isFinite(a) ? clampParagraphPt(a) : paraAfter;
+    setBeforeDraft(String(nextBefore));
+    setAfterDraft(String(nextAfter));
+    setParagraph(nextBefore, nextAfter);
+  }, [beforeDraft, afterDraft, paraBefore, paraAfter, setParagraph]);
   // Keep the draft in step when the stored value arrives or changes from
   // elsewhere. initLineSpacing() resolves AFTER this screen can mount, so
   // without this the box would show the default while the editor was
@@ -147,6 +167,11 @@ export function Settings({ onClose }: SettingsProps) {
   useEffect(() => {
     setMultipleDraft(String(spacingMultiple));
   }, [spacingMultiple]);
+
+  useEffect(() => {
+    setBeforeDraft(String(paraBefore));
+    setAfterDraft(String(paraAfter));
+  }, [paraBefore, paraAfter]);
 
   // UI state
   const [loading, setLoading]             = useState(true);
@@ -1142,6 +1167,88 @@ export function Settings({ onClose }: SettingsProps) {
                     the font's own natural line height rather than a flat 1.0.
                     Interface size above is the separate control for menus and
                     labels. Saved globally.
+                  </p>
+                </div>
+
+                {/* ── Paragraph spacing ───────────────────────────────────
+                    A SEPARATE MEASUREMENT FROM LINE SPACING, and the reason
+                    it exists is worth keeping. Line spacing stretches the
+                    wrapped lines INSIDE a paragraph. A manuscript that ends
+                    paragraphs with a single newline -- which is how real ones
+                    are written -- has no blank line for that to stretch, so no
+                    amount of line spacing will ever separate two paragraphs.
+                    That got reported as line spacing being broken, twice.
+
+                    Points, and 0 before / 8 after, because that is what a word
+                    processor calls this and what it defaults to. A writer who
+                    has set paragraph spacing before has set it in points. */}
+                <div className="mt-6">
+                  <label className="mb-2 block text-xs font-medium text-text-primary">
+                    Paragraph spacing
+                  </label>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                      <label
+                        htmlFor="para-before"
+                        className="mb-1 block text-micro uppercase tracking-label text-text-muted"
+                      >
+                        Before
+                      </label>
+                      <span className="flex items-center gap-1">
+                        <input
+                          id="para-before"
+                          type="number"
+                          min={PARAGRAPH_PT_MIN}
+                          max={PARAGRAPH_PT_MAX}
+                          step={1}
+                          value={beforeDraft}
+                          onChange={e => setBeforeDraft(e.target.value)}
+                          onBlur={() => commitParagraph()}
+                          className="w-16 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        />
+                        <span className="text-xs text-faint">pt</span>
+                      </span>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="para-after"
+                        className="mb-1 block text-micro uppercase tracking-label text-text-muted"
+                      >
+                        After
+                      </label>
+                      <span className="flex items-center gap-1">
+                        <input
+                          id="para-after"
+                          type="number"
+                          min={PARAGRAPH_PT_MIN}
+                          max={PARAGRAPH_PT_MAX}
+                          step={1}
+                          value={afterDraft}
+                          onChange={e => setAfterDraft(e.target.value)}
+                          onBlur={() => commitParagraph()}
+                          className="w-16 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        />
+                        <span className="text-xs text-faint">pt</span>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBeforeDraft(String(PARAGRAPH_BEFORE_DEFAULT));
+                        setAfterDraft(String(PARAGRAPH_AFTER_DEFAULT));
+                        setParagraph(PARAGRAPH_BEFORE_DEFAULT, PARAGRAPH_AFTER_DEFAULT);
+                      }}
+                      className="rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted transition-colors hover:border-border-strong hover:text-text-primary"
+                    >
+                      Reset to 0 / 8
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-faint">
+                    The gap above and below each paragraph, measured in points
+                    the way a word processor measures it. This is what separates
+                    one paragraph from the next -- line spacing above only
+                    stretches the lines inside a paragraph, so on its own it
+                    cannot open a gap here. Saved globally.
                   </p>
                 </div>
               </section>

@@ -67,6 +67,11 @@ class SettingsResponse(BaseModel):
     # while another option is selected, so switching away and back does not
     # lose the number the writer typed.
     line_spacing_multiple:  float
+    # Gap above and below each paragraph, in typography points. Answers a
+    # different question from line_spacing: that one spaces the wrapped lines
+    # inside a paragraph, these space one paragraph from the next.
+    paragraph_space_before: float
+    paragraph_space_after:  float
     # Writing Progress: writer's chosen skill level. Drives the daily
     # word + task targets in the Writing Progress tracker.
     writing_skill_level:    str
@@ -118,6 +123,9 @@ class UpdateSettingsRequest(BaseModel):
     # Clamped to 0.8-5.0 at write time. Below roughly 0.8 the lines
     # physically overlap and the prose stops being readable.
     line_spacing_multiple: float | None                = None
+    # Points. Clamped 0-72 (an inch) at write time.
+    paragraph_space_before: float | None                = None
+    paragraph_space_after:  float | None                = None
     # One of the seven skill levels. Anything else is silently coerced to
     # "novice" (the default) when written.
     writing_skill_level: str | None                   = None
@@ -204,6 +212,10 @@ async def update_settings(request: UpdateSettingsRequest):
         # writer is still typing in, and a 400 on the way to a valid number
         # is worse than storing the nearest usable one.
         settings["line_spacing_multiple"] = max(0.8, min(5.0, float(request.line_spacing_multiple)))
+    if request.paragraph_space_before is not None:
+        settings["paragraph_space_before"] = max(0.0, min(72.0, float(request.paragraph_space_before)))
+    if request.paragraph_space_after is not None:
+        settings["paragraph_space_after"] = max(0.0, min(72.0, float(request.paragraph_space_after)))
     if request.writing_skill_level is not None:
         # Coerce unknown levels to "novice" (the documented default) rather
         # than 400'ing -- forward-compatible if more steps are added later.
@@ -429,6 +441,8 @@ def _settings_response(settings: dict) -> SettingsResponse:
         ui_scale               = settings.get("ui_scale", "default"),
         line_spacing           = settings.get("line_spacing", "one_half"),
         line_spacing_multiple  = float(settings.get("line_spacing_multiple", 1.15) or 1.15),
+        paragraph_space_before = float(settings.get("paragraph_space_before", 0.0) or 0.0),
+        paragraph_space_after  = float(settings.get("paragraph_space_after", 8.0) or 8.0),
         writing_skill_level    = settings.get("writing_skill_level", "novice"),
         day_rollover_hour      = int(settings.get("day_rollover_hour", 0) or 0),
         model_roles            = settings.get("model_roles", {}) or {},

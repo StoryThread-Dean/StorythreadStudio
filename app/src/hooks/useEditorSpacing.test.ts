@@ -1,4 +1,4 @@
-// useLineSpacing.test.ts -- what the named options actually do
+// useEditorSpacing.test.ts -- what the named options actually do
 // ==============================================================
 // Line spacing is offered under word-processor names -- Single, 1.5 lines,
 // Double, Multiple -- and those names are a PROMISE about proportions. A
@@ -21,7 +21,7 @@ import {
   clampMultiple,
   resolveLineHeight,
   type LineSpacing,
-} from "./useLineSpacing";
+} from "./useEditorSpacing";
 
 describe("the named options keep word-processor proportions", () => {
   it("resolves each option to the line height a word processor reports", () => {
@@ -212,10 +212,14 @@ describe("the editor puts line-height where CodeMirror will honour it", () => {
     ).not.toContain("lineHeight");
   });
 
-  it("takes the value as an argument rather than hardcoding one", () => {
-    expect(SOURCE).toContain("buildFontTheme(fontFamily: string, lineHeight: number)");
-    // And re-applies it when the setting changes, or the writer would have to
-    // reopen the chapter to see their own choice.
-    expect(SOURCE).toContain("}, [font, lineHeight]);");
+  it("takes the spacing as arguments rather than hardcoding it", () => {
+    // Four now: the font, the line height, and the two paragraph gaps.
+    expect(SOURCE).toMatch(/function buildFontTheme\(/);
+    for (const arg of ["lineHeight: number", "spaceBefore: number", "spaceAfter: number"]) {
+      expect(SOURCE, `buildFontTheme should take ${arg}`).toContain(arg);
+    }
+    // And re-applies all of them when a setting changes, or the writer would
+    // have to reopen the chapter to see their own choice.
+    expect(SOURCE).toContain("}, [font, lineHeight, spaceBefore, spaceAfter]);");
   });
 });
