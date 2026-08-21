@@ -28,7 +28,21 @@ export function appendPreset(view: EditorView, markdown: string): void {
   const doc = view.state.doc.toString();
   const needsGap = doc.trim().length > 0;
   const prefix = needsGap ? (doc.endsWith("\n\n") ? "" : doc.endsWith("\n") ? "\n" : "\n\n") : "";
-  const text = prefix + markdown.replace(/\s*$/, "") + "\n";
+
+  // A RULE ABOVE EACH SECTION. Without one the outline reads as a single
+  // column of headings and prose with nothing marking where one section ends
+  // and the next starts -- which is what a writer reported after adding their
+  // first one.
+  //
+  // `---` rather than `___`, because MarkdownEditor's hrLinePlugin paints a
+  // stripe across any line of three or more dashes. So this is an actual
+  // horizontal rule in the editor, not three characters that mean one.
+  //
+  // Only BETWEEN sections: never above the first thing in an empty file, and
+  // so never at position 0, where a pair of them could be mistaken for
+  // frontmatter by the healer.
+  const rule = needsGap ? "---\n\n" : "";
+  const text = prefix + rule + markdown.replace(/\s*$/, "") + "\n";
 
   const at = doc.length;
   // Land the caret after the heading, on the first line of body text.

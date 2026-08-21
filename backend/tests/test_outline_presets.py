@@ -210,3 +210,53 @@ def test_asking_for_the_worksheet_writes_nothing(client: TestClient, tmp_path):
 def test_each_preset_body_says_something(preset):
     # A heading with no prompt under it is a blank the writer has to guess at.
     assert len(preset["body"].strip()) > 20, f"{preset['id']} has no guidance"
+
+
+def test_every_section_carries_an_example():
+    # A prompt says what belongs in a section; an example shows the shape.
+    # Three of the nineteen had one when this shipped, which meant most
+    # sections landed as a heading and an instruction.
+    missing = [p["id"] for p in PRESETS if "_Example" not in p["body"]]
+    assert not missing, f"no example in: {missing}"
+
+
+def test_every_example_says_it_is_disposable():
+    # THE ITALICS ARE NOT ENOUGH. Reported after the first section was added:
+    # a writer should never have to work out which lines the app expects them
+    # to keep. So the instruction lives INSIDE the text that needs deleting,
+    # where it cannot be missed and goes away when the line does.
+    for p in PRESETS:
+        for line in p["body"].split("\n"):
+            if "_Example" in line:
+                assert "delete this" in line, (
+                    f"{p['id']}: an example that does not say to delete it -- "
+                    f"{line.strip()!r}"
+                )
+
+
+def test_the_walkthrough_has_a_page_for_every_section():
+    # A CROSS-LANGUAGE CONTRACT, the same shape as test_explain_costs.py:
+    # Python reads the TypeScript so a claim cannot outlive the thing it
+    # describes.
+    #
+    # The walkthrough promises a page per section. Presets live here, the
+    # walkthrough lives in the renderer, and nothing but this connects them --
+    # so adding a preset without adding its page would leave the guide quietly
+    # incomplete, with no failure anywhere and no way to notice except by
+    # clicking through twenty-one pages counting.
+    import pathlib
+
+    guide = (
+        pathlib.Path(__file__).resolve().parent.parent.parent
+        / "app" / "src" / "features" / "outline" / "OutlineGuide.tsx"
+    )
+    source = guide.read_text(encoding="utf-8")
+
+    missing = [
+        p["label"] for p in PRESETS
+        if f'title: "{p["label"]}"' not in source
+    ]
+    assert not missing, (
+        f"no walkthrough page for: {missing}. Add one to OutlineGuide.tsx "
+        "with three worked examples, or the guide stops covering the drawer."
+    )

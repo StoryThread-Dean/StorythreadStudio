@@ -24,9 +24,10 @@
 // EVERYTHING HERE IS FREE. No model is called; see explanations.ts.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, FilePlus2, Loader } from "lucide-react";
+import { BookOpen, ChevronDown, FilePlus2, Loader } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import { Explain } from "../../components/learn/Explain";
+import { OutlineGuide } from "./OutlineGuide";
 import { fetchOutlinePresets, fetchOutlineWorksheet } from "./outlineApi";
 import type { OutlinePreset } from "./outlineApi";
 import { headingsIn, normaliseHeading } from "./headings";
@@ -52,6 +53,7 @@ export function OutlineToolbar({
   const [note, setNote]       = useState<string | null>(null);
   const [error, setError]     = useState<string | null>(null);
   const [dismissedHeal, setDismissedHeal] = useState(false);
+  const [guiding, setGuiding] = useState(false);
 
   // The headings currently in the buffer. Recomputed when the menu opens
   // rather than on every keystroke: it is one regex over the document, and
@@ -128,11 +130,20 @@ export function OutlineToolbar({
       const { content } = await fetchOutlineWorksheet(projectPath);
       const filled = fillWorksheet(view, content);
       onEdited();
+      // A no-op has to explain ITSELF, or it reads as a failure. Reported
+      // exactly that way: "didn't seem to work because it said all of the
+      // sections had filled in parts". It had worked -- there was simply
+      // nothing left to do, because converting the outline already copied
+      // Book Details into the header. Saying what it would have done, and
+      // why it did not, is the difference between those two readings.
       setNote(
         filled === 0
-          ? "Nothing to fill in -- every line already has something in it."
+          ? "Your header is already complete, so there was nothing to copy "
+            + "across. This only fills lines that are EMPTY -- it never "
+            + "replaces something you have written. To change a value, edit "
+            + "it here or in Book Details."
           : `Filled in ${filled} ${filled === 1 ? "line" : "lines"} from Book `
-            + "Details. Nothing you had written was replaced.",
+            + "Details. Anything you had already written was left alone.",
       );
     } catch {
       setError("Could not read your Book Details.");
@@ -143,6 +154,8 @@ export function OutlineToolbar({
 
   return (
     <div className="border-b border-border bg-bg-panel px-3 py-2">
+      {guiding && <OutlineGuide onClose={() => setGuiding(false)} />}
+
       {/* The conversion notice. Shown once, dismissible, and it names where
           the original went -- a rewrite the writer did not ask for has to be
           reversible by hand if nothing else. */}
@@ -252,6 +265,19 @@ export function OutlineToolbar({
         >
           {busy ? <Loader size={12} className="animate-spin" /> : <FilePlus2 size={12} />}
           Fill from Book Details
+        </button>
+
+        {/* SHOW ME HOW is its own walkthrough, not a paragraph hung under
+            "What's this?". That panel answers four questions and floats
+            beside its button; this is nineteen sections with three worked
+            examples each, and it needs pages and somewhere to stay put. */}
+        <button
+          type="button"
+          onClick={() => setGuiding(true)}
+          data-testid="outline-guide-open"
+          className="inline-flex items-center gap-1.5 rounded border border-border bg-bg-surface px-2.5 py-1 text-xs text-text-primary transition-colors hover:border-accent"
+        >
+          <BookOpen size={12} /> Show me how
         </button>
 
         <Explain of="outline.worksheet" />
