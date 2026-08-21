@@ -77,8 +77,34 @@ function buildFontTheme(fontFamily: string, lineHeight: number) {
       caretColor: "var(--st-accent)",
       padding: "2rem 1rem",  // Small padding only -- wrapper handles centering
     },
+    // PARAGRAPH SEPARATION, and it is a different thing from line height.
+    //
+    // With lineWrapping on, ONE .cm-line holds one SOURCE line however many
+    // visual rows it wraps to. So in a manuscript that separates paragraphs
+    // with a single newline -- which is how the writer's actually is --
+    // .cm-line is exactly one paragraph. Padding here therefore opens the
+    // gap BETWEEN paragraphs and leaves wrapped lines inside a paragraph
+    // alone, which is precisely the distinction line-height cannot make.
+    //
+    // This is what was really being reported as "line spacing doesn't work":
+    // the line-height was applying, but "the spaces in the main editor are
+    // literally next to each other after a full paragraph" is a complaint
+    // about paragraph gaps, and no line-height can produce one when a
+    // paragraph break is just another line.
+    //
+    // Half a line, scaled with the setting, so Double opens paragraphs up
+    // as well as lines. PADDING rather than margin on purpose: CodeMirror
+    // measures a line with getBoundingClientRect, which includes padding
+    // and excludes margin, so margin here would desync its scroll height
+    // from reality on a long chapter.
     ".cm-line": {
       fontFamily,
+      // The full shorthand, not paddingBottom. CodeMirror's baseTheme sets
+      // `padding: 0 2px 0 6px` on .cm-line, and a lone padding-bottom here
+      // would only survive as long as this rule is injected after that one.
+      // Restating its left/right keeps the gap independent of style order --
+      // the same class of ordering assumption that hid the line-height bug.
+      padding: `0 2px ${(lineHeight * 0.5).toFixed(2)}em 6px`,
     },
     // Hide the line-number gutter (not useful in a prose editor)
     ".cm-gutters": {
