@@ -267,10 +267,14 @@ export function OutlineToolbar({
           Fill from Book Details
         </button>
 
+        <Explain of="outline.worksheet" />
+
         {/* SHOW ME HOW is its own walkthrough, not a paragraph hung under
             "What's this?". That panel answers four questions and floats
             beside its button; this is nineteen sections with three worked
-            examples each, and it needs pages and somewhere to stay put. */}
+            examples each, and it needs pages and somewhere to stay put.
+            It sits AFTER the panel because the two are read in that order:
+            what this is, then how to do it. */}
         <button
           type="button"
           onClick={() => setGuiding(true)}
@@ -279,8 +283,6 @@ export function OutlineToolbar({
         >
           <BookOpen size={12} /> Show me how
         </button>
-
-        <Explain of="outline.worksheet" />
       </div>
 
       {note && (
