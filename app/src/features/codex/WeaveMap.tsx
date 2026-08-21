@@ -433,7 +433,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                 <g key={`${edge.src_id}-${edge.rel}-${edge.dst_id}-${i}`}>
                   <line
                     x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                    className={edge.active ? "stroke-zinc-600" : "stroke-zinc-700"}
+                    className={edge.active ? "stroke-border-strong" : "stroke-border"}
                     strokeWidth={1.2}
                     // Not yet true, or already over: drawn but distinguished.
                     // The writer is looking at their own future book, not a
@@ -451,7 +451,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                     <text
                       x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 3}
                       textAnchor="middle"
-                      className="fill-zinc-500 text-2xs"
+                      className="fill-text-muted text-2xs"
                     >
                       {/* The writer's own line where they wrote one -- that
                           is what the backend sends `reason` FOR. The relation
@@ -504,7 +504,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                   {node.placeholder ? (
                     <circle
                       r={radius}
-                      className={`fill-transparent ${isFocus ? "stroke-white" : "stroke-zinc-500"}`}
+                      className={`fill-transparent ${isFocus ? "stroke-accent" : "stroke-text-muted"}`}
                       strokeWidth={isFocus ? 2 : 1}
                       strokeDasharray="3 2"
                     />
@@ -512,18 +512,18 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                     <>
                       <circle
                         r={radius}
-                        className={`${tone.fill} ${isFocus ? "stroke-white" : "stroke-zinc-900"}`}
+                        className={`${tone.fill} ${isFocus ? "stroke-accent" : "stroke-bg-primary"}`}
                         strokeWidth={isFocus ? 2 : 1}
                       />
                       <Icon x={-6} y={-6} width={12} height={12}
-                            className="pointer-events-none fill-none stroke-zinc-950"
+                            className="pointer-events-none fill-none stroke-bg-primary"
                             strokeWidth={2.2} />
                     </>
                   )}
                   <text
                     y={radius + 11} textAnchor="middle"
-                    className={node.placeholder ? "fill-zinc-500 text-micro"
-                                                : "fill-zinc-300 text-micro"}
+                    className={node.placeholder ? "fill-text-muted text-micro"
+                                                : "fill-text-primary text-micro"}
                   >
                     {nodeLabel(node)}
                   </text>

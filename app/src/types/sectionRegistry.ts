@@ -45,14 +45,14 @@ export interface SectionConfig {
  * not a highlighter.
  */
 const SECTION_COLOURS = [
-  { bar: "bg-sky-500/70", border: "border-sky-700/60" },
-  { bar: "bg-emerald-500/70", border: "border-emerald-700/60" },
-  { bar: "bg-amber-500/70", border: "border-amber-700/60" },
-  { bar: "bg-rose-500/70", border: "border-rose-700/60" },
-  { bar: "bg-teal-500/70", border: "border-teal-700/60" },
-  { bar: "bg-fuchsia-500/70", border: "border-fuchsia-700/60" },
-  { bar: "bg-lime-500/70", border: "border-lime-700/60" },
-  { bar: "bg-cyan-500/70", border: "border-cyan-700/60" },
+  { bar: "bg-kind-1", border: "border-kind-1/60" },
+  { bar: "bg-kind-2", border: "border-kind-2/60" },
+  { bar: "bg-kind-3", border: "border-kind-3/60" },
+  { bar: "bg-kind-4", border: "border-kind-4/60" },
+  { bar: "bg-kind-5", border: "border-kind-5/60" },
+  { bar: "bg-kind-6", border: "border-kind-6/60" },
+  { bar: "bg-kind-7", border: "border-kind-7/60" },
+  { bar: "bg-kind-8", border: "border-kind-8/60" },
 ];
 
 /**
@@ -68,9 +68,9 @@ const SECTION_COLOURS = [
  * secret, it is simply not for saying out loud.
  */
 export const SHADOWED = {
-  bar: "bg-violet-400/80",
-  border: "border-violet-700/70",
-  panel: "border-violet-900/70 bg-violet-950/30",
+  bar: "bg-weave",
+  border: "border-weave/70",
+  panel: "border-weave/50 bg-weave-soft",
 };
 
 /** True for the section a kind keeps its secrets in. Matched on the key rather

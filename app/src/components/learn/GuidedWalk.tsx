@@ -96,26 +96,26 @@ interface GuidedWalkProps {
 
 const TONES = {
   violet: {
-    box: "border-violet-800 bg-violet-950/30",
-    icon: "text-violet-300",
-    title: "text-violet-100",
-    body: "text-violet-100/80",
-    example: "border-violet-900",
-    back: "border-violet-800 text-violet-200 hover:border-violet-500",
-    next: "bg-violet-600 hover:bg-violet-500",
-    hint: "text-violet-300/60",
-    close: "text-violet-400 hover:text-violet-100",
+    box: "border-weave/60 bg-weave-soft",
+    icon: "text-weave",
+    title: "text-weave-strong",
+    body: "text-text-primary",
+    example: "border-weave/40",
+    back: "border-weave/60 text-weave hover:border-weave",
+    next: "bg-weave-fill hover:bg-weave-muted",
+    hint: "text-text-muted",
+    close: "text-weave hover:text-weave-strong",
   },
   blue: {
-    box: "border-blue-800 bg-blue-950/30",
-    icon: "text-blue-300",
-    title: "text-blue-100",
-    body: "text-blue-100/80",
-    example: "border-blue-900",
-    back: "border-blue-800 text-blue-200 hover:border-blue-500",
-    next: "bg-blue-600 hover:bg-blue-500",
-    hint: "text-blue-300/60",
-    close: "text-blue-400 hover:text-blue-100",
+    box: "border-accent/60 bg-accent-soft",
+    icon: "text-accent",
+    title: "text-accent-strong",
+    body: "text-text-primary",
+    example: "border-accent/40",
+    back: "border-accent/60 text-accent hover:border-accent",
+    next: "bg-accent-fill hover:bg-accent-muted",
+    hint: "text-text-muted",
+    close: "text-accent hover:text-accent-strong",
   },
 };
 
@@ -182,7 +182,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
       <p className={`text-mini leading-relaxed ${c.body}`}>{step.body}</p>
 
       {step.example && (
-        <p className={`mt-1.5 rounded border bg-zinc-950/60 px-2 py-1 font-mono text-micro leading-relaxed text-zinc-400 ${c.example}`}>
+        <p className={`mt-1.5 rounded border bg-bg-surface px-2 py-1 font-mono text-micro leading-relaxed text-text-muted ${c.example}`}>
           {step.example}
         </p>
       )}
@@ -191,22 +191,22 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
         // Set apart by a left accent rather than a filled box: it has to
         // read as a different KIND of sentence without competing with the
         // step it belongs to.
-        <p className="mt-1.5 flex items-start gap-1.5 rounded-r border-l-2 border-amber-600/70 bg-amber-950/20 px-2 py-1 text-micro leading-relaxed text-amber-200/90">
-          <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-r border-l-2 border-warn-fill/70 bg-warn-soft px-2 py-1 text-micro leading-relaxed text-warn-strong/90">
+          <AlertTriangle size={11} className="mt-0.5 shrink-0 text-warn/80" />
           <span>{step.note}</span>
         </p>
       )}
 
       {step.demos && step.demos.length > 0 && (
-        <div className={`mt-1.5 overflow-hidden rounded border bg-zinc-950/60 ${c.example}`}>
+        <div className={`mt-1.5 overflow-hidden rounded border bg-bg-surface ${c.example}`}>
           {step.demos.map(demo => (
             <div key={demo.kind}
-                 className="flex items-start gap-2 border-b border-zinc-800/60 px-2 py-1.5 last:border-b-0">
+                 className="flex items-start gap-2 border-b border-border px-2 py-1.5 last:border-b-0">
               {/* A shown demo has nothing to press. Rendering a dead Play
                   button beside it would be the clearest possible way to say
                   "this feature does not understand what it is showing you". */}
               {demo.play === "shown" ? (
-                <span className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-micro uppercase tracking-wide text-zinc-500">
+                <span className="shrink-0 rounded border border-border px-2 py-0.5 text-micro uppercase tracking-wide text-faint">
                   {demo.label}
                 </span>
               ) : (
@@ -214,7 +214,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
                   onClick={() => void playDemo(demo.kind)}
                   disabled={loading !== null}
                   aria-label={`Play: ${demo.label}`}
-                  className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-0.5 text-mini text-text-primary hover:border-emerald-600 hover:text-success disabled:opacity-40"
                 >
                   {loading === demo.kind
                     ? <Loader2 size={11} className="animate-spin" />
@@ -222,7 +222,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
                   Play
                 </button>
               )}
-              <span className="min-w-0 flex-1 text-mini leading-tight text-zinc-300">
+              <span className="min-w-0 flex-1 text-mini leading-tight text-text-primary">
                 {demo.play === "shown" ? demo.body : demo.label}
               </span>
             </div>
@@ -231,7 +231,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
       )}
 
       {demoError && (
-        <p className="mt-1.5 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-micro text-rose-300">
+        <p className="mt-1.5 rounded border border-danger/60 bg-danger-soft px-2 py-1 text-micro text-danger">
           {demoError}
         </p>
       )}
@@ -259,7 +259,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
         ) : (
           <button
             onClick={onClose}
-            className="rounded bg-emerald-600 px-2.5 py-0.5 text-mini font-semibold text-white hover:bg-emerald-500"
+            className="rounded bg-success-fill px-2.5 py-0.5 text-mini font-semibold text-white hover:bg-success-muted"
           >
             Done --{" "}
             <span data-testid="tutorial-progress">

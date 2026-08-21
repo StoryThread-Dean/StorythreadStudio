@@ -443,12 +443,12 @@ export const BUILT_IN_TYPES = Object.keys(TYPE_TONES);
  *  strings rather than interpolated names -- Tailwind only ships classes it
  *  can see written out. */
 export const TONE_CLASSES: Record<Tone, { text: string; fill: string; border: string }> = {
-  emerald: { text: "text-emerald-300", fill: "fill-emerald-400", border: "border-emerald-700" },
-  amber:   { text: "text-amber-300",   fill: "fill-amber-400",   border: "border-amber-700" },
-  rose:    { text: "text-rose-300",    fill: "fill-rose-400",    border: "border-rose-700" },
-  blue:    { text: "text-blue-300",    fill: "fill-blue-400",    border: "border-blue-700" },
-  violet:  { text: "text-violet-300",  fill: "fill-violet-400",  border: "border-violet-700" },
-  zinc:    { text: "text-zinc-300",    fill: "fill-zinc-400",    border: "border-zinc-700" },
+  emerald: { text: "text-success",   fill: "fill-success",   border: "border-success" },
+  amber:   { text: "text-warn",      fill: "fill-warn",      border: "border-warn" },
+  rose:    { text: "text-danger",    fill: "fill-danger",    border: "border-danger" },
+  blue:    { text: "text-accent",    fill: "fill-accent",    border: "border-accent" },
+  violet:  { text: "text-weave",     fill: "fill-weave",     border: "border-weave" },
+  zinc:    { text: "text-text-muted", fill: "fill-current",  border: "border-border-strong" },
 };
 
 /**
