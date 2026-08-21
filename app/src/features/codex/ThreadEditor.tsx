@@ -82,6 +82,26 @@ interface ThreadEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
+/**
+ * A group heading inside the entry form.
+ *
+ * Every non-profile kind -- Concepts, Events, Objects, Governments -- opens
+ * THIS editor, and it rendered as one undifferentiated column of grey field
+ * labels: "entirely mono/flat, devoid of all color". The three groups already
+ * existed as comments in the source; they simply were never on screen, so
+ * nothing separated what a thing is CALLED from what it DOES.
+ *
+ * The accent blue is the same one the editor uses for "Full chapter will be
+ * sent" -- this app's colour for "this is the thing you are looking at".
+ */
+function GroupHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h4 className="mt-5 mb-1 border-b border-border pb-1 text-micro font-semibold uppercase tracking-label text-accent first:mt-0">
+      {children}
+    </h4>
+  );
+}
+
 export function ThreadEditor({
   projectPath, typeId, initialFilename, onBack, onDirtyChange,
 }: ThreadEditorProps) {
@@ -250,7 +270,7 @@ export function ThreadEditor({
 
         <div className="min-h-0 flex-1 overflow-y-auto py-1">
           {list.length === 0 ? (
-            <p className="px-3 py-2 text-[11px] text-faint">
+            <p className="px-3 py-2 text-mini text-faint">
               Nothing here yet.
             </p>
           ) : list.map(item => (
@@ -278,17 +298,17 @@ export function ThreadEditor({
                 placeholder={`New ${lex.term.toLowerCase()}`}
                 aria-label="Name"
                 autoFocus
-                className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
               />
               <button onClick={() => void create()} disabled={!newName.trim() || busy}
-                      className="rounded bg-violet-600 px-2 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                      className="rounded bg-weave-fill px-2 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
                 Add
               </button>
             </div>
           ) : (
             <button
               onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-violet-300 hover:text-violet-200"
+              className="inline-flex items-center gap-1.5 text-mini text-weave hover:text-weave-strong"
             >
               <Plus size={11} /> Add {lex.term.toLowerCase()}
             </button>
@@ -300,7 +320,7 @@ export function ThreadEditor({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {error && (
           <p role="alert"
-             className="m-3 flex items-start gap-1.5 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-xs text-rose-200">
+             className="m-3 flex items-start gap-1.5 rounded border border-danger-fill bg-danger-soft/40 px-2 py-1.5 text-xs text-danger-strong">
             <AlertTriangle size={12} className="mt-0.5 shrink-0" />
             {error}
           </p>
@@ -320,23 +340,23 @@ export function ThreadEditor({
               </h3>
               {dirty && (
                 <span data-testid="unsaved"
-                      className="text-[11px] text-amber-300">Unsaved changes</span>
+                      className="text-mini text-warn">Unsaved changes</span>
               )}
               {saved && !dirty && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
+                <span className="inline-flex items-center gap-1 text-mini text-success">
                   <Check size={11} /> Saved
                 </span>
               )}
               <button
                 onClick={() => setTying(true)}
-                className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+                className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-mini text-text-muted hover:text-text-primary"
               >
                 <Link2 size={11} /> Connections
               </button>
               <button
                 onClick={() => void save()}
                 disabled={!dirty || busy}
-                className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
               >
                 {busy ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
                 Save
@@ -344,6 +364,7 @@ export function ThreadEditor({
             </div>
 
             {/* ── What it is called ─────────────────────────────────── */}
+            <GroupHeading>What it is called</GroupHeading>
             <div className="grid gap-2 sm:grid-cols-2">
               <RunField label="Name" hint="What it is. The official one.">
                 <input
@@ -390,6 +411,7 @@ export function ThreadEditor({
             </div>
 
             {/* ── The sections this KIND has, from the registry ─────── */}
+            <GroupHeading>{lex.term} details</GroupHeading>
             {sections.map(section => (
               <RunField key={section.id} label={section.heading}>
                 <textarea
@@ -410,6 +432,7 @@ export function ThreadEditor({
             ))}
 
             {/* ── The Run ───────────────────────────────────────────── */}
+            <GroupHeading>What changes across the book</GroupHeading>
             <RunEditor
               run={thread.run ?? []}
               chapters={chapters}

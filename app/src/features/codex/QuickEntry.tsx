@@ -325,7 +325,7 @@ export function QuickEntry({
           ? `${appended ? "Added to" : "Created"}: ${nodeLabel(made)}`
           : "Quick entry"}
         data-testid="quick-entry"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <KindIcon size={14}
@@ -344,7 +344,7 @@ export function QuickEntry({
         {made ? (
           // ── WHAT HAPPENED, AND WHAT IS NEXT -- the continuous-flow rule. ──
           <div className="p-3">
-            <p className="flex items-start gap-1.5 text-[11px] text-emerald-200">
+            <p className="flex items-start gap-1.5 text-mini text-success-strong">
               <Check size={12} className="mt-0.5 shrink-0" />
               <span>
                 {appended ? (
@@ -374,9 +374,9 @@ export function QuickEntry({
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 onClick={() => setConnecting(true)}
-                className="inline-flex items-center gap-1.5 rounded border border-violet-700 bg-violet-950/40 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-violet-900/50"
+                className="inline-flex items-center gap-1.5 rounded border border-weave-fill bg-weave-soft/40 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-weave-soft/50"
               >
-                <Plus size={11} className="text-violet-300" />
+                <Plus size={11} className="text-weave" />
                 Yes -- choose the connection
               </button>
               <button
@@ -384,7 +384,7 @@ export function QuickEntry({
                 className="inline-flex flex-col items-start rounded border border-border px-2.5 py-1 text-left text-xs text-text-muted hover:border-text-muted hover:text-text-primary"
               >
                 <span>No, I am good for now</span>
-                <span className="text-[10px] text-faint">
+                <span className="text-micro text-faint">
                   takes you to the next thing in the walk
                 </span>
               </button>
@@ -393,7 +393,7 @@ export function QuickEntry({
         ) : (
           <div className="p-3">
             {asking && (
-              <p className="mb-2 rounded border border-border bg-bg-surface px-2 py-1.5 text-[11px] text-text-muted">
+              <p className="mb-2 rounded border border-border bg-bg-surface px-2 py-1.5 text-mini text-text-muted">
                 {asking}
               </p>
             )}
@@ -407,7 +407,7 @@ export function QuickEntry({
                 question about how it works. */}
             {existing.length > 0 && !addingTo && (
               <div className="mb-3 rounded border border-border p-2">
-                <p className="mb-1 text-[11px] text-text-muted">
+                <p className="mb-1 text-mini text-text-muted">
                   Your world already has{" "}
                   {existing.length === 1
                     ? `a ${kindEntry.term}`
@@ -419,7 +419,7 @@ export function QuickEntry({
                     <li key={node.entity_id}>
                       <button
                         onClick={() => setAddingTo(node)}
-                        className="w-full rounded px-1 py-0.5 text-left text-xs text-text-muted hover:bg-bg-surface hover:text-text-primary"
+                        className="w-full rounded px-1 py-0.5 text-left text-xs text-text-muted hover:bg-bg-raised hover:text-text-primary"
                       >
                         {nodeLabel(node)}
                       </button>
@@ -432,7 +432,7 @@ export function QuickEntry({
             {addingTo ? (
               <>
                 <label htmlFor="qe-text"
-                       className="mb-1 block text-[11px] text-text-muted">
+                       className="mb-1 block text-mini text-text-muted">
                   Add to {nodeLabel(addingTo)}
                   {landing ? ` under ${landing.heading}` : ""}. Anything already
                   written there is kept -- this goes after it.
@@ -443,13 +443,13 @@ export function QuickEntry({
                   onChange={e => setText(e.target.value)}
                   rows={4}
                   aria-label="The answer"
-                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 />
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={() => void addToExisting(addingTo)}
                     disabled={busy || !text.trim()}
-                    className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                   >
                     {busy ? <Loader size={11} className="animate-spin" />
                           : <Check size={11} />}
@@ -466,7 +466,7 @@ export function QuickEntry({
             ) : (
               <>
                 <label htmlFor="qe-name"
-                       className="mb-1 block text-[11px] text-text-muted">
+                       className="mb-1 block text-mini text-text-muted">
                   What is it called?
                 </label>
                 <input
@@ -474,7 +474,7 @@ export function QuickEntry({
                   value={name}
                   onChange={e => setName(e.target.value)}
                   aria-label="Name"
-                  className="mb-2 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="mb-2 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 />
 
                 {/* WHICH PAGE THIS CHARACTER GETS. Characters only, because
@@ -483,7 +483,7 @@ export function QuickEntry({
                     it. */}
                 {kind === "character" && (
                   <fieldset className="mb-2">
-                    <legend className="mb-1 text-[11px] text-text-muted">
+                    <legend className="mb-1 text-mini text-text-muted">
                       How much of a character are they?
                     </legend>
                     <div className="flex gap-1.5">
@@ -498,10 +498,10 @@ export function QuickEntry({
                         <label
                           key={option.value}
                           title={option.hint}
-                          className={`flex-1 cursor-pointer rounded border px-2 py-1.5 text-[11px] ${
+                          className={`flex-1 cursor-pointer rounded border px-2 py-1.5 text-mini ${
                             characterKind === option.value
-                              ? "border-violet-500 bg-violet-600/15 text-text-primary"
-                              : "border-border text-text-muted hover:border-violet-700"
+                              ? "border-weave-fill bg-weave-fill/15 text-text-primary"
+                              : "border-border text-text-muted hover:border-weave-fill"
                           }`}
                         >
                           <input
@@ -516,7 +516,7 @@ export function QuickEntry({
                         </label>
                       ))}
                     </div>
-                    <p className="mt-1 text-[11px] text-faint">
+                    <p className="mt-1 text-mini text-faint">
                       {characterKind === "side"
                         ? "You can make them a Main character later without "
                           + "losing anything."
@@ -529,7 +529,7 @@ export function QuickEntry({
                 {!kindLocked && (
                   <>
                     <label htmlFor="qe-kind"
-                           className="mb-1 block text-[11px] text-text-muted">
+                           className="mb-1 block text-mini text-text-muted">
                       What kind of thing is it?
                     </label>
                     <select
@@ -537,7 +537,7 @@ export function QuickEntry({
                       value={kind}
                       onChange={e => setKind(e.target.value)}
                       aria-label="What kind of thing"
-                      className="mb-2 w-full rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                      className="mb-2 w-full rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                     >
                       {kindChoices().map(group => (
                         <optgroup key={group.group} label={group.group}>
@@ -551,7 +551,7 @@ export function QuickEntry({
                 )}
 
                 <label htmlFor="qe-text"
-                       className="mb-1 block text-[11px] text-text-muted">
+                       className="mb-1 block text-mini text-text-muted">
                   {asking
                     ? "Your answer, in a line or two"
                     : landing
@@ -565,10 +565,10 @@ export function QuickEntry({
                   onChange={e => setText(e.target.value)}
                   rows={3}
                   aria-label={asking ? "The answer" : "Starter text"}
-                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 />
                 {prefill && (
-                  <p className="mt-1 text-[10px] text-faint">
+                  <p className="mt-1 text-micro text-faint">
                     Prefilled from your own writing -- edit it or clear it.
                   </p>
                 )}
@@ -577,7 +577,7 @@ export function QuickEntry({
                   <button
                     onClick={() => void create()}
                     disabled={busy || !name.trim()}
-                    className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                   >
                     {busy ? <Loader size={11} className="animate-spin" />
                           : <Check size={11} />}
@@ -594,7 +594,7 @@ export function QuickEntry({
             )}
 
             {error && (
-              <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>
+              <p role="alert" className="mt-2 text-mini text-danger">{error}</p>
             )}
           </div>
         )}

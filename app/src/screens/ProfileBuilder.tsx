@@ -126,12 +126,12 @@ type GaugeLevel = "sparse" | "basic" | "good" | "detailed" | "wordy" | "bloated"
 function getGaugeLevel(wordCount: number, importance: ImportanceLevel): { level: GaugeLevel; label: string; color: string } {
   const t = GAUGE_THRESHOLDS[importance];
 
-  if (wordCount <= t.sparse) return { level: "sparse", label: "Sparse -- add more", color: "text-red-400" };
-  if (wordCount <= t.basic)  return { level: "basic",  label: "Basic",             color: "text-amber-400" };
-  if (wordCount <= t.good)   return { level: "good",   label: "Good",              color: "text-emerald-400" };
-  if (wordCount <= t.detailed) return { level: "detailed", label: "Detailed",      color: "text-lime-400" };
-  if (wordCount <= t.wordy)  return { level: "wordy",  label: "Wordy -- trim recommended", color: "text-amber-400" };
-  return { level: "bloated", label: "Too Bloated!", color: "text-red-400" };
+  if (wordCount <= t.sparse) return { level: "sparse", label: "Sparse -- add more", color: "text-danger-muted" };
+  if (wordCount <= t.basic)  return { level: "basic",  label: "Basic",             color: "text-warn-muted" };
+  if (wordCount <= t.good)   return { level: "good",   label: "Good",              color: "text-success-muted" };
+  if (wordCount <= t.detailed) return { level: "detailed", label: "Detailed",      color: "text-success-muted" };
+  if (wordCount <= t.wordy)  return { level: "wordy",  label: "Wordy -- trim recommended", color: "text-warn-muted" };
+  return { level: "bloated", label: "Too Bloated!", color: "text-danger-muted" };
 }
 
 // Visual gauge bar that fills proportionally
@@ -145,12 +145,12 @@ function WordGauge({ wordCount, importance }: { wordCount: number; importance: I
 
   // Bar color matches the gauge level
   const barColor =
-    level === "sparse"   ? "bg-red-500/60" :
-    level === "basic"    ? "bg-amber-500/60" :
-    level === "good"     ? "bg-emerald-500/60" :
-    level === "detailed" ? "bg-lime-500/50" :
-    level === "wordy"    ? "bg-amber-500/60" :
-    "bg-red-500/60";
+    level === "sparse"   ? "bg-danger-fill/60" :
+    level === "basic"    ? "bg-warn-fill/60" :
+    level === "good"     ? "bg-success-fill/60" :
+    level === "detailed" ? "bg-success-fill/50" :
+    level === "wordy"    ? "bg-warn-fill/60" :
+    "bg-danger-fill/60";
 
   return (
     <div className="mt-1.5 flex items-center gap-2">
@@ -1421,7 +1421,7 @@ export function ProfileBuilder({
         <div className="border-b border-border px-3 py-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="Return to the writing editor"
           >
             <ChevronLeft size={13} />
@@ -1441,8 +1441,8 @@ export function ProfileBuilder({
                 onClick={() => { if (type !== profileType) setProfileType(type); }}
                 className={`rounded px-2 py-1.5 text-left text-sm transition-colors ${
                   profileType === type
-                    ? "bg-indigo-600/20 text-indigo-300"
-                    : "text-text-primary hover:bg-bg-surface"
+                    ? "bg-accent-fill/20 text-accent"
+                    : "text-text-primary hover:bg-bg-raised"
                 }`}
               >
                 {labelFor(type)}
@@ -1461,7 +1461,7 @@ export function ProfileBuilder({
               {source?.canImport && (
                 <button
                   onClick={handleImport}
-                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
+                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-raised hover:text-accent"
                   title="Bring an entry in from another book"
                 >
                   <Download size={12} /> Import
@@ -1469,7 +1469,7 @@ export function ProfileBuilder({
               )}
               <button
                 onClick={() => { setShowCreateForm(true); setNewName(""); setNewRole(""); }}
-                className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-surface hover:text-indigo-300"
+                className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:bg-bg-raised hover:text-accent"
                 title={`Create a new ${profileType} profile`}
               >
                 <Plus size={12} /> New
@@ -1485,8 +1485,8 @@ export function ProfileBuilder({
               left in place as a copy, so counting it would raise an alarm about
               files that are meant to be there. */}
           {home === "profiles" && elsewhere > 0 && (
-            <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5">
-              <p className="text-xs text-amber-300">
+            <div className="mb-2 rounded border border-warn-fill/30 bg-warn-fill/5 px-2 py-1.5">
+              <p className="text-xs text-warn">
                 {elsewhere} {elsewhere === 1 ? "entry was" : "entries were"} made
                 in the Weave and {elsewhere === 1 ? "is" : "are"} not shown here.
               </p>
@@ -1544,13 +1544,13 @@ export function ProfileBuilder({
                 <div
                   key={item.filename}
                   className={`group mb-0.5 flex items-stretch rounded transition-colors ${
-                    isActive ? "bg-indigo-600/20" : "hover:bg-bg-surface"
+                    isActive ? "bg-accent-fill/20" : "hover:bg-bg-raised"
                   }`}
                 >
                   <button
                     onClick={() => loadProfile(item)}
                     className={`flex-1 min-w-0 px-2 py-1.5 text-left ${
-                      isActive ? "text-indigo-300" : "text-text-primary"
+                      isActive ? "text-accent" : "text-text-primary"
                     }`}
                     title={item.role ? `${item.role} -- ${item.filename}` : item.filename}
                   >
@@ -1561,7 +1561,7 @@ export function ProfileBuilder({
                   </button>
                   <button
                     onClick={() => handleDelete(item)}
-                    className="shrink-0 px-2 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+                    className="shrink-0 px-2 text-faint opacity-0 transition-all hover:text-danger-muted group-hover:opacity-100 focus:opacity-100"
                     title={`Delete ${item.name}`}
                     aria-label={`Delete ${item.name}`}
                   >
@@ -1580,7 +1580,7 @@ export function ProfileBuilder({
             const groupHeader = (label: string, count: number, collapsed: boolean, onToggle: () => void) => (
               <button
                 onClick={onToggle}
-                className="mb-0.5 mt-1 flex w-full items-center gap-1 rounded px-1 py-1 text-left text-xs font-semibold uppercase tracking-wide text-text-muted transition-colors hover:bg-bg-surface"
+                className="mb-0.5 mt-1 flex w-full items-center gap-1 rounded px-1 py-1 text-left text-xs font-semibold uppercase tracking-wide text-text-muted transition-colors hover:bg-bg-raised"
               >
                 {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
                 {label} <span className="font-normal text-faint">({count})</span>
@@ -1646,7 +1646,7 @@ export function ProfileBuilder({
                         {preview.dissolved === 1 ? " a line" : " lines"} of text.
                       </p>
                       {preview.hidden > 0 && (
-                        <p className="rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-amber-200">
+                        <p className="rounded border border-warn-fill/30 bg-warn-fill/5 px-2 py-1.5 text-warn-strong">
                           {preview.hidden} of {preview.hidden === 1 ? "them is" : "them are"} marked
                           Hidden. A Side character has no Hidden level, so
                           {preview.hidden === 1 ? " that line" : " those lines"} will start with
@@ -1677,7 +1677,7 @@ export function ProfileBuilder({
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() => applyTemplate(templateAsk)}
-                className="rounded bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-500"
+                className="rounded bg-accent-fill px-3 py-1 text-xs font-semibold text-white hover:bg-accent-fill"
               >
                 Make {templateAsk === "side" ? "Side" : "Main"}
               </button>
@@ -1712,7 +1712,7 @@ export function ProfileBuilder({
             <Explain of="profile.page" compact />
             <button
               onClick={() => setPageGuideOpen(true)}
-              className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+              className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-accent"
             >
               Show me how this page works
             </button>
@@ -1727,7 +1727,7 @@ export function ProfileBuilder({
                 </span>
                 <button
                   onClick={() => setTemplateAsk(isSideCharacter ? "main" : "side")}
-                  className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+                  className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-accent"
                   title={isSideCharacter
                     ? "Give this character the full Main page"
                     : "Move this character to the simpler Side page"}
@@ -1741,13 +1741,13 @@ export function ProfileBuilder({
           <div className="flex shrink-0 items-center gap-2">
             {profile && (
               isDirty ? (
-                <span className="flex items-center gap-1.5 text-xs text-amber-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                <span className="flex items-center gap-1.5 text-xs text-warn-muted">
+                  <span className="h-1.5 w-1.5 rounded-full bg-warn-muted" />
                   Unsaved
                 </span>
               ) : (
-                <span className="flex items-center gap-1.5 text-xs text-emerald-500">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="flex items-center gap-1.5 text-xs text-success-fill">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success-fill" />
                   Saved
                 </span>
               )
@@ -1755,7 +1755,7 @@ export function ProfileBuilder({
             <button
               onClick={handleSave}
               disabled={!isDirty || !profile}
-              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title="Save profile to disk (Ctrl+S)"
             >
               Save
@@ -1783,7 +1783,7 @@ export function ProfileBuilder({
                 if (e.key === "Enter")  { e.preventDefault(); handleFindNext();  }
               }}
               placeholder="Find..."
-              className="w-48 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+              className="w-48 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
             />
             {/* Replace-with input -- Enter triggers the single Replace
                 (matches Notepad / VS Code behaviour where Enter in the
@@ -1800,14 +1800,14 @@ export function ProfileBuilder({
                 }
               }}
               placeholder="Replace with..."
-              className="w-48 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+              className="w-48 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
             />
             {/* Find (next) -- jumps to the next match, wraps at end. Writer
                 can press it repeatedly to walk matches one at a time. */}
             <button
               onClick={handleFindNext}
               disabled={!findQuery || findMatches.length === 0}
-              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title={findMatches.length === 0 ? "No matches" : "Jump to next match (Enter)"}
             >
               Find
@@ -1816,7 +1816,7 @@ export function ProfileBuilder({
             <button
               onClick={handleReplaceSingle}
               disabled={!findQuery || findMatches.length === 0}
-              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title={findMatches.length === 0 ? "No matches to replace" : "Replace this one match"}
             >
               Replace
@@ -1825,7 +1825,7 @@ export function ProfileBuilder({
             <button
               onClick={handleReplaceAll}
               disabled={!findQuery || findMatches.length === 0}
-              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title={findMatches.length === 0 ? "No matches to replace" : `Replace all ${findMatches.length} match(es)`}
             >
               Replace All
@@ -1835,7 +1835,7 @@ export function ProfileBuilder({
                 type="checkbox"
                 checked={findCaseSens}
                 onChange={e => setFindCaseSens(e.target.checked)}
-                className="accent-indigo-500"
+                className="accent-accent-fill"
               />
               Match case
             </label>
@@ -1866,8 +1866,8 @@ export function ProfileBuilder({
 
         {/* Error banner */}
         {error && (
-          <div className="shrink-0 border-b border-red-800 bg-red-950/40 px-4 py-2">
-            <p className="text-xs text-red-300">
+          <div className="shrink-0 border-b border-danger-fill bg-danger-soft/40 px-4 py-2">
+            <p className="text-xs text-danger">
               <span className="font-semibold">Error: </span>{error}
             </p>
           </div>
@@ -1880,7 +1880,7 @@ export function ProfileBuilder({
               New {singular(labelFor(profileType))}
             </p>
             <label className="mb-1 block text-xs text-text-muted">
-              Name <span className="text-indigo-400">*</span>
+              Name <span className="text-accent-muted">*</span>
             </label>
             <input
               type="text"
@@ -1889,7 +1889,7 @@ export function ProfileBuilder({
               onKeyDown={e => e.key === "Enter" && handleCreate()}
               autoFocus
               placeholder={profileType === "character" ? "e.g. Elara Voss" : "e.g. Northwatch Harbor"}
-              className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+              className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
             />
             {profileType === "character" && (
               <>
@@ -1898,7 +1898,7 @@ export function ProfileBuilder({
                 <button
                   type="button"
                   onClick={() => setShowCreateNameGen(v => !v)}
-                  className="mb-3 flex items-center gap-1.5 text-xs text-indigo-400 transition-colors hover:text-indigo-300"
+                  className="mb-3 flex items-center gap-1.5 text-xs text-accent-muted transition-colors hover:text-accent"
                 >
                   <Dices size={12} />
                   {showCreateNameGen ? "Hide name generator" : "Need a name?"}
@@ -1916,7 +1916,7 @@ export function ProfileBuilder({
                   onChange={e => setNewRole(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCreate()}
                   placeholder="e.g. protagonist, mentor, antagonist"
-                  className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                  className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                 />
 
                 {/* Template choice: Main = full trait-block editor; Side =
@@ -1929,7 +1929,7 @@ export function ProfileBuilder({
                       name="characterKind"
                       checked={newKind === "main"}
                       onChange={() => setNewKind("main")}
-                      className="mt-0.5 accent-indigo-500"
+                      className="mt-0.5 accent-accent-fill"
                     />
                     <span className="text-xs">
                       <span className="font-medium text-text-primary">Main character</span>
@@ -1942,7 +1942,7 @@ export function ProfileBuilder({
                       name="characterKind"
                       checked={newKind === "side"}
                       onChange={() => setNewKind("side")}
-                      className="mt-0.5 accent-indigo-500"
+                      className="mt-0.5 accent-accent-fill"
                     />
                     <span className="text-xs">
                       <span className="font-medium text-text-primary">Side / background character</span>
@@ -1956,7 +1956,7 @@ export function ProfileBuilder({
               <button
                 onClick={handleCreate}
                 disabled={!newName.trim() || creating}
-                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                className="rounded bg-accent-fill px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-fill disabled:opacity-50"
               >
                 {creating ? "Creating..." : "Create"}
               </button>
@@ -2003,7 +2003,7 @@ export function ProfileBuilder({
                         value={profile.name}
                         onChange={e => updateProfileField("name", e.target.value)}
                         data-pb-field="name"
-                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
                       />
                       {/* Name generator toggle -- characters only */}
                       {profile.type === "character" && (
@@ -2012,8 +2012,8 @@ export function ProfileBuilder({
                           onClick={() => setShowHeaderNameGen(v => !v)}
                           className={`shrink-0 rounded border px-2 transition-colors ${
                             showHeaderNameGen
-                              ? "border-indigo-500 text-indigo-300"
-                              : "border-border text-text-muted hover:border-indigo-500 hover:text-indigo-300"
+                              ? "border-accent-fill text-accent"
+                              : "border-border text-text-muted hover:border-accent-fill hover:text-accent"
                           }`}
                           title="Roll a name (cultures, eras, fantasy races)"
                         >
@@ -2031,7 +2031,7 @@ export function ProfileBuilder({
                         onChange={e => updateProfileField("role", e.target.value)}
                         placeholder="e.g. protagonist"
                         data-pb-field="role"
-                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                       />
                       {/* Role quick-pick: grouped Popular / Less Common /
                           Niche story functions. Picking fills the field;
@@ -2041,7 +2041,7 @@ export function ProfileBuilder({
                         <select
                           value=""
                           onChange={e => { if (e.target.value) updateProfileField("role", e.target.value); }}
-                          className="w-24 shrink-0 rounded border border-border bg-bg-surface px-1 py-1.5 text-xs text-text-muted outline-none focus:border-indigo-500"
+                          className="w-24 shrink-0 rounded border border-border bg-bg-surface px-1 py-1.5 text-xs text-text-muted outline-none focus:border-accent-fill"
                           title="Pick a common story role"
                         >
                           <option value="">Pick...</option>
@@ -2085,8 +2085,8 @@ export function ProfileBuilder({
                                 "sex", isCustom ? (chosen ? profile.sex : " ") : option)}
                               className={`rounded border px-2 py-1 text-xs transition-colors ${
                                 chosen
-                                  ? "border-indigo-500 bg-indigo-600/20 text-indigo-200"
-                                  : "border-border text-text-muted hover:border-indigo-700"
+                                  ? "border-accent-fill bg-accent-fill/20 text-accent-strong"
+                                  : "border-border text-text-muted hover:border-accent-fill"
                               }`}
                             >
                               {isCustom ? "Custom" : option}
@@ -2106,7 +2106,7 @@ export function ProfileBuilder({
                           placeholder="Your word for it"
                           aria-label="Custom sex"
                           data-pb-field="sex"
-                          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill disabled:cursor-not-allowed disabled:opacity-40"
                         />
                       </div>
                     </div>
@@ -2118,7 +2118,7 @@ export function ProfileBuilder({
                         onChange={e => updateProfileField("age", e.target.value)}
                         placeholder="18, 18ish, 18 months, approx 30, Unknown"
                         data-pb-field="age"
-                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                       />
                       <p className="mt-1 text-xs text-faint">
                         Say it however you would say it. Blank is fine when it
@@ -2133,7 +2133,7 @@ export function ProfileBuilder({
                   <select
                     value={profile.status}
                     onChange={e => updateProfileField("status", e.target.value)}
-                    className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
                   >
                     <option value="active">Active</option>
                     <option value="archived">Archived</option>
@@ -2183,8 +2183,8 @@ export function ProfileBuilder({
                   silently they are a loss the writer finds weeks later; said out
                   loud they are a short list of things to redo. */}
               {(profile.importWarnings ?? []).length > 0 && (
-                <div className="mb-6 rounded border border-amber-500/30 bg-amber-500/5 p-3">
-                  <p className="text-xs text-amber-200">
+                <div className="mb-6 rounded border border-warn-fill/30 bg-warn-fill/5 p-3">
+                  <p className="text-xs text-warn-strong">
                     Imported from another book. Some things could not come with
                     it:
                   </p>
@@ -2205,7 +2205,7 @@ export function ProfileBuilder({
                   checking whether their traits are still there; this says where
                   they went and what is left to do. */}
               {templateDid && (
-                <div className="mb-6 rounded border border-indigo-700/40 bg-indigo-950/20 p-3">
+                <div className="mb-6 rounded border border-accent-fill/40 bg-accent-soft/20 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-xs text-text-muted">
                       <p className="text-text-primary">
@@ -2229,7 +2229,7 @@ export function ProfileBuilder({
                           was.
                         </p>
                       )}
-                      <p className="mt-1 text-amber-300">
+                      <p className="mt-1 text-warn">
                         Not saved yet -- press Save (or Ctrl+S) to keep it, or
                         switch profiles to leave it alone.
                       </p>
@@ -2386,7 +2386,7 @@ export function ProfileBuilder({
                   <button
                     onClick={runImportanceAudit}
                     disabled={auditLoading}
-                    className="flex items-center gap-1.5 rounded border border-teal-700/50 px-3 py-1.5 text-xs text-teal-400 transition-colors hover:border-teal-500 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded border border-secondary-fill/50 px-3 py-1.5 text-xs text-secondary-muted transition-colors hover:border-secondary-fill hover:text-secondary-strong disabled:cursor-not-allowed disabled:opacity-50"
                     title="AI reviews all traits and flags importance level mismatches"
                   >
                     <Sparkles size={11} />
@@ -2394,33 +2394,33 @@ export function ProfileBuilder({
                   </button>
 
                   {auditOpen && (
-                    <div className="mt-3 rounded border border-teal-800/40 bg-teal-950/20 p-3">
+                    <div className="mt-3 rounded border border-secondary-fill/40 bg-secondary-soft/20 p-3">
                       <div className="mb-2 flex items-center justify-between">
-                        <p className="text-xs font-medium text-teal-300">Importance Audit Results</p>
+                        <p className="text-xs font-medium text-secondary">Importance Audit Results</p>
                         <button
                           onClick={() => setAuditOpen(false)}
-                          className="text-xs text-teal-700 hover:text-teal-400"
+                          className="text-xs text-secondary-fill hover:text-secondary-muted"
                         >
                           Close
                         </button>
                       </div>
                       {auditLoading ? (
-                        <p className="text-xs text-teal-600 animate-pulse">Analyzing trait blocks...</p>
+                        <p className="text-xs text-secondary-fill animate-pulse">Analyzing trait blocks...</p>
                       ) : auditFlags.length === 0 ? (
-                        <p className="text-xs text-teal-500">All importance levels look reasonable. No mismatches found.</p>
+                        <p className="text-xs text-secondary-fill">All importance levels look reasonable. No mismatches found.</p>
                       ) : (
                         <div className="space-y-2">
                           {auditFlags.map((flag, i) => (
-                            <div key={i} className="rounded border border-teal-800/30 bg-bg-panel p-2">
+                            <div key={i} className="rounded border border-secondary-fill/30 bg-bg-panel p-2">
                               <div className="mb-1 flex items-center gap-2 text-xs">
-                                <span className="font-medium text-teal-200">{flag.trait}</span>
+                                <span className="font-medium text-secondary-strong">{flag.trait}</span>
                                 {flag.current_importance && flag.suggested_importance && (
-                                  <span className="text-teal-600">
+                                  <span className="text-secondary-fill">
                                     {flag.current_importance} → {flag.suggested_importance}
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs leading-relaxed text-teal-400/80">{flag.reason}</p>
+                              <p className="text-xs leading-relaxed text-secondary-muted/80">{flag.reason}</p>
                             </div>
                           ))}
                         </div>
@@ -2511,17 +2511,17 @@ export function ProfileBuilder({
               })}
 
               {/* Full AI Summary -- teal card */}
-              <div className="mb-6 rounded border border-teal-800/40 bg-teal-950/20 p-4">
+              <div className="mb-6 rounded border border-secondary-fill/40 bg-secondary-soft/20 p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-semibold text-teal-200">
+                    <h2 className="text-sm font-semibold text-secondary-strong">
                       {profile.type === "chapter_summary"
                         ? "Chapter Summary"
                         : profile.type === "scene_summary"
                         ? "Scene Summary"
                         : "Full AI Summary"}
                     </h2>
-                    <p className="mt-0.5 text-xs text-teal-700">
+                    <p className="mt-0.5 text-xs text-secondary-fill">
                       {profile.type === "chapter_summary" || profile.type === "scene_summary"
                         ? "Used as AI context when attached as a context chip in the editor."
                         : profile.type === "character"
@@ -2532,7 +2532,7 @@ export function ProfileBuilder({
                   <button
                     onClick={generateFullSummary}
                     disabled={generatingField === "full_summary"}
-                    className="flex shrink-0 items-center gap-1 rounded border border-teal-700/50 px-2 py-0.5 text-xs text-teal-400 transition-colors hover:border-teal-500 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex shrink-0 items-center gap-1 rounded border border-secondary-fill/50 px-2 py-0.5 text-xs text-secondary-muted transition-colors hover:border-secondary-fill hover:text-secondary-strong disabled:cursor-not-allowed disabled:opacity-50"
                     title="Generate this summary using AI based on the profile content above"
                   >
                     <Sparkles size={11} />
@@ -2549,7 +2549,7 @@ export function ProfileBuilder({
                       ? "Write a concise summary of this scene for use as AI context..."
                       : "Click Generate to create a full AI profile summary, or write one manually."
                   }
-                  className="w-full rounded border border-teal-800/40 bg-bg-primary px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-teal-600"
+                  className="w-full rounded border border-secondary-fill/40 bg-bg-primary px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-secondary-fill"
                   minRows={4}
                   dataField="full_ai_summary"
                 />
@@ -2563,12 +2563,12 @@ export function ProfileBuilder({
                     so the writer can confirm the relationship-aware behavior
                     is firing instead of having to guess. */}
                 {profile.type === "character" && relationshipSourcesUsed.length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-teal-300">
-                    <span className="text-teal-500">Folded in {relationshipSourcesUsed.length} relationship profile{relationshipSourcesUsed.length === 1 ? "" : "s"}:</span>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-secondary">
+                    <span className="text-secondary-fill">Folded in {relationshipSourcesUsed.length} relationship profile{relationshipSourcesUsed.length === 1 ? "" : "s"}:</span>
                     {relationshipSourcesUsed.map((name) => (
                       <span
                         key={name}
-                        className="rounded-full border border-teal-700/50 bg-teal-950/60 px-2 py-0.5 text-teal-200"
+                        className="rounded-full border border-secondary-fill/50 bg-secondary-soft/60 px-2 py-0.5 text-secondary-strong"
                       >
                         {name}
                       </span>
@@ -2599,7 +2599,7 @@ export function ProfileBuilder({
         {chatCollapsed ? (
           <button
             onClick={() => setChatCollapsed(false)}
-            className="flex h-full w-full flex-col items-center justify-center gap-2 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
+            className="flex h-full w-full flex-col items-center justify-center gap-2 text-faint transition-colors hover:bg-bg-raised hover:text-text-muted"
             title="Expand the Profile Chat panel"
           >
             <span className="text-xs font-medium" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
@@ -2616,7 +2616,7 @@ export function ProfileBuilder({
               <h2 className="shrink-0 text-sm font-semibold text-text-primary">Profile Chat</h2>
               {focusedSection && (
                 <span
-                  className="truncate rounded-full border border-indigo-800/50 bg-indigo-900/20 px-2 py-0.5 text-xs text-indigo-400"
+                  className="truncate rounded-full border border-accent-fill/50 bg-accent-soft/20 px-2 py-0.5 text-xs text-accent-muted"
                   title={`Writer is focused on the "${focusedSection.heading}" section`}
                 >
                   {focusedSection.heading}
@@ -2627,7 +2627,7 @@ export function ProfileBuilder({
               {chatMessages.length > 0 && (
                 <button
                   onClick={() => { setChatMessages([]); setChatError(null); }}
-                  className="text-xs text-rose-700 transition-colors hover:text-rose-400"
+                  className="text-xs text-danger-fill transition-colors hover:text-danger-muted"
                   title="Clear the conversation"
                 >
                   Clear
@@ -2635,7 +2635,7 @@ export function ProfileBuilder({
               )}
               <button
                 onClick={() => setChatCollapsed(true)}
-                className="rounded p-0.5 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
+                className="rounded p-0.5 text-faint transition-colors hover:bg-bg-raised hover:text-text-muted"
                 title="Collapse the chat panel"
               >
                 <ChevronRight size={14} />
@@ -2655,7 +2655,7 @@ export function ProfileBuilder({
 
           {profile && chatMessages.length === 0 && (
             <div className="flex flex-col items-center gap-3 pt-4 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-900/40 text-indigo-400">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft/40 text-accent-muted">
                 <Bot size={20} />
               </div>
               <div>
@@ -2697,7 +2697,7 @@ export function ProfileBuilder({
               className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
-                <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-indigo-400">
+                <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft/60 text-accent-muted">
                   <Bot size={11} />
                 </div>
               )}
@@ -2705,7 +2705,7 @@ export function ProfileBuilder({
               <div
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                   msg.role === "user"
-                    ? "rounded-tr-sm bg-indigo-600 text-white"
+                    ? "rounded-tr-sm bg-accent-fill text-white"
                     : "rounded-tl-sm border border-border bg-bg-surface text-text-primary"
                 }`}
               >
@@ -2717,7 +2717,7 @@ export function ProfileBuilder({
               </div>
 
               {msg.role === "user" && (
-                <div className="ml-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-800/60 text-indigo-300">
+                <div className="ml-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-fill/60 text-accent">
                   <span className="text-xs font-bold">W</span>
                 </div>
               )}
@@ -2726,7 +2726,7 @@ export function ProfileBuilder({
 
           {chatLoading && (
             <div className="flex items-center gap-2 text-xs text-text-muted">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-muted" />
               <span>
                 {chatModelUsed
                   ? <>{chatModelUsed.split("/").pop()} <span className="text-faint">thinking...</span></>
@@ -2736,8 +2736,8 @@ export function ProfileBuilder({
           )}
 
           {chatError && (
-            <div className="rounded border border-red-800 bg-red-950/40 p-2">
-              <p className="text-xs text-red-300">{chatError}</p>
+            <div className="rounded border border-danger-fill bg-danger-soft/40 p-2">
+              <p className="text-xs text-danger">{chatError}</p>
             </div>
           )}
 
@@ -2763,7 +2763,7 @@ export function ProfileBuilder({
             AI knows which rounds of questions to run next. */}
         {behaviorMode === "interview" && profile && (
           <div className="border-t border-border px-3 py-2">
-            <p className="mb-1.5 text-[11px] text-faint">
+            <p className="mb-1.5 text-mini text-faint">
               Expand on next send:
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -2779,10 +2779,10 @@ export function ProfileBuilder({
                       else next.add(c.heading);
                       return next;
                     })}
-                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                    className={`rounded-full border px-2 py-0.5 text-mini transition-colors ${
                       checked
-                        ? "border-indigo-500 bg-indigo-950/40 text-indigo-200"
-                        : "border-border bg-bg-surface text-faint hover:border-indigo-500 hover:text-text-muted"
+                        ? "border-accent-fill bg-accent-soft/40 text-accent-strong"
+                        : "border-border bg-bg-surface text-faint hover:border-accent-fill hover:text-text-muted"
                     }`}
                   >
                     {checked ? "☑" : "☐"} {c.heading}
@@ -2820,20 +2820,20 @@ export function ProfileBuilder({
               disabled={!profile || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
-              className={`text-entry flex-1 rounded border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50 bg-border ${
+              className={`text-entry flex-1 rounded border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-secondary-fill disabled:cursor-not-allowed disabled:opacity-50 bg-border ${
                 chatInput.length > 6000
-                  ? "border-red-600"
+                  ? "border-danger-fill"
                   : chatInput.length > 3000
-                  ? "border-amber-600"
+                  ? "border-warn-fill"
                   : "border-border"
               }`}
             />
             {chatInput.length > 500 && (
               <div className={`absolute bottom-1 right-14 text-xs ${
                 chatInput.length > 6000
-                  ? "text-red-400"
+                  ? "text-danger-muted"
                   : chatInput.length > 3000
-                  ? "text-amber-500"
+                  ? "text-warn-fill"
                   : "text-faint"
               }`}>
                 {chatInput.length.toLocaleString()} chars
@@ -2843,7 +2843,7 @@ export function ProfileBuilder({
             <button
               onClick={sendChatMessage}
               disabled={!profile || !chatInput.trim() || chatLoading}
-              className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-accent-fill hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
               title="Send message (Enter)"
             >
               <Send size={13} />
@@ -2970,7 +2970,7 @@ function ProfileSectionEditor({
             <Explain of="character.subtext" />
             <button
               onClick={() => setGuideOpen(true)}
-              className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-800 px-1.5 py-0.5 text-[10px] text-violet-200 transition-colors hover:border-violet-500"
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-weave-fill px-1.5 py-0.5 text-micro text-weave-strong transition-colors hover:border-weave-fill"
             >
               <BookOpen size={10} /> Show me how this works
             </button>
@@ -2983,7 +2983,7 @@ function ProfileSectionEditor({
           <button
             onClick={onGenerateOverview}
             disabled={generatingOverview}
-            className="ml-auto flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ml-auto flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
             title="AI writes a short overview from the fields you've filled in (Role, Tags, traits, notes). Click again for a different take -- always editable, never saved until you save."
           >
             <Sparkles size={11} />
@@ -2997,8 +2997,8 @@ function ProfileSectionEditor({
           thing the simple page cannot express. */}
       {!hasTraitBlocks && showSecretsOnly
         && (section.trait_blocks ?? []).some(b => b.subtext || b.ai_scope === "on-request") && (
-        <div className="mb-3 rounded border border-violet-900/60 bg-violet-950/10 p-2">
-          <p className="mb-1.5 flex items-center gap-1 text-xs text-violet-200">
+        <div className="mb-3 rounded border border-weave-soft/60 bg-weave-soft/10 p-2">
+          <p className="mb-1.5 flex items-center gap-1 text-xs text-weave-strong">
             <EyeOff size={11} />
             Never named
           </p>
@@ -3015,14 +3015,14 @@ function ProfileSectionEditor({
                   value={block.trait}
                   onChange={e => onUpdateTraitBlock(block.id, { trait: e.target.value })}
                   placeholder="What it is"
-                  className="mb-1 w-full rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-violet-500"
+                  className="mb-1 w-full rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-weave-fill"
                 />
                 <textarea
                   value={block.description}
                   onChange={e => onUpdateTraitBlock(block.id, { description: e.target.value })}
                   rows={2}
                   placeholder="What it makes them do"
-                  className="w-full resize-y rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-violet-500"
+                  className="w-full resize-y rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-weave-fill"
                 />
                 <div className="mt-1 flex items-center justify-between">
                   <span className="text-xs text-faint">
@@ -3030,7 +3030,7 @@ function ProfileSectionEditor({
                   </span>
                   <button
                     onClick={() => onRemoveTraitBlock(block.id)}
-                    className="rounded p-0.5 text-faint hover:text-red-400"
+                    className="rounded p-0.5 text-faint hover:text-danger-muted"
                     title="Remove this"
                     aria-label={`Remove ${block.trait || "this secret"}`}
                   >
@@ -3062,7 +3062,7 @@ function ProfileSectionEditor({
                 onChange={e => onContentChange(e.target.value)}
                 rows={3}
                 data-pb-field={`section:${sectionKey}:content`}
-                className="w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                className="w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-fill"
               />
               <p className="mt-1 text-xs text-faint">
                 Written as plain notes rather than as traits. Move any of it into
@@ -3093,7 +3093,7 @@ function ProfileSectionEditor({
           ))}
           <button
             onClick={onAddTraitBlock}
-            className="mb-3 flex items-center gap-1 rounded border border-dashed border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            className="mb-3 flex items-center gap-1 rounded border border-dashed border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-accent"
             title="Add a trait or group of related traits"
           >
             <Plus size={12} /> Add Trait
@@ -3107,7 +3107,7 @@ function ProfileSectionEditor({
           placeholder={`Write ${heading.toLowerCase()} notes here...`}
           rows={4}
           data-pb-field={`section:${sectionKey}:content`}
-          className="mb-3 w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+          className="mb-3 w-full resize-y rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
         />
         {/* SAYING WHAT A FIELD CALLED NOTES ACTUALLY DOES.
             It used to travel to the model inside the "details" bucket on
@@ -3158,7 +3158,7 @@ function ProfileSectionEditor({
           <button
             onClick={() => { setSummaryOpen(true); onGenerateSectionSummary(); }}
             disabled={isGeneratingSummary}
-            className="flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-faint transition-colors hover:border-accent-fill hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
             title="Generate this section summary using AI"
           >
             <Sparkles size={10} />
@@ -3170,7 +3170,7 @@ function ProfileSectionEditor({
             value={section.ai_summary}
             onChange={e => onAiSummaryChange(e.target.value)}
             placeholder="Click Generate to create an AI summary, or write one manually."
-            className="mt-1.5 w-full rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-muted placeholder-faint outline-none focus:border-indigo-500"
+            className="mt-1.5 w-full rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-muted placeholder-faint outline-none focus:border-accent-fill"
             minRows={2}
             dataField={`section:${sectionKey}:ai_summary`}
           />
@@ -3213,17 +3213,17 @@ function ImportanceHelpPopover({
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="shrink-0 rounded p-0.5 text-faint transition-colors hover:text-indigo-400"
+        className="shrink-0 rounded p-0.5 text-faint transition-colors hover:text-accent-muted"
         title={`Help: ${importance} importance level`}
       >
         <HelpCircle size={12} />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-6 z-30 w-72 rounded-lg border border-border bg-bg-primary p-3 shadow-xl">
+        <div className="absolute left-0 top-6 z-30 w-72 rounded-lg border border-border bg-bg-primary p-3 shadow-e3">
           {/* Header */}
           <div className="mb-2 flex items-start justify-between">
-            <p className="text-xs font-semibold text-indigo-300">
+            <p className="text-xs font-semibold text-accent">
               {importance.charAt(0).toUpperCase() + importance.slice(1)} Importance
             </p>
             <button
@@ -3278,17 +3278,17 @@ function SectionHelpPopover({
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="shrink-0 rounded p-0.5 text-faint transition-colors hover:text-indigo-400"
+        className="shrink-0 rounded p-0.5 text-faint transition-colors hover:text-accent-muted"
         title="Writing tips for this section"
       >
         <HelpCircle size={12} />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-6 z-30 max-h-[28rem] w-80 overflow-y-auto rounded-lg border border-border bg-bg-primary p-3 shadow-xl">
+        <div className="absolute left-0 top-6 z-30 max-h-[28rem] w-80 overflow-y-auto rounded-lg border border-border bg-bg-primary p-3 shadow-e3">
           {/* Header */}
           <div className="mb-2 flex items-start justify-between">
-            <p className="text-xs font-semibold text-indigo-300">Writing Tips</p>
+            <p className="text-xs font-semibold text-accent">Writing Tips</p>
             <button
               onClick={() => setOpen(false)}
               className="rounded p-0.5 text-faint hover:text-text-primary"
@@ -3301,24 +3301,24 @@ function SectionHelpPopover({
           <p className="mb-3 text-xs leading-relaxed text-text-primary">{help.whatToPut}</p>
 
           {/* Poor example */}
-          <div className="mb-2 rounded border border-red-900/40 bg-red-950/20 p-2">
-            <p className="mb-1 text-xs font-medium text-red-400">Needs Work</p>
-            <p className="mb-1 text-xs italic text-red-300/70">"{help.poorExample}"</p>
-            <p className="text-xs text-red-400/60">{help.poorWhy}</p>
+          <div className="mb-2 rounded border border-danger-soft/40 bg-danger-soft/20 p-2">
+            <p className="mb-1 text-xs font-medium text-danger-muted">Needs Work</p>
+            <p className="mb-1 text-xs italic text-danger/70">"{help.poorExample}"</p>
+            <p className="text-xs text-danger-muted/60">{help.poorWhy}</p>
           </div>
 
           {/* Good example */}
-          <div className="mb-2 rounded border border-amber-800/40 bg-amber-950/20 p-2">
-            <p className="mb-1 text-xs font-medium text-amber-400">Good</p>
-            <p className="mb-1 text-xs italic text-amber-200/70">"{help.goodExample}"</p>
-            <p className="text-xs text-amber-400/60">{help.goodWhy}</p>
+          <div className="mb-2 rounded border border-warn-fill/40 bg-warn-soft/20 p-2">
+            <p className="mb-1 text-xs font-medium text-warn-muted">Good</p>
+            <p className="mb-1 text-xs italic text-warn-strong/70">"{help.goodExample}"</p>
+            <p className="text-xs text-warn-muted/60">{help.goodWhy}</p>
           </div>
 
           {/* Great example */}
-          <div className="rounded border border-emerald-800/40 bg-emerald-950/20 p-2">
-            <p className="mb-1 text-xs font-medium text-emerald-400">Great</p>
-            <p className="mb-1 text-xs italic text-emerald-200/70">"{help.greatExample}"</p>
-            <p className="text-xs text-emerald-400/60">{help.greatWhy}</p>
+          <div className="rounded border border-success-fill/40 bg-success-soft/20 p-2">
+            <p className="mb-1 text-xs font-medium text-success-muted">Great</p>
+            <p className="mb-1 text-xs italic text-success-strong/70">"{help.greatExample}"</p>
+            <p className="text-xs text-success-muted/60">{help.greatWhy}</p>
           </div>
         </div>
       )}
@@ -3451,7 +3451,7 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
               {block.importance}
             </span>
             {block.subtext && (
-              <span className="inline-flex items-center gap-0.5 rounded-full border border-violet-700 px-1.5 text-xs text-violet-200">
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-weave-fill px-1.5 text-xs text-weave-strong">
                 <EyeOff size={9} /> never named
               </span>
             )}
@@ -3480,7 +3480,7 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
         <select
           value={block.importance}
           onChange={e => onUpdate({ importance: e.target.value as ImportanceLevel })}
-          className="shrink-0 rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+          className="shrink-0 rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
           title="How prominently AI uses this trait"
         >
           {(Object.keys(IMPORTANCE_LABELS) as ImportanceLevel[]).map(level => (
@@ -3503,8 +3503,8 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
           aria-pressed={Boolean(block.subtext)}
           className={`shrink-0 rounded border px-1.5 py-1 text-xs transition-colors ${
             block.subtext
-              ? "border-violet-500 bg-violet-600/20 text-violet-200"
-              : "border-border text-faint hover:border-violet-700 hover:text-text-muted"
+              ? "border-weave-fill bg-weave-fill/20 text-weave-strong"
+              : "border-border text-faint hover:border-weave-fill hover:text-text-muted"
           }`}
           title={block.subtext ? SUBTEXT_HELP.on : SUBTEXT_HELP.off}
         >
@@ -3523,14 +3523,14 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
           onChange={e => onUpdate({ trait: e.target.value })}
           placeholder="Trait name (e.g. observant, punctual)"
           data-pb-field={`trait:${block.id}:trait`}
-          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
         />
 
         {/* "How AI uses this" button -- generates on-demand prose explanation */}
         <button
           onClick={generatePreview}
           disabled={previewLoading || !block.trait.trim() || !block.description.trim()}
-          className="shrink-0 rounded p-1 text-faint transition-colors hover:text-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 rounded p-1 text-faint transition-colors hover:text-accent-muted disabled:cursor-not-allowed disabled:opacity-40"
           title="How AI uses this trait (generates a preview explanation)"
         >
           <Sparkles size={12} />
@@ -3539,7 +3539,7 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
         {/* Delete button */}
         <button
           onClick={onRemove}
-          className="shrink-0 rounded p-1 text-faint transition-colors hover:bg-red-950/40 hover:text-red-400"
+          className="shrink-0 rounded p-1 text-faint transition-colors hover:bg-danger-soft/40 hover:text-danger-muted"
           title="Remove this trait"
         >
           <Trash2 size={12} />
@@ -3553,7 +3553,7 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
         placeholder="Describe this trait in detail. Be specific to this character."
         rows={3}
         data-pb-field={`trait:${block.id}:description`}
-        className="mb-1 w-full resize-y rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+        className="mb-1 w-full resize-y rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
       />
 
       {/* Word count gauge + trim button when wordy/bloated */}
@@ -3565,7 +3565,7 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
           <button
             onClick={generateTrim}
             disabled={trimLoading}
-            className="mt-1 flex shrink-0 items-center gap-1 rounded border border-amber-700/50 px-1.5 py-0.5 text-xs text-amber-400 transition-colors hover:border-amber-500 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-1 flex shrink-0 items-center gap-1 rounded border border-warn-fill/50 px-1.5 py-0.5 text-xs text-warn-muted transition-colors hover:border-warn-fill hover:text-warn-strong disabled:cursor-not-allowed disabled:opacity-50"
             title="AI suggests a more concise version of this description"
           >
             <Scissors size={10} />
@@ -3590,27 +3590,27 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
 
       {/* AI Trim suggestion -- expandable area */}
       {trimOpen && (
-        <div className="mt-2 rounded border border-amber-800/40 bg-amber-950/20 p-2.5">
+        <div className="mt-2 rounded border border-warn-fill/40 bg-warn-soft/20 p-2.5">
           <div className="mb-1 flex items-center justify-between">
-            <p className="text-xs font-medium text-amber-400">Trim Suggestion</p>
+            <p className="text-xs font-medium text-warn-muted">Trim Suggestion</p>
             <button
               onClick={() => setTrimOpen(false)}
-              className="text-xs text-amber-700 hover:text-amber-400"
+              className="text-xs text-warn-fill hover:text-warn-muted"
             >
               Close
             </button>
           </div>
           {trimLoading ? (
-            <p className="text-xs text-amber-600 animate-pulse">Generating trim...</p>
+            <p className="text-xs text-warn-fill animate-pulse">Generating trim...</p>
           ) : (
             <>
-              <p className="mb-2 text-xs leading-relaxed text-amber-200/80">{trimText}</p>
+              <p className="mb-2 text-xs leading-relaxed text-warn-strong/80">{trimText}</p>
               <button
                 onClick={() => {
                   onUpdate({ description: trimText });
                   setTrimOpen(false);
                 }}
-                className="rounded border border-amber-700/50 px-2 py-0.5 text-xs text-amber-300 transition-colors hover:border-amber-500 hover:bg-amber-900/30 hover:text-amber-100"
+                className="rounded border border-warn-fill/50 px-2 py-0.5 text-xs text-warn transition-colors hover:border-warn-fill hover:bg-warn-soft/30 hover:text-warn-strong"
                 title="Replace the current description with this trimmed version"
               >
                 Apply
@@ -3622,20 +3622,20 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
 
       {/* "How AI uses this" preview -- expandable area below gauge */}
       {previewOpen && (
-        <div className="mt-2 rounded border border-indigo-800/40 bg-indigo-950/20 p-2.5">
+        <div className="mt-2 rounded border border-accent-fill/40 bg-accent-soft/20 p-2.5">
           <div className="mb-1 flex items-center justify-between">
-            <p className="text-xs font-medium text-indigo-400">How AI uses this</p>
+            <p className="text-xs font-medium text-accent-muted">How AI uses this</p>
             <button
               onClick={() => setPreviewOpen(false)}
-              className="text-xs text-indigo-700 hover:text-indigo-400"
+              className="text-xs text-accent-fill hover:text-accent-muted"
             >
               Close
             </button>
           </div>
           {previewLoading ? (
-            <p className="text-xs text-indigo-600 animate-pulse">Generating preview...</p>
+            <p className="text-xs text-accent-fill animate-pulse">Generating preview...</p>
           ) : (
-            <p className="text-xs leading-relaxed text-indigo-200/80">{previewText}</p>
+            <p className="text-xs leading-relaxed text-accent-strong/80">{previewText}</p>
           )}
         </div>
       )}
@@ -3686,12 +3686,12 @@ function AiBehaviorPanel({ currentMode, open, onToggleOpen, onSelectMode }: AiBe
   const current = BEHAVIOR_MODES.find(m => m.id === currentMode) ?? BEHAVIOR_MODES[0];
 
   return (
-    <div className="border-b border-teal-800/40 bg-teal-950/40">
+    <div className="border-b border-secondary-fill/40 bg-secondary-soft/40">
 
       {/* Expanded mode list */}
       {open && (
-        <div className="border-b border-teal-800/30 px-2 pb-2 pt-1.5">
-          <p className="mb-2 px-1 text-xs text-teal-600">
+        <div className="border-b border-secondary-fill/30 px-2 pb-2 pt-1.5">
+          <p className="mb-2 px-1 text-xs text-secondary-fill">
             Choose what the AI should do. Switching mode clears the conversation.
           </p>
           {BEHAVIOR_MODES.map(mode => {
@@ -3702,12 +3702,12 @@ function AiBehaviorPanel({ currentMode, open, onToggleOpen, onSelectMode }: AiBe
                 onClick={() => onSelectMode(mode.id)}
                 className={`mb-1 w-full rounded px-2 py-2 text-left transition-colors ${
                   isActive
-                    ? "bg-teal-700/30 text-teal-100"
-                    : "text-teal-400 hover:bg-teal-900/30 hover:text-teal-200"
+                    ? "bg-secondary-fill/30 text-secondary-strong"
+                    : "text-secondary-muted hover:bg-secondary-soft/30 hover:text-secondary-strong"
                 }`}
               >
                 <p className="text-xs font-medium">{mode.label}</p>
-                <p className="mt-0.5 text-xs text-teal-600">{mode.description}</p>
+                <p className="mt-0.5 text-xs text-secondary-fill">{mode.description}</p>
               </button>
             );
           })}
@@ -3717,18 +3717,18 @@ function AiBehaviorPanel({ currentMode, open, onToggleOpen, onSelectMode }: AiBe
       {/* Toggle bar */}
       <button
         onClick={onToggleOpen}
-        className="flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-teal-900/20"
+        className="flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-secondary-soft/20"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <Settings2 size={12} className="shrink-0 text-teal-600" />
-          <span className="text-xs text-teal-500">Mode:</span>
-          <span className="truncate text-xs font-medium text-teal-300">
+          <Settings2 size={12} className="shrink-0 text-secondary-fill" />
+          <span className="text-xs text-secondary-fill">Mode:</span>
+          <span className="truncate text-xs font-medium text-secondary">
             {current.label}
           </span>
         </div>
         <ChevronDown
           size={12}
-          className={`shrink-0 text-teal-600 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-secondary-fill transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
     </div>

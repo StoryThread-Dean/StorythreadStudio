@@ -105,11 +105,11 @@ export function FactLayer({ fact, run, chapters, people, entryName,
         role="dialog"
         aria-label="What this fact does"
         data-testid="fact-layer"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-start gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] uppercase tracking-wide text-faint">
+            <p className="text-micro uppercase tracking-wide text-faint">
               One fact on {entryName}
             </p>
             <h2 className="text-xs font-semibold text-text-primary">
@@ -126,11 +126,11 @@ export function FactLayer({ fact, run, chapters, people, entryName,
         <div className="space-y-2 p-3">
           {/* ── Where it is in force ─────────────────────────────────────── */}
           <section>
-            <h3 className="text-[11px] font-medium text-text-muted">
+            <h3 className="text-mini font-medium text-text-muted">
               Where it is true
             </h3>
             {!placed ? (
-              <p className="mt-1 flex items-start gap-1.5 text-[11px] text-amber-200"
+              <p className="mt-1 flex items-start gap-1.5 text-mini text-warn-strong"
                  data-testid="fact-unplaced">
                 <CalendarOff size={11} className="mt-0.5 shrink-0" />
                 <span>
@@ -148,12 +148,12 @@ export function FactLayer({ fact, run, chapters, people, entryName,
                       key={c.anchor}
                       title={`${i + 1}. ${c.title}`}
                       className={`h-2 flex-1 rounded-sm ${
-                        inForce(i) ? "bg-violet-500" : "bg-border"
+                        inForce(i) ? "bg-weave-fill" : "bg-border"
                       }`}
                     />
                   ))}
                 </div>
-                <p className="mt-1 text-[11px] text-text-muted">
+                <p className="mt-1 text-mini text-text-muted">
                   From {chapterName(fact.at, chapters)}
                   {replacedBy
                     ? <> until {chapterName(replacedBy.at, chapters)}, when
@@ -168,8 +168,8 @@ export function FactLayer({ fact, run, chapters, people, entryName,
 
           {/* ── Whose truth ──────────────────────────────────────────────── */}
           <section>
-            <h3 className="text-[11px] font-medium text-text-muted">Whose truth</h3>
-            <p className="mt-1 flex items-start gap-1.5 text-[11px] text-text-muted">
+            <h3 className="text-mini font-medium text-text-muted">Whose truth</h3>
+            <p className="mt-1 flex items-start gap-1.5 text-mini text-text-muted">
               <User size={11} className="mt-0.5 shrink-0 text-faint" />
               {frame ? (
                 <span data-testid="fact-frame">
@@ -188,12 +188,12 @@ export function FactLayer({ fact, run, chapters, people, entryName,
 
           {/* ── When the reader learns it ────────────────────────────────── */}
           <section>
-            <h3 className="text-[11px] font-medium text-text-muted">
+            <h3 className="text-mini font-medium text-text-muted">
               When the reader learns it
             </h3>
-            <p className="mt-1 flex items-start gap-1.5 text-[11px] text-text-muted">
+            <p className="mt-1 flex items-start gap-1.5 text-mini text-text-muted">
               {fact.revealed_at
-                ? <EyeOff size={11} className="mt-0.5 shrink-0 text-amber-300" />
+                ? <EyeOff size={11} className="mt-0.5 shrink-0 text-warn" />
                 : <Eye size={11} className="mt-0.5 shrink-0 text-faint" />}
               {fact.revealed_at ? (
                 <span data-testid="fact-reveal">
@@ -213,10 +213,10 @@ export function FactLayer({ fact, run, chapters, people, entryName,
           {/* ── What it replaces, and what replaces it ───────────────────── */}
           {(replaces || replacedBy) && (
             <section data-testid="fact-chain">
-              <h3 className="text-[11px] font-medium text-text-muted">
+              <h3 className="text-mini font-medium text-text-muted">
                 The chain it is part of
               </h3>
-              <ul className="mt-1 space-y-0.5 text-[11px] text-text-muted">
+              <ul className="mt-1 space-y-0.5 text-mini text-text-muted">
                 {replaces && (
                   <li>
                     It replaces{" "}
@@ -240,7 +240,7 @@ export function FactLayer({ fact, run, chapters, people, entryName,
           )}
 
           {fact.intentional && (
-            <p className="flex items-start gap-1.5 text-[11px] text-emerald-200"
+            <p className="flex items-start gap-1.5 text-mini text-success-strong"
                data-testid="fact-intentional">
               <Check size={11} className="mt-0.5 shrink-0" />
               <span>
@@ -253,12 +253,12 @@ export function FactLayer({ fact, run, chapters, people, entryName,
           {/* ── What a model would actually receive ──────────────────────── */}
           {/* The payoff. Everything above is a rule; this is the consequence,
               and it is the only thing here a writer can act on directly. */}
-          <section className="rounded border border-violet-900/60 bg-violet-950/20 p-2">
-            <h3 className="flex items-center gap-1.5 text-[11px] font-medium text-violet-100">
-              <Sparkles size={11} className="shrink-0 text-violet-300" />
+          <section className="rounded border border-weave-soft/60 bg-weave-soft/20 p-2">
+            <h3 className="flex items-center gap-1.5 text-mini font-medium text-weave-strong">
+              <Sparkles size={11} className="shrink-0 text-weave" />
               What your AI gets
             </h3>
-            <p className="mt-1 text-[11px] text-violet-100/80"
+            <p className="mt-1 text-mini text-weave-strong/80"
                data-testid="fact-brief">
               {!placed
                 ? "Nothing. An unplaced fact never reaches a brief."
@@ -275,7 +275,7 @@ export function FactLayer({ fact, run, chapters, people, entryName,
 
           <button
             onClick={onClose}
-            className="text-[11px] text-faint hover:text-text-primary"
+            className="text-mini text-faint hover:text-text-primary"
           >
             Back
           </button>

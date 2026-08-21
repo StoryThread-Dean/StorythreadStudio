@@ -127,7 +127,7 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
       <p className="mb-2 text-xs text-zinc-300">{message}</p>
       {busy ? (
         <>
-          <p className="mb-1 text-[11px] text-blue-300">
+          <p className="mb-1 text-mini text-blue-300">
             {install.state === "downloading"
               ? `Downloading... ${Math.round(install.progress * 100)}%`
               : install.state === "verifying" ? "Verifying download..."
@@ -149,12 +149,12 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
           )}
         </button>
       )}
-      <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">
+      <p className="mt-1.5 text-micro leading-relaxed text-zinc-600">
         One download, all {""}voices included. Runs entirely on your
         computer -- narration is free forever.
       </p>
       {error && (
-        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-[10px] text-rose-300">
+        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-micro text-rose-300">
           {error}
         </p>
       )}
@@ -369,7 +369,7 @@ export function GenerationPanel({
 
   return (
     <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-zinc-800 p-4">
-      <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-300">
+      <h3 className="flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-blue-300">
         <Mic2 size={12} /> Narration
       </h3>
 
@@ -398,7 +398,7 @@ export function GenerationPanel({
       {engineState === "ready" && (
         <>
           <div>
-            <label className="mb-1 block text-[11px] text-zinc-500" htmlFor="narrator-voice">
+            <label className="mb-1 block text-mini text-zinc-500" htmlFor="narrator-voice">
               Narrator voice ({voices.length} available, free and local)
             </label>
             {/* Voice and its sample share one line: the dropdown sizes to
@@ -423,7 +423,7 @@ export function GenerationPanel({
                 onClick={() => void handlePreview()}
                 disabled={previewing !== null || !voiceId}
                 title={previewing === "selection" ? "Waiting for the selection sample to finish" : "Play a short sample sentence in this voice"}
-                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-1.5 text-mini text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
               >
                 {previewIcon("voice")}
                 Sample
@@ -454,12 +454,12 @@ export function GenerationPanel({
                 Sample selection
               </button>
             </div>
-            <p className="mt-1 text-[9px] text-zinc-600">local &middot; free &middot; up to 3,000 characters</p>
+            <p className="mt-1 text-2xs text-zinc-600">local &middot; free &middot; up to 3,000 characters</p>
             {previewUrl && (
               <audio controls autoPlay src={previewUrl} className="mt-2 w-full" />
             )}
             {previewWarnings.map((warning, i) => (
-              <p key={i} className="mt-1.5 rounded border border-blue-800 bg-blue-950/40 px-2 py-1.5 text-[10px] leading-relaxed text-blue-300">
+              <p key={i} className="mt-1.5 rounded border border-blue-800 bg-blue-950/40 px-2 py-1.5 text-micro leading-relaxed text-blue-300">
                 {warning}
               </p>
             ))}
@@ -468,7 +468,7 @@ export function GenerationPanel({
             {previewTrace.length > 0 && (
               <div className="mt-1.5 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1.5">
                 {previewTrace.map((piece, i) => (
-                  <p key={i} className="truncate text-[10px] leading-relaxed text-zinc-500">
+                  <p key={i} className="truncate text-micro leading-relaxed text-zinc-500">
                     <span className={piece.marker_pace ? "text-blue-300" : "text-zinc-400"}>
                       {piece.speed.toFixed(2)}x
                     </span>
@@ -491,7 +491,7 @@ export function GenerationPanel({
               fast on pause-heavy chapters. Draft audio is stale to a
               Standard run, so it can never ship by accident. */}
           {watching && !active && !resumable && (
-            <p className="flex items-center gap-2 text-[11px] text-blue-300">
+            <p className="flex items-center gap-2 text-mini text-blue-300">
               <Loader2 size={12} className="animate-spin" />
               Checking on the run...
             </p>
@@ -545,7 +545,7 @@ export function GenerationPanel({
               somewhere" into paragraphs to look at. */}
           {!active && !watching && audioStatus
             && audioStatus.flow_fallbacks > 0 && (
-            <p className="rounded border border-zinc-700 bg-zinc-900/60 px-2.5 py-2 text-[10px] leading-relaxed text-zinc-400">
+            <p className="rounded border border-zinc-700 bg-zinc-900/60 px-2.5 py-2 text-micro leading-relaxed text-zinc-400">
               <span className="text-zinc-300">
                 {audioStatus.flow_fallbacks} pause group
                 {audioStatus.flow_fallbacks === 1 ? "" : "s"} rendered as
@@ -560,14 +560,14 @@ export function GenerationPanel({
 
           {!active && !watching && audioStatus && audioStatus.outdated_segments > 0 && (
             <div className="rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2">
-              <p className="text-[11px] leading-relaxed text-amber-200">
+              <p className="text-mini leading-relaxed text-amber-200">
                 {audioStatus.outdated_segments === 1
                   ? "1 section no longer matches its audio"
                   : `${audioStatus.outdated_segments} sections no longer match their audio`}
                 {audioStatus.outdated_reason === "voice"
                   ? " -- the voice changed." : "."}
               </p>
-              <p className="mt-1 text-[10px] leading-relaxed text-amber-200/70">
+              <p className="mt-1 text-micro leading-relaxed text-amber-200/70">
                 {audioStatus.outdated_reason === "voice"
                   ? "Generating re-narrates the book in the new voice. Keeping "
                     + "the existing audio is fine too -- nothing is regenerated "
@@ -611,14 +611,14 @@ export function GenerationPanel({
                   }
                 })();
               }}
-              className="self-center text-[10px] text-rose-400 hover:text-rose-300 hover:underline"
+              className="self-center text-micro text-rose-400 hover:text-rose-300 hover:underline"
             >
               Cancel generation and start over
             </button>
           )}
           {/* A finished draft must say so where the writer will see it. */}
           {run?.draft && (
-            <p className="rounded border border-amber-800 bg-amber-950/50 px-2 py-1.5 text-[11px] text-amber-300">
+            <p className="rounded border border-amber-800 bg-amber-950/50 px-2 py-1.5 text-mini text-amber-300">
               Draft-quality audio{active ? " is generating" : ""}. Regenerate
               in Standard quality before exporting -- a Standard run
               re-queues all draft segments automatically.
@@ -641,7 +641,7 @@ export function GenerationPanel({
       {/* Live run -- the sapphire path */}
       {run && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-          <div className="mb-1 flex items-center justify-between text-[11px]">
+          <div className="mb-1 flex items-center justify-between text-mini">
             <span className={
               run.status === "completed" ? "text-emerald-300"
               : run.status === "generating" ? "text-blue-300"
@@ -658,11 +658,11 @@ export function GenerationPanel({
             />
           </div>
           {run.failed_segments > 0 && (
-            <p className="mt-1.5 text-[11px] text-rose-300">
+            <p className="mt-1.5 text-mini text-rose-300">
               {run.failed_segments} segment{run.failed_segments === 1 ? "" : "s"} failed -- resume retries them.
             </p>
           )}
-          {run.note && <p className="mt-1.5 text-[11px] text-blue-300">{run.note}</p>}
+          {run.note && <p className="mt-1.5 text-mini text-blue-300">{run.note}</p>}
 
           {active && (
             <div className="mt-2 flex gap-2">
@@ -670,7 +670,7 @@ export function GenerationPanel({
                 onClick={() => void control(pauseGeneration)}
                 disabled={busy}
                 title="Finishes the current segment, then pauses"
-                className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
               >
                 <Pause size={11} /> Pause
               </button>
@@ -678,7 +678,7 @@ export function GenerationPanel({
                 onClick={() => void control(cancelGeneration)}
                 disabled={busy}
                 title="Finishes the current segment, then stops"
-                className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-rose-600 hover:text-rose-300 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-200 hover:border-rose-600 hover:text-rose-300 disabled:opacity-40"
               >
                 <Square size={11} /> Cancel
               </button>
@@ -714,7 +714,7 @@ export function GenerationPanel({
           but harmless earlier -- the backend refuses honestly. */}
       <ExportPanel workspacePath={workspacePath} />
 
-      <p className="mt-auto text-[10px] leading-relaxed text-zinc-600">
+      <p className="mt-auto text-micro leading-relaxed text-zinc-600">
         Generation runs while Storythread is open and pauses if you close
         the app -- reopen and resume anytime. Draft free here; premium
         cloud voices arrive in a later update for the final print.

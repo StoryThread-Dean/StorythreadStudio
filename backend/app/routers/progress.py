@@ -26,8 +26,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.outline_frontmatter import parse_outline_frontmatter
-from app.outline_templates import TEMPLATE_DEFAULTS
+from app.yaml_frontmatter import parse_yaml_frontmatter
+from app.outline_worksheet import (
+    STORY_TYPE_DEFAULT_WORDS, WORKSHEET_FIELDS, read_targets,
+)
 from app.progress_store import count_words, local_date_for, open_db
 from app.routers.documents import _title_from_file
 from app.settings_store import get_rollover_hour, load_settings
@@ -91,7 +93,15 @@ class ChapterProgress(BaseModel):
 
 class OutlineSummary(BaseModel):
     present: bool
-    has_frontmatter: bool
+    #: How many of the ten worksheet labels have a value, and out of how many.
+    #: Replaces has_frontmatter, which was a yes/no about a machine block the
+    #: writer never saw and could not deliberately create.
+    fields_filled: int
+    fields_total: int
+    #: True when this outline still carries the pre-v2.0.2 yaml block. The
+    #: numbers above are correct either way; this only says whether the file
+    #: has been converted yet.
+    legacy: bool
     weight: float
 
 
@@ -180,7 +190,7 @@ def _read_outline(project_path: str) -> tuple[str | None, dict[str, Any]]:
             text = f.read()
     except OSError:
         return None, {}
-    return text, parse_outline_frontmatter(text)
+    return text, parse_yaml_frontmatter(text)
 
 
 def _profile_name_from_file(filepath: str) -> str | None:
@@ -200,7 +210,7 @@ def _profile_name_from_file(filepath: str) -> str | None:
 
     # Profiles use the same `---\n...\n---` frontmatter convention as the
     # outline. Reuse the outline parser for the extraction.
-    fm = parse_outline_frontmatter(text)
+    fm = parse_yaml_frontmatter(text)
     name = fm.get("name")
     return str(name).strip() if isinstance(name, str) and name.strip() else None
 
@@ -379,9 +389,9 @@ async def get_summary(project_path: str) -> SummaryResponse:
     story_type = project.get("story_type", "novel")
     is_serial = story_type == "serial_fiction"
 
-    # Outline -- read frontmatter to know what the writer is planning toward.
+    # Outline -- the worksheet says what the writer is planning toward.
     outline_text, frontmatter = _read_outline(project_path)
-    has_frontmatter = bool(frontmatter)
+    outline_present = bool(outline_text and outline_text.strip())
 
     # Manuscript -- words on disk vs. target from outline (or template default).
     # The per-chapter list also feeds the slide-over's chapter breakdown.
@@ -389,14 +399,18 @@ async def get_summary(project_path: str) -> SummaryResponse:
     manuscript_actual = sum(words for _, _, words in chapter_counts)
     chapter_count = len(chapter_counts)
     chapter_progress = _chapter_progress_list(chapter_counts, frontmatter)
-    target_from_outline = frontmatter.get("target_word_count")
-    if isinstance(target_from_outline, int) and target_from_outline > 0:
-        manuscript_target: int | None = target_from_outline
+    # read_targets prefers the worksheet line and falls back to the OLD yaml
+    # block, so a book that has not been opened since the upgrade still
+    # reports the right target rather than silently dropping to the default.
+    targets = read_targets(outline_text or "")
+    if targets.word_count:
+        manuscript_target: int | None = targets.word_count
     else:
-        # Fall back to per-template default. Serial fiction has None -- the
+        # Fall back to the story-type default. Serial fiction has None -- the
         # gauge renders a placeholder card instead of a percentage.
-        defaults = TEMPLATE_DEFAULTS.get(story_type, TEMPLATE_DEFAULTS["novel"])
-        manuscript_target = defaults.get("target_word_count")
+        manuscript_target = STORY_TYPE_DEFAULT_WORDS.get(
+            story_type, STORY_TYPE_DEFAULT_WORDS["novel"],
+        )
 
     # Notes -- binary presence check (excluding outline.md, which has its
     # own gauge segment).
@@ -429,13 +443,24 @@ async def get_summary(project_path: str) -> SummaryResponse:
         ))
 
     # ── Weights ──
-    # If we have frontmatter the gauge uses the locked 50/10/30/10 split.
-    # Otherwise the manuscript carries 100% and other segments are info-only.
-    if has_frontmatter and not is_serial:
-        manuscript_weight = 50.0
-        outline_weight = 10.0
-        profiles_weight = 30.0
-        notes_weight = 10.0
+    # 60 / 20 / 20, gated on the outline EXISTING rather than on it carrying
+    # yaml frontmatter -- outlines do not have frontmatter any more.
+    #
+    # THE PROFILES SLICE IS GONE, and dropping it was not optional. It scored
+    # matched-against-expected using the outline's expected_characters lists,
+    # and those inputs are retired: the Weave already knows the writer's cast,
+    # and the Unwoven pass already asks about planned-but-unwritten things.
+    # Leaving the weight in place with no source would have left a 30-point
+    # hole and capped every gauge at 70% forever.
+    #
+    # The Weave is COUNTED, NOT SCORED, for a reason worth keeping: with no
+    # writer-declared cast there is no honest denominator, and inventing one
+    # would be the app deciding how many people belong in somebody's book.
+    if outline_present and not is_serial:
+        manuscript_weight = 60.0
+        outline_weight = 20.0
+        profiles_weight = 0.0
+        notes_weight = 20.0
     else:
         manuscript_weight = 100.0
         outline_weight = 0.0
@@ -450,7 +475,10 @@ async def get_summary(project_path: str) -> SummaryResponse:
     else:
         manuscript_pct = 0.0   # serial fiction or zero target -> info only
 
-    outline_pct = 100.0 if has_frontmatter else 0.0
+    # A GRADIENT, not the old yes/no on frontmatter existing. Filling in three
+    # of the ten worksheet labels is worth three tenths of this slice, which
+    # is something a writer can actually move.
+    outline_pct = 100.0 * targets.fields_filled / len(WORKSHEET_FIELDS)
 
     # Profiles: split the 30% evenly across sub-segments that have an
     # expectation, then each contributes (matched / expected) * its slice.
@@ -488,8 +516,10 @@ async def get_summary(project_path: str) -> SummaryResponse:
             weight=manuscript_weight,
         ),
         outline=OutlineSummary(
-            present=outline_text is not None,
-            has_frontmatter=has_frontmatter,
+            present=outline_present,
+            fields_filled=targets.fields_filled,
+            fields_total=len(WORKSHEET_FIELDS),
+            legacy=targets.from_legacy,
             weight=outline_weight,
         ),
         profiles=ProfilesSummary(

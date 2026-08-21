@@ -47,6 +47,7 @@ import { MapEntryList } from "./MapEntryList";
 import { EntryTools } from "./EntryTools";
 import { Scrubber } from "./Scrubber";
 import { TieEditor } from "./TieEditor";
+import { WarpWeft } from "../../components/icons";
 
 /** How far the cursor may travel before a press stops being a click. */
 const DRAG_SLOP = 4;
@@ -304,7 +305,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
 
   if (error) {
     return (
-      <div className="rounded border border-rose-800 bg-rose-950/40 px-4 py-3 text-xs text-rose-200">
+      <div className="rounded border border-danger-fill bg-danger-soft/40 px-4 py-3 text-xs text-danger-strong">
         <AlertTriangle size={13} className="mr-1.5 inline" />
         {error}
       </div>
@@ -323,13 +324,13 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
         <div className="mb-1.5 flex flex-wrap items-center gap-3">
           <span className="text-xs font-medium text-text-primary">
             Showing your world as of{" "}
-            <span className="text-violet-300">{label}</span>
+            <span className="text-weave">{label}</span>
           </span>
           <button
             type="button"
             onClick={() => setHideSpoilers(v => !v)}
             aria-pressed={hideSpoilers}
-            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-[11px] text-text-muted transition-colors hover:border-violet-600 hover:text-text-primary"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-mini text-text-muted transition-colors hover:border-weave-fill hover:text-text-primary"
           >
             {hideSpoilers ? <EyeOff size={11} /> : <Eye size={11} />}
             {hideSpoilers ? "Hiding what the reader does not know yet" : "Showing everything"}
@@ -343,7 +344,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
               type="button"
               onClick={() => setConfirmSpread(true)}
               data-testid="map-spread"
-              className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-[11px] text-text-muted transition-colors hover:border-violet-600 hover:text-text-primary"
+              className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-mini text-text-muted transition-colors hover:border-weave-fill hover:text-text-primary"
             >
               <Shuffle size={11} /> Spread the dots out
             </button>
@@ -357,12 +358,12 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
             as every other destructive confirm in this app: the cost stated in
             the writer's terms, before the button that pays it. */}
         {confirmSpread && (
-          <div className="mb-2 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+          <div className="mb-2 rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-2"
                data-testid="map-spread-confirm">
-            <p className="text-xs font-semibold text-amber-100">
+            <p className="text-xs font-semibold text-warn-strong">
               Move every dot?
             </p>
-            <p className="mt-1 max-w-xl text-[11px] text-amber-200/80">
+            <p className="mt-1 max-w-xl text-mini text-warn-strong/80">
               This pushes the dots apart so they stop overlapping, keeping them
               all on screen. It replaces wherever you have dragged things to,
               and there is no way back -- the positions are the only record of
@@ -381,14 +382,14 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                                     { width: WIDTH, height: HEIGHT }));
                   setConfirmSpread(false);
                 }}
-                className="rounded bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-500"
+                className="rounded bg-warn-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-warn-fill"
               >
                 Spread them out
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmSpread(false)}
-                className="rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary"
+                className="rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:text-text-primary"
               >
                 Leave them as they are
               </button>
@@ -433,7 +434,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                 <g key={`${edge.src_id}-${edge.rel}-${edge.dst_id}-${i}`}>
                   <line
                     x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                    className={edge.active ? "stroke-zinc-600" : "stroke-zinc-700"}
+                    className={edge.active ? "stroke-border-strong" : "stroke-border"}
                     strokeWidth={1.2}
                     // Not yet true, or already over: drawn but distinguished.
                     // The writer is looking at their own future book, not a
@@ -451,7 +452,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                     <text
                       x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 3}
                       textAnchor="middle"
-                      className="fill-zinc-500 text-[9px]"
+                      className="fill-text-muted text-2xs"
                     >
                       {/* The writer's own line where they wrote one -- that
                           is what the backend sends `reason` FOR. The relation
@@ -504,7 +505,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                   {node.placeholder ? (
                     <circle
                       r={radius}
-                      className={`fill-transparent ${isFocus ? "stroke-white" : "stroke-zinc-500"}`}
+                      className={`fill-transparent ${isFocus ? "stroke-accent" : "stroke-text-muted"}`}
                       strokeWidth={isFocus ? 2 : 1}
                       strokeDasharray="3 2"
                     />
@@ -512,18 +513,18 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                     <>
                       <circle
                         r={radius}
-                        className={`${tone.fill} ${isFocus ? "stroke-white" : "stroke-zinc-900"}`}
+                        className={`${tone.fill} ${isFocus ? "stroke-accent" : "stroke-bg-primary"}`}
                         strokeWidth={isFocus ? 2 : 1}
                       />
                       <Icon x={-6} y={-6} width={12} height={12}
-                            className="pointer-events-none fill-none stroke-zinc-950"
+                            className="pointer-events-none fill-none stroke-bg-primary"
                             strokeWidth={2.2} />
                     </>
                   )}
                   <text
                     y={radius + 11} textAnchor="middle"
-                    className={node.placeholder ? "fill-zinc-500 text-[10px]"
-                                                : "fill-zinc-300 text-[10px]"}
+                    className={node.placeholder ? "fill-text-muted text-micro"
+                                                : "fill-text-primary text-micro"}
                   >
                     {nodeLabel(node)}
                   </text>
@@ -620,7 +621,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                 if (node) setWorking(node);
               }}
               data-testid="map-open-workbench"
-              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted hover:text-text-primary"
             >
               <Pencil size={11} /> Edit this entry
             </button>
@@ -630,7 +631,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                 const node = (graph?.nodes ?? []).find(n => n.entity_id === focus);
                 if (node) setTying(node);
               }}
-              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted hover:text-text-primary"
             >
               <Link2 size={11} /> Connections
             </button>
@@ -643,14 +644,14 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                 const node = (graph?.nodes ?? []).find(n => n.entity_id === focus);
                 if (node) setFixing(node);
               }}
-              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted hover:text-text-primary"
             >
               <Wrench size={11} /> Fix or remove
             </button>
             <button
               type="button"
               onClick={() => setFocus(null)}
-              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+              className="inline-flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted hover:text-text-primary"
             >
               <RotateCcw size={11} /> Show the whole world
             </button>
@@ -667,7 +668,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
           const entry = threadTypeEntry(type.id, type.label, type.icon);
           const Icon = entry.Icon;
           return (
-            <span key={type.id} className="inline-flex items-center gap-1 text-[11px]"
+            <span key={type.id} className="inline-flex items-center gap-1 text-mini"
                   title={entry.short}>
               <Icon size={11} className={TONE_CLASSES[entry.tone as Tone].text} />
               <span className="text-text-muted">{entry.term}</span>
@@ -704,7 +705,7 @@ function HiddenNotice({ graph, view, hideSpoilers }: {
 
   return (
     <p data-testid="weave-hidden-notice"
-       className="rounded border border-border bg-bg-primary px-3 py-1.5 text-[11px] text-faint">
+       className="rounded border border-border bg-bg-primary px-3 py-1.5 text-mini text-faint">
       Not shown: {parts.join(" · ")}.
     </p>
   );
@@ -717,6 +718,10 @@ function EmptyMap({ hasWorld, atLabel }: { hasWorld: boolean; atLabel: string })
   // nothing exists YET at this point in the story.
   return (
     <div className="flex h-[60vh] flex-col items-center justify-center gap-2 px-8 text-center">
+      {/* Cloth with nothing on it. An empty state with a mark in it reads as
+          a place that is waiting; an empty state with only text reads as a
+          screen that failed to load. */}
+      <WarpWeft size={40} className="mb-1 text-border-strong" strokeWidth={1.5} />
       <p className="text-sm text-text-primary">
         {hasWorld
           ? `Nothing in your world has appeared by ${atLabel}.`

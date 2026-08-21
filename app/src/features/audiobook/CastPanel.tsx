@@ -502,7 +502,7 @@ export function CastPanel({
           aria-label={label}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
+          className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-mini text-zinc-200"
         >
           <option value="">Same as the narrator</option>
           {(draftRoster?.voices ?? []).map(voice => (
@@ -518,7 +518,7 @@ export function CastPanel({
           title={value ? "Hear this voice -- free, runs on your computer"
                        : "Pick a voice first"}
           aria-label={`Sample ${label}`}
-          className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-1.5 py-1 text-[10px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-1.5 py-1 text-micro text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
         >
           {sampling === sampleKey
             ? <Loader2 size={10} className="animate-spin" />
@@ -535,7 +535,7 @@ export function CastPanel({
         aria-label={label}
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
+        className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-mini text-zinc-200"
       >
         {/* "None chosen" is a sanity check, not a placeholder: a writer
             who never set these can be sure they have not quietly armed a
@@ -570,7 +570,7 @@ export function CastPanel({
         <br /><br />
         You can also do it by hand in the editor if you prefer: wrap the
         spoken words in{" "}
-        <code className="rounded bg-zinc-800 px-1 text-[10px] text-violet-300">
+        <code className="rounded bg-zinc-800 px-1 text-micro text-violet-300">
           [voice:Elizabeth Bennet]"I could easily forgive his pride."[/voice]
         </code>{" "}
         and it means exactly the same thing. This window is just faster,
@@ -637,7 +637,7 @@ export function CastPanel({
             </p>
           ) : (
             <div className="space-y-4">
-              <p className="text-[12px] leading-relaxed text-zinc-300">
+              <p className="text-xs leading-relaxed text-zinc-300">
                 Give each character their own voice, and every dialogue line
                 you mark as theirs is read in that voice. The rest is read
                 as the narrator.
@@ -649,7 +649,7 @@ export function CastPanel({
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   onClick={() => { setTutorial(v => !v); setOpenHelp(null); }}
-                  className={"inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors "
+                  className={"inline-flex items-center gap-1 rounded border px-2 py-1 text-mini transition-colors "
                     + (tutorial
                       ? "border-violet-500 bg-violet-900/40 text-violet-100"
                       : "border-violet-700 text-violet-200 hover:border-violet-500")}
@@ -661,7 +661,7 @@ export function CastPanel({
                     key={item.key}
                     onClick={() => { setOpenHelp(prev =>
                       prev === item.key ? null : item.key); setTutorial(false); }}
-                    className={"inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors "
+                    className={"inline-flex items-center gap-1 rounded border px-2 py-1 text-mini transition-colors "
                       + (openHelp === item.key
                         ? "border-violet-700 bg-violet-950/40 text-violet-200"
                         : "border-zinc-700 text-zinc-300 hover:border-violet-700 hover:text-violet-200")}
@@ -674,7 +674,7 @@ export function CastPanel({
               </div>
 
               {openHelp && (
-                <p className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                <p className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-mini leading-relaxed text-zinc-400">
                   {HELP.find(h => h.key === openHelp)?.body}
                 </p>
               )}
@@ -687,13 +687,13 @@ export function CastPanel({
               )}
 
               {draftRoster?.note && (
-                <p className="flex items-start gap-1.5 rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2 text-[10px] leading-relaxed text-amber-200">
+                <p className="flex items-start gap-1.5 rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2 text-micro leading-relaxed text-amber-200">
                   <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                   {draftRoster.note}
                 </p>
               )}
               {printRoster?.configured && printRoster.note && (
-                <p className="flex items-start gap-1.5 rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2 text-[10px] leading-relaxed text-amber-200">
+                <p className="flex items-start gap-1.5 rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2 text-micro leading-relaxed text-amber-200">
                   <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                   {printRoster.note}
                 </p>
@@ -707,10 +707,10 @@ export function CastPanel({
                 >
                   {voicesOpen ? <ChevronDown size={12} className="text-zinc-500" />
                               : <ChevronRight size={12} className="text-zinc-500" />}
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <span className="text-mini font-semibold uppercase tracking-wider text-zinc-500">
                     Voices
                   </span>
-                  <span className="text-[10px] text-zinc-600">
+                  <span className="text-micro text-zinc-600">
                     {rows.length === 0
                       ? "start here -- add the characters who speak"
                       : `${rows.length} character${rows.length === 1 ? "" : "s"}`
@@ -720,7 +720,7 @@ export function CastPanel({
 
                 {voicesOpen && (
                   <div className="mt-2">
-                    <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-600">
+                    <div className="mb-1 flex items-center gap-2 text-micro uppercase tracking-wider text-zinc-600">
                       <span className="w-32 shrink-0">Character</span>
                       <span className="flex-1">Draft voice (free, local)</span>
                       {printReady && <span className="flex-1">Pro / Premium voice</span>}
@@ -729,7 +729,7 @@ export function CastPanel({
 
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="w-32 shrink-0 text-[11px] text-zinc-200">
+                        <span className="w-32 shrink-0 text-mini text-zinc-200">
                           Narrator
                         </span>
                         {draftVoice(narratorVoice, setNarratorVoice,
@@ -754,7 +754,7 @@ export function CastPanel({
                               placeholder="Elena"
                               onChange={e => setRows(prev => prev.map((r, i) =>
                                 i === index ? { ...r, display_name: e.target.value } : r))}
-                              className={"w-32 shrink-0 rounded border bg-zinc-900 px-2 py-1 text-[11px] text-zinc-100 "
+                              className={"w-32 shrink-0 rounded border bg-zinc-900 px-2 py-1 text-mini text-zinc-100 "
                                 + (clash ? "border-rose-600" : "border-zinc-700")}
                               style={name && !clash
                                 ? { borderLeft: `3px solid ${colorOf(name)}` }
@@ -785,7 +785,7 @@ export function CastPanel({
                                 case look complicated. */}
                             <button
                               onClick={() => setExpanded(e => (e === index ? null : index))}
-                              className="ml-1 flex items-center gap-1 text-[10px] text-zinc-500 hover:text-violet-300"
+                              className="ml-1 flex items-center gap-1 text-micro text-zinc-500 hover:text-violet-300"
                             >
                               {expanded === index
                                 ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
@@ -796,7 +796,7 @@ export function CastPanel({
 
                             {expanded === index && (
                               <div className="ml-4 mt-1 rounded border border-zinc-800 bg-zinc-950/40 px-2.5 py-2">
-                                <p className="text-[10px] leading-relaxed text-zinc-500">
+                                <p className="text-micro leading-relaxed text-zinc-500">
                                   Nicknames your book uses for{" "}
                                   {name || "this character"} -- Lexi, Lex, Alexa.
                                   They are read in this character's voice, and the
@@ -804,14 +804,14 @@ export function CastPanel({
                                   {name || "the full name"}.
                                 </p>
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                  <label className="flex items-center gap-1 text-[10px] text-zinc-500">
+                                  <label className="flex items-center gap-1 text-micro text-zinc-500">
                                     Colour
                                     <select
                                       aria-label={`Colour for character ${index + 1}`}
                                       value={row.color}
                                       onChange={e => setRows(prev => prev.map((r, i) =>
                                         i === index ? { ...r, color: e.target.value } : r))}
-                                      className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-200"
+                                      className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-micro text-zinc-200"
                                       style={{ borderLeft: `4px solid ${colorOf(name)}` }}
                                     >
                                       <option value="">
@@ -825,7 +825,7 @@ export function CastPanel({
                                   {row.aliases.map(alias => (
                                     <span
                                       key={alias}
-                                      className="inline-flex items-center gap-1 rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300"
+                                      className="inline-flex items-center gap-1 rounded border border-zinc-700 px-1.5 py-0.5 text-micro text-zinc-300"
                                     >
                                       {alias}
                                       <button
@@ -851,7 +851,7 @@ export function CastPanel({
                                           i === index
                                             ? { ...r, aliases: [...r.aliases, alias] } : r));
                                       }}
-                                      className="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-200"
+                                      className="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-micro text-zinc-200"
                                     >
                                       <option value="">+ a name found in your book</option>
                                       {detected.map(n => (
@@ -859,7 +859,7 @@ export function CastPanel({
                                       ))}
                                     </select>
                                   ) : (
-                                    <span className="text-[10px] text-zinc-600">
+                                    <span className="text-micro text-zinc-600">
                                       No unclaimed names left to add.
                                     </span>
                                   )}
@@ -873,7 +873,7 @@ export function CastPanel({
 
                     {detected.length > 0 && (
                       <div className="mt-2 rounded border border-zinc-800 bg-zinc-950/40 px-2.5 py-2">
-                        <p className="text-[10px] leading-relaxed text-zinc-500">
+                        <p className="text-micro leading-relaxed text-zinc-500">
                           <span className="text-zinc-300">
                             Names found in your book:
                           </span>{" "}
@@ -889,7 +889,7 @@ export function CastPanel({
                                 onClick={() => setRows(prev => [...prev, {
                                   display_name: name, aliases: [], color: "",
                                   voice_id: "", premium_voice_id: "" }])}
-                                className="px-2 py-0.5 text-[11px] text-violet-200 hover:bg-violet-950/50"
+                                className="px-2 py-0.5 text-mini text-violet-200 hover:bg-violet-950/50"
                               >
                                 + {name}
                               </button>
@@ -897,7 +897,7 @@ export function CastPanel({
                                 onClick={() => setIgnored(prev => [...prev, name])}
                                 aria-label={`Ignore ${name}`}
                                 title={`The narrator reads ${name}. Stops offering the name.`}
-                                className="border-l border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-200"
+                                className="border-l border-zinc-700 px-1.5 py-0.5 text-micro text-zinc-500 hover:text-zinc-200"
                               >
                                 ignore
                               </button>
@@ -908,7 +908,7 @@ export function CastPanel({
                     )}
 
                     {ignored.length > 0 && (
-                      <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-600">
+                      <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-micro text-zinc-600">
                         Narrator reads:
                         {ignored.map(name => (
                           <span key={name} className="inline-flex items-center gap-1">
@@ -930,20 +930,20 @@ export function CastPanel({
                         onClick={() => setRows(prev => [...prev, {
                           display_name: "", aliases: [], color: "",
                           voice_id: "", premium_voice_id: "" }])}
-                        className="inline-flex items-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-400 hover:border-violet-600 hover:text-violet-300"
+                        className="inline-flex items-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-mini text-zinc-400 hover:border-violet-600 hover:text-violet-300"
                       >
                         <Plus size={11} /> Add a character
                       </button>
                       <button
                         onClick={() => void handleSaveCast()}
                         disabled={!dirty || saving}
-                        className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                        className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-mini font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
                       >
                         {saving && <Loader2 size={11} className="animate-spin" />}
                         Save Cast
                       </button>
                       {dirty && (
-                        <span className="text-[10px] text-amber-300">
+                        <span className="text-micro text-amber-300">
                           Save the cast to use these voices below.
                         </span>
                       )}
@@ -955,20 +955,20 @@ export function CastPanel({
               {/* ── THE WALK ─────────────────────────────────────────── */}
               <section>
                 <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-zinc-800 pb-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <span className="text-mini font-semibold uppercase tracking-wider text-zinc-500">
                     Dialogue
                   </span>
                   <select
                     aria-label="Chapter"
                     value={chapterIndex}
                     onChange={e => setChapterIndex(Number(e.target.value))}
-                    className="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200"
+                    className="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-mini text-zinc-200"
                   >
                     {chapters.map((c, i) => (
                       <option key={i} value={i}>{c.title}</option>
                     ))}
                   </select>
-                  <span className="text-[10px] text-zinc-600">
+                  <span className="text-micro text-zinc-600">
                     {stops.length === 0
                       ? "no dialogue found in this chapter"
                       : `line ${Math.min(stopIndex + 1, stops.length)} of ${stops.length}`}
@@ -985,7 +985,7 @@ export function CastPanel({
                       value={mode}
                       onChange={e => { setMode(e.target.value as PassMode);
                                        setPassNote(null); }}
-                      className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
+                      className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-mini text-zinc-200"
                     >
                       {MODES.map(m => (
                         <option key={m.value} value={m.value}>{m.label}</option>
@@ -997,14 +997,14 @@ export function CastPanel({
                       title={rows.length === 0
                         ? "Add a character first -- there is nobody to mark lines as."
                         : "Run this mode over the chapter"}
-                      className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1 text-mini font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
                     >
                       {passState === "running"
                         && <Loader2 size={11} className="animate-spin" />}
                       Start
                     </button>
                   </div>
-                  <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+                  <p className="mt-1 text-micro leading-relaxed text-zinc-500">
                     {activeMode.blurb}
                     {activeMode.usesAi && (
                       <span className="ml-1 text-zinc-400">
@@ -1018,7 +1018,7 @@ export function CastPanel({
                     )}
                   </p>
                   {passNote && (
-                    <p className="mt-1 text-[10px] leading-relaxed text-violet-300">
+                    <p className="mt-1 text-micro leading-relaxed text-violet-300">
                       {passNote}
                     </p>
                   )}
@@ -1040,7 +1040,7 @@ export function CastPanel({
                         // of the name -- anything reading this screen
                         // aloud should hear the character.
                         aria-label={name}
-                        className={"rounded border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 "
+                        className={"rounded border px-2.5 py-1 text-mini font-medium transition-colors disabled:opacity-40 "
                           + (active ? "" : "border-zinc-700 text-zinc-200 hover:border-zinc-500")}
                         style={active
                           ? { backgroundColor: color || "#52525B",
@@ -1063,7 +1063,7 @@ export function CastPanel({
                         key={name}
                         onClick={() => assign(name)}
                         disabled={!stop}
-                        className="rounded border border-zinc-800 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-zinc-600 disabled:opacity-40"
+                        className="rounded border border-zinc-800 px-2.5 py-1 text-mini text-zinc-400 hover:border-zinc-600 disabled:opacity-40"
                         style={{ borderColor: `${colorOf(name)}40` }}
                       >
                         {name}
@@ -1071,7 +1071,7 @@ export function CastPanel({
                     )) : (
                       <button
                         onClick={() => setShowOthers(true)}
-                        className="rounded border border-dashed border-zinc-700 px-2 py-1 text-[10px] text-zinc-500 hover:text-zinc-300"
+                        className="rounded border border-dashed border-zinc-700 px-2 py-1 text-micro text-zinc-500 hover:text-zinc-300"
                       >
                         + {others.length} more in this book
                       </button>
@@ -1080,7 +1080,7 @@ export function CastPanel({
                   {stop?.assigned && (
                     <button
                       onClick={() => assign(null)}
-                      className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-rose-600 hover:text-rose-300"
+                      className="rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-400 hover:border-rose-600 hover:text-rose-300"
                     >
                       Remove
                     </button>
@@ -1093,14 +1093,14 @@ export function CastPanel({
                   <button
                     onClick={() => setStopIndex(i => Math.max(0, i - 1))}
                     disabled={stopIndex === 0}
-                    className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+                    className="rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
                   >
                     &lt;- Back
                   </button>
                   <button
                     onClick={accept}
                     disabled={!stop}
-                    className="rounded bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    className="rounded bg-violet-600 px-3 py-1 text-mini font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
                   >
                     Accept
                   </button>
@@ -1109,7 +1109,7 @@ export function CastPanel({
                     disabled={!stop || hearing}
                     title="Hear this line exactly as it will be narrated -- free, on your computer"
                     aria-label="Hear this line"
-                    className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
                   >
                     {hearing
                       ? <Loader2 size={11} className="animate-spin" />
@@ -1119,12 +1119,12 @@ export function CastPanel({
                   <button
                     onClick={accept}
                     disabled={!stop}
-                    className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+                    className="rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
                   >
                     Skip
                   </button>
                   {stop?.guess && !stop.assigned && resolveName(stop.guess) && (
-                    <span className="text-[10px] text-zinc-500">
+                    <span className="text-micro text-zinc-500">
                       {stop.guessSource === "beat"
                         ? `only ${stop.guess} is named here`
                         : `your text says ${stop.guess}`}
@@ -1133,7 +1133,7 @@ export function CastPanel({
                       <button
                         onClick={() => assign(resolveName(stop.guess))}
                         aria-label={`Use ${resolveName(stop.guess)}`}
-                        className="rounded border border-emerald-700 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:border-emerald-500"
+                        className="rounded border border-emerald-700 px-1.5 py-0.5 text-micro text-emerald-300 hover:border-emerald-500"
                       >
                         {resolveName(stop.guess)}
                       </button>
@@ -1141,13 +1141,13 @@ export function CastPanel({
                   )}
                 </div>
 
-                <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-500">
+                <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-zinc-500">
                   <span>{remaining} line{remaining === 1 ? "" : "s"} left</span>
                   <span>{assignedCount} assigned</span>
                   {aiCount > 0 && (
                     <button
                       onClick={() => { setReviewOnly(v => !v); setStopIndex(0); }}
-                      className={"rounded border px-1.5 py-0.5 text-[10px] "
+                      className={"rounded border px-1.5 py-0.5 text-micro "
                         + (reviewOnly
                           ? "border-violet-500 text-violet-200"
                           : "border-zinc-700 text-zinc-400 hover:border-violet-600")}
@@ -1170,7 +1170,7 @@ export function CastPanel({
 
         <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800 px-5 py-3">
           {error && (
-            <p className="min-w-0 flex-1 truncate text-[11px] text-rose-300" title={error}>
+            <p className="min-w-0 flex-1 truncate text-mini text-rose-300" title={error}>
               {error}
             </p>
           )}

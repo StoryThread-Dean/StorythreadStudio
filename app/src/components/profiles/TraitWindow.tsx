@@ -93,7 +93,7 @@ export function TraitWindow({ trueIn, chapters, onChange, unavailable }: Props) 
     <div className="mt-2 rounded border border-border bg-bg-surface/40 p-2"
          data-testid="trait-window">
       <div className="flex flex-wrap items-center gap-2">
-        <CalendarClock size={12} className="shrink-0 text-blue-300" />
+        <CalendarClock size={12} className="shrink-0 text-accent" />
         <label className="flex cursor-pointer items-center gap-1.5 text-xs text-text-primary">
           <input
             type="checkbox"
@@ -113,14 +113,14 @@ export function TraitWindow({ trueIn, chapters, onChange, unavailable }: Props) 
 
       {!always && (
         <div className="mt-2" data-testid="trait-window-picker">
-          <p className="text-[11px] text-faint">
+          <p className="text-mini text-faint">
             This trait is only true in these chapters. Anywhere else it is left
             out of what the app sends AI -- so the version of this character
             that reaches a model matches the chapter you are writing.
           </p>
 
           {unavailable ? (
-            <p className="mt-1.5 text-[11px] text-faint"
+            <p className="mt-1.5 text-mini text-faint"
                data-testid="trait-window-unavailable">
               {unavailable}
             </p>
@@ -130,7 +130,7 @@ export function TraitWindow({ trueIn, chapters, onChange, unavailable }: Props) 
                   data-testid="trait-window-chapters">
                 {chapters.map((chapter, index) => (
                   <li key={chapter.anchor} className="flex items-center gap-1">
-                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-[11px] hover:bg-white/5">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-mini hover:bg-white/5">
                       <input
                         type="checkbox"
                         checked={ticked.has(chapter.anchor)}
@@ -159,12 +159,12 @@ export function TraitWindow({ trueIn, chapters, onChange, unavailable }: Props) 
                   reach -- but not one to discover later by noticing a
                   character has gone quiet. */}
               {summary ? (
-                <p className="mt-1 text-[11px] text-emerald-300"
+                <p className="mt-1 text-mini text-success"
                    data-testid="trait-window-summary">
                   True in {summary}. Left out everywhere else.
                 </p>
               ) : (
-                <p className="mt-1 text-[11px] text-amber-300"
+                <p className="mt-1 text-mini text-warn"
                    data-testid="trait-window-empty">
                   Nothing ticked, so this trait is not true anywhere and is not
                   sent to AI at all. Tick a chapter, or switch it back to true

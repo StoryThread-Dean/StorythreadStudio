@@ -9,6 +9,7 @@ A local-first Markdown writing app for fiction writers. The writer does the draf
 ## What it does
 
 - **Markdown editor** with focused, distraction-free writing in a serif typeface (Tauri + CodeMirror 6)
+- **The Outline** -- a second editor for planning the book, on the same typing surface you draft chapters in. It opens as a short worksheet -- title, genre, tone, word and chapter targets -- and everything past that is opt-in: a drawer of nineteen ready-made sections (Premise, Central Conflict, Crisis, Climax, act beats, world rules, a chapter plan) added one at a time, each with a prompt and an example to delete. A section you already have is greyed out. **Show me how** walks all twenty-one pages with The Lord of the Rings, Harry Potter and Dungeon Crawler Carl answering each one
 - **The Weave** -- your story world as a linked, time-aware model rather than a folder of static profiles. It is the centre of the app; see below
 - **Smart Advisor** runs Readability, Structure, and Context passes directly over your chapter. Findings appear as coloured inline highlights anchored to the exact passages the AI quoted; click any highlight for an explanation, a word-level diff against the suggested rewrite, and accept / ignore / re-cast controls (Rewrite, Expand, Shorten, Describe, Rephrase, Add Sensory Detail, Change Tone). Subcategory toggles let you scope a pass, for example Readability to Grammar and Clarity only
 - **Writing Companion** chat panel for open conversational help, plus **Draft** mode for writing scene prose from a premise you give it, and **Enhance** mode for reworking a passage you highlight
@@ -17,7 +18,7 @@ A local-first Markdown writing app for fiction writers. The writer does the draf
 - **Export** -- full manuscript, dated snapshots, optional inclusion of summaries, notes, and profiles, and the Weave itself as Markdown for a person, JSON for a program, or CSV for a spreadsheet
 - **Audiobook Converter** -- turn a finished manuscript into a real audiobook: per-chapter MP3s, a combined MP3, and an M4B with navigable chapter marks. Import from DOCX, EPUB, PDF, Markdown, TXT, or a Storythread project. Narrate the whole book **free and offline** with a local voice engine (54 voices, downloaded on demand), then optionally regenerate once with a paid premium voice when the book is final, with the exact cost quoted before anything is spent. Guided walkthroughs help place pauses, fix the words the narrator would mispronounce, and give individual characters their own voices
 - **Passage / Dialogue Check** -- hear any passage read aloud while you write. Free, offline, and often the fastest way to catch a repeated word or a sentence that only parses on the second read
-- **Light + dark themes**
+- **Light + dark themes** -- a charcoal workspace or a warm paper one, with your own line spacing, paragraph spacing and interface size
 
 ---
 

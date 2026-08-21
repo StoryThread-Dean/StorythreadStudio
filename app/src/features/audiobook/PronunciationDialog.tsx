@@ -76,12 +76,12 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
         <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-300">{label}</h3>
         <button
           onClick={() => setRules([...rules, { ...EMPTY_ROW }])}
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-emerald-600 hover:text-emerald-300"
+          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300"
         >
           <Plus size={11} /> Add
         </button>
       </div>
-      <p className="mb-2 text-[11px] text-zinc-600">{hint}</p>
+      <p className="mb-2 text-mini text-zinc-600">{hint}</p>
       {rules.length === 0 ? (
         <p className="rounded border border-dashed border-zinc-800 px-3 py-2 text-xs text-zinc-600">
           No rules yet.
@@ -107,7 +107,7 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
                 onChange={e => setRules(rules.map((r, n) => n === i ? { ...r, spoken_text: e.target.value } : r))}
                 className="w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500"
               />
-              <label className="flex shrink-0 items-center gap-1 text-[10px] text-zinc-500" title="Match uppercase and lowercase exactly">
+              <label className="flex shrink-0 items-center gap-1 text-micro text-zinc-500" title="Match uppercase and lowercase exactly">
                 <input
                   type="checkbox"
                   checked={rule.case_sensitive}
@@ -138,7 +138,7 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
             <X size={16} />
           </button>
         </div>
-        <p className="mb-4 text-[11px] text-zinc-500">
+        <p className="mb-4 text-mini text-zinc-500">
           Rules change only what the narrator SAYS -- your text on screen never
           changes. For a single spot, select the word in the editor and use the
           [say] toolbar button instead. Where both apply, [say] wins: the

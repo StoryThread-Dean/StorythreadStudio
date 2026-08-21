@@ -47,12 +47,15 @@ describe("emphasis", () => {
     render(<GuideBody lines={LINES} />);
     const term = screen.getByText("Factions");
     expect(term.className).toContain("font-semibold");
-    expect(term.className).toContain("violet");
+    // `weave` is violet: the Weave's identity colour, named for what it
+    // means now rather than for the shade it happens to be. Emphasis inside
+    // a Weave guide is tinted with it, which is what these three check.
+    expect(term.className).toContain("weave");
   });
 
   it("marks a phrase inside a sentence", () => {
     render(<GuideBody lines={[{ text: "the things *in* it" }]} />);
-    expect(screen.getByText("in").className).toContain("violet");
+    expect(screen.getByText("in").className).toContain("weave");
   });
 
   it("never shows the asterisks themselves", () => {
@@ -68,7 +71,7 @@ describe("emphasis", () => {
   it("handles several emphasised phrases in one line", () => {
     render(<GuideBody lines={[{ text: "a *Bloodline*, a *Guild*, a *Starship class*" }]} />);
     for (const phrase of ["Bloodline", "Guild", "Starship class"]) {
-      expect(screen.getByText(phrase).className).toContain("violet");
+      expect(screen.getByText(phrase).className).toContain("weave");
     }
   });
 });

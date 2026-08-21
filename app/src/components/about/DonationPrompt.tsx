@@ -40,10 +40,10 @@ export function DonationPrompt({
       // Bottom-right corner, above any normal status bars. Limited width
       // so it never crowds the writing surface; the entire card is
       // dismissable with the X button.
-      className="fixed bottom-4 right-4 z-40 w-80 rounded-lg border border-pink-700/60 bg-bg-panel shadow-xl"
+      className="fixed bottom-4 right-4 z-40 w-80 rounded-lg border border-weave-fill/60 bg-bg-panel shadow-e3"
     >
       <div className="flex items-start justify-between border-b border-border px-3 py-2">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-pink-300">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-weave">
           <Heart size={12} fill="currentColor" />
           A small ask
         </div>
@@ -59,10 +59,10 @@ export function DonationPrompt({
       <div className="px-3 py-3 text-xs text-text-primary">
         <p className="mb-2">
           You've launched Storythread Studio{" "}
-          <span className="font-semibold text-pink-300">{appOpenCount}</span> times.
+          <span className="font-semibold text-weave">{appOpenCount}</span> times.
           If it's helping your writing, consider chipping in to keep development going.
         </p>
-        <p className="mb-3 text-[11px] text-faint">
+        <p className="mb-3 text-mini text-faint">
           Donations cover the Claude API costs of ongoing development. The app stays
           free for everyone either way -- this is purely optional.
         </p>
@@ -70,22 +70,22 @@ export function DonationPrompt({
         <div className="flex flex-col gap-1.5">
           <button
             onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
-            className="rounded border border-pink-700 bg-pink-900/30 px-2 py-1 text-[11px] font-medium text-pink-200 hover:bg-pink-900/50"
+            className="rounded border border-weave-fill bg-weave-soft/30 px-2 py-1 text-mini font-medium text-weave-strong hover:bg-weave-soft/50"
           >
             Support on GitHub Sponsors
           </button>
           <button
             onClick={() => openLink("https://ko-fi.com/storythreadstudio")}
-            className="rounded border border-cyan-700 bg-cyan-900/30 px-2 py-1 text-[11px] font-medium text-cyan-200 hover:bg-cyan-900/50"
+            className="rounded border border-secondary-fill bg-secondary-soft/30 px-2 py-1 text-mini font-medium text-secondary-strong hover:bg-secondary-soft/50"
           >
             Tip on Ko-fi
           </button>
         </div>
 
-        <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-[11px]">
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-mini">
           <button
             onClick={() => { onMarkDonated(); onDismiss(); }}
-            className="text-pink-300 underline hover:text-pink-200"
+            className="text-weave underline hover:text-weave-strong"
             title="If you've already donated, this stops these reminders"
           >
             Already donated

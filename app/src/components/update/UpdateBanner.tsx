@@ -28,23 +28,23 @@ export function UpdateBanner({ update, onViewDetails }: UpdateBannerProps) {
   if (dismissed) return null;
 
   return (
-    <div className="flex w-full items-center gap-2 border-b border-indigo-700/40 bg-indigo-950/40 px-4 py-1.5 text-xs text-indigo-200">
-      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+    <div className="flex w-full items-center gap-2 border-b border-accent-fill/40 bg-accent-soft/40 px-4 py-1.5 text-xs text-accent-strong">
+      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent-muted" />
       <span>
         <span className="font-semibold">Storythread Studio v{update.version}</span> is available.
-        <span className="ml-1 text-indigo-300/80">
+        <span className="ml-1 text-accent/80">
           You're on v{update.currentVersion}.
         </span>
       </span>
       <button
         onClick={onViewDetails}
-        className="ml-2 rounded border border-indigo-600 bg-indigo-700/40 px-2 py-0.5 text-[11px] text-indigo-100 transition-colors hover:bg-indigo-700/60"
+        className="ml-2 rounded border border-accent-fill bg-accent-fill/40 px-2 py-0.5 text-mini text-accent-strong transition-colors hover:bg-accent-fill/60"
       >
         View details
       </button>
       <button
         onClick={() => setDismissed(true)}
-        className="ml-auto rounded px-2 py-0.5 text-[11px] text-indigo-300/70 hover:text-indigo-200"
+        className="ml-auto rounded px-2 py-0.5 text-mini text-accent/70 hover:text-accent-strong"
         title="Hide for this session"
       >
         Later

@@ -199,7 +199,7 @@ export function BindDot({
         role="dialog"
         aria-label={`What is ${dot.name}?`}
         data-testid="bind-dot"
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <h2 className="flex-1 text-xs font-semibold text-text-primary">
@@ -215,7 +215,7 @@ export function BindDot({
           // Said in terms of what MOVED, never what was removed.
           <div className="px-3 py-3">
             <p className="flex items-start gap-1.5 text-xs text-text-primary">
-              <Check size={13} className="mt-0.5 shrink-0 text-emerald-400" />
+              <Check size={13} className="mt-0.5 shrink-0 text-success-muted" />
               <span>
                 &ldquo;{dot.name}&rdquo; now means{" "}
                 <span className="font-semibold">{done.label}</span>. Every
@@ -223,25 +223,25 @@ export function BindDot({
                 notes -- finds them from now on.
               </span>
             </p>
-            <p className="mt-2 text-[11px] text-text-muted">
+            <p className="mt-2 text-mini text-text-muted">
               {done.label} answers to:{" "}
               <span className="text-text-primary">{done.words.join(", ")}</span>
             </p>
-            <p className="mt-2 text-[11px] text-faint">
+            <p className="mt-2 text-mini text-faint">
               The bare dot has gone because it was only standing in for the
               word, and the word is theirs now. Nothing in{" "}
               {done.label}&rsquo;s own entry was changed.
             </p>
             <button
               onClick={onClose}
-              className="mt-3 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500"
+              className="mt-3 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill"
             >
               Done
             </button>
           </div>
         ) : (
           <>
-            <p className="px-3 pt-2 text-[11px] text-text-muted">
+            <p className="px-3 pt-2 text-mini text-text-muted">
               Weaving found this word in your writing and made a placeholder
               for it. If it means something you already have an entry for, say
               which -- the word becomes one of its names, and nothing in that
@@ -250,20 +250,20 @@ export function BindDot({
 
             {promoting ? (
               <div className="px-3 py-3">
-                <p className="text-[11px] text-text-muted">
+                <p className="text-mini text-text-muted">
                   What kind of thing is it, and what is it really called? The
                   prose says &ldquo;{dot.name}&rdquo;; the entry can have a
                   fuller name and still answer to that.
                 </p>
 
-                <label className="mt-2 block text-[11px] text-text-muted">
+                <label className="mt-2 block text-mini text-text-muted">
                   What kind?
                 </label>
                 <select
                   value={kind}
                   onChange={e => setKind(e.target.value)}
                   aria-label="What kind"
-                  className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 >
                   <option value="">Choose...</option>
                   {kindGroups.map(group => (
@@ -275,22 +275,22 @@ export function BindDot({
                   ))}
                 </select>
 
-                <label className="mt-2 block text-[11px] text-text-muted">
+                <label className="mt-2 block text-mini text-text-muted">
                   Called what?
                 </label>
                 <input
                   value={fullName}
                   onChange={e => setFullName(e.target.value)}
                   aria-label="Called what"
-                  className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 />
-                <p className="mt-1 text-[10px] text-faint">
+                <p className="mt-1 text-micro text-faint">
                   &ldquo;The Foot&rdquo; in the manuscript, &ldquo;The Foot
                   Clan&rdquo; as the entry. Both find it afterwards.
                 </p>
 
                 {error && (
-                  <p role="alert" className="mt-2 text-[11px] text-rose-200">
+                  <p role="alert" className="mt-2 text-mini text-danger-strong">
                     {error}
                   </p>
                 )}
@@ -299,7 +299,7 @@ export function BindDot({
                   <button
                     onClick={() => void promote()}
                     disabled={!kind || !fullName.trim() || busy}
-                    className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                   >
                     {busy ? <Loader size={11} className="animate-spin" />
                           : <Check size={11} />}
@@ -341,7 +341,7 @@ export function BindDot({
                    that looked like a next step. The way forward was already
                    there -- it just read as a rejection rather than an answer,
                    so it says so now. */
-                <li className="px-3 py-3 text-[11px] text-text-muted">
+                <li className="px-3 py-3 text-mini text-text-muted">
                   <p className="mb-1 text-text-primary">
                     {candidates.some(n => !n.placeholder)
                       ? "No entry matches that."
@@ -353,7 +353,7 @@ export function BindDot({
                     record yet. Use{" "}
                     <button
                       onClick={() => { setPromoting(true); setChosen(null); }}
-                      className="text-violet-300 underline hover:text-violet-200"
+                      className="text-weave underline hover:text-weave-strong"
                     >
                       It is its own thing
                     </button>{" "}
@@ -369,8 +369,8 @@ export function BindDot({
                     <button
                       onClick={() => setChosen(picked ? null : node)}
                       className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
-                        picked ? "bg-violet-500/15 text-text-primary"
-                               : "text-text-muted hover:bg-bg-surface"
+                        picked ? "bg-weave-fill/15 text-text-primary"
+                               : "text-text-muted hover:bg-bg-raised"
                       }`}
                     >
                       <Icon size={12}
@@ -381,7 +381,7 @@ export function BindDot({
                           <span className="ml-1 text-faint">({node.name})</span>
                         )}
                       </span>
-                      {picked && <Check size={12} className="shrink-0 text-emerald-400" />}
+                      {picked && <Check size={12} className="shrink-0 text-success-muted" />}
                     </button>
                   </li>
                 );
@@ -393,7 +393,7 @@ export function BindDot({
                 {/* The label question. Only worth asking once there is a
                     choice to make, which is why it appears here rather than
                     sitting greyed out from the start. */}
-                <label className="flex cursor-pointer items-start gap-2 text-[11px] text-text-muted">
+                <label className="flex cursor-pointer items-start gap-2 text-mini text-text-muted">
                   <input
                     type="checkbox"
                     checked={asLabel}
@@ -414,7 +414,7 @@ export function BindDot({
 
             {error && (
               <p role="alert"
-                 className="mx-3 mb-2 flex items-start gap-1.5 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200">
+                 className="mx-3 mb-2 flex items-start gap-1.5 rounded border border-danger-fill bg-danger-soft/40 px-2 py-1.5 text-mini text-danger-strong">
                 <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                 {error}
               </p>
@@ -424,7 +424,7 @@ export function BindDot({
               <button
                 onClick={() => void bind()}
                 disabled={!chosen || busy}
-                className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
               >
                 {busy ? <Loader size={11} className="animate-spin" />
                       : <Check size={11} />}
@@ -447,7 +447,7 @@ export function BindDot({
               {onWrong && (
                 <button
                   onClick={onWrong}
-                  className="ml-auto text-[11px] text-faint hover:text-rose-300"
+                  className="ml-auto text-mini text-faint hover:text-danger"
                 >
                   It is nothing -- remove it
                 </button>

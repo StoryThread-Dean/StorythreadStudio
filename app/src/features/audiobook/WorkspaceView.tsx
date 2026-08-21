@@ -507,7 +507,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             setWalkthroughStart(textareaRef.current?.selectionStart ?? 0);
           }}
           title="Walk the manuscript from the cursor: pauses at dialogue hand-offs, beats between short sentences, marker repairs. Apply or skip each stop."
-          className="inline-flex items-center gap-1 rounded border border-blue-800 bg-blue-950/50 px-2 py-1 text-[11px] text-blue-200 hover:border-blue-500 hover:text-blue-100"
+          className="inline-flex items-center gap-1 rounded border border-blue-800 bg-blue-950/50 px-2 py-1 text-mini text-blue-200 hover:border-blue-500 hover:text-blue-100"
         >
           <Wand2 size={11} /> Formatting Walkthrough
         </button>
@@ -517,7 +517,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             key={action.snippet}
             onClick={() => insertAtCursor(action.snippet, action.inline)}
             title={action.title}
-            className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+            className="rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
           >
             {action.label}
           </button>
@@ -532,14 +532,14 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <button
           onClick={() => wrapSelection("[pace:-2]", "[/pace]")}
           title="Slow the selected passage two steps below your base pace -- let a heavy moment breathe"
-          className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
           Slow
         </button>
         <button
           onClick={() => wrapSelection("[pace:+2]", "[/pace]")}
           title="Quicken the selected passage two steps above your base pace -- carry an action beat"
-          className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
           Fast
         </button>
@@ -547,14 +547,14 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <button
           onClick={handleSay}
           title="One-spot pronunciation: select a word, then type how it should be spoken"
-          className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
           [say]
         </button>
         <button
           onClick={handleExclude}
           title="Keep the selected text in the file but never narrate it"
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
         >
           <EyeOff size={11} /> Exclude
         </button>
@@ -562,14 +562,14 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <button
           onClick={handleRemoveMarkers}
           title="Remove audio markers from the selection (or the paragraph under the cursor). Your words stay."
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:border-rose-600 hover:text-rose-300"
+          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-rose-600 hover:text-rose-300"
         >
           <Scissors size={11} /> Remove
         </button>
         <button
           onClick={() => setShowMarkerHelp(v => !v)}
           title="What do these buttons do? Includes audio examples."
-          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-zinc-500 hover:text-blue-300"
+          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-mini text-zinc-500 hover:text-blue-300"
         >
           <HelpCircle size={11} /> {showMarkerHelp ? "Hide help" : "What's this?"}
         </button>
@@ -615,7 +615,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             in the middle of a long chapter list). */}
         <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-300">
+          <h3 className="mb-2 flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-blue-300">
             <BookMarked size={12} /> Chapters ({chapters.length})
           </h3>
           <ul className="space-y-0.5">
@@ -649,7 +649,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             title={dirty
               ? "Save your narration changes first, then add chapters."
               : "Pull in chapters the source book gained since this audiobook was made"}
-            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-400 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-mini text-zinc-400 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
           >
             <Plus size={11} /> Add chapters
           </button>
@@ -658,21 +658,21 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             <button
               onClick={() => setSettingsOpen(true)}
               title="Narration engine, API keys, and this book's pacing"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-blue-600 hover:text-blue-300"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-mini text-zinc-300 transition-colors hover:border-blue-600 hover:text-blue-300"
             >
               <SettingsIcon size={12} /> Audiobook Settings
             </button>
             <button
               onClick={openCast}
               title="Give characters their own voices -- free on your local narrator"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-violet-600 hover:text-violet-300"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-mini text-zinc-300 transition-colors hover:border-violet-600 hover:text-violet-300"
             >
               <Users size={12} /> Cast{castNames.length > 0 && ` (${castNames.length})`}
             </button>
             <button
               onClick={() => setStorageOpen(true)}
               title="How much space this audiobook is using, and what you can safely delete"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-mini text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300"
             >
               <HardDrive size={12} /> Storage
             </button>
@@ -710,7 +710,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
           {warnings.length > 0 && (
             <div className="shrink-0 border-b border-zinc-800 bg-blue-950/40 px-4 py-2">
               {warnings.map((warning, i) => (
-                <p key={i} className="text-[11px] text-blue-300">{warning}</p>
+                <p key={i} className="text-mini text-blue-300">{warning}</p>
               ))}
             </div>
           )}
@@ -844,7 +844,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
                       />
                       <span>
                         {chapter.title}
-                        <span className="ml-1 text-[10px] text-zinc-500">
+                        <span className="ml-1 text-micro text-zinc-500">
                           ({(chapter.characters / 1000).toFixed(1)}k characters)
                         </span>
                       </span>
@@ -854,7 +854,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               </ul>
             )}
             {addChaptersState.error && (
-              <p className="mb-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-[10px] text-rose-300">
+              <p className="mb-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-micro text-rose-300">
                 {addChaptersState.error}
               </p>
             )}

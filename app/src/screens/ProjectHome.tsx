@@ -396,20 +396,53 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
   }
 
 
+  // The book to offer on the hero: the most recently opened one that is
+  // still where it was. `exists` is false when the folder has been moved or
+  // deleted, and offering a button that cannot work is worse than offering
+  // none. Recents arrive newest-first from the backend.
+  const mostRecent = recentProjects.find(rp => rp.exists);
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen flex-col bg-bg-primary text-text-primary">
 
-      {/* Title bar -- a full-width logo banner with the tagline beneath.
-          Wordmark renders the dashed-thin ivory strip carrying the official
-          logo art. The tagline sits below it on the regular bg-bg-panel
-          background so the banner reads as the focal point and the tagline
-          as supporting copy. */}
-      <div className="shrink-0 border-b border-border bg-bg-panel">
-        <Wordmark />
-        <p className="py-2 text-center text-xs text-text-muted">
-          Your local writing workspace
-        </p>
+      {/* ── The hero ─────────────────────────────────────────────────────
+          The dashboard used to be a logo strip, a tagline, and two columns of
+          boxes -- reported as generic and plain, which it was: nothing on it
+          said what to do next, so a returning writer had to find their book
+          in a list before they could start.
+
+          So the band leads with the thing they came for. It is built ONLY
+          from what this screen already fetched -- the recents list -- and it
+          hides itself entirely when there is nothing to continue, so a first
+          run still opens on the story-type picker rather than on an empty
+          promise. */}
+      <div className="shrink-0 border-b border-border bg-bg-panel shadow-e1">
+        <Wordmark compact maxImageWidth={420} />
+
+        <div className="flex flex-wrap items-center gap-4 px-8 pb-2.5 pt-1">
+          <div className="min-w-0">
+            <p className="text-xs text-text-muted">Your local writing workspace</p>
+          </div>
+
+          {mostRecent && (
+            <button
+              type="button"
+              onClick={() => void handleOpenRecent(mostRecent)}
+              data-testid="hero-continue"
+              className="ml-auto flex min-w-0 items-center gap-3 rounded-lg border border-border bg-bg-surface px-4 py-2 text-left transition-colors hover:border-accent hover:bg-bg-raised"
+            >
+              <BookOpen size={18} className="shrink-0 text-accent" />
+              <span className="min-w-0">
+                <span className="block text-micro uppercase tracking-label text-text-muted">
+                  Continue where you left off
+                </span>
+                <span className="block truncate text-sm font-semibold text-text-primary">
+                  {mostRecent.title}
+                </span>
+              </span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Two-column body. min-h-0 + overflow on inner scrolls keeps the two
@@ -422,7 +455,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
           {/* Main mode: tile picker + open button */}
           {mode === "main" && (
             <>
-              <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-indigo-300">
+              <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-accent">
                 New Project
               </h2>
               <p className="mb-5 text-xs text-text-muted">
@@ -440,9 +473,9 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                       onClick={() => handlePickStoryType(opt.value)}
                       disabled={loading}
                       title={opt.hint}
-                      className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-accent-fill hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <Icon size={22} className="text-indigo-400" />
+                      <Icon size={22} className="text-accent-muted" />
                       <p className="mt-1 text-sm font-semibold text-text-primary">
                         {STORY_TYPE_LABELS[opt.value]}
                       </p>
@@ -462,7 +495,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               <button
                 onClick={handleOpen}
                 disabled={loading}
-                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-indigo-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-accent-fill hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                 title="Open an existing project or series folder"
               >
                 <p className="text-sm font-semibold text-text-primary">Open Project</p>
@@ -484,10 +517,10 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               <button
                 onClick={onOpenAudiobooks}
                 disabled={loading}
-                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-emerald-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                className="self-start rounded-lg border border-border bg-bg-panel px-5 py-3 text-left transition-colors hover:border-success-fill hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                 title="Convert a manuscript into MP3 and M4B audiobooks"
               >
-                <p className="text-sm font-semibold text-emerald-400">Audiobook Converter</p>
+                <p className="text-sm font-semibold text-success-muted">Audiobook Converter</p>
                 <p className="mt-0.5 text-xs text-text-muted">
                   Convert manuscripts into MP3 and M4B audiobooks.
                 </p>
@@ -500,7 +533,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
             <>
               <button
                 onClick={backToMain}
-                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-indigo-300"
+                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-accent"
               >
                 <ArrowLeft size={12} /> Back
               </button>
@@ -515,13 +548,13 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               </p>
 
               <label className="mb-1 block text-xs font-medium text-text-muted">
-                Title <span className="text-indigo-400">*</span>
+                Title <span className="text-accent-muted">*</span>
               </label>
               <input
                 type="text" value={title} onChange={e => setTitle(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !isSeries) handleCreate(); }}
                 placeholder="e.g. The Ember Chronicles" autoFocus
-                className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-accent-fill focus:ring-1 focus:ring-accent-fill"
               />
 
               <label className="mb-1 block text-xs font-medium text-text-muted">
@@ -530,7 +563,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               <input
                 type="text" value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="A short description of your story"
-                className="mb-4 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="mb-4 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-accent-fill focus:ring-1 focus:ring-accent-fill"
               />
 
               {/* Series toggle + inline expansion. When checked the series
@@ -539,7 +572,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                 <input
                   type="checkbox" checked={isSeries}
                   onChange={e => setIsSeries(e.target.checked)}
-                  className="accent-teal-500"
+                  className="accent-secondary-fill"
                 />
                 Make this a series
               </label>
@@ -549,14 +582,14 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               </p>
 
               {isSeries && (
-                <div className="ml-6 mb-4 rounded border border-teal-800/40 bg-bg-panel p-4">
+                <div className="ml-6 mb-4 rounded border border-secondary-fill/40 bg-bg-panel p-4">
                   <label className="mb-1 block text-xs font-medium text-text-muted">
-                    Series Name <span className="text-teal-400">*</span>
+                    Series Name <span className="text-secondary-muted">*</span>
                   </label>
                   <input
                     type="text" value={seriesName} onChange={e => setSeriesName(e.target.value)}
                     placeholder="e.g. The Ember Throne Saga"
-                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-secondary-fill focus:ring-1 focus:ring-secondary-fill"
                   />
 
                   <label className="mb-1 block text-xs font-medium text-text-muted">
@@ -565,7 +598,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                   <input
                     type="text" value={seriesGenre} onChange={e => setSeriesGenre(e.target.value)}
                     placeholder="e.g. epic fantasy"
-                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-secondary-fill focus:ring-1 focus:ring-secondary-fill"
                   />
 
                   <label className="mb-1 block text-xs font-medium text-text-muted">
@@ -574,7 +607,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                   <input
                     type="text" value={seriesTone} onChange={e => setSeriesTone(e.target.value)}
                     placeholder="e.g. dark, atmospheric"
-                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-secondary-fill focus:ring-1 focus:ring-secondary-fill"
                   />
 
                   <label className="mb-1 block text-xs font-medium text-text-muted">
@@ -583,7 +616,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                   <select
                     value={seriesContentMode}
                     onChange={e => setSeriesContentMode(e.target.value as "general" | "mature" | "explicit")}
-                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-secondary-fill focus:ring-1 focus:ring-secondary-fill"
                   >
                     <option value="general">General</option>
                     <option value="mature">Mature</option>
@@ -599,7 +632,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                 <button
                   onClick={handleCreate}
                   disabled={!title.trim() || (isSeries && !seriesName.trim()) || loading}
-                  className="flex-1 rounded bg-indigo-600 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex-1 rounded bg-accent-fill py-2 text-sm font-medium text-white transition-colors hover:bg-accent-fill disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loading ? "Creating..." : "Create"}
                 </button>
@@ -619,12 +652,12 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
             <>
               <button
                 onClick={backToMain}
-                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-indigo-300"
+                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-accent"
               >
                 <ArrowLeft size={12} /> Back
               </button>
 
-              <h2 className="mb-1 text-sm font-semibold text-teal-200">{browsedSeriesName}</h2>
+              <h2 className="mb-1 text-sm font-semibold text-secondary-strong">{browsedSeriesName}</h2>
               <p className="mb-5 text-xs text-text-muted">
                 {browsedSeriesPath}
               </p>
@@ -644,7 +677,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                       key={book.project_id || book.folder_name}
                       onClick={() => handleOpenBookFromBrowser(book)}
                       disabled={loading}
-                      className="rounded border border-border bg-bg-panel px-4 py-3 text-left transition-colors hover:border-teal-600 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded border border-border bg-bg-panel px-4 py-3 text-left transition-colors hover:border-secondary-fill hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <p className="text-sm font-medium text-text-primary">{book.title}</p>
                       <p className="mt-0.5 text-xs text-faint">{book.folder_name}</p>
@@ -656,7 +689,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               <button
                 onClick={handleStartAddBook}
                 disabled={loading}
-                className="self-start rounded border border-dashed border-teal-700/60 px-4 py-2 text-xs text-teal-300 transition-colors hover:border-teal-500 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
+                className="self-start rounded border border-dashed border-secondary-fill/60 px-4 py-2 text-xs text-secondary transition-colors hover:border-secondary-fill hover:text-secondary-strong disabled:cursor-not-allowed disabled:opacity-50"
               >
                 + Add a new book to this series
               </button>
@@ -670,12 +703,12 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
             <>
               <button
                 onClick={() => setMode("series_browser")}
-                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-indigo-300"
+                className="mb-4 inline-flex items-center gap-1 self-start text-xs text-text-muted hover:text-accent"
               >
                 <ArrowLeft size={12} /> Back to series
               </button>
 
-              <h2 className="mb-1 text-sm font-semibold text-teal-200">
+              <h2 className="mb-1 text-sm font-semibold text-secondary-strong">
                 New Book in {browsedSeriesName}
               </h2>
 
@@ -691,9 +724,9 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                           onClick={() => setSelectedStoryType(opt.value)}
                           disabled={loading}
                           title={opt.hint}
-                          className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-teal-500 hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex flex-col items-start gap-1 rounded-lg border border-border bg-bg-panel p-4 text-left transition-colors hover:border-secondary-fill hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <Icon size={22} className="text-teal-300" />
+                          <Icon size={22} className="text-secondary" />
                           <p className="mt-1 text-sm font-semibold text-text-primary">
                             {STORY_TYPE_LABELS[opt.value]}
                           </p>
@@ -706,7 +739,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
               ) : (
                 <>
                   <p className="mb-4 text-xs text-text-muted">
-                    Type: <span className="text-teal-200">{STORY_TYPE_LABELS[selectedStoryType]}</span>
+                    Type: <span className="text-secondary-strong">{STORY_TYPE_LABELS[selectedStoryType]}</span>
                     <button
                       onClick={() => setSelectedStoryType(null)}
                       className="ml-2 text-faint underline hover:text-text-muted"
@@ -716,13 +749,13 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                   </p>
 
                   <label className="mb-1 block text-xs font-medium text-text-muted">
-                    Title <span className="text-teal-400">*</span>
+                    Title <span className="text-secondary-muted">*</span>
                   </label>
                   <input
                     type="text" value={title} onChange={e => setTitle(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleCreateBookInBrowsedSeries()}
                     placeholder="e.g. The Ashen Crown" autoFocus
-                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-3 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-secondary-fill focus:ring-1 focus:ring-secondary-fill"
                   />
 
                   <label className="mb-1 block text-xs font-medium text-text-muted">
@@ -731,14 +764,14 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
                   <input
                     type="text" value={description} onChange={e => setDescription(e.target.value)}
                     placeholder="A short description of this book"
-                    className="mb-4 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="mb-4 w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none focus:border-secondary-fill focus:ring-1 focus:ring-secondary-fill"
                   />
 
                   <div className="flex gap-3">
                     <button
                       onClick={handleCreateBookInBrowsedSeries}
                       disabled={!title.trim() || loading}
-                      className="flex-1 rounded bg-teal-700 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex-1 rounded bg-secondary-fill py-2 text-sm font-medium text-white transition-colors hover:bg-secondary-fill disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {loading ? "Creating..." : "Create Book"}
                     </button>
@@ -758,11 +791,11 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
           {/* Error display lives at the bottom of the left column so it's
               visible regardless of which sub-mode is active. */}
           {error && (
-            <div className="mt-6 rounded border border-red-800 bg-red-950/40 p-3">
-              <p className="text-xs text-red-300">
+            <div className="mt-6 rounded border border-danger-fill bg-danger-soft/40 p-3">
+              <p className="text-xs text-danger">
                 <span className="font-semibold">Error: </span>{error}
               </p>
-              <p className="mt-1 text-xs text-red-400">
+              <p className="mt-1 text-xs text-danger-muted">
                 Make sure the Storythread Studio backend is running on port 8000.
               </p>
             </div>
@@ -772,7 +805,7 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
 
         {/* ── Right column: Recent Projects ──────────────────────────── */}
         <aside className="flex w-2/5 min-w-0 flex-col overflow-y-auto bg-bg-primary p-8">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-indigo-300">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-accent">
             Recent Projects
           </h2>
           <p className="mb-5 text-xs text-text-muted">
@@ -831,7 +864,7 @@ function RecentProjectRow({
       className={`group relative rounded border px-3 py-2 transition-colors ${
         isMissing
           ? "border-border bg-bg-primary opacity-60"
-          : "border-border bg-bg-panel hover:border-indigo-500 hover:bg-bg-surface"
+          : "border-border bg-bg-panel hover:border-accent-fill hover:bg-bg-raised"
       }`}
     >
       {/* Open button covers the whole row except the X. We use a wrapping
@@ -851,7 +884,7 @@ function RecentProjectRow({
           {rp.series_name && (
             <>
               <span className="mx-1 text-faint">.</span>
-              <span className="text-teal-400">Series: {rp.series_name}</span>
+              <span className="text-secondary-muted">Series: {rp.series_name}</span>
             </>
           )}
           {lastOpened && (
@@ -862,7 +895,7 @@ function RecentProjectRow({
           )}
         </p>
         {isMissing && (
-          <p className="mt-0.5 text-xs text-red-400">(not found)</p>
+          <p className="mt-0.5 text-xs text-danger-muted">(not found)</p>
         )}
       </button>
 
@@ -873,7 +906,7 @@ function RecentProjectRow({
         disabled={loading}
         title="Remove from recent list (does not delete files)"
         aria-label="Remove from recent list"
-        className="absolute right-1.5 top-1.5 rounded p-1 text-faint transition-colors hover:bg-red-950/40 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+        className="absolute right-1.5 top-1.5 rounded p-1 text-faint transition-colors hover:bg-danger-soft/40 hover:text-danger-muted disabled:cursor-not-allowed disabled:opacity-40"
       >
         <X size={12} />
       </button>

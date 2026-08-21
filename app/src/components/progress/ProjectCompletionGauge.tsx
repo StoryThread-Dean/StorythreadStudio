@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type {
+  OutlineSummary,
   ProgressSummary,
   ProgressDaily,
   TaskCreditEntry,
@@ -48,6 +49,38 @@ interface Props {
   onToggle:    () => void;
 }
 
+
+/**
+ * What the Outline row says on the right.
+ *
+ * A COUNT, not a yes/no. This used to read "tracked" or "no tracking data"
+ * off whether the file carried yaml frontmatter -- a machine block the writer
+ * never saw and had no way to deliberately create, so the row was reporting
+ * on something they could not act on. The worksheet is ten visible lines, and
+ * how many are filled in is both the score and the instruction.
+ */
+function outlineRight(outline: OutlineSummary): string {
+  if (!outline.present) return "-no entry-";
+  if (outline.fields_filled === 0) return "empty";
+  if (outline.fields_filled >= outline.fields_total) return "complete";
+  return `${outline.fields_filled} of ${outline.fields_total}`;
+}
+
+/** And the line underneath, which is where the next step goes. */
+function outlineDetail(outline: OutlineSummary): string {
+  if (!outline.present) {
+    return "No outline yet. The Outline is where the book gets decided.";
+  }
+  if (outline.fields_filled === 0) {
+    return "Fill in the header at the top. Title, Genre and Target Word "
+      + "Count do the most.";
+  }
+  if (outline.fields_filled >= outline.fields_total) {
+    return "Nothing left to fill in here.";
+  }
+  return `${outline.fields_total - outline.fields_filled} more `
+    + "header lines to fill in.";
+}
 
 export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props) {
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
@@ -95,7 +128,7 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full flex-col gap-1 rounded border border-border bg-bg-panel px-3 py-2 text-left transition-colors hover:border-indigo-500"
+        className="flex w-full flex-col gap-1 rounded border border-border bg-bg-panel px-3 py-2 text-left transition-colors hover:border-accent-fill"
         title={isSerial
           ? "Writing Progress for serial fiction is being designed"
           : "Click to expand the project completion breakdown"}
@@ -116,12 +149,12 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
               className="h-full w-full"
               style={{
                 backgroundImage:
-                  "repeating-linear-gradient(135deg, var(--color-bg-surface) 0 4px, var(--color-border) 4px 8px)",
+                  "repeating-linear-gradient(135deg, var(--st-bg-surface) 0 4px, var(--st-border) 4px 8px)",
               }}
             />
           ) : (
             <div
-              className="h-full rounded bg-indigo-500 transition-all"
+              className="h-full rounded bg-accent-fill transition-all"
               style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
             />
           )}
@@ -144,11 +177,11 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
           scroll for long breakdowns. */}
       {isOpen && (
         <div
-          className="absolute left-0 right-0 bottom-full z-20 mb-1 max-h-[80vh] overflow-y-auto rounded border border-border bg-bg-panel shadow-xl"
+          className="absolute left-0 right-0 bottom-full z-20 mb-1 max-h-[80vh] overflow-y-auto rounded border border-border bg-bg-panel shadow-e3"
         >
           <SlideOverHeader onClose={onToggle} />
           {error && (
-            <p className="px-3 py-2 text-xs text-rose-400">{error}</p>
+            <p className="px-3 py-2 text-xs text-danger-muted">{error}</p>
           )}
           {isSerial ? (
             <SerialPlaceholder />
@@ -174,7 +207,7 @@ function SlideOverHeader({ onClose }: { onClose: () => void }) {
       <button
         type="button"
         onClick={onClose}
-        className="rounded p-1 text-faint transition-colors hover:bg-bg-surface hover:text-text-muted"
+        className="rounded p-1 text-faint transition-colors hover:bg-bg-raised hover:text-text-muted"
         title="Close"
       >
         <X size={12} />
@@ -246,18 +279,8 @@ function SummaryBreakdown({ summary }: { summary: ProgressSummary | null }) {
       <SegmentRow
         label="Outline"
         weight={summary.outline.weight}
-        rightLabel={
-          summary.outline.has_frontmatter
-            ? "tracked"
-            : summary.outline.present
-            ? "no tracking data"
-            : "-no entry-"
-        }
-        detail={
-          summary.outline.has_frontmatter
-            ? "frontmatter parsed"
-            : "Add YAML frontmatter to outline.md for richer tracking"
-        }
+        rightLabel={outlineRight(summary.outline)}
+        detail={outlineDetail(summary.outline)}
       />
 
       {/* Profiles bucket */}
@@ -331,7 +354,7 @@ function ChapterRow({ chapter }: { chapter: ChapterProgress }) {
         <div className="mt-0.5 h-1 w-full overflow-hidden rounded bg-bg-surface">
           <div
             className={`h-full rounded transition-all ${
-              (chapter.percent ?? 0) >= 100 ? "bg-emerald-500" : "bg-indigo-500"
+              (chapter.percent ?? 0) >= 100 ? "bg-success-fill" : "bg-accent-fill"
             }`}
             style={{ width: `${Math.min(100, Math.max(0, chapter.percent ?? 0))}%` }}
           />
@@ -381,7 +404,7 @@ function DailyTracker({ daily }: { daily: ProgressDaily | null }) {
           Today ({daily.skill_level})
         </h4>
         {goalHit && (
-          <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">
+          <span className="rounded bg-success-fill/20 px-2 py-0.5 text-xs text-success">
             Goal hit
           </span>
         )}
@@ -460,12 +483,12 @@ function SparkCell({
     <div
       title={tooltip}
       className={`h-6 flex-1 rounded border ${
-        isToday ? "border-indigo-400" : "border-border"
+        isToday ? "border-accent-muted" : "border-border"
       } ${
         cell.hit
-          ? "bg-emerald-500/70"
+          ? "bg-success-fill/70"
           : isPartial
-          ? "bg-indigo-500/40"
+          ? "bg-accent-fill/40"
           : "bg-bg-surface"
       }`}
     />

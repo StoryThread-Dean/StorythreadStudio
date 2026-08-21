@@ -111,7 +111,7 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
 
   if (chapters.length === 0) {
     return (
-      <p className="text-[11px] text-faint">
+      <p className="text-mini text-faint">
         This project has no chapters yet, so there is no story to move through.
       </p>
     );
@@ -135,9 +135,9 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
                 data-testid="scrubber-act"
                 style={{ left: at(first - 1),
                          width: `calc(${at(last)} - ${at(first - 1)})` }}
-                className={`absolute top-0 min-w-0 truncate rounded-sm px-1 py-0.5 text-[10px] uppercase tracking-wide ${
+                className={`absolute top-0 min-w-0 truncate rounded-sm px-1 py-0.5 text-micro uppercase tracking-wide ${
                   band.id
-                    ? "bg-violet-500/15 text-violet-200"
+                    ? "bg-weave-fill/15 text-weave-strong"
                     : "bg-bg-surface text-faint"
                 }`}
                 title={band.title || "Not in an act"}
@@ -165,7 +165,7 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
             data-active={value === BEFORE_THE_BOOK ? "true" : "false"}
             style={{ left: at(BEFORE_THE_BOOK) }}
             className={`absolute top-1/2 h-2.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-sm transition-colors ${
-              value === BEFORE_THE_BOOK ? "bg-violet-400" : "bg-border"
+              value === BEFORE_THE_BOOK ? "bg-weave-muted" : "bg-border"
             }`}
           />
           {chapters.map((chapter, i) => (
@@ -176,9 +176,9 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
               style={{ left: at(i) }}
               className={`absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border transition-colors ${
                 i === value
-                  ? "scale-150 border-violet-300 bg-violet-400"
+                  ? "scale-150 border-weave bg-weave-muted"
                   : i < value
-                    ? "border-violet-700 bg-violet-800"
+                    ? "border-weave-fill bg-weave-fill"
                     : "border-border bg-bg-primary"
               }`}
             />
@@ -204,7 +204,7 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
           // again, which is the bug this arithmetic exists to fix. The -moz-
           // rules are for running the dev server in Firefox; the product is
           // WebView2, which takes the -webkit- ones.
-          className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-violet-300 [&::-moz-range-thumb]:bg-violet-500 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-violet-300 [&::-webkit-slider-thumb]:bg-violet-500"
+          className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-weave [&::-moz-range-thumb]:bg-weave-fill [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-weave [&::-webkit-slider-thumb]:bg-weave-fill"
         />
       </div>
 
@@ -249,9 +249,9 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
                 // a layout rule.
                 width: `calc((100% - ${THUMB}px) / ${chapters.length} * ${here ? 3 : 1} - 2px)`,
               }}
-              className={`absolute top-0 -translate-x-1/2 text-center text-[10px] leading-tight ${
+              className={`absolute top-0 -translate-x-1/2 text-center text-micro leading-tight ${
                 here
-                  ? "z-10 font-semibold text-violet-200"
+                  ? "z-10 font-semibold text-weave-strong"
                   : "truncate text-faint"
               }`}
               title={`${i + 1} - ${chapter.title}`}
@@ -267,7 +267,7 @@ export function Scrubber({ chapters, value, onChange }: ScrubberProps) {
           the reader meets it, before anything has happened -- and the track has
           nowhere to show that, so it is said in words. */}
       {value === BEFORE_THE_BOOK && (
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-violet-200">
+        <p className="mt-1 flex items-center gap-1.5 text-mini text-weave-strong">
           <History size={11} />
           Before the book begins: nothing has happened yet.
         </p>

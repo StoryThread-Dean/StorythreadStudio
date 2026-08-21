@@ -92,7 +92,7 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
 
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-          <Network size={15} className="text-violet-300" />
+          <Network size={15} className="text-weave" />
           The Weave
         </h2>
 
@@ -116,7 +116,7 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
             type="button"
             onClick={() => setView("map")}
             data-testid="weave-back-to-map"
-            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:text-text-primary"
           >
             <Network size={11} /> Back to the map
           </button>
@@ -126,7 +126,7 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
           <button
             type="button"
             onClick={() => setShowReport(v => !v)}
-            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-mini text-text-muted hover:text-text-primary"
           >
             <FileText size={11} />
             {showReport ? "Hide the conversion" : "What did the conversion do?"}
@@ -141,7 +141,7 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
       </header>
 
       {error && (
-        <p className="rounded border border-rose-800 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
+        <p className="rounded border border-danger-fill bg-danger-soft/40 px-3 py-2 text-xs text-danger-strong">
           <AlertTriangle size={12} className="mr-1.5 inline" />{error}
         </p>
       )}
@@ -164,12 +164,12 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
       ) : (
         <>
           {health?.index_dirty && (
-            <p className="flex flex-wrap items-center gap-2 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-1.5 text-[11px] text-amber-200/90">
-              <AlertTriangle size={11} className="text-amber-400/80" />
+            <p className="flex flex-wrap items-center gap-2 rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-1.5 text-mini text-warn-strong/90">
+              <AlertTriangle size={11} className="text-warn-muted/80" />
               Your files have changed since the Weave last read them, so it is
               re-reading as you look.
               <button type="button" onClick={() => void rebuild()} disabled={busy}
-                      className="inline-flex items-center gap-1 rounded border border-amber-700/60 px-1.5 py-0.5 hover:text-amber-100 disabled:opacity-50">
+                      className="inline-flex items-center gap-1 rounded border border-warn-fill/60 px-1.5 py-0.5 hover:text-warn-strong disabled:opacity-50">
                 <RefreshCw size={10} className={busy ? "animate-spin" : ""} /> Re-read now
               </button>
             </p>
@@ -199,15 +199,15 @@ function Broken({ health }: { health: WeaveHealth }) {
   // The types file is the writer's own data once they customise it, so it is
   // never repaired or replaced -- only reported, with the line to look at.
   return (
-    <div className="rounded border border-rose-800 bg-rose-950/40 px-4 py-4">
-      <p className="flex items-center gap-2 text-sm text-rose-100">
+    <div className="rounded border border-danger-fill bg-danger-soft/40 px-4 py-4">
+      <p className="flex items-center gap-2 text-sm text-danger-strong">
         <AlertTriangle size={14} /> The Weave's types file could not be read.
       </p>
-      <p className="mt-1 max-w-xl text-xs text-rose-200/80">
+      <p className="mt-1 max-w-xl text-xs text-danger-strong/80">
         It has been left exactly as it is -- nothing was changed or replaced.
         Fix the line named below and reopen.
       </p>
-      <pre className="mt-2 overflow-x-auto rounded bg-black/40 px-2 py-1 text-[11px] text-rose-200">
+      <pre className="mt-2 overflow-x-auto rounded bg-black/40 px-2 py-1 text-mini text-danger-strong">
         {health.registry_error}
       </pre>
     </div>

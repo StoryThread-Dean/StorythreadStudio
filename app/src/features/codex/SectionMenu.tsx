@@ -104,27 +104,27 @@ export function SectionMenu({
               {canRename ? (
                 <button
                   onClick={() => setMode("rename")}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-surface"
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-raised"
                 >
-                  <Pencil size={12} className="text-violet-300" />
+                  <Pencil size={12} className="text-weave" />
                   {rename === "label" ? "Change what it is called" : "Rename this section"}
                 </button>
               ) : (
                 /* Said rather than hidden. A missing button teaches nothing;
                    this teaches how the app is put together. */
-                <p className="rounded bg-bg-surface/60 px-2 py-1.5 text-[11px] text-text-muted">
+                <p className="rounded bg-bg-surface/60 px-2 py-1.5 text-mini text-text-muted">
                   {section.label} is a document the app opens by name, so its
                   name is fixed. Everything you write in it is yours.
                 </p>
               )}
               <button
                 onClick={() => setMode("confirm")}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-surface"
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-text-primary hover:bg-bg-raised"
               >
-                <Trash2 size={12} className="text-rose-400" />
+                <Trash2 size={12} className="text-danger-muted" />
                 {removal === "hide" ? "Hide this section" : "Remove it"}
               </button>
-              <p className="px-2 pt-1 text-[11px] text-faint">
+              <p className="px-2 pt-1 text-mini text-faint">
                 {section.count > 0
                   ? `${section.count} ${section.count === 1 ? "entry" : "entries"} in here.`
                   : "Nothing in here yet."}
@@ -134,7 +134,7 @@ export function SectionMenu({
 
           {mode === "rename" && (
             <div>
-              <label className="mb-1 block text-[11px] text-text-muted">
+              <label className="mb-1 block text-mini text-text-muted">
                 What should it be called?
               </label>
               <div className="flex items-start gap-2">
@@ -150,25 +150,25 @@ export function SectionMenu({
                   maxLength={CUSTOM_NAME_MAX}
                   aria-label="New name"
                   aria-invalid={Boolean(check.problem)}
-                  className="flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 />
                 <button
                   onClick={() => onRename(tidyCustomName(name))}
                   disabled={!check.ok || busy}
-                  className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                 >
                   {busy ? <Loader size={11} className="animate-spin" /> : <Check size={11} />}
                   Save
                 </button>
               </div>
               {check.problem && (
-                <p role="alert" className="mt-1.5 text-[11px] text-amber-200/90">
+                <p role="alert" className="mt-1.5 text-mini text-warn-strong/90">
                   {check.problem}
                 </p>
               )}
               {/* Said plainly, because a rename that quietly moved files
                   would be alarming to notice afterwards. */}
-              <p className="mt-1.5 text-[11px] text-faint">
+              <p className="mt-1.5 text-mini text-faint">
                 {rename === "label"
                   ? "Only the name changes. This is one of the sections the app "
                     + "is built around, so its folder and everything in it stay "
@@ -185,10 +185,10 @@ export function SectionMenu({
           {mode === "confirm" && (
             <div>
               <p className="flex items-start gap-1.5 text-xs text-text-primary">
-                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-400/80" />
+                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warn-muted/80" />
                 {removal === "hide" ? "Hide" : "Remove"} {section.label}?
               </p>
-              <p className="mt-1.5 text-[11px] text-faint">
+              <p className="mt-1.5 text-mini text-faint">
                 {removal === "hide"
                   ? section.count > 0
                     // Hiding turns off "show even when empty". A section with
@@ -215,7 +215,7 @@ export function SectionMenu({
                 <button
                   onClick={onRemove}
                   disabled={busy}
-                  className="rounded bg-rose-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-600 disabled:opacity-40"
+                  className="rounded bg-danger-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-danger-fill disabled:opacity-40"
                 >
                   {busy ? <Loader size={11} className="animate-spin" />
                         : removal === "hide" ? "Hide it" : "Remove"}
@@ -231,7 +231,7 @@ export function SectionMenu({
           )}
 
           {error && (
-            <p role="alert" className="mt-2.5 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200">
+            <p role="alert" className="mt-2.5 rounded border border-danger-fill bg-danger-soft/40 px-2 py-1.5 text-mini text-danger-strong">
               {error}
             </p>
           )}

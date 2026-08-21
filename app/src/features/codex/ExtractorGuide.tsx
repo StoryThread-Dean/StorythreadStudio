@@ -27,8 +27,8 @@ interface Page {
  *  for something the writer wrote or the app decided. */
 function Proposed({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded border border-violet-900/60 bg-violet-500/5 p-2">
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-violet-300">
+    <div className="rounded border border-weave-soft/60 bg-weave-fill/5 p-2">
+      <p className="mb-1 text-micro uppercase tracking-wide text-weave">
         Proposed
       </p>
       <p className="text-xs text-text-primary">{children}</p>
@@ -40,7 +40,7 @@ function Proposed({ children }: { children: React.ReactNode }) {
 function Yours({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded border border-border bg-surface p-2">
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">
+      <p className="mb-1 text-micro uppercase tracking-wide text-faint">
         What you have now
       </p>
       <p className="text-xs text-text-muted">{children}</p>
@@ -269,7 +269,7 @@ export function ExtractorGuide({ onClose }: ExtractorGuideProps) {
       >
         <header className="flex items-center gap-2 border-b border-border px-4 py-2">
           <h2 className="text-sm font-semibold text-text-primary">{page.title}</h2>
-          <span className="ml-auto text-[11px] text-faint">
+          <span className="ml-auto text-mini text-faint">
             {index + 1} of {PAGES.length}
           </span>
           <button type="button" onClick={onClose} aria-label="Close"
@@ -287,14 +287,14 @@ export function ExtractorGuide({ onClose }: ExtractorGuideProps) {
             type="button"
             onClick={() => setIndex(i => Math.max(0, i - 1))}
             disabled={index === 0}
-            className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-text-muted hover:text-text-primary disabled:opacity-30"
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-mini text-text-muted hover:text-text-primary disabled:opacity-30"
           >
             <ChevronLeft size={11} /> Back
           </button>
           {last ? (
             <button
               type="button" onClick={onClose}
-              className="ml-auto rounded bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-500"
+              className="ml-auto rounded bg-weave-fill px-3 py-1 text-mini font-semibold text-white hover:bg-weave-fill"
             >
               Done
             </button>
@@ -302,7 +302,7 @@ export function ExtractorGuide({ onClose }: ExtractorGuideProps) {
             <button
               type="button"
               onClick={() => setIndex(i => Math.min(PAGES.length - 1, i + 1))}
-              className="ml-auto inline-flex items-center gap-1 rounded bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-500"
+              className="ml-auto inline-flex items-center gap-1 rounded bg-weave-fill px-3 py-1 text-mini font-semibold text-white hover:bg-weave-fill"
             >
               Next <ChevronRight size={11} />
             </button>

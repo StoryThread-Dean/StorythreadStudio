@@ -21,7 +21,7 @@ function withEmphasis(text: string) {
   // group interleaves matches with the text between them.
   return text.split(/\*([^*]+)\*/g).map((part, i) =>
     i % 2 === 1
-      ? <span key={i} className="font-medium text-violet-300">{part}</span>
+      ? <span key={i} className="font-medium text-weave">{part}</span>
       : <span key={i}>{part}</span>,
   );
 }
@@ -32,14 +32,14 @@ export function GuideBody({ lines }: { lines: GuideLine[] }) {
       {lines.map((line, i) => (
         <p
           key={i}
-          className={`text-[11px] leading-relaxed ${
+          className={`text-mini leading-relaxed ${
             // A kind within the group sits under the lines above it, so the
             // list reads as a list rather than as more sentences.
             line.indent ? "pl-3 text-text-muted" : "text-text-muted"
           }`}
         >
           {line.term && (
-            <span className="font-semibold text-violet-300">{line.term} </span>
+            <span className="font-semibold text-weave">{line.term} </span>
           )}
           {withEmphasis(line.text)}
         </p>

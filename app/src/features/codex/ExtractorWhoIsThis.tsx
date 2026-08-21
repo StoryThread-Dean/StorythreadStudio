@@ -115,7 +115,7 @@ export function ExtractorWhoIsThis({
           <h2 className="text-sm font-semibold text-text-primary">
             Who is "{name}"?
           </h2>
-          <p className="mt-0.5 text-[11px] text-text-muted">
+          <p className="mt-0.5 text-mini text-text-muted">
             Your book describes this one without naming them. If they are
             somebody you already have, say so here rather than making a second
             entry for the same person.
@@ -130,12 +130,12 @@ export function ExtractorWhoIsThis({
               onChange={event => setQuery(event.target.value)}
               placeholder={`Search your world (showing ${type}s)`}
               aria-label="Search your world"
-              className="w-full bg-transparent text-[11px] text-text-primary outline-none"
+              className="w-full bg-transparent text-mini text-text-primary outline-none"
             />
           </label>
 
           {loading ? (
-            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-text-muted">
+            <p className="mt-2 flex items-center gap-1.5 text-mini text-text-muted">
               <Loader size={11} className="animate-spin" /> Reading your world...
             </p>
           ) : (
@@ -146,15 +146,15 @@ export function ExtractorWhoIsThis({
                   <button
                     type="button"
                     onClick={() => setChosen(thread.entity_id)}
-                    className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11px] ${
+                    className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-mini ${
                       thread.entity_id === chosen
-                        ? "bg-violet-500/15 text-text-primary"
+                        ? "bg-weave-fill/15 text-text-primary"
                         : "text-text-muted hover:bg-white/5"}`}
                   >
                     <span className="truncate">{nodeLabel(thread)}</span>
                     <span className="ml-auto shrink-0 text-faint">{thread.type}</span>
                     {thread.entity_id === suggestedId && (
-                      <span className="shrink-0 text-[9px] text-violet-300">
+                      <span className="shrink-0 text-2xs text-weave">
                         suggested
                       </span>
                     )}
@@ -164,7 +164,7 @@ export function ExtractorWhoIsThis({
             </ul>
           )}
 
-          {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
+          {error && <p role="alert" className="mt-2 text-mini text-danger">{error}</p>}
 
           {/* THE TWO ANSWERS, and the difference stated in the writer's terms
               rather than the app's. Neither is "merge": one is about a word,
@@ -172,27 +172,27 @@ export function ExtractorWhoIsThis({
           {target && (
             <div className="mt-3 space-y-2" data-testid="who-is-this-choices">
               <div className="rounded border border-border px-2.5 py-2">
-                <p className="text-[11px] font-semibold text-text-primary">
+                <p className="text-mini font-semibold text-text-primary">
                   "{name}" is just another way your book says{" "}
                   {nodeLabel(target)}.
                 </p>
-                <p className="mt-0.5 text-[11px] text-faint">
+                <p className="mt-0.5 text-mini text-faint">
                   One person, one entry. The phrase is added as another name
                   that finds {nodeLabel(target)}, and everything proposed here
                   goes onto their page.
                 </p>
                 <button type="button" onClick={() => void makeAlias()} disabled={busy}
                         data-testid="who-is-this-alias"
-                        className="mt-1.5 rounded bg-violet-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                        className="mt-1.5 rounded bg-weave-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
                   Use it as another name for {nodeLabel(target)}
                 </button>
               </div>
 
               <div className="rounded border border-border px-2.5 py-2">
-                <p className="text-[11px] font-semibold text-text-primary">
+                <p className="text-mini font-semibold text-text-primary">
                   They are two people, and one is pretending to be the other.
                 </p>
-                <p className="mt-0.5 text-[11px] text-faint">
+                <p className="mt-0.5 text-mini text-faint">
                   A barkeep who turns out to be a wizard in disguise is still a
                   barkeep in your book, with his own scenes and his own
                   connections. Keep both entries and record how they relate --
@@ -201,7 +201,7 @@ export function ExtractorWhoIsThis({
                 <button type="button"
                         onClick={() => onWantsConnection(target.entity_id)}
                         data-testid="who-is-this-connection"
-                        className="mt-1.5 rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary">
+                        className="mt-1.5 rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:text-text-primary">
                   Keep both and connect them
                 </button>
               </div>
@@ -210,11 +210,11 @@ export function ExtractorWhoIsThis({
         </div>
 
         <footer className="flex items-center gap-2 border-t border-border px-4 py-2">
-          <p className="text-[10px] text-faint">
+          <p className="text-micro text-faint">
             Neither of these fits? Close this and create a new entry instead.
           </p>
           <button type="button" onClick={onClose}
-                  className="ml-auto rounded px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary">
+                  className="ml-auto rounded px-2.5 py-1 text-mini text-text-muted hover:text-text-primary">
             Close
           </button>
         </footer>

@@ -102,7 +102,7 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
       {guiding && <ExtractorGuide onClose={() => setGuiding(false)} />}
       {/* ── The rail ─────────────────────────────────────────────────────── */}
       <nav className="w-56 shrink-0 overflow-y-auto" data-testid="extractor-rail">
-        <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">
+        <p className="mb-1 text-micro uppercase tracking-wide text-faint">
           Found in your book
         </p>
         {[...byKind.entries()].map(([kind, kindEntries]) => {
@@ -120,8 +120,8 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
                 className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-text-primary hover:bg-white/5"
               >
                 {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                <span className="capitalize">{kind}</span>
-                <span className="ml-auto text-[10px] text-faint">
+                <span className="font-semibold capitalize text-accent">{kind}</span>
+                <span className="ml-auto text-micro text-faint">
                   {done}/{kindEntries.length}
                 </span>
               </button>
@@ -132,19 +132,19 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
                       <button
                         type="button"
                         onClick={() => setSelectedId(entry.item_id)}
-                        className={`flex w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-[11px] ${
+                        className={`flex w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-mini ${
                           entry.item_id === selectedId
-                            ? "bg-violet-500/15 text-text-primary"
-                            : "text-text-muted hover:bg-white/5"}`}
+                            ? "bg-weave/20 font-medium text-text-primary ring-1 ring-inset ring-weave/40"
+                            : "text-text-muted hover:bg-bg-raised"}`}
                       >
                         <span className="truncate">{entry.name}</span>
                         {!entry.entity_id && !entry.created_entity_id && (
-                          <span className="ml-auto shrink-0 text-[9px] text-violet-300">
+                          <span className="ml-auto shrink-0 text-2xs text-weave">
                             new
                           </span>
                         )}
                         {entry.state === "done" && (
-                          <Check size={10} className="ml-auto shrink-0 text-emerald-400" />
+                          <Check size={10} className="ml-auto shrink-0 text-success-muted" />
                         )}
                       </button>
                     </li>
@@ -160,24 +160,24 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
       <div className="min-w-0 flex-1 overflow-y-auto">
         <header className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
           <h3 className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
-            <Sparkles size={13} className="text-violet-400" /> Profile Extractions
+            <Sparkles size={13} className="text-weave-muted" /> Profile Extractions
           </h3>
           <Explain of="extractor.review" />
           <button type="button" onClick={() => setGuiding(true)}
                   data-testid="extractor-show-me"
-                  className="rounded border border-border px-2 py-0.5 text-[10px] text-text-muted hover:text-text-primary">
+                  className="rounded border border-border px-2 py-0.5 text-micro text-text-muted hover:text-text-primary">
             Show me how this works
           </button>
           {/* WHEN, not whether it is stale. The manuscript may have moved under
               a long review and nothing here will flag it -- that is the direct
               consequence of there being one saved run, and it is the writer's
               call rather than an oversight. Saying the date lets them make it. */}
-          <span className="text-[10px] text-faint" data-testid="extractor-when">
+          <span className="text-micro text-faint" data-testid="extractor-when">
             Read on {whenMade(run.created_at)}
             {run.model_used ? ` by ${run.model_used}` : ""}
           </span>
           <button type="button" onClick={onStartOver}
-                  className="ml-auto rounded border border-border px-2 py-0.5 text-[11px] text-text-muted hover:text-text-primary">
+                  className="ml-auto rounded border border-border px-2 py-0.5 text-mini text-text-muted hover:text-text-primary">
             Run it again
           </button>
         </header>
@@ -190,12 +190,12 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
             nothing. So the warning sits above the list, not only in the empty
             state where it started. */}
         {run.incomplete && entries.length > 0 && (
-          <div className="mb-3 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+          <div className="mb-3 rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-2"
                data-testid="extractor-partial">
-            <p className="text-[11px] font-semibold text-amber-200">
+            <p className="text-mini font-semibold text-warn-strong">
               This did not cover your whole book.
             </p>
-            <ul className="mt-1 space-y-0.5 text-[11px] text-amber-200/80">
+            <ul className="mt-1 space-y-0.5 text-mini text-warn-strong/80">
               {(run.dropped ?? []).slice(0, 4).map((line, index) => (
                 <li key={index}>{line}</li>
               ))}
@@ -224,11 +224,11 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
             <p className="text-xs text-text-primary">Nothing came back that
               could be used.</p>
             {(run.dropped ?? []).length > 0 && (
-              <div className="rounded border border-amber-700/60 bg-amber-950/20 px-2.5 py-2">
-                <p className="text-[11px] font-semibold text-amber-200">
+              <div className="rounded border border-warn-fill/60 bg-warn-soft/20 px-2.5 py-2">
+                <p className="text-mini font-semibold text-warn-strong">
                   What happened:
                 </p>
-                <ul className="mt-1 space-y-0.5 text-[11px] text-amber-200/80">
+                <ul className="mt-1 space-y-0.5 text-mini text-warn-strong/80">
                   {(run.dropped ?? []).slice(0, 8).map((line, index) => (
                     <li key={index}>{line}</li>
                   ))}
@@ -236,7 +236,7 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
               </div>
             )}
             {run.estimated_tokens && run.context_tokens ? (
-              <p className="text-[11px] text-text-muted">
+              <p className="text-mini text-text-muted">
                 That run sent about {run.estimated_tokens.toLocaleString()}{" "}
                 tokens to {run.model_used}, which holds{" "}
                 {run.context_tokens.toLocaleString()}.
@@ -244,15 +244,15 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
             ) : null}
             {run.raw_excerpt && (
               <details className="rounded border border-border px-2.5 py-1.5">
-                <summary className="cursor-pointer text-[11px] text-text-muted">
+                <summary className="cursor-pointer text-mini text-text-muted">
                   What the model actually said
                 </summary>
-                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] text-faint">
+                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-micro text-faint">
                   {run.raw_excerpt}
                 </pre>
               </details>
             )}
-            <p className="text-[11px] text-text-muted">
+            <p className="text-mini text-text-muted">
               Try fewer chapters, or a model with a larger context window
               assigned to Long-context analysis in Settings.
             </p>
@@ -347,20 +347,20 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="text-sm font-semibold text-text-primary">{entry.name}</h4>
         {entry.unnamed && (
-          <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-faint"
+          <span className="rounded border border-border px-1.5 py-0.5 text-micro text-faint"
                 data-testid="extractor-unnamed">
             described, not named
           </span>
         )}
-        <span className="text-[11px] text-faint capitalize">{entry.type}</span>
+        <span className="text-mini text-faint capitalize">{entry.type}</span>
         <button
           type="button"
           onClick={() => void tick(entry.state === "done" ? "open" : "done")}
           data-testid="extractor-tick"
-          className={`ml-auto rounded border px-2 py-0.5 text-[11px] ${
+          className={`ml-auto rounded border px-2 py-0.5 text-mini ${
             entry.state === "done"
-              ? "border-emerald-700 text-emerald-300"
-              : "border-border text-text-muted hover:text-text-primary"}`}
+              ? "border-success bg-success/15 font-semibold text-success"
+              : "border-border bg-bg-surface text-text-muted hover:border-border-strong hover:text-text-primary"}`}
         >
           {entry.state === "done" ? "Done" : "Mark done"}
         </button>
@@ -369,7 +369,7 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       {/* A character the prose describes without naming. The description IS
           the name; the app never invents one. */}
       {entry.unnamed && (
-        <p className="text-[11px] text-text-muted">
+        <p className="text-mini text-text-muted">
           Your book describes this person without naming them, so the
           description is the name. Rename it whenever you decide who they are.
         </p>
@@ -378,7 +378,7 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       {/* A reveal: an OFFER, never a merge. Two labels becoming one person is
           the writer's call, and the app does not act on a hunch. */}
       {entry.same_as && (
-        <p className="rounded border border-border bg-surface px-2.5 py-1.5 text-[11px] text-text-muted"
+        <p className="rounded border border-border bg-surface px-2.5 py-1.5 text-mini text-text-muted"
            data-testid="extractor-same-as">
           The book seems to reveal this is someone you already have. If it is,
           add the description to that entry as another name it answers to,
@@ -388,8 +388,8 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       )}
 
       {!targetId && (
-        <div className="rounded border border-violet-800 bg-violet-500/5 px-3 py-2">
-          <p className="text-[11px] text-text-muted">
+        <div className="rounded border border-weave-fill bg-weave-fill/5 px-3 py-2">
+          <p className="text-mini text-text-muted">
             You do not have an entry for this yet. Either it is somebody new, or
             it is a name your book uses for somebody you already have.
           </p>
@@ -399,7 +399,7 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
                 character, not adding TO the character." */}
             <button type="button" onClick={() => void create()} disabled={creating}
                     data-testid="extractor-create"
-                    className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                    className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
               {creating ? <Loader size={11} className="animate-spin" />
                         : <Plus size={11} />}
               Create this {entry.type}
@@ -414,7 +414,7 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
             </button>
           </div>
           {entry.character_kind === "side" && (
-            <p className="mt-1 text-[10px] text-faint">
+            <p className="mt-1 text-micro text-faint">
               It arrives as a Side character. Most names a book mentions are;
               you can make it a Main from its own page whenever you want.
             </p>
@@ -509,13 +509,13 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       )}
 
       {connectError && (
-        <p role="alert" className="text-[11px] text-rose-300"
+        <p role="alert" className="text-mini text-danger"
            data-testid="extractor-connect-error">
           {connectError}
         </p>
       )}
 
-      {error && <p role="alert" className="text-[11px] text-rose-300">{error}</p>}
+      {error && <p role="alert" className="text-mini text-danger">{error}</p>}
 
       <ul className="space-y-2">
         {entry.parts.map(part => (
@@ -584,7 +584,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
 
   if (state !== "open") {
     return (
-      <li className="rounded border border-border px-2.5 py-1.5 text-[11px] text-faint"
+      <li className="rounded border border-border px-2.5 py-1.5 text-mini text-faint"
           data-testid="extractor-part-settled">
         {part.form === "trait" ? part.trait_name : part.heading}{" "}
         {state === "applied" ? "added to the entry" : "thrown away"}.
@@ -593,8 +593,8 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
   }
 
   return (
-    <li className="rounded border border-border" data-testid="extractor-part">
-      <p className="border-b border-border px-2.5 py-1 text-[10px] uppercase tracking-wide text-faint">
+    <li className="overflow-hidden rounded border border-border bg-bg-panel" data-testid="extractor-part">
+      <p className="border-b border-border px-2.5 py-1 text-micro uppercase tracking-label text-accent">
         {part.heading}
         {part.form === "trait" && (
           <span className="ml-1 normal-case tracking-normal text-text-muted">
@@ -606,7 +606,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
             and the content was moved here rather than thrown away. Saying so
             turns an odd-looking paragraph into an explained one. */}
         {part.adapted_from && (
-          <span className="ml-1 normal-case tracking-normal text-amber-300/80"
+          <span className="ml-1 normal-case tracking-normal text-warn/80"
                 data-testid="extractor-adapted">
             (proposed as "{part.adapted_from}", which this kind does not have)
           </span>
@@ -616,19 +616,19 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
       {/* THE TWO COLUMNS. Never the proposal alone. */}
       <div className="grid gap-px bg-border sm:grid-cols-2">
         <div className="bg-bg-primary px-2.5 py-2">
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-violet-300">
+          <p className="mb-1 text-micro uppercase tracking-wide text-weave">
             Proposed
           </p>
-          <p className="whitespace-pre-wrap text-[11px] text-text-primary">
+          <p className="whitespace-pre-wrap text-mini text-text-primary">
             {part.content}
           </p>
         </div>
         <div className="bg-bg-primary px-2.5 py-2">
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">
+          <p className="mb-1 text-micro uppercase tracking-wide text-faint">
             What you have now
           </p>
           {part.form === "prose" ? (
-            <p className="whitespace-pre-wrap text-[11px] text-text-muted">
+            <p className="whitespace-pre-wrap text-mini text-text-muted">
               {existingProse || <span className="text-faint">Nothing yet.</span>}
             </p>
           ) : existingTraits.length ? (
@@ -637,7 +637,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
                Emulating Resilience, Seeking Identity and Seeking Purpose are
                indistinguishable by name, and folding a proposal into one of
                them is a guess without the words underneath. */
-            <ul className="space-y-1 text-[11px]" data-testid="extractor-current-traits">
+            <ul className="space-y-1 text-mini" data-testid="extractor-current-traits">
               {existingTraits.map((trait, index) => (
                 <li key={index}>
                   <span className="text-text-primary">
@@ -650,25 +650,25 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
               ))}
             </ul>
           ) : (
-            <p className="text-[11px] text-faint">No traits here yet.</p>
+            <p className="text-mini text-faint">No traits here yet.</p>
           )}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-2.5 py-1.5">
         {!entityId ? (
-          <span className="text-[10px] text-faint">
+          <span className="text-micro text-faint">
             Make the entry above first.
           </span>
         ) : part.form === "prose" ? (
           <>
             <button type="button" disabled={busy} onClick={() => void act("merge")}
                     data-testid="extractor-merge"
-                    className="rounded bg-violet-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                    className="rounded bg-weave-fill px-2 py-0.5 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
               Add to what I wrote
             </button>
             <button type="button" disabled={busy} onClick={() => void act("overwrite")}
-                    className="rounded border border-border px-2 py-0.5 text-[11px] text-text-muted hover:text-text-primary disabled:opacity-40">
+                    className="rounded border border-border px-2 py-0.5 text-mini text-text-muted hover:text-text-primary disabled:opacity-40">
               Replace mine
             </button>
           </>
@@ -676,7 +676,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
           <>
             <button type="button" disabled={busy} onClick={() => void act("add")}
                     data-testid="extractor-add-trait"
-                    className="rounded bg-violet-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                    className="rounded bg-weave-fill px-2 py-0.5 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
               Add as its own trait
             </button>
             {existingTraits.length > 0 && (
@@ -690,7 +690,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
                   onChange={event => setMergeInto(event.target.value)}
                   aria-label="Fold into which of your traits"
                   data-testid="extractor-merge-into"
-                  className="rounded border border-border bg-bg-primary px-1 py-0.5 text-[11px] text-text-primary"
+                  className="rounded border border-border bg-bg-primary px-1 py-0.5 text-mini text-text-primary"
                 >
                   <option value="">fold into...</option>
                   {existingTraits.map((trait, index) => {
@@ -712,7 +712,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
                 </select>
                 <button type="button" disabled={busy || !mergeInto}
                         onClick={() => void act("merge_trait")}
-                        className="rounded border border-border px-2 py-0.5 text-[11px] text-text-muted hover:text-text-primary disabled:opacity-40">
+                        className="rounded border border-border px-2 py-0.5 text-mini text-text-muted hover:text-text-primary disabled:opacity-40">
                   Fold in
                 </button>
               </span>
@@ -721,13 +721,13 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
         )}
         <button type="button" disabled={busy} onClick={() => void act("dismiss")}
                 data-testid="extractor-dismiss"
-                className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-faint hover:text-text-muted disabled:opacity-40">
+                className="ml-auto inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted hover:border-danger hover:text-danger disabled:opacity-40">
           <X size={10} /> Not this
         </button>
       </div>
 
       {error && (
-        <p role="alert" className="border-t border-border px-2.5 py-1 text-[11px] text-rose-300">
+        <p role="alert" className="border-t border-border px-2.5 py-1 text-mini text-danger">
           {error}
         </p>
       )}

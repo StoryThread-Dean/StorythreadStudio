@@ -128,14 +128,14 @@ export function NodeWorkbench({
       // top-12 clears a row of py-1 buttons at top-2 with room to spare, and
       // the height allowance drops by the same amount so a long entry still
       // scrolls inside the map rather than off the bottom of it.
-      className="absolute right-2 top-12 flex max-h-[calc(100%-3.5rem)] w-80 flex-col rounded border border-border bg-bg-primary shadow-lg"
+      className="absolute right-2 top-12 flex max-h-[calc(100%-3.5rem)] w-80 flex-col rounded border border-border bg-bg-primary shadow-e2"
     >
       <header className="flex items-start gap-2 border-b border-border px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold text-text-primary">
             {nodeLabel(node)}
           </p>
-          <p className="text-[10px] capitalize text-faint">{node.type}</p>
+          <p className="text-micro capitalize text-faint">{node.type}</p>
         </div>
         <button type="button" onClick={attemptClose} aria-label="Close"
                 className="ml-auto rounded p-0.5 text-faint hover:text-text-primary">
@@ -149,18 +149,18 @@ export function NodeWorkbench({
             type="button"
             onClick={() => onOpenThread(node.entity_id)}
             data-testid="workbench-open"
-            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-mini text-text-muted hover:text-text-primary"
           >
             <ExternalLink size={11} /> Open the full entry
           </button>
         )}
 
         {error && (
-          <p role="alert" className="text-[11px] text-rose-300">{error}</p>
+          <p role="alert" className="text-mini text-danger">{error}</p>
         )}
 
         {loading ? (
-          <p className="flex items-center gap-1.5 text-[11px] text-text-muted">
+          <p className="flex items-center gap-1.5 text-mini text-text-muted">
             <Loader size={11} className="animate-spin" /> Reading it...
           </p>
         ) : thread ? (
@@ -192,7 +192,7 @@ export function NodeWorkbench({
                   onClick={() => void save()}
                   disabled={saving}
                   data-testid="workbench-save"
-                  className="mt-2 inline-flex items-center gap-1.5 rounded bg-violet-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded bg-weave-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                 >
                   {saving ? <Loader size={11} className="animate-spin" />
                           : <Save size={11} />}

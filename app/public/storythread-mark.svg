@@ -1,0 +1,9 @@
+<!-- The Storythread mark: a needle drawn through, thread still moving.
+     Kept in step with NeedleThread in src/components/icons/index.tsx by
+     app/src/components/icons/icons.test.tsx, which reads both. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="#90CAF9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M3 21 14.2 9.8" />
+  <circle cx="17" cy="7" r="3" />
+  <path d="M14.6 5.3C10 3 5.5 6.5 8 10.4" />
+</svg>

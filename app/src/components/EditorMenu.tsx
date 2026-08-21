@@ -61,7 +61,7 @@ function MenuItem({
       onClick={onClick}
       disabled={disabled}
       title={hint}
-      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-primary transition-colors hover:bg-bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-primary transition-colors hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span className="shrink-0 text-text-muted">{icon}</span>
       <span className="truncate">{label}</span>
@@ -72,7 +72,7 @@ function MenuItem({
 // A tiny uppercase group label, matching the sidebar's NavSection styling.
 function MenuGroupLabel({ children }: { children: string }) {
   return (
-    <p className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
+    <p className="px-3 pb-0.5 pt-2 text-micro font-semibold uppercase tracking-wider text-faint">
       {children}
     </p>
   );
@@ -131,8 +131,8 @@ export function EditorMenu({
         onClick={() => setOpen(o => !o)}
         className={`flex items-center gap-1 rounded border px-2 py-0.5 text-xs transition-colors ${
           open
-            ? "border-indigo-500 text-text-primary"
-            : "border-border text-text-muted hover:border-indigo-500 hover:text-text-primary"
+            ? "border-accent-fill text-text-primary"
+            : "border-border text-text-muted hover:border-accent-fill hover:text-text-primary"
         }`}
         title="Summaries, Reader Mode, and Export live here"
         aria-haspopup="menu"
@@ -146,7 +146,7 @@ export function EditorMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-30 mt-1 w-60 rounded border border-border bg-bg-panel py-1 shadow-xl"
+          className="absolute right-0 top-full z-30 mt-1 w-60 rounded border border-border bg-bg-panel py-1 shadow-e3"
         >
           {hasAiGroup && (
             <>

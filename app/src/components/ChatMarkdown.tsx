@@ -31,6 +31,7 @@
 import ReactMarkdown from "react-markdown";
 import { memo } from "react";
 import type React from "react";
+import { StitchRule } from "./icons";
 
 interface ChatMarkdownProps {
   content: string;
@@ -171,14 +172,16 @@ function handleChatCopy(e: React.ClipboardEvent<HTMLDivElement>): void {
 // and the entire tree gets rebuilt.
 const MARKDOWN_COMPONENTS = {
   p: ({ children }: { children?: React.ReactNode }) => <p className="mb-2 last:mb-0">{children}</p>,
-  strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-semibold text-indigo-300">{children}</strong>,
+  strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-semibold text-accent">{children}</strong>,
   em: ({ children }: { children?: React.ReactNode }) => <em className="italic text-text-primary">{children}</em>,
   ul: ({ children }: { children?: React.ReactNode }) => <ul className="mb-2 ml-4 list-disc last:mb-0">{children}</ul>,
   ol: ({ children }: { children?: React.ReactNode }) => <ol className="mb-2 ml-4 list-decimal last:mb-0">{children}</ol>,
   li: ({ children }: { children?: React.ReactNode }) => <li className="mb-0.5">{children}</li>,
-  hr: () => <hr className="my-2 border-border" />,
+  // A rule in prose, as a line of running stitch. Same single element,
+  // same currentColor, and it says which app you are in.
+  hr: () => <StitchRule className="my-3" />,
   blockquote: ({ children }: { children?: React.ReactNode }) => (
-    <blockquote className="my-1 border-l-2 border-indigo-600/50 pl-2 text-text-primary">
+    <blockquote className="my-1 border-l-2 border-accent-fill/50 pl-2 text-text-primary">
       {children}
     </blockquote>
   ),
@@ -186,7 +189,7 @@ const MARKDOWN_COMPONENTS = {
   h2: ({ children }: { children?: React.ReactNode }) => <p className="mb-1 font-semibold text-text-primary">{children}</p>,
   h3: ({ children }: { children?: React.ReactNode }) => <p className="mb-1 font-semibold text-text-primary">{children}</p>,
   code: ({ children }: { children?: React.ReactNode }) => (
-    <code className="rounded bg-bg-panel px-1 py-0.5 text-xs text-indigo-300">
+    <code className="rounded bg-bg-panel px-1 py-0.5 text-xs text-accent">
       {children}
     </code>
   ),

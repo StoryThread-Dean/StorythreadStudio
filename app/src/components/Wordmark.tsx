@@ -1,50 +1,79 @@
-// components/Wordmark.tsx -- Storythread Studio Dashboard Wordmark
-// =================================================================
-// Renders the official Storythread Studio logo as a wide banner across
-// the top of the ProjectHome dashboard.
+// components/Wordmark.tsx -- the writer's own logo, on either background
+// ========================================================================
+// app/public/storythreadstudio.png is CUSTOM ARTWORK: the script lettering,
+// the quill, and the thread looping through the "d" were drawn for this app.
+// It is not a placeholder and it is not the app's to replace.
 //
-// Asset: app/public/storythreadstudio.png
-//   Vite serves anything in app/public/ at the site root, so this loads as
-//   /storythreadstudio.png. Replace that file to swap the artwork; no code
-//   change needed.
+// (It WAS replaced, briefly, with a drawn lockup during the icon pass. That
+// was wrong -- recolouring a palette is not licence to redraw somebody's
+// logo -- and it is recorded here so the next person does not repeat it.)
 //
-// About the layout:
-//   The logo is a wide horizontal mark (cursive "Storythread" + Studio +
-//   quill glyph). To read as a banner rather than a boxed thumbnail it
-//   needs to stretch across the panel with minimal vertical padding -- the
-//   logo's natural aspect ratio carries the banner shape on its own.
+// THE PLATE IS GONE, AND IT TURNS OUT IT NEVER NEEDED TO BE THERE.
 //
-//   The artwork is dark indigo on near-white. To stay visible in dark mode
-//   (where the panel is dark navy) the banner sits on an ivory strip that
-//   spans the full width in both themes. In light mode the strip blends
-//   gracefully into the surrounding paper palette; in dark mode it stands
-//   out as a deliberate "frontispiece" band, the way a book cover detail
-//   sits on a printed dust jacket.
+// The file has a fully transparent background: the corners are (0,0,0,0) and
+// only about six per cent of it is opaque at all. The ink is navy rgb(7,15,30).
+// The ivory strip existed for exactly one reason -- navy ink is invisible on a
+// dark page -- and it solved that by putting a rectangle of daylight behind
+// the logo, which on a charcoal dashboard read as a sheet of paper taped to
+// the window.
+//
+// So instead: invert the INK, and only in dark mode.
+//
+//   filter: invert(1) flips RGB and leaves alpha alone. The transparent
+//   background stays transparent; the navy becomes a warm cream (248,240,225)
+//   that sits on the grey-blue panel like ink on a page rather than a pasted
+//   picture. Every tonal detail survives, including the grey shading on the
+//   feather -- which a flat tint or an alpha mask would have crushed to one
+//   solid colour.
+//
+//   Light mode gets no filter at all. The artwork was drawn for a pale ground
+//   and the warm paper theme is one.
+//
+// Driven off the theme rather than a prefers-color-scheme media query,
+// because the theme here is a stored choice and does not follow the OS.
+
+import { useTheme } from "../hooks/useTheme";
 
 interface WordmarkProps {
-  /** Max width the logo image is allowed to render at. The banner strip
-   *  itself is full-width; this just caps the image so it doesn't bloom
-   *  oversized on very wide windows. */
+  /** Caps how wide the artwork renders. Its own aspect ratio sets the height. */
   maxImageWidth?: number;
-  /** Optional className applied to the outer banner. */
+  /**
+   * Tight vertical padding, for a banner that has other things under it.
+   *
+   * A prop rather than a className override: Tailwind resolves conflicting
+   * utilities by the order they appear in the generated stylesheet, not by
+   * the order they are written in a string, so passing "py-1" alongside a
+   * hardcoded "py-4" wins or loses depending on which Tailwind emitted first.
+   * That is a coin toss, not an override.
+   */
+  compact?: boolean;
   className?: string;
 }
 
+export function Wordmark({
+  maxImageWidth = 460, compact = false, className = "",
+}: WordmarkProps) {
+  const [theme] = useTheme();
 
-export function Wordmark({ maxImageWidth = 520, className = "" }: WordmarkProps) {
   return (
-    // Full-width ivory strip with NO vertical padding -- the image's own
-    // aspect ratio sets the banner height. Any padding here just adds
-    // wasted landscape above and below the artwork.
     <div
-      className={`flex w-full items-center justify-center bg-[#FBF8F1] ${className}`}
+      className={`flex w-full items-center justify-center ${
+        compact ? "pt-2 pb-0" : "py-4"
+      } ${className}`}
     >
       <img
         src="/storythreadstudio.png"
         alt="Storythread Studio"
-        style={{ maxWidth: `${maxImageWidth}px`, width: "100%", height: "auto" }}
-        // Stop the browser's default image-drag behavior; clicking near the
-        // logo shouldn't kick off a drag-and-drop ghost image.
+        data-testid="wordmark"
+        style={{
+          maxWidth: `${maxImageWidth}px`,
+          width: "100%",
+          height: "auto",
+          // Dark mode only. In light mode the ink is already right.
+          filter: theme === "dark" ? "invert(1)" : undefined,
+        }}
+        // Stop the browser's default image drag; clicking near the logo
+        // should not start a drag-and-drop ghost.
         draggable={false}
       />
     </div>

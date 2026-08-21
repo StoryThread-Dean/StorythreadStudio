@@ -32,7 +32,9 @@ const MOCK_SUMMARY: ProgressSummary = {
   },
   outline: {
     present: false,
-    has_frontmatter: false,
+    fields_filled: 0,
+    fields_total: 10,
+    legacy: false,
     weight: 0,
   },
   profiles: {

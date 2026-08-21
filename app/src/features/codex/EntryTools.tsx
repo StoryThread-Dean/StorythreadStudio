@@ -92,7 +92,7 @@ export function EntryTools({
         role="dialog"
         aria-label={`Fix or remove ${nodeLabel(entry)}`}
         data-testid="entry-tools"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <CurrentIcon size={14}
@@ -113,8 +113,8 @@ export function EntryTools({
 
           {/* ── It is the wrong kind of thing ──────────────────────────── */}
           {changed ? (
-            <div className="mb-3 rounded border border-emerald-800 bg-emerald-950/20 p-2.5">
-              <p className="flex items-start gap-1.5 text-[11px] text-emerald-200">
+            <div className="mb-3 rounded border border-success-fill bg-success-soft/20 p-2.5">
+              <p className="flex items-start gap-1.5 text-mini text-success-strong">
                 <Check size={12} className="mt-0.5 shrink-0" />
                 <span>
                   <span className="font-medium text-text-primary">
@@ -127,7 +127,7 @@ export function EntryTools({
                 <ul className="mt-1.5 space-y-0.5">
                   {warnings.map(w => (
                     <li key={w}
-                        className="flex items-start gap-1.5 text-[10px] text-amber-200/90">
+                        className="flex items-start gap-1.5 text-micro text-warn-strong/90">
                       <AlertTriangle size={10} className="mt-0.5 shrink-0" />
                       {w}
                     </li>
@@ -138,7 +138,7 @@ export function EntryTools({
           ) : (
             <div className="mb-3">
               <label htmlFor="et-kind"
-                     className="mb-1 block text-[11px] text-text-muted">
+                     className="mb-1 block text-mini text-text-muted">
                 What kind of thing is this?
               </label>
               <div className="flex flex-wrap items-center gap-2">
@@ -147,7 +147,7 @@ export function EntryTools({
                   value={kind}
                   onChange={e => setKind(e.target.value)}
                   aria-label="What kind of thing"
-                  className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 >
                   {kindChoices().map(group => (
                     <optgroup key={group.group} label={group.group}>
@@ -160,14 +160,14 @@ export function EntryTools({
                 <button
                   onClick={() => void changeKind()}
                   disabled={busy || kind === entry.type}
-                  className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                 >
                   {busy ? <Loader size={11} className="animate-spin" />
                         : <Check size={11} />}
                   Change it
                 </button>
               </div>
-              <p className="mt-1 text-[10px] text-faint">
+              <p className="mt-1 text-micro text-faint">
                 Its name, everything written in it and every connection stay
                 exactly as they are -- only what it IS changes.
               </p>
@@ -178,11 +178,11 @@ export function EntryTools({
           <div className="rounded border border-border p-2">
             {confirming ? (
               <>
-                <p className="mb-1.5 text-[11px] text-text-primary">
+                <p className="mb-1.5 text-mini text-text-primary">
                   Remove {nodeLabel(entry)} from your world?
                 </p>
                 {/* WHAT IT COSTS, before the button that does it. */}
-                <ul className="mb-2 space-y-0.5 text-[10px] text-text-muted">
+                <ul className="mb-2 space-y-0.5 text-micro text-text-muted">
                   <li>Everything written in this entry is deleted.</li>
                   <li>Its connections to other entries go with it.</li>
                   <li>
@@ -195,7 +195,7 @@ export function EntryTools({
                   <button
                     onClick={() => void remove()}
                     disabled={busy}
-                    className="inline-flex items-center gap-1 rounded bg-rose-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-600 disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded bg-danger-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-danger-fill disabled:opacity-40"
                   >
                     {busy ? <Loader size={11} className="animate-spin" />
                           : <Trash2 size={11} />}
@@ -212,12 +212,12 @@ export function EntryTools({
             ) : (
               <button
                 onClick={() => setConfirming(true)}
-                className="inline-flex flex-col items-start text-left text-[11px] text-rose-300 hover:text-rose-200"
+                className="inline-flex flex-col items-start text-left text-mini text-danger hover:text-danger-strong"
               >
                 <span className="inline-flex items-center gap-1">
                   <Trash2 size={10} /> Remove this entry
                 </span>
-                <span className="text-[10px] text-faint">
+                <span className="text-micro text-faint">
                   for something created by mistake
                 </span>
               </button>
@@ -225,12 +225,12 @@ export function EntryTools({
           </div>
 
           {error && (
-            <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>
+            <p role="alert" className="mt-2 text-mini text-danger">{error}</p>
           )}
 
           <button
             onClick={onClose}
-            className="mt-3 block text-[11px] text-faint hover:text-text-primary"
+            className="mt-3 block text-mini text-faint hover:text-text-primary"
           >
             {changed ? "Done" : "Back"}
           </button>

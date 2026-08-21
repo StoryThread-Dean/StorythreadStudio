@@ -139,7 +139,7 @@ export function WeaveNav({
 
   if (loading) {
     return (
-      <p className="flex items-center gap-2 px-3 py-2 text-[11px] text-faint">
+      <p className="flex items-center gap-2 px-3 py-2 text-mini text-faint">
         <Loader size={11} className="animate-spin" /> Reading your world...
       </p>
     );
@@ -147,7 +147,7 @@ export function WeaveNav({
 
   if (error) {
     return (
-      <p className="px-3 py-2 text-[11px] text-rose-300">{error}</p>
+      <p className="px-3 py-2 text-mini text-danger">{error}</p>
     );
   }
 
@@ -155,10 +155,10 @@ export function WeaveNav({
     <div data-testid="weave-nav">
       <button
         onClick={onOpenWeave}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold text-text-primary hover:text-violet-300"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold text-text-primary hover:text-weave"
         title={CONCEPTS.weave.short}
       >
-        <Network size={13} className="text-violet-300" />
+        <Network size={13} className="text-weave" />
         The Weave
       </button>
 
@@ -174,7 +174,7 @@ export function WeaveNav({
         title={onOpenWeaving
           ? CONCEPTS.weaving.short
           : "Weaving is not available here."}
-        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-[11px] text-text-muted hover:text-violet-300 disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
+        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-mini text-text-muted hover:text-weave disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
       >
         <Spool size={12} />
         Weaving...
@@ -190,7 +190,7 @@ export function WeaveNav({
         title={onOpenExtractor
           ? "Read your manuscript and propose what each entry should say. Run Weaving first."
           : "The Profile Extractor is not available here."}
-        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-[11px] text-text-muted hover:text-violet-300 disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
+        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-mini text-text-muted hover:text-weave disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
       >
         <Sparkles size={12} />
         Profile Extractor...
@@ -203,7 +203,7 @@ export function WeaveNav({
             <button
               onClick={() => setCollapsed(c => ({ ...c, [group.id]: !isCollapsed }))}
               aria-expanded={!isCollapsed}
-              className="flex w-full items-center gap-1.5 px-3 py-1 text-left text-[11px] font-medium uppercase tracking-wide text-text-muted hover:text-text-primary"
+              className="flex w-full items-center gap-1.5 px-3 py-1 text-left text-mini font-medium uppercase tracking-wide text-text-muted hover:text-text-primary"
             >
               {isCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
               {group.label}
@@ -215,7 +215,7 @@ export function WeaveNav({
                     not yet contain what they are after. */}
                 <button
                   onClick={() => { setAdding(group.id); setAddError(null); }}
-                  className="flex w-full items-center gap-1.5 py-1 pl-8 pr-3 text-left text-[11px] text-violet-300 hover:text-violet-200"
+                  className="flex w-full items-center gap-1.5 py-1 pl-8 pr-3 text-left text-mini text-weave hover:text-weave-strong"
                 >
                   <Plus size={11} /> Add New
                 </button>
@@ -234,7 +234,7 @@ export function WeaveNav({
                       <button
                         onClick={() => onOpenSection(section)}
                         title={lex.short}
-                        className={`flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[11px] ${
+                        className={`flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-mini ${
                           active ? "text-text-primary" : "text-text-muted hover:text-text-primary"
                         }`}
                       >
@@ -289,7 +289,7 @@ export function WeaveNav({
       )}
 
       {movedTo && (
-        <p className="px-3 py-1 text-[11px] text-faint">
+        <p className="px-3 py-1 text-mini text-faint">
           Moved to <span className="text-text-muted">{movedTo}</span>.
         </p>
       )}

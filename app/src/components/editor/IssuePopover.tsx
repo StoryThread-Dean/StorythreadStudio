@@ -92,9 +92,9 @@ const MODIFIERS: { key: ReviseModifier; label: string; help: string }[] = [
 // Severity badge colors. Praise = subtle green; issue = red; suggestion =
 // indigo. The colors don't carry meaning beyond visual sorting at a glance.
 function severityClass(sev: string): string {
-  if (sev === "praise") return "bg-emerald-700/40 text-emerald-200 border-emerald-700";
-  if (sev === "suggestion") return "bg-indigo-700/40 text-indigo-200 border-indigo-700";
-  return "bg-rose-700/40 text-rose-200 border-rose-700";
+  if (sev === "praise") return "bg-success-fill/40 text-success-strong border-success-fill";
+  if (sev === "suggestion") return "bg-accent-fill/40 text-accent-strong border-accent-fill";
+  return "bg-danger-fill/40 text-danger-strong border-danger-fill";
 }
 
 
@@ -112,7 +112,7 @@ function renderDiff(segments: DiffSegment[]) {
       return (
         <span
           key={i}
-          className="rounded-sm bg-emerald-700/40 px-0.5 text-emerald-200"
+          className="rounded-sm bg-success-fill/40 px-0.5 text-success-strong"
           title="Added"
         >
           {seg.text}
@@ -124,7 +124,7 @@ function renderDiff(segments: DiffSegment[]) {
     return (
       <span
         key={i}
-        className="rounded-sm bg-rose-900/30 px-0.5 text-rose-300 line-through"
+        className="rounded-sm bg-danger-soft/30 px-0.5 text-danger line-through"
         title="Removed"
       >
         {seg.text}
@@ -406,7 +406,7 @@ export function IssuePopover({
       onClick={onClose}
     >
       <div
-        className="absolute rounded-lg border border-indigo-700/60 bg-bg-panel shadow-xl text-sm text-text-primary"
+        className="absolute rounded-lg border border-accent-fill/60 bg-bg-panel shadow-e3 text-sm text-text-primary"
         style={{
           // Hidden until the first layout pass has measured the anchor.
           // Avoids a one-frame flash at (0, 0) on mount.
@@ -421,7 +421,7 @@ export function IssuePopover({
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <p className="text-xs font-semibold text-indigo-300">
+          <p className="text-xs font-semibold text-accent">
             {items.length === 1 ? "1 issue here" : `${items.length} issues here`}
           </p>
           <button onClick={onClose} className="text-faint hover:text-text-muted">✕</button>
@@ -486,10 +486,10 @@ function IssueCard({
 
       {/* Header row: severity badge + category label. */}
       <div className="mb-1.5 flex items-center gap-2">
-        <span className={`rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${severityClass(sev)}`}>
+        <span className={`rounded border px-1.5 py-0.5 text-micro uppercase tracking-wide ${severityClass(sev)}`}>
           {sev}
         </span>
-        <span className="text-xs font-semibold text-indigo-200">{label}</span>
+        <span className="text-xs font-semibold text-accent-strong">{label}</span>
       </div>
 
       {/* Explanation. Short paragraph, no markdown rendering -- the AI is
@@ -499,7 +499,7 @@ function IssueCard({
       {/* Suggested rewrite, rendered with the diff highlighted inline.
           Skip when the entry is praise (no suggestion to show). */}
       {state.current && (
-        <blockquote className="mb-2 whitespace-pre-wrap break-words border-l-2 border-indigo-600/50 pl-2 text-xs italic text-text-primary">
+        <blockquote className="mb-2 whitespace-pre-wrap break-words border-l-2 border-accent-fill/50 pl-2 text-xs italic text-text-primary">
           {renderDiff(diff)}
         </blockquote>
       )}
@@ -514,7 +514,7 @@ function IssueCard({
             <Explain of="issue.what" label="What am I looking at?" />
           </div>
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <p className="text-[10px] uppercase tracking-wide text-faint">
+            <p className="text-micro uppercase tracking-wide text-faint">
               Try a different angle
             </p>
             {/* PER PRESS, and that is the thing to say out loud. Cycling four
@@ -535,7 +535,7 @@ function IssueCard({
                   onClick={() => onRevise(m.key)}
                   disabled={disabled}
                   title={m.help}
-                  className="rounded border border-border bg-bg-primary px-1.5 py-0.5 text-[11px] text-text-primary transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded border border-border bg-bg-primary px-1.5 py-0.5 text-mini text-text-primary transition-colors hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {busyModifier === m.key ? "..." : m.label}
                 </button>
@@ -546,7 +546,7 @@ function IssueCard({
       )}
 
       {/* Inline error from a failed revise call. */}
-      {error && <p className="mb-2 text-[11px] text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-mini text-danger-muted">{error}</p>}
 
       {/* Action row: Accept / Ignore. Praise entries get only Dismiss. */}
       <div className="flex justify-end gap-2">
@@ -561,7 +561,7 @@ function IssueCard({
           <button
             onClick={onAccept}
             disabled={isBusy}
-            className="rounded border border-indigo-600 bg-indigo-700/40 px-2 py-0.5 text-xs text-indigo-100 hover:bg-indigo-700/60 disabled:opacity-40"
+            className="rounded border border-accent-fill bg-accent-fill/40 px-2 py-0.5 text-xs text-accent-strong hover:bg-accent-fill/60 disabled:opacity-40"
           >
             Accept
           </button>

@@ -203,7 +203,7 @@ export function ThesaurusPopover({
       style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 9999 }}
       className="
         min-w-[200px] max-w-[280px] max-h-80 overflow-y-auto
-        rounded-lg border border-border shadow-2xl
+        rounded-lg border border-border shadow-e4
         bg-bg-panel text-text-primary text-sm
         flex flex-col
       "
@@ -240,20 +240,20 @@ export function ThesaurusPopover({
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
               Weaving
             </span>
-            <span className="font-medium text-violet-300 truncate">{markable}</span>
+            <span className="font-medium text-weave truncate">{markable}</span>
           </div>
           {marked === "" || marked === "saving" ? (
             <button
               type="button"
               onClick={() => void mark()}
               disabled={marked === "saving"}
-              className="flex items-center gap-2 px-3 py-2 text-left text-xs text-text-primary hover:bg-bg-surface disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 text-left text-xs text-text-primary hover:bg-bg-raised disabled:opacity-50"
             >
-              <Pin size={12} className="text-violet-300" />
+              <Pin size={12} className="text-weave" />
               Mark for Weaving
             </button>
           ) : (
-            <p className="px-3 py-2 text-[11px] text-text-muted">
+            <p className="px-3 py-2 text-mini text-text-muted">
               {marked === "done"
                 ? "Marked. Weaving will ask you about it -- nothing was changed in your text."
                 : marked === "already"
@@ -328,7 +328,7 @@ function Section({ label, words, onSelect, word, accentSelection }: SectionProps
           <span className="font-medium text-accent truncate">{word}</span>
         </div>
       ) : (
-        <div className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+        <div className="px-3 pt-2 pb-0.5 text-micro font-semibold text-text-muted uppercase tracking-wider">
           {label}
         </div>
       )}
@@ -338,7 +338,7 @@ function Section({ label, words, onSelect, word, accentSelection }: SectionProps
           onClick={() => onSelect(w)}
           className={`
             w-full text-left px-4 py-1.5 text-sm
-            text-text-primary hover:bg-bg-surface hover:text-accent
+            text-text-primary hover:bg-bg-raised hover:text-accent
             transition-colors duration-75
             ${accentSelection ? "font-medium" : ""}
           `}

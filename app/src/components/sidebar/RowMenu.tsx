@@ -65,8 +65,8 @@ export function RowMenu({ items, ariaLabel }: { items: RowMenuItem[]; ariaLabel:
       it.disabled
         ? "cursor-not-allowed text-faint"
         : it.danger
-          ? "text-rose-300 hover:bg-rose-950/40"
-          : "text-text-primary hover:bg-bg-surface"
+          ? "text-danger hover:bg-danger-soft/40"
+          : "text-text-primary hover:bg-bg-raised"
     }`;
 
   return (
@@ -87,7 +87,7 @@ export function RowMenu({ items, ariaLabel }: { items: RowMenuItem[]; ariaLabel:
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-30 mt-0.5 w-44 rounded border border-border bg-bg-panel py-1 shadow-xl"
+          className="absolute right-0 top-full z-30 mt-0.5 w-44 rounded border border-border bg-bg-panel py-1 shadow-e3"
         >
           {items.map((it, i) => (
             <div key={it.label}>

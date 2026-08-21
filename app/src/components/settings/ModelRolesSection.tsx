@@ -169,7 +169,7 @@ export function ModelRolesSection({
                 onClick={() => setOpenRole(isOpen ? null : role.id)}
                 aria-expanded={isOpen}
                 aria-label={`${role.label} settings`}
-                className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors hover:bg-bg-surface/60"
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors hover:bg-bg-raised/60"
               >
                 {isOpen
                   ? <ChevronDown size={12} className="shrink-0 text-faint" />
@@ -181,8 +181,8 @@ export function ModelRolesSection({
 
                 <span
                   data-testid={`role-summary-${role.id}`}
-                  className={`flex w-44 shrink-0 items-center justify-between gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] ${
-                    isAssigned ? "text-emerald-300" : "text-text-muted"
+                  className={`flex w-44 shrink-0 items-center justify-between gap-1 rounded border border-border px-1.5 py-0.5 text-mini ${
+                    isAssigned ? "text-success" : "text-text-muted"
                   }`}
                 >
                   <span className="truncate">{summary}</span>
@@ -190,12 +190,12 @@ export function ModelRolesSection({
                 </span>
 
                 {providerBroken && (
-                  <AlertTriangle size={11} className="shrink-0 text-amber-400" />
+                  <AlertTriangle size={11} className="shrink-0 text-warn-muted" />
                 )}
 
                 {/* Truncated, not wrapped: rows stay one line tall so the
                     whole list is scannable at a glance. */}
-                <span className="min-w-0 flex-1 truncate text-[11px] text-faint">
+                <span className="min-w-0 flex-1 truncate text-mini text-faint">
                   {role.reserved ? role.reserved_note : role.blurb}
                 </span>
               </button>
@@ -203,7 +203,7 @@ export function ModelRolesSection({
               {/* Expanded: the explanation and the actual controls. */}
               {isOpen && (
                 <div className="border-t border-border/60 bg-bg-primary/40 px-6 py-3">
-                  <p className="mb-1 text-[11px] leading-relaxed text-text-muted">
+                  <p className="mb-1 text-mini leading-relaxed text-text-muted">
                     {role.blurb}
                   </p>
                   <div className="mb-3">
@@ -214,13 +214,13 @@ export function ModelRolesSection({
                           Features that use this role: {role.features.join(" · ")}
                         </p>
                       ) : (
-                        <p className="text-amber-300/80">{role.reserved_note}</p>
+                        <p className="text-warn/80">{role.reserved_note}</p>
                       )}
                     </WhatsThis>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                    <label className="flex items-center gap-1.5 text-mini text-text-muted">
                       From Source:
                       <select
                         aria-label={`${role.label} provider`}
@@ -234,7 +234,7 @@ export function ModelRolesSection({
                           assign(role.id, { provider, model: "" });
                           onNeedModels(provider);
                         }}
-                        className="rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        className="rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                       >
                         <option value="">Use Default Model</option>
                         {PROVIDER_META.map(p => {
@@ -253,14 +253,14 @@ export function ModelRolesSection({
                     </label>
 
                     {assignment?.provider && (
-                      <label className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] text-text-muted">
+                      <label className="flex min-w-0 flex-1 items-center gap-1.5 text-mini text-text-muted">
                         Model:
                         {catalog.length > 0 ? (
                           <select
                             aria-label={`${role.label} model`}
                             value={assignment.model}
                             onChange={e => assign(role.id, { model: e.target.value })}
-                            className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                            className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                           >
                             <option value="">Choose a model...</option>
                             {/* A short recommended list, spread across price
@@ -294,7 +294,7 @@ export function ModelRolesSection({
                             value={assignment.model}
                             onChange={e => assign(role.id, { model: e.target.value })}
                             placeholder="Model id"
-                            className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                            className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                           />
                         )}
                       </label>
@@ -304,9 +304,9 @@ export function ModelRolesSection({
                   {providerBroken && (
                     <p
                       data-testid={`role-warning-${role.id}`}
-                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-amber-600/70 bg-amber-950/20 px-2 py-1 text-[10.5px] leading-relaxed text-amber-200/90"
+                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-warn-fill/70 bg-warn-soft/20 px-2 py-1 text-micro leading-relaxed text-warn-strong/90"
                     >
-                      <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
+                      <AlertTriangle size={11} className="mt-0.5 shrink-0 text-warn-muted/80" />
                       <span>
                         This role is set to a source with no key connected, so it
                         will refuse rather than quietly using another model.
@@ -319,7 +319,7 @@ export function ModelRolesSection({
                   {noCaching && (
                     <p
                       data-testid={`role-no-caching-${role.id}`}
-                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-border bg-bg-surface px-2 py-1 text-[10.5px] leading-relaxed text-text-muted"
+                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-border bg-bg-surface px-2 py-1 text-micro leading-relaxed text-text-muted"
                     >
                       <Info size={11} className="mt-0.5 shrink-0 text-faint" />
                       <span>

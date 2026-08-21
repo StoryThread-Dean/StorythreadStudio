@@ -55,12 +55,12 @@ export function ToggleSwitch({
         />
       </span>
       <span className="min-w-0">
-        <span className={"block text-[11px] font-medium transition-colors "
+        <span className={"block text-mini font-medium transition-colors "
           + (checked ? lit.text : "text-zinc-400")}>
           {label}
         </span>
         {hint && (
-          <span className="block text-[10px] leading-relaxed text-zinc-500">
+          <span className="block text-micro leading-relaxed text-zinc-500">
             {hint}
           </span>
         )}

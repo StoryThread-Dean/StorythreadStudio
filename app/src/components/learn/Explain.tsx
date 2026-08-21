@@ -92,7 +92,7 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
         aria-expanded={open}
         aria-label={compact ? (label ?? "What's this?") : undefined}
         title={compact ? (label ?? "What's this?") : undefined}
-        className="inline-flex shrink-0 items-center gap-1 rounded text-[10px] text-text-muted transition-colors hover:text-blue-300"
+        className="inline-flex shrink-0 items-center gap-1 rounded text-micro text-text-muted transition-colors hover:text-accent"
       >
         <HelpCircle size={compact ? 13 : 11} />
         {!compact && (label ?? "What's this?")}
@@ -102,19 +102,31 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
         <div
           data-testid="explain-panel"
           role="note"
-          className={`absolute top-full z-50 mt-1 w-[min(30rem,80vw)] space-y-1.5 rounded border border-border bg-bg-panel px-2.5 py-2 text-[10px] leading-relaxed text-text-muted shadow-xl ${
+          className={`absolute top-full z-50 mt-1.5 w-[min(30rem,80vw)] overflow-hidden rounded-lg border border-border-strong bg-bg-panel text-micro leading-relaxed text-text-muted shadow-e3 ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >
-          <p className="text-text-primary">{info.what}</p>
+          {/* WHAT IT IS, on the accent bar. A floating panel needs a top edge
+              that says "this is a different surface", and the first line is
+              the answer to the question the writer clicked. */}
+          <p className="border-b border-border bg-bg-surface px-3 py-2 text-xs text-text-primary">
+            {info.what}
+          </p>
+
+          <div className="space-y-2 px-3 py-2">
 
           {/* WHY, labelled, because it is the part writers ask for and the part
               that gets left out. Naming it also stops it being written as more
               description of what the thing is. */}
-          <p><span className="text-faint">Why: </span>{info.why}</p>
+          <p>
+            <span className="mr-1 text-micro font-semibold uppercase tracking-label text-accent">
+              Why
+            </span>
+            {info.why}
+          </p>
 
           <p className="flex items-start gap-1">
-            <CircleCheck size={10} className="mt-0.5 shrink-0 text-emerald-400/80" />
+            <CircleCheck size={10} className="mt-0.5 shrink-0 text-success-muted/80" />
             <span>{NEED_WORDING[info.needed]}</span>
           </p>
 
@@ -124,7 +136,7 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
               expect a meter running. */}
           {info.cost && (
             <p className="flex items-start gap-1">
-              <Coins size={10} className="mt-0.5 shrink-0 text-amber-300/80" />
+              <Coins size={10} className="mt-0.5 shrink-0 text-warn/80" />
               <span>
                 {info.cost.kind === "free"
                   ? "Free. No AI is called, so this costs nothing."
@@ -136,12 +148,17 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
           {/* The steps, in the same panel under their own heading. They used to
               be a second button; the heading does the same job for none of the
               width. */}
+          </div>
+
           {info.how && info.how.length > 0 && (
-            <div data-testid="explain-how" className="border-t border-border pt-1.5">
-              <p className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-faint">
+            <div
+              data-testid="explain-how"
+              className="border-t border-border bg-bg-surface px-3 py-2"
+            >
+              <p className="mb-1.5 flex items-center gap-1 text-micro font-semibold uppercase tracking-label text-accent">
                 <ListOrdered size={10} /> How to do this
               </p>
-              <ol className="list-decimal space-y-0.5 pl-4">
+              <ol className="list-decimal space-y-1 pl-4 marker:text-faint">
                 {info.how.map(step => <li key={step}>{step}</li>)}
               </ol>
             </div>

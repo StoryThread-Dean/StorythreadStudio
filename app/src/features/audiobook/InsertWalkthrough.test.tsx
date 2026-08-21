@@ -335,7 +335,11 @@ describe("InsertWalkthrough as a window", () => {
     fireEvent.click(screen.getByRole("button", { name: /Show me how this works/ }));
     walkToStep("Short-sentence beats");
     const note = screen.getByText(/slur or run words\s+together/).closest("p")!;
-    expect(note.className).toMatch(/amber/);
+    // `warn` IS the amber role -- GuidedWalk moved onto role tokens so the
+    // same component can be charcoal inside the Audiobook Converter and
+    // carry the writing app's palette outside it. Inside .audiobook-theme
+    // this still resolves to amber, which is what the assertion was about.
+    expect(note.className).toMatch(/warn/);
     // Above the demos, so the writer reads it before playing the clip it
     // is describing.
     const play = screen.getByLabelText(/Play: No pauses/);

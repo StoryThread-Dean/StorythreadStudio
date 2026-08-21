@@ -16,6 +16,7 @@
 # Keeping them separate follows the "single responsibility" principle --
 # each file does one job and is easier to understand and extend.
 
+import json
 import os
 import re
 import shutil
@@ -24,7 +25,9 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.outline_frontmatter import parse_outline_frontmatter, strip_outline_frontmatter
+from app.yaml_frontmatter import parse_yaml_frontmatter, strip_yaml_frontmatter
+from app.outline_presets import GROUP_ORDER, PRESETS, render_preset
+from app.outline_worksheet import OutlineMetadata, heal_outline, render_worksheet
 from app.progress_store import record_save_event, migrate_file_relpath
 from app.settings_store import get_rollover_hour
 from app.utils.structure_store import (
@@ -54,6 +57,12 @@ class LoadChapterResponse(BaseModel):
     title: str
     content: str    # The full Markdown text of the chapter
     path: str
+    #: True only when THIS read converted a pre-v2.0.2 outline. The editor
+    #: shows a banner saying so and where the backup went. Harmless default
+    #: for chapters and every other note, which are never converted.
+    healed: bool = False
+    #: Where the pre-conversion bytes were kept, when one happened.
+    healed_backup: str | None = None
 
 
 class SaveChapterRequest(BaseModel):
@@ -1316,6 +1325,25 @@ async def load_note(folder_path: str, filename: str):
             detail=f"Note not found: {filename}"
         )
 
+    # CONVERT A PRE-v2.0.2 OUTLINE, HERE AND NOWHERE ELSE.
+    #
+    # One call site on purpose. This is where the file is read anyway, so
+    # there is no window in which something serves the old bytes after the
+    # conversion; and one place to convert is one place to audit. It also
+    # matches the precedent the original corruption fix set -- healing on
+    # load rather than hoping every writer finds a button.
+    #
+    # heal_outline is SUBTRACTIVE and refuses when anything is ambiguous, so
+    # a hand-written outline with no frontmatter is never touched. See the
+    # six properties in its docstring; they are the reason this is safe to do
+    # without asking.
+    healed = False
+    healed_backup: str | None = None
+    if filename == "outline.md":
+        result = heal_outline(folder_path, _outline_metadata(folder_path))
+        healed = result.healed
+        healed_backup = result.snapshot
+
     try:
         with open(note_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -1326,6 +1354,8 @@ async def load_note(folder_path: str, filename: str):
         filename=filename,
         title=_title_from_file(note_path, filename),
         content=content,
+        healed=healed,
+        healed_backup=healed_backup,
         path=note_path,
     )
 
@@ -1581,7 +1611,7 @@ async def get_outline(folder_path: str):
 
     # Auto-heal before any parsing. The _FUSED_SEPARATOR_RE check in
     # _parse_outline_sections catches fusions in the body, but only AFTER
-    # strip_outline_frontmatter runs. If the fusion is at the YAML closing
+    # strip_yaml_frontmatter runs. If the fusion is at the YAML closing
     # position (e.g. "---## Setting in One Paragraph"), the frontmatter regex
     # mis-fires and absorbs section content into the YAML body, losing both
     # section visibility AND YAML field values. Healing the raw bytes here
@@ -1596,8 +1626,8 @@ async def get_outline(folder_path: str):
             pass  # Non-fatal: serve healed version in memory even if write fails
         raw = healed_raw
 
-    fm_data = parse_outline_frontmatter(raw)
-    body    = strip_outline_frontmatter(raw)
+    fm_data = parse_yaml_frontmatter(raw)
+    body    = strip_yaml_frontmatter(raw)
     preamble, sections = _parse_outline_sections(body)
 
     fm = OutlineFrontmatterData(
@@ -1666,4 +1696,131 @@ async def save_outline(request: OutlineSaveRequest):
         filename = "outline.md",
         path     = outline_path,
         message  = "Outline saved.",
+    )
+
+
+# ── The Outline ──────────────────────────────────────────────────────────────
+#
+# The Outline is a second main editor: it loads and saves through the ordinary
+# GET/POST /note path above, like the Style Guide. These two endpoints are the
+# only extra surface it needs.
+#
+# What used to be here instead: GET/POST /outline, which parsed the file into
+# frontmatter + preamble + a list of sections, handed that to a form screen,
+# and rebuilt the file from the pieces on save. That round trip is what lost a
+# writer's section when one heading failed to parse. There is no round trip
+# now -- the editor holds text and writes text back.
+
+
+def _outline_metadata(folder_path: str) -> OutlineMetadata:
+    """
+    What the app knows about this book, for the worksheet.
+
+    Read from project.json, with series.json underneath it for a book in a
+    series. ONE WAY: this fills the worksheet, and nothing ever reads those
+    lines back. project.json stays the single master for everything the AI
+    sees, which is the whole reason the worksheet is allowed to be plain text
+    the writer can scribble on.
+    """
+    def _read(path: str) -> dict:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    project = _read(os.path.join(folder_path, "project.json"))
+    series: dict = {}
+    series_path = project.get("series_path")
+    if isinstance(series_path, str) and series_path:
+        series = _read(os.path.join(series_path, "series.json"))
+
+    def pick(key: str) -> str:
+        value = project.get(key) or series.get(key) or ""
+        return str(value).strip()
+
+    meta: OutlineMetadata = {
+        "title":       pick("title"),
+        "series_name": str(series.get("name", "")).strip(),
+        "genre":       pick("genre"),
+        "tone":        pick("tone"),
+        "description": pick("description"),
+        "setting":     pick("setting"),
+        "theme":       pick("theme"),
+        "tense":       pick("tense"),
+    }
+    return meta
+
+
+class OutlinePresetItem(BaseModel):
+    id:         str
+    group:      str
+    label:      str
+    heading:    str
+    #: The full Markdown appended when this is chosen: the H2, then the body.
+    markdown:   str
+    repeatable: bool
+
+
+class OutlinePresetsResponse(BaseModel):
+    groups:  list[str]
+    presets: list[OutlinePresetItem]
+
+
+# --- GET /api/documents/outline/presets ---
+@router.get("/outline/presets", response_model=OutlinePresetsResponse)
+async def get_outline_presets():
+    """
+    The sections a writer can drop into their outline.
+
+    Static and free -- no model is called, nothing is read from disk, nothing
+    is written. The frontend holds no copy of this text: the catalog lives in
+    Python because codex/scan.py has to subtract these words from
+    planned-name candidates, and that runs in the packaged backend where a
+    path into the renderer bundle may not exist.
+    """
+    return OutlinePresetsResponse(
+        groups=GROUP_ORDER,
+        presets=[
+            OutlinePresetItem(
+                id=p["id"], group=p["group"], label=p["label"],
+                heading=p["heading"], markdown=render_preset(p),
+                repeatable=p["repeatable"],
+            )
+            for p in PRESETS
+        ],
+    )
+
+
+class OutlineWorksheetResponse(BaseModel):
+    #: The ten labels, rendered with whatever Book Details already knows.
+    content: str
+
+
+# --- GET /api/documents/outline/worksheet ---
+@router.get("/outline/worksheet", response_model=OutlineWorksheetResponse)
+async def get_outline_worksheet(folder_path: str):
+    """
+    The worksheet header, filled in from Book Details.
+
+    Returned rather than written. The frontend puts it in the editor BUFFER,
+    unsaved, so manual save still means manual save and one Ctrl+Z takes it
+    back. Its predecessor -- POST /apply-outline-template -- overwrote
+    notes/outline.md on the server with no backup, which is why it needed a
+    two-step confirm and this does not.
+
+    Free: no model, and no write.
+    """
+    story_type = "novel"
+    try:
+        with open(os.path.join(folder_path, "project.json"), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and data.get("story_type"):
+            story_type = str(data["story_type"])
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    return OutlineWorksheetResponse(
+        content=render_worksheet(_outline_metadata(folder_path), story_type),
     )

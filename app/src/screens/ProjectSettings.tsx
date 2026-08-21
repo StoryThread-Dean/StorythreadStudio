@@ -15,7 +15,7 @@
 
 import { useState, useEffect } from "react";
 import { X, ChevronDown, HelpCircle } from "lucide-react";
-import type { ProjectInfo, OutlineTemplateType } from "../types/project";
+import type { ProjectInfo } from "../types/project";
 import type { ModelInfo } from "../types/ai";
 // Content-mode filter, cost tiers, media filter, and the curated recommended
 // list are shared with the global Settings screen so the two pickers behave
@@ -329,24 +329,24 @@ function ChipGroup({
   const [showHelp, setShowHelp] = useState(false);
 
   const checkedClass = accent === "red"
-    ? "border-red-500/60 bg-red-900/30 text-red-300"
-    : "border-indigo-500/60 bg-indigo-900/30 text-indigo-300";
+    ? "border-danger-fill/60 bg-danger-soft/30 text-danger"
+    : "border-accent-fill/60 bg-accent-soft/30 text-accent";
   const helpLinkClass = accent === "red"
-    ? "text-red-400/70 hover:text-red-400"
-    : "text-indigo-300/70 hover:text-indigo-300";
-  const helpTermClass = accent === "red" ? "text-red-300" : "text-indigo-300";
+    ? "text-danger-muted/70 hover:text-danger-muted"
+    : "text-accent/70 hover:text-accent";
+  const helpTermClass = accent === "red" ? "text-danger" : "text-accent";
 
   return (
     <div>
       <div className="mb-1 flex items-center gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+        <p className="text-micro font-semibold uppercase tracking-wider text-faint">
           {group.label}
         </p>
         {group.help && (
           <button
             type="button"
             onClick={() => setShowHelp(h => !h)}
-            className={`text-[10px] transition-colors ${helpLinkClass}`}
+            className={`text-micro transition-colors ${helpLinkClass}`}
             title="Explain each option in this group"
             aria-expanded={showHelp}
           >
@@ -358,7 +358,7 @@ function ChipGroup({
       {/* Definitions, shown above the chips so the reader has context before
           clicking. Only the options that actually have help text appear. */}
       {showHelp && group.help && (
-        <dl className="mb-1.5 space-y-0.5 rounded bg-bg-panel/60 px-2 py-1.5 text-[11px] leading-snug">
+        <dl className="mb-1.5 space-y-0.5 rounded bg-bg-panel/60 px-2 py-1.5 text-mini leading-snug">
           {group.options.filter(opt => group.help?.[opt]).map(opt => (
             <div key={opt}>
               <dt className={`inline font-semibold ${helpTermClass}`}>{opt}</dt>
@@ -376,7 +376,7 @@ function ChipGroup({
               key={opt}
               type="button"
               onClick={() => onChange(togglePart(value, opt))}
-              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors ${
+              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-mini transition-colors ${
                 checked
                   ? checkedClass
                   : "border-border bg-bg-panel text-text-muted hover:border-faint hover:text-text-primary"
@@ -420,7 +420,7 @@ function SuggestionPicker({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="text-[11px] text-indigo-300/80 transition-colors hover:text-indigo-300"
+        className="text-mini text-accent/80 transition-colors hover:text-accent"
         title="Common choices -- click to add or remove them from the box above"
       >
         {open ? "Hide suggestions" : "Show suggestions..."}
@@ -439,15 +439,15 @@ function SuggestionPicker({
               <button
                 type="button"
                 onClick={() => setNsfwOpen(o => !o)}
-                className="text-[11px] font-medium text-red-400/90 transition-colors hover:text-red-400"
+                className="text-mini font-medium text-danger-muted/90 transition-colors hover:text-danger-muted"
                 title="Adult / erotica classification labels -- optional, for mature fiction"
               >
                 {nsfwOpen ? "Hide NSFW suggestions" : "Show NSFW suggestions..."}
               </button>
 
               {nsfwOpen && (
-                <div className="mt-1.5 space-y-2 rounded border border-red-900/50 bg-red-950/20 p-2">
-                  <p className="text-[10px] text-red-400/70">
+                <div className="mt-1.5 space-y-2 rounded border border-danger-soft/50 bg-danger-soft/20 p-2">
+                  <p className="text-micro text-danger-muted/70">
                     Adult / erotica labels for classifying mature fiction. Optional, and separate from your AI content-mode setting.
                   </p>
                   {nsfwGroups.map(group => (
@@ -522,6 +522,9 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   // The backend stores it in notes/outline.md frontmatter (the Progress
   // gauge's source of truth), never in project.json.
   const [targetWordCount, setTargetWordCount] = useState("");
+  // Both targets live in the outline worksheet rather than project.json, so
+  // the Writing Progress gauge has one place to read them from.
+  const [targetChapterCount, setTargetChapterCount] = useState("");
   const [contentMode, setContentMode] = useState(project.content_mode_default);
   const [costTier, setCostTier]       = useState("standard");
   const [projectModel, setProjectModel] = useState(project.default_model ?? "");
@@ -539,14 +542,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   // Outline template section -- tracks the current template and lets the writer
   // swap it. The initial value comes from project.json (may be null for older
   // projects created before templates existed).
-  const [templateChoice, setTemplateChoice] = useState<OutlineTemplateType>(
-    project.outline_template ?? "novel"
-  );
-  const [templateApplying, setTemplateApplying] = useState(false);
-  const [templateApplied, setTemplateApplied]   = useState(false);
   // True after the writer changes the radio, before they click Apply.
   // Prevents flashing "Applied!" from a previous run.
-  const templateDirty = templateChoice !== (project.outline_template ?? "novel");
 
   // Help guide expanded state
   const [showGuide, setShowGuide] = useState(false);
@@ -575,6 +572,9 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           setTargetAudience(data.target_audience ?? "");
           setTargetWordCount(
             data.target_word_count != null ? String(data.target_word_count) : ""
+          );
+          setTargetChapterCount(
+            data.target_chapter_count != null ? String(data.target_chapter_count) : ""
           );
           setCostTier(data.cost_tier ?? "standard");
           setProjectModel(data.default_model ?? "");
@@ -625,6 +625,15 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
       return;
     }
 
+    // Same rule for the chapter target: blank leaves it alone.
+    const parsedChapters = parseInt(targetChapterCount.replace(/[,\s]/g, ""), 10);
+    if (targetChapterCount.trim() !== ""
+        && (!Number.isFinite(parsedChapters) || parsedChapters < 0)) {
+      setError("Chapter Count target must be a number.");
+      setSaving(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/projects/settings`, {
         method: "PUT",
@@ -641,6 +650,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           tense:                tense,
           target_audience:      targetAudience,
           ...(targetWordCount.trim() !== "" ? { target_word_count: parsedTarget } : {}),
+          ...(targetChapterCount.trim() !== ""
+            ? { target_chapter_count: parsedChapters } : {}),
           content_mode_default: contentMode,
           cost_tier:            costTier,
           default_model:        projectModel || null,  // empty string = use global
@@ -676,42 +687,6 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
   }
 
 
-  // --- Apply outline template ---
-  // Regenerates notes/outline.md with the selected template. This is a
-  // separate action from Save because it overwrites a file -- the writer
-  // must explicitly confirm it.
-  async function handleApplyTemplate() {
-    setTemplateApplying(true);
-    setTemplateApplied(false);
-    setError(null);
-
-    try {
-      const res = await fetch(`${API_BASE}/api/projects/apply-outline-template`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          root_path:     project.root_path,
-          template_type: templateChoice,
-        }),
-      });
-
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.detail ?? "Failed to apply template.");
-      }
-
-      setTemplateApplied(true);
-      // Update the parent's project info so outline_template stays in sync.
-      onProjectUpdated({
-        ...project,
-        outline_template: templateChoice,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not apply template.");
-    } finally {
-      setTemplateApplying(false);
-    }
-  }
 
 
   // ── Dynamic guide text generators ────────────────────────────────────────
@@ -791,7 +766,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-e4">
 
         {/* Header */}
         <div
@@ -801,7 +776,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           <h2 className="text-base font-semibold text-text-primary">Book Details</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
           >
             <X size={16} />
           </button>
@@ -823,7 +798,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-fill"
                 />
               </div>
 
@@ -833,7 +808,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   rows={3}
-                  className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                  className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-fill"
                 />
               </div>
 
@@ -847,7 +822,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={genre}
                   onChange={e => setGenre(e.target.value)}
                   placeholder="e.g. epic fantasy, sci-fi thriller, contemporary romance"
-                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                 />
                 <SuggestionPicker value={genre} onChange={setGenre} groups={GENRE_SUGGESTIONS} nsfwGroups={GENRE_NSFW} />
               </div>
@@ -862,7 +837,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={tone}
                   onChange={e => setTone(e.target.value)}
                   placeholder="e.g. dark, atmospheric, slow burn, humorous"
-                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                 />
                 <SuggestionPicker value={tone} onChange={setTone} groups={TONE_SUGGESTIONS} nsfwGroups={TONE_NSFW} />
               </div>
@@ -877,7 +852,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={theme}
                   onChange={e => setTheme(e.target.value)}
                   placeholder="e.g. redemption, found family, the cost of power"
-                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                 />
               </div>
 
@@ -891,7 +866,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={storySetting}
                   onChange={e => setStorySetting(e.target.value)}
                   placeholder="e.g. a storm-locked island kingdom, near-future Chicago"
-                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                 />
               </div>
 
@@ -907,7 +882,26 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={targetWordCount}
                   onChange={e => setTargetWordCount(e.target.value)}
                   placeholder="e.g. 90000"
-                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
+                />
+              </div>
+
+              {/* Chapter target. Stored beside the word target in the outline
+                  worksheet, for the same reason: the gauge reads one place. */}
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-text-primary">Chapter Count Target</label>
+                <p className="mb-1 text-xs text-faint">
+                  How many chapters you are planning. Shown beside your word
+                  count in the Writing Progress gauge (stored in the outline,
+                  not project settings). Leave blank to keep the current target.
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={targetChapterCount}
+                  onChange={e => setTargetChapterCount(e.target.value)}
+                  placeholder="e.g. 30"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                 />
               </div>
 
@@ -919,10 +913,10 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     <button
                       type="button"
                       onClick={() => setShowPovHelp(h => !h)}
-                      className={`flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] transition-colors ${
+                      className={`flex items-center gap-0.5 rounded px-1 py-0.5 text-micro transition-colors ${
                         showPovHelp
-                          ? "text-indigo-300"
-                          : "text-faint hover:text-indigo-300"
+                          ? "text-accent"
+                          : "text-faint hover:text-accent"
                       }`}
                       title="What do these options mean, and which should I pick?"
                       aria-expanded={showPovHelp}
@@ -934,7 +928,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   <select
                     value={pointOfView}
                     onChange={e => setPointOfView(e.target.value)}
-                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-fill"
                     title="Narration perspective. Auto-injected into AI prompts."
                   >
                     <option value="">(not set)</option>
@@ -950,7 +944,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   <select
                     value={tense}
                     onChange={e => setTense(e.target.value)}
-                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-fill"
                     title="Narration tense. Auto-injected into AI prompts."
                   >
                     <option value="">(not set)</option>
@@ -963,18 +957,18 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
               {/* POV explainer -- expands full-width below the POV/Tense row
                   so the two-column grid doesn't squeeze the text. */}
               {showPovHelp && (
-                <div className="mb-3 rounded border border-indigo-800/40 bg-indigo-950/20 p-3">
+                <div className="mb-3 rounded border border-accent-fill/40 bg-accent-soft/20 p-3">
                   <div className="space-y-2">
                     {POV_HELP.map(pov => (
                       <div key={pov.name}>
-                        <p className="text-xs font-semibold text-indigo-300">{pov.name}</p>
+                        <p className="text-xs font-semibold text-accent">{pov.name}</p>
                         <p className="text-xs text-text-muted">{pov.what}</p>
                         <p className="text-xs text-faint">{pov.note}</p>
                       </div>
                     ))}
                   </div>
-                  <p className="mt-2 border-t border-indigo-800/40 pt-2 text-xs text-text-muted">
-                    <span className="font-semibold text-indigo-300">Not sure? </span>
+                  <p className="mt-2 border-t border-accent-fill/40 pt-2 text-xs text-text-muted">
+                    <span className="font-semibold text-accent">Not sure? </span>
                     Pick <span className="text-text-primary">Third Limited</span> -- it's
                     the most popular choice in modern fiction and the easiest to keep
                     consistent. Writing Young Adult or romance and want the reader glued
@@ -995,82 +989,21 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   value={targetAudience}
                   onChange={e => setTargetAudience(e.target.value)}
                   placeholder="e.g. Adult, Young Adult, Middle Grade"
-                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                 />
                 <SuggestionPicker value={targetAudience} onChange={setTargetAudience} groups={AUDIENCE_SUGGESTIONS} nsfwGroups={AUDIENCE_NSFW} />
               </div>
 
               {/* Series info (read-only if applicable) */}
               {project.series_id && (
-                <div className="rounded border border-teal-800/40 bg-teal-950/20 p-3">
-                  <p className="text-xs text-teal-400">
+                <div className="rounded border border-secondary-fill/40 bg-secondary-soft/20 p-3">
+                  <p className="text-xs text-secondary-muted">
                     Part of a series
                   </p>
                   <p className="text-xs text-text-muted">
                     Series path: {project.series_path}
                   </p>
                 </div>
-              )}
-            </section>
-
-
-            {/* ── Outline Template ─────────────────────────────────────── */}
-            <section>
-              <h3 className="mb-3 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                Outline Template
-              </h3>
-              <p className="mb-3 text-xs text-faint">
-                Choose which scaffold to use for notes/outline.md. Applying a
-                new template will <span className="text-amber-500">overwrite</span> the
-                current outline file.
-              </p>
-
-              {/* Template radio options */}
-              <div className="mb-3 flex flex-col gap-1.5">
-                {([
-                  { value: "novel" as OutlineTemplateType, label: "Novel", hint: "Full three-act scaffold for fiction and fantasy novels." },
-                  { value: "short_story" as OutlineTemplateType, label: "Short Story", hint: "Tight 2k-10k scaffold with Seven-Point, Freytag, and more." },
-                ]).map(opt => (
-                  <label
-                    key={opt.value}
-                    className="flex cursor-pointer items-start gap-2 rounded border border-border bg-bg-surface p-2 transition-colors hover:border-faint"
-                  >
-                    <input
-                      type="radio"
-                      name="outlineTemplate"
-                      value={opt.value}
-                      checked={templateChoice === opt.value}
-                      onChange={() => { setTemplateChoice(opt.value); setTemplateApplied(false); }}
-                      className="mt-0.5 accent-indigo-500"
-                    />
-                    <div>
-                      <p className="text-xs font-medium text-text-primary">{opt.label}</p>
-                      <p className="text-xs text-text-muted">{opt.hint}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-
-              {/* Apply button + warning -- only shown when the choice differs from
-                  the currently applied template */}
-              {templateDirty && (
-                <div className="mb-2 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
-                  <p className="text-xs text-amber-400">
-                    Applying will replace the current outline.md. This cannot be undone.
-                  </p>
-                </div>
-              )}
-
-              <button
-                onClick={handleApplyTemplate}
-                disabled={templateApplying || (!templateDirty && !templateApplied)}
-                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {templateApplying ? "Applying..." : "Apply Template"}
-              </button>
-
-              {templateApplied && !templateDirty && (
-                <span className="ml-2 text-xs text-emerald-400">Template applied.</span>
               )}
             </section>
 
@@ -1100,7 +1033,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                         value={opt.value}
                         checked={contentMode === opt.value}
                         onChange={() => setContentMode(opt.value)}
-                        className="mt-0.5 accent-indigo-500"
+                        className="mt-0.5 accent-accent-fill"
                       />
                       <div>
                         <span className="text-xs font-medium text-text-primary">{opt.label}</span>
@@ -1121,7 +1054,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 <select
                   value={costTier}
                   onChange={e => setCostTier(e.target.value)}
-                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-fill"
                 >
                   <option value="free">Free (free models only)</option>
                   <option value="budget">Lowest ($0-1/M input)</option>
@@ -1141,12 +1074,12 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 <p className="mb-2 text-xs text-faint">
                   Choose a specific model for this project. Leave blank to use the global default.
                   {contentMode === "explicit" && (
-                    <span className="ml-1 text-amber-500">
+                    <span className="ml-1 text-warn-fill">
                       Showing only unmoderated models (explicit mode).
                     </span>
                   )}
                   {contentMode === "mature" && (
-                    <span className="ml-1 text-amber-500">
+                    <span className="ml-1 text-warn-fill">
                       Hiding known moderated providers (mature mode).
                     </span>
                   )}
@@ -1155,7 +1088,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   <select
                     value={projectModel}
                     onChange={e => setProjectModel(e.target.value)}
-                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-fill"
                   >
                     <option value="">Use global default</option>
                     {/* Orphaned stored model: render it so the select shows the
@@ -1198,14 +1131,14 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     value={projectModel}
                     onChange={e => setProjectModel(e.target.value)}
                     placeholder="e.g. anthropic/claude-3.5-sonnet (leave blank for global)"
-                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                   />
                 )}
                 {/* Loud warning when the saved model is no longer selectable.
                     This is the case that produced the silent "HTTP 404" -- the
                     model is dead but the project still points at it. */}
                 {projectModelMissing && models.length > 0 && (
-                  <p className="mt-1 text-xs text-amber-500">
+                  <p className="mt-1 text-xs text-warn-fill">
                     This project is set to <span className="font-mono">{projectModel}</span>, which
                     is not in the current model list from your AI provider
                     ({aiProvider === "nanogpt" ? "NanoGPT" : "OpenRouter"}). If the model came from a
@@ -1216,7 +1149,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   </p>
                 )}
                 {projectModel && !projectModelMissing && (
-                  <p className="mt-1 text-xs text-emerald-600">
+                  <p className="mt-1 text-xs text-success-fill">
                     This project will use {projectModel.split("/").pop()} for all AI requests.
                   </p>
                 )}
@@ -1228,10 +1161,10 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
             <section>
               <button
                 onClick={() => setShowGuide(g => !g)}
-                className="flex w-full items-center justify-between rounded border border-border bg-bg-primary px-4 py-3 text-left transition-colors hover:border-indigo-800"
+                className="flex w-full items-center justify-between rounded border border-border bg-bg-primary px-4 py-3 text-left transition-colors hover:border-accent-fill"
               >
                 <div className="flex items-center gap-2">
-                  <HelpCircle size={14} className="text-indigo-400" />
+                  <HelpCircle size={14} className="text-accent-muted" />
                   <span className="text-xs font-semibold text-text-primary">
                     Model Choosing Guide
                   </span>
@@ -1247,7 +1180,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
                   {/* Section A: What does the tier floor do? */}
                   <div>
-                    <p className="mb-1 text-xs font-semibold text-indigo-300">
+                    <p className="mb-1 text-xs font-semibold text-accent">
                       What does the model quality floor do?
                     </p>
                     <p className="text-xs leading-relaxed text-text-muted">
@@ -1260,7 +1193,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
                   {/* Section B: Cost estimates (dynamic based on tier) */}
                   <div>
-                    <p className="mb-1 text-xs font-semibold text-indigo-300">
+                    <p className="mb-1 text-xs font-semibold text-accent">
                       What will this cost me?
                     </p>
                     <p className="mb-1 text-xs text-text-muted">
@@ -1269,11 +1202,11 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                     <div className="rounded border border-border bg-bg-panel p-3">
                       <p className="text-xs text-text-primary">
                         Getting started (5-8 profiles, world-building, 3-5 chapters with AI feedback):
-                        <span className="ml-1 font-semibold text-emerald-400">{costs.startup}</span>
+                        <span className="ml-1 font-semibold text-success-muted">{costs.startup}</span>
                       </p>
                       <p className="mt-1 text-xs text-text-primary">
                         Typical writing session after that (profile tweaks, feedback on 1-2 chapters):
-                        <span className="ml-1 font-semibold text-emerald-400">{costs.session}</span>
+                        <span className="ml-1 font-semibold text-success-muted">{costs.session}</span>
                       </p>
                     </div>
                     <p className="mt-1 text-xs text-faint">
@@ -1284,7 +1217,7 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
                   {/* Section C: Content mode impact (dynamic) */}
                   <div>
-                    <p className="mb-1 text-xs font-semibold text-indigo-300">
+                    <p className="mb-1 text-xs font-semibold text-accent">
                       How does content mode affect model choice?
                     </p>
                     <p className="text-xs leading-relaxed text-text-muted">
@@ -1293,8 +1226,8 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                   </div>
 
                   {/* Section D: Recommendation (dynamic based on ALL settings) */}
-                  <div className="rounded border border-indigo-800/40 bg-indigo-950/20 p-3">
-                    <p className="mb-1 text-xs font-semibold text-indigo-300">
+                  <div className="rounded border border-accent-fill/40 bg-accent-soft/20 p-3">
+                    <p className="mb-1 text-xs font-semibold text-accent">
                       Recommendation for your project
                     </p>
                     <p className="text-xs leading-relaxed text-text-primary">
@@ -1314,15 +1247,15 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
           className="shrink-0 border-t border-border"
           style={{ padding: "1rem 1.5rem" }}
         >
-          {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
+          {error && <p className="mb-2 text-xs text-danger-muted">{error}</p>}
           {saved && !error && (
-            <p className="mb-2 text-xs text-emerald-400">Settings saved.</p>
+            <p className="mb-2 text-xs text-success-muted">Settings saved.</p>
           )}
           <div className="flex justify-end">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded bg-accent-fill px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-fill disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save"}
             </button>

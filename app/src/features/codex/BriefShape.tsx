@@ -95,7 +95,7 @@ export function BriefShape({ threads, edges, asOfLabel }: BriefShapeProps) {
             <line
               key={`${edge.src_id}-${edge.rel}-${edge.dst_id}-${i}`}
               x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              className="stroke-zinc-600" strokeWidth={1}
+              className="stroke-border-strong" strokeWidth={1}
             />
           );
         })}
@@ -122,7 +122,7 @@ export function BriefShape({ threads, edges, asOfLabel }: BriefShapeProps) {
               <text
                 x={at.x} y={at.y - nodeRadius(degrees[thread.entity_id] ?? 0) - 3}
                 textAnchor="middle"
-                className="fill-zinc-300 text-[8px]"
+                className="fill-text-primary text-2xs"
               >
                 {thread.name}
               </text>
@@ -130,7 +130,7 @@ export function BriefShape({ threads, edges, asOfLabel }: BriefShapeProps) {
           );
         })}
       </svg>
-      <p className="mt-1 text-[10px] text-faint">
+      <p className="mt-1 text-micro text-faint">
         {inside.length === 0
           ? `${threads.length} ${threads.length === 1 ? "Thread" : "Threads"}, `
             + "none connected to each other here"

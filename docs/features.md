@@ -10,7 +10,7 @@ This is a snapshot of what Storythread Studio does today. For where it is going 
 - Formatting toolbar, font selector, find and replace
 - A **Tools** pulldown in the title bar collects the one-off actions: Generate Scene Summaries, Suggest Scene Breaks, Chapter Summary, Reader Mode, Passage / Dialogue Check, and Export
 - **Passage / Dialogue Check** reads the selected passage aloud. Reading silently hides a passage's rhythm -- the writer supplies the pauses and emphasis without noticing, and an indifferent voice does not. It catches repeated words, sentences that only parse on the second read, and right-word-wrong-word errors no checker flags ("walked through the dessert" is perfectly spelled). Four voices, remembered per book, entirely local and free using the same engine as the Audiobook Converter; it saves nothing and applies no markers
-- Light and dark themes (app-wide, persisted)
+- Light and dark themes (app-wide, persisted), plus line spacing and paragraph spacing -- see Settings
 - Selection highlight persists when the writer moves focus into the chat or Smart Advisor panels
 
 ## Project structure
@@ -30,12 +30,87 @@ Each project is a folder the user owns. The app reads and writes Markdown files 
 
 The left panel presents Story > Act > Chapter > Scene > Beat:
 
-- **Book Details** — a section header at the top that opens the Book Details popout (formerly "Project Settings" behind a gear icon, now the single home for everything book-level): Title, Description, Genre, Tone, Theme, Setting, Word Count target, Point of View, Tense, Target Audience, plus outline template, content mode, and the model picker. All story fields but the word target flow into AI prompts as STORY CONTEXT.
+- **Book Details** — a section header at the top that opens the Book Details popout (formerly "Project Settings" behind a gear icon, now the single home for everything book-level): Title, Description, Genre, Tone, Theme, Setting, Word Count target, Chapter Count target, Point of View, Tense, Target Audience, plus content mode and the model picker. All story fields but the two targets flow into AI prompts as STORY CONTEXT; the targets live in the outline worksheet and drive the Writing Progress gauge.
 - **Acts** — created with "+ New Act"; chapters move between acts and reorder via each row's hover "..." menu (Move up / Move down / Move to Act). Acts collapse, and the collapsed state is remembered per book. Moves never rename chapter files.
 - **Chapters** — double-click to rename. A rename updates the heading AND the filename (slug follows the title, `NN-` prefix kept), and carries the chapter's summary, scene summaries, act slot, and progress history along.
 - **Scenes** — expandable under each chapter (from scene summaries); each scene with beats shows a done/total badge and expandable read-only beat rows.
 - **Notes / Profiles** — collapsible sections; collapse state remembered per book across restarts and updates.
 - **Writing Progress** — pinned at the bottom of the panel, always visible no matter how much of the tree is expanded; the breakdown slide-over opens upward.
+
+## The Outline
+
+A second editor rather than a form. Clicking Outline in the sidebar opens the
+same CodeMirror surface used for chapters, on `notes/outline.md`. The writer can
+type and go; nothing in the file is required, and nothing is filled in for them.
+Full format and rules in `docs/outline-spec.md`.
+
+### The worksheet
+
+A new book's outline is ten plain lines and nothing else -- Title, Series, Genre,
+Tone, Description, Setting, Theme, Tense, Target Word Count, Target Chapter
+Count. No YAML, no HTML comment, no instruction prose, and no `---` anywhere.
+
+Eight of those lines are a **one-way copy** of Book Details, never read back:
+`project.json` stays the single master for everything the AI sees, so the same
+fact cannot disagree with itself in two places. The two exceptions are **Target
+Word Count** and **Target Chapter Count**, which are mastered here and exist
+nowhere else; Book Details writes to them and the Writing Progress gauge reads
+them. Blank means unset -- serial fiction simply leaves the word target empty.
+
+### Preset sections
+
+A dropdown of nineteen ready-made sections in six groups: Story Core (Premise,
+Story Promise, Central Conflict, Protagonist), Story Overview (Story Summary,
+Beginning State, Inciting Change, Escalating Change, Crisis, Climax, Resolution),
+Character Module (Identity, Story Function -- both repeatable, once per
+character), Structure (Act Beats, Midpoint), World Module (Setting Sketch, Rules
+and Limits, Factions and Powers), and Chapter Plan.
+
+Each carries a prompt and a worked example, and **no example contains an invented
+proper noun** -- they are written with role words ("a disgraced soldier", "the
+heir she once tried to kill") so a model has no name to adopt as canon and the
+Weave's scan has no name to raise. Every example line is italic and marked
+`_Example -- delete this: ..._`.
+
+A section already in the outline is greyed out, tooltipped, and clicking it
+scrolls to that heading instead of adding a second one. The check reads the live
+editor buffer rather than the file, so a preset added but not yet saved greys
+immediately and `Ctrl+Z` un-greys it. Insertion always appends at the end after a
+blank line -- never at the cursor, which could split a sentence -- in one
+transaction, so one undo removes it.
+
+### Fill from Book Details
+
+Puts the title, series, genre, tone, description, setting, theme, tense and both
+targets into the worksheet header. It only fills lines that are **empty**, so it
+can never overwrite something the writer typed, and it lands as a single
+transaction that `Ctrl+Z` reverts -- which is why it needs no confirm dialog.
+
+### Show me how
+
+A twenty-one page walkthrough, one page per worksheet field and preset section,
+each showing how The Lord of the Rings, Harry Potter and Dungeon Crawler Carl
+answer it. Three books at three different distances from genre convention, so the
+example never reads as the only right answer.
+
+### Converting an older outline
+
+Outlines written before v2.0.2 opened with a YAML tracking block. They are
+converted the first time the outline is opened, and the conversion is
+**subtractive**: it removes that one block and inserts the worksheet, and carries
+the rest of the file through as an opaque slice. Existing template bodies are
+left exactly as they are -- they belong to the writer now, whatever they started
+as. Anything typed into the old `expected_characters` style lists is preserved
+under a `## Kept from your old outline` heading rather than dropped.
+
+A copy of the original is written to `.storythread/snapshots/outline-heal/`
+first, and the editor shows a dismissible banner naming it. The transform
+verifies before writing that every original line outside the removed block still
+appears in order; if that fails it writes nothing at all. A file it cannot read
+confidently -- malformed YAML, no leading block -- is left alone, on the
+principle that a broken file the writer can see beats one the app rewrote.
+Reading the targets falls back to the legacy block independently, so the gauge
+stays correct whether or not conversion has run.
 
 ## Profile Builder
 
@@ -878,7 +953,7 @@ A modal accessible from the sidebar. Sections:
 - **Model Roles** — one model per KIND of job (see below)
 - **Content mode** — project-level default (`general`, `mature`, `explicit`) overridable per request
 - **Model Routing** — allowlist, blocklist, and per-model content-mode declarations enforced at request time
-- **Theme** — light / dark
+- **Appearance** -- **Theme** (light / dark), **Interface size** (scales the app's own text and controls), **Line spacing** and **Paragraph spacing**. The two spacing controls follow a word processor's model: line spacing is Single / 1.5 lines / Double / a custom multiple, measured against the font's own metrics and shown with its computed value (`1.5 lines [1.75]`); paragraph spacing is space before and after each paragraph in points, defaulting to 0 and 8. They are two different jobs and both are needed -- line spacing only opens up the lines *inside* a paragraph, so on its own it cannot put a gap between them. Markdown editing surfaces only; Reader Mode keeps its own picker for a deliberately different job
 - **Debug options**
 
 ## Model Roles

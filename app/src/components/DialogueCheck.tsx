@@ -211,7 +211,7 @@ export function DialogueCheck({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex w-full max-w-lg flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+      <div className="flex w-full max-w-lg flex-col rounded-lg border border-border bg-bg-panel shadow-e4">
         <div className="flex items-center gap-2 border-b border-border px-5 py-3">
           <Headphones size={15} className="text-accent" />
           <h2 className="flex-1 text-sm font-semibold text-text-primary">
@@ -224,7 +224,7 @@ export function DialogueCheck({
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <p className="text-[12px] leading-relaxed text-text-secondary">
+          <p className="text-xs leading-relaxed text-text-secondary">
             Hear this passage read aloud. Your ear catches what your eye
             skims.
           </p>
@@ -235,13 +235,13 @@ export function DialogueCheck({
           <div>
             <button
               onClick={() => setShowWhy(v => !v)}
-              className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
+              className="inline-flex items-center gap-1 text-mini text-accent hover:underline"
             >
               {showWhy ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
               What's this for?
             </button>
             {showWhy && (
-              <div className="mt-1.5 space-y-2 rounded border border-border bg-bg-surface px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
+              <div className="mt-1.5 space-y-2 rounded border border-border bg-bg-surface px-3 py-2 text-mini leading-relaxed text-text-secondary">
                 <p>
                   Reading your own words silently hides their rhythm. You
                   supply the pauses and the emphasis without noticing, so it
@@ -267,7 +267,7 @@ export function DialogueCheck({
           </div>
 
           {!hadSelection && (
-            <p className="rounded border border-border bg-bg-surface px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
+            <p className="rounded border border-border bg-bg-surface px-3 py-2 text-mini leading-relaxed text-text-secondary">
               Nothing was selected, so this is the whole chapter. Select a
               scene or a passage first and it will read just that -- faster
               to prepare, and easier to judge.
@@ -275,12 +275,12 @@ export function DialogueCheck({
           )}
 
           {engine === "missing" ? (
-            <div className="rounded border border-amber-800 bg-amber-950/30 px-3 py-2.5">
-              <p className="flex items-start gap-1.5 text-[12px] font-medium text-amber-200">
+            <div className="rounded border border-warn-fill bg-warn-soft/30 px-3 py-2.5">
+              <p className="flex items-start gap-1.5 text-xs font-medium text-warn-strong">
                 <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                 The free voice engine is not installed yet.
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-amber-200/80">
+              <p className="mt-1 text-mini leading-relaxed text-warn-strong/80">
                 Dialogue Check reads entirely on your computer -- no account,
                 no key, nothing sent anywhere. It needs a one-time download of
                 about 372 MB, shared with the Audiobook Converter.
@@ -288,7 +288,7 @@ export function DialogueCheck({
               <button
                 onClick={() => void install()}
                 disabled={installing}
-                className="mt-2 inline-flex items-center gap-2 rounded bg-accent px-3 py-1.5 text-[12px] font-semibold text-black disabled:opacity-40"
+                className="mt-2 inline-flex items-center gap-2 rounded bg-accent px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40"
               >
                 {installing && <Loader2 size={12} className="animate-spin" />}
                 {installing ? "Downloading the voices..." : "Install the voices"}
@@ -297,7 +297,7 @@ export function DialogueCheck({
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <label className="text-[11px] text-text-secondary" htmlFor="dc-voice">
+                <label className="text-mini text-text-secondary" htmlFor="dc-voice">
                   Read by
                 </label>
                 <select
@@ -307,7 +307,7 @@ export function DialogueCheck({
                     setVoiceId(e.target.value);
                     onVoiceChange?.(e.target.value);
                   }}
-                  className="min-w-0 flex-1 rounded border border-border bg-bg-input px-2 py-1 text-[12px] text-text-primary"
+                  className="min-w-0 flex-1 rounded border border-border bg-bg-input px-2 py-1 text-xs text-text-primary"
                 >
                   {options.map(v => (
                     <option key={v.id} value={v.id}>{v.label}</option>
@@ -317,7 +317,7 @@ export function DialogueCheck({
                   onClick={() => void speak(
                     "The road disappeared beneath the gathering snow.", "sample")}
                   disabled={busy !== null || engine !== "ready"}
-                  className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-text-secondary hover:text-text-primary disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-mini text-text-secondary hover:text-text-primary disabled:opacity-40"
                 >
                   {busy === "sample"
                     ? <Loader2 size={11} className="animate-spin" />
@@ -326,11 +326,11 @@ export function DialogueCheck({
                 </button>
               </div>
 
-              <p className="text-[11px] text-text-secondary">
+              <p className="text-mini text-text-secondary">
                 {chars.toLocaleString()} characters selected -- around{" "}
                 {estimateWait(chars)} to prepare.
                 {long && (
-                  <span className="text-amber-300">
+                  <span className="text-warn">
                     {" "}Long passages are fine; they just take a while. A
                     single scene is usually enough to hear the problem.
                   </span>
@@ -341,7 +341,7 @@ export function DialogueCheck({
                 <button
                   onClick={() => void speak(text, "reading")}
                   disabled={busy !== null || engine !== "ready" || chars === 0}
-                  className="inline-flex items-center gap-2 rounded bg-accent px-4 py-2 text-[12px] font-semibold text-black disabled:opacity-40"
+                  className="inline-flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs font-semibold text-black disabled:opacity-40"
                 >
                   {busy === "reading"
                     ? <Loader2 size={13} className="animate-spin" />
@@ -351,7 +351,7 @@ export function DialogueCheck({
                 {url && (
                   <button
                     onClick={() => { playerRef.current?.pause(); }}
-                    className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary"
+                    className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-secondary hover:text-text-primary"
                   >
                     <Square size={12} /> Stop
                   </button>
@@ -366,14 +366,14 @@ export function DialogueCheck({
           )}
 
           {error && (
-            <p className="rounded border border-rose-800 bg-rose-950/40 px-3 py-2 text-[11px] text-rose-300">
+            <p className="rounded border border-danger-fill bg-danger-soft/40 px-3 py-2 text-mini text-danger">
               {error}
             </p>
           )}
 
           {/* Faded on purpose: this is a boundary statement, not
               instructions. It matters the first time and never again. */}
-          <p className="border-t border-border pt-3 text-[10px] leading-relaxed text-faint">
+          <p className="border-t border-border pt-3 text-micro leading-relaxed text-faint">
             This is listening, not producing. Nothing is saved, no markers or
             pacing apply, and the audio disappears when you close this window.
             To make an actual audiobook -- chapter files, an M4B, character

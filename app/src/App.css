@@ -13,139 +13,531 @@
  */
 @import "tailwindcss";
 
-
 /*
  * Theme Tokens -- Storythread Studio Design System
  * ==================================================
- * Design tokens are named values for colors, spacing, etc. that you
- * define once and reuse everywhere. Changing a token here updates it
- * across the whole app instantly.
+ * Three layers, in this order, and the order matters:
  *
- * Two layers work together:
+ *   LAYER 1  Role tokens (:root and [data-theme="light"])
+ *            The ONLY colours a component is allowed to name. A role says
+ *            what a colour is FOR -- accent, danger, the Weave -- never what
+ *            it looks like. Swap a role here and every screen follows.
  *
- *   1. CSS variables on :root and [data-theme="light"]
- *      - These are runtime-swappable. The frontend sets
- *        document.documentElement.setAttribute('data-theme', 'light')
- *        to flip every color in the app at once.
+ *   LAYER 2  The bridge (generated)
+ *            Tailwind's own palette variables, aimed at this app's roles, so
+ *            that ~2,400 call sites written as `text-indigo-300` take the new
+ *            look without being edited. Temporary; see the block itself.
  *
- *   2. @theme block (Tailwind v4)
- *      - References the CSS variables via var(--color-*).
- *      - Tailwind v4 auto-generates utility classes like bg-bg-primary,
- *        text-text-primary, border-border, bg-accent from these tokens.
- *      - Components use those classes (NOT hardcoded hex values), so the
- *        runtime variable swap actually takes effect.
+ *   LAYER 3  .audiobook-theme
+ *            The Audiobook Converter's charcoal world, pinned so neither
+ *            layer above can reach into it.
  *
- * Adding a new color: declare it in BOTH :root and [data-theme="light"],
- * then expose it through @theme so Tailwind generates a utility class.
+ * SURFACES ALTERNATE. THEY DO NOT CLIMB. This is the rule, and it came from
+ * the writer looking at the build and naming the two places it already
+ * happened by accident:
+ *
+ *     "BOOK DETAILS popout color is good for background, but the text windows
+ *      are a lighter shade. This color of the text window is not appealing.
+ *      In the same window at the bottom there is a Model Choosing Guide. The
+ *      color for this card is perfect for the text windows. Inside that
+ *      dropdown section [there are] two cards ... These card colors are a
+ *      perfect blend of counterbalance to each other. The grey-blue on top of
+ *      charcoal and charcoal on top of grey-blue."
+ *
+ * So there are TWO surface colours in dark mode and nesting swaps between
+ * them, rather than a ramp that gets lighter the higher you go:
+ *
+ *     page      #1E1E1E  charcoal
+ *       panel   #23232D  grey-blue   (dialogs, cards, sidebars)
+ *         inset #1E1E1E  charcoal    (inputs, wells, inner cards)
+ *           ... and a card inside THAT goes back to grey-blue.
+ *
+ * --st-bg-surface is deliberately the same value as --st-bg-primary. It is
+ * not a redundant token: it means "recessed", where bg-primary means "the
+ * page", and an input is a well you type INTO rather than a tile sitting on
+ * top of something. The old value (#2A2A34, a lighter grey) tried to make
+ * inputs float above the dialog and is exactly what the writer rejected.
+ *
+ * Light mode mirrors it: page #F5F2EC, panel #FBF9F4, inset back to #F5F2EC.
+ *
+ * HOVER IS THE ONE THING THAT REALLY DOES LIFT -- --st-bg-raised, #33333D in
+ * dark and #EDE9E0 in light (darker on paper, because on cream a darker patch
+ * is what reads as "the pointer is here"). 53 call sites were using
+ * hover:bg-bg-surface for this while bg-bg-raised, which exists for exactly
+ * that job, had zero users. They are on the right token now; without that
+ * move, changing bg-surface to a recessed colour would have made every hover
+ * in the app go dark instead of light.
+ *
+ * THE DARK SURFACES ARE COOL AND THE PAGE BEHIND THEM IS NEUTRAL. That is
+ * deliberate: a raised panel reads as lifted partly because it is lighter and
+ * partly because it is a slightly different temperature from the window it
+ * sits on. The blue is 10 points on the B channel, held CONSTANT up the ramp
+ * so a dialog opening over a card belongs to the same family rather than
+ * looking grey against it. The borders carry the same cast for the same
+ * reason -- a neutral line around a cool panel reads brown.
+ *
+ * If the cast is ever retuned, move every one of these together. Cooling the
+ * card alone is the tempting single edit and it is the wrong one.
+ *
+ * HOW THIS GOT HERE. Two values contradict the original spec, and the reasons
+ * matter more than the numbers:
+ *
+ *   The spec put L1 at #1D1D1D, one shade DARKER than the page, and the first
+ *   cut followed it literally with borders and shadows carrying all the depth.
+ *   Verdict on that build: "only a shade darker and its flat/mono looking. It
+ *   needs to jump out more. The border color is too muted." Both true, and
+ *   they compound -- a surface that does not separate by lightness is relying
+ *   entirely on its border, so a quiet border leaves it with nothing.
+ *
+ *   Then: "L1 needs to be slightly cooler with a cool grey to it", naming
+ *   #232330 with #23232A as a backup. Both were tried on the real screen and
+ *   both missed: #232330 (13 points of blue) "went over the mark just a bit",
+ *   #23232A (7 points) "doesn't look right now". Settled at 10 -- "lets do ~10
+ *   as the happy medium". #23232A is parked in --st-bg-panel-alt.
+ *
+ *   Worth noting for anyone retuning this: the two rejected values were both
+ *   picked by eye off a screenshot, and the one that worked was arrived at by
+ *   splitting them. The channel offset, not the hex, is the thing to reason
+ *   about.
+ *
+ * The rule all this replaced said elevation was carried by line and shadow and
+ * NEVER by lightness. It is written down here because it was wrong rather
+ * than because it was forgotten: it was the justification for the darker L1,
+ * and deleting it silently would leave the next person free to re-derive it.
+ *
+ * Adding a colour: declare it in BOTH :root and [data-theme="light"], then
+ * expose it through @theme inline. App.css.test.ts fails the build if a
+ * token exists in one theme and not the other -- that used to be a comment
+ * asking nicely, and nothing checked it.
  */
 
-/* ── Dark theme (default) ─────────────────────────────────────────────
- * Three levels of dark navy create visual depth without bright contrast.
- * Inspired by Quarkle.ai's dark mode design.
- *   primary  = outermost window background (darkest)
- *   panel    = sidebars and panel surfaces
- *   surface  = cards, input fields, inner boxes (lightest of the three)
- */
+/* -- Dark theme (default) --------------------------------------------- */
 :root {
   /*
    * Native controls follow the OS palette unless told otherwise, and a
-   * dropdown is drawn by the OS, not by us. On Windows in light mode
-   * that gave a <select> popup LIGHT grey panels with our white option
-   * text on top -- an option was only readable while it was
-   * highlighted. One declaration fixes every select, scrollbar, date
-   * picker and context menu in the app, and it is the only way to
-   * reach a popup that lives outside the page.
+   * dropdown is drawn by the OS, not by us. One declaration fixes every
+   * select, scrollbar, date picker and context menu, and it is the only
+   * way to reach a popup that lives outside the page.
    */
   color-scheme: dark;
 
-  --color-bg-primary:   #070724;
-  --color-bg-panel:     #0d0d2b;
-  --color-bg-surface:   #12122e;
-  --color-border:       #1e1e4a;
-  --color-text-primary: #f0f0f5;
-  --color-text-muted:   #8888aa;
-  /* Faint = even dimmer than muted; used for placeholders, hint text, and
-     low-emphasis labels. ~114 places use this shade in dark mode. */
-  --color-faint:        #3f3f7a;
-  --color-accent:       #6366f1;
+  /* Surfaces */
+  --st-bg-primary:   #1E1E1E;   /* the window itself        */
+  --st-bg-panel:     #23232D;   /* L1 -- cards, sidebars    */
+  --st-bg-surface:   #1E1E1E;   /* inset -- inputs, wells   */
+  --st-bg-raised:    #33333D;   /* L3 -- hover, menus       */
+  --st-bg-panel-alt: #23232A;   /* unused: the cooler-by-7 L1 */
+  --st-scrim:        rgb(0 0 0 / 0.66);
+  --st-paper:        #FBF8F1;   /* the wordmark plate, both themes */
+  --st-brand-deep:   #070724;   /* Black Russian: brand fills only */
 
-  /* Selection layer colors (used by CodeMirror + native ::selection) */
-  --color-selection:        #3a5bbf;
-  --color-active-line:      rgba(13, 13, 43, 0.5);
+  /* Ink -- 87 / 60 / 38% white, the Material dark ladder.
+     These carry alpha and are never used with a Tailwind /NN modifier;
+     the tokens that ARE (border, the surfaces) are opaque on purpose. */
+  --st-text-primary: rgb(255 255 255 / 0.87);
+  --st-text-muted:   rgb(255 255 255 / 0.60);
+  --st-faint:        rgb(255 255 255 / 0.38);
+  --st-on-accent:    #10202E;   /* ink ON a filled accent button */
+
+  /* Lines -- opaque, because border-border/60 is a real call site and
+     alpha-on-alpha would compound to something invisible. */
+  --st-border:        #3F3F49;
+  --st-border-strong: #5A5A64;
+  --st-focus:         #90CAF9;
+
+  /* Accent -- links, primary action, focus, "you are here". */
+  --st-accent:        #90CAF9;
+  --st-accent-strong: #BBDEFB;
+  --st-accent-muted:  #64B5F6;
+  --st-accent-fill:   #42A5F5;
+  --st-accent-soft:   rgb(144 202 249 / 0.14);
+
+  --st-secondary:        #80CBC4;
+  --st-secondary-strong: #B2DFDB;
+  --st-secondary-muted:  #4DB6AC;
+  --st-secondary-fill:   #26A69A;
+  --st-secondary-soft:   rgb(128 203 196 / 0.14);
+
+  --st-success:        #81C784;
+  --st-success-strong: #A5D6A7;
+  --st-success-muted:  #66BB6A;
+  --st-success-fill:   #43A047;
+  --st-success-soft:   rgb(129 199 132 / 0.14);
+
+  --st-warn:        #FFD54F;
+  --st-warn-strong: #FFE082;
+  --st-warn-muted:  #FFCA28;
+  --st-warn-fill:   #FFA726;
+  --st-warn-soft:   rgb(255 213 79 / 0.13);
+
+  --st-danger:        #E57373;
+  --st-danger-strong: #EF9A9A;
+  --st-danger-muted:  #EF5350;
+  --st-danger-fill:   #E53935;
+  --st-danger-soft:   rgb(229 115 115 / 0.14);
+
+  /* Feature identity. Violet is the Weave's colour everywhere in this app
+     (lexicon.ts, sectionRegistry.SHADOWED) and emerald is the audiobook's.
+     Neither is a status, so neither collapses onto accent. */
+  --st-weave:        #B39DDB;
+  --st-weave-strong: #D1C4E9;
+  --st-weave-muted:  #9575CD;
+  --st-weave-fill:   #7E57C2;
+  --st-weave-soft:   rgb(179 157 219 / 0.14);
+  --st-audio:        #81C784;
+
+  /* Categorical -- sectionRegistry's positional stripes. A scale, not a set
+     of meanings: index 3 signifies no more than index 1. */
+  --st-kind-1: #4FC3F7;  --st-kind-2: #81C784;
+  --st-kind-3: #FFD54F;  --st-kind-4: #E57373;
+  --st-kind-5: #80CBC4;  --st-kind-6: #BA68C8;
+  --st-kind-7: #AED581;  --st-kind-8: #4DD0E1;
+
+  /* Editor layers (CodeMirror + native ::selection) */
+  --st-selection:   #2E5C8A;
+  --st-active-line: rgb(255 255 255 / 0.04);
 }
 
-/* ── Light theme (paper feel) ─────────────────────────────────────────
- * Warm off-white palette evoking a real paper page. Indigo accent kept
- * identical so brand identity carries over. Activated by setting
- * data-theme="light" on the <html> element.
- */
+/* -- Light theme (warm paper) ----------------------------------------- */
 [data-theme="light"] {
-  --color-bg-primary:   #F4F1EA;  /* warm paper */
-  --color-bg-panel:     #EAE6DC;  /* slightly darker paper for sidebars */
-  --color-bg-surface:   #FBF8F1;  /* near-white for cards/inputs */
-  --color-border:       #D6D0C2;  /* soft tan */
-  --color-text-primary: #1A1A1A;  /* near-black for body text */
-  --color-text-muted:   #6B6B6B;  /* warm grey for labels */
-  --color-faint:        #9A9485;  /* very light tan for placeholders/hints */
-  --color-accent:       #6366f1;  /* indigo, unchanged */
+  /* WAS MISSING. Without it, native scrollbars, <select> popups and context
+     menus stayed dark-chrome on a cream page. */
+  color-scheme: light;
 
-  /* Selection: lighter, more subtle on paper */
-  --color-selection:        #c7d2fe;
-  --color-active-line:      rgba(99, 102, 241, 0.08);
+  --st-bg-primary:   #F5F2EC;
+  --st-bg-panel:     #FBF9F4;
+  --st-bg-surface:   #F5F2EC;
+  --st-bg-raised:    #EDE9E0;
+  --st-bg-panel-alt: #FBF9F4;
+  --st-scrim:        rgb(26 26 26 / 0.42);
+  --st-paper:        #FBF8F1;
+  --st-brand-deep:   #070724;
 
-  /* Override Tailwind's lighter indigo shades in light mode.
-     ============================================================
-     The codebase uses text-indigo-200 / -300 / -400 to mark "selected" or
-     "highlighted" UI items (active chapter, active tab, primary buttons).
-     Those shades were picked to read against a DARK navy background --
-     on the cream paper background they fade out and become hard to read.
-     Overriding the same Tailwind tokens here means every existing
-     text-indigo-300 etc. instantly becomes readable in light mode,
-     without refactoring ~80 occurrences across the app.
-     Dark-mode shades aren't affected because these overrides only apply
-     under [data-theme="light"]. */
-  --color-indigo-200:   #4338ca;  /* was #c7d2fe -- dark enough to read on cream */
-  --color-indigo-300:   #3730a3;  /* was #a5b4fc -- the main "highlight" shade */
-  --color-indigo-400:   #4338ca;  /* was #818cf8 -- icons / accent text */
+  /* 0.90 / 0.65 / 0.45, not 0.87 / 0.60 / 0.38. Black at 60% on #F5F2EC is
+     4.33:1 -- under AA, across 517 text-text-muted call sites. Measured,
+     not guessed. */
+  --st-text-primary: rgb(26 26 26 / 0.90);
+  --st-text-muted:   rgb(26 26 26 / 0.65);
+  --st-faint:        rgb(26 26 26 / 0.45);
+  --st-on-accent:    #FFFFFF;
 
-  /* Override Tailwind's teal palette for light mode.
-     ============================================================
-     Teal is the accent color used in the Profile Builder AI panel
-     ("Mode:" bar, mode list) and on Location chips. The default
-     light teal shades fade out on cream; we darken the text shades
-     and lighten the dark-bg shades so:
-       - Default text (was teal-300/400): now medium-dark teal -- readable
-       - Hover text (was teal-100/200): now even darker teal -- "couple
-         of tones darker on hover" as the user requested
-       - The "Mode:" bar (bg-teal-950/40) stops being a dark grey patch:
-         teal-950 is overridden to a pale teal so 40% over cream reads
-         as a faint tint instead of a heavy dark band.
-     Border shades (teal-700/800) are left as Tailwind defaults --
-     dark teal borders work fine on cream. */
-  --color-teal-100:     #042f2e;  /* was #ccfbf1 -- for active-mode label */
-  --color-teal-200:     #115e59;  /* was #99f6e4 -- hover emphasis */
-  --color-teal-300:     #0f766e;  /* was #5eead4 -- main highlight */
-  --color-teal-400:     #0d9488;  /* was #2dd4bf -- default action text */
-  --color-teal-500:     #0f766e;  /* was #14b8a6 -- "Mode:" label */
-  --color-teal-600:     #115e59;  /* was #0d9488 -- chevrons / labels */
-  --color-teal-900:     #ccfbf1;  /* was #134e4a -- semi-transparent bg patches */
-  --color-teal-950:     #ccfbf1;  /* was #042f2e -- the AI panel bar */
+  --st-border:        #CBC3B2;
+  --st-border-strong: #A89F8B;
+  --st-focus:         #1565C0;
+
+  --st-accent:        #1565C0;
+  --st-accent-strong: #0D47A1;
+  --st-accent-muted:  #1976D2;
+  --st-accent-fill:   #1565C0;
+  --st-accent-soft:   rgb(21 101 192 / 0.10);
+
+  --st-secondary:        #00796B;
+  --st-secondary-strong: #004D40;
+  --st-secondary-muted:  #00897B;
+  --st-secondary-fill:   #00796B;
+  --st-secondary-soft:   rgb(0 121 107 / 0.10);
+
+  --st-success:        #2E7D32;
+  --st-success-strong: #1B5E20;
+  --st-success-muted:  #388E3C;
+  --st-success-fill:   #2E7D32;
+  --st-success-soft:   rgb(46 125 50 / 0.10);
+
+  /* NOT an amber. Amber text on cream always fails contrast; this is a
+     dark ochre at 5.31:1. It will look less "amber" than the dark side --
+     that is deliberate, not a mistake to be reverted. */
+  --st-warn:        #8A5A00;
+  --st-warn-strong: #6B4500;
+  --st-warn-muted:  #A66B00;
+
+  --st-warn-fill:   #E65100;
+  --st-warn-soft:   rgb(230 81 0 / 0.10);
+
+  --st-danger:        #C62828;
+  --st-danger-strong: #8E0000;
+  --st-danger-muted:  #D32F2F;
+  --st-danger-fill:   #C62828;
+  --st-danger-soft:   rgb(198 40 40 / 0.09);
+
+  --st-weave:        #5E35B1;
+  --st-weave-strong: #4527A0;
+  --st-weave-muted:  #673AB7;
+  --st-weave-fill:   #5E35B1;
+  --st-weave-soft:   rgb(94 53 177 / 0.09);
+  --st-audio:        #2E7D32;
+
+  --st-kind-1: #0277BD;  --st-kind-2: #2E7D32;
+  --st-kind-3: #8A5A00;  --st-kind-4: #C62828;
+  --st-kind-5: #00796B;  --st-kind-6: #6A1B9A;
+  --st-kind-7: #558B2F;  --st-kind-8: #00838F;
+
+  --st-selection:   #BBDEFB;
+  --st-active-line: rgb(21 101 192 / 0.07);
 }
+
 
 /*
- * Bridge CSS variables into Tailwind v4's design system.
- * Each entry here makes the variable available as a utility class,
- * e.g. --color-bg-primary becomes bg-bg-primary / text-bg-primary / etc.
+ * Bridge CSS variables into Tailwind v4.
+ *
+ * `@theme inline` rather than `@theme`. The plain form emitted
+ * `--st-bg-primary: var(--st-bg-primary)` into :root inside Tailwind's
+ * theme layer, which resolved only because the author block above happens to
+ * be unlayered -- a circular definition that any future @layer tidy-up would
+ * have broken silently. `inline` substitutes the var() into the generated
+ * utility and declares nothing, which is what was meant all along.
+ */
+@theme inline {
+  --color-bg-primary:   var(--st-bg-primary);
+  --color-bg-panel:     var(--st-bg-panel);
+  --color-bg-surface:   var(--st-bg-surface);
+  --color-bg-raised:    var(--st-bg-raised);
+  --color-bg-panel-alt: var(--st-bg-panel-alt);
+  --color-scrim:        var(--st-scrim);
+  --color-paper:        var(--st-paper);
+  --color-brand-deep:   var(--st-brand-deep);
+
+  --color-text-primary: var(--st-text-primary);
+  --color-text-muted:   var(--st-text-muted);
+  --color-faint:        var(--st-faint);
+  --color-on-accent:    var(--st-on-accent);
+
+  --color-border:        var(--st-border);
+  --color-border-strong: var(--st-border-strong);
+  --color-focus:         var(--st-focus);
+
+  --color-accent:        var(--st-accent);
+  --color-accent-strong: var(--st-accent-strong);
+  --color-accent-muted:  var(--st-accent-muted);
+  --color-accent-fill:   var(--st-accent-fill);
+  --color-accent-soft:   var(--st-accent-soft);
+
+  --color-secondary:        var(--st-secondary);
+  --color-secondary-strong: var(--st-secondary-strong);
+  --color-secondary-muted:  var(--st-secondary-muted);
+  --color-secondary-fill:   var(--st-secondary-fill);
+  --color-secondary-soft:   var(--st-secondary-soft);
+
+  --color-success:        var(--st-success);
+  --color-success-strong: var(--st-success-strong);
+  --color-success-muted:  var(--st-success-muted);
+  --color-success-fill:   var(--st-success-fill);
+  --color-success-soft:   var(--st-success-soft);
+
+  --color-warn:        var(--st-warn);
+  --color-warn-strong: var(--st-warn-strong);
+  --color-warn-muted:  var(--st-warn-muted);
+  --color-warn-fill:   var(--st-warn-fill);
+  --color-warn-soft:   var(--st-warn-soft);
+
+  --color-danger:        var(--st-danger);
+  --color-danger-strong: var(--st-danger-strong);
+  --color-danger-muted:  var(--st-danger-muted);
+  --color-danger-fill:   var(--st-danger-fill);
+  --color-danger-soft:   var(--st-danger-soft);
+
+  --color-weave:        var(--st-weave);
+  --color-weave-strong: var(--st-weave-strong);
+  --color-weave-muted:  var(--st-weave-muted);
+  --color-weave-fill:   var(--st-weave-fill);
+  --color-weave-soft:   var(--st-weave-soft);
+  --color-audio:        var(--st-audio);
+
+  --color-kind-1: var(--st-kind-1);
+  --color-kind-2: var(--st-kind-2);
+  --color-kind-3: var(--st-kind-3);
+  --color-kind-4: var(--st-kind-4);
+  --color-kind-5: var(--st-kind-5);
+  --color-kind-6: var(--st-kind-6);
+  --color-kind-7: var(--st-kind-7);
+  --color-kind-8: var(--st-kind-8);
+
+  --color-selection:   var(--st-selection);
+  --color-active-line: var(--st-active-line);
+}
+
+
+/*
+ * Type scale, elevation, tracking
+ * ================================
+ * THE POINT OF THE TYPE SCALE IS THAT IT IS IN REM.
+ *
+ * useUiScale works by setting font-size on <html>, which moves rem-based
+ * utilities and nothing else. This app had 847 hardcoded pixel sizes against
+ * 1,044 rem-based ones -- 540 of them text-[11px], 270 text-[10px] -- so
+ * roughly 45% of the interface quietly ignored the writer's Interface size
+ * setting. Not a style preference: the control did not work, and the smallest
+ * text in the app was the part that refused to grow.
+ *
+ * The three new steps below are the sizes the app was ALREADY using as raw
+ * pixels, expressed as rem at the default 16px root. At the default scale
+ * they render identically -- text-mini is 11px exactly. The difference is
+ * that now they move when the writer asks them to.
+ *
+ * DELIBERATELY ADDITIVE. --text-xs, --text-sm and --text-base keep Tailwind's
+ * values. Retuning those would resize 1,038 existing call sites, which is a
+ * design decision that belongs in the polish phase where it can be looked at,
+ * not smuggled in under a mechanical find-and-replace.
  */
 @theme {
-  --color-bg-primary:   var(--color-bg-primary);
-  --color-bg-panel:     var(--color-bg-panel);
-  --color-bg-surface:   var(--color-bg-surface);
-  --color-border:       var(--color-border);
-  --color-text-primary: var(--color-text-primary);
-  --color-text-muted:   var(--color-text-muted);
-  --color-faint:        var(--color-faint);
-  --color-accent:       var(--color-accent);
+  --text-2xs:   0.5625rem;   /*  9px -- badges, counters                  */
+  --text-micro: 0.625rem;    /* 10px -- dense labels, hints               */
+  --text-mini:  0.6875rem;   /* 11px -- the app's real body size          */
+
+  --text-2xs--line-height:   1.35;
+  --text-micro--line-height: 1.4;
+  --text-mini--line-height:  1.45;
+
+  /* Elevation. There were 48 shadow utilities in 46,000 lines, essentially
+     all of them on modals, which is why every other surface reads as a flat
+     box. These are the ladder; applying them is the polish phase.
+
+     Light mode is softer AND warmer on purpose: a black shadow over warm
+     paper reads as dirt rather than as depth. */
+  --shadow-e1: 0 1px 2px rgb(0 0 0 / 0.20);
+  --shadow-e2: 0 2px 8px rgb(0 0 0 / 0.28), 0 1px 2px rgb(0 0 0 / 0.20);
+  --shadow-e3: 0 8px 28px rgb(0 0 0 / 0.38), 0 2px 6px rgb(0 0 0 / 0.24);
+  --shadow-e4: 0 18px 56px rgb(0 0 0 / 0.46), 0 4px 12px rgb(0 0 0 / 0.28);
+
+  /* Corners. Tailwind bakes `rounded` at 4px, which across 850 call sites is
+     what made every surface in the app read as the same hard little box.
+     6px is still restrained -- it is the difference between "a box" and "a
+     card" -- and it applies everywhere without touching a component.
+
+     Dialogs go further, because a modal wants to look like a separate object
+     rather than a bigger version of the panel underneath it. */
+  --radius:    0.375rem;   /* 6px  -- the app default            */
+  --radius-lg: 0.625rem;   /* 10px -- dialogs, hero cards        */
+
+  /* The uppercase section headings the app uses everywhere. */
+  --tracking-label: 0.06em;
+}
+
+[data-theme="light"] {
+  --shadow-e1: 0 1px 2px rgb(74 62 45 / 0.08);
+  --shadow-e2: 0 2px 8px rgb(74 62 45 / 0.10), 0 1px 2px rgb(74 62 45 / 0.06);
+  --shadow-e3: 0 8px 28px rgb(74 62 45 / 0.14), 0 2px 6px rgb(74 62 45 / 0.08);
+  --shadow-e4: 0 18px 56px rgb(74 62 45 / 0.18), 0 4px 12px rgb(74 62 45 / 0.10);
+}
+
+
+/*
+ * LAYER 2 -- THE BRIDGE. Removed, and worth recording rather than forgetting.
+ * ==========================================================================
+ * There used to be ~110 declarations here re-aiming Tailwind's own palette
+ * variables -- --color-indigo-300 and its siblings -- at this app's role
+ * tokens. It existed so that roughly 2,400 call sites written as
+ * `text-indigo-300` could take the new palette without being edited, and so
+ * that converting them afterwards was PROVABLY invisible: while it was in
+ * place, text-indigo-300 and text-accent resolved to the same value.
+ *
+ * That conversion is done. Every call site outside features/audiobook names a
+ * role, and the codemod that did it read its mapping OUT OF THIS BLOCK, so
+ * the result was identical to what the bridge had been rendering.
+ *
+ * App.css.test.ts now enforces the state that made removing it safe: no raw
+ * Tailwind palette class outside features/audiobook. Add one and it renders
+ * in stock Tailwind indigo, which is nothing like this app -- so the test
+ * fails rather than letting a stray colour look almost right.
+ */
+
+
+
+
+/*
+ * THE AUDIOBOOK BOUNDARY -- jewel tones on charcoal
+ * ==================================================
+ * AudiobookConverter.tsx has carried `className="audiobook-theme"` since the
+ * day it was written, with a comment calling it "the boundary". The class has
+ * never existed in any stylesheet. It does now, and it has two jobs:
+ *
+ *   1. PIN Tailwind's own palette back to its stock values, so the bridge
+ *      above cannot reach in here. Every variable the bridge touches is
+ *      re-declared below at the value Tailwind ships. App.css.test.ts asserts
+ *      the two lists match, so a family added to the bridge in six months
+ *      cannot silently repaint this side of the app.
+ *
+ *   2. Point the ROLE tokens at the charcoal ramp, so a shared component
+ *      converted to semantic tokens -- GuidedWalk and WhatsThis are imported
+ *      by BOTH sides -- renders here exactly as it renders today. The values
+ *      are the zinc shades those components already use, which is why this
+ *      block changes nothing on screen.
+ *
+ * Custom properties inherit, so this class on a descendant div beats
+ * [data-theme="light"] on <html> for its whole subtree. No specificity games.
+ *
+ * THIS BLOCK IS DELIBERATELY NOT REPEATED UNDER [data-theme="light"].
+ * Charcoal in both themes is the point: the writer should always know which
+ * side of the app they are standing in. See audiobook-converter-spec.md 5.0,
+ * which specified this class and never got it.
+ */
+.audiobook-theme {
+  color-scheme: dark;
+
+  --st-bg-primary:   #09090b;   /* zinc-950 */
+  --st-bg-panel:     #18181b;   /* zinc-900 */
+  --st-bg-surface:   #27272a;   /* zinc-800 */
+  --st-bg-raised:    #3f3f46;   /* zinc-700 */
+  --st-bg-panel-alt: #18181b;
+  --st-scrim:        rgb(0 0 0 / 0.70);
+
+  --st-text-primary: #f4f4f5;   /* zinc-100 */
+  --st-text-muted:   #a1a1aa;   /* zinc-400 */
+  --st-faint:        #71717a;   /* zinc-500 */
+  --st-on-accent:    #ffffff;
+
+  --st-border:        #3f3f46;
+  --st-border-strong: #52525b;
+  --st-focus:         #10b981;
+
+  /* Emerald = primary action and success. Sapphire = information and
+     progress. Ruby = cost, warning and failure. Spec 5.0, unchanged. */
+  --st-accent:        #6ee7b7;
+  --st-accent-strong: #a7f3d0;
+  --st-accent-muted:  #34d399;
+  --st-accent-fill:   #059669;
+  --st-accent-soft:   rgb(16 185 129 / 0.14);
+
+  --st-secondary:        #7dd3fc;
+  --st-secondary-strong: #bae6fd;
+  --st-secondary-muted:  #38bdf8;
+  --st-secondary-fill:   #0284c7;
+  --st-secondary-soft:   rgb(56 189 248 / 0.14);
+
+  --st-success:        #6ee7b7;
+  --st-success-strong: #a7f3d0;
+  --st-success-muted:  #34d399;
+  --st-success-fill:   #059669;
+  --st-success-soft:   rgb(16 185 129 / 0.14);
+
+  --st-warn:        #fcd34d;
+  --st-warn-strong: #fde68a;
+  --st-warn-muted:  #fbbf24;
+  --st-warn-fill:   #d97706;
+  --st-warn-soft:   rgb(251 191 36 / 0.14);
+
+  --st-danger:        #fda4af;
+  --st-danger-strong: #fecdd3;
+  --st-danger-muted:  #fb7185;
+  --st-danger-fill:   #e11d48;
+  --st-danger-soft:   rgb(251 113 133 / 0.14);
+
+  --st-weave:        #c4b5fd;
+  --st-weave-strong: #ddd6fe;
+  --st-weave-muted:  #a78bfa;
+  --st-weave-fill:   #7c3aed;
+  --st-weave-soft:   rgb(167 139 250 / 0.14);
+  --st-audio:        #6ee7b7;
+
+  --st-selection:   #1e3a5f;
+  --st-active-line: rgb(255 255 255 / 0.04);
+
+  /* The pin list that used to sit here -- every Tailwind palette variable,
+     re-declared at its stock value -- is gone with the bridge it defended
+     against. Nothing remaps them any more, so stock is simply what they are.
+     The ROLE tokens above stay, and they are the load-bearing part: GuidedWalk
+     and WhatsThis are imported by both sides, and these are what keep them
+     charcoal in here while they follow the writing app's palette out there. */
+
 }
 
 
@@ -185,13 +577,13 @@
 /* CodeMirror drawn selection: force visible above line backgrounds.
    Uses the --color-selection variable so it adapts to dark/light themes. */
 .cm-selectionLayer .cm-selectionBackground {
-  background-color: var(--color-selection) !important;
+  background-color: var(--st-selection) !important;
 }
 
 /* The active line highlight must not be fully opaque or it covers the selection.
    Use a semi-transparent version so selection shows through. */
 .cm-activeLine {
-  background-color: var(--color-active-line) !important;
+  background-color: var(--st-active-line) !important;
 }
 
 /* Ensure .cm-line backgrounds don't cover the selection layer */
@@ -201,12 +593,12 @@
 
 /* Browser native selection: fallback for text outside CodeMirror */
 ::selection {
-  background-color: var(--color-selection);
+  background-color: var(--st-selection);
   color: inherit;
 }
 
 ::-webkit-selection {
-  background-color: var(--color-selection);
+  background-color: var(--st-selection);
   color: inherit;
 }
 
@@ -382,17 +774,20 @@
 select,
 option,
 optgroup {
-  background-color: var(--color-bg-panel);
-  color: var(--color-text-primary);
+  /* An input is a well you type INTO, so it takes the RECESSED surface, the
+     same as every text field. This was bg-panel, which made a dropdown the
+     one control that floated above the dialog holding it. */
+  background-color: var(--st-bg-surface);
+  color: var(--st-text-primary);
 }
 
 optgroup {
-  color: var(--color-text-muted);
+  color: var(--st-text-muted);
   font-style: normal;
 }
 
 option:disabled {
-  color: var(--color-faint);
+  color: var(--st-faint);
 }
 
 

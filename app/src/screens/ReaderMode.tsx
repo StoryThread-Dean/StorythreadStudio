@@ -460,7 +460,7 @@ export function ReaderMode({ projectPath, onClose }: ReaderModeProps) {
           {indexState === "open" ? (
             <div className="flex flex-col" style={{ width: INDEX_OPEN_W }}>
               <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: mutedFg }}>Chapters</span>
+                <span className="text-micro font-semibold uppercase tracking-widest" style={{ color: mutedFg }}>Chapters</span>
                 <button onClick={toggleIndex} title="Collapse" className="flex h-6 w-6 items-center justify-center rounded" style={{ color: mutedFg }}>
                   <ChevronLeft size={14} />
                 </button>
@@ -484,7 +484,7 @@ export function ReaderMode({ projectPath, onClose }: ReaderModeProps) {
               <div className="mt-2 flex flex-col items-center gap-1.5 overflow-y-auto pb-4">
                 {chapters.map((ch, idx) => (
                   <button key={ch.filename} onClick={() => goToChapter(idx)} title={ch.title}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-micro font-medium"
                     style={{ background: idx === currentChapterIdx ? accent : (isDark ? "#374151" : "#C8B89A"), color: idx === currentChapterIdx ? "#fff" : mutedFg }}>
                     {idx + 1}
                   </button>

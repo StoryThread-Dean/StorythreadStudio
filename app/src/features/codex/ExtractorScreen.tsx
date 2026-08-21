@@ -64,7 +64,7 @@ export function ExtractorScreen({ projectPath }: Props) {
       {/* The counts, whenever there is something to count. Kept in the shell so
           they survive switching between the two halves. */}
       {run && progress && !startingOver && (
-        <p className="text-[11px] text-faint" data-testid="extractor-progress">
+        <p className="text-mini text-faint" data-testid="extractor-progress">
           {progress.parts_open} left to look at
           {progress.parts_applied > 0 && `, ${progress.parts_applied} added`}
           {progress.parts_dismissed > 0

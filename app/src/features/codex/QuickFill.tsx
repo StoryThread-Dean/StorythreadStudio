@@ -179,7 +179,7 @@ export function QuickFill({
         role="dialog"
         aria-label={`Fill in ${String(thread?.name ?? "the entry")}`}
         data-testid="quick-fill"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <KindIcon size={14}
@@ -199,7 +199,7 @@ export function QuickFill({
           </div>
 
           {!thread && !error && (
-            <p className="flex items-center gap-2 text-[11px] text-text-muted">
+            <p className="flex items-center gap-2 text-mini text-text-muted">
               <Loader size={11} className="animate-spin" /> Reading the entry...
             </p>
           )}
@@ -209,10 +209,10 @@ export function QuickFill({
               reads as a broken loop -- which is exactly how it was reported. */}
           {done.map(box => (
             <div key={box.id} className="mb-2">
-              <p className="mb-0.5 flex items-center gap-1 text-[11px] text-emerald-300">
+              <p className="mb-0.5 flex items-center gap-1 text-mini text-success">
                 <Check size={10} /> {box.heading} already has writing
               </p>
-              <p className="rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted">
+              <p className="rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted">
                 {box.text}
               </p>
             </div>
@@ -226,10 +226,10 @@ export function QuickFill({
               </p>
               <button
                 onClick={onDone}
-                className="inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+                className="inline-flex flex-col items-start rounded border border-success-fill bg-success-soft/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-success-soft/50"
               >
                 <span>Carry on</span>
-                <span className="text-[10px] font-normal text-faint">
+                <span className="text-micro font-normal text-faint">
                   takes you to the next thing in the walk
                 </span>
               </button>
@@ -239,7 +239,7 @@ export function QuickFill({
           {boxes.map((box, i) => (
             <div key={box.id} className="mb-2">
               <label htmlFor={`qf-${box.id}`}
-                     className="mb-1 block text-[11px] text-text-muted">
+                     className="mb-1 block text-mini text-text-muted">
                 {box.heading}
               </label>
               <textarea
@@ -248,13 +248,13 @@ export function QuickFill({
                 onChange={e => setBoxes(prev => prev.map((b, j) =>
                   j === i ? { ...b, text: e.target.value } : b))}
                 rows={3}
-                className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
               />
             </div>
           ))}
 
           {error && (
-            <p role="alert" className="mb-2 text-[11px] text-rose-300">{error}</p>
+            <p role="alert" className="mb-2 text-mini text-danger">{error}</p>
           )}
 
           {/* The entry could not be read at all -- on a stale stop this
@@ -266,10 +266,10 @@ export function QuickFill({
             <div className="flex gap-2">
               <button
                 onClick={onDone}
-                className="inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+                className="inline-flex flex-col items-start rounded border border-success-fill bg-success-soft/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-success-soft/50"
               >
                 <span>Nothing to do here -- carry on</span>
-                <span className="text-[10px] font-normal text-faint">
+                <span className="text-micro font-normal text-faint">
                   takes you to the next thing in the walk
                 </span>
               </button>
@@ -287,7 +287,7 @@ export function QuickFill({
           {thread && wordName && onAbsorbInstead && (
             <button
               onClick={onAbsorbInstead}
-              className="mb-2 block text-[11px] text-violet-300 hover:text-violet-200"
+              className="mb-2 block text-mini text-weave hover:text-weave-strong"
             >
               &ldquo;{wordName}&rdquo; is actually another name for an entry I
               already have
@@ -299,7 +299,7 @@ export function QuickFill({
               <button
                 onClick={() => void save()}
                 disabled={busy || !wrote}
-                className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
               >
                 {busy ? <Loader size={11} className="animate-spin" />
                       : <Check size={11} />}

@@ -18,6 +18,12 @@ import { X, CheckCircle, Star, Folder, Sun, Moon } from "lucide-react";
 import type { AppSettings, ModelInfo } from "../types/ai";
 import { useTheme } from "../hooks/useTheme";
 import { useUiScale, UI_SCALE_PX, type UiScale } from "../hooks/useUiScale";
+import {
+  useEditorSpacing, LINE_SPACING_OPTIONS, resolveLineHeight, clampMultiple,
+  MULTIPLE_MIN, MULTIPLE_MAX, clampParagraphPt,
+  PARAGRAPH_PT_MIN, PARAGRAPH_PT_MAX,
+  PARAGRAPH_BEFORE_DEFAULT, PARAGRAPH_AFTER_DEFAULT,
+} from "../hooks/useEditorSpacing";
 // Content-mode filter, cost tiers, media filter, and the curated recommended
 // list all live in a shared util so Settings and ProjectSettings can't drift
 // apart (see utils/modelFiltering.ts).
@@ -131,6 +137,41 @@ export function Settings({ onClose }: SettingsProps) {
   // (menus, chat box, Settings, About, profile labels). The manuscript
   // editor has its own font picker and is unaffected by this control.
   const [uiScale, setUiScaleLocal] = useUiScale();
+  // Line spacing. `multipleDraft` is the text in the number box while the
+  // writer is still typing it; the applied value only changes on blur, so
+  // typing "2" on the way to "2.5" does not reflow the manuscript twice.
+  const {
+    spacing, multiple: spacingMultiple, set: setSpacing,
+    before: paraBefore, after: paraAfter, setParagraph,
+  } = useEditorSpacing();
+  const [multipleDraft, setMultipleDraft] = useState(String(spacingMultiple));
+  // Paragraph gaps are drafted the same way as the custom multiple: typing
+  // "1" on the way to "12" must not reflow the manuscript at 1pt.
+  const [beforeDraft, setBeforeDraft] = useState(String(paraBefore));
+  const [afterDraft,  setAfterDraft]  = useState(String(paraAfter));
+
+  /** Apply both gaps, falling back to the live value for anything unreadable. */
+  const commitParagraph = useCallback(() => {
+    const b = Number(beforeDraft);
+    const a = Number(afterDraft);
+    const nextBefore = Number.isFinite(b) ? clampParagraphPt(b) : paraBefore;
+    const nextAfter  = Number.isFinite(a) ? clampParagraphPt(a) : paraAfter;
+    setBeforeDraft(String(nextBefore));
+    setAfterDraft(String(nextAfter));
+    setParagraph(nextBefore, nextAfter);
+  }, [beforeDraft, afterDraft, paraBefore, paraAfter, setParagraph]);
+  // Keep the draft in step when the stored value arrives or changes from
+  // elsewhere. initLineSpacing() resolves AFTER this screen can mount, so
+  // without this the box would show the default while the editor was
+  // already using the writer's saved number.
+  useEffect(() => {
+    setMultipleDraft(String(spacingMultiple));
+  }, [spacingMultiple]);
+
+  useEffect(() => {
+    setBeforeDraft(String(paraBefore));
+    setAfterDraft(String(paraAfter));
+  }, [paraBefore, paraAfter]);
 
   // UI state
   const [loading, setLoading]             = useState(true);
@@ -509,7 +550,7 @@ export function Settings({ onClose }: SettingsProps) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal -- wider and scrollable for expanded content */}
-      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-e4">
 
         {/* Sticky header -- inline padding to bypass Tailwind purge */}
         <div
@@ -519,7 +560,7 @@ export function Settings({ onClose }: SettingsProps) {
           <h2 className="text-base font-semibold text-text-primary">Settings</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="Close settings"
           >
             <X size={16} />
@@ -556,14 +597,14 @@ export function Settings({ onClose }: SettingsProps) {
                         onClick={() => { setSelectedProvider(p.id); setTestResult(null); }}
                         className={`flex flex-1 flex-col items-start gap-0.5 rounded border px-3 py-2 text-left transition-colors ${
                           selectedProvider === p.id
-                            ? "border-indigo-500 bg-bg-surface"
-                            : "border-border bg-bg-panel hover:border-indigo-500"
+                            ? "border-accent-fill bg-bg-surface"
+                            : "border-border bg-bg-panel hover:border-accent-fill"
                         }`}
                       >
                         <span className="flex w-full items-center justify-between">
                           <span className="text-xs font-medium text-text-primary">{p.label}</span>
-                          <span className={`text-[10px] ${
-                            isActiveSaved ? "text-emerald-400" : keySet ? "text-indigo-300" : "text-faint"
+                          <span className={`text-micro ${
+                            isActiveSaved ? "text-success-muted" : keySet ? "text-accent" : "text-faint"
                           }`}>
                             {status}
                           </span>
@@ -620,7 +661,7 @@ export function Settings({ onClose }: SettingsProps) {
                             onChange={e => setLocalBaseUrl(e.target.value)}
                             placeholder="http://localhost:11434"
                             aria-label="Local server address"
-                            className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                            className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                           />
                         </div>
                         <div>
@@ -636,7 +677,7 @@ export function Settings({ onClose }: SettingsProps) {
                             value={localApiStyle}
                             onChange={e => setLocalApiStyle(e.target.value)}
                             aria-label="Local API style"
-                            className="rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-indigo-500"
+                            className="rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-fill"
                           >
                             <option value="openai">OpenAI-compatible</option>
                             <option value="ollama">Ollama native</option>
@@ -645,7 +686,7 @@ export function Settings({ onClose }: SettingsProps) {
                         <button
                           onClick={handleTest}
                           disabled={testing || saving}
-                          className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary disabled:opacity-50"
                         >
                           Test Connection
                         </button>
@@ -668,7 +709,7 @@ export function Settings({ onClose }: SettingsProps) {
                         <button
                           onClick={() => setPromptCaching(v => !v)}
                           className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                            promptCaching ? "bg-indigo-600" : "bg-border"
+                            promptCaching ? "bg-accent-fill" : "bg-border"
                           }`}
                           title={promptCaching ? "Prompt caching on" : "Prompt caching off"}
                         >
@@ -703,7 +744,7 @@ export function Settings({ onClose }: SettingsProps) {
                     step={1}
                     value={tierIndex(costTier)}
                     onChange={e => setCostTier(TIERS[parseInt(e.target.value)].value)}
-                    className="w-full accent-indigo-500"
+                    className="w-full accent-accent-fill"
                   />
                   {/* Tier labels */}
                   <div className="mt-1 flex justify-between">
@@ -712,7 +753,7 @@ export function Settings({ onClose }: SettingsProps) {
                         key={t.value}
                         className={`text-xs ${
                           i === tierIndex(costTier)
-                            ? "font-semibold text-indigo-300"
+                            ? "font-semibold text-accent"
                             : "text-faint"
                         }`}
                       >
@@ -734,7 +775,7 @@ export function Settings({ onClose }: SettingsProps) {
                   <button
                     onClick={() => setTextOnlyFilter(v => !v)}
                     className={`relative h-5 w-9 rounded-full transition-colors ${
-                      textOnlyFilter ? "bg-indigo-600" : "bg-border"
+                      textOnlyFilter ? "bg-accent-fill" : "bg-border"
                     }`}
                     title={textOnlyFilter ? "Text-only filter on" : "Text-only filter off"}
                   >
@@ -748,8 +789,8 @@ export function Settings({ onClose }: SettingsProps) {
 
                 {/* Tier conflict warning */}
                 {selectedOutsideTier && (
-                  <div className="mb-4 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
-                    <p className="text-xs text-amber-300">
+                  <div className="mb-4 rounded border border-warn-fill/50 bg-warn-soft/30 px-3 py-2">
+                    <p className="text-xs text-warn">
                       Your selected model is outside the current tier filter. It will still be used
                       until you pick a different one from the list below.
                     </p>
@@ -759,8 +800,8 @@ export function Settings({ onClose }: SettingsProps) {
                 {/* Cross-provider model warning: the saved default model came
                     from a different provider's catalog and doesn't exist here. */}
                 {selectedMissingFromProvider && (
-                  <div className="mb-4 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
-                    <p className="text-xs text-amber-300">
+                  <div className="mb-4 rounded border border-warn-fill/50 bg-warn-soft/30 px-3 py-2">
+                    <p className="text-xs text-warn">
                       Your default model came from your previous provider and isn't
                       available on {providerMetaById(savedProvider).label}. Pick a
                       model from the list below.
@@ -786,7 +827,7 @@ export function Settings({ onClose }: SettingsProps) {
                         value={selectedModel}
                         onChange={e => setSelectedModel(e.target.value)}
                         placeholder="e.g. openai/gpt-4o-mini"
-                        className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                       />
                       <p className="mt-1 text-xs text-faint">
                         Test your connection above to load the model list.
@@ -800,7 +841,7 @@ export function Settings({ onClose }: SettingsProps) {
                       {flagshipPicks.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
-                            <p className="text-xs font-semibold text-amber-400">
+                            <p className="text-xs font-semibold text-warn-muted">
                               ★ Flagship
                             </p>
                           </div>
@@ -826,7 +867,7 @@ export function Settings({ onClose }: SettingsProps) {
                       {recommendedPicks.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
-                            <p className="text-xs font-semibold text-indigo-400">
+                            <p className="text-xs font-semibold text-accent-muted">
                               ★ Recommended
                             </p>
                           </div>
@@ -852,7 +893,7 @@ export function Settings({ onClose }: SettingsProps) {
                       {availableFavorites.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
-                            <p className="text-xs font-semibold text-teal-400">
+                            <p className="text-xs font-semibold text-secondary-muted">
                               ★ My Favorites
                             </p>
                           </div>
@@ -932,7 +973,7 @@ export function Settings({ onClose }: SettingsProps) {
                           value={option.value}
                           checked={contentMode === option.value}
                           onChange={() => setContentMode(option.value)}
-                          className="mt-0.5 accent-indigo-500"
+                          className="mt-0.5 accent-accent-fill"
                         />
                         <div>
                           <p className="text-xs font-medium text-text-primary">{option.label}</p>
@@ -968,8 +1009,8 @@ export function Settings({ onClose }: SettingsProps) {
                       type="button"
                       className={`flex flex-1 items-center gap-2 rounded border px-3 py-2 text-xs transition-colors ${
                         theme === "dark"
-                          ? "border-indigo-500 bg-bg-surface text-text-primary"
-                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                       }`}
                     >
                       <Moon size={14} />
@@ -981,8 +1022,8 @@ export function Settings({ onClose }: SettingsProps) {
                       type="button"
                       className={`flex flex-1 items-center gap-2 rounded border px-3 py-2 text-xs transition-colors ${
                         theme === "light"
-                          ? "border-indigo-500 bg-bg-surface text-text-primary"
-                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                       }`}
                     >
                       <Sun size={14} />
@@ -1018,8 +1059,8 @@ export function Settings({ onClose }: SettingsProps) {
                         type="button"
                         className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
                           uiScale === opt.id
-                            ? "border-indigo-500 bg-bg-surface text-text-primary"
-                            : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                            ? "border-accent-fill bg-bg-surface text-text-primary"
+                            : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                         }`}
                       >
                         <span className="font-medium">{opt.label}</span>
@@ -1031,6 +1072,183 @@ export function Settings({ onClose }: SettingsProps) {
                     Scales menus, chat, Settings, and other interface text. The
                     manuscript editor's font is controlled separately by the
                     font picker in the editor toolbar. Saved globally.
+                  </p>
+                </div>
+
+                {/* ── Line spacing ────────────────────────────────────────
+                    Sits beside Interface size and does a DIFFERENT job, which
+                    the help text has to make obvious or the two get confused:
+                    Interface size sizes the app's chrome, this spaces the
+                    writer's own prose. Wanting compact menus above a roomy
+                    manuscript is an ordinary preference, so they are separate
+                    controls rather than one.
+
+                    Named the way a word processor names it. A writer who has
+                    spent years in Word knows what "1.5 lines" looks like; they
+                    have no feel at all for "1.75". The number is shown anyway,
+                    in brackets, because it is the thing actually applied and
+                    hiding it would make Multiple impossible to reason about. */}
+                <div className="mt-6">
+                  <label className="mb-2 block text-xs font-medium text-text-primary">
+                    Line spacing
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {LINE_SPACING_OPTIONS.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setSpacing(opt.id, spacingMultiple)}
+                        type="button"
+                        aria-pressed={spacing === opt.id}
+                        className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
+                          spacing === opt.id
+                            ? "border-accent-fill bg-bg-surface text-text-primary"
+                            : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
+                        }`}
+                      >
+                        <span className="font-medium">{opt.label}</span>
+                        {/* The resolved line-height, to two decimals. Same
+                            number the editor is handed, so what this says and
+                            what the page does cannot drift. */}
+                        <span className="text-text-muted">
+                          {resolveLineHeight(opt.id, spacingMultiple).toFixed(2)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* The custom multiplier. Only meaningful for Multiple, so it
+                      only appears then -- a permanently visible input that does
+                      nothing three times out of four is a question the writer
+                      has to answer and then discover was irrelevant. */}
+                  {spacing === "multiple" && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <label
+                        htmlFor="line-spacing-multiple"
+                        className="text-xs text-text-muted"
+                      >
+                        Multiple of a single line
+                      </label>
+                      <input
+                        id="line-spacing-multiple"
+                        type="number"
+                        min={MULTIPLE_MIN}
+                        max={MULTIPLE_MAX}
+                        step={0.05}
+                        value={multipleDraft}
+                        onChange={e => setMultipleDraft(e.target.value)}
+                        /* Committed on blur rather than per keystroke: typing
+                           "2" on the way to "2.5" would otherwise apply 2 and
+                           reflow the manuscript underneath the writer. */
+                        onBlur={() => {
+                          const parsed = Number(multipleDraft);
+                          if (!Number.isFinite(parsed)) {
+                            // Not a number: put the live value back rather than
+                            // silently substituting one, so nothing is applied
+                            // that the writer did not ask for.
+                            setMultipleDraft(String(spacingMultiple));
+                            return;
+                          }
+                          const clamped = clampMultiple(parsed);
+                          setMultipleDraft(String(clamped));
+                          setSpacing("multiple", clamped);
+                        }}
+                        className="w-20 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
+                      />
+                      <span className="text-xs text-faint">
+                        = {resolveLineHeight("multiple", spacingMultiple).toFixed(2)} line height
+                      </span>
+                    </div>
+                  )}
+
+                  <p className="mt-2 text-xs text-faint">
+                    Spaces the lines in the manuscript, outline, notes and
+                    summary editors -- your writing, not the app around it.
+                    Measured the way a word processor measures it, so Single is
+                    the font's own natural line height rather than a flat 1.0.
+                    Interface size above is the separate control for menus and
+                    labels. Saved globally.
+                  </p>
+                </div>
+
+                {/* ── Paragraph spacing ───────────────────────────────────
+                    A SEPARATE MEASUREMENT FROM LINE SPACING, and the reason
+                    it exists is worth keeping. Line spacing stretches the
+                    wrapped lines INSIDE a paragraph. A manuscript that ends
+                    paragraphs with a single newline -- which is how real ones
+                    are written -- has no blank line for that to stretch, so no
+                    amount of line spacing will ever separate two paragraphs.
+                    That got reported as line spacing being broken, twice.
+
+                    Points, and 0 before / 8 after, because that is what a word
+                    processor calls this and what it defaults to. A writer who
+                    has set paragraph spacing before has set it in points. */}
+                <div className="mt-6">
+                  <label className="mb-2 block text-xs font-medium text-text-primary">
+                    Paragraph spacing
+                  </label>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                      <label
+                        htmlFor="para-before"
+                        className="mb-1 block text-micro uppercase tracking-label text-text-muted"
+                      >
+                        Before
+                      </label>
+                      <span className="flex items-center gap-1">
+                        <input
+                          id="para-before"
+                          type="number"
+                          min={PARAGRAPH_PT_MIN}
+                          max={PARAGRAPH_PT_MAX}
+                          step={1}
+                          value={beforeDraft}
+                          onChange={e => setBeforeDraft(e.target.value)}
+                          onBlur={() => commitParagraph()}
+                          className="w-16 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
+                        />
+                        <span className="text-xs text-faint">pt</span>
+                      </span>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="para-after"
+                        className="mb-1 block text-micro uppercase tracking-label text-text-muted"
+                      >
+                        After
+                      </label>
+                      <span className="flex items-center gap-1">
+                        <input
+                          id="para-after"
+                          type="number"
+                          min={PARAGRAPH_PT_MIN}
+                          max={PARAGRAPH_PT_MAX}
+                          step={1}
+                          value={afterDraft}
+                          onChange={e => setAfterDraft(e.target.value)}
+                          onBlur={() => commitParagraph()}
+                          className="w-16 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
+                        />
+                        <span className="text-xs text-faint">pt</span>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBeforeDraft(String(PARAGRAPH_BEFORE_DEFAULT));
+                        setAfterDraft(String(PARAGRAPH_AFTER_DEFAULT));
+                        setParagraph(PARAGRAPH_BEFORE_DEFAULT, PARAGRAPH_AFTER_DEFAULT);
+                      }}
+                      className="rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted transition-colors hover:border-border-strong hover:text-text-primary"
+                    >
+                      Reset to 0 / 8
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-faint">
+                    The gap above and below each paragraph, measured in points
+                    the way a word processor measures it. This is what separates
+                    one paragraph from the next -- line spacing above only
+                    stretches the lines inside a paragraph, so on its own it
+                    cannot open a gap here. Saved globally.
                   </p>
                 </div>
               </section>
@@ -1057,7 +1275,7 @@ export function Settings({ onClose }: SettingsProps) {
                       value={vaultRoot}
                       onChange={e => setVaultRoot(e.target.value)}
                       placeholder="C:\\Users\\You\\Documents\\Storythread Studio"
-                      className="flex-1 rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                      className="flex-1 rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                     />
                     <button
                       onClick={async () => {
@@ -1067,7 +1285,7 @@ export function Settings({ onClose }: SettingsProps) {
                         });
                         if (typeof picked === "string") setVaultRoot(picked);
                       }}
-                      className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+                      className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary"
                       title="Browse for a folder"
                       type="button"
                     >
@@ -1076,7 +1294,7 @@ export function Settings({ onClose }: SettingsProps) {
                   </div>
                   <p className="mt-2 text-xs text-faint">
                     Leave blank and save to reset to the default
-                    (<code className="text-indigo-400">~/Documents/Storythread Studio</code>).
+                    (<code className="text-accent-muted">~/Documents/Storythread Studio</code>).
                   </p>
                 </div>
               </section>
@@ -1106,7 +1324,7 @@ export function Settings({ onClose }: SettingsProps) {
                   <select
                     value={writingSkillLevel}
                     onChange={e => setWritingSkillLevel(e.target.value)}
-                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent-fill"
                   >
                     <option value="newbie">Newbie -- 500 words / 1 task per day</option>
                     <option value="beginner">Beginner -- 750 words / 1 task per day</option>
@@ -1140,8 +1358,8 @@ export function Settings({ onClose }: SettingsProps) {
                       type="button"
                       className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
                         !nightOwl
-                          ? "border-indigo-500 bg-bg-surface text-text-primary"
-                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                       }`}
                     >
                       <span className="font-medium">Midnight (default)</span>
@@ -1152,8 +1370,8 @@ export function Settings({ onClose }: SettingsProps) {
                       type="button"
                       className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
                         nightOwl
-                          ? "border-indigo-500 bg-bg-surface text-text-primary"
-                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                       }`}
                     >
                       <span className="font-medium">Night Owl</span>
@@ -1211,7 +1429,7 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelAllowlist(e.target.value)}
                     rows={3}
                     placeholder={"e.g.\nanthropic/claude-3.5-sonnet\nopenai/gpt-4o-mini"}
-                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                   />
                 </div>
 
@@ -1228,7 +1446,7 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelBlocklist(e.target.value)}
                     rows={3}
                     placeholder="e.g.\ngoogle/gemma-2-9b-it:free"
-                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                   />
                 </div>
 
@@ -1239,7 +1457,7 @@ export function Settings({ onClose }: SettingsProps) {
                   </label>
                   <p className="mb-2 text-xs text-faint">
                     Configure which content modes each model supports. Format: one entry per line as
-                    <code className="mx-1 text-indigo-400">model-id: general, mature, explicit</code>
+                    <code className="mx-1 text-accent-muted">model-id: general, mature, explicit</code>
                     Models not listed default to "general" only.
                   </p>
                   <textarea
@@ -1247,7 +1465,7 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelContentModes(e.target.value)}
                     rows={4}
                     placeholder={"e.g.\nanthropic/claude-3.5-sonnet: general, mature\ndeepseek/deepseek-chat: general, mature, explicit"}
-                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                   />
                 </div>
               </section>
@@ -1258,9 +1476,9 @@ export function Settings({ onClose }: SettingsProps) {
 
         {/* Sticky footer -- inline padding to bypass Tailwind purge */}
         <div className="shrink-0 border-t border-border" style={{ padding: "1rem 1.5rem" }}>
-          {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
+          {error && <p className="mb-2 text-xs text-danger-muted">{error}</p>}
           {saved && !error && (
-            <p className="mb-2 flex items-center gap-1.5 text-xs text-emerald-400">
+            <p className="mb-2 flex items-center gap-1.5 text-xs text-success-muted">
               <CheckCircle size={13} /> Settings saved.
             </p>
           )}
@@ -1268,7 +1486,7 @@ export function Settings({ onClose }: SettingsProps) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded bg-accent-fill px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-fill disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Settings"}
             </button>
@@ -1302,7 +1520,7 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
   return (
     <div
       className={`flex items-center gap-2 px-3 py-2 transition-colors hover:bg-bg-panel ${
-        isSelected ? "bg-indigo-900/20" : ""
+        isSelected ? "bg-accent-soft/20" : ""
       }`}
     >
       {/* Clickable area (name + cost + note) */}
@@ -1314,18 +1532,18 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
         {/* Selection indicator */}
         <span
           className={`h-2 w-2 shrink-0 rounded-full ${
-            isSelected ? "bg-indigo-400" : "bg-transparent"
+            isSelected ? "bg-accent-muted" : "bg-transparent"
           }`}
         />
         <div className="min-w-0">
-          <p className={`truncate text-xs ${isSelected ? "text-indigo-300 font-medium" : "text-text-primary"}`}>
+          <p className={`truncate text-xs ${isSelected ? "text-accent font-medium" : "text-text-primary"}`}>
             {model.name}
           </p>
           {note && (
             <p className="text-xs text-text-muted">{note}</p>
           )}
         </div>
-        <span className={`ml-auto shrink-0 text-xs ${model.is_free ? "text-emerald-500" : "text-faint"}`}>
+        <span className={`ml-auto shrink-0 text-xs ${model.is_free ? "text-success-fill" : "text-faint"}`}>
           {costLabel}
         </span>
       </button>
@@ -1334,7 +1552,7 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
       <button
         onClick={(e) => { e.stopPropagation(); onToggleStar(); }}
         className={`shrink-0 transition-colors ${
-          isStarred ? "text-amber-400" : "text-faint hover:text-text-muted"
+          isStarred ? "text-warn-muted" : "text-faint hover:text-text-muted"
         }`}
         title={isStarred ? "Remove from favorites" : "Add to favorites"}
       >

@@ -75,15 +75,15 @@ export function PlaceStop({
   });
 
   return (
-    <div className="mt-2 rounded border border-blue-900/60 bg-blue-950/15 px-2.5 py-2"
+    <div className="mt-2 rounded border border-accent-soft/60 bg-accent-soft/15 px-2.5 py-2"
          data-testid="place-stop">
-      <p className="flex items-center gap-1.5 text-[11px] font-medium text-blue-100">
+      <p className="flex items-center gap-1.5 text-mini font-medium text-accent-strong">
         <MapPin size={11} /> Where {name} appears
       </p>
 
       {/* THE PAYOFF, said plainly. Tagging chapters is work and the reason for
           it happens somewhere else entirely. */}
-      <p className="mt-1 text-[10px] text-faint">
+      <p className="mt-1 text-micro text-faint">
         Recording this lets the app send only what belongs in the chapter you
         are writing, instead of your whole world every time. Nothing is saved
         until you press the button.
@@ -93,7 +93,7 @@ export function PlaceStop({
           data-testid="place-chapters">
         {shown.map(chapter => (
           <li key={chapter.anchor}>
-            <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-[11px] hover:bg-white/5">
+            <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-mini hover:bg-white/5">
               <input
                 type="checkbox"
                 checked={ticked.has(chapter.anchor)}
@@ -101,12 +101,12 @@ export function PlaceStop({
               />
               <span className="truncate text-text-primary">{chapter.title}</span>
               {recorded.has(chapter.anchor) && (
-                <span className="ml-auto shrink-0 text-[9px] text-faint">
+                <span className="ml-auto shrink-0 text-2xs text-faint">
                   already recorded
                 </span>
               )}
               {!recorded.has(chapter.anchor) && suggested.has(chapter.anchor) && (
-                <span className="ml-auto shrink-0 text-[9px] text-blue-300">
+                <span className="ml-auto shrink-0 text-2xs text-accent">
                   found here
                 </span>
               )}
@@ -118,7 +118,7 @@ export function PlaceStop({
       {!showAll && chapters.length > shown.length && (
         <button type="button" onClick={() => setShowAll(true)}
                 data-testid="place-show-all"
-                className="mt-1 text-[10px] text-text-muted hover:text-text-primary">
+                className="mt-1 text-micro text-text-muted hover:text-text-primary">
           Show the other {chapters.length - shown.length} chapters
           {" "}-- your book may put them somewhere it never says their name
         </button>
@@ -130,7 +130,7 @@ export function PlaceStop({
           onClick={() => onSave([...ticked])}
           disabled={busy}
           data-testid="place-save"
-          className="inline-flex items-center gap-1 rounded bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+          className="inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
         >
           {busy ? <Loader size={11} className="animate-spin" />
                 : <Check size={11} />}
@@ -138,14 +138,14 @@ export function PlaceStop({
         </button>
         <button type="button" onClick={onSkip} disabled={busy}
                 data-testid="place-skip"
-                className="rounded border border-border px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary disabled:opacity-40">
+                className="rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:text-text-primary disabled:opacity-40">
           Not now
         </button>
         {ticked.size === 0 && already.length > 0 && (
           // Unticking everything is a real answer -- "I placed this wrongly" --
           // and it has to be distinguishable from doing nothing, or the writer
           // has no way to undo a bad tag from inside the walk.
-          <span className="text-[10px] text-amber-300/90">
+          <span className="text-micro text-warn/90">
             This will clear where {name} was recorded.
           </span>
         )}

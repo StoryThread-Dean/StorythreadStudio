@@ -80,7 +80,7 @@ export function MapEntryList({
         onClick={() => setOpen(v => !v)}
         data-testid="map-entry-list-toggle"
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 rounded border border-border bg-bg-surface px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
+        className="flex w-full items-center gap-1.5 rounded border border-border bg-bg-surface px-2 py-1 text-mini text-text-muted hover:text-text-primary"
       >
         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
         <List size={11} />
@@ -89,7 +89,7 @@ export function MapEntryList({
       </button>
 
       {open && (
-        <div className="mt-1 rounded border border-border bg-bg-primary shadow-lg">
+        <div className="mt-1 rounded border border-border bg-bg-primary shadow-e2">
           <label className="flex items-center gap-1.5 border-b border-border px-2 py-1">
             <Search size={11} className="shrink-0 text-faint" />
             <input
@@ -97,7 +97,7 @@ export function MapEntryList({
               onChange={event => setQuery(event.target.value)}
               placeholder="Search"
               aria-label="Search entries"
-              className="w-full bg-transparent text-[11px] text-text-primary outline-none"
+              className="w-full bg-transparent text-mini text-text-primary outline-none"
             />
           </label>
 
@@ -112,7 +112,7 @@ export function MapEntryList({
               const Icon = entry.Icon;
               return (
                 <li key={type}>
-                  <p className="px-2 py-0.5 text-[9px] uppercase tracking-wide text-faint">
+                  <p className="px-2 py-0.5 text-2xs uppercase tracking-wide text-faint">
                     {entry.term}
                   </p>
                   <ul>
@@ -121,9 +121,9 @@ export function MapEntryList({
                         <button
                           type="button"
                           onClick={() => { onPick(node); setOpen(false); }}
-                          className={`flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-[11px] ${
+                          className={`flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-mini ${
                             node.entity_id === focus
-                              ? "bg-violet-500/15 text-text-primary"
+                              ? "bg-weave-fill/15 text-text-primary"
                               : "text-text-muted hover:bg-white/5"}`}
                         >
                           <Icon size={10}
@@ -133,7 +133,7 @@ export function MapEntryList({
                               a list that did not say so would look like the
                               map was wrong. */}
                           {node.present === false && (
-                            <span className="ml-auto shrink-0 text-[9px] text-faint">
+                            <span className="ml-auto shrink-0 text-2xs text-faint">
                               elsewhere
                             </span>
                           )}
@@ -145,7 +145,7 @@ export function MapEntryList({
               );
             })}
             {total === 0 && (
-              <li className="px-2 py-2 text-[11px] text-faint">
+              <li className="px-2 py-2 text-mini text-faint">
                 Nothing matches that.
               </li>
             )}
@@ -156,7 +156,7 @@ export function MapEntryList({
               type="button"
               onClick={onOpenListView}
               data-testid="map-open-list-view"
-              className="w-full border-t border-border px-2 py-1 text-left text-[10px] text-faint hover:text-text-muted"
+              className="w-full border-t border-border px-2 py-1 text-left text-micro text-faint hover:text-text-muted"
             >
               Open the full list instead -- readable, keyboard-friendly, and it
               does not cap what it shows

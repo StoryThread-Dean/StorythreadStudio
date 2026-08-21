@@ -347,7 +347,7 @@ export function GlobalSearchModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal panel */}
-      <div className="flex w-full max-w-3xl flex-col rounded border border-border bg-bg-panel shadow-2xl"
+      <div className="flex w-full max-w-3xl flex-col rounded border border-border bg-bg-panel shadow-e4"
            style={{ maxHeight: "85vh" }}>
 
         {/* ── Header ── */}
@@ -359,7 +359,7 @@ export function GlobalSearchModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-faint transition-colors hover:bg-bg-surface hover:text-text-primary"
+            className="rounded p-1 text-faint transition-colors hover:bg-bg-raised hover:text-text-primary"
             title="Close (Esc)"
           >
             <X size={14} />
@@ -376,7 +376,7 @@ export function GlobalSearchModal({
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Find (min 2 characters)…"
-              className="flex-1 rounded border border-border bg-bg-surface px-3 py-1.5 text-sm text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none"
+              className="flex-1 rounded border border-border bg-bg-surface px-3 py-1.5 text-sm text-text-primary placeholder:text-faint focus:border-accent-fill focus:outline-none"
             />
             {/* Case-sensitive toggle */}
             <TogglePill
@@ -401,7 +401,7 @@ export function GlobalSearchModal({
               value={replacement}
               onChange={e => setReplacement(e.target.value)}
               placeholder="Replace with…"
-              className="flex-1 rounded border border-border bg-bg-surface px-3 py-1.5 text-sm text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none"
+              className="flex-1 rounded border border-border bg-bg-surface px-3 py-1.5 text-sm text-text-primary placeholder:text-faint focus:border-accent-fill focus:outline-none"
             />
             {/* Spacer to align with the two pills above */}
             <div className="w-[4.5rem]" />
@@ -414,7 +414,7 @@ export function GlobalSearchModal({
             <p className="text-xs text-text-muted">Searching…</p>
           )}
           {!isSearching && searchError && (
-            <p className="text-xs text-rose-400">{searchError}</p>
+            <p className="text-xs text-danger-muted">{searchError}</p>
           )}
           {!isSearching && !searchError && results && (
             <p className="text-xs text-text-muted">
@@ -463,9 +463,9 @@ export function GlobalSearchModal({
         <div className="border-t border-border px-4 py-3 space-y-2">
           {/* Unsaved-changes warning */}
           {showUnsavedWarning && (
-            <div className="rounded border border-amber-700/50 bg-amber-950/40 px-3 py-2 text-xs">
-              <p className="font-medium text-amber-300">Unsaved changes in open chapter</p>
-              <p className="mt-0.5 text-amber-400/80">
+            <div className="rounded border border-warn-fill/50 bg-warn-soft/40 px-3 py-2 text-xs">
+              <p className="font-medium text-warn">Unsaved changes in open chapter</p>
+              <p className="mt-0.5 text-warn-muted/80">
                 The currently open file is in the replace set and has unsaved edits.
                 Save first to avoid overwriting in-memory changes.
               </p>
@@ -473,7 +473,7 @@ export function GlobalSearchModal({
                 <button
                   type="button"
                   onClick={() => void handleSaveAndContinue()}
-                  className="rounded border border-amber-600 bg-amber-700/30 px-3 py-1 text-xs text-amber-200 transition-colors hover:bg-amber-700/50"
+                  className="rounded border border-warn-fill bg-warn-fill/30 px-3 py-1 text-xs text-warn-strong transition-colors hover:bg-warn-fill/50"
                 >
                   Save &amp; Continue
                 </button>
@@ -490,20 +490,20 @@ export function GlobalSearchModal({
 
           {/* Replace error */}
           {replaceError && (
-            <p className="text-xs text-rose-400">{replaceError}</p>
+            <p className="text-xs text-danger-muted">{replaceError}</p>
           )}
 
           {/* Last replace summary + undo */}
           {lastSnapshot && (
-            <div className="flex items-center gap-3 rounded border border-emerald-800/40 bg-emerald-950/30 px-3 py-2">
-              <p className="flex-1 text-xs text-emerald-300">
+            <div className="flex items-center gap-3 rounded border border-success-fill/40 bg-success-soft/30 px-3 py-2">
+              <p className="flex-1 text-xs text-success">
                 Replaced {lastSnapshot.replacements_made} occurrence{lastSnapshot.replacements_made === 1 ? "" : "s"} in {lastSnapshot.files_modified} file{lastSnapshot.files_modified === 1 ? "" : "s"}.
               </p>
               <button
                 type="button"
                 onClick={() => void handleUndo()}
                 disabled={isReplacing}
-                className="flex items-center gap-1.5 rounded border border-emerald-700/50 px-2 py-1 text-xs text-emerald-300 transition-colors hover:border-emerald-500 hover:text-emerald-200 disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded border border-success-fill/50 px-2 py-1 text-xs text-success transition-colors hover:border-success-fill hover:text-success-strong disabled:opacity-40"
                 title="Restore all touched files from the pre-replace snapshot"
               >
                 <RotateCcw size={11} />
@@ -522,7 +522,7 @@ export function GlobalSearchModal({
                 type="button"
                 disabled={isReplacing || totalChecked === 0}
                 onClick={() => guardReplace(buildSelections())}
-                className="rounded border border-indigo-700 bg-indigo-900/40 px-4 py-1.5 text-xs font-medium text-indigo-200 transition-colors hover:border-indigo-500 hover:bg-indigo-800/40 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded border border-accent-fill bg-accent-soft/40 px-4 py-1.5 text-xs font-medium text-accent-strong transition-colors hover:border-accent-fill hover:bg-accent-fill/40 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Replace All ({totalChecked})
               </button>
@@ -549,8 +549,8 @@ function TogglePill({
       title={title}
       className={`rounded border px-2 py-1.5 text-xs font-mono transition-colors ${
         active
-          ? "border-indigo-500 bg-indigo-700/40 text-indigo-200"
-          : "border-border bg-bg-surface text-faint hover:border-indigo-600 hover:text-text-muted"
+          ? "border-accent-fill bg-accent-fill/40 text-accent-strong"
+          : "border-border bg-bg-surface text-faint hover:border-accent-fill hover:text-text-muted"
       }`}
     >
       {label}
@@ -596,12 +596,12 @@ function FileGroup({
           type="checkbox"
           checked={allChecked}
           onChange={onToggleAll}
-          className="shrink-0 accent-indigo-500"
+          className="shrink-0 accent-accent-fill"
           title="Select / deselect all matches in this file"
         />
 
         {/* Relative path */}
-        <span className="flex-1 truncate font-mono text-xs text-indigo-300" title={fm.file_relpath}>
+        <span className="flex-1 truncate font-mono text-xs text-accent" title={fm.file_relpath}>
           {fm.file_relpath}
         </span>
 
@@ -615,7 +615,7 @@ function FileGroup({
           type="button"
           onClick={onReplaceFile}
           disabled={disabled || checkedSet.size === 0}
-          className="shrink-0 rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
         >
           Replace in file
         </button>
@@ -659,7 +659,7 @@ function HitRow({
         type="checkbox"
         checked={checked}
         onChange={onToggle}
-        className="mt-0.5 shrink-0 accent-indigo-500"
+        className="mt-0.5 shrink-0 accent-accent-fill"
       />
 
       {/* Context block */}
@@ -679,7 +679,7 @@ function HitRow({
         type="button"
         onClick={onReplace}
         disabled={disabled || !checked}
-        className="shrink-0 self-start rounded border border-border px-2 py-0.5 text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+        className="shrink-0 self-start rounded border border-border px-2 py-0.5 text-xs text-faint transition-colors hover:border-accent-fill hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
         title="Replace this match only"
       >
         Replace
@@ -701,7 +701,7 @@ function HighlightedLine({ line, col, len }: { line: string; col: number; len: n
   return (
     <p className="truncate text-text-primary">
       {before}
-      <mark className="rounded-sm bg-amber-500/30 px-0.5 text-amber-200 not-italic">
+      <mark className="rounded-sm bg-warn-fill/30 px-0.5 text-warn-strong not-italic">
         {match}
       </mark>
       {after}

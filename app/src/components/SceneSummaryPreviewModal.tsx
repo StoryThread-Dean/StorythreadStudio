@@ -203,7 +203,7 @@ export function SceneSummaryPreviewModal({
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-bg-panel shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-bg-panel shadow-e4"
         onClick={(e) => e.stopPropagation()}
       >
 
@@ -242,7 +242,7 @@ export function SceneSummaryPreviewModal({
               onChange={(e) => setTitle(e.target.value)}
               disabled={isGenerating || isSaving}
               placeholder={isGenerating ? "Generating title..." : "Scene title"}
-              className="rounded border border-border bg-bg-primary px-2 py-1 text-sm text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+              className="rounded border border-border bg-bg-primary px-2 py-1 text-sm text-text-primary placeholder:text-faint focus:border-accent-fill focus:outline-none disabled:opacity-50"
             />
           </div>
 
@@ -258,13 +258,13 @@ export function SceneSummaryPreviewModal({
               disabled={isGenerating || isSaving}
               placeholder={isGenerating ? "Generating summary..." : "Summary body"}
               rows={10}
-              className="text-entry flex-1 resize-y rounded border border-border bg-bg-primary px-2 py-1.5 text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+              className="text-entry flex-1 resize-y rounded border border-border bg-bg-primary px-2 py-1.5 text-text-primary placeholder:text-faint focus:border-accent-fill focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Slot picker */}
           <div className="flex flex-col gap-2 rounded border border-border bg-bg-primary/50 p-3">
-            <span className="text-xs font-semibold text-indigo-300">Save as</span>
+            <span className="text-xs font-semibold text-accent">Save as</span>
 
             <label className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
               <input
@@ -272,7 +272,7 @@ export function SceneSummaryPreviewModal({
                 name="slot-mode"
                 checked={slotMode === "new"}
                 onChange={() => setSlotMode("new")}
-                className="accent-indigo-500"
+                className="accent-accent-fill"
               />
               <span>
                 New scene &nbsp;
@@ -289,7 +289,7 @@ export function SceneSummaryPreviewModal({
                   name="slot-mode"
                   checked={slotMode === "replace"}
                   onChange={() => setSlotMode("replace")}
-                  className="accent-indigo-500"
+                  className="accent-accent-fill"
                 />
                 <span className="flex items-center gap-2">
                   Replace existing scene
@@ -312,7 +312,7 @@ export function SceneSummaryPreviewModal({
 
           {/* Error banner */}
           {error && (
-            <div className="rounded border border-red-800 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+            <div className="rounded border border-danger-fill bg-danger-soft/40 px-3 py-2 text-xs text-danger">
               <span className="font-semibold">Error: </span>{error}
             </div>
           )}
@@ -323,7 +323,7 @@ export function SceneSummaryPreviewModal({
           <button
             onClick={() => runGenerate(true)}
             disabled={isGenerating || isSaving}
-            className="rounded border border-indigo-700/50 bg-indigo-950/40 px-3 py-1 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-accent-fill/50 bg-accent-soft/40 px-3 py-1 text-xs text-accent transition-colors hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
             title="Re-run the AI on the same selected text"
           >
             {isGenerating ? "Generating..." : "Regenerate"}
@@ -333,14 +333,14 @@ export function SceneSummaryPreviewModal({
             <button
               onClick={() => onClose()}
               disabled={isGenerating || isSaving}
-              className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-red-500 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-danger-fill hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
             >
               Discard
             </button>
             <button
               onClick={handleSave}
               disabled={isGenerating || isSaving || !content.trim()}
-              className="rounded border border-emerald-700/50 bg-emerald-950/40 px-3 py-1 text-xs text-emerald-300 transition-colors hover:border-emerald-500 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded border border-success-fill/50 bg-success-soft/40 px-3 py-1 text-xs text-success transition-colors hover:border-success-fill hover:text-success-strong disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Saving..." : "Save"}
             </button>

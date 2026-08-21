@@ -142,7 +142,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
                             report={result as MigrationReport} />
         ) : (
           <p className="flex items-center gap-2 text-sm text-text-primary">
-            <Check size={14} className="text-emerald-400" />
+            <Check size={14} className="text-success-muted" />
             {result.status === "restored"
               ? "Your profiles are back the way they were."
               : "This project was already in the Weave. Nothing changed."}
@@ -165,26 +165,26 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
   if (state === "incomplete") {
     return (
       <div data-testid="migration-interrupted"
-           className="rounded border border-amber-700/60 bg-amber-950/20 px-4 py-4">
-        <p className="flex items-center gap-2 text-sm text-amber-100">
-          <AlertTriangle size={14} className="text-amber-400/80" />
+           className="rounded border border-warn-fill/60 bg-warn-soft/20 px-4 py-4">
+        <p className="flex items-center gap-2 text-sm text-warn-strong">
+          <AlertTriangle size={14} className="text-warn-muted/80" />
           A previous conversion did not finish.
         </p>
-        <p className="mt-1 max-w-xl text-xs text-amber-200/80">
+        <p className="mt-1 max-w-xl text-xs text-warn-strong/80">
           Nothing has been lost. Your original profiles were copied before any
           change was made, and that copy is still there. You can carry on from
           where it stopped, or put everything back the way it was.
         </p>
         {plan?.backup_path && (
-          <p className="mt-1 text-[11px] text-amber-200/70">
-            The copy is at <span className="text-amber-100">{plan.backup_path}</span>.
+          <p className="mt-1 text-mini text-warn-strong/70">
+            The copy is at <span className="text-warn-strong">{plan.backup_path}</span>.
           </p>
         )}
-        {error && <p role="alert" className="mt-2 text-[11px] text-rose-300">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-mini text-danger">{error}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             onClick={() => void act("resume")} disabled={busy !== ""}
-            className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
           >
             {busy === "resume" ? <Loader size={12} className="animate-spin" />
                                : <ArrowRight size={12} />}
@@ -192,7 +192,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
           </button>
           <button
             onClick={() => void act("restore")} disabled={busy !== ""}
-            className="inline-flex items-center gap-1.5 rounded border border-amber-700/60 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-900/30 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded border border-warn-fill/60 px-3 py-1.5 text-xs text-warn-strong hover:bg-warn-soft/30 disabled:opacity-40"
           >
             {busy === "restore" ? <Loader size={12} className="animate-spin" />
                                 : <RotateCcw size={12} />}
@@ -210,7 +210,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
     <div data-testid="migration-preview"
          className="rounded border border-border bg-bg-primary px-4 py-4">
       <p className="flex items-center gap-2 text-sm text-text-primary">
-        <FolderInput size={14} className="text-violet-300" />
+        <FolderInput size={14} className="text-weave" />
         This project has not been brought into the Weave yet.
       </p>
       <p className="mt-1 max-w-xl text-xs text-text-muted">
@@ -220,7 +220,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
       </p>
 
       {error && (
-        <p role="alert" className="mt-2 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200">
+        <p role="alert" className="mt-2 rounded border border-danger-fill bg-danger-soft/40 px-2 py-1.5 text-mini text-danger-strong">
           {error}
         </p>
       )}
@@ -273,8 +273,8 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
             <Section title="Cannot be converted" tone="rose">
               <ul className="space-y-0.5">
                 {plan!.unconvertible.map(u => (
-                  <li key={`${u.folder}/${u.file ?? ""}`} className="text-xs text-rose-200/80">
-                    <span className="text-rose-100">
+                  <li key={`${u.folder}/${u.file ?? ""}`} className="text-xs text-danger-strong/80">
+                    <span className="text-danger-strong">
                       profiles/{u.folder}{u.file ? `/${u.file}` : ""}
                     </span>
                     {" -- "}{u.reason}
@@ -288,7 +288,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
             <Section title="Worth knowing first" tone="amber">
               <ul className="space-y-0.5">
                 {plan!.warnings.map(w => (
-                  <li key={w} className="text-xs text-amber-200/80">{w}</li>
+                  <li key={w} className="text-xs text-warn-strong/80">{w}</li>
                 ))}
               </ul>
             </Section>
@@ -296,8 +296,8 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
 
           {/* Named BEFORE the button, so the writer can go and look at the
               folder with their own file manager while deciding. */}
-          <p className="flex items-start gap-1.5 rounded border border-border bg-bg-surface px-2 py-1.5 text-[11px] text-text-muted">
-            <Info size={11} className="mt-0.5 shrink-0 text-violet-300" />
+          <p className="flex items-start gap-1.5 rounded border border-border bg-bg-surface px-2 py-1.5 text-mini text-text-muted">
+            <Info size={11} className="mt-0.5 shrink-0 text-weave" />
             <span>
               Your profiles are copied to{" "}
               <span className="text-text-primary">{plan!.backup_path}</span>{" "}
@@ -314,7 +314,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
           <button
             onClick={() => setConfirming(true)}
             disabled={nothingToDo}
-            className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
           >
             <ArrowRight size={12} />
             Convert {plan!.total} {plan!.total === 1 ? "entry" : "entries"}
@@ -330,7 +330,7 @@ export function MigrationPanel({ projectPath, state, onChanged }: MigrationPanel
             </span>
             <button
               onClick={() => void act("convert")} disabled={busy !== ""}
-              className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
             >
               {busy === "convert" ? <Loader size={12} className="animate-spin" />
                                   : <Check size={12} />}
@@ -355,11 +355,11 @@ function Section({ title, tone = "zinc", children }: {
   tone?: "zinc" | "amber" | "rose";
   children: React.ReactNode;
 }) {
-  const colour = tone === "amber" ? "text-amber-200/90"
-    : tone === "rose" ? "text-rose-200/90" : "text-faint";
+  const colour = tone === "amber" ? "text-warn-strong/90"
+    : tone === "rose" ? "text-danger-strong/90" : "text-faint";
   return (
     <div>
-      <p className={`text-[11px] font-semibold uppercase tracking-wide ${colour}`}>
+      <p className={`text-mini font-semibold uppercase tracking-wide ${colour}`}>
         {title}
       </p>
       <div className="mt-1">{children}</div>

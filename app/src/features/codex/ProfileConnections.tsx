@@ -135,23 +135,23 @@ export function ProfileConnections({
   return (
     <section className="rounded border border-border bg-bg-surface p-2.5">
       <header className="mb-2 flex flex-wrap items-center gap-2">
-        <Link2 size={12} className="shrink-0 text-violet-300" />
+        <Link2 size={12} className="shrink-0 text-weave" />
         <h3 className="text-xs font-semibold text-text-primary">Connections</h3>
         <Explain of="profile.connections" />
         <button
           onClick={() => void openConnect()}
-          className="ml-auto inline-flex items-center gap-1 rounded border border-violet-700 bg-violet-950/40 px-2 py-0.5 text-[11px] text-violet-200 hover:bg-violet-900/50"
+          className="ml-auto inline-flex items-center gap-1 rounded border border-weave-fill bg-weave-soft/40 px-2 py-0.5 text-mini text-weave-strong hover:bg-weave-soft/50"
         >
           <Plus size={10} /> Connect {name} to something
         </button>
       </header>
 
       {ties === null ? (
-        <p className="flex items-center gap-1.5 text-[11px] text-text-muted">
+        <p className="flex items-center gap-1.5 text-mini text-text-muted">
           <Loader size={11} className="animate-spin" /> Reading connections...
         </p>
       ) : ties.length === 0 ? (
-        <p className="text-[11px] text-faint">
+        <p className="text-mini text-faint">
           Nothing yet. A connection is how this relates to the rest of your
           world -- who it knows, where it belongs, what it serves. Nothing can
           work that out for you, and it is what the AI is told when you ask
@@ -169,7 +169,7 @@ export function ProfileConnections({
                   <span
                     key={`${tie.src_id}|${tie.rel}|${tie.dst_id}`}
                     title={`${tie.reads_as} ${tie.other_name}`}
-                    className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-text-muted"
+                    className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted"
                   >
                     <KindIcon size={10}
                               className={`shrink-0 ${TONE_CLASSES[kind.tone].text}`} />
@@ -194,14 +194,14 @@ export function ProfileConnections({
                 const elsewhere = tie.recorded_on && tie.recorded_on !== entityId;
                 return (
                   <li key={`${tie.src_id}|${tie.rel}|${tie.dst_id}`}
-                      className="flex items-start gap-2 text-[11px]">
+                      className="flex items-start gap-2 text-mini">
                     <KindIcon size={11}
                               className={`mt-0.5 shrink-0 ${TONE_CLASSES[kind.tone].text}`} />
                     <span className="min-w-0 flex-1">
                       <span className="text-text-primary">
                         {tie.other_name}{full}
                       </span>
-                      <span className="text-emerald-300"> -- {tie.reads_as} -- </span>
+                      <span className="text-success"> -- {tie.reads_as} -- </span>
                       {tie.why ? (
                         <span className="text-text-muted">{tie.why}</span>
                       ) : (
@@ -211,7 +211,7 @@ export function ProfileConnections({
                         <span className="text-faint"> (from {tie.at_label})</span>
                       )}
                       {elsewhere && (
-                        <span className="block text-[10px] text-faint">
+                        <span className="block text-micro text-faint">
                           recorded on {tie.other_name}&rsquo;s page
                         </span>
                       )}
@@ -224,7 +224,7 @@ export function ProfileConnections({
 
           <button
             onClick={() => setExpanded(v => !v)}
-            className="mt-2 inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-200"
+            className="mt-2 inline-flex items-center gap-1 text-mini text-weave hover:text-weave-strong"
           >
             {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
             {expanded
@@ -235,7 +235,7 @@ export function ProfileConnections({
       )}
 
       {error && (
-        <p role="alert" className="mt-1.5 text-[11px] text-rose-300">{error}</p>
+        <p role="alert" className="mt-1.5 text-mini text-danger">{error}</p>
       )}
     </section>
   );

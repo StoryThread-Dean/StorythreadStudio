@@ -197,11 +197,11 @@ export function ProfilePageGuide({ onClose }: ProfilePageGuideProps) {
         role="dialog"
         aria-label="How this page works"
         data-testid="profile-page-guide"
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-indigo-800 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-accent-fill bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] uppercase tracking-wide text-faint">
+            <p className="text-micro uppercase tracking-wide text-faint">
               Page {index + 1} of {PAGES.length}
             </p>
             <h2 className="truncate text-xs font-semibold text-text-primary">
@@ -230,14 +230,14 @@ export function ProfilePageGuide({ onClose }: ProfilePageGuideProps) {
           {last ? (
             <button
               onClick={onClose}
-              className="rounded bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-500"
+              className="rounded bg-accent-fill px-3 py-1 text-xs font-semibold text-white hover:bg-accent-fill"
             >
               Done
             </button>
           ) : (
             <button
               onClick={() => setIndex(i => Math.min(PAGES.length - 1, i + 1))}
-              className="inline-flex items-center gap-1 rounded bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-500"
+              className="inline-flex items-center gap-1 rounded bg-accent-fill px-3 py-1 text-xs font-semibold text-white hover:bg-accent-fill"
             >
               Next <ChevronRight size={12} />
             </button>

@@ -416,7 +416,7 @@ export function EditorAdvisorBar({
     allSubs:  { key: IssueSubcategory; label: string; help: string }[];
     setSubs:  (v: IssueSubcategory[]) => void;
     label:    string;
-    color:    string;     // Tailwind border/text color, e.g. "border-amber-600 text-amber-300"
+    color:    string;     // Tailwind border/text color, e.g. "border-warn-fill text-warn"
   }) {
     const isRunning = running === category;
     const isMenuOpen = openMenu === category;
@@ -445,22 +445,22 @@ export function EditorAdvisorBar({
 
         {/* Subcategory dropdown. Anchored to the button. */}
         {isMenuOpen && (
-          <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded border border-border bg-bg-panel p-2 text-xs shadow-lg">
-            <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">
+          <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded border border-border bg-bg-panel p-2 text-xs shadow-e2">
+            <p className="mb-1 text-micro uppercase tracking-wide text-faint">
               Look for
             </p>
             <div className="space-y-1">
               {allSubs.map(s => (
-                <label key={s.key} className="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-indigo-900/20">
+                <label key={s.key} className="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-accent-soft/20">
                   <input
                     type="checkbox"
                     checked={subs.includes(s.key)}
                     onChange={() => toggleSub(s.key as IssueSubcategory, subs, setSubs)}
-                    className="mt-0.5 h-3 w-3 accent-indigo-500"
+                    className="mt-0.5 h-3 w-3 accent-accent-fill"
                   />
                   <span className="flex flex-col">
                     <span className="text-text-primary">{s.label}</span>
-                    <span className="text-[10px] text-faint">{s.help}</span>
+                    <span className="text-micro text-faint">{s.help}</span>
                   </span>
                 </label>
               ))}
@@ -474,7 +474,7 @@ export function EditorAdvisorBar({
 
   return (
     <div ref={barRef} className="flex flex-wrap items-center gap-2 border-b border-border bg-bg-primary px-3 py-1.5">
-      <span className="text-[10px] uppercase tracking-wide text-faint">Smart Advisor</span>
+      <span className="text-micro uppercase tracking-wide text-faint">Smart Advisor</span>
       {/* THE FIRST PLACE IN THIS APP WHERE HELP HAS TO TALK ABOUT MONEY.
           A pass reads the whole chapter unless something is selected, so
           "select first" is not a tip -- it is the difference in the bill.
@@ -491,7 +491,7 @@ export function EditorAdvisorBar({
         allSubs={READABILITY_SUBS as { key: IssueSubcategory; label: string; help: string }[]}
         setSubs={(v) => setReadabilitySubs(v as ReadabilitySubcategory[])}
         label="Readability"
-        color="border-amber-600 text-amber-300"
+        color="border-warn-fill text-warn"
       />
 
       <CategoryButton
@@ -500,7 +500,7 @@ export function EditorAdvisorBar({
         allSubs={STRUCTURE_SUBS as { key: IssueSubcategory; label: string; help: string }[]}
         setSubs={(v) => setStructureSubs(v as StructureSubcategory[])}
         label="Structure"
-        color="border-violet-600 text-violet-300"
+        color="border-weave-fill text-weave"
       />
 
       {/* Context group: category button + profile attach + (i) info hint.
@@ -513,7 +513,7 @@ export function EditorAdvisorBar({
           allSubs={CONTEXT_SUBS as { key: IssueSubcategory; label: string; help: string }[]}
           setSubs={(v) => setContextSubs(v as ContextSubcategory[])}
           label="Context"
-          color="border-teal-600 text-teal-300"
+          color="border-secondary-fill text-secondary"
         />
 
         {/* Attach / profile-count button. Shows "Attach Profiles" when none
@@ -523,7 +523,7 @@ export function EditorAdvisorBar({
           <button
             onClick={onOpenProfilePicker}
             disabled={running != null}
-            className="rounded border border-teal-700 bg-teal-900/20 px-2 py-0.5 text-[10px] text-teal-300 hover:bg-teal-800/40 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-secondary-fill bg-secondary-soft/20 px-2 py-0.5 text-micro text-secondary hover:bg-secondary-fill/40 disabled:cursor-not-allowed disabled:opacity-50"
             title="Attach character, relationship, location, or lore profiles for Context to use"
           >
             Attach Profiles
@@ -532,7 +532,7 @@ export function EditorAdvisorBar({
           <button
             onClick={onOpenProfilePicker}
             disabled={running != null}
-            className="rounded border border-teal-800 bg-teal-900/10 px-2 py-0.5 text-[10px] text-teal-400 hover:bg-teal-700/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-secondary-fill bg-secondary-soft/10 px-2 py-0.5 text-micro text-secondary-muted hover:bg-secondary-fill/20 disabled:cursor-not-allowed disabled:opacity-50"
             title="Add or refresh attached profiles"
           >
             {profileChipCount} {profileChipCount === 1 ? "profile" : "profiles"}
@@ -546,21 +546,21 @@ export function EditorAdvisorBar({
           <div className="relative">
             <button
               onClick={() => setShowContextInfo(prev => !prev)}
-              className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-teal-800 text-[9px] font-bold text-teal-600 hover:border-teal-600 hover:text-teal-300"
+              className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-secondary-fill text-2xs font-bold text-secondary-fill hover:border-secondary-fill hover:text-secondary"
               title="Why does Context need profiles?"
               aria-label="Context help"
             >
               i
             </button>
             {showContextInfo && (
-              <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded border border-teal-800 bg-bg-panel p-2.5 shadow-lg">
-                <p className="mb-1 text-[11px] font-semibold text-teal-300">Context needs profiles</p>
-                <p className="text-[11px] text-text-muted">
+              <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded border border-secondary-fill bg-bg-panel p-2.5 shadow-e2">
+                <p className="mb-1 text-mini font-semibold text-secondary">Context needs profiles</p>
+                <p className="text-mini text-text-muted">
                   Context checks the chapter against your attached character,
                   relationship, location, and lore profiles. Without profiles
                   there is nothing to compare and very few issues will surface.
                 </p>
-                <p className="mt-1.5 text-[11px] text-teal-400">
+                <p className="mt-1.5 text-mini text-secondary-muted">
                   Click <span className="font-semibold">Attach Profiles</span> to get started.
                 </p>
               </div>
@@ -577,8 +577,8 @@ export function EditorAdvisorBar({
           there's no useful count or Done while we're still gathering. */}
       <div className="ml-auto flex items-center gap-2">
         {running ? (
-          <span className="flex items-center gap-1.5 text-[11px] italic text-indigo-300">
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
+          <span className="flex items-center gap-1.5 text-mini italic text-accent">
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent-muted" />
             {progressText(running, elapsed, runningIsSelection)}
           </span>
         ) : (
@@ -588,9 +588,9 @@ export function EditorAdvisorBar({
                 selection, otherwise "full chapter". Hidden while a pass
                 is running -- the progress text covers that case. */}
             <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] ${
+              className={`rounded-full border px-2 py-0.5 text-micro ${
                 selectionInfo
-                  ? "border-amber-700 bg-amber-900/20 text-amber-200"
+                  ? "border-warn-fill bg-warn-soft/20 text-warn-strong"
                   : "border-border bg-bg-elev text-faint"
               }`}
               title={
@@ -604,7 +604,7 @@ export function EditorAdvisorBar({
                 : "full chapter"}
             </span>
             {issueCount > 0 && (
-              <span className="rounded-full border border-indigo-700 bg-indigo-900/30 px-2 py-0.5 text-[10px] text-indigo-200">
+              <span className="rounded-full border border-accent-fill bg-accent-soft/30 px-2 py-0.5 text-micro text-accent-strong">
                 {issueCount} {issueCount === 1 ? "issue" : "issues"}
               </span>
             )}
@@ -624,7 +624,7 @@ export function EditorAdvisorBar({
       {/* Error message, full-width on its own row when present. Keeps the
           button row stable in height. */}
       {error && (
-        <p className="basis-full text-[11px] text-red-400">{error}</p>
+        <p className="basis-full text-mini text-danger-muted">{error}</p>
       )}
     </div>
   );

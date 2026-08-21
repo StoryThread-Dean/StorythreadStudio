@@ -1,0 +1,171 @@
+# Words that appeared in the five retired outline templates.
+#
+# Generated ONCE, from outline_templates.py, on the commit that deleted it.
+# Do not edit by hand and do not regenerate: the templates no longer exist,
+# so this file IS the record.
+#
+# WHY IT HAS TO EXIST. codex/scan.py subtracts template scaffolding from
+# planned-name candidates -- measured at 53 planned names down to 23 on the
+# writer's real outlines. Every project created before v2.0.2 still has a
+# full template body sitting in notes/outline.md. Delete the renderers
+# without keeping their vocabulary and the scan stops subtracting, and every
+# existing writer's noise silently returns.
+#
+act
+act short
+action
+add
+all is lost
+ally
+antagonist
+arc
+ashen
+ashen pact
+beat
+book
+break
+brief
+call
+cast
+central conflict
+central mystery
+changes over
+chapter
+chapter plan
+character anchors
+classic
+climax
+closing beat
+closing image
+cold open
+compressed
+context
+core fields
+counterforce
+dan wells
+dark night
+debate
+denouement
+description
+ember throne
+empress asha
+ending type
+english
+episode
+episode plan
+episode target
+episodic cast
+escalation
+exposition
+falling
+falling action
+fantasy
+fiction
+fiction template
+fill
+first push
+first trials
+foil
+freytag's pyramid
+front matter
+genre
+goal
+hollow crown
+hook
+in medias
+inciting
+inciting incident
+irish
+ironhold
+kael
+key relationship
+lighthouse
+logline
+low point
+magic
+medias res
+mentor
+middle
+midpoint
+midpoint reversal
+mirror
+new plan
+night
+notes
+open questions
+opening image
+opposing force
+opposition
+optional
+outline
+paragraph
+per
+pick
+plot beat scratchpad
+point
+point structure
+premise
+present
+pressure mounts
+profile builder
+protagonist
+protagonist's status quo
+question
+range foreshadowing threads
+reader engagement notes
+reader promises
+recap strategy
+recurring allies
+recurring antagonist
+recurring cast
+refusal
+release cadence
+res
+resolution
+rising
+rival
+saga
+salt
+season
+season cliffhanger
+season climax
+season inciting incident
+season midpoint
+season premise
+section
+section plan
+self
+sentence
+serial
+series
+series arc
+series premise
+setting
+setting summary
+seven
+seventh
+slice
+soul
+start
+status quo
+story
+story template
+structure below
+subplot
+supporting cast
+target length
+target word count
+tech rules
+template
+tense
+theme
+three
+threshold
+time
+tone
+vire
+witness
+working title
+world
+worldbuilding hooks
+writing progress

@@ -125,7 +125,7 @@ export function MarkerHelpPanel() {
 
   return (
     <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <p className="mb-2 text-[11px] text-zinc-500">
+      <p className="mb-2 text-mini text-zinc-500">
         Every example below is generated live by the free local narrator
         (Heart voice), exactly the way your book will sound. The narrator is
         quite good at standard pronunciations on its own -- you don't need to
@@ -141,7 +141,7 @@ export function MarkerHelpPanel() {
               <span className="flex shrink-0 items-center gap-1.5">
                 {/* Writers used to metered AI need to know this button is
                     free -- it runs on their own machine, no tokens spent. */}
-                <span className="text-[9px] text-zinc-600" title="Generated on your computer -- no tokens or credits are spent">
+                <span className="text-2xs text-zinc-600" title="Generated on your computer -- no tokens or credits are spent">
                   local &middot; free
                 </span>
                 <button
@@ -150,7 +150,7 @@ export function MarkerHelpPanel() {
                   title={nowPlaying?.kind === item.kind
                     ? (nowPlaying.status === "playing" ? "Click to pause" : "Click to continue")
                     : "Play the example"}
-                  className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] disabled:opacity-40 ${
+                  className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-micro disabled:opacity-40 ${
                     nowPlaying?.kind === item.kind
                       ? "border-emerald-600 text-emerald-300"
                       : "border-zinc-700 text-zinc-300 hover:border-emerald-600 hover:text-emerald-300"
@@ -171,12 +171,12 @@ export function MarkerHelpPanel() {
                 </button>
               </span>
             </div>
-            <p className="text-[11px] leading-relaxed text-zinc-500">{item.body}</p>
+            <p className="text-mini leading-relaxed text-zinc-500">{item.body}</p>
           </div>
         ))}
       </div>
       {error && (
-        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-3 py-1.5 text-[11px] text-rose-300">
+        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-3 py-1.5 text-mini text-rose-300">
           {error}
         </p>
       )}
