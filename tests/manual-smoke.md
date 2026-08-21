@@ -50,7 +50,7 @@ Expected:
 ## 2. Create new project from scratch
 
 **Touches:** native folder picker (Tauri `plugin-dialog`), story-type
-selection, outline-template injection, `project.json` write, full
+selection, outline worksheet seeding, `project.json` write, full
 project-folder scaffold.
 
 Steps:
@@ -76,9 +76,29 @@ input), and the new project folder contains all of:
 - `.storythread/` -- cache; `app.db` will appear here after the first
   save event
 
-`notes/outline.md` begins with a YAML frontmatter block: starts with
-`---` followed by `# OUTLINE TRACKING DATA`, then `target_word_count`,
-`expected_characters: []`, etc.
+`notes/outline.md` is the ten-line worksheet and NOTHING else -- no YAML,
+no `# OUTLINE TRACKING DATA`, and no `---` anywhere in the file. It reads:
+
+```
+# Outline -- Smoke Test Novel
+
+Title: Smoke Test Novel
+Series:
+Genre:
+Tone:
+Description:
+Setting:
+Theme:
+Tense:
+Target Word Count: 90000
+Target Chapter Count:
+```
+
+Title comes across from what you typed and Target Word Count from the story
+type (a Novella would say 30000; Serial fiction leaves it blank on purpose,
+because absence is how "no fixed total" is spelled in a file a person reads).
+Every other line is a bare label. If you see the old tracking block here, the
+project was made by a pre-2.0.2 build -- check the version before filing.
 
 The app navigates into the new project.
 

@@ -30,6 +30,8 @@ entry while working on a feature, append it under Unreleased.
 - **Show me how, for the Outline.** A twenty-one page walkthrough, one page per section, each showing how The Lord of the Rings, Harry Potter and Dungeon Crawler Carl answer it.
 - **Fill from Book Details** puts your title, genre, tone and targets into the outline header. It only fills lines that are empty, so nothing you have written is replaced.
 - **Chapter Count target** in Book Details, beside the word count target.
+- **Icons drawn for this app** rather than borrowed: a needle and thread, a loom, a spool, a thimble for anything held back, and a line of stitching in place of the plain hairline dividers. The installer, taskbar and browser-tab icons change with them.
+- **A dashboard that offers you your book.** The project screen opens with the one you were last writing, rather than a logo and a list to search through. It hides itself on a first run, when there is nothing to continue.
 
 ### Changed
 
