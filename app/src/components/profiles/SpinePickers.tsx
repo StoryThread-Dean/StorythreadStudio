@@ -51,7 +51,7 @@ function SpineSelect({
           type="button"
           onClick={() => setShowHelp(h => !h)}
           className={`flex items-center gap-0.5 text-mini transition-colors ${
-            showHelp ? "text-indigo-300" : "text-faint hover:text-indigo-300"
+            showHelp ? "text-accent" : "text-faint hover:text-accent"
           }`}
           title={`What do the ${label} options mean?`}
         >
@@ -61,10 +61,10 @@ function SpineSelect({
       </div>
 
       {showHelp && (
-        <div className="mb-2 rounded border border-indigo-800/40 bg-indigo-950/20 p-2">
+        <div className="mb-2 rounded border border-accent-fill/40 bg-accent-soft/20 p-2">
           {options.map(o => (
             <p key={o.id} className="mb-1 text-mini leading-snug text-text-muted">
-              <span className="font-medium text-indigo-300">{o.label}:</span> {o.help}
+              <span className="font-medium text-accent">{o.label}:</span> {o.help}
             </p>
           ))}
         </div>
@@ -78,7 +78,7 @@ function SpineSelect({
           const picked = spineOptionById(options, e.target.value);
           if (picked) onPick(picked);
         }}
-        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-500"
+        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
       >
         <option value="">Pick to insert a starting point...</option>
         {options.map(o => (
@@ -130,7 +130,7 @@ export function SpinePickers({ onInsert, onRolePicked }: SpinePickersProps) {
         />
       </div>
       {notice ? (
-        <p className="mt-1.5 text-mini text-emerald-400">{notice}</p>
+        <p className="mt-1.5 text-mini text-success-muted">{notice}</p>
       ) : (
         <p className="mt-1.5 text-mini text-faint">
           Starting points, not verdicts -- fill in the blanks and ask what

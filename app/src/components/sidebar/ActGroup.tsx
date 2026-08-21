@@ -56,7 +56,7 @@ export function ActGroup({
       <div className="group flex items-stretch rounded transition-colors hover:bg-bg-raised">
         <button
           onClick={onToggleCollapsed}
-          className="flex w-5 shrink-0 items-center justify-center text-xs text-text-muted hover:text-indigo-300"
+          className="flex w-5 shrink-0 items-center justify-center text-xs text-text-muted hover:text-accent"
           title={collapsed ? "Expand act" : "Collapse act"}
           aria-label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
         >
@@ -79,7 +79,7 @@ export function ActGroup({
               }
             }}
             onFocus={e => e.currentTarget.select()}
-            className="flex-1 min-w-0 rounded border border-indigo-500/50 bg-bg-surface px-1 py-0.5 text-xs font-semibold text-text-primary outline-none focus:border-indigo-400"
+            className="flex-1 min-w-0 rounded border border-accent-fill/50 bg-bg-surface px-1 py-0.5 text-xs font-semibold text-text-primary outline-none focus:border-accent-muted"
             title="Rename act -- Enter to save, Escape to cancel"
           />
         ) : (

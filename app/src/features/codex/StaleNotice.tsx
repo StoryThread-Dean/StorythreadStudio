@@ -50,10 +50,10 @@ export function StaleNotice({ report, onRecheck, scoped,
   return (
     <div
       data-testid="stale-notice"
-      className="mt-2 rounded border border-amber-900/70 bg-amber-950/20 p-2"
+      className="mt-2 rounded border border-warn-soft/70 bg-warn-soft/20 p-2"
     >
-      <p className="flex items-start gap-1.5 text-mini text-amber-100">
-        <History size={12} className="mt-0.5 shrink-0 text-amber-300" />
+      <p className="flex items-start gap-1.5 text-mini text-warn-strong">
+        <History size={12} className="mt-0.5 shrink-0 text-warn" />
         <span>
           {stale > 0 ? (
             <>
@@ -101,7 +101,7 @@ export function StaleNotice({ report, onRecheck, scoped,
             onClick={() => onRecheck(chapters)}
             disabled={busy}
             data-testid="stale-recheck"
-            className="inline-flex items-center gap-1 rounded border border-amber-800 px-2 py-0.5 text-mini text-amber-100 hover:border-amber-600 disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded border border-warn-fill px-2 py-0.5 text-mini text-warn-strong hover:border-warn-fill disabled:opacity-40"
           >
             <RefreshCw size={10} />
             Re-check just{" "}
@@ -121,9 +121,9 @@ export function StaleMark() {
   return (
     <p
       data-testid="stale-mark"
-      className="mt-2 flex items-start gap-1.5 rounded border border-amber-900/70 bg-amber-950/20 px-2 py-1 text-mini text-amber-100"
+      className="mt-2 flex items-start gap-1.5 rounded border border-warn-soft/70 bg-warn-soft/20 px-2 py-1 text-mini text-warn-strong"
     >
-      <History size={11} className="mt-0.5 shrink-0 text-amber-300" />
+      <History size={11} className="mt-0.5 shrink-0 text-warn" />
       <span>
         You put this one off before, and the text it was about has been
         rewritten since. What is quoted above is the new wording.

@@ -116,7 +116,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
         role="dialog"
         aria-label={`What is ${word}?`}
         data-testid="word-fix"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <h2 className="flex-1 text-xs font-semibold text-text-primary">
@@ -150,14 +150,14 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                 statement that the flagged phrase was not a thing, but they
                 should see that the app took it that way. */}
             {corrected && (
-              <p className="mt-1.5 text-mini text-amber-200/90"
+              <p className="mt-1.5 text-mini text-warn-strong/90"
                  data-testid="word-fix-retired">
                 &quot;{word}&quot; was not right, so it will not be raised again.
               </p>
             )}
             <button
               onClick={() => onDone(corrected ? word : "")}
-              className="mt-3 inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+              className="mt-3 inline-flex flex-col items-start rounded border border-success-fill bg-success-soft/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-success-soft/50"
             >
               <span>Carry on</span>
               <span className="text-micro font-normal text-faint">
@@ -178,10 +178,10 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                 value={text}
                 onChange={e => setText(e.target.value)}
                 aria-label="The word"
-                className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
               />
               {corrected && (
-                <p className="mt-1 text-mini text-amber-200/90"
+                <p className="mt-1 text-mini text-warn-strong/90"
                    data-testid="word-fix-changed">
                   Recording &quot;{text.trim()}&quot;. The original,
                   &quot;{word}&quot;, will not be raised again.
@@ -237,7 +237,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                         <button
                           onClick={() => setChosen(picked ? null : node)}
                           className={`flex w-full items-center gap-1.5 rounded border px-2 py-1 text-left text-xs ${
-                            picked ? "border-violet-500 bg-violet-500/10"
+                            picked ? "border-weave-fill bg-weave-fill/10"
                                    : "border-border hover:border-text-muted"
                           }`}
                         >
@@ -263,7 +263,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                   type="checkbox"
                   checked={asLabel}
                   onChange={e => setAsLabel(e.target.checked)}
-                  className="mt-0.5 shrink-0 accent-violet-500"
+                  className="mt-0.5 shrink-0 accent-weave-fill"
                 />
                 <span>
                   Call it &quot;{text.trim()}&quot; on the map and in the
@@ -274,7 +274,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
             )}
 
             {error && (
-              <p role="alert" className="text-mini text-rose-300">{error}</p>
+              <p role="alert" className="text-mini text-danger">{error}</p>
             )}
 
             <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
@@ -282,7 +282,7 @@ export function WordFix({ projectPath, word, candidates, onCreateInstead,
                 onClick={() => void record()}
                 disabled={busy || !chosen || !text.trim()}
                 data-testid="word-fix-record"
-                className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
               >
                 {busy ? <Loader size={11} className="animate-spin" />
                       : <Check size={11} />}

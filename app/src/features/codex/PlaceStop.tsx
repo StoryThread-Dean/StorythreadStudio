@@ -75,9 +75,9 @@ export function PlaceStop({
   });
 
   return (
-    <div className="mt-2 rounded border border-blue-900/60 bg-blue-950/15 px-2.5 py-2"
+    <div className="mt-2 rounded border border-accent-soft/60 bg-accent-soft/15 px-2.5 py-2"
          data-testid="place-stop">
-      <p className="flex items-center gap-1.5 text-mini font-medium text-blue-100">
+      <p className="flex items-center gap-1.5 text-mini font-medium text-accent-strong">
         <MapPin size={11} /> Where {name} appears
       </p>
 
@@ -106,7 +106,7 @@ export function PlaceStop({
                 </span>
               )}
               {!recorded.has(chapter.anchor) && suggested.has(chapter.anchor) && (
-                <span className="ml-auto shrink-0 text-2xs text-blue-300">
+                <span className="ml-auto shrink-0 text-2xs text-accent">
                   found here
                 </span>
               )}
@@ -130,7 +130,7 @@ export function PlaceStop({
           onClick={() => onSave([...ticked])}
           disabled={busy}
           data-testid="place-save"
-          className="inline-flex items-center gap-1 rounded bg-blue-600 px-2.5 py-1 text-mini font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+          className="inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
         >
           {busy ? <Loader size={11} className="animate-spin" />
                 : <Check size={11} />}
@@ -145,7 +145,7 @@ export function PlaceStop({
           // Unticking everything is a real answer -- "I placed this wrongly" --
           // and it has to be distinguishable from doing nothing, or the writer
           // has no way to undo a bad tag from inside the walk.
-          <span className="text-micro text-amber-300/90">
+          <span className="text-micro text-warn/90">
             This will clear where {name} was recorded.
           </span>
         )}

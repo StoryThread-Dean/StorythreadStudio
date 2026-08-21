@@ -597,14 +597,14 @@ export function Settings({ onClose }: SettingsProps) {
                         onClick={() => { setSelectedProvider(p.id); setTestResult(null); }}
                         className={`flex flex-1 flex-col items-start gap-0.5 rounded border px-3 py-2 text-left transition-colors ${
                           selectedProvider === p.id
-                            ? "border-indigo-500 bg-bg-surface"
-                            : "border-border bg-bg-panel hover:border-indigo-500"
+                            ? "border-accent-fill bg-bg-surface"
+                            : "border-border bg-bg-panel hover:border-accent-fill"
                         }`}
                       >
                         <span className="flex w-full items-center justify-between">
                           <span className="text-xs font-medium text-text-primary">{p.label}</span>
                           <span className={`text-micro ${
-                            isActiveSaved ? "text-emerald-400" : keySet ? "text-indigo-300" : "text-faint"
+                            isActiveSaved ? "text-success-muted" : keySet ? "text-accent" : "text-faint"
                           }`}>
                             {status}
                           </span>
@@ -661,7 +661,7 @@ export function Settings({ onClose }: SettingsProps) {
                             onChange={e => setLocalBaseUrl(e.target.value)}
                             placeholder="http://localhost:11434"
                             aria-label="Local server address"
-                            className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                            className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                           />
                         </div>
                         <div>
@@ -677,7 +677,7 @@ export function Settings({ onClose }: SettingsProps) {
                             value={localApiStyle}
                             onChange={e => setLocalApiStyle(e.target.value)}
                             aria-label="Local API style"
-                            className="rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-indigo-500"
+                            className="rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-fill"
                           >
                             <option value="openai">OpenAI-compatible</option>
                             <option value="ollama">Ollama native</option>
@@ -686,7 +686,7 @@ export function Settings({ onClose }: SettingsProps) {
                         <button
                           onClick={handleTest}
                           disabled={testing || saving}
-                          className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary disabled:opacity-50"
                         >
                           Test Connection
                         </button>
@@ -709,7 +709,7 @@ export function Settings({ onClose }: SettingsProps) {
                         <button
                           onClick={() => setPromptCaching(v => !v)}
                           className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                            promptCaching ? "bg-indigo-600" : "bg-border"
+                            promptCaching ? "bg-accent-fill" : "bg-border"
                           }`}
                           title={promptCaching ? "Prompt caching on" : "Prompt caching off"}
                         >
@@ -744,7 +744,7 @@ export function Settings({ onClose }: SettingsProps) {
                     step={1}
                     value={tierIndex(costTier)}
                     onChange={e => setCostTier(TIERS[parseInt(e.target.value)].value)}
-                    className="w-full accent-indigo-500"
+                    className="w-full accent-accent-fill"
                   />
                   {/* Tier labels */}
                   <div className="mt-1 flex justify-between">
@@ -753,7 +753,7 @@ export function Settings({ onClose }: SettingsProps) {
                         key={t.value}
                         className={`text-xs ${
                           i === tierIndex(costTier)
-                            ? "font-semibold text-indigo-300"
+                            ? "font-semibold text-accent"
                             : "text-faint"
                         }`}
                       >
@@ -775,7 +775,7 @@ export function Settings({ onClose }: SettingsProps) {
                   <button
                     onClick={() => setTextOnlyFilter(v => !v)}
                     className={`relative h-5 w-9 rounded-full transition-colors ${
-                      textOnlyFilter ? "bg-indigo-600" : "bg-border"
+                      textOnlyFilter ? "bg-accent-fill" : "bg-border"
                     }`}
                     title={textOnlyFilter ? "Text-only filter on" : "Text-only filter off"}
                   >
@@ -789,8 +789,8 @@ export function Settings({ onClose }: SettingsProps) {
 
                 {/* Tier conflict warning */}
                 {selectedOutsideTier && (
-                  <div className="mb-4 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
-                    <p className="text-xs text-amber-300">
+                  <div className="mb-4 rounded border border-warn-fill/50 bg-warn-soft/30 px-3 py-2">
+                    <p className="text-xs text-warn">
                       Your selected model is outside the current tier filter. It will still be used
                       until you pick a different one from the list below.
                     </p>
@@ -800,8 +800,8 @@ export function Settings({ onClose }: SettingsProps) {
                 {/* Cross-provider model warning: the saved default model came
                     from a different provider's catalog and doesn't exist here. */}
                 {selectedMissingFromProvider && (
-                  <div className="mb-4 rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2">
-                    <p className="text-xs text-amber-300">
+                  <div className="mb-4 rounded border border-warn-fill/50 bg-warn-soft/30 px-3 py-2">
+                    <p className="text-xs text-warn">
                       Your default model came from your previous provider and isn't
                       available on {providerMetaById(savedProvider).label}. Pick a
                       model from the list below.
@@ -827,7 +827,7 @@ export function Settings({ onClose }: SettingsProps) {
                         value={selectedModel}
                         onChange={e => setSelectedModel(e.target.value)}
                         placeholder="e.g. openai/gpt-4o-mini"
-                        className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                       />
                       <p className="mt-1 text-xs text-faint">
                         Test your connection above to load the model list.
@@ -841,7 +841,7 @@ export function Settings({ onClose }: SettingsProps) {
                       {flagshipPicks.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
-                            <p className="text-xs font-semibold text-amber-400">
+                            <p className="text-xs font-semibold text-warn-muted">
                               ★ Flagship
                             </p>
                           </div>
@@ -867,7 +867,7 @@ export function Settings({ onClose }: SettingsProps) {
                       {recommendedPicks.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
-                            <p className="text-xs font-semibold text-indigo-400">
+                            <p className="text-xs font-semibold text-accent-muted">
                               ★ Recommended
                             </p>
                           </div>
@@ -893,7 +893,7 @@ export function Settings({ onClose }: SettingsProps) {
                       {availableFavorites.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-bg-primary px-3 py-1.5">
-                            <p className="text-xs font-semibold text-teal-400">
+                            <p className="text-xs font-semibold text-secondary-muted">
                               ★ My Favorites
                             </p>
                           </div>
@@ -973,7 +973,7 @@ export function Settings({ onClose }: SettingsProps) {
                           value={option.value}
                           checked={contentMode === option.value}
                           onChange={() => setContentMode(option.value)}
-                          className="mt-0.5 accent-indigo-500"
+                          className="mt-0.5 accent-accent-fill"
                         />
                         <div>
                           <p className="text-xs font-medium text-text-primary">{option.label}</p>
@@ -1009,8 +1009,8 @@ export function Settings({ onClose }: SettingsProps) {
                       type="button"
                       className={`flex flex-1 items-center gap-2 rounded border px-3 py-2 text-xs transition-colors ${
                         theme === "dark"
-                          ? "border-indigo-500 bg-bg-surface text-text-primary"
-                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                       }`}
                     >
                       <Moon size={14} />
@@ -1022,8 +1022,8 @@ export function Settings({ onClose }: SettingsProps) {
                       type="button"
                       className={`flex flex-1 items-center gap-2 rounded border px-3 py-2 text-xs transition-colors ${
                         theme === "light"
-                          ? "border-indigo-500 bg-bg-surface text-text-primary"
-                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                       }`}
                     >
                       <Sun size={14} />
@@ -1059,8 +1059,8 @@ export function Settings({ onClose }: SettingsProps) {
                         type="button"
                         className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
                           uiScale === opt.id
-                            ? "border-indigo-500 bg-bg-surface text-text-primary"
-                            : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                            ? "border-accent-fill bg-bg-surface text-text-primary"
+                            : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                         }`}
                       >
                         <span className="font-medium">{opt.label}</span>
@@ -1101,8 +1101,8 @@ export function Settings({ onClose }: SettingsProps) {
                         aria-pressed={spacing === opt.id}
                         className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
                           spacing === opt.id
-                            ? "border-indigo-500 bg-bg-surface text-text-primary"
-                            : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                            ? "border-accent-fill bg-bg-surface text-text-primary"
+                            : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                         }`}
                       >
                         <span className="font-medium">{opt.label}</span>
@@ -1152,7 +1152,7 @@ export function Settings({ onClose }: SettingsProps) {
                           setMultipleDraft(String(clamped));
                           setSpacing("multiple", clamped);
                         }}
-                        className="w-20 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        className="w-20 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                       />
                       <span className="text-xs text-faint">
                         = {resolveLineHeight("multiple", spacingMultiple).toFixed(2)} line height
@@ -1204,7 +1204,7 @@ export function Settings({ onClose }: SettingsProps) {
                           value={beforeDraft}
                           onChange={e => setBeforeDraft(e.target.value)}
                           onBlur={() => commitParagraph()}
-                          className="w-16 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                          className="w-16 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                         />
                         <span className="text-xs text-faint">pt</span>
                       </span>
@@ -1226,7 +1226,7 @@ export function Settings({ onClose }: SettingsProps) {
                           value={afterDraft}
                           onChange={e => setAfterDraft(e.target.value)}
                           onBlur={() => commitParagraph()}
-                          className="w-16 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                          className="w-16 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                         />
                         <span className="text-xs text-faint">pt</span>
                       </span>
@@ -1275,7 +1275,7 @@ export function Settings({ onClose }: SettingsProps) {
                       value={vaultRoot}
                       onChange={e => setVaultRoot(e.target.value)}
                       placeholder="C:\\Users\\You\\Documents\\Storythread Studio"
-                      className="flex-1 rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                      className="flex-1 rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                     />
                     <button
                       onClick={async () => {
@@ -1285,7 +1285,7 @@ export function Settings({ onClose }: SettingsProps) {
                         });
                         if (typeof picked === "string") setVaultRoot(picked);
                       }}
-                      className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+                      className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary"
                       title="Browse for a folder"
                       type="button"
                     >
@@ -1294,7 +1294,7 @@ export function Settings({ onClose }: SettingsProps) {
                   </div>
                   <p className="mt-2 text-xs text-faint">
                     Leave blank and save to reset to the default
-                    (<code className="text-indigo-400">~/Documents/Storythread Studio</code>).
+                    (<code className="text-accent-muted">~/Documents/Storythread Studio</code>).
                   </p>
                 </div>
               </section>
@@ -1324,7 +1324,7 @@ export function Settings({ onClose }: SettingsProps) {
                   <select
                     value={writingSkillLevel}
                     onChange={e => setWritingSkillLevel(e.target.value)}
-                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent-fill"
                   >
                     <option value="newbie">Newbie -- 500 words / 1 task per day</option>
                     <option value="beginner">Beginner -- 750 words / 1 task per day</option>
@@ -1358,8 +1358,8 @@ export function Settings({ onClose }: SettingsProps) {
                       type="button"
                       className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
                         !nightOwl
-                          ? "border-indigo-500 bg-bg-surface text-text-primary"
-                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                       }`}
                     >
                       <span className="font-medium">Midnight (default)</span>
@@ -1370,8 +1370,8 @@ export function Settings({ onClose }: SettingsProps) {
                       type="button"
                       className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
                         nightOwl
-                          ? "border-indigo-500 bg-bg-surface text-text-primary"
-                          : "border-border bg-bg-panel text-text-muted hover:border-indigo-500"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
                       }`}
                     >
                       <span className="font-medium">Night Owl</span>
@@ -1429,7 +1429,7 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelAllowlist(e.target.value)}
                     rows={3}
                     placeholder={"e.g.\nanthropic/claude-3.5-sonnet\nopenai/gpt-4o-mini"}
-                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                   />
                 </div>
 
@@ -1446,7 +1446,7 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelBlocklist(e.target.value)}
                     rows={3}
                     placeholder="e.g.\ngoogle/gemma-2-9b-it:free"
-                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                   />
                 </div>
 
@@ -1457,7 +1457,7 @@ export function Settings({ onClose }: SettingsProps) {
                   </label>
                   <p className="mb-2 text-xs text-faint">
                     Configure which content modes each model supports. Format: one entry per line as
-                    <code className="mx-1 text-indigo-400">model-id: general, mature, explicit</code>
+                    <code className="mx-1 text-accent-muted">model-id: general, mature, explicit</code>
                     Models not listed default to "general" only.
                   </p>
                   <textarea
@@ -1465,7 +1465,7 @@ export function Settings({ onClose }: SettingsProps) {
                     onChange={e => setModelContentModes(e.target.value)}
                     rows={4}
                     placeholder={"e.g.\nanthropic/claude-3.5-sonnet: general, mature\ndeepseek/deepseek-chat: general, mature, explicit"}
-                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-3 py-2 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                   />
                 </div>
               </section>
@@ -1476,9 +1476,9 @@ export function Settings({ onClose }: SettingsProps) {
 
         {/* Sticky footer -- inline padding to bypass Tailwind purge */}
         <div className="shrink-0 border-t border-border" style={{ padding: "1rem 1.5rem" }}>
-          {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
+          {error && <p className="mb-2 text-xs text-danger-muted">{error}</p>}
           {saved && !error && (
-            <p className="mb-2 flex items-center gap-1.5 text-xs text-emerald-400">
+            <p className="mb-2 flex items-center gap-1.5 text-xs text-success-muted">
               <CheckCircle size={13} /> Settings saved.
             </p>
           )}
@@ -1486,7 +1486,7 @@ export function Settings({ onClose }: SettingsProps) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded bg-accent-fill px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-fill disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Settings"}
             </button>
@@ -1520,7 +1520,7 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
   return (
     <div
       className={`flex items-center gap-2 px-3 py-2 transition-colors hover:bg-bg-panel ${
-        isSelected ? "bg-indigo-900/20" : ""
+        isSelected ? "bg-accent-soft/20" : ""
       }`}
     >
       {/* Clickable area (name + cost + note) */}
@@ -1532,18 +1532,18 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
         {/* Selection indicator */}
         <span
           className={`h-2 w-2 shrink-0 rounded-full ${
-            isSelected ? "bg-indigo-400" : "bg-transparent"
+            isSelected ? "bg-accent-muted" : "bg-transparent"
           }`}
         />
         <div className="min-w-0">
-          <p className={`truncate text-xs ${isSelected ? "text-indigo-300 font-medium" : "text-text-primary"}`}>
+          <p className={`truncate text-xs ${isSelected ? "text-accent font-medium" : "text-text-primary"}`}>
             {model.name}
           </p>
           {note && (
             <p className="text-xs text-text-muted">{note}</p>
           )}
         </div>
-        <span className={`ml-auto shrink-0 text-xs ${model.is_free ? "text-emerald-500" : "text-faint"}`}>
+        <span className={`ml-auto shrink-0 text-xs ${model.is_free ? "text-success-fill" : "text-faint"}`}>
           {costLabel}
         </span>
       </button>
@@ -1552,7 +1552,7 @@ function ModelRow({ model, note, isSelected, isStarred, onSelect, onToggleStar }
       <button
         onClick={(e) => { e.stopPropagation(); onToggleStar(); }}
         className={`shrink-0 transition-colors ${
-          isStarred ? "text-amber-400" : "text-faint hover:text-text-muted"
+          isStarred ? "text-warn-muted" : "text-faint hover:text-text-muted"
         }`}
         title={isStarred ? "Remove from favorites" : "Add to favorites"}
       >

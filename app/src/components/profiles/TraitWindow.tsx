@@ -93,7 +93,7 @@ export function TraitWindow({ trueIn, chapters, onChange, unavailable }: Props) 
     <div className="mt-2 rounded border border-border bg-bg-surface/40 p-2"
          data-testid="trait-window">
       <div className="flex flex-wrap items-center gap-2">
-        <CalendarClock size={12} className="shrink-0 text-blue-300" />
+        <CalendarClock size={12} className="shrink-0 text-accent" />
         <label className="flex cursor-pointer items-center gap-1.5 text-xs text-text-primary">
           <input
             type="checkbox"
@@ -159,12 +159,12 @@ export function TraitWindow({ trueIn, chapters, onChange, unavailable }: Props) 
                   reach -- but not one to discover later by noticing a
                   character has gone quiet. */}
               {summary ? (
-                <p className="mt-1 text-mini text-emerald-300"
+                <p className="mt-1 text-mini text-success"
                    data-testid="trait-window-summary">
                   True in {summary}. Left out everywhere else.
                 </p>
               ) : (
-                <p className="mt-1 text-mini text-amber-300"
+                <p className="mt-1 text-mini text-warn"
                    data-testid="trait-window-empty">
                   Nothing ticked, so this trait is not true anywhere and is not
                   sent to AI at all. Tick a chapter, or switch it back to true

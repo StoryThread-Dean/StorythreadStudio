@@ -157,7 +157,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
               <select
                 value={archetypeId}
                 onChange={e => setArchetypeAndReroll(e.target.value)}
-                className="flex-1 rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-indigo-500"
+                className="flex-1 rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-fill"
               >
                 <option value="">Any role</option>
                 {ARCHETYPE_OPTIONS.map(o => (
@@ -168,7 +168,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
                 <button
                   type="button"
                   onClick={() => onInsertRoleSummary(`Story role: ${chosenArchetype.label}`, chosenArchetype.summary)}
-                  className="shrink-0 rounded border border-border px-2 py-1.5 text-mini text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+                  className="shrink-0 rounded border border-border px-2 py-1.5 text-mini text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary"
                   title="Add this role's summary to the Personality section"
                 >
                   + Add role summary
@@ -184,9 +184,9 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
                 type="checkbox"
                 checked={nsfw}
                 onChange={e => setNsfwAndReroll(e.target.checked)}
-                className="accent-red-500"
+                className="accent-danger-fill"
               />
-              <span className={`text-xs ${nsfw ? "font-medium text-red-400" : "text-faint"}`}>
+              <span className={`text-xs ${nsfw ? "font-medium text-danger-muted" : "text-faint"}`}>
                 NSFW options
               </span>
             </label>
@@ -201,9 +201,9 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
                 checked={explicit}
                 disabled={!nsfw}
                 onChange={e => setExplicitAndReroll(e.target.checked)}
-                className="accent-red-600"
+                className="accent-danger-fill"
               />
-              <span className={`text-xs ${explicit ? "font-medium text-red-300" : nsfw ? "text-red-700" : "text-faint"}`}>
+              <span className={`text-xs ${explicit ? "font-medium text-danger" : nsfw ? "text-danger-fill" : "text-faint"}`}>
                 Explicit (fill-in-the-blank)
               </span>
             </label>
@@ -217,7 +217,7 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
                 <button
                   type="button"
                   onClick={() => rollRow(row.section)}
-                  className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+                  className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary"
                   title={`Reroll the ${row.label} options -- pages through the pool without repeating`}
                 >
                   <Dices size={11} />
@@ -232,8 +232,8 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
                     onClick={() => onInsert(row.targetSectionKey, option)}
                     className={`rounded-lg border px-2.5 py-1 text-left text-mini leading-snug transition-colors ${
                       nsfw
-                        ? "border-red-800/50 bg-red-950/20 text-red-300 hover:border-red-500 hover:text-red-200"
-                        : "border-border bg-bg-surface text-text-muted hover:border-indigo-500 hover:text-text-primary"
+                        ? "border-danger-fill/50 bg-danger-soft/20 text-danger hover:border-danger-fill hover:text-danger-strong"
+                        : "border-border bg-bg-surface text-text-muted hover:border-accent-fill hover:text-text-primary"
                     }`}
                     title="Add to the matching section as a new line"
                   >

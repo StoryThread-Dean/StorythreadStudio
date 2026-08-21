@@ -196,14 +196,14 @@ export function WeaveContextBar({
   return (
     <div className="border-t border-border px-3 py-1.5">
       <div className="flex items-center gap-2">
-        <Globe size={12} className={off ? "text-faint" : "text-violet-300"} />
+        <Globe size={12} className={off ? "text-faint" : "text-weave"} />
         <span className="min-w-0 flex-1 truncate text-mini text-text-muted">
           {off ? (
             "World context off -- only what you attach is sent."
           ) : busy && !brief ? (
             "Working out what to send..."
           ) : brief?.refused ? (
-            <span className="text-amber-200/90">
+            <span className="text-warn-strong/90">
               World context does not fit and was not sent.
             </span>
           ) : threads.length === 0 ? (
@@ -265,7 +265,7 @@ export function WeaveContextBar({
           aria-label="Send world context"
           className={`shrink-0 rounded px-1.5 py-0.5 text-micro ${
             off ? "border border-border text-faint hover:text-text-primary"
-                : "border border-violet-700 bg-violet-950/40 text-violet-200"
+                : "border border-weave-fill bg-weave-soft/40 text-weave-strong"
           }`}
         >
           {off ? "Turn on" : "On"}
@@ -273,7 +273,7 @@ export function WeaveContextBar({
       </div>
 
       {error && (
-        <p role="alert" className="mt-1 text-micro text-rose-300">{error}</p>
+        <p role="alert" className="mt-1 text-micro text-danger">{error}</p>
       )}
 
       {open && (
@@ -285,10 +285,10 @@ export function WeaveContextBar({
             role="dialog"
             aria-label="What the Weave will send"
             data-testid="weave-context-panel"
-            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
           >
             <header className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <Globe size={14} className="shrink-0 text-violet-300" />
+              <Globe size={14} className="shrink-0 text-weave" />
               <h2 className="flex-1 text-xs font-semibold text-text-primary">
                 What your world will tell the AI
               </h2>
@@ -318,7 +318,7 @@ export function WeaveContextBar({
 
               {brief?.refused && (
                 <p role="alert"
-                   className="mb-2 rounded border border-amber-700/60 bg-amber-950/20 px-2 py-1.5 text-mini text-amber-200/90">
+                   className="mb-2 rounded border border-warn-fill/60 bg-warn-soft/20 px-2 py-1.5 text-mini text-warn-strong/90">
                   {brief.refusal} Nothing from your world is being sent this
                   turn -- half a profile reads as a whole one, so it is
                   refused rather than cut short.
@@ -378,7 +378,7 @@ export function WeaveContextBar({
                             excludedIds: [...excludedIds, piece.entity_id],
                           })}
                           aria-label={`Remove ${piece.name}`}
-                          className="shrink-0 rounded p-0.5 text-faint hover:text-rose-300"
+                          className="shrink-0 rounded p-0.5 text-faint hover:text-danger"
                         >
                           <X size={11} />
                         </button>
@@ -432,7 +432,7 @@ export function WeaveContextBar({
                           className={`rounded border px-1.5 py-0.5 text-micro ${
                             dropped
                               ? "border-border text-faint line-through"
-                              : "border-violet-800 bg-violet-950/30 text-violet-200"
+                              : "border-weave-fill bg-weave-soft/30 text-weave-strong"
                           }`}
                         >
                           {entry.term}
@@ -446,7 +446,7 @@ export function WeaveContextBar({
               {/* ── What was dropped to fit ────────────────────────────── */}
               {brief && brief.omitted.length > 0 && (
                 <details className="mb-2">
-                  <summary className="cursor-pointer text-mini text-violet-300 hover:text-violet-200">
+                  <summary className="cursor-pointer text-mini text-weave hover:text-weave-strong">
                     {brief.omitted.length} left out to fit
                   </summary>
                   {/* Reported rather than silently dropped: a brief that
@@ -488,7 +488,7 @@ export function WeaveContextBar({
               {/* ── Where the window went ──────────────────────────────── */}
               {brief && (
                 <details className="mb-2">
-                  <summary className="cursor-pointer text-mini text-violet-300 hover:text-violet-200">
+                  <summary className="cursor-pointer text-mini text-weave hover:text-weave-strong">
                     Where the room went
                   </summary>
                   <ul className="mt-1 space-y-0.5">
@@ -506,7 +506,7 @@ export function WeaveContextBar({
               {/* ── The words themselves ───────────────────────────────── */}
               {brief?.brief && (
                 <details className="mb-2">
-                  <summary className="cursor-pointer text-mini text-violet-300 hover:text-violet-200">
+                  <summary className="cursor-pointer text-mini text-weave hover:text-weave-strong">
                     Read it exactly as the AI will
                   </summary>
                   <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-border bg-bg-surface px-2 py-1 text-micro text-text-muted">
@@ -524,7 +524,7 @@ export function WeaveContextBar({
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setOpen(false)}
-                  className="inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+                  className="inline-flex flex-col items-start rounded border border-success-fill bg-success-soft/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-success-soft/50"
                 >
                   <span>Looks right</span>
                   <span className="text-micro font-normal text-faint">

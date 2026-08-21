@@ -12,12 +12,17 @@
 //      mode on every change.
 //
 //   2. The audiobook boundary leaking.
-//      The bridge re-aims Tailwind's own palette variables at this app's
-//      roles. `.audiobook-theme` pins every one of them back to stock so the
-//      Audiobook Converter keeps its charcoal world. If someone adds a family
-//      to the bridge in six months and forgets the pin, the audiobook side
-//      quietly repaints -- and its own tests would still pass, because they
-//      assert class names, not colours.
+//      `.audiobook-theme` overrides the role tokens so the Audiobook
+//      Converter keeps its charcoal world. GuidedWalk and WhatsThis are
+//      imported by BOTH sides and now name roles, so that block is the only
+//      thing standing between them and the writing app's palette. Its own
+//      tests would not catch a leak: they assert class names, not colours.
+//
+//   3. A raw Tailwind palette class reappearing in the main app.
+//      There used to be a bridge re-aiming Tailwind's palette at these roles,
+//      which made a stray `text-indigo-300` render as the accent. It is gone,
+//      so one now renders in stock Tailwind indigo -- close enough to look
+//      deliberate and wrong enough to matter.
 //
 // Reading the stylesheet as text is deliberate. Rendering cannot see an
 // unused variable, and that is precisely what goes wrong.
@@ -32,10 +37,8 @@ import { resolve } from "node:path";
 // assertion below pass while checking nothing. Hence also the length guard:
 // a test that reads nothing and asserts over nothing is worse than no test.
 //
-// Line endings are normalised because this repo is genuinely mixed -- App.css
-// is LF, MarkdownEditor.tsx next door is CRLF -- and the bridge selector spans
-// two lines, so a match that depended on which ending you got would break for
-// no real reason.
+// Line endings are normalised because this repo is genuinely mixed: App.css
+// is LF and MarkdownEditor.tsx next door is CRLF.
 const CSS = readFileSync(resolve(process.cwd(), "src/App.css"), "utf-8")
   .split("\r\n")
   .join("\n");
@@ -74,12 +77,12 @@ function declaredVars(body: string, prefix: string): Set<string> {
   return names;
 }
 
-// The four blocks the system is built from. `:root,\n[data-theme="light"]`
-// is the bridge -- note it is matched by its full two-line selector so it is
-// never confused with the plain `:root` token block above it.
+// The three blocks the system is built from. A fourth used to sit between
+// them -- the bridge, on a two-line `:root, [data-theme="light"]` selector --
+// and it is gone now that every call site outside features/audiobook names a
+// role rather than a shade.
 const DARK = block(":root");
 const LIGHT = block('[data-theme="light"]');
-const BRIDGE = block(':root,\n[data-theme="light"]');
 const AUDIOBOOK = block(".audiobook-theme");
 
 describe("App.css -- both themes define the same tokens", () => {
@@ -103,65 +106,32 @@ describe("App.css -- both themes define the same tokens", () => {
   });
 });
 
-describe("App.css -- the audiobook boundary holds", () => {
-  it("pins back every Tailwind palette variable the bridge re-aims", () => {
-    const remapped = declaredVars(BRIDGE, "--color-");
-    const pinned = declaredVars(AUDIOBOOK, "--color-");
-
-    const unpinned = [...remapped].filter(v => !pinned.has(v)).sort();
-
-    expect(
-      unpinned,
-      "the bridge remaps these but .audiobook-theme does not pin them back, " +
-        "so the Audiobook Converter would take the writing app's palette",
-    ).toEqual([]);
-  });
-
-  it("pins them to literal values, never to a role token", () => {
-    // A pin that read `var(--st-accent)` would defeat itself: the whole job
-    // of the block is to stop the audiobook following this app's roles.
-    const body = AUDIOBOOK.replace(/\/\*[\s\S]*?\*\//g, " ");
-    const pinnedToRole = [
-      ...body.matchAll(/(--color-[a-z0-9-]+)\s*:\s*var\(/g),
-    ].map(m => m[1]);
-
-    expect(pinnedToRole, "pinned to a variable instead of a stock value").toEqual([]);
-  });
-
-  it("overrides the role tokens too, so shared components follow the boundary", () => {
-    // GuidedWalk and WhatsThis are imported by BOTH sides. Once they name
-    // roles instead of zinc, this block is the only thing keeping them
-    // charcoal inside the converter.
+describe("the audiobook boundary still holds", () => {
+  it("overrides the role tokens, so shared components follow it", () => {
+    // The PIN list is gone with the bridge -- nothing remaps Tailwind's
+    // palette any more, so stock is simply what it is. These are the part
+    // that still matters: GuidedWalk and WhatsThis are imported by BOTH
+    // sides, and now that they name roles instead of zinc, this block is the
+    // only thing keeping them charcoal inside the Audiobook Converter.
     const roles = declaredVars(AUDIOBOOK, "--st-");
     for (const required of [
-      "--st-bg-primary",
-      "--st-bg-panel",
-      "--st-bg-surface",
-      "--st-text-primary",
-      "--st-text-muted",
-      "--st-border",
-      "--st-accent",
-      "--st-danger",
+      "--st-bg-primary", "--st-bg-panel", "--st-bg-surface",
+      "--st-text-primary", "--st-text-muted", "--st-border",
+      "--st-accent", "--st-danger", "--st-warn", "--st-success",
     ]) {
       expect(roles.has(required), `.audiobook-theme must override ${required}`).toBe(true);
     }
   });
 
-  it("is declared exactly once, after the bridge it defends against", () => {
-    // Once, because a second .audiobook-theme block would split the pin list
-    // and the parity check above would only see half of it.
+  it("is declared exactly once, and not for light mode", () => {
     expect(CSS.match(/^\.audiobook-theme\s*\{/gm)?.length ?? 0).toBe(1);
-
-    // After, because it exists to answer the bridge. Declared before it, the
-    // block would read as the default rather than as the exception, and the
-    // next person to widen the bridge would have no reason to look further
-    // down the file.
-    expect(CSS.indexOf(AUDIOBOOK)).toBeGreaterThan(CSS.indexOf(BRIDGE));
-
-    // And charcoal in BOTH themes: no light-mode variant anywhere. The writer
-    // should always know which side of the app they are standing in.
+    // Charcoal in BOTH themes: the writer should always know which side of
+    // the app they are standing in.
     expect(CSS).not.toMatch(/\[data-theme="light"\]\s*\.audiobook-theme/);
-    expect(CSS).not.toMatch(/\.audiobook-theme\s*\[data-theme="light"\]/);
+  });
+
+  it("no longer pins Tailwind's palette, because nothing remaps it", () => {
+    expect(declaredVars(AUDIOBOOK, "--color-").size).toBe(0);
   });
 });
 
@@ -229,5 +199,46 @@ describe("hover uses the token that exists for it", () => {
       .map(([path]) => path);
 
     expect(offenders, "use hover:bg-bg-raised instead").toEqual([]);
+  });
+});
+
+describe("no raw Tailwind palette outside the audiobook", () => {
+  // THE INVARIANT THAT LET THE BRIDGE GO. While it existed, a stray
+  // `text-indigo-300` resolved to the accent and looked right. Without it the
+  // same class renders in stock Tailwind indigo, which is close enough to
+  // look deliberate in a screenshot and wrong enough to be a bug.
+  //
+  // features/audiobook is excluded because its palette IS raw Tailwind, on
+  // purpose, scoped behind .audiobook-theme.
+  const SOURCES = import.meta.glob(["./**/*.tsx", "./**/*.ts"], {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>;
+
+  // A literal, not a built string. `"\b"` inside a JS string is a BACKSPACE
+  // character, so a word boundary written that way matches nothing and the
+  // whole gate passes while checking for something that cannot occur.
+  const PALETTE =
+    /\b(?:bg|text|border|ring|fill|stroke|from|to|via|caret|divide|placeholder)-(?:indigo|violet|emerald|amber|rose|red|blue|teal|sky|zinc|pink|cyan|lime|fuchsia)-[0-9]{2,3}\b/g;
+
+  it("found the sources at all", () => {
+    expect(Object.keys(SOURCES).length).toBeGreaterThan(150);
+  });
+
+  it("names a role everywhere, never a shade", () => {
+    const offenders: string[] = [];
+    for (const [path, source] of Object.entries(SOURCES)) {
+      if (path.includes("/audiobook/")) continue;
+      if (path.endsWith("/App.css.test.ts")) continue;   // quotes the pattern
+      const hits = source.match(PALETTE);
+      if (hits) offenders.push(`${path}: ${[...new Set(hits)].sort().join(", ")}`);
+    }
+    expect(
+      offenders,
+      "these name a Tailwind shade rather than a role, and there is no longer "
+        + "a bridge making that resolve to the right colour. Use bg-bg-panel, "
+        + "text-accent, border-danger and friends -- see App.css.",
+    ).toEqual([]);
   });
 });

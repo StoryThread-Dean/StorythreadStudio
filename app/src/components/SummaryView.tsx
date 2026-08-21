@@ -223,7 +223,7 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
         <div className="flex items-baseline gap-2">
           <button
             onClick={onBack}
-            className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-accent"
             title="Back to the chapter editor"
           >
             &larr; Back
@@ -234,18 +234,18 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
 
         <div className="flex items-center gap-2">
           {statusMessage && (
-            <span className="text-xs text-emerald-400">{statusMessage}</span>
+            <span className="text-xs text-success-muted">{statusMessage}</span>
           )}
           {isDirty ? (
-            <span className="flex items-center gap-1.5 text-xs text-amber-400"
+            <span className="flex items-center gap-1.5 text-xs text-warn-muted"
               title="Unsaved changes. Press Ctrl+S to save.">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span className="h-1.5 w-1.5 rounded-full bg-warn-muted" />
               Unsaved
             </span>
           ) : exists ? (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-500"
+            <span className="flex items-center gap-1.5 text-xs text-success-fill"
               title="All changes are saved.">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-success-fill" />
               Saved
             </span>
           ) : null}
@@ -253,7 +253,7 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
           <button
             onClick={handleRegenerate}
             disabled={isGenerating}
-            className="rounded border border-indigo-700/50 bg-indigo-950/40 px-3 py-1 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-accent-fill/50 bg-accent-soft/40 px-3 py-1 text-xs text-accent transition-colors hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
             title="Ask AI to generate a chapter summary from the chapter text"
           >
             {isGenerating ? "Generating..." : exists ? "Regenerate with AI" : "Generate with AI"}
@@ -262,7 +262,7 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
           <button
             onClick={handleSave}
             disabled={!isDirty || isSaving}
-            className="rounded border border-border px-3 py-1 text-xs text-text-primary transition-colors hover:border-emerald-500 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-border px-3 py-1 text-xs text-text-primary transition-colors hover:border-success-fill hover:text-success-muted disabled:cursor-not-allowed disabled:opacity-40"
             title="Save edits (Ctrl+S)"
           >
             {isSaving ? "Saving..." : "Save"}
@@ -273,15 +273,15 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
       {/* Info banner -- tiny, so it doesn't dominate the editor */}
       <div className="shrink-0 border-b border-border bg-bg-panel/50 px-4 py-1.5">
         <p className="text-xs text-text-muted">
-          <span className="font-semibold text-indigo-300">Purpose:</span>{" "}
+          <span className="font-semibold text-accent">Purpose:</span>{" "}
           AI context for drafting and continuity checks. Focus on causality and state changes, not prose.
         </p>
       </div>
 
       {/* Error banner */}
       {error && (
-        <div className="shrink-0 border-b border-red-800 bg-red-950/40 px-4 py-2">
-          <p className="text-xs text-red-300">
+        <div className="shrink-0 border-b border-danger-fill bg-danger-soft/40 px-4 py-2">
+          <p className="text-xs text-danger">
             <span className="font-semibold">Error: </span>{error}
           </p>
         </div>
@@ -297,7 +297,7 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
           // Empty state overlay: sits above an empty editor so the writer can
           // either click Generate or start typing their own summary by hand.
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-sm text-indigo-300">No summary yet.</p>
+            <p className="text-sm text-accent">No summary yet.</p>
             <p className="max-w-md text-xs text-text-muted">
               Click Generate with AI to produce a continuity brief from the chapter,
               or start typing your own below.
@@ -305,7 +305,7 @@ export function SummaryView({ project, chapterFile, font, onBack }: SummaryViewP
             <button
               onClick={handleRegenerate}
               disabled={isGenerating}
-              className="mt-2 rounded border border-indigo-700/50 bg-indigo-950/40 px-4 py-1.5 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 rounded border border-accent-fill/50 bg-accent-soft/40 px-4 py-1.5 text-xs text-accent transition-colors hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isGenerating ? "Generating..." : "Generate with AI"}
             </button>

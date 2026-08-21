@@ -93,7 +93,7 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
   return (
     <div data-testid="migration-results" className="space-y-3">
       <p className="flex items-center gap-2 text-sm text-text-primary">
-        <Check size={14} className="text-emerald-400" />
+        <Check size={14} className="text-success-muted" />
         {report.converted === 1
           ? "1 entry is now in the Weave."
           : `${report.converted} entries are now in the Weave.`}
@@ -150,10 +150,10 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
 
       {(report.warnings?.length ?? 0) > 0 && (
         <div>
-          <p className="text-mini font-semibold uppercase tracking-wide text-amber-200/90">
+          <p className="text-mini font-semibold uppercase tracking-wide text-warn-strong/90">
             Worth knowing
           </p>
-          <ul className="mt-1 space-y-0.5 text-mini text-amber-200/80">
+          <ul className="mt-1 space-y-0.5 text-mini text-warn-strong/80">
             {report.warnings.map(w => <li key={w}>{w}</li>)}
           </ul>
         </div>
@@ -161,10 +161,10 @@ export function MigrationResults({ projectPath, report }: MigrationResultsProps)
 
       {(report.unconvertible?.length ?? 0) > 0 && (
         <div>
-          <p className="text-mini font-semibold uppercase tracking-wide text-rose-200/90">
+          <p className="text-mini font-semibold uppercase tracking-wide text-danger-strong/90">
             Left alone
           </p>
-          <ul className="mt-1 space-y-0.5 text-mini text-rose-200/80">
+          <ul className="mt-1 space-y-0.5 text-mini text-danger-strong/80">
             {report.unconvertible.map(u => (
               <li key={`${u.folder}/${u.file ?? ""}`}>
                 {u.folder}{u.file ? `/${u.file}` : ""} -- {u.reason}
@@ -216,14 +216,14 @@ function Detail({ projectPath, entry, onBack }: {
   return (
     <div data-testid="migration-detail" className="space-y-3">
       <button onClick={onBack}
-              className="inline-flex items-center gap-1 text-mini text-violet-300 hover:text-violet-200">
+              className="inline-flex items-center gap-1 text-mini text-weave hover:text-weave-strong">
         <ArrowLeft size={11} /> Back to everything that was converted
       </button>
 
       <h3 className="text-sm font-semibold text-text-primary">{entry.name}</h3>
 
       {error && (
-        <p role="alert" className="rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-mini text-rose-200">
+        <p role="alert" className="rounded border border-danger-fill bg-danger-soft/40 px-2 py-1.5 text-mini text-danger-strong">
           {error}
         </p>
       )}
@@ -239,8 +239,8 @@ function Detail({ projectPath, entry, onBack }: {
           {/* The headline. "Nothing changed" is the expected answer and the
               reassuring one, so it is said out loud rather than left to be
               inferred from a wall of identical rows. */}
-          <p className={`text-xs ${missing > 0 ? "text-rose-200"
-              : changed > 0 ? "text-amber-200/90" : "text-emerald-300"}`}>
+          <p className={`text-xs ${missing > 0 ? "text-danger-strong"
+              : changed > 0 ? "text-warn-strong/90" : "text-success"}`}>
             {missing > 0 ? (
               <>
                 <AlertTriangle size={12} className="mr-1 inline" />
@@ -274,14 +274,14 @@ function Detail({ projectPath, entry, onBack }: {
                   return (
                     <tr key={label}
                         className={`border-b border-border/50 align-top ${
-                          row.missing ? "bg-rose-950/20"
-                            : row.changed ? "bg-amber-950/10" : ""}`}>
+                          row.missing ? "bg-danger-soft/20"
+                            : row.changed ? "bg-warn-soft/10" : ""}`}>
                       <td className="py-1.5 pr-2 text-text-muted">
                         {label}
                         {row.missing ? (
-                          <span className="ml-1 text-micro text-rose-300">missing</span>
+                          <span className="ml-1 text-micro text-danger">missing</span>
                         ) : row.changed ? (
-                          <span className="ml-1 text-micro text-amber-300/80">changed</span>
+                          <span className="ml-1 text-micro text-warn/80">changed</span>
                         ) : null}
                       </td>
                       <td className="whitespace-pre-wrap py-1.5 pr-2 text-text-muted">
@@ -299,7 +299,7 @@ function Detail({ projectPath, entry, onBack }: {
 
           <button
             onClick={() => setRaw(v => !v)}
-            className="inline-flex items-center gap-1 text-mini text-violet-300 hover:text-violet-200"
+            className="inline-flex items-center gap-1 text-mini text-weave hover:text-weave-strong"
           >
             <FileText size={11} />
             {raw ? "Hide the files themselves" : "Show me the files themselves"}

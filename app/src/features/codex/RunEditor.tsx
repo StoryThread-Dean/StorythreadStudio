@@ -64,7 +64,7 @@ export const BEFORE_STORY = "before";
 
 export const runInputClass =
   "w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs "
-  + "text-text-primary outline-none focus:border-indigo-500";
+  + "text-text-primary outline-none focus:border-accent-fill";
 
 export function RunField({ label, hint, children }: {
   label: string; hint?: string; children: React.ReactNode;
@@ -191,11 +191,11 @@ export function RunEditor({
   return (
     <section
       data-testid="run-editor"
-      className="mt-4 rounded-lg border border-violet-800/60 bg-violet-950/15 p-3"
+      className="mt-4 rounded-lg border border-weave-fill/60 bg-weave-soft/15 p-3"
     >
       <div className="flex items-center gap-2">
-        <Spool size={13} className="shrink-0 text-violet-300" />
-        <h4 className="text-xs font-semibold text-violet-100">
+        <Spool size={13} className="shrink-0 text-weave" />
+        <h4 className="text-xs font-semibold text-weave-strong">
           How this changes through the story
         </h4>
         <Explain of="thread.run" compact />
@@ -219,14 +219,14 @@ export function RunEditor({
         <button
           onClick={() => setWalking(true)}
           data-testid="run-walk-open"
-          className="mt-1 text-mini text-violet-300 underline-offset-2 hover:underline"
+          className="mt-1 text-mini text-weave underline-offset-2 hover:underline"
         >
           Show me how this works
         </button>
       )}
 
       {unavailable ? (
-        <p className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-mini text-amber-200">
+        <p className="mt-2 rounded border border-warn-fill/30 bg-warn-fill/5 px-2 py-1.5 text-mini text-warn-strong">
           {unavailable}
         </p>
       ) : (
@@ -243,7 +243,7 @@ export function RunEditor({
                 <li key={fact.id}
                     data-testid="fact"
                     className={`rounded border bg-bg-panel/60 transition-colors ${
-                      open ? "border-violet-500" : "border-violet-900/50 hover:border-violet-700"
+                      open ? "border-weave-fill" : "border-weave-soft/50 hover:border-weave-fill"
                     }`}>
                   {/* THE LINE. What a writer reads when they are not editing:
                       when it starts, what is true, whose it is, and when the
@@ -251,7 +251,7 @@ export function RunEditor({
                   <button
                     onClick={() => setOpenId(open ? null : fact.id)}
                     aria-expanded={open}
-                    className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-mini text-violet-100/80 hover:text-violet-100"
+                    className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-mini text-weave-strong/80 hover:text-weave-strong"
                   >
                     {open ? <ChevronDown size={11} className="mt-0.5 shrink-0" />
                           : <ChevronRight size={11} className="mt-0.5 shrink-0" />}
@@ -261,7 +261,7 @@ export function RunEditor({
                   </button>
 
                   {open && (
-                  <div className="border-t border-violet-900/50 px-2 pb-2">
+                  <div className="border-t border-weave-soft/50 px-2 pb-2">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <RunField label="What changes"
                               hint="A short name for the thing that changes, so two facts about it can replace each other.">
@@ -390,14 +390,14 @@ export function RunEditor({
                     <button
                       onClick={() => setZoomed(fact.id)}
                       data-testid={`fact-zoom-${i}`}
-                      className="mt-2 self-end text-mini text-violet-300 underline-offset-2 hover:underline"
+                      className="mt-2 self-end text-mini text-weave underline-offset-2 hover:underline"
                     >
                       What does this do?
                     </button>
                     <button
                       onClick={() => onChange(run.filter((_, n) => n !== i))}
                       aria-label={`Remove ${fact.axis || "this"}`}
-                      className="ml-auto rounded p-1 text-faint hover:text-rose-300"
+                      className="ml-auto rounded p-1 text-faint hover:text-danger"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -412,7 +412,7 @@ export function RunEditor({
 
           <button
             onClick={add}
-            className="mt-2 inline-flex items-center gap-1.5 rounded border border-violet-700 px-2 py-1 text-mini font-medium text-violet-200 transition-colors hover:border-violet-500 hover:bg-violet-900/30"
+            className="mt-2 inline-flex items-center gap-1.5 rounded border border-weave-fill px-2 py-1 text-mini font-medium text-weave-strong transition-colors hover:border-weave-fill hover:bg-weave-soft/30"
           >
             <Plus size={11} /> Something that changes
           </button>

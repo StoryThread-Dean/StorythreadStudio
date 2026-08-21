@@ -364,7 +364,7 @@ export function SceneSummaryView({
         <div className="flex items-baseline gap-2">
           <button
             onClick={onBack}
-            className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-accent"
             title="Back to the chapter editor"
           >
             &larr; Back
@@ -375,18 +375,18 @@ export function SceneSummaryView({
 
         <div className="flex items-center gap-2">
           {statusMessage && (
-            <span className="text-xs text-emerald-400">{statusMessage}</span>
+            <span className="text-xs text-success-muted">{statusMessage}</span>
           )}
           {isDirty ? (
-            <span className="flex items-center gap-1.5 text-xs text-amber-400"
+            <span className="flex items-center gap-1.5 text-xs text-warn-muted"
               title="Unsaved changes. Press Ctrl+S to save.">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span className="h-1.5 w-1.5 rounded-full bg-warn-muted" />
               Unsaved
             </span>
           ) : exists ? (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-500"
+            <span className="flex items-center gap-1.5 text-xs text-success-fill"
               title="All changes are saved.">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-success-fill" />
               Saved
             </span>
           ) : null}
@@ -394,7 +394,7 @@ export function SceneSummaryView({
           <button
             onClick={handleRegenerate}
             disabled={isGenerating}
-            className="rounded border border-indigo-700/50 bg-indigo-950/40 px-3 py-1 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-accent-fill/50 bg-accent-soft/40 px-3 py-1 text-xs text-accent transition-colors hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
             title="Ask AI to summarize this scene from the chapter text"
           >
             {isGenerating ? "Generating..." : exists ? "Regenerate with AI" : "Generate with AI"}
@@ -403,7 +403,7 @@ export function SceneSummaryView({
           <button
             onClick={handleSave}
             disabled={!isDirty || isSaving}
-            className="rounded border border-border px-3 py-1 text-xs text-text-primary transition-colors hover:border-emerald-500 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-border px-3 py-1 text-xs text-text-primary transition-colors hover:border-success-fill hover:text-success-muted disabled:cursor-not-allowed disabled:opacity-40"
             title="Save edits (Ctrl+S)"
           >
             {isSaving ? "Saving..." : "Save"}
@@ -412,7 +412,7 @@ export function SceneSummaryView({
           {exists && (
             <button
               onClick={handleDelete}
-              className="rounded border border-red-900/50 bg-red-950/30 px-2 py-1 text-xs text-red-300 transition-colors hover:border-red-600 hover:text-red-200"
+              className="rounded border border-danger-soft/50 bg-danger-soft/30 px-2 py-1 text-xs text-danger transition-colors hover:border-danger-fill hover:text-danger-strong"
               title="Delete this scene summary"
             >
               Delete
@@ -436,7 +436,7 @@ export function SceneSummaryView({
             setIsDirty(true);
           }}
           placeholder="Untitled scene"
-          className="flex-1 rounded border border-border bg-bg-panel px-2 py-0.5 text-xs text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none"
+          className="flex-1 rounded border border-border bg-bg-panel px-2 py-0.5 text-xs text-text-primary placeholder:text-faint focus:border-accent-fill focus:outline-none"
         />
       </div>
 
@@ -465,8 +465,8 @@ export function SceneSummaryView({
                   ))}
                   className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-micro transition-colors ${
                     beat.done
-                      ? "border-emerald-600 bg-emerald-900/40 text-emerald-400"
-                      : "border-border text-transparent hover:border-emerald-600"
+                      ? "border-success-fill bg-success-soft/40 text-success-muted"
+                      : "border-border text-transparent hover:border-success-fill"
                   }`}
                   title={beat.done ? "Mark as not done" : "Mark as done"}
                   aria-label={beat.done ? `Mark "${beat.text}" not done` : `Mark "${beat.text}" done`}
@@ -491,7 +491,7 @@ export function SceneSummaryView({
                   onKeyDown={e => {
                     if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
                   }}
-                  className={`min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs outline-none transition-colors focus:border-indigo-500 focus:bg-bg-surface ${
+                  className={`min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs outline-none transition-colors focus:border-accent-fill focus:bg-bg-surface ${
                     beat.done ? "text-faint line-through" : "text-text-primary"
                   }`}
                   title="Edit the beat -- blur or Enter saves, empty deletes"
@@ -511,7 +511,7 @@ export function SceneSummaryView({
                   >▼</button>
                   <button
                     onClick={() => void saveBeats(beats.filter((_, bi) => bi !== i))}
-                    className="px-0.5 text-micro text-faint hover:text-red-400"
+                    className="px-0.5 text-micro text-faint hover:text-danger-muted"
                     title="Delete beat" aria-label="Delete beat"
                   >✕</button>
                 </div>
@@ -526,14 +526,14 @@ export function SceneSummaryView({
           onKeyDown={e => { if (e.key === "Enter") addBeat(); }}
           onBlur={addBeat}
           placeholder="Add a beat (what should happen in this scene)... Enter to add"
-          className="w-full rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-primary placeholder:text-faint focus:border-indigo-500 focus:outline-none"
+          className="w-full rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-primary placeholder:text-faint focus:border-accent-fill focus:outline-none"
         />
       </div>
 
       {/* Error banner */}
       {error && (
-        <div className="shrink-0 border-b border-red-800 bg-red-950/40 px-4 py-2">
-          <p className="text-xs text-red-300">
+        <div className="shrink-0 border-b border-danger-fill bg-danger-soft/40 px-4 py-2">
+          <p className="text-xs text-danger">
             <span className="font-semibold">Error: </span>{error}
           </p>
         </div>
@@ -547,7 +547,7 @@ export function SceneSummaryView({
           </div>
         ) : !exists && initialContent === "" ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-sm text-indigo-300">No summary for scene {sceneIndex} yet.</p>
+            <p className="text-sm text-accent">No summary for scene {sceneIndex} yet.</p>
             <p className="max-w-md text-xs text-text-muted">
               Click Generate with AI to summarize this scene from the chapter text,
               or type your own below.
@@ -555,7 +555,7 @@ export function SceneSummaryView({
             <button
               onClick={handleRegenerate}
               disabled={isGenerating}
-              className="mt-2 rounded border border-indigo-700/50 bg-indigo-950/40 px-4 py-1.5 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 rounded border border-accent-fill/50 bg-accent-soft/40 px-4 py-1.5 text-xs text-accent transition-colors hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isGenerating ? "Generating..." : "Generate with AI"}
             </button>

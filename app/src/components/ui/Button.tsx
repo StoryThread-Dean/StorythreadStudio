@@ -1,9 +1,11 @@
 // Button.tsx -- the five shapes a button in this app actually takes
 // ==================================================================
 // Buttons were styled inline at every call site, which meant a primary action
-// was `bg-indigo-600 text-white` in one place, `bg-violet-600 text-white` in
-// another and `bg-emerald-600 text-white` in a third, and nothing said which
-// was correct.
+// was filled indigo in one place, violet in another and emerald in a third,
+// and nothing said which was correct. Those spellings are gone now -- the
+// whole app names roles -- but they are what this component was written to
+// replace. Deliberately described rather than quoted: Tailwind scans source
+// for class names, comments included, and App.css.test.ts bans the raw ones.
 //
 // THE ONE THAT IS NOT A STYLE CHOICE: a filled accent button uses
 // `text-on-accent`, NEVER `text-white`. The accent is #90CAF9, a light blue.

@@ -115,7 +115,7 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
           {currentModel ? ` (holds ${tokens(currentModel.context_length)})` : ""}
         </span>
         {currentModel?.supports_reasoning && (
-          <span className="rounded border border-amber-700/60 px-1.5 py-0.5 text-micro text-amber-200"
+          <span className="rounded border border-warn-fill/60 px-1.5 py-0.5 text-micro text-warn-strong"
                 title="Reasoning models spend part of their reply budget thinking before they write, and can return an empty answer.">
             reasoning
           </span>
@@ -137,7 +137,7 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
       </p>
 
       {tooSmall && (
-        <p className="mt-1 flex items-center gap-1.5 text-mini text-rose-300"
+        <p className="mt-1 flex items-center gap-1.5 text-mini text-danger"
            data-testid="extractor-model-too-small">
           <AlertTriangle size={11} />
           This one holds {tokens(currentModel!.context_length)} and the run needs
@@ -163,7 +163,7 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
               <Loader size={11} className="animate-spin" /> Reading the model list...
             </p>
           )}
-          {error && <p className="mt-1.5 text-mini text-rose-300">{error}</p>}
+          {error && <p className="mt-1.5 text-mini text-danger">{error}</p>}
 
           {!loading && !error && (
             <>
@@ -186,13 +186,13 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
                         className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-mini hover:bg-white/5 disabled:opacity-40"
                       >
                         {model.id === current
-                          ? <Check size={11} className="shrink-0 text-emerald-400" />
+                          ? <Check size={11} className="shrink-0 text-success-muted" />
                           : <span className="w-[11px] shrink-0" />}
                         <span className="min-w-0 flex-1 truncate text-text-primary">
                           {model.id}
                         </span>
                         <span className={`shrink-0 tabular-nums ${
-                          fits ? "text-text-muted" : "text-rose-300"}`}>
+                          fits ? "text-text-muted" : "text-danger"}`}>
                           {tokens(model.context_length)}
                         </span>
                         <span className="w-24 shrink-0 text-right text-faint">
@@ -201,7 +201,7 @@ export function ExtractorModelPicker({ current, needed, onChosen }: Props) {
                             : `${money(model.cost_input_per_million)} / ${money(model.cost_output_per_million)}`}
                         </span>
                         {model.supports_reasoning && (
-                          <span className="shrink-0 text-2xs text-amber-300/80">
+                          <span className="shrink-0 text-2xs text-warn/80">
                             reasoning
                           </span>
                         )}

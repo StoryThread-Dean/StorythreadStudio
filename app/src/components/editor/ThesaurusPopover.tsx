@@ -240,7 +240,7 @@ export function ThesaurusPopover({
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
               Weaving
             </span>
-            <span className="font-medium text-violet-300 truncate">{markable}</span>
+            <span className="font-medium text-weave truncate">{markable}</span>
           </div>
           {marked === "" || marked === "saving" ? (
             <button
@@ -249,7 +249,7 @@ export function ThesaurusPopover({
               disabled={marked === "saving"}
               className="flex items-center gap-2 px-3 py-2 text-left text-xs text-text-primary hover:bg-bg-raised disabled:opacity-50"
             >
-              <Pin size={12} className="text-violet-300" />
+              <Pin size={12} className="text-weave" />
               Mark for Weaving
             </button>
           ) : (

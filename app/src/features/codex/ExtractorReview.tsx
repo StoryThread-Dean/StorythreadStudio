@@ -139,12 +139,12 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
                       >
                         <span className="truncate">{entry.name}</span>
                         {!entry.entity_id && !entry.created_entity_id && (
-                          <span className="ml-auto shrink-0 text-2xs text-violet-300">
+                          <span className="ml-auto shrink-0 text-2xs text-weave">
                             new
                           </span>
                         )}
                         {entry.state === "done" && (
-                          <Check size={10} className="ml-auto shrink-0 text-emerald-400" />
+                          <Check size={10} className="ml-auto shrink-0 text-success-muted" />
                         )}
                       </button>
                     </li>
@@ -160,7 +160,7 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
       <div className="min-w-0 flex-1 overflow-y-auto">
         <header className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
           <h3 className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
-            <Sparkles size={13} className="text-violet-400" /> Profile Extractions
+            <Sparkles size={13} className="text-weave-muted" /> Profile Extractions
           </h3>
           <Explain of="extractor.review" />
           <button type="button" onClick={() => setGuiding(true)}
@@ -190,12 +190,12 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
             nothing. So the warning sits above the list, not only in the empty
             state where it started. */}
         {run.incomplete && entries.length > 0 && (
-          <div className="mb-3 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+          <div className="mb-3 rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-2"
                data-testid="extractor-partial">
-            <p className="text-mini font-semibold text-amber-200">
+            <p className="text-mini font-semibold text-warn-strong">
               This did not cover your whole book.
             </p>
-            <ul className="mt-1 space-y-0.5 text-mini text-amber-200/80">
+            <ul className="mt-1 space-y-0.5 text-mini text-warn-strong/80">
               {(run.dropped ?? []).slice(0, 4).map((line, index) => (
                 <li key={index}>{line}</li>
               ))}
@@ -224,11 +224,11 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
             <p className="text-xs text-text-primary">Nothing came back that
               could be used.</p>
             {(run.dropped ?? []).length > 0 && (
-              <div className="rounded border border-amber-700/60 bg-amber-950/20 px-2.5 py-2">
-                <p className="text-mini font-semibold text-amber-200">
+              <div className="rounded border border-warn-fill/60 bg-warn-soft/20 px-2.5 py-2">
+                <p className="text-mini font-semibold text-warn-strong">
                   What happened:
                 </p>
-                <ul className="mt-1 space-y-0.5 text-mini text-amber-200/80">
+                <ul className="mt-1 space-y-0.5 text-mini text-warn-strong/80">
                   {(run.dropped ?? []).slice(0, 8).map((line, index) => (
                     <li key={index}>{line}</li>
                   ))}
@@ -388,7 +388,7 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       )}
 
       {!targetId && (
-        <div className="rounded border border-violet-800 bg-violet-500/5 px-3 py-2">
+        <div className="rounded border border-weave-fill bg-weave-fill/5 px-3 py-2">
           <p className="text-mini text-text-muted">
             You do not have an entry for this yet. Either it is somebody new, or
             it is a name your book uses for somebody you already have.
@@ -399,7 +399,7 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
                 character, not adding TO the character." */}
             <button type="button" onClick={() => void create()} disabled={creating}
                     data-testid="extractor-create"
-                    className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                    className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
               {creating ? <Loader size={11} className="animate-spin" />
                         : <Plus size={11} />}
               Create this {entry.type}
@@ -509,13 +509,13 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
       )}
 
       {connectError && (
-        <p role="alert" className="text-mini text-rose-300"
+        <p role="alert" className="text-mini text-danger"
            data-testid="extractor-connect-error">
           {connectError}
         </p>
       )}
 
-      {error && <p role="alert" className="text-mini text-rose-300">{error}</p>}
+      {error && <p role="alert" className="text-mini text-danger">{error}</p>}
 
       <ul className="space-y-2">
         {entry.parts.map(part => (
@@ -606,7 +606,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
             and the content was moved here rather than thrown away. Saying so
             turns an odd-looking paragraph into an explained one. */}
         {part.adapted_from && (
-          <span className="ml-1 normal-case tracking-normal text-amber-300/80"
+          <span className="ml-1 normal-case tracking-normal text-warn/80"
                 data-testid="extractor-adapted">
             (proposed as "{part.adapted_from}", which this kind does not have)
           </span>
@@ -616,7 +616,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
       {/* THE TWO COLUMNS. Never the proposal alone. */}
       <div className="grid gap-px bg-border sm:grid-cols-2">
         <div className="bg-bg-primary px-2.5 py-2">
-          <p className="mb-1 text-micro uppercase tracking-wide text-violet-300">
+          <p className="mb-1 text-micro uppercase tracking-wide text-weave">
             Proposed
           </p>
           <p className="whitespace-pre-wrap text-mini text-text-primary">
@@ -664,7 +664,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
           <>
             <button type="button" disabled={busy} onClick={() => void act("merge")}
                     data-testid="extractor-merge"
-                    className="rounded bg-violet-600 px-2 py-0.5 text-mini font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                    className="rounded bg-weave-fill px-2 py-0.5 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
               Add to what I wrote
             </button>
             <button type="button" disabled={busy} onClick={() => void act("overwrite")}
@@ -676,7 +676,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
           <>
             <button type="button" disabled={busy} onClick={() => void act("add")}
                     data-testid="extractor-add-trait"
-                    className="rounded bg-violet-600 px-2 py-0.5 text-mini font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                    className="rounded bg-weave-fill px-2 py-0.5 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
               Add as its own trait
             </button>
             {existingTraits.length > 0 && (
@@ -727,7 +727,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
       </div>
 
       {error && (
-        <p role="alert" className="border-t border-border px-2.5 py-1 text-mini text-rose-300">
+        <p role="alert" className="border-t border-border px-2.5 py-1 text-mini text-danger">
           {error}
         </p>
       )}

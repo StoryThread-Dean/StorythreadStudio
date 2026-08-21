@@ -27,8 +27,8 @@ interface Page {
  *  for something the writer wrote or the app decided. */
 function Proposed({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded border border-violet-900/60 bg-violet-500/5 p-2">
-      <p className="mb-1 text-micro uppercase tracking-wide text-violet-300">
+    <div className="rounded border border-weave-soft/60 bg-weave-fill/5 p-2">
+      <p className="mb-1 text-micro uppercase tracking-wide text-weave">
         Proposed
       </p>
       <p className="text-xs text-text-primary">{children}</p>
@@ -294,7 +294,7 @@ export function ExtractorGuide({ onClose }: ExtractorGuideProps) {
           {last ? (
             <button
               type="button" onClick={onClose}
-              className="ml-auto rounded bg-violet-600 px-3 py-1 text-mini font-semibold text-white hover:bg-violet-500"
+              className="ml-auto rounded bg-weave-fill px-3 py-1 text-mini font-semibold text-white hover:bg-weave-fill"
             >
               Done
             </button>
@@ -302,7 +302,7 @@ export function ExtractorGuide({ onClose }: ExtractorGuideProps) {
             <button
               type="button"
               onClick={() => setIndex(i => Math.min(PAGES.length - 1, i + 1))}
-              className="ml-auto inline-flex items-center gap-1 rounded bg-violet-600 px-3 py-1 text-mini font-semibold text-white hover:bg-violet-500"
+              className="ml-auto inline-flex items-center gap-1 rounded bg-weave-fill px-3 py-1 text-mini font-semibold text-white hover:bg-weave-fill"
             >
               Next <ChevronRight size={11} />
             </button>

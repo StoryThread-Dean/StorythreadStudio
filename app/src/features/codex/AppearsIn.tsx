@@ -81,7 +81,7 @@ export function AppearsIn({
   return (
     <section data-testid="appears-in">
       <h4 className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
-        <MapPin size={12} className="text-blue-300" /> Where this appears
+        <MapPin size={12} className="text-accent" /> Where this appears
       </h4>
 
       <p className="mt-0.5 max-w-xl text-mini text-faint">
@@ -127,7 +127,7 @@ export function AppearsIn({
           onClick={() => void save()}
           disabled={busy || !dirty}
           data-testid="appears-in-save"
-          className="rounded bg-blue-600 px-2.5 py-1 text-mini font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+          className="rounded bg-accent-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
         >
           {busy ? <Loader size={11} className="inline animate-spin" /> : null}
           {" "}Record {ticked.size} {ticked.size === 1 ? "chapter" : "chapters"}
@@ -139,7 +139,7 @@ export function AppearsIn({
           </button>
         )}
         {!dirty && saved && (
-          <span className="text-mini text-emerald-300"
+          <span className="text-mini text-success"
                 data-testid="appears-in-saved">
             Saved.
           </span>
@@ -147,7 +147,7 @@ export function AppearsIn({
       </div>
 
       {error && (
-        <p role="alert" className="mt-1 text-mini text-rose-300">{error}</p>
+        <p role="alert" className="mt-1 text-mini text-danger">{error}</p>
       )}
     </section>
   );

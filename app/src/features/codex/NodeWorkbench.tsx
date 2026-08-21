@@ -156,7 +156,7 @@ export function NodeWorkbench({
         )}
 
         {error && (
-          <p role="alert" className="text-mini text-rose-300">{error}</p>
+          <p role="alert" className="text-mini text-danger">{error}</p>
         )}
 
         {loading ? (
@@ -192,7 +192,7 @@ export function NodeWorkbench({
                   onClick={() => void save()}
                   disabled={saving}
                   data-testid="workbench-save"
-                  className="mt-2 inline-flex items-center gap-1.5 rounded bg-violet-600 px-2.5 py-1 text-mini font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded bg-weave-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                 >
                   {saving ? <Loader size={11} className="animate-spin" />
                           : <Save size={11} />}

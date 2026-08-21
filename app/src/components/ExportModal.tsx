@@ -228,7 +228,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
               onClick={() => setChaptersExpanded((v) => !v)}
               className="flex w-full items-center justify-between gap-2 p-3 text-left"
             >
-              <span className="flex items-center gap-2 text-xs font-medium text-indigo-300">
+              <span className="flex items-center gap-2 text-xs font-medium text-accent">
                 {chaptersExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 Chapters
               </span>
@@ -248,7 +248,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
             {chaptersExpanded && (
               <div className="border-t border-border p-3">
                 {chaptersLoadError ? (
-                  <p className="text-xs text-red-300">{chaptersLoadError}</p>
+                  <p className="text-xs text-danger">{chaptersLoadError}</p>
                 ) : chapters.length === 0 ? (
                   <p className="text-xs text-text-muted">No chapters found in manuscript/.</p>
                 ) : (
@@ -258,7 +258,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                         type="button"
                         onClick={selectAll}
                         disabled={allSelected || isExporting}
-                        className="rounded border border-border px-2 py-0.5 text-indigo-300 transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded border border-border px-2 py-0.5 text-accent transition-colors hover:border-accent-fill disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Select all
                       </button>
@@ -266,7 +266,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                         type="button"
                         onClick={selectNone}
                         disabled={noneSelected || isExporting}
-                        className="rounded border border-border px-2 py-0.5 text-indigo-300 transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded border border-border px-2 py-0.5 text-accent transition-colors hover:border-accent-fill disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Clear
                       </button>
@@ -289,7 +289,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                               checked={selectedFilenames.has(c.filename)}
                               onChange={() => toggleChapter(c.filename)}
                               disabled={isExporting}
-                              className="accent-indigo-500"
+                              className="accent-accent-fill"
                             />
                             <span className="flex-1 truncate" title={c.title}>{c.title}</span>
                             <span className="shrink-0 font-mono text-micro text-text-muted">
@@ -309,7 +309,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
               Applies to Full Manuscript only. Snapshot is always a folder
               of .md files regardless of this setting. */}
           <div className="rounded-lg border border-border bg-bg-primary p-3">
-            <p className="mb-2 text-xs font-medium text-indigo-300">Export format</p>
+            <p className="mb-2 text-xs font-medium text-accent">Export format</p>
             <div className="flex gap-2">
               {(["markdown", "txt", "docx", "epub"] as const).map((fmt) => (
                 <button
@@ -319,8 +319,8 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   disabled={isExporting}
                   className={`rounded border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
                     exportFormat === fmt
-                      ? "border-indigo-500 bg-indigo-950 text-indigo-300"
-                      : "border-border text-text-muted hover:border-indigo-400 hover:text-text-primary"
+                      ? "border-accent-fill bg-accent-soft text-accent"
+                      : "border-border text-text-muted hover:border-accent-muted hover:text-text-primary"
                   }`}
                 >
                   {fmt === "markdown" ? ".MD" : fmt === "txt" ? ".TXT" : fmt.toUpperCase()}
@@ -339,7 +339,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           <div className={`rounded-lg border border-border bg-bg-primary p-3 transition-opacity ${
             extrasAvailable ? "opacity-100" : "opacity-30 pointer-events-none"
           }`}>
-            <p className="mb-2 text-xs font-medium text-indigo-300">
+            <p className="mb-2 text-xs font-medium text-accent">
               Include {!extrasAvailable && <span className="text-text-muted">(Markdown / TXT only)</span>}
             </p>
             <div className="flex flex-col gap-1.5">
@@ -349,7 +349,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   checked={includeChapterSummaries}
                   onChange={(e) => setIncludeChapterSummaries(e.target.checked)}
                   disabled={isExporting || !extrasAvailable}
-                  className="accent-indigo-500"
+                  className="accent-accent-fill"
                 />
                 <span>Chapter summaries</span>
                 <span className="text-micro text-text-muted">summaries/chapters/</span>
@@ -360,7 +360,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   checked={includeSceneSummaries}
                   onChange={(e) => setIncludeSceneSummaries(e.target.checked)}
                   disabled={isExporting || !extrasAvailable}
-                  className="accent-indigo-500"
+                  className="accent-accent-fill"
                 />
                 <span>Scene summaries</span>
                 <span className="text-micro text-text-muted">summaries/scenes/</span>
@@ -371,7 +371,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   checked={includeNotes}
                   onChange={(e) => setIncludeNotes(e.target.checked)}
                   disabled={isExporting || !extrasAvailable}
-                  className="accent-indigo-500"
+                  className="accent-accent-fill"
                 />
                 <span>Notes</span>
                 <span className="text-micro text-text-muted">notes/ (outline, style guide)</span>
@@ -382,7 +382,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   checked={includeProfiles}
                   onChange={(e) => setIncludeProfiles(e.target.checked)}
                   disabled={isExporting || !extrasAvailable}
-                  className="accent-indigo-500"
+                  className="accent-accent-fill"
                 />
                 <span>Profiles</span>
                 <span className="text-micro text-text-muted">every entry, as you wrote it</span>
@@ -393,7 +393,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                   checked={includeWeave}
                   onChange={(e) => setIncludeWeave(e.target.checked)}
                   disabled={isExporting || !extrasAvailable}
-                  className="accent-violet-500"
+                  className="accent-weave-fill"
                 />
                 <span>The Weave</span>
                 <span className="text-micro text-text-muted">
@@ -409,9 +409,9 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
               get my world OUT of this app". A writer reaching for that is
               usually leaving, backing up, or handing the world to somebody
               else, and none of those want a novel wrapped around it. */}
-          <div className="rounded-lg border border-violet-900/60 bg-violet-950/10 p-4">
+          <div className="rounded-lg border border-weave-soft/60 bg-weave-soft/10 p-4">
             <div className="mb-2 flex items-center gap-2">
-              <Network size={16} className="shrink-0 text-violet-300" />
+              <Network size={16} className="shrink-0 text-weave" />
               <p className="text-sm font-medium text-text-primary">
                 Export the Weave on its own
               </p>
@@ -426,7 +426,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
             <button
               onClick={() => handleWeaveExport()}
               disabled={isExporting}
-              className="inline-flex items-center gap-2 rounded border border-violet-700 px-3 py-1.5 text-xs font-medium text-violet-200 transition-colors hover:border-violet-500 hover:bg-violet-900/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded border border-weave-fill px-3 py-1.5 text-xs font-medium text-weave-strong transition-colors hover:border-weave-fill hover:bg-weave-soft/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Network size={13} />
               {isExporting ? "Exporting..." : "Export the Weave"}
@@ -437,9 +437,9 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           <button
             onClick={() => handleExport("full-manuscript")}
             disabled={isExporting || noneSelected}
-            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-accent-fill hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <FileText size={20} className="mt-0.5 shrink-0 text-indigo-400" />
+            <FileText size={20} className="mt-0.5 shrink-0 text-accent-muted" />
             <div>
               <p className="text-sm font-medium text-text-primary">Full Manuscript</p>
               <p className="mt-1 text-xs text-text-muted">
@@ -457,9 +457,9 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           <button
             onClick={() => handleExport("snapshot")}
             disabled={isExporting || noneSelected}
-            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-indigo-500 hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:border-accent-fill hover:bg-bg-raised disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Camera size={20} className="mt-0.5 shrink-0 text-indigo-400" />
+            <Camera size={20} className="mt-0.5 shrink-0 text-accent-muted" />
             <div>
               <p className="text-sm font-medium text-text-primary">Snapshot</p>
               <p className="mt-1 text-xs text-text-muted">
@@ -470,7 +470,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           </button>
 
           {noneSelected && chapters.length > 0 && (
-            <p className="text-xs text-amber-300">
+            <p className="text-xs text-warn">
               Pick at least one chapter to export.
             </p>
           )}
@@ -485,13 +485,13 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
 
           {/* Success message */}
           {result && (
-            <div className="rounded-lg border border-emerald-800 bg-emerald-950/40 p-3">
+            <div className="rounded-lg border border-success-fill bg-success-soft/40 p-3">
               <div className="flex items-start gap-2">
-                <CheckCircle size={16} className="mt-0.5 shrink-0 text-emerald-400" />
+                <CheckCircle size={16} className="mt-0.5 shrink-0 text-success-muted" />
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-emerald-300">{result.message}</p>
+                  <p className="text-xs font-medium text-success">{result.message}</p>
                   <p
-                    className="mt-1 break-all font-mono text-xs text-emerald-400/70"
+                    className="mt-1 break-all font-mono text-xs text-success-muted/70"
                     title={result.path}
                   >
                     {result.path}
@@ -503,10 +503,10 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
 
           {/* Error message */}
           {error && (
-            <div className="rounded-lg border border-red-800 bg-red-950/40 p-3">
+            <div className="rounded-lg border border-danger-fill bg-danger-soft/40 p-3">
               <div className="flex items-start gap-2">
-                <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-400" />
-                <p className="text-xs text-red-300">{error}</p>
+                <AlertCircle size={16} className="mt-0.5 shrink-0 text-danger-muted" />
+                <p className="text-xs text-danger">{error}</p>
               </div>
             </div>
           )}

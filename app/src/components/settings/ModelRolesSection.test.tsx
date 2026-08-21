@@ -298,7 +298,7 @@ describe("an assignment that cannot run", () => {
     // The row carries a warning icon; without it a broken assignment would
     // be invisible in a list that is collapsed by default.
     const row = screen.getByTestId("role-row-prose");
-    expect(row.querySelector("svg.text-amber-400")).toBeTruthy();
+    expect(row.querySelector("svg.text-warn-muted")).toBeTruthy();
   });
 
   it("stays quiet for an assignment that works", async () => {

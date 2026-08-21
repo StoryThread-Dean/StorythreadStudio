@@ -206,7 +206,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       {guiding && <ExtractorGuide onClose={() => setGuiding(false)} />}
       <div>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-          <Sparkles size={14} className="text-violet-400" /> Profile Extractor
+          <Sparkles size={14} className="text-weave-muted" /> Profile Extractor
         </h3>
         <p className="mt-1 max-w-2xl text-xs text-text-muted">
           This reads your manuscript and proposes what your entries should say:
@@ -225,12 +225,12 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
 
       {/* THE ORDER MATTERS, AND THE SCREEN SAYS SO. */}
       {plan && !plan.has_world && (
-        <div className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+        <div className="rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-2"
              data-testid="extractor-run-weaving-first">
-          <p className="flex items-center gap-2 text-xs font-semibold text-amber-200">
+          <p className="flex items-center gap-2 text-xs font-semibold text-warn-strong">
             <AlertTriangle size={12} /> Run Weaving first.
           </p>
-          <p className="mt-1 max-w-2xl text-mini text-amber-200/80">
+          <p className="mt-1 max-w-2xl text-mini text-warn-strong/80">
             You have no entries yet. This pass works by building on what you
             already have -- it sends a short extract of each entry so it can
             add to them rather than start over. With nothing to build on it will
@@ -307,7 +307,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
                     ? new Set() : next;
                 })}
                 className={`rounded border px-2 py-0.5 text-mini ${
-                  on ? "border-violet-600 bg-violet-500/10 text-text-primary"
+                  on ? "border-weave-fill bg-weave-fill/10 text-text-primary"
                      : "border-border text-faint hover:text-text-muted"}`}
               >
                 {chapter.title}
@@ -402,12 +402,12 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
           that holds 64,000, got an unreadable answer back, and spent the
           request finding that out. */}
       {plan && modelId && !fits && contextTokens > 0 && (
-        <div className="rounded border border-rose-800 bg-rose-950/30 px-3 py-2"
+        <div className="rounded border border-danger-fill bg-danger-soft/30 px-3 py-2"
              data-testid="extractor-too-big">
-          <p className="text-xs font-semibold text-rose-100">
+          <p className="text-xs font-semibold text-danger-strong">
             This will not fit in {modelId}.
           </p>
-          <p className="mt-1 text-mini text-rose-200/80">
+          <p className="mt-1 text-mini text-danger-strong/80">
             Your selection is roughly{" "}
             {estimatedTokens.toLocaleString()} tokens and that model holds{" "}
             {contextTokens.toLocaleString()}. Tick fewer chapters, or
@@ -418,32 +418,32 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       )}
 
       {plan?.model_error && (
-        <div className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+        <div className="rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-2"
              data-testid="extractor-model-error">
-          <p className="text-mini text-amber-200">
+          <p className="text-mini text-warn-strong">
             No model can run this yet: {plan.model_error}
           </p>
         </div>
       )}
 
-      {error && <p role="alert" className="text-mini text-rose-300">{error}</p>}
+      {error && <p role="alert" className="text-mini text-danger">{error}</p>}
 
       {/* THE GUARD. Not an error -- a question, with the number in it. */}
       {confirmReplace !== null && (
-        <div className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+        <div className="rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-2"
              data-testid="extractor-replace-confirm">
-          <p className="text-xs text-amber-100">
+          <p className="text-xs text-warn-strong">
             You have {confirmReplace} proposal{confirmReplace === 1 ? "" : "s"}{" "}
             you have not looked at yet. Starting a new run throws{" "}
             {confirmReplace === 1 ? "it" : "them"} away.
           </p>
-          <p className="mt-1 text-mini text-amber-200/70">
+          <p className="mt-1 text-mini text-warn-strong/70">
             There is only ever one extraction at a time, so the new one replaces
             the old one entirely. You paid for those proposals.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" onClick={() => void start(true)} disabled={running}
-                    className="rounded bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
+                    className="rounded bg-warn-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-warn-fill disabled:opacity-40">
               Replace them and run again
             </button>
             {onOpenCurrent && (
@@ -468,7 +468,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
             disabled={running || (plan?.chapters.length ?? 0) === 0
                       || (!!modelId && contextTokens > 0 && !fits)}
             data-testid="extractor-run"
-            className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
           >
             {running ? <Loader size={12} className="animate-spin" />
                      : <BookOpen size={12} />}
@@ -493,7 +493,7 @@ export function ExtractorSetup({ projectPath, onExtracted, onOpenCurrent }: Prop
       )}
 
       {partial && (
-        <p className="rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2 text-mini text-amber-200"
+        <p className="rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-2 text-mini text-warn-strong"
            data-testid="extractor-partial-run">
           {partial}
         </p>
@@ -515,7 +515,7 @@ function Stat({ label, value, tone = "plain", testId }: {
     <div className="bg-bg-primary px-2.5 py-1.5" data-testid={testId}>
       <p className="text-micro uppercase tracking-wide text-faint">{label}</p>
       <p className={`text-xs tabular-nums ${
-        tone === "bad" ? "text-rose-300" : "text-text-primary"}`}>
+        tone === "bad" ? "text-danger" : "text-text-primary"}`}>
         {value}
       </p>
     </div>

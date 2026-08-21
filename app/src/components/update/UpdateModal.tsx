@@ -59,14 +59,14 @@ export function UpdateModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded border border-indigo-700/60 bg-bg-panel shadow-xl flex flex-col"
+        className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded border border-accent-fill/60 bg-bg-panel shadow-xl flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-faint">Update available</p>
-            <h2 className="mt-0.5 text-lg font-semibold text-indigo-300">
+            <h2 className="mt-0.5 text-lg font-semibold text-accent">
               v{update.version}
               <span className="ml-2 text-sm font-normal text-text-muted">
                 from v{update.currentVersion}
@@ -101,7 +101,7 @@ export function UpdateModal({
               No release notes provided. The full changelog is available at{" "}
               <button
                 onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/blob/main/CHANGELOG.md")}
-                className="text-indigo-300 underline hover:text-indigo-200"
+                className="text-accent underline hover:text-accent-strong"
               >
                 CHANGELOG.md
               </button>.
@@ -112,8 +112,8 @@ export function UpdateModal({
               user hasn't already marked as a donor. Soft and dismissable
               -- it's a reminder, not a wall. */}
           {!isWorking && !hasDonated && (
-            <div className="mt-4 rounded border border-indigo-800/40 bg-indigo-950/30 p-3">
-              <p className="mb-2 text-xs text-indigo-200">
+            <div className="mt-4 rounded border border-accent-fill/40 bg-accent-soft/30 p-3">
+              <p className="mb-2 text-xs text-accent-strong">
                 Storythread Studio is free and stays free. If it's useful to your
                 writing, consider supporting development -- donations cover the
                 Claude API costs that power this app's AI features.
@@ -121,13 +121,13 @@ export function UpdateModal({
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
-                  className="rounded border border-pink-700 bg-pink-900/30 px-2 py-0.5 text-mini text-pink-200 hover:bg-pink-900/50"
+                  className="rounded border border-weave-fill bg-weave-soft/30 px-2 py-0.5 text-mini text-weave-strong hover:bg-weave-soft/50"
                 >
                   GitHub Sponsors
                 </button>
                 <button
                   onClick={() => openLink("https://ko-fi.com/storythreadstudio")}
-                  className="rounded border border-cyan-700 bg-cyan-900/30 px-2 py-0.5 text-mini text-cyan-200 hover:bg-cyan-900/50"
+                  className="rounded border border-secondary-fill bg-secondary-soft/30 px-2 py-0.5 text-mini text-secondary-strong hover:bg-secondary-soft/50"
                 >
                   Ko-fi
                 </button>
@@ -144,7 +144,7 @@ export function UpdateModal({
               </p>
               <div className="h-2 w-full overflow-hidden rounded bg-bg-panel">
                 <div
-                  className="h-full bg-indigo-500 transition-all"
+                  className="h-full bg-accent-fill transition-all"
                   style={{ width: progress.percent != null ? `${progress.percent * 100}%` : "100%" }}
                 />
               </div>
@@ -158,17 +158,17 @@ export function UpdateModal({
 
           {/* Ready-to-relaunch state. */}
           {isReady && (
-            <div className="mt-4 rounded border border-emerald-800/50 bg-emerald-950/30 p-3 text-xs text-emerald-200">
+            <div className="mt-4 rounded border border-success-fill/50 bg-success-soft/30 p-3 text-xs text-success-strong">
               Update installed. Restart the app to start using v{update.version}.
             </div>
           )}
 
           {/* Error display. Shown both for check failures and download failures. */}
           {isErrored && error && (
-            <div className="mt-4 rounded border border-red-800/50 bg-red-950/30 p-3 text-xs text-red-300">
+            <div className="mt-4 rounded border border-danger-fill/50 bg-danger-soft/30 p-3 text-xs text-danger">
               <p className="font-semibold">Update failed</p>
               <p className="mt-1">{error}</p>
-              <p className="mt-1 text-red-400/70">
+              <p className="mt-1 text-danger-muted/70">
                 You can keep using the current version. Try again from the About panel later.
               </p>
             </div>
@@ -179,7 +179,7 @@ export function UpdateModal({
         <div className="flex shrink-0 items-center justify-between border-t border-border bg-bg-primary px-5 py-3">
           <button
             onClick={() => openLink(`https://github.com/StoryThread-Dean/StorythreadStudio/releases/tag/v${update.version}`)}
-            className="text-mini text-indigo-300 underline hover:text-indigo-200"
+            className="text-mini text-accent underline hover:text-accent-strong"
           >
             View on GitHub
           </button>
@@ -196,7 +196,7 @@ export function UpdateModal({
             {!isReady && !isWorking && (
               <button
                 onClick={onDownloadInstall}
-                className="rounded border border-indigo-600 bg-indigo-700/40 px-3 py-1 text-xs font-semibold text-indigo-100 hover:bg-indigo-700/60"
+                className="rounded border border-accent-fill bg-accent-fill/40 px-3 py-1 text-xs font-semibold text-accent-strong hover:bg-accent-fill/60"
               >
                 Download &amp; Install
               </button>
@@ -204,7 +204,7 @@ export function UpdateModal({
             {isReady && (
               <button
                 onClick={onRelaunch}
-                className="rounded border border-emerald-600 bg-emerald-700/40 px-3 py-1 text-xs font-semibold text-emerald-100 hover:bg-emerald-700/60"
+                className="rounded border border-success-fill bg-success-fill/40 px-3 py-1 text-xs font-semibold text-success-strong hover:bg-success-fill/60"
               >
                 Restart now
               </button>

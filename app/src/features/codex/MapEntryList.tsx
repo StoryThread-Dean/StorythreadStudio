@@ -123,7 +123,7 @@ export function MapEntryList({
                           onClick={() => { onPick(node); setOpen(false); }}
                           className={`flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-mini ${
                             node.entity_id === focus
-                              ? "bg-violet-500/15 text-text-primary"
+                              ? "bg-weave-fill/15 text-text-primary"
                               : "text-text-muted hover:bg-white/5"}`}
                         >
                           <Icon size={10}

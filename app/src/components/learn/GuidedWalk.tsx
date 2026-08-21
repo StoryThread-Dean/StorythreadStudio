@@ -214,7 +214,7 @@ export function GuidedWalk({ steps, tone = "violet", onClose }: GuidedWalkProps)
                   onClick={() => void playDemo(demo.kind)}
                   disabled={loading !== null}
                   aria-label={`Play: ${demo.label}`}
-                  className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-0.5 text-mini text-text-primary hover:border-emerald-600 hover:text-success disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-0.5 text-mini text-text-primary hover:border-success-fill hover:text-success disabled:opacity-40"
                 >
                   {loading === demo.kind
                     ? <Loader2 size={11} className="animate-spin" />

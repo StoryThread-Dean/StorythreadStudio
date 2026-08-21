@@ -1919,16 +1919,16 @@ function App() {
     (backendBannerDismissedAt === null || backendBannerDismissedAt < (backendHealth.lastSeen ?? 0));
   const backendDownBanner = showBackendBanner ? (
     <div
-      className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-red-800 bg-red-950/95 px-4 py-2 shadow-lg backdrop-blur-sm"
+      className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-danger-fill bg-danger-soft/95 px-4 py-2 shadow-lg backdrop-blur-sm"
       role="alert"
     >
       <div className="flex items-center gap-2">
-        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-400" />
-        <p className="text-xs text-red-100">
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-danger-muted" />
+        <p className="text-xs text-danger-strong">
           <span className="font-semibold">Backend not responding.</span>{" "}
           Storythread Studio can't reach the local API at <span className="font-mono">localhost:8000</span>.
           Start it with{" "}
-          <span className="rounded border border-red-800 bg-red-900/70 px-1 font-mono text-micro text-red-200">
+          <span className="rounded border border-danger-fill bg-danger-soft/70 px-1 font-mono text-micro text-danger-strong">
             uv run uvicorn app.main:app --reload --port 8000
           </span>
           {" "}from the <span className="font-mono">backend/</span> folder.
@@ -1936,7 +1936,7 @@ function App() {
       </div>
       <button
         onClick={() => setBackendBannerDismissedAt(Date.now())}
-        className="rounded border border-red-800 px-2 py-0.5 text-xs text-red-200 transition-colors hover:border-red-500 hover:text-red-100"
+        className="rounded border border-danger-fill px-2 py-0.5 text-xs text-danger-strong transition-colors hover:border-danger-fill hover:text-danger-strong"
         title="Hide this banner (it reappears if the backend goes down again)"
       >
         Dismiss
@@ -2130,7 +2130,7 @@ function App() {
                       }}
                       className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-bg-raised ${
                         rp.root_path === currentProject.root_path
-                          ? "text-indigo-300"
+                          ? "text-accent"
                           : "text-text-primary"
                       }`}
                     >
@@ -2163,7 +2163,7 @@ function App() {
               ProjectHome screen. */}
           <button
             onClick={() => setCurrentProject(null)}
-            className="mb-4 flex w-full items-center gap-2 rounded border border-border bg-bg-panel px-2 py-1.5 text-left text-xs text-text-muted transition-colors hover:border-indigo-500 hover:bg-bg-raised hover:text-indigo-300"
+            className="mb-4 flex w-full items-center gap-2 rounded border border-border bg-bg-panel px-2 py-1.5 text-left text-xs text-text-muted transition-colors hover:border-accent-fill hover:bg-bg-raised hover:text-accent"
             title="Return to the main menu (does not affect any open work on disk)"
           >
             <span aria-hidden="true">&larr;</span>
@@ -2376,7 +2376,7 @@ function App() {
                       materializes structure.json on disk. */}
                   <button
                     onClick={handleAddAct}
-                    className="mt-1 w-full rounded border border-dashed border-border px-2 py-1 text-left text-xs text-faint transition-colors hover:border-indigo-500 hover:text-indigo-300"
+                    className="mt-1 w-full rounded border border-dashed border-border px-2 py-1 text-left text-xs text-faint transition-colors hover:border-accent-fill hover:text-accent"
                     title="Group chapters into acts (Act I, Act II...). Chapters can be moved between acts from their row menu."
                   >
                     + New Act
@@ -2455,7 +2455,7 @@ function App() {
             {/* Surface the donor flag here as a small heart so the writer
                 sees the acknowledgement every time they open the sidebar. */}
             {donation.hasDonated && (
-              <span className="text-pink-400" title="Thank you for donating!">♥</span>
+              <span className="text-weave-muted" title="Thank you for donating!">♥</span>
             )}
           </button>
         </div>
@@ -2552,28 +2552,28 @@ function App() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleCreateChapter}
-              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-emerald-500 hover:text-emerald-400"
+              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-success-fill hover:text-success-muted"
               title="Create a new chapter in manuscript/"
             >
               + New Chapter
             </button>
             {isDirty ? (
-              <span className="flex items-center gap-1.5 text-xs text-amber-400"
+              <span className="flex items-center gap-1.5 text-xs text-warn-muted"
                 title="You have unsaved changes. Press Ctrl+S to save.">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                <span className="h-1.5 w-1.5 rounded-full bg-warn-muted" />
                 Unsaved changes
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 text-xs text-emerald-500"
+              <span className="flex items-center gap-1.5 text-xs text-success-fill"
                 title="All changes are saved to disk. Manual save only -- no autosave.">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="h-1.5 w-1.5 rounded-full bg-success-fill" />
                 Saved
               </span>
             )}
             <button
               onClick={handleSave}
               disabled={!isDirty || (currentView === "notes" ? !currentNote : !currentChapter)}
-              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title="Save to disk (Ctrl+S)"
             >
               Save
@@ -2627,8 +2627,8 @@ function App() {
 
         {/* Error banner -- shown when save or load fails */}
         {editorError && (
-          <div className="shrink-0 border-b border-red-800 bg-red-950/40 px-4 py-2">
-            <p className="text-xs text-red-300">
+          <div className="shrink-0 border-b border-danger-fill bg-danger-soft/40 px-4 py-2">
+            <p className="text-xs text-danger">
               <span className="font-semibold">Error: </span>{editorError}
             </p>
           </div>
@@ -2771,7 +2771,7 @@ function App() {
             {chatMessages.length > 0 && (
               <button
                 onClick={clearWritingCompanionChat}
-                className="text-xs text-rose-700 transition-colors hover:text-rose-400"
+                className="text-xs text-danger-fill transition-colors hover:text-danger-muted"
                 title="Clear the conversation and detach all context chips"
               >
                 Clear
@@ -2793,7 +2793,7 @@ function App() {
             // based scene summarization is conceptually a Writing Companion
             // action on the selected passage.
             <div className="flex items-center justify-between gap-2">
-              <p className={`min-w-0 flex-1 truncate text-xs ${enhanceMode ? "text-violet-400" : (establishedSelection !== "" && selectedText.trim() === establishedSelection) || chapterEstablished ? "text-emerald-700" : "text-emerald-400"}`} title={selectedText}>
+              <p className={`min-w-0 flex-1 truncate text-xs ${enhanceMode ? "text-weave-muted" : (establishedSelection !== "" && selectedText.trim() === establishedSelection) || chapterEstablished ? "text-success-fill" : "text-success-muted"}`} title={selectedText}>
                 {enhanceMode
                   ? "Passage to enhance"
                   // Muted label when this exact selection is already in the
@@ -2804,7 +2804,7 @@ function App() {
               <button
                 onClick={handleSummarizeAsScene}
                 disabled={!currentChapter}
-                className="shrink-0 rounded border border-indigo-700/50 bg-indigo-950/40 px-2 py-0.5 text-micro text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
+                className="shrink-0 rounded border border-accent-fill/50 bg-accent-soft/40 px-2 py-0.5 text-micro text-accent transition-colors hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-40"
                 title="Generate an AI scene summary from this selection (opens a preview modal)"
               >
                 Summarize as Scene
@@ -2813,7 +2813,7 @@ function App() {
           ) : currentChapter && enhanceMode ? (
             // Enhance is on but nothing is highlighted -- the feature needs a
             // target passage, so prompt the writer to select one.
-            <p className="text-xs text-violet-400">
+            <p className="text-xs text-weave-muted">
               Highlight a passage in the editor to enhance
             </p>
           ) : currentChapter ? (
@@ -2823,8 +2823,8 @@ function App() {
                 !includeChapter
                   ? "text-faint"
                   : chapterEstablished
-                    ? "text-amber-700"
-                    : "text-indigo-300"
+                    ? "text-warn-fill"
+                    : "text-accent"
               }`}>
                 {!includeChapter
                   ? "Chapter text not included"
@@ -2838,7 +2838,7 @@ function App() {
               >
                 <span className="text-xs text-faint">Include chapter</span>
                 <div
-                  className={`relative h-4 w-7 rounded-full transition-colors ${includeChapter ? "bg-indigo-600" : "bg-border"}`}
+                  className={`relative h-4 w-7 rounded-full transition-colors ${includeChapter ? "bg-accent-fill" : "bg-border"}`}
                   onClick={() => setIncludeChapter(v => !v)}
                 >
                   <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${includeChapter ? "translate-x-3.5" : "translate-x-0.5"}`} />
@@ -2860,14 +2860,14 @@ function App() {
               {/* Surface the stance when attachments are set to Reference, since it
                   changes how the AI uses them and is otherwise hidden in the popup. */}
               {contextChips.length > 0 && !treatAsCanon && (
-                <span className="ml-1 text-amber-400" title="Attachments are reference only; your direction takes precedence. Change in + Add.">
+                <span className="ml-1 text-warn-muted" title="Attachments are reference only; your direction takes precedence. Change in + Add.">
                   · reference
                 </span>
               )}
             </p>
             <button
               onClick={() => setShowChipPicker(prev => !prev)}
-              className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300"
+              className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-accent"
               title="Attach a profile as context"
             >
               + Add
@@ -2916,14 +2916,14 @@ function App() {
                 return (
                   <span
                     key={i}
-                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-opacity ${chipTypeColor(chip.type)} ${isEstablished ? "opacity-40" : ""} ${isHuge ? "ring-1 ring-red-500" : isLarge ? "ring-1 ring-amber-500" : ""}`}
+                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-opacity ${chipTypeColor(chip.type)} ${isEstablished ? "opacity-40" : ""} ${isHuge ? "ring-1 ring-danger-fill" : isLarge ? "ring-1 ring-warn-fill" : ""}`}
                     title={tooltip}
                   >
                     {chip.name}
                     <span className="text-micro opacity-60">({sizeLabel})</span>
                     <button
                       onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
-                      className="text-faint hover:text-red-400"
+                      className="text-faint hover:text-danger-muted"
                     >
                       ×
                     </button>
@@ -2962,7 +2962,7 @@ function App() {
           {/* Empty state with tab-specific suggestions */}
           {chatMessages.length === 0 && !chatLoading && !chatError && (
             <div className="flex flex-col items-center gap-3 pt-4 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-900/40 text-indigo-400">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft/40 text-accent-muted">
                 <Bot size={20} />
               </div>
               <p className="text-sm font-medium text-text-muted">Writing Companion</p>
@@ -3007,9 +3007,9 @@ function App() {
                   AI only sees messages from the latest divider onward. */}
               {askBoundaries.includes(i) && (
                 <div className="my-3 flex items-center gap-2" aria-label="new ask">
-                  <div className="h-px flex-1 bg-violet-800/50" />
-                  <span className="text-micro uppercase tracking-wide text-violet-400">New ask</span>
-                  <div className="h-px flex-1 bg-violet-800/50" />
+                  <div className="h-px flex-1 bg-weave-fill/50" />
+                  <span className="text-micro uppercase tracking-wide text-weave-muted">New ask</span>
+                  <div className="h-px flex-1 bg-weave-fill/50" />
                 </div>
               )}
               {/* Hidden messages (the persisted materials block -- profiles +
@@ -3018,13 +3018,13 @@ function App() {
               {!msg.hidden && (
               <div className={`mb-3 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               {msg.role === "assistant" && (
-                <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-indigo-400">
+                <div className="mr-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft/60 text-accent-muted">
                   <Bot size={11} />
                 </div>
               )}
               <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                 msg.role === "user"
-                  ? "rounded-tr-sm bg-indigo-600 text-white"
+                  ? "rounded-tr-sm bg-accent-fill text-white"
                   : "rounded-tl-sm border border-border bg-bg-surface text-text-primary"
               }`}>
                 {msg.role === "user" ? (
@@ -3034,8 +3034,8 @@ function App() {
                     {/* Reasoning trace (Reasoning toggle): collapsed by default so
                         the reply stays the focus; native <details> needs no state. */}
                     {msg.reasoning && (
-                      <details className="mb-2 rounded border border-sky-900/60 bg-sky-950/20 px-2 py-1">
-                        <summary className="cursor-pointer text-mini text-sky-400">
+                      <details className="mb-2 rounded border border-accent-soft/60 bg-accent-soft/20 px-2 py-1">
+                        <summary className="cursor-pointer text-mini text-accent-muted">
                           Reasoning
                         </summary>
                         <p className="mt-1 whitespace-pre-wrap text-mini text-text-muted">
@@ -3048,7 +3048,7 @@ function App() {
                 )}
               </div>
               {msg.role === "user" && (
-                <div className="ml-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-800/60 text-indigo-300">
+                <div className="ml-2 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-fill/60 text-accent">
                   <span className="text-xs font-bold">W</span>
                 </div>
               )}
@@ -3073,7 +3073,7 @@ function App() {
                   suppressText: true,
                 })}
                 disabled={!currentChapter}
-                className="inline-flex items-center gap-1 rounded-full border border-indigo-700/50 bg-indigo-950/40 px-2.5 py-1 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-full border border-accent-fill/50 bg-accent-soft/40 px-2.5 py-1 text-xs text-accent transition-colors hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-40"
                 title="Write the next segment of the scene, continuing from here"
               >
                 <CornerDownRight size={12} />
@@ -3084,7 +3084,7 @@ function App() {
 
           {chatLoading && (
             <div className="flex items-center gap-2 text-xs text-text-muted">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-muted" />
               <span>
                 {chatModelUsed
                   ? <>{chatModelUsed.split("/").pop()} <span className="text-faint">thinking...</span></>
@@ -3096,7 +3096,7 @@ function App() {
               {chatCanCancel && (
                 <button
                   onClick={cancelEditorChat}
-                  className="ml-1 rounded border border-red-800/60 bg-red-950/30 px-2 py-0.5 text-mini text-red-300 transition-colors hover:border-red-600 hover:bg-red-900/40 hover:text-red-200"
+                  className="ml-1 rounded border border-danger-fill/60 bg-danger-soft/30 px-2 py-0.5 text-mini text-danger transition-colors hover:border-danger-fill hover:bg-danger-soft/40 hover:text-danger-strong"
                   title="Cancel this request"
                 >
                   Cancel
@@ -3106,10 +3106,10 @@ function App() {
           )}
 
           {chatError && (
-            <div className="rounded border border-red-800 bg-red-950/40 p-2">
-              <p className="text-xs text-red-300">{chatError}</p>
+            <div className="rounded border border-danger-fill bg-danger-soft/40 p-2">
+              <p className="text-xs text-danger">{chatError}</p>
               {chatError.includes("API key") && (
-                <button onClick={() => setShowSettings(true)} className="mt-1 text-xs text-indigo-400 underline">
+                <button onClick={() => setShowSettings(true)} className="mt-1 text-xs text-accent-muted underline">
                   Open Settings
                 </button>
               )}
@@ -3125,15 +3125,15 @@ function App() {
           {/* Weak-model nudge: shown once when drafting on a budget model that
               tends to produce generic prose. Dismissible, never blocks. */}
           {showDraftModelNudge && !draftNudgeDismissed && (
-            <div className="mb-2 rounded border border-amber-800/60 bg-amber-950/30 p-2">
-              <p className="text-xs text-amber-200">
+            <div className="mb-2 rounded border border-warn-fill/60 bg-warn-soft/30 p-2">
+              <p className="text-xs text-warn-strong">
                 Drafting works best on a stronger model.
                 {chatModelUsed ? <> Current: <span className="font-medium">{chatModelUsed.split("/").pop()}</span>.</> : null}
               </p>
               <div className="mt-1 flex items-center gap-3">
                 <button
                   onClick={() => { setShowSettings(true); }}
-                  className="text-xs text-indigo-300 underline transition-colors hover:text-indigo-200"
+                  className="text-xs text-accent underline transition-colors hover:text-accent-strong"
                 >
                   Change in Settings
                 </button>
@@ -3151,8 +3151,8 @@ function App() {
               the writer attach grounding (chapter/outline/profiles) for better
               results. Dismissible, never blocks. */}
           {enhanceMode && !enhanceNudgeDismissed && (
-            <div className="mb-2 rounded border border-violet-800/60 bg-violet-950/30 p-2">
-              <p className="text-xs text-violet-200">
+            <div className="mb-2 rounded border border-weave-fill/60 bg-weave-soft/30 p-2">
+              <p className="text-xs text-weave-strong">
                 For the richest results, attach your outline, chapter or scene
                 summaries, and relevant character profiles as context (use + Add
                 above). Enhance already includes the paragraphs around your
@@ -3177,10 +3177,10 @@ function App() {
               className="flex cursor-pointer items-center gap-1.5"
               title="When on, the AI writes story prose from your message and attached context. When off, it discusses your writing. Draft uses this conversation as planning context -- use New Ask for a clean slate."
             >
-              <PenLine size={12} className={draftMode ? "text-emerald-400" : "text-faint"} />
-              <span className={`text-xs ${draftMode ? "text-emerald-400" : "text-faint"}`}>Draft mode</span>
+              <PenLine size={12} className={draftMode ? "text-success-muted" : "text-faint"} />
+              <span className={`text-xs ${draftMode ? "text-success-muted" : "text-faint"}`}>Draft mode</span>
               <div
-                className={`relative h-4 w-7 rounded-full transition-colors ${draftMode ? "bg-emerald-600" : "bg-border"}`}
+                className={`relative h-4 w-7 rounded-full transition-colors ${draftMode ? "bg-success-fill" : "bg-border"}`}
                 onClick={() => setDraftMode(v => { const next = !v; if (next) setEnhanceMode(false); return next; })}
               >
                 <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${draftMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
@@ -3192,10 +3192,10 @@ function App() {
               className="flex cursor-pointer items-center gap-1.5"
               title="When on, highlight a passage and the AI rewrites it as richer, more vivid prose (keeping the same events). Output appears in chat for you to copy."
             >
-              <Sparkles size={12} className={enhanceMode ? "text-violet-400" : "text-faint"} />
-              <span className={`text-xs ${enhanceMode ? "text-violet-400" : "text-faint"}`}>Enhance</span>
+              <Sparkles size={12} className={enhanceMode ? "text-weave-muted" : "text-faint"} />
+              <span className={`text-xs ${enhanceMode ? "text-weave-muted" : "text-faint"}`}>Enhance</span>
               <div
-                className={`relative h-4 w-7 rounded-full transition-colors ${enhanceMode ? "bg-violet-600" : "bg-border"}`}
+                className={`relative h-4 w-7 rounded-full transition-colors ${enhanceMode ? "bg-weave-fill" : "bg-border"}`}
                 onClick={() => setEnhanceMode(v => { const next = !v; if (next) setDraftMode(false); return next; })}
               >
                 <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enhanceMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
@@ -3209,10 +3209,10 @@ function App() {
                 className="flex cursor-pointer items-center gap-1.5"
                 title="When on, the AI's reasoning trace is shown above each reply as a collapsible block. Available because the active model supports reasoning."
               >
-                <Brain size={12} className={reasoningMode ? "text-sky-400" : "text-faint"} />
-                <span className={`text-xs ${reasoningMode ? "text-sky-400" : "text-faint"}`}>Reasoning</span>
+                <Brain size={12} className={reasoningMode ? "text-accent-muted" : "text-faint"} />
+                <span className={`text-xs ${reasoningMode ? "text-accent-muted" : "text-faint"}`}>Reasoning</span>
                 <div
-                  className={`relative h-4 w-7 rounded-full transition-colors ${reasoningMode ? "bg-sky-600" : "bg-border"}`}
+                  className={`relative h-4 w-7 rounded-full transition-colors ${reasoningMode ? "bg-accent-fill" : "bg-border"}`}
                   onClick={() => setReasoningMode(v => !v)}
                 >
                   <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${reasoningMode ? "translate-x-3.5" : "translate-x-0.5"}`} />
@@ -3224,7 +3224,7 @@ function App() {
                 Reasoning and when a writer would reach for each. */}
             <button
               onClick={() => setShowModeHelp(v => !v)}
-              className="flex items-center gap-1 text-mini text-text-muted transition-colors hover:text-indigo-300"
+              className="flex items-center gap-1 text-mini text-text-muted transition-colors hover:text-accent"
               title="What do these modes do?"
             >
               <HelpCircle size={12} />
@@ -3244,8 +3244,8 @@ function App() {
                 title="Start a new ask: the AI gets a clean slate (your attachments stay). Your transcript is kept."
                 className={`ml-auto flex items-center gap-1 rounded border px-2 py-0.5 text-micro transition-colors ${
                   selectedText.trim() !== "" && selectedText !== lastSentSelection
-                    ? "border-violet-500 bg-violet-950/50 text-violet-200"
-                    : "border-border text-faint hover:border-violet-700 hover:text-violet-300"
+                    ? "border-weave-fill bg-weave-soft/50 text-weave-strong"
+                    : "border-border text-faint hover:border-weave-fill hover:text-weave"
                 }`}
               >
                 <CornerDownRight size={11} />
@@ -3268,7 +3268,7 @@ function App() {
                 </p>
               </div>
               <div>
-                <span className="font-semibold text-emerald-300">
+                <span className="font-semibold text-success">
                   <PenLine size={11} className="mr-1 inline" />Draft mode
                 </span>
                 <p>
@@ -3281,7 +3281,7 @@ function App() {
                 </p>
               </div>
               <div>
-                <span className="font-semibold text-violet-300">
+                <span className="font-semibold text-weave">
                   <Sparkles size={11} className="mr-1 inline" />Enhance
                 </span>
                 <p>
@@ -3293,7 +3293,7 @@ function App() {
                 </p>
               </div>
               <div>
-                <span className="font-semibold text-sky-300">
+                <span className="font-semibold text-accent">
                   <Brain size={11} className="mr-1 inline" />Reasoning
                 </span>
                 <p>
@@ -3324,8 +3324,8 @@ function App() {
                   title={opt.hint}
                   className={`rounded border px-2 py-0.5 text-micro transition-colors ${
                     enhanceLevel === opt.value
-                      ? "border-violet-500 bg-violet-950/50 text-violet-200"
-                      : "border-border text-faint hover:border-violet-700 hover:text-violet-300"
+                      ? "border-weave-fill bg-weave-soft/50 text-weave-strong"
+                      : "border-border text-faint hover:border-weave-fill hover:text-weave"
                   }`}
                 >
                   {opt.label}
@@ -3367,12 +3367,12 @@ function App() {
               disabled={!currentChapter || chatLoading}
               rows={3}
               style={{ resize: "none", overflowY: "hidden" }}
-              className="text-entry flex-1 rounded border border-border bg-border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="text-entry flex-1 rounded border border-border bg-border px-2 py-2 text-text-primary placeholder-text-muted outline-none focus:border-secondary-fill disabled:cursor-not-allowed disabled:opacity-50"
             />
             <button
               onClick={() => sendEditorChat()}
               disabled={!currentChapter || !chatInput.trim() || chatLoading}
-              className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-center rounded border border-border p-1.5 text-text-muted transition-colors hover:border-accent-fill hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
               title="Send (Enter)"
             >
               <Send size={13} />
@@ -3478,7 +3478,7 @@ function App() {
       {/* Global Replace banner -- briefly shown after the open chapter is
           modified by a replace, so the writer knows why their text changed. */}
       {globalReplaceBanner && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded border border-indigo-700 bg-indigo-950/90 px-4 py-2 text-xs text-indigo-200 shadow-lg backdrop-blur-sm">
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded border border-accent-fill bg-accent-soft/90 px-4 py-2 text-xs text-accent-strong shadow-lg backdrop-blur-sm">
           {globalReplaceBanner}
         </div>
       )}
@@ -3553,21 +3553,21 @@ function App() {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => sceneOverwritePrompt.onAnswer("cancel")}
-                className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-red-500 hover:text-red-300"
+                className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-danger-fill hover:text-danger"
                 title="Stop the auto-split loop (keeps what's already been generated)"
               >
                 Cancel All
               </button>
               <button
                 onClick={() => sceneOverwritePrompt.onAnswer("no")}
-                className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+                className="rounded border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary"
                 title="Skip this scene; keep the existing summary"
               >
                 No (Skip)
               </button>
               <button
                 onClick={() => sceneOverwritePrompt.onAnswer("yes")}
-                className="rounded border border-indigo-700/50 bg-indigo-950/40 px-3 py-1 text-xs text-indigo-300 transition-colors hover:border-indigo-500 hover:text-indigo-200"
+                className="rounded border border-accent-fill/50 bg-accent-soft/40 px-3 py-1 text-xs text-accent transition-colors hover:border-accent-fill hover:text-accent-strong"
                 title="Regenerate and overwrite this scene's summary"
               >
                 Yes (Overwrite)
@@ -3577,9 +3577,9 @@ function App() {
         </div>
       )}
       {autoSplitProgress && !sceneOverwritePrompt && (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-40 rounded-lg border border-indigo-800 bg-bg-panel px-4 py-2 shadow-lg">
-          <p className="text-xs text-indigo-300">
-            <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
+        <div className="pointer-events-none fixed bottom-4 right-4 z-40 rounded-lg border border-accent-fill bg-bg-panel px-4 py-2 shadow-lg">
+          <p className="text-xs text-accent">
+            <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-accent-muted" />
             {autoSplitProgress}
           </p>
         </div>
@@ -3615,19 +3615,19 @@ function App() {
 // Used in both the chip picker and the attached chip display.
 
 const CHIP_TYPES: { id: string; label: string; color: string }[] = [
-  { id: "character",              label: "Character",              color: "text-indigo-300 border-indigo-700/50 bg-indigo-900/20"  },
-  { id: "relationship",           label: "Relationship",           color: "text-violet-300  border-violet-700/50  bg-violet-900/20"  },
-  { id: "location",               label: "Location",               color: "text-teal-300    border-teal-700/50    bg-teal-900/20"    },
-  { id: "lore",                   label: "Lore",                   color: "text-amber-300   border-amber-700/50   bg-amber-900/20"   },
-  { id: "chapter_summary",        label: "Chapter Summary",        color: "text-sky-300     border-sky-700/50     bg-sky-900/20"     },
-  { id: "scene_summary",          label: "Scene Summary",          color: "text-emerald-300 border-emerald-700/50 bg-emerald-900/20" },
+  { id: "character",              label: "Character",              color: "text-accent border-accent-fill/50 bg-accent-soft/20"  },
+  { id: "relationship",           label: "Relationship",           color: "text-weave  border-weave-fill/50  bg-weave-soft/20"  },
+  { id: "location",               label: "Location",               color: "text-secondary    border-secondary-fill/50    bg-secondary-soft/20"    },
+  { id: "lore",                   label: "Lore",                   color: "text-warn   border-warn-fill/50   bg-warn-soft/20"   },
+  { id: "chapter_summary",        label: "Chapter Summary",        color: "text-accent     border-accent-fill/50     bg-accent-soft/20"     },
+  { id: "scene_summary",          label: "Scene Summary",          color: "text-success border-success-fill/50 bg-success-soft/20" },
   // Notes -- outline and style guide documents from the notes/ folder
-  { id: "note",                   label: "Note",                   color: "text-rose-300    border-rose-700/50    bg-rose-900/20"    },
+  { id: "note",                   label: "Note",                   color: "text-danger    border-danger-fill/50    bg-danger-soft/20"    },
   // Series canonical profiles -- attached from the series source toggle in ChipPicker
-  { id: "series_character",       label: "Series Character",       color: "text-indigo-200 border-indigo-600/50 bg-indigo-800/20"  },
-  { id: "series_relationship",    label: "Series Relationship",    color: "text-violet-200  border-violet-600/50  bg-violet-800/20"  },
-  { id: "series_location",        label: "Series Location",        color: "text-teal-200    border-teal-600/50    bg-teal-800/20"    },
-  { id: "series_lore",            label: "Series Lore",            color: "text-amber-200   border-amber-600/50   bg-amber-800/20"   },
+  { id: "series_character",       label: "Series Character",       color: "text-accent-strong border-accent-fill/50 bg-accent-fill/20"  },
+  { id: "series_relationship",    label: "Series Relationship",    color: "text-weave-strong  border-weave-fill/50  bg-weave-fill/20"  },
+  { id: "series_location",        label: "Series Location",        color: "text-secondary-strong    border-secondary-fill/50    bg-secondary-fill/20"    },
+  { id: "series_lore",            label: "Series Lore",            color: "text-warn-strong   border-warn-fill/50   bg-warn-fill/20"   },
 ];
 
 // Known note files in the project's notes/ folder.
@@ -4079,9 +4079,9 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
   const pendingHasSummary = Boolean(pending && pending.profile.full_ai_summary && pending.profile.full_ai_summary.trim().length > 0);
 
   return (
-    <div className="mb-3 rounded border border-indigo-800/50 bg-bg-primary p-3">
+    <div className="mb-3 rounded border border-accent-fill/50 bg-bg-primary p-3">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold text-indigo-300">
+        <p className="text-xs font-semibold text-accent">
           {pending ? `Attach: ${pending.name}` : "Attach Context"}
         </p>
         <button onClick={onClose} className="text-xs text-faint hover:text-text-muted">✕</button>
@@ -4127,7 +4127,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                 key={`suggest-${s.filename}`}
                 onClick={() => pickProfile(s.filename, s.name, "project")}
                 disabled={adding === s.filename}
-                className="rounded border border-dashed border-indigo-700/40 px-2 py-0.5 text-xs text-indigo-400/60 transition-colors hover:border-indigo-500 hover:text-indigo-300"
+                className="rounded border border-dashed border-accent-fill/40 px-2 py-0.5 text-xs text-accent-muted/60 transition-colors hover:border-accent-fill hover:text-accent"
                 title={`Suggested: ${s.name} (click to attach)`}
               >
                 {adding === s.filename ? "..." : s.name}
@@ -4144,7 +4144,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
             onClick={() => setSource("project")}
             className={`rounded border px-2 py-0.5 text-xs transition-colors ${
               source === "project"
-                ? "border-indigo-600 bg-indigo-900/30 text-indigo-300"
+                ? "border-accent-fill bg-accent-soft/30 text-accent"
                 : "border-border text-faint hover:text-text-muted"
             }`}
           >
@@ -4154,7 +4154,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
             onClick={() => setSource("series")}
             className={`rounded border px-2 py-0.5 text-xs transition-colors ${
               source === "series"
-                ? "border-teal-600 bg-teal-900/30 text-teal-300"
+                ? "border-secondary-fill bg-secondary-soft/30 text-secondary"
                 : "border-border text-faint hover:text-text-muted"
             }`}
           >
@@ -4190,7 +4190,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
           onClick={() => setProfileType("notes")}
           className={`rounded border px-2 py-0.5 text-xs transition-colors ${
             profileType === "notes"
-              ? "text-rose-300 border-rose-700/50 bg-rose-900/20"
+              ? "text-danger border-danger-fill/50 bg-danger-soft/20"
               : "border-border text-faint hover:text-text-muted"
           }`}
         >
@@ -4214,14 +4214,14 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                 className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
                   alreadyAdded
                     ? "text-faint"
-                    : "text-text-primary hover:bg-indigo-600/20"
+                    : "text-text-primary hover:bg-accent-fill/20"
                 }`}
               >
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-rose-300 border-rose-700/50 bg-rose-900/20" />
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-danger border-danger-fill/50 bg-danger-soft/20" />
                 {adding === n.filename
                   ? "Adding..."
                   : alreadyAdded
-                  ? <><span className="opacity-50">{n.name}</span><span className="ml-auto text-emerald-600">✓</span></>
+                  ? <><span className="opacity-50">{n.name}</span><span className="ml-auto text-success-fill">✓</span></>
                   : n.name}
               </button>
             );
@@ -4249,14 +4249,14 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                   onClick={() => !alreadyAdded && pickChapterSummary(cs.chapter_filename, cs.chapter_title)}
                   disabled={alreadyAdded || adding === addingKey}
                   className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
-                    alreadyAdded ? "text-faint" : "text-text-primary hover:bg-indigo-600/20"
+                    alreadyAdded ? "text-faint" : "text-text-primary hover:bg-accent-fill/20"
                   }`}
                 >
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-sky-300 border-sky-700/50 bg-sky-900/20" />
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-accent border-accent-fill/50 bg-accent-soft/20" />
                   {adding === addingKey
                     ? "Adding..."
                     : alreadyAdded
-                    ? <><span className="opacity-50">{cs.chapter_title}</span><span className="ml-auto text-emerald-600">✓</span></>
+                    ? <><span className="opacity-50">{cs.chapter_title}</span><span className="ml-auto text-success-fill">✓</span></>
                     : cs.chapter_title}
                 </button>
               );
@@ -4281,14 +4281,14 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                 <div key={group.chapter_filename}>
                   <button
                     onClick={() => toggleSceneGroup(group.chapter_filename)}
-                    className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-text-muted hover:bg-emerald-600/10"
+                    className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-text-muted hover:bg-success-fill/10"
                   >
                     <span className="font-mono text-micro text-faint">{expanded ? "▾" : "▸"}</span>
                     <span className="truncate">{group.chapter_title}</span>
                     <span className="ml-auto text-micro text-faint">{group.scenes.length}</span>
                   </button>
                   {expanded && (
-                    <div className="ml-3 flex flex-col gap-0.5 border-l border-emerald-800/30 pl-2">
+                    <div className="ml-3 flex flex-col gap-0.5 border-l border-success-fill/30 pl-2">
                       {group.scenes.map(scene => {
                         const sceneLabel = scene.title || `Scene ${scene.index}`;
                         const chipName   = `${group.chapter_title} - ${sceneLabel}`;
@@ -4300,14 +4300,14 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                             onClick={() => !alreadyAdded && pickSceneSummary(group.chapter_filename, group.chapter_title, scene.index, sceneLabel)}
                             disabled={alreadyAdded || adding === addingKey}
                             className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-left text-xs transition-colors disabled:cursor-not-allowed ${
-                              alreadyAdded ? "text-faint" : "text-text-primary hover:bg-emerald-600/20"
+                              alreadyAdded ? "text-faint" : "text-text-primary hover:bg-success-fill/20"
                             }`}
                           >
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-emerald-300 border-emerald-700/50 bg-emerald-900/20" />
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-success border-success-fill/50 bg-success-soft/20" />
                             {adding === addingKey
                               ? "Adding..."
                               : alreadyAdded
-                              ? <><span className="opacity-50">{sceneLabel}</span><span className="ml-auto text-emerald-600">✓</span></>
+                              ? <><span className="opacity-50">{sceneLabel}</span><span className="ml-auto text-success-fill">✓</span></>
                               : sceneLabel}
                           </button>
                         );
@@ -4340,14 +4340,14 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                   className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
                     alreadyAdded
                       ? "text-faint"
-                      : "text-text-primary hover:bg-indigo-600/20"
+                      : "text-text-primary hover:bg-accent-fill/20"
                   }`}
                 >
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full border ${typeColor}`} />
                   {adding === p.filename
                     ? "Adding..."
                     : alreadyAdded
-                    ? <><span className="opacity-50">{p.name}</span><span className="ml-auto text-emerald-600">✓</span></>
+                    ? <><span className="opacity-50">{p.name}</span><span className="ml-auto text-success-fill">✓</span></>
                     : p.name}
                 </button>
               );
@@ -4421,12 +4421,12 @@ function ConfigureAttachPanel({
   const isHuge  = tokens > 3000;
 
   return (
-    <div className="mb-2 rounded border border-indigo-700/50 bg-indigo-950/30 p-2">
+    <div className="mb-2 rounded border border-accent-fill/50 bg-accent-soft/30 p-2">
       <div className="mb-1.5 flex items-center justify-between">
-        <p className="text-xs font-semibold text-indigo-300">What to include</p>
+        <p className="text-xs font-semibold text-accent">What to include</p>
         <button
           onClick={onShowHelp}
-          className="rounded-full border border-indigo-600 px-1.5 py-0 text-micro text-indigo-300 hover:bg-indigo-800/40"
+          className="rounded-full border border-accent-fill px-1.5 py-0 text-micro text-accent hover:bg-accent-fill/40"
           title="Detailed explanation of each option and combinations"
         >
           ?
@@ -4464,7 +4464,7 @@ function ConfigureAttachPanel({
 
       {/* Token estimate -- updates live as the writer flips checkboxes.
           Color escalates from neutral to amber to red as the chip grows. */}
-      <p className={`mb-2 text-mini ${isHuge ? "text-red-400" : isLarge ? "text-amber-400" : "text-faint"}`}>
+      <p className={`mb-2 text-mini ${isHuge ? "text-danger-muted" : isLarge ? "text-warn-muted" : "text-faint"}`}>
         Estimated cost: ~{tokens.toLocaleString()} tokens
         {isHuge ? " (very heavy -- consider trimming)" : isLarge ? " (heavy)" : ""}
       </p>
@@ -4472,14 +4472,14 @@ function ConfigureAttachPanel({
       {/* Canon / Reference stance -- how the AI treats everything you attach
           (global, applies to all attachments). Lives here, just under the token
           estimate, with a tutorial helptip. */}
-      <div className="mb-2 border-t border-indigo-800/40 pt-2">
+      <div className="mb-2 border-t border-accent-fill/40 pt-2">
         <div className="flex items-center justify-between gap-2">
           <label className="flex cursor-pointer items-center gap-1.5" title="How the AI treats your attachments">
-            <span className={`text-xs font-medium ${treatAsCanon ? "text-indigo-300" : "text-amber-400"}`}>
+            <span className={`text-xs font-medium ${treatAsCanon ? "text-accent" : "text-warn-muted"}`}>
               {treatAsCanon ? "Canon" : "Reference"}
             </span>
             <div
-              className={`relative h-4 w-7 rounded-full transition-colors ${treatAsCanon ? "bg-indigo-600" : "bg-amber-600"}`}
+              className={`relative h-4 w-7 rounded-full transition-colors ${treatAsCanon ? "bg-accent-fill" : "bg-warn-fill"}`}
               onClick={() => onTreatAsCanonChange(!treatAsCanon)}
             >
               <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${treatAsCanon ? "translate-x-3.5" : "translate-x-0.5"}`} />
@@ -4487,7 +4487,7 @@ function ConfigureAttachPanel({
           </label>
           <button
             onClick={() => setShowCanonHelp(v => !v)}
-            className="flex items-center gap-1 text-mini text-text-muted transition-colors hover:text-indigo-300"
+            className="flex items-center gap-1 text-mini text-text-muted transition-colors hover:text-accent"
             title="What does this do?"
           >
             <HelpCircle size={12} />
@@ -4500,15 +4500,15 @@ function ConfigureAttachPanel({
             : "Attachments are reference only; your typed instructions take precedence over them."}
         </p>
         {showCanonHelp && (
-          <div className="mt-2 space-y-2 border-t border-indigo-800/40 pt-2 text-mini leading-relaxed text-text-muted">
+          <div className="mt-2 space-y-2 border-t border-accent-fill/40 pt-2 text-mini leading-relaxed text-text-muted">
             <p>
-              <span className="font-semibold text-indigo-300">Toggle (On) Canon:</span> the AI treats attached
+              <span className="font-semibold text-accent">Toggle (On) Canon:</span> the AI treats attached
               profiles, outline, and locations as established truth and keeps your writing consistent with
               them. Use when drafting a scene where characters should stay true to their established traits,
               or when you want the profile enforced.
             </p>
             <p>
-              <span className="font-semibold text-amber-400">Toggle (Off) Reference:</span> the AI uses attachments
+              <span className="font-semibold text-warn-muted">Toggle (Off) Reference:</span> the AI uses attachments
               as helpful reference but follows <em>your</em> instructions first, drawing on the details that
               fit this moment. Use when you're deliberately showing a different side of a character, writing a
               turning point or exception, or your specific direction matters more than strict consistency right now.
@@ -4531,7 +4531,7 @@ function ConfigureAttachPanel({
         <button
           onClick={onAttach}
           disabled={!anySelected}
-          className="rounded border border-indigo-600 bg-indigo-700/40 px-2 py-0.5 text-xs text-indigo-100 hover:bg-indigo-700/60 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded border border-accent-fill bg-accent-fill/40 px-2 py-0.5 text-xs text-accent-strong hover:bg-accent-fill/60 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Attach
         </button>
@@ -4554,13 +4554,13 @@ interface CheckboxRowProps {
 
 function CheckboxRow({ label, checked, disabled = false, disabledHint, onToggle }: CheckboxRowProps) {
   return (
-    <label className={`flex items-center gap-1.5 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-indigo-200"}`}>
+    <label className={`flex items-center gap-1.5 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-accent-strong"}`}>
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={onToggle}
-        className="h-3 w-3 accent-indigo-500"
+        className="h-3 w-3 accent-accent-fill"
       />
       <span>{label}</span>
       {disabled && disabledHint && (
@@ -4590,11 +4590,11 @@ function ChipIncludeHelp({ onClose }: ChipIncludeHelpProps) {
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] max-w-2xl overflow-y-auto rounded border border-indigo-700/50 bg-bg-panel p-5 text-sm text-text-primary shadow-xl"
+        className="max-h-[85vh] max-w-2xl overflow-y-auto rounded border border-accent-fill/50 bg-bg-panel p-5 text-sm text-text-primary shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-indigo-300">What each option does</h2>
+          <h2 className="text-base font-semibold text-accent">What each option does</h2>
           <button onClick={onClose} className="text-faint hover:text-text-muted">✕</button>
         </div>
 
@@ -4633,7 +4633,7 @@ function ChipIncludeHelp({ onClose }: ChipIncludeHelpProps) {
           <p className="mt-1 text-xs text-faint">Typical cost: highly variable — can be the largest section if the profile is detailed.</p>
         </Section>
 
-        <h3 className="mb-2 mt-4 text-sm font-semibold text-indigo-300">Combinations to recognize</h3>
+        <h3 className="mb-2 mt-4 text-sm font-semibold text-accent">Combinations to recognize</h3>
 
         <Section title="Summary + Traits (the default)">
           <p>The everyday choice for character work. The AI sees who the character is at a glance and the operational trait layer it needs to write or analyze them in scene. Light enough to attach 3 or 4 characters at once for a multi-character scene check.</p>
@@ -4655,7 +4655,7 @@ function ChipIncludeHelp({ onClose }: ChipIncludeHelpProps) {
           <p>For non-character profiles (relationships, locations, lore) where there are no trait sections. This combination is what those profiles always look like effectively — the picker disables Traits when no trait sections exist, so you’ll naturally end up here.</p>
         </Section>
 
-        <h3 className="mb-2 mt-4 text-sm font-semibold text-indigo-300">A note about Hidden traits</h3>
+        <h3 className="mb-2 mt-4 text-sm font-semibold text-accent">A note about Hidden traits</h3>
         <p className="mb-3 text-xs">
           When you include Traits, traits marked [hidden] go to the AI <em>as influence material</em> — the AI is instructed never to name, describe, or quote them directly. They shape body language, dialogue choices, and what the character avoids; they don’t become content on the page. If you want the AI to ignore hidden traits entirely, mark them with a different importance level instead.
         </p>
@@ -4663,7 +4663,7 @@ function ChipIncludeHelp({ onClose }: ChipIncludeHelpProps) {
         <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="rounded border border-indigo-600 bg-indigo-700/40 px-3 py-1 text-xs text-indigo-100 hover:bg-indigo-700/60"
+            className="rounded border border-accent-fill bg-accent-fill/40 px-3 py-1 text-xs text-accent-strong hover:bg-accent-fill/60"
           >
             Close
           </button>
@@ -4678,7 +4678,7 @@ function ChipIncludeHelp({ onClose }: ChipIncludeHelpProps) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-3 text-xs">
-      <h3 className="mb-1 text-sm font-semibold text-indigo-200">{title}</h3>
+      <h3 className="mb-1 text-sm font-semibold text-accent-strong">{title}</h3>
       <div className="text-text-primary">{children}</div>
     </div>
   );

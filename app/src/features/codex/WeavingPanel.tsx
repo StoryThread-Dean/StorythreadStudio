@@ -645,7 +645,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
                     dependency without locking anything: dressing the loom is
                     never finished, so a gate would never open. */}
                 {option.step && (
-                  <span className="ml-auto shrink-0 text-micro uppercase tracking-wide text-violet-300/80">
+                  <span className="ml-auto shrink-0 text-micro uppercase tracking-wide text-weave/80">
                     {option.step}
                   </span>
                 )}
@@ -751,14 +751,14 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           </p>
         )}
         {!scanning && open > 60 && (
-          <p className="mt-1 text-mini text-amber-200/90">
+          <p className="mt-1 text-mini text-warn-strong/90">
             That is many sessions of work. Your answers save as you go, and
             you can stop anywhere and come back.
           </p>
         )}
 
         {result?.unreadable?.length ? (
-          <p className="mt-2 text-mini text-amber-200/90">
+          <p className="mt-2 text-mini text-warn-strong/90">
             {result.unreadable.length} chapter
             {result.unreadable.length === 1 ? "" : "s"} could not be read and
             {result.unreadable.length === 1 ? " was" : " were"} left out:{" "}
@@ -766,7 +766,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           </p>
         ) : null}
 
-        {error && <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-mini text-danger">{error}</p>}
 
         {/* CARRY ON, OR START FRESH -- and the difference stated, because it
             is not obvious. Anything applied or permanently declined lives in
@@ -780,13 +780,13 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             <button
               onClick={() => void begin(true)}
               disabled={busy || scanning || open === 0}
-              className="inline-flex flex-col items-start rounded bg-violet-600 px-3 py-1.5 text-left text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+              className="inline-flex flex-col items-start rounded bg-weave-fill px-3 py-1.5 text-left text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
             >
               <span className="inline-flex items-center gap-1.5">
                 {busy ? <Loader size={12} className="animate-spin" /> : null}
                 Carry on where you left off
               </span>
-              <span className="text-micro font-normal text-violet-100/80">
+              <span className="text-micro font-normal text-weave-strong/80">
                 keeps what you put off last time
               </span>
             </button>
@@ -797,7 +797,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             className={`inline-flex flex-col items-start rounded px-3 py-1.5 text-left text-xs font-semibold disabled:opacity-40 ${
               earlier.length > 0
                 ? "border border-border-strong bg-bg-surface text-text-primary hover:border-accent hover:bg-bg-raised"
-                : "bg-violet-600 text-white hover:bg-violet-500"
+                : "bg-weave-fill text-white hover:bg-weave-fill"
             }`}
           >
             <span className="inline-flex items-center gap-1.5">
@@ -1198,7 +1198,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           stop's quote is -- a decision made without seeing what prompted it is
           not a decision, and "5 problems" without the five is a number. */}
       {tangleMembers(stop).length > 0 && (
-        <ol className="mt-2 space-y-0.5 rounded border-l-2 border-rose-900/70 bg-bg-surface px-2 py-1.5"
+        <ol className="mt-2 space-y-0.5 rounded border-l-2 border-danger-soft/70 bg-bg-surface px-2 py-1.5"
             data-testid="tangle-members">
           {tangleMembers(stop).map((m, i) => (
             <li key={m.key ?? i} className="text-mini text-text-muted">
@@ -1209,7 +1209,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
       )}
 
       <details className="mt-2">
-        <summary className="cursor-pointer text-mini text-violet-300 hover:text-violet-200">
+        <summary className="cursor-pointer text-mini text-weave hover:text-weave-strong">
           Why am I seeing this?
         </summary>
         <p className="mt-1 text-mini text-text-muted">{stop.why}</p>
@@ -1240,7 +1240,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           </p>
           <button
             onClick={() => setGuiding(true)}
-            className="text-mini text-violet-300 underline-offset-2 hover:underline"
+            className="text-mini text-weave underline-offset-2 hover:underline"
           >
             Show me how this works
           </button>
@@ -1268,9 +1268,9 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         </div>
       )}
 
-      {error && <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-mini text-danger">{error}</p>}
       {notice && (
-        <p role="status" className="mt-2 text-mini text-amber-200/90">
+        <p role="status" className="mt-2 text-mini text-warn-strong/90">
           {notice}
         </p>
       )}
@@ -1278,7 +1278,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           "carry on" should see that it took -- and a resumed walk is shorter
           than a fresh one, which would otherwise look like something missing. */}
       {resumed && at === 0 && (
-        <p className="mt-2 text-mini text-violet-300" data-testid="resumed-note">
+        <p className="mt-2 text-mini text-weave" data-testid="resumed-note">
           Carrying on from your last sitting -- anything you put off then is
           still put off.
         </p>
@@ -1342,7 +1342,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             setFixingWord(true);
           })()}
           data-testid="word-fix-offer"
-          className="mt-2 w-full rounded border border-violet-800 bg-violet-950/25 px-2.5 py-1.5 text-left text-mini text-violet-100 hover:border-violet-600"
+          className="mt-2 w-full rounded border border-weave-fill bg-weave-soft/25 px-2.5 py-1.5 text-left text-mini text-weave-strong hover:border-weave-fill"
         >
           <span className="font-medium">
             Not right? Fix the word, or say who it belongs to
@@ -1364,7 +1364,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
         <button
           onClick={() => setSweeping(stop.kind)}
           data-testid="sweep-offer"
-          className="mt-2 w-full rounded border border-violet-800 bg-violet-950/25 px-2.5 py-1.5 text-left text-mini text-violet-100 hover:border-violet-600"
+          className="mt-2 w-full rounded border border-weave-fill bg-weave-soft/25 px-2.5 py-1.5 text-left text-mini text-weave-strong hover:border-weave-fill"
         >
           <span className="font-medium">
             Work through all {sweepable[stop.kind].length} at once
@@ -1379,8 +1379,8 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
 
       {settledAs ? (
         <div data-testid="already-answered"
-             className="mt-3 rounded border border-emerald-800 bg-emerald-950/20 p-2.5">
-          <p className="flex items-start gap-1.5 text-mini text-emerald-200">
+             className="mt-3 rounded border border-success-fill bg-success-soft/20 p-2.5">
+          <p className="flex items-start gap-1.5 text-mini text-success-strong">
             <Check size={12} className="mt-0.5 shrink-0" />
             <span>
               You answered this one this sitting:{" "}
@@ -1454,7 +1454,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             return false;
           })}
           disabled={busy}
-          className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+          className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
         >
           {busy ? <Loader size={11} className="animate-spin" /> : <Check size={11} />}
           {stop.kind === "pinned"
@@ -1526,7 +1526,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
                 }}
                 disabled={busy}
                 data-testid="mute-this-one"
-                className="inline-flex flex-col items-start rounded border border-violet-700 bg-violet-500/10 px-2.5 py-1 text-left text-xs text-text-primary hover:border-violet-500 disabled:opacity-40"
+                className="inline-flex flex-col items-start rounded border border-weave-fill bg-weave-fill/10 px-2.5 py-1 text-left text-xs text-text-primary hover:border-weave-fill disabled:opacity-40"
               >
                 <span>About {muteTargetName(stop)} only</span>
                 <span className="text-micro font-normal text-faint">
@@ -1632,10 +1632,10 @@ function Shell({ children, onClose, guard }: {
         role="dialog"
         aria-label="Weaving"
         data-testid="weaving-panel"
-        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel p-4 shadow-2xl"
+        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel p-4 shadow-2xl"
       >
         <header className="mb-3 flex items-center gap-2">
-          <Spool size={15} className="text-violet-300" />
+          <Spool size={15} className="text-weave" />
           <h2 className="flex-1 text-sm font-semibold text-text-primary">Weaving</h2>
           {/* The X goes through the same guard as the backdrop and Escape. A
               deliberate press still confirms when there is work to lose, which

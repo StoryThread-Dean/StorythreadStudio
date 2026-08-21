@@ -304,7 +304,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
 
   if (error) {
     return (
-      <div className="rounded border border-rose-800 bg-rose-950/40 px-4 py-3 text-xs text-rose-200">
+      <div className="rounded border border-danger-fill bg-danger-soft/40 px-4 py-3 text-xs text-danger-strong">
         <AlertTriangle size={13} className="mr-1.5 inline" />
         {error}
       </div>
@@ -323,13 +323,13 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
         <div className="mb-1.5 flex flex-wrap items-center gap-3">
           <span className="text-xs font-medium text-text-primary">
             Showing your world as of{" "}
-            <span className="text-violet-300">{label}</span>
+            <span className="text-weave">{label}</span>
           </span>
           <button
             type="button"
             onClick={() => setHideSpoilers(v => !v)}
             aria-pressed={hideSpoilers}
-            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-mini text-text-muted transition-colors hover:border-violet-600 hover:text-text-primary"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-mini text-text-muted transition-colors hover:border-weave-fill hover:text-text-primary"
           >
             {hideSpoilers ? <EyeOff size={11} /> : <Eye size={11} />}
             {hideSpoilers ? "Hiding what the reader does not know yet" : "Showing everything"}
@@ -343,7 +343,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
               type="button"
               onClick={() => setConfirmSpread(true)}
               data-testid="map-spread"
-              className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-mini text-text-muted transition-colors hover:border-violet-600 hover:text-text-primary"
+              className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-mini text-text-muted transition-colors hover:border-weave-fill hover:text-text-primary"
             >
               <Shuffle size={11} /> Spread the dots out
             </button>
@@ -357,12 +357,12 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
             as every other destructive confirm in this app: the cost stated in
             the writer's terms, before the button that pays it. */}
         {confirmSpread && (
-          <div className="mb-2 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2"
+          <div className="mb-2 rounded border border-warn-fill/60 bg-warn-soft/20 px-3 py-2"
                data-testid="map-spread-confirm">
-            <p className="text-xs font-semibold text-amber-100">
+            <p className="text-xs font-semibold text-warn-strong">
               Move every dot?
             </p>
-            <p className="mt-1 max-w-xl text-mini text-amber-200/80">
+            <p className="mt-1 max-w-xl text-mini text-warn-strong/80">
               This pushes the dots apart so they stop overlapping, keeping them
               all on screen. It replaces wherever you have dragged things to,
               and there is no way back -- the positions are the only record of
@@ -381,7 +381,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                                     { width: WIDTH, height: HEIGHT }));
                   setConfirmSpread(false);
                 }}
-                className="rounded bg-amber-600 px-2.5 py-1 text-mini font-semibold text-white hover:bg-amber-500"
+                className="rounded bg-warn-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-warn-fill"
               >
                 Spread them out
               </button>

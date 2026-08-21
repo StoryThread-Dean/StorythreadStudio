@@ -73,7 +73,7 @@ export function ProviderPanel({
                 value={keyInput}
                 onChange={e => onKeyInputChange(e.target.value)}
                 placeholder={meta.keyPlaceholder}
-                className="w-full rounded border border-border bg-bg-surface px-3 py-2 pr-8 text-sm text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg-surface px-3 py-2 pr-8 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
               />
               <button
                 onClick={onToggleShowKey}
@@ -87,7 +87,7 @@ export function ProviderPanel({
             <button
               onClick={onTest}
               disabled={testing || saving}
-              className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary disabled:opacity-50"
               title={`Test if the ${meta.label} API key works`}
             >
               {testing ? <Loader size={12} className="animate-spin" /> : null}
@@ -99,7 +99,7 @@ export function ProviderPanel({
 
       {/* Connection test outcome */}
       {testResult && (
-        <div className={`mt-2 flex items-center gap-2 text-xs ${testResult.ok ? "text-emerald-400" : "text-red-400"}`}>
+        <div className={`mt-2 flex items-center gap-2 text-xs ${testResult.ok ? "text-success-muted" : "text-danger-muted"}`}>
           {testResult.ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
           {testResult.message}
         </div>
@@ -114,8 +114,8 @@ export function ProviderPanel({
           the writer saves explicitly and the model list reloads from the
           newly active provider. */}
       {!isActive && (
-        <div className="mt-3 rounded border border-indigo-700/50 bg-indigo-950/30 px-3 py-2">
-          <p className="text-xs text-indigo-300">
+        <div className="mt-3 rounded border border-accent-fill/50 bg-accent-soft/30 px-3 py-2">
+          <p className="text-xs text-accent">
             Save to switch to {meta.label} and load its models.
           </p>
         </div>

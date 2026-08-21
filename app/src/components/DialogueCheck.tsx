@@ -275,12 +275,12 @@ export function DialogueCheck({
           )}
 
           {engine === "missing" ? (
-            <div className="rounded border border-amber-800 bg-amber-950/30 px-3 py-2.5">
-              <p className="flex items-start gap-1.5 text-xs font-medium text-amber-200">
+            <div className="rounded border border-warn-fill bg-warn-soft/30 px-3 py-2.5">
+              <p className="flex items-start gap-1.5 text-xs font-medium text-warn-strong">
                 <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                 The free voice engine is not installed yet.
               </p>
-              <p className="mt-1 text-mini leading-relaxed text-amber-200/80">
+              <p className="mt-1 text-mini leading-relaxed text-warn-strong/80">
                 Dialogue Check reads entirely on your computer -- no account,
                 no key, nothing sent anywhere. It needs a one-time download of
                 about 372 MB, shared with the Audiobook Converter.
@@ -330,7 +330,7 @@ export function DialogueCheck({
                 {chars.toLocaleString()} characters selected -- around{" "}
                 {estimateWait(chars)} to prepare.
                 {long && (
-                  <span className="text-amber-300">
+                  <span className="text-warn">
                     {" "}Long passages are fine; they just take a while. A
                     single scene is usually enough to hear the problem.
                   </span>
@@ -366,7 +366,7 @@ export function DialogueCheck({
           )}
 
           {error && (
-            <p className="rounded border border-rose-800 bg-rose-950/40 px-3 py-2 text-mini text-rose-300">
+            <p className="rounded border border-danger-fill bg-danger-soft/40 px-3 py-2 text-mini text-danger">
               {error}
             </p>
           )}

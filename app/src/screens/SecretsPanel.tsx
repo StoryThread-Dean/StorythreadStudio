@@ -63,17 +63,17 @@ export function SecretsPanel({ profile, sections, onSetWeight }: SecretsPanelPro
   return (
     <div
       data-testid="secrets-panel"
-      className="mb-6 rounded border border-violet-900/60 bg-violet-950/10 p-3"
+      className="mb-6 rounded border border-weave-soft/60 bg-weave-soft/10 p-3"
     >
       <div className="mb-2 flex items-center gap-2">
-        <EyeOff size={13} className="text-violet-300" />
-        <p className="flex-1 text-xs font-medium text-violet-200">
+        <EyeOff size={13} className="text-weave" />
+        <p className="flex-1 text-xs font-medium text-weave-strong">
           {secrets.length} thing{secrets.length === 1 ? "" : "s"} AI will never
           say out loud
         </p>
         <button
           onClick={() => setGuideOpen(true)}
-          className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-800 px-1.5 py-0.5 text-micro text-violet-200 hover:border-violet-500"
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-weave-fill px-1.5 py-0.5 text-micro text-weave-strong hover:border-weave-fill"
         >
           <BookOpen size={10} /> Show me how this works
         </button>
@@ -106,7 +106,7 @@ export function SecretsPanel({ profile, sections, onSetWeight }: SecretsPanelPro
               onChange={e => onSetWeight(sectionKey, block.id,
                                          e.target.value as ImportanceLevel)}
               aria-label={`Weight for ${block.trait || "this secret"}`}
-              className="shrink-0 rounded border border-border bg-bg-surface px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-violet-500"
+              className="shrink-0 rounded border border-border bg-bg-surface px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-weave-fill"
             >
               {(Object.keys(IMPORTANCE_LABELS) as ImportanceLevel[]).map(level => (
                 <option key={level} value={level}>

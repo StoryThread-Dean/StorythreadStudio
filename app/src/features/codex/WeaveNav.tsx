@@ -147,7 +147,7 @@ export function WeaveNav({
 
   if (error) {
     return (
-      <p className="px-3 py-2 text-mini text-rose-300">{error}</p>
+      <p className="px-3 py-2 text-mini text-danger">{error}</p>
     );
   }
 
@@ -155,10 +155,10 @@ export function WeaveNav({
     <div data-testid="weave-nav">
       <button
         onClick={onOpenWeave}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold text-text-primary hover:text-violet-300"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold text-text-primary hover:text-weave"
         title={CONCEPTS.weave.short}
       >
-        <Network size={13} className="text-violet-300" />
+        <Network size={13} className="text-weave" />
         The Weave
       </button>
 
@@ -174,7 +174,7 @@ export function WeaveNav({
         title={onOpenWeaving
           ? CONCEPTS.weaving.short
           : "Weaving is not available here."}
-        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-mini text-text-muted hover:text-violet-300 disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
+        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-mini text-text-muted hover:text-weave disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
       >
         <Spool size={12} />
         Weaving...
@@ -190,7 +190,7 @@ export function WeaveNav({
         title={onOpenExtractor
           ? "Read your manuscript and propose what each entry should say. Run Weaving first."
           : "The Profile Extractor is not available here."}
-        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-mini text-text-muted hover:text-violet-300 disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
+        className="flex w-full items-center gap-2 py-1 pl-8 pr-3 text-left text-mini text-text-muted hover:text-weave disabled:cursor-default disabled:text-faint disabled:hover:text-faint"
       >
         <Sparkles size={12} />
         Profile Extractor...
@@ -215,7 +215,7 @@ export function WeaveNav({
                     not yet contain what they are after. */}
                 <button
                   onClick={() => { setAdding(group.id); setAddError(null); }}
-                  className="flex w-full items-center gap-1.5 py-1 pl-8 pr-3 text-left text-mini text-violet-300 hover:text-violet-200"
+                  className="flex w-full items-center gap-1.5 py-1 pl-8 pr-3 text-left text-mini text-weave hover:text-weave-strong"
                 >
                   <Plus size={11} /> Add New
                 </button>

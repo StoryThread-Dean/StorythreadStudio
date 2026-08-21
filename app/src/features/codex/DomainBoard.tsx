@@ -73,7 +73,7 @@ export function DomainBoard({ domains, chosen, onChoose,
       </p>
       <button
         onClick={onShowGuide}
-        className="mt-1 text-mini text-violet-300 underline-offset-2 hover:underline"
+        className="mt-1 text-mini text-weave underline-offset-2 hover:underline"
       >
         Show me how this works
       </button>
@@ -90,7 +90,7 @@ export function DomainBoard({ domains, chosen, onChoose,
               onClick={() => onChoose(active ? null : domain.id)}
               className={`flex flex-col items-start rounded border px-2 py-1.5 text-left ${
                 active
-                  ? "border-violet-500 bg-violet-500/10"
+                  ? "border-weave-fill bg-weave-fill/10"
                   : "border-border hover:border-text-muted"
               }`}
             >
@@ -99,7 +99,7 @@ export function DomainBoard({ domains, chosen, onChoose,
                   {domain.label}
                 </span>
                 <span className="ml-auto shrink-0 text-micro text-faint">
-                  {done ? <Check size={11} className="text-emerald-400" />
+                  {done ? <Check size={11} className="text-success-muted" />
                         : domain.open}
                 </span>
               </span>
@@ -109,7 +109,7 @@ export function DomainBoard({ domains, chosen, onChoose,
               <span className="mt-1 h-0.5 w-full rounded bg-border">
                 <span
                   className={`block h-full rounded ${
-                    done ? "bg-emerald-500" : "bg-violet-500"
+                    done ? "bg-success-fill" : "bg-weave-fill"
                   }`}
                   style={{
                     width: `${Math.round(
@@ -124,13 +124,13 @@ export function DomainBoard({ domains, chosen, onChoose,
       </div>
 
       {finished > 0 && (
-        <p className="mt-1.5 text-mini text-emerald-300/90">
+        <p className="mt-1.5 text-mini text-success/90">
           {finished} {finished === 1 ? "part is" : "parts are"} fully decided.
         </p>
       )}
 
       {chosen && (
-        <p className="mt-1.5 text-mini text-violet-300" data-testid="board-chosen">
+        <p className="mt-1.5 text-mini text-weave" data-testid="board-chosen">
           This sitting will ask about{" "}
           {domains.find(d => d.id === chosen)?.label ?? "that part"} only.
           Choose it again to go back to all of it.

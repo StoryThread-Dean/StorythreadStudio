@@ -65,7 +65,7 @@ export function RowMenu({ items, ariaLabel }: { items: RowMenuItem[]; ariaLabel:
       it.disabled
         ? "cursor-not-allowed text-faint"
         : it.danger
-          ? "text-rose-300 hover:bg-rose-950/40"
+          ? "text-danger hover:bg-danger-soft/40"
           : "text-text-primary hover:bg-bg-raised"
     }`;
 

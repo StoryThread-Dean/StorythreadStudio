@@ -197,7 +197,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
       </p>
 
       {settled.size > 0 && (
-        <p className="mt-1 text-mini text-emerald-300" data-testid="sweep-done">
+        <p className="mt-1 text-mini text-success" data-testid="sweep-done">
           {settled.size} settled. {open.length} left.
         </p>
       )}
@@ -214,7 +214,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
                 checked={ticked.has(row.stop.key)}
                 onChange={() => toggle(row.stop.key)}
                 aria-label={row.what}
-                className="mt-0.5 shrink-0 accent-violet-500"
+                className="mt-0.5 shrink-0 accent-weave-fill"
               />
               <KindIcon size={12}
                         className={`mt-0.5 shrink-0 ${TONE_CLASSES[type.tone].text}`} />
@@ -230,7 +230,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
                   "does that look right", and it cannot be made without seeing
                   the answer being offered. */}
               {placing && (
-                <span className="shrink-0 text-micro text-blue-200/90"
+                <span className="shrink-0 text-micro text-accent-strong/90"
                       data-testid="sweep-place-chapters">
                   {anchorsFor(row).map(anchor =>
                     chapters.find(c => c.anchor === anchor)?.title ?? anchor)
@@ -242,7 +242,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
                   value={row.at}
                   onChange={e => setAnchor(row.stop.key, e.target.value)}
                   aria-label={`Chapter for ${row.what}`}
-                  className="shrink-0 rounded border border-border bg-bg-surface px-1 py-0.5 text-mini text-text-primary outline-none focus:border-indigo-500"
+                  className="shrink-0 rounded border border-border bg-bg-surface px-1 py-0.5 text-mini text-text-primary outline-none focus:border-accent-fill"
                 >
                   <option value="">chapter ...</option>
                   {chapters.map(c => (
@@ -256,11 +256,11 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
       </ul>
 
       {error && (
-        <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>
+        <p role="alert" className="mt-2 text-mini text-danger">{error}</p>
       )}
 
       {missingAnchor > 0 && (
-        <p className="mt-1.5 text-mini text-amber-200" data-testid="sweep-no-chapter">
+        <p className="mt-1.5 text-mini text-warn-strong" data-testid="sweep-no-chapter">
           {missingAnchor} ticked {missingAnchor === 1 ? "row has" : "rows have"} no
           chapter chosen, so {missingAnchor === 1 ? "it" : "they"} cannot be
           placed yet.
@@ -273,7 +273,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
             onClick={() => void run(r => onPlace(r.stop, r.at), placeable)}
             disabled={busy || placeable.length === 0}
             data-testid="sweep-place"
-            className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
           >
             {busy ? <Loader size={11} className="animate-spin" />
                   : <Check size={11} />}
@@ -286,7 +286,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
               r => onRecordPlace(r.stop, anchorsFor(r)), chosen)}
             disabled={busy || chosen.length === 0}
             data-testid="sweep-record-place"
-            className="inline-flex items-center gap-1 rounded bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
           >
             {busy ? <Loader size={11} className="animate-spin" />
                   : <Check size={11} />}
@@ -323,7 +323,7 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
         <button
           onClick={() => onDone([...settled])}
           data-testid="sweep-finished"
-          className="mt-2 rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+          className="mt-2 rounded border border-success-fill bg-success-soft/30 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-success-soft/50"
         >
           That is all of them. Carry on.
         </button>

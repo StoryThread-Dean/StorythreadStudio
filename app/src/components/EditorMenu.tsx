@@ -131,8 +131,8 @@ export function EditorMenu({
         onClick={() => setOpen(o => !o)}
         className={`flex items-center gap-1 rounded border px-2 py-0.5 text-xs transition-colors ${
           open
-            ? "border-indigo-500 text-text-primary"
-            : "border-border text-text-muted hover:border-indigo-500 hover:text-text-primary"
+            ? "border-accent-fill text-text-primary"
+            : "border-border text-text-muted hover:border-accent-fill hover:text-text-primary"
         }`}
         title="Summaries, Reader Mode, and Export live here"
         aria-haspopup="menu"

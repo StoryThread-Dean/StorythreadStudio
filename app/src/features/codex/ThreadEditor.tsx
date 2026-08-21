@@ -298,17 +298,17 @@ export function ThreadEditor({
                 placeholder={`New ${lex.term.toLowerCase()}`}
                 aria-label="Name"
                 autoFocus
-                className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
               />
               <button onClick={() => void create()} disabled={!newName.trim() || busy}
-                      className="rounded bg-violet-600 px-2 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                      className="rounded bg-weave-fill px-2 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
                 Add
               </button>
             </div>
           ) : (
             <button
               onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 text-mini text-violet-300 hover:text-violet-200"
+              className="inline-flex items-center gap-1.5 text-mini text-weave hover:text-weave-strong"
             >
               <Plus size={11} /> Add {lex.term.toLowerCase()}
             </button>
@@ -320,7 +320,7 @@ export function ThreadEditor({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {error && (
           <p role="alert"
-             className="m-3 flex items-start gap-1.5 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-xs text-rose-200">
+             className="m-3 flex items-start gap-1.5 rounded border border-danger-fill bg-danger-soft/40 px-2 py-1.5 text-xs text-danger-strong">
             <AlertTriangle size={12} className="mt-0.5 shrink-0" />
             {error}
           </p>
@@ -340,10 +340,10 @@ export function ThreadEditor({
               </h3>
               {dirty && (
                 <span data-testid="unsaved"
-                      className="text-mini text-amber-300">Unsaved changes</span>
+                      className="text-mini text-warn">Unsaved changes</span>
               )}
               {saved && !dirty && (
-                <span className="inline-flex items-center gap-1 text-mini text-emerald-300">
+                <span className="inline-flex items-center gap-1 text-mini text-success">
                   <Check size={11} /> Saved
                 </span>
               )}
@@ -356,7 +356,7 @@ export function ThreadEditor({
               <button
                 onClick={() => void save()}
                 disabled={!dirty || busy}
-                className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
               >
                 {busy ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
                 Save

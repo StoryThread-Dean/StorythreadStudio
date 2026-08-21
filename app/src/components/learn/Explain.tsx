@@ -92,7 +92,7 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
         aria-expanded={open}
         aria-label={compact ? (label ?? "What's this?") : undefined}
         title={compact ? (label ?? "What's this?") : undefined}
-        className="inline-flex shrink-0 items-center gap-1 rounded text-micro text-text-muted transition-colors hover:text-blue-300"
+        className="inline-flex shrink-0 items-center gap-1 rounded text-micro text-text-muted transition-colors hover:text-accent"
       >
         <HelpCircle size={compact ? 13 : 11} />
         {!compact && (label ?? "What's this?")}
@@ -114,7 +114,7 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
           <p><span className="text-faint">Why: </span>{info.why}</p>
 
           <p className="flex items-start gap-1">
-            <CircleCheck size={10} className="mt-0.5 shrink-0 text-emerald-400/80" />
+            <CircleCheck size={10} className="mt-0.5 shrink-0 text-success-muted/80" />
             <span>{NEED_WORDING[info.needed]}</span>
           </p>
 
@@ -124,7 +124,7 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
               expect a meter running. */}
           {info.cost && (
             <p className="flex items-start gap-1">
-              <Coins size={10} className="mt-0.5 shrink-0 text-amber-300/80" />
+              <Coins size={10} className="mt-0.5 shrink-0 text-warn/80" />
               <span>
                 {info.cost.kind === "free"
                   ? "Free. No AI is called, so this costs nothing."

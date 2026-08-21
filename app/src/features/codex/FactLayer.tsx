@@ -105,7 +105,7 @@ export function FactLayer({ fact, run, chapters, people, entryName,
         role="dialog"
         aria-label="What this fact does"
         data-testid="fact-layer"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-start gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0 flex-1">
@@ -130,7 +130,7 @@ export function FactLayer({ fact, run, chapters, people, entryName,
               Where it is true
             </h3>
             {!placed ? (
-              <p className="mt-1 flex items-start gap-1.5 text-mini text-amber-200"
+              <p className="mt-1 flex items-start gap-1.5 text-mini text-warn-strong"
                  data-testid="fact-unplaced">
                 <CalendarOff size={11} className="mt-0.5 shrink-0" />
                 <span>
@@ -148,7 +148,7 @@ export function FactLayer({ fact, run, chapters, people, entryName,
                       key={c.anchor}
                       title={`${i + 1}. ${c.title}`}
                       className={`h-2 flex-1 rounded-sm ${
-                        inForce(i) ? "bg-violet-500" : "bg-border"
+                        inForce(i) ? "bg-weave-fill" : "bg-border"
                       }`}
                     />
                   ))}
@@ -193,7 +193,7 @@ export function FactLayer({ fact, run, chapters, people, entryName,
             </h3>
             <p className="mt-1 flex items-start gap-1.5 text-mini text-text-muted">
               {fact.revealed_at
-                ? <EyeOff size={11} className="mt-0.5 shrink-0 text-amber-300" />
+                ? <EyeOff size={11} className="mt-0.5 shrink-0 text-warn" />
                 : <Eye size={11} className="mt-0.5 shrink-0 text-faint" />}
               {fact.revealed_at ? (
                 <span data-testid="fact-reveal">
@@ -240,7 +240,7 @@ export function FactLayer({ fact, run, chapters, people, entryName,
           )}
 
           {fact.intentional && (
-            <p className="flex items-start gap-1.5 text-mini text-emerald-200"
+            <p className="flex items-start gap-1.5 text-mini text-success-strong"
                data-testid="fact-intentional">
               <Check size={11} className="mt-0.5 shrink-0" />
               <span>
@@ -253,12 +253,12 @@ export function FactLayer({ fact, run, chapters, people, entryName,
           {/* ── What a model would actually receive ──────────────────────── */}
           {/* The payoff. Everything above is a rule; this is the consequence,
               and it is the only thing here a writer can act on directly. */}
-          <section className="rounded border border-violet-900/60 bg-violet-950/20 p-2">
-            <h3 className="flex items-center gap-1.5 text-mini font-medium text-violet-100">
-              <Sparkles size={11} className="shrink-0 text-violet-300" />
+          <section className="rounded border border-weave-soft/60 bg-weave-soft/20 p-2">
+            <h3 className="flex items-center gap-1.5 text-mini font-medium text-weave-strong">
+              <Sparkles size={11} className="shrink-0 text-weave" />
               What your AI gets
             </h3>
-            <p className="mt-1 text-mini text-violet-100/80"
+            <p className="mt-1 text-mini text-weave-strong/80"
                data-testid="fact-brief">
               {!placed
                 ? "Nothing. An unplaced fact never reaches a brief."

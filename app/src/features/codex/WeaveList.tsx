@@ -134,7 +134,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
 
   if (error) {
     return (
-      <div className="rounded border border-rose-800 bg-rose-950/40 px-4 py-3 text-xs text-rose-200">
+      <div className="rounded border border-danger-fill bg-danger-soft/40 px-4 py-3 text-xs text-danger-strong">
         <AlertTriangle size={13} className="mr-1.5 inline" />
         {error}
       </div>
@@ -198,7 +198,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
           type="button"
           onClick={() => setHideSpoilers(v => !v)}
           aria-pressed={hideSpoilers}
-          className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-mini text-text-muted hover:border-violet-600 hover:text-text-primary"
+          className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-mini text-text-muted hover:border-weave-fill hover:text-text-primary"
         >
           {hideSpoilers ? <EyeOff size={11} /> : <Eye size={11} />}
           {hideSpoilers ? "Hiding what the reader does not know yet" : "Showing everything"}
@@ -208,7 +208,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
       </div>
 
       <p className="text-mini text-faint">
-        Your world as of <span className="text-violet-300">{atLabel}</span>
+        Your world as of <span className="text-weave">{atLabel}</span>
         {" -- "}{rows.length} {rows.length === 1 ? "entry" : "entries"}.
       </p>
 
@@ -245,7 +245,7 @@ export function WeaveList({ projectPath, onOpenThread }: WeaveListProps) {
                       onClick={() => setExpanded(isOpen ? null : row.entity_id)}
                       onDoubleClick={() => onOpenThread?.(row.entity_id)}
                       aria-expanded={isOpen}
-                      className="text-left text-text-primary hover:text-violet-300"
+                      className="text-left text-text-primary hover:text-weave"
                     >
                       {row.name}
                     </button>
@@ -383,7 +383,7 @@ function TieList({ graph, entityId, registry }: {
         return (
           <li key={`${tie.rel}-${otherId}-${i}`} className="text-mini text-text-muted">
             {prefix}
-            <span className="text-violet-300">{phrase}</span>
+            <span className="text-weave">{phrase}</span>
             {" "}
             {names[otherId] ?? otherId}
             {!tie.active && (

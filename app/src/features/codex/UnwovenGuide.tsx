@@ -28,7 +28,7 @@ interface Page {
 /** A question as the walk shows it, with the reason underneath. */
 function Ask({ prompt, why }: { prompt: string; why: string }) {
   return (
-    <div className="rounded border border-violet-900/60 bg-violet-500/5 p-2">
+    <div className="rounded border border-weave-soft/60 bg-weave-fill/5 p-2">
       <p className="text-xs font-medium text-text-primary">{prompt}</p>
       <p className="mt-1 text-mini text-faint">{why}</p>
     </div>
@@ -311,7 +311,7 @@ export function UnwovenGuide({ onClose }: UnwovenGuideProps) {
         role="dialog"
         aria-label="How the ground rules pass works"
         data-testid="unwoven-guide"
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0 flex-1">
@@ -344,14 +344,14 @@ export function UnwovenGuide({ onClose }: UnwovenGuideProps) {
           {last ? (
             <button
               onClick={onClose}
-              className="rounded bg-violet-600 px-3 py-1 text-xs font-semibold text-white hover:bg-violet-500"
+              className="rounded bg-weave-fill px-3 py-1 text-xs font-semibold text-white hover:bg-weave-fill"
             >
               Done
             </button>
           ) : (
             <button
               onClick={() => setIndex(i => Math.min(PAGES.length - 1, i + 1))}
-              className="inline-flex items-center gap-1 rounded bg-violet-600 px-3 py-1 text-xs font-semibold text-white hover:bg-violet-500"
+              className="inline-flex items-center gap-1 rounded bg-weave-fill px-3 py-1 text-xs font-semibold text-white hover:bg-weave-fill"
             >
               Next <ChevronRight size={12} />
             </button>

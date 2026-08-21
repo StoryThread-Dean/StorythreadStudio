@@ -609,7 +609,7 @@ function relOptionLabel(rel: Relation): string {
         role="dialog"
         aria-label={`Connections for ${nodeLabel(thread)}`}
         data-testid="tie-editor"
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           {/* The entry being connected FROM, with its own kind's icon. The
@@ -652,7 +652,7 @@ function relOptionLabel(rel: Relation): string {
                   <li key={`${tie.src_id}|${tie.rel}|${tie.dst_id}`}
                       className="group rounded px-1 py-1 hover:bg-bg-raised">
                     <div className="flex items-center gap-2">
-                      <span className="shrink-0 text-mini text-emerald-300">
+                      <span className="shrink-0 text-mini text-success">
                         {tie.reads_as}
                       </span>
                       <ArrowRight size={10} className="shrink-0 text-faint" />
@@ -670,7 +670,7 @@ function relOptionLabel(rel: Relation): string {
                         onClick={() => void remove(tie)}
                         disabled={busy}
                         aria-label={`Remove ${tie.reads_as} ${tie.other_name}`}
-                        className="shrink-0 rounded p-0.5 text-faint opacity-0 hover:text-rose-300 focus:opacity-100 group-hover:opacity-100 disabled:opacity-30"
+                        className="shrink-0 rounded p-0.5 text-faint opacity-0 hover:text-danger focus:opacity-100 group-hover:opacity-100 disabled:opacity-30"
                       >
                         <Trash2 size={11} />
                       </button>
@@ -693,7 +693,7 @@ function relOptionLabel(rel: Relation): string {
             <ul className="mt-2 space-y-0.5">
               {warnings.map(w => (
                 <li key={w}
-                    className="flex items-start gap-1.5 rounded border border-amber-700/60 bg-amber-950/20 px-2 py-1 text-mini text-amber-200/90">
+                    className="flex items-start gap-1.5 rounded border border-warn-fill/60 bg-warn-soft/20 px-2 py-1 text-mini text-warn-strong/90">
                   <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                   {/* Recorded anyway. Sometimes a disputed throne IS the story,
                       and the app is not entitled to decide. */}
@@ -705,7 +705,7 @@ function relOptionLabel(rel: Relation): string {
 
           {error && (
             <p role="alert"
-               className="mt-2 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-mini text-rose-200">
+               className="mt-2 rounded border border-danger-fill bg-danger-soft/40 px-2 py-1.5 text-mini text-danger-strong">
               {error}
             </p>
           )}
@@ -723,8 +723,8 @@ function relOptionLabel(rel: Relation): string {
               a close button. Never one ambiguous Close. */}
           {justRecorded && (
             <div data-testid="what-next"
-                 className="mt-3 rounded border border-emerald-800 bg-emerald-950/20 p-2.5">
-              <p className="flex items-start gap-1.5 text-mini text-emerald-200">
+                 className="mt-3 rounded border border-success-fill bg-success-soft/20 p-2.5">
+              <p className="flex items-start gap-1.5 text-mini text-success-strong">
                 <Check size={12} className="mt-0.5 shrink-0" />
                 <span>
                   Recorded:{" "}
@@ -742,9 +742,9 @@ function relOptionLabel(rel: Relation): string {
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   onClick={() => { setJustRecorded(null); setAdding(true); }}
-                  className="inline-flex items-center gap-1.5 rounded border border-violet-700 bg-violet-950/40 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-violet-900/50"
+                  className="inline-flex items-center gap-1.5 rounded border border-weave-fill bg-weave-soft/40 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-weave-soft/50"
                 >
-                  <Plus size={11} className="text-violet-300" />
+                  <Plus size={11} className="text-weave" />
                   Yes -- make another connection
                 </button>
                 <button
@@ -769,7 +769,7 @@ function relOptionLabel(rel: Relation): string {
           {!adding && !justRecorded ? (
             <button
               onClick={() => { setAdding(true); setJustRecorded(null); }}
-              className="mt-3 inline-flex items-center gap-1.5 text-mini text-violet-300 hover:text-violet-200"
+              className="mt-3 inline-flex items-center gap-1.5 text-mini text-weave hover:text-weave-strong"
             >
               <Plus size={11} /> Connect this to something
             </button>
@@ -785,7 +785,7 @@ function relOptionLabel(rel: Relation): string {
                     onChange={e => setQuery(e.target.value)}
                     placeholder="Find an entry"
                     aria-label="Find an entry"
-                    className="mb-1 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                    className="mb-1 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                   />
                   <ul className="max-h-40 overflow-y-auto">
                     {reachable.length === 0 ? (
@@ -812,14 +812,14 @@ function relOptionLabel(rel: Relation): string {
                                 is: a name the walk made an entry for, with
                                 nothing written in it yet. */}
                             {node.placeholder && (
-                              <span className="shrink-0 text-micro text-violet-300">
+                              <span className="shrink-0 text-micro text-weave">
                                 nothing in it yet
                               </span>
                             )}
                             {/* The evidence, on the row. A suggestion that
                                 cannot show its reasoning is just a guess. */}
                             {sharedWith.has(node.entity_id) && (
-                              <span className="shrink-0 text-micro text-emerald-300">
+                              <span className="shrink-0 text-micro text-success">
                                 {sharedWith.get(node.entity_id) === 1
                                   ? "1 scene together"
                                   : `${sharedWith.get(node.entity_id)} scenes together`}
@@ -846,7 +846,7 @@ function relOptionLabel(rel: Relation): string {
                         value={madeName}
                         onChange={e => setMadeName(e.target.value)}
                         aria-label="What is it called"
-                        className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                       />
                       <label className="mt-1.5 block text-mini text-text-muted">
                         What kind of thing is it?
@@ -855,7 +855,7 @@ function relOptionLabel(rel: Relation): string {
                         value={madeKind}
                         onChange={e => setMadeKind(e.target.value)}
                         aria-label="What kind of thing is it"
-                        className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        className="mt-0.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                       >
                         <option value="">Choose...</option>
                         {KIND_GROUPS.map(group => (
@@ -874,7 +874,7 @@ function relOptionLabel(rel: Relation): string {
                         <button
                           onClick={() => void makeOther()}
                           disabled={!madeName.trim() || !madeKind || busy}
-                          className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                          className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                         >
                           {busy ? <Loader size={11} className="animate-spin" />
                                 : <Check size={11} />}
@@ -894,7 +894,7 @@ function relOptionLabel(rel: Relation): string {
                         setMaking(true);
                         setMadeName(query.trim());
                       }}
-                      className="mt-1.5 inline-flex items-center gap-1 text-mini text-violet-300 hover:text-violet-200"
+                      className="mt-1.5 inline-flex items-center gap-1 text-mini text-weave hover:text-weave-strong"
                     >
                       <Plus size={11} /> It is not here yet -- make it
                     </button>
@@ -943,7 +943,7 @@ function relOptionLabel(rel: Relation): string {
                     maxLength={reasonLimit}
                     placeholder="taught her everything, then vanished"
                     aria-label="Why they are connected"
-                    className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                    className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                   />
                   <p className="mt-1 text-micro text-faint">
                     This is what gets sent to AI when you ask for help with a
@@ -951,7 +951,7 @@ function relOptionLabel(rel: Relation): string {
                     why one line is the limit. Every connection in a scene costs
                     budget, and a wordy one gets left out.
                     {reason.length > reasonLimit - 25 && (
-                      <span className="ml-1 text-amber-300">
+                      <span className="ml-1 text-warn">
                         {reasonLimit - reason.length} left
                       </span>
                     )}
@@ -975,7 +975,7 @@ function relOptionLabel(rel: Relation): string {
                         maxLength={reasonLimit}
                         placeholder="does not know she stole from him"
                         aria-label="Why, from the other side"
-                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                       />
                     </>
                   ) : (
@@ -989,7 +989,7 @@ function relOptionLabel(rel: Relation): string {
                   )}
 
                   {!canConnect && (
-                    <p role="status" className="mt-1.5 text-micro text-amber-300">
+                    <p role="status" className="mt-1.5 text-micro text-warn">
                       Write that line and the buttons below wake up. A connection
                       with nothing but two names tells AI less than the prose
                       already does.
@@ -1016,7 +1016,7 @@ function relOptionLabel(rel: Relation): string {
                           onChange={e => setNewLabel(e.target.value)}
                           placeholder="worships"
                           aria-label="Connection name"
-                          className="flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                          className="flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                         />
                         <button
                           onClick={() => void nameIt()}
@@ -1026,7 +1026,7 @@ function relOptionLabel(rel: Relation): string {
                           // The amber "write that line" hint above covers this
                           // button too.
                           disabled={!newLabel.trim() || busy || !canConnect}
-                          className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                          className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                         >
                           {busy ? <Loader size={11} className="animate-spin" />
                                 : <Check size={11} />}
@@ -1042,7 +1042,7 @@ function relOptionLabel(rel: Relation): string {
                         onChange={e => setNewInverse(e.target.value)}
                         placeholder="worshipped by"
                         aria-label="The other way round"
-                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                       />
                       <p className="mt-1 text-micro text-faint">
                         It becomes part of your world, so you can use it between
@@ -1058,7 +1058,7 @@ function relOptionLabel(rel: Relation): string {
                           because a writer's own culture may genuinely need a word
                           no model knows -- and then the reason line carries the
                           meaning. */}
-                      <p className="mt-1 text-micro text-amber-300/90">
+                      <p className="mt-1 text-micro text-warn/90">
                         Use words AI already knows where you can -- "blood-sworn
                         to" reads to a model, "kh'thari of" does not. This label
                         goes into the connection sent with your writing, so
@@ -1104,7 +1104,7 @@ function relOptionLabel(rel: Relation): string {
                             setPickedRel(e.target.value);
                           }}
                           aria-label="How they are connected"
-                          className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                          className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                         >
                           <option value="">choose from ...</option>
                           {grouped.map(section => (
@@ -1133,7 +1133,7 @@ function relOptionLabel(rel: Relation): string {
                             value={pickedInverseRel}
                             onChange={e => setPickedInverseRel(e.target.value)}
                             aria-label="How it reads from the other side"
-                            className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                            className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                           >
                             <option value="">
                               {pickedRel && relById.get(pickedRel)?.inverse_label
@@ -1169,10 +1169,10 @@ function relOptionLabel(rel: Relation): string {
                       <button
                         onClick={() => void record()}
                         disabled={busy || !canConnect}
-                        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded border border-emerald-800 bg-emerald-950/30 px-2 py-1.5 text-xs font-semibold text-text-primary hover:bg-emerald-950/50 disabled:opacity-40"
+                        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded border border-success-fill bg-success-soft/30 px-2 py-1.5 text-xs font-semibold text-text-primary hover:bg-success-soft/50 disabled:opacity-40"
                       >
                         {busy ? <Loader size={11} className="animate-spin" />
-                              : <Check size={11} className="text-emerald-300" />}
+                              : <Check size={11} className="text-success" />}
                         Record it
                       </button>
                     </>

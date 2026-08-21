@@ -70,7 +70,7 @@ export function ChapterNavRow({
 }) {
   // Softer highlight for the parent chapter row when the child summary is
   // active -- helps the eye trace back up the tree without dominating the row.
-  const parentGhostBg = isSummaryAncestor && !isActiveChapter ? "bg-indigo-900/10" : "";
+  const parentGhostBg = isSummaryAncestor && !isActiveChapter ? "bg-accent-soft/10" : "";
 
   // Inline-rename state: when `editing` is true the title <button> swaps to
   // an <input>. Start with a local draft so Escape can discard without ever
@@ -110,12 +110,12 @@ export function ChapterNavRow({
           each other. `group` lets the trash icon stay hidden until hover. */}
       <div
         className={`group flex items-stretch rounded transition-colors ${
-          isActiveChapter ? "bg-indigo-600/20" : `hover:bg-bg-raised ${parentGhostBg}`
+          isActiveChapter ? "bg-accent-fill/20" : `hover:bg-bg-raised ${parentGhostBg}`
         }`}
       >
         <button
           onClick={onToggleExpand}
-          className="flex w-6 shrink-0 items-center justify-center text-xs text-text-muted hover:text-indigo-300"
+          className="flex w-6 shrink-0 items-center justify-center text-xs text-text-muted hover:text-accent"
           title={isExpanded ? "Collapse" : "Expand"}
           aria-label={isExpanded ? "Collapse chapter" : "Expand chapter"}
         >
@@ -142,7 +142,7 @@ export function ChapterNavRow({
               }
             }}
             onFocus={e => e.currentTarget.select()}
-            className="flex-1 min-w-0 rounded border border-indigo-500/50 bg-bg-surface px-1 py-1 text-sm text-text-primary outline-none focus:border-indigo-400"
+            className="flex-1 min-w-0 rounded border border-accent-fill/50 bg-bg-surface px-1 py-1 text-sm text-text-primary outline-none focus:border-accent-muted"
             title="Rename chapter -- Enter to save, Escape to cancel"
           />
         ) : (
@@ -150,7 +150,7 @@ export function ChapterNavRow({
             onClick={onOpenChapter}
             onDoubleClick={() => { setDraft(chapter.title); setEditing(true); }}
             className={`flex-1 min-w-0 truncate px-1 py-1.5 text-left text-sm ${
-              isActiveChapter ? "text-indigo-300" : "text-text-primary"
+              isActiveChapter ? "text-accent" : "text-text-primary"
             }`}
             title={`Open ${chapter.filename} -- double-click to rename`}
           >
@@ -163,7 +163,7 @@ export function ChapterNavRow({
           ) : (
             <button
               onClick={onDeleteChapter}
-              className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+              className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-danger-muted group-hover:opacity-100 focus:opacity-100"
               title={`Delete ${chapter.title}`}
               aria-label={`Delete ${chapter.title}`}
             >
@@ -180,13 +180,13 @@ export function ChapterNavRow({
         <div className="ml-6 mt-0.5 border-l border-border pl-2">
           <div
             className={`group flex items-stretch rounded transition-colors ${
-              isChapterSummaryActive ? "bg-indigo-600/20" : "hover:bg-bg-raised"
+              isChapterSummaryActive ? "bg-accent-fill/20" : "hover:bg-bg-raised"
             }`}
           >
             <button
               onClick={onOpenChapterSummary}
               className={`flex-1 min-w-0 truncate px-2 py-1.5 text-left text-sm ${
-                isChapterSummaryActive ? "text-indigo-300" : "text-text-primary"
+                isChapterSummaryActive ? "text-accent" : "text-text-primary"
               }`}
               title="AI-generated continuity brief for this chapter"
             >
@@ -194,7 +194,7 @@ export function ChapterNavRow({
             </button>
             <button
               onClick={onDeleteChapterSummary}
-              className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+              className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-danger-muted group-hover:opacity-100 focus:opacity-100"
               title="Delete chapter summary (keeps the chapter)"
               aria-label="Delete chapter summary"
             >
@@ -212,7 +212,7 @@ export function ChapterNavRow({
               className="group flex w-full items-stretch rounded text-left text-sm text-text-primary transition-colors hover:bg-bg-raised"
               title="Per-scene AI summaries (click to expand)"
             >
-              <span className="flex w-5 shrink-0 items-center justify-center text-xs text-text-muted group-hover:text-indigo-300">
+              <span className="flex w-5 shrink-0 items-center justify-center text-xs text-text-muted group-hover:text-accent">
                 {isScenesExpanded ? "v" : ">"}
               </span>
               <span className="flex-1 min-w-0 truncate px-1 py-1.5 text-left">
@@ -243,7 +243,7 @@ export function ChapterNavRow({
                       <div key={scene.index}>
                         <div
                           className={`group flex items-stretch rounded transition-colors ${
-                            isActive ? "bg-indigo-600/20" : "hover:bg-bg-raised"
+                            isActive ? "bg-accent-fill/20" : "hover:bg-bg-raised"
                           }`}
                         >
                           {/* Beat caret -- only when the scene has beats, so
@@ -251,7 +251,7 @@ export function ChapterNavRow({
                           {hasBeats && (
                             <button
                               onClick={() => toggleBeats(scene.index)}
-                              className="flex w-4 shrink-0 items-center justify-center text-micro text-text-muted hover:text-indigo-300"
+                              className="flex w-4 shrink-0 items-center justify-center text-micro text-text-muted hover:text-accent"
                               title={beatsOpen ? "Hide beats" : `Show beats (${beatsDone}/${scene.beats.length} done)`}
                               aria-label={beatsOpen ? "Hide beats" : "Show beats"}
                             >
@@ -261,7 +261,7 @@ export function ChapterNavRow({
                           <button
                             onClick={() => onOpenScene(scene.index)}
                             className={`flex-1 min-w-0 truncate px-2 py-1 text-left text-xs ${
-                              isActive ? "text-indigo-300" : "text-text-primary"
+                              isActive ? "text-accent" : "text-text-primary"
                             }`}
                             title={`Scene ${scene.index}: ${scene.title}`}
                           >
@@ -276,7 +276,7 @@ export function ChapterNavRow({
                           </button>
                           <button
                             onClick={() => onDeleteScene(scene.index)}
-                            className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+                            className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-danger-muted group-hover:opacity-100 focus:opacity-100"
                             title={`Delete scene ${scene.index} summary`}
                             aria-label={`Delete scene ${scene.index} summary`}
                           >
@@ -297,7 +297,7 @@ export function ChapterNavRow({
                                 className="flex w-full items-start gap-1.5 rounded px-1.5 py-0.5 text-left text-mini transition-colors hover:bg-bg-raised"
                                 title="Open the scene summary to edit beats"
                               >
-                                <span className={`shrink-0 ${beat.done ? "text-emerald-500" : "text-faint"}`}>
+                                <span className={`shrink-0 ${beat.done ? "text-success-fill" : "text-faint"}`}>
                                   {beat.done ? "✓" : "○"}
                                 </span>
                                 <span className={`min-w-0 truncate ${

@@ -42,12 +42,12 @@ export function AboutPanel({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded border border-indigo-700/60 bg-bg-panel shadow-xl"
+        className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded border border-accent-fill/60 bg-bg-panel shadow-xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-base font-semibold text-indigo-300">About</h2>
+          <h2 className="text-base font-semibold text-accent">About</h2>
           <button onClick={onClose} className="text-faint hover:text-text-muted">✕</button>
         </div>
 
@@ -56,7 +56,7 @@ export function AboutPanel({
           <p className="text-lg font-semibold text-text-primary">Storythread Studio</p>
           <p className="text-xs text-text-muted">Version {version}</p>
           {hasDonated && (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-pink-700 bg-pink-900/30 px-2.5 py-0.5 text-mini text-pink-200">
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-weave-fill bg-weave-soft/30 px-2.5 py-0.5 text-mini text-weave-strong">
               <Heart size={11} fill="currentColor" />
               Thank you for donating!
             </div>
@@ -77,7 +77,7 @@ export function AboutPanel({
           <div className="flex flex-col gap-2">
             <button
               onClick={() => openLink("https://github.com/sponsors/StoryThread-Dean")}
-              className="flex items-center justify-center gap-2 rounded border border-pink-700 bg-pink-900/30 px-3 py-1.5 text-xs font-medium text-pink-200 hover:bg-pink-900/50"
+              className="flex items-center justify-center gap-2 rounded border border-weave-fill bg-weave-soft/30 px-3 py-1.5 text-xs font-medium text-weave-strong hover:bg-weave-soft/50"
             >
               <Heart size={12} fill="currentColor" />
               GitHub Sponsors
@@ -85,7 +85,7 @@ export function AboutPanel({
             </button>
             <button
               onClick={() => openLink("https://ko-fi.com/storythreadstudio")}
-              className="flex items-center justify-center gap-2 rounded border border-cyan-700 bg-cyan-900/30 px-3 py-1.5 text-xs font-medium text-cyan-200 hover:bg-cyan-900/50"
+              className="flex items-center justify-center gap-2 rounded border border-secondary-fill bg-secondary-soft/30 px-3 py-1.5 text-xs font-medium text-secondary-strong hover:bg-secondary-soft/50"
             >
               <Coffee size={12} />
               Ko-fi
@@ -112,7 +112,7 @@ export function AboutPanel({
                 <span>Already donated?</span>
                 <button
                   onClick={onMarkDonated}
-                  className="rounded border border-pink-700 bg-pink-900/30 px-2 py-0.5 text-pink-200 hover:bg-pink-900/50"
+                  className="rounded border border-weave-fill bg-weave-soft/30 px-2 py-0.5 text-weave-strong hover:bg-weave-soft/50"
                 >
                   Mark me as a donor
                 </button>
@@ -129,7 +129,7 @@ export function AboutPanel({
           <button
             onClick={onCheckUpdates}
             disabled={checking}
-            className="rounded border border-border bg-bg-primary px-3 py-1 text-xs text-text-primary hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-border bg-bg-primary px-3 py-1 text-xs text-text-primary hover:border-accent-fill hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
           >
             {checking ? "Checking..." : "Check for updates"}
           </button>
@@ -147,25 +147,25 @@ export function AboutPanel({
           <div className="space-y-1">
             <button
               onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio")}
-              className="flex items-center gap-1 text-indigo-300 underline hover:text-indigo-200"
+              className="flex items-center gap-1 text-accent underline hover:text-accent-strong"
             >
               GitHub repository <ExternalLink size={10} />
             </button>
             <button
               onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/blob/main/CHANGELOG.md")}
-              className="flex items-center gap-1 text-indigo-300 underline hover:text-indigo-200"
+              className="flex items-center gap-1 text-accent underline hover:text-accent-strong"
             >
               Changelog <ExternalLink size={10} />
             </button>
             <button
               onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/issues")}
-              className="flex items-center gap-1 text-indigo-300 underline hover:text-indigo-200"
+              className="flex items-center gap-1 text-accent underline hover:text-accent-strong"
             >
               Report a bug or request a feature <ExternalLink size={10} />
             </button>
             <button
               onClick={() => openLink("https://github.com/StoryThread-Dean/StorythreadStudio/blob/main/LICENSE")}
-              className="flex items-center gap-1 text-indigo-300 underline hover:text-indigo-200"
+              className="flex items-center gap-1 text-accent underline hover:text-accent-strong"
             >
               Apache License 2.0 <ExternalLink size={10} />
             </button>

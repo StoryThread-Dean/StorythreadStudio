@@ -182,7 +182,7 @@ export function ModelRolesSection({
                 <span
                   data-testid={`role-summary-${role.id}`}
                   className={`flex w-44 shrink-0 items-center justify-between gap-1 rounded border border-border px-1.5 py-0.5 text-mini ${
-                    isAssigned ? "text-emerald-300" : "text-text-muted"
+                    isAssigned ? "text-success" : "text-text-muted"
                   }`}
                 >
                   <span className="truncate">{summary}</span>
@@ -190,7 +190,7 @@ export function ModelRolesSection({
                 </span>
 
                 {providerBroken && (
-                  <AlertTriangle size={11} className="shrink-0 text-amber-400" />
+                  <AlertTriangle size={11} className="shrink-0 text-warn-muted" />
                 )}
 
                 {/* Truncated, not wrapped: rows stay one line tall so the
@@ -214,7 +214,7 @@ export function ModelRolesSection({
                           Features that use this role: {role.features.join(" · ")}
                         </p>
                       ) : (
-                        <p className="text-amber-300/80">{role.reserved_note}</p>
+                        <p className="text-warn/80">{role.reserved_note}</p>
                       )}
                     </WhatsThis>
                   </div>
@@ -234,7 +234,7 @@ export function ModelRolesSection({
                           assign(role.id, { provider, model: "" });
                           onNeedModels(provider);
                         }}
-                        className="rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                        className="rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                       >
                         <option value="">Use Default Model</option>
                         {PROVIDER_META.map(p => {
@@ -260,7 +260,7 @@ export function ModelRolesSection({
                             aria-label={`${role.label} model`}
                             value={assignment.model}
                             onChange={e => assign(role.id, { model: e.target.value })}
-                            className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                            className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                           >
                             <option value="">Choose a model...</option>
                             {/* A short recommended list, spread across price
@@ -294,7 +294,7 @@ export function ModelRolesSection({
                             value={assignment.model}
                             onChange={e => assign(role.id, { model: e.target.value })}
                             placeholder="Model id"
-                            className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                            className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                           />
                         )}
                       </label>
@@ -304,9 +304,9 @@ export function ModelRolesSection({
                   {providerBroken && (
                     <p
                       data-testid={`role-warning-${role.id}`}
-                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-amber-600/70 bg-amber-950/20 px-2 py-1 text-micro leading-relaxed text-amber-200/90"
+                      className="mt-2 flex items-start gap-1.5 rounded-r border-l-2 border-warn-fill/70 bg-warn-soft/20 px-2 py-1 text-micro leading-relaxed text-warn-strong/90"
                     >
-                      <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
+                      <AlertTriangle size={11} className="mt-0.5 shrink-0 text-warn-muted/80" />
                       <span>
                         This role is set to a source with no key connected, so it
                         will refuse rather than quietly using another model.

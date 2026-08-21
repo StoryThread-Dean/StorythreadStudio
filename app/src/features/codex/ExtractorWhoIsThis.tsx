@@ -148,13 +148,13 @@ export function ExtractorWhoIsThis({
                     onClick={() => setChosen(thread.entity_id)}
                     className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-mini ${
                       thread.entity_id === chosen
-                        ? "bg-violet-500/15 text-text-primary"
+                        ? "bg-weave-fill/15 text-text-primary"
                         : "text-text-muted hover:bg-white/5"}`}
                   >
                     <span className="truncate">{nodeLabel(thread)}</span>
                     <span className="ml-auto shrink-0 text-faint">{thread.type}</span>
                     {thread.entity_id === suggestedId && (
-                      <span className="shrink-0 text-2xs text-violet-300">
+                      <span className="shrink-0 text-2xs text-weave">
                         suggested
                       </span>
                     )}
@@ -164,7 +164,7 @@ export function ExtractorWhoIsThis({
             </ul>
           )}
 
-          {error && <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>}
+          {error && <p role="alert" className="mt-2 text-mini text-danger">{error}</p>}
 
           {/* THE TWO ANSWERS, and the difference stated in the writer's terms
               rather than the app's. Neither is "merge": one is about a word,
@@ -183,7 +183,7 @@ export function ExtractorWhoIsThis({
                 </p>
                 <button type="button" onClick={() => void makeAlias()} disabled={busy}
                         data-testid="who-is-this-alias"
-                        className="mt-1.5 rounded bg-violet-600 px-2.5 py-1 text-mini font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                        className="mt-1.5 rounded bg-weave-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40">
                   Use it as another name for {nodeLabel(target)}
                 </button>
               </div>

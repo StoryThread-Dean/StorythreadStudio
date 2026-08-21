@@ -288,7 +288,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
       value={value}
       onChange={e => onChange(e.target.value)}
       aria-label={label}
-      className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+      className="rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
     >
       <option value="">choose a chapter ...</option>
       {chapters.map(c => (
@@ -313,7 +313,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
         role="dialog"
         aria-label={stop.title}
         data-testid="snag-fixer"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <KindIcon size={14}
@@ -345,7 +345,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
             </p>
             <button
               onClick={onDone}
-              className="mt-2 inline-flex flex-col items-start rounded border border-emerald-800 bg-emerald-950/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-emerald-950/50"
+              className="mt-2 inline-flex flex-col items-start rounded border border-success-fill bg-success-soft/30 px-2.5 py-1 text-left text-xs font-semibold text-text-primary hover:bg-success-soft/50"
             >
               <span>Carry on</span>
               <span className="text-micro font-normal text-faint">
@@ -361,9 +361,9 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
 
           {/* ── Tangle: say what the group IS before showing one of it ──── */}
           {tangle && (
-            <div className="mb-2 rounded border border-rose-900/60 bg-rose-950/20 p-2"
+            <div className="mb-2 rounded border border-danger-soft/60 bg-danger-soft/20 p-2"
                  data-testid="tangle-group">
-              <p className="text-mini text-rose-100">
+              <p className="text-mini text-danger-strong">
                 {members.length} problems here all concern{" "}
                 <span className="font-medium text-text-primary">
                   {String(stop.detail?.axis ?? "one thing")}
@@ -428,7 +428,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                   onClick={() => void act(() =>
                     patchFact(String(sides[0].id), { at: draftAt }))}
                   disabled={busy || !draftAt}
-                  className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                 >
                   {busy ? <Loader size={11} className="animate-spin" />
                         : <Check size={11} />}
@@ -507,7 +507,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                       onClick={() => void act(() => deleteTie(side))}
                       disabled={busy}
                       aria-label={`Remove ${side.target_name ?? side.target}`}
-                      className="shrink-0 rounded border border-border p-1 text-faint hover:text-rose-300 disabled:opacity-40"
+                      className="shrink-0 rounded border border-border p-1 text-faint hover:text-danger disabled:opacity-40"
                     >
                       <Trash2 size={11} />
                     </button>
@@ -541,7 +541,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                           onChange={e => setDraftValue(e.target.value)}
                           rows={2}
                           aria-label="The corrected text"
-                          className="mb-1.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                          className="mb-1.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                         />
                         <div className="flex flex-wrap items-center gap-2">
                           {chapterPicker(draftAt, setDraftAt, "Its chapter")}
@@ -566,7 +566,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                               ...(draftRevealed ? { revealed_at: draftRevealed } : {}),
                             }))}
                             disabled={busy || !draftValue.trim()}
-                            className="inline-flex items-center gap-1 rounded bg-violet-600 px-2 py-1 text-mini font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                            className="inline-flex items-center gap-1 rounded bg-weave-fill px-2 py-1 text-mini font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                           >
                             <Check size={10} /> Save the fix
                           </button>
@@ -605,7 +605,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
                               }
                             })}
                             disabled={busy}
-                            className="shrink-0 rounded border border-emerald-800 px-1.5 py-0.5 text-micro text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
+                            className="shrink-0 rounded border border-success-fill px-1.5 py-0.5 text-micro text-success hover:bg-success-soft/40 disabled:opacity-40"
                           >
                             Keep this one
                           </button>
@@ -650,7 +650,7 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
           )}
 
           {error && (
-            <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>
+            <p role="alert" className="mt-2 text-mini text-danger">{error}</p>
           )}
 
           <button

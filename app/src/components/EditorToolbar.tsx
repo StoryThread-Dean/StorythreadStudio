@@ -407,7 +407,7 @@ export function EditorToolbar({
         <button
           onClick={onNewTemplate}
           title="Apply a different outline template (overwrites current outline)"
-          className="mr-2 flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+          className="mr-2 flex items-center gap-1 rounded border border-border bg-bg-surface px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary"
         >
           <FilePlus2 size={12} />
           <span>+ New Template</span>
@@ -419,7 +419,7 @@ export function EditorToolbar({
         <select
           value={currentFont}
           onChange={(e) => onFontChange(e.target.value as FontValue)}
-          className="appearance-none rounded border border-border bg-bg-surface py-0.5 pl-2 pr-6 text-xs text-text-primary transition-colors hover:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="appearance-none rounded border border-border bg-bg-surface py-0.5 pl-2 pr-6 text-xs text-text-primary transition-colors hover:border-accent-fill focus:outline-none focus:ring-1 focus:ring-accent-fill"
           title="Change the editor font (display only -- not saved in the document)"
           style={{ fontFamily: currentFont }}
         >

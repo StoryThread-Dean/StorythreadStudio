@@ -128,7 +128,7 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full flex-col gap-1 rounded border border-border bg-bg-panel px-3 py-2 text-left transition-colors hover:border-indigo-500"
+        className="flex w-full flex-col gap-1 rounded border border-border bg-bg-panel px-3 py-2 text-left transition-colors hover:border-accent-fill"
         title={isSerial
           ? "Writing Progress for serial fiction is being designed"
           : "Click to expand the project completion breakdown"}
@@ -154,7 +154,7 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
             />
           ) : (
             <div
-              className="h-full rounded bg-indigo-500 transition-all"
+              className="h-full rounded bg-accent-fill transition-all"
               style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
             />
           )}
@@ -181,7 +181,7 @@ export function ProjectCompletionGauge({ projectPath, isOpen, onToggle }: Props)
         >
           <SlideOverHeader onClose={onToggle} />
           {error && (
-            <p className="px-3 py-2 text-xs text-rose-400">{error}</p>
+            <p className="px-3 py-2 text-xs text-danger-muted">{error}</p>
           )}
           {isSerial ? (
             <SerialPlaceholder />
@@ -354,7 +354,7 @@ function ChapterRow({ chapter }: { chapter: ChapterProgress }) {
         <div className="mt-0.5 h-1 w-full overflow-hidden rounded bg-bg-surface">
           <div
             className={`h-full rounded transition-all ${
-              (chapter.percent ?? 0) >= 100 ? "bg-emerald-500" : "bg-indigo-500"
+              (chapter.percent ?? 0) >= 100 ? "bg-success-fill" : "bg-accent-fill"
             }`}
             style={{ width: `${Math.min(100, Math.max(0, chapter.percent ?? 0))}%` }}
           />
@@ -404,7 +404,7 @@ function DailyTracker({ daily }: { daily: ProgressDaily | null }) {
           Today ({daily.skill_level})
         </h4>
         {goalHit && (
-          <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">
+          <span className="rounded bg-success-fill/20 px-2 py-0.5 text-xs text-success">
             Goal hit
           </span>
         )}
@@ -483,12 +483,12 @@ function SparkCell({
     <div
       title={tooltip}
       className={`h-6 flex-1 rounded border ${
-        isToday ? "border-indigo-400" : "border-border"
+        isToday ? "border-accent-muted" : "border-border"
       } ${
         cell.hit
-          ? "bg-emerald-500/70"
+          ? "bg-success-fill/70"
           : isPartial
-          ? "bg-indigo-500/40"
+          ? "bg-accent-fill/40"
           : "bg-bg-surface"
       }`}
     />

@@ -190,7 +190,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
         <button
           type="button"
           onClick={() => rerollRow(kind)}
-          className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted transition-colors hover:border-indigo-500 hover:text-text-primary"
+          className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted transition-colors hover:border-accent-fill hover:text-text-primary"
           title={`Reroll ${label.toLowerCase()}`}
         >
           <Dices size={11} />
@@ -205,8 +205,8 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
             onClick={() => setPicked(picked === name ? null : name)}
             className={`rounded-full border px-2.5 py-1 text-mini transition-colors ${
               picked === name
-                ? "border-indigo-500 bg-indigo-950/40 text-indigo-200"
-                : "border-border bg-bg-surface text-text-muted hover:border-indigo-500 hover:text-text-primary"
+                ? "border-accent-fill bg-accent-soft/40 text-accent-strong"
+                : "border-border bg-bg-surface text-text-muted hover:border-accent-fill hover:text-text-primary"
             }`}
           >
             {name}
@@ -225,7 +225,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
         <Explain of="names.what" />
       </div>
       {loadError && (
-        <p className="mb-2 text-mini text-amber-400">
+        <p className="mb-2 text-mini text-warn-muted">
           Could not load the name lists from the backend -- fantasy races still work.
         </p>
       )}
@@ -235,7 +235,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
         <select
           value={selection}
           onChange={e => onSelectorChange({ sel: e.target.value })}
-          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-indigo-500"
+          className="min-w-0 flex-1 rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-fill"
         >
           <option value="">Pick a culture or race...</option>
           {regions.map(region => (
@@ -257,7 +257,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
           <select
             value={era}
             onChange={e => onSelectorChange({ era: e.target.value })}
-            className="w-44 shrink-0 rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-indigo-500"
+            className="w-44 shrink-0 rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-fill"
             title="Time period"
           >
             <option value="any">Any era</option>
@@ -270,7 +270,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
         <select
           value={gender}
           onChange={e => onSelectorChange({ gender: e.target.value })}
-          className="w-20 shrink-0 rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-indigo-500"
+          className="w-20 shrink-0 rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-fill"
           title="Given-name gender"
         >
           <option value="any">Any</option>
@@ -280,7 +280,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
       </div>
 
       {showFallbackNote && (
-        <p className="mb-2 text-mini text-amber-400">
+        <p className="mb-2 text-mini text-warn-muted">
           Showing {eraLabel(usedEra)} -- closest available for this culture.
         </p>
       )}
@@ -299,7 +299,7 @@ export function NameGeneratorPanel({ onPick }: NameGeneratorPanelProps) {
               type="button"
               disabled={!composed}
               onClick={() => { onPick(composed); setPickedGiven(null); setPickedSurname(null); }}
-              className="shrink-0 rounded bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
+              className="shrink-0 rounded bg-accent-fill px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-accent-fill disabled:opacity-40"
             >
               Use this name
             </button>

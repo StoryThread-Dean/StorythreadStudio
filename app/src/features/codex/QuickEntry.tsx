@@ -325,7 +325,7 @@ export function QuickEntry({
           ? `${appended ? "Added to" : "Created"}: ${nodeLabel(made)}`
           : "Quick entry"}
         data-testid="quick-entry"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-violet-900 bg-bg-panel"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-weave-soft bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <KindIcon size={14}
@@ -344,7 +344,7 @@ export function QuickEntry({
         {made ? (
           // ── WHAT HAPPENED, AND WHAT IS NEXT -- the continuous-flow rule. ──
           <div className="p-3">
-            <p className="flex items-start gap-1.5 text-mini text-emerald-200">
+            <p className="flex items-start gap-1.5 text-mini text-success-strong">
               <Check size={12} className="mt-0.5 shrink-0" />
               <span>
                 {appended ? (
@@ -374,9 +374,9 @@ export function QuickEntry({
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 onClick={() => setConnecting(true)}
-                className="inline-flex items-center gap-1.5 rounded border border-violet-700 bg-violet-950/40 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-violet-900/50"
+                className="inline-flex items-center gap-1.5 rounded border border-weave-fill bg-weave-soft/40 px-2.5 py-1 text-xs font-semibold text-text-primary hover:bg-weave-soft/50"
               >
-                <Plus size={11} className="text-violet-300" />
+                <Plus size={11} className="text-weave" />
                 Yes -- choose the connection
               </button>
               <button
@@ -443,13 +443,13 @@ export function QuickEntry({
                   onChange={e => setText(e.target.value)}
                   rows={4}
                   aria-label="The answer"
-                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 />
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={() => void addToExisting(addingTo)}
                     disabled={busy || !text.trim()}
-                    className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                   >
                     {busy ? <Loader size={11} className="animate-spin" />
                           : <Check size={11} />}
@@ -474,7 +474,7 @@ export function QuickEntry({
                   value={name}
                   onChange={e => setName(e.target.value)}
                   aria-label="Name"
-                  className="mb-2 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="mb-2 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 />
 
                 {/* WHICH PAGE THIS CHARACTER GETS. Characters only, because
@@ -500,8 +500,8 @@ export function QuickEntry({
                           title={option.hint}
                           className={`flex-1 cursor-pointer rounded border px-2 py-1.5 text-mini ${
                             characterKind === option.value
-                              ? "border-violet-500 bg-violet-600/15 text-text-primary"
-                              : "border-border text-text-muted hover:border-violet-700"
+                              ? "border-weave-fill bg-weave-fill/15 text-text-primary"
+                              : "border-border text-text-muted hover:border-weave-fill"
                           }`}
                         >
                           <input
@@ -537,7 +537,7 @@ export function QuickEntry({
                       value={kind}
                       onChange={e => setKind(e.target.value)}
                       aria-label="What kind of thing"
-                      className="mb-2 w-full rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                      className="mb-2 w-full rounded border border-border bg-bg-surface px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                     >
                       {kindChoices().map(group => (
                         <optgroup key={group.group} label={group.group}>
@@ -565,7 +565,7 @@ export function QuickEntry({
                   onChange={e => setText(e.target.value)}
                   rows={3}
                   aria-label={asking ? "The answer" : "Starter text"}
-                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
                 />
                 {prefill && (
                   <p className="mt-1 text-micro text-faint">
@@ -577,7 +577,7 @@ export function QuickEntry({
                   <button
                     onClick={() => void create()}
                     disabled={busy || !name.trim()}
-                    className="inline-flex items-center gap-1 rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                   >
                     {busy ? <Loader size={11} className="animate-spin" />
                           : <Check size={11} />}
@@ -594,7 +594,7 @@ export function QuickEntry({
             )}
 
             {error && (
-              <p role="alert" className="mt-2 text-mini text-rose-300">{error}</p>
+              <p role="alert" className="mt-2 text-mini text-danger">{error}</p>
             )}
           </div>
         )}

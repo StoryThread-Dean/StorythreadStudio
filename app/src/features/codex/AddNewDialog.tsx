@@ -88,7 +88,7 @@ export function AddNewDialog({
         className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-border bg-bg-panel"
       >
         <header className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-          <Plus size={14} className="text-violet-300" />
+          <Plus size={14} className="text-weave" />
           <h2 className="flex-1 text-sm font-semibold text-text-primary">
             Add to your world
           </h2>
@@ -109,7 +109,7 @@ export function AddNewDialog({
               onClick={() => { setGroup(entry.id); setShowCustom(false); }}
               className={`rounded px-2.5 py-1 text-mini ${
                 entry.id === current?.id
-                  ? "bg-violet-600 text-white"
+                  ? "bg-weave-fill text-white"
                   : "text-text-muted hover:text-text-primary"
               }`}
             >
@@ -144,7 +144,7 @@ export function AddNewDialog({
                       onClick={() => onAdd(entry)}
                       disabled={busy}
                       title={lex.short}
-                      className="flex w-full items-center gap-2 rounded border border-border px-2 py-1.5 text-left text-xs text-text-primary transition-colors hover:border-violet-600 disabled:opacity-50"
+                      className="flex w-full items-center gap-2 rounded border border-border px-2 py-1.5 text-left text-xs text-text-primary transition-colors hover:border-weave-fill disabled:opacity-50"
                     >
                       <Icon size={13} className={TONE_CLASSES[lex.tone].text} />
                       <span className="truncate">{entry.label}</span>
@@ -166,7 +166,7 @@ export function AddNewDialog({
             {!showCustom ? (
               <button
                 onClick={() => setShowCustom(true)}
-                className="text-mini text-violet-300 hover:text-violet-200"
+                className="text-mini text-weave hover:text-weave-strong"
               >
                 Something else...
               </button>
@@ -196,20 +196,20 @@ export function AddNewDialog({
                     aria-label="Name"
                     aria-invalid={Boolean(check.problem)}
                     placeholder="Name"
-                    className="flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-indigo-500"
+                    className="flex-1 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
                   />
                   <button
                     onClick={() => onAddCustom(tidyCustomName(customName), current!.id)}
                     disabled={!check.ok || busy}
-                    className="rounded bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                    className="rounded bg-weave-fill px-2.5 py-1 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                   >
                     {busy ? <Loader size={12} className="animate-spin" /> : "Add"}
                   </button>
                 </div>
 
                 {check.problem && (
-                  <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-mini text-amber-200/90">
-                    <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
+                  <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-mini text-warn-strong/90">
+                    <AlertTriangle size={11} className="mt-0.5 shrink-0 text-warn-muted/80" />
                     {check.problem}
                   </p>
                 )}
@@ -224,7 +224,7 @@ export function AddNewDialog({
           </div>
 
           {error && (
-            <p role="alert" className="mt-3 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-mini text-rose-200">
+            <p role="alert" className="mt-3 rounded border border-danger-fill bg-danger-soft/40 px-2 py-1.5 text-mini text-danger-strong">
               {error}
             </p>
           )}

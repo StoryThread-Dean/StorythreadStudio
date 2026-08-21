@@ -135,12 +135,12 @@ export function ProfileConnections({
   return (
     <section className="rounded border border-border bg-bg-surface p-2.5">
       <header className="mb-2 flex flex-wrap items-center gap-2">
-        <Link2 size={12} className="shrink-0 text-violet-300" />
+        <Link2 size={12} className="shrink-0 text-weave" />
         <h3 className="text-xs font-semibold text-text-primary">Connections</h3>
         <Explain of="profile.connections" />
         <button
           onClick={() => void openConnect()}
-          className="ml-auto inline-flex items-center gap-1 rounded border border-violet-700 bg-violet-950/40 px-2 py-0.5 text-mini text-violet-200 hover:bg-violet-900/50"
+          className="ml-auto inline-flex items-center gap-1 rounded border border-weave-fill bg-weave-soft/40 px-2 py-0.5 text-mini text-weave-strong hover:bg-weave-soft/50"
         >
           <Plus size={10} /> Connect {name} to something
         </button>
@@ -201,7 +201,7 @@ export function ProfileConnections({
                       <span className="text-text-primary">
                         {tie.other_name}{full}
                       </span>
-                      <span className="text-emerald-300"> -- {tie.reads_as} -- </span>
+                      <span className="text-success"> -- {tie.reads_as} -- </span>
                       {tie.why ? (
                         <span className="text-text-muted">{tie.why}</span>
                       ) : (
@@ -224,7 +224,7 @@ export function ProfileConnections({
 
           <button
             onClick={() => setExpanded(v => !v)}
-            className="mt-2 inline-flex items-center gap-1 text-mini text-violet-300 hover:text-violet-200"
+            className="mt-2 inline-flex items-center gap-1 text-mini text-weave hover:text-weave-strong"
           >
             {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
             {expanded
@@ -235,7 +235,7 @@ export function ProfileConnections({
       )}
 
       {error && (
-        <p role="alert" className="mt-1.5 text-mini text-rose-300">{error}</p>
+        <p role="alert" className="mt-1.5 text-mini text-danger">{error}</p>
       )}
     </section>
   );

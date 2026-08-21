@@ -21,7 +21,7 @@ function withEmphasis(text: string) {
   // group interleaves matches with the text between them.
   return text.split(/\*([^*]+)\*/g).map((part, i) =>
     i % 2 === 1
-      ? <span key={i} className="font-medium text-violet-300">{part}</span>
+      ? <span key={i} className="font-medium text-weave">{part}</span>
       : <span key={i}>{part}</span>,
   );
 }
@@ -39,7 +39,7 @@ export function GuideBody({ lines }: { lines: GuideLine[] }) {
           }`}
         >
           {line.term && (
-            <span className="font-semibold text-violet-300">{line.term} </span>
+            <span className="font-semibold text-weave">{line.term} </span>
           )}
           {withEmphasis(line.text)}
         </p>
