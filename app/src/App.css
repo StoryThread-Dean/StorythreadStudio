@@ -34,25 +34,28 @@
  *
  * ELEVATION: A RAISED SURFACE MOVES AWAY FROM THE PAGE, AND THE DIRECTION
  * DEPENDS ON THE THEME. In dark mode surfaces climb toward light -- page
- * #1E1E1E, card #232330, dialog #2A2A37, hover #333340. In light mode they
+ * #1E1E1E, card #23232A, dialog #2A2A31, hover #33333A. In light mode they
  * climb toward white -- #F5F2EC, #FBF9F4, #FFFFFF -- while HOVER goes the
  * other way and tints down (#EDE9E0), because on paper a darker patch is
  * what reads as "the pointer is here".
  *
- * Each step is roughly a 5-point jump, which is enough to read as a distinct
+ * Each step is roughly a 7-point jump, which is enough to read as a distinct
  * surface without turning the window into a stack of grey boxes. Borders do
  * the fine separation on top of that, not instead of it.
  *
  * THE DARK SURFACES ARE COOL AND THE PAGE BEHIND THEM IS NEUTRAL. That is
  * deliberate: a raised panel reads as lifted partly because it is lighter and
  * partly because it is a slightly different temperature from the window it
- * sits on. The blue is about 13 points on the B channel, held constant up the
- * ramp so a dialog opening over a card belongs to the same family rather than
+ * sits on. The blue is 7 points on the B channel, held CONSTANT up the ramp
+ * so a dialog opening over a card belongs to the same family rather than
  * looking grey against it. The borders carry the same cast for the same
- * reason -- a neutral #3F3F3F line around a cool panel reads brown.
+ * reason -- a neutral line around a cool panel reads brown.
  *
- * HOW THIS GOT HERE, because two of the values contradict the original spec
- * and the reasons matter more than the numbers:
+ * If the cast is ever retuned, move every one of these together. Cooling the
+ * card alone is the tempting single edit and it is the wrong one.
+ *
+ * HOW THIS GOT HERE. Two values contradict the original spec, and the reasons
+ * matter more than the numbers:
  *
  *   The spec put L1 at #1D1D1D, one shade DARKER than the page, and the first
  *   cut followed it literally with borders and shadows carrying all the depth.
@@ -61,11 +64,13 @@
  *   they compound -- a surface that does not separate by lightness is relying
  *   entirely on its border, so a quiet border leaves it with nothing.
  *
- *   Then: "L1 needs to be slightly cooler with a cool grey to it." Hence
- *   #232330, with #23232A named as the subtler alternative and parked in
- *   --st-bg-panel-alt so it is one swap away.
+ *   Then: "L1 needs to be slightly cooler with a cool grey to it", naming
+ *   #232330 with #23232A as a backup. #232330 (13 points of blue) overshot --
+ *   "the cool grey tone is the correct move, but it went over the mark just a
+ *   bit" -- so the backup is what ships. #232330 is parked in
+ *   --st-bg-panel-alt, one swap away in the other direction.
  *
- * The rule this replaced said elevation was carried by line and shadow and
+ * The rule all this replaced said elevation was carried by line and shadow and
  * NEVER by lightness. It is written down here because it was wrong rather
  * than because it was forgotten: it was the justification for the darker L1,
  * and deleting it silently would leave the next person free to re-derive it.
@@ -88,10 +93,10 @@
 
   /* Surfaces */
   --st-bg-primary:   #1E1E1E;   /* the window itself        */
-  --st-bg-panel:     #232330;   /* L1 -- cards, sidebars    */
-  --st-bg-surface:   #2A2A37;   /* L2 -- dialogs, inputs    */
-  --st-bg-raised:    #333340;   /* L3 -- hover, menus       */
-  --st-bg-panel-alt: #23232A;   /* unused: the subtler cool L1 */
+  --st-bg-panel:     #23232A;   /* L1 -- cards, sidebars    */
+  --st-bg-surface:   #2A2A31;   /* L2 -- dialogs, inputs    */
+  --st-bg-raised:    #33333A;   /* L3 -- hover, menus       */
+  --st-bg-panel-alt: #232330;   /* unused: the bolder cool L1 */
   --st-scrim:        rgb(0 0 0 / 0.66);
   --st-paper:        #FBF8F1;   /* the wordmark plate, both themes */
   --st-brand-deep:   #070724;   /* Black Russian: brand fills only */
@@ -106,8 +111,8 @@
 
   /* Lines -- opaque, because border-border/60 is a real call site and
      alpha-on-alpha would compound to something invisible. */
-  --st-border:        #3F3F4C;
-  --st-border-strong: #5A5A68;
+  --st-border:        #3F3F46;
+  --st-border-strong: #5A5A61;
   --st-focus:         #90CAF9;
 
   /* Accent -- links, primary action, focus, "you are here". */
