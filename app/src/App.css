@@ -1107,7 +1107,10 @@
 select,
 option,
 optgroup {
-  background-color: var(--st-bg-panel);
+  /* An input is a well you type INTO, so it takes the RECESSED surface, the
+     same as every text field. This was bg-panel, which made a dropdown the
+     one control that floated above the dialog holding it. */
+  background-color: var(--st-bg-surface);
   color: var(--st-text-primary);
 }
 

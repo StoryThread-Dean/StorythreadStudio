@@ -82,6 +82,26 @@ interface ThreadEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
+/**
+ * A group heading inside the entry form.
+ *
+ * Every non-profile kind -- Concepts, Events, Objects, Governments -- opens
+ * THIS editor, and it rendered as one undifferentiated column of grey field
+ * labels: "entirely mono/flat, devoid of all color". The three groups already
+ * existed as comments in the source; they simply were never on screen, so
+ * nothing separated what a thing is CALLED from what it DOES.
+ *
+ * The accent blue is the same one the editor uses for "Full chapter will be
+ * sent" -- this app's colour for "this is the thing you are looking at".
+ */
+function GroupHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h4 className="mt-5 mb-1 border-b border-border pb-1 text-micro font-semibold uppercase tracking-label text-accent first:mt-0">
+      {children}
+    </h4>
+  );
+}
+
 export function ThreadEditor({
   projectPath, typeId, initialFilename, onBack, onDirtyChange,
 }: ThreadEditorProps) {
@@ -344,6 +364,7 @@ export function ThreadEditor({
             </div>
 
             {/* ── What it is called ─────────────────────────────────── */}
+            <GroupHeading>What it is called</GroupHeading>
             <div className="grid gap-2 sm:grid-cols-2">
               <RunField label="Name" hint="What it is. The official one.">
                 <input
@@ -390,6 +411,7 @@ export function ThreadEditor({
             </div>
 
             {/* ── The sections this KIND has, from the registry ─────── */}
+            <GroupHeading>{lex.term} details</GroupHeading>
             {sections.map(section => (
               <RunField key={section.id} label={section.heading}>
                 <textarea
@@ -410,6 +432,7 @@ export function ThreadEditor({
             ))}
 
             {/* ── The Run ───────────────────────────────────────────── */}
+            <GroupHeading>What changes across the book</GroupHeading>
             <RunEditor
               run={thread.run ?? []}
               chapters={chapters}

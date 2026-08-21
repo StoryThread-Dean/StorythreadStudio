@@ -632,8 +632,8 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
               onClick={() => setDepth(option.id)}
               className={`flex w-full flex-col items-start rounded border px-2.5 py-2 text-left ${
                 depth === option.id
-                  ? "border-violet-500 bg-violet-500/10"
-                  : "border-border hover:border-text-muted"
+                  ? "border-weave bg-weave/15 ring-1 ring-inset ring-weave/40"
+                  : "border-border bg-bg-surface hover:border-border-strong hover:bg-bg-raised"
               }`}
             >
               <span className="flex w-full items-baseline gap-2">
@@ -796,7 +796,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             disabled={busy || scanning || open === 0}
             className={`inline-flex flex-col items-start rounded px-3 py-1.5 text-left text-xs font-semibold disabled:opacity-40 ${
               earlier.length > 0
-                ? "border border-border text-text-muted hover:text-text-primary"
+                ? "border border-border-strong bg-bg-surface text-text-primary hover:border-accent hover:bg-bg-raised"
                 : "bg-violet-600 text-white hover:bg-violet-500"
             }`}
           >
@@ -806,7 +806,7 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
               {earlier.length > 0 ? "Start fresh" : "Start"}
             </span>
             {earlier.length > 0 && (
-              <span className="text-micro font-normal text-faint">
+              <span className="text-micro font-normal text-text-muted">
                 asks again about anything you put off
               </span>
             )}

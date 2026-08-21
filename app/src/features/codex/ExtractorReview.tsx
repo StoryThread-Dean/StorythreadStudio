@@ -120,7 +120,7 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
                 className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-text-primary hover:bg-white/5"
               >
                 {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                <span className="capitalize">{kind}</span>
+                <span className="font-semibold capitalize text-accent">{kind}</span>
                 <span className="ml-auto text-micro text-faint">
                   {done}/{kindEntries.length}
                 </span>
@@ -134,8 +134,8 @@ export function ExtractorReview({ projectPath, run, onChanged, onStartOver }: Pr
                         onClick={() => setSelectedId(entry.item_id)}
                         className={`flex w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-mini ${
                           entry.item_id === selectedId
-                            ? "bg-violet-500/15 text-text-primary"
-                            : "text-text-muted hover:bg-white/5"}`}
+                            ? "bg-weave/20 font-medium text-text-primary ring-1 ring-inset ring-weave/40"
+                            : "text-text-muted hover:bg-bg-raised"}`}
                       >
                         <span className="truncate">{entry.name}</span>
                         {!entry.entity_id && !entry.created_entity_id && (
@@ -359,8 +359,8 @@ function EntryPanel({ projectPath, entry, onPatch, onProgress }: {
           data-testid="extractor-tick"
           className={`ml-auto rounded border px-2 py-0.5 text-mini ${
             entry.state === "done"
-              ? "border-emerald-700 text-emerald-300"
-              : "border-border text-text-muted hover:text-text-primary"}`}
+              ? "border-success bg-success/15 font-semibold text-success"
+              : "border-border bg-bg-surface text-text-muted hover:border-border-strong hover:text-text-primary"}`}
         >
           {entry.state === "done" ? "Done" : "Mark done"}
         </button>
@@ -593,8 +593,8 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
   }
 
   return (
-    <li className="rounded border border-border" data-testid="extractor-part">
-      <p className="border-b border-border px-2.5 py-1 text-micro uppercase tracking-wide text-faint">
+    <li className="overflow-hidden rounded border border-border bg-bg-panel" data-testid="extractor-part">
+      <p className="border-b border-border px-2.5 py-1 text-micro uppercase tracking-label text-accent">
         {part.heading}
         {part.form === "trait" && (
           <span className="ml-1 normal-case tracking-normal text-text-muted">
@@ -721,7 +721,7 @@ function PartRow({ projectPath, itemId, part, entityId, current, onProgress,
         )}
         <button type="button" disabled={busy} onClick={() => void act("dismiss")}
                 data-testid="extractor-dismiss"
-                className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-mini text-faint hover:text-text-muted disabled:opacity-40">
+                className="ml-auto inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted hover:border-danger hover:text-danger disabled:opacity-40">
           <X size={10} /> Not this
         </button>
       </div>
