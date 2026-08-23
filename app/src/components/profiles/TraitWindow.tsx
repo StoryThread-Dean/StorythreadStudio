@@ -38,8 +38,9 @@ export interface TraitWindowChapter {
 }
 
 interface Props {
-  /** The chapters this trait is true in. `undefined` = always true. */
-  trueIn?: string[];
+  /** The chapters this trait is true in. Absent = always true, and absent
+   *  means BOTH `undefined` and `null` -- see the `always` line below. */
+  trueIn?: string[] | null;
   chapters: TraitWindowChapter[];
   /** Pass `undefined` to go back to always true. */
   onChange: (trueIn: string[] | undefined) => void;
@@ -48,7 +49,23 @@ interface Props {
 }
 
 export function TraitWindow({ trueIn, chapters, onChange, unavailable }: Props) {
-  const always = trueIn === undefined;
+  // `== null`, NOT `=== undefined`, and this line was a real bug for a whole
+  // release. Absent means always true; `[]` means true nowhere. Those two must
+  // never collapse -- but there are TWO ways to spell absent by the time a
+  // value reaches this component, and the strict check only knew one of them.
+  //
+  // The profiles/ path returns the backend's Pydantic model straight to the
+  // screen, and FastAPI serialises an unset `true_in` as JSON `null`. So a
+  // trait that had never been given a window arrived here as `null`, read as
+  // "a window exists and nothing is ticked", and rendered the switch OFF with
+  // the "not sent to AI at all" warning under it. Turning the switch on worked
+  // in memory and was undone by the save's own response.
+  //
+  // TypeScript could not catch it: the declared type said `string[] |
+  // undefined` and the wire disagreed. The rest of the codebase already writes
+  // `!= null` for exactly this (see profileSource.ts); this control was the one
+  // place that did not.
+  const always = trueIn == null;
   const ticked = useMemo(() => new Set(trueIn ?? []), [trueIn]);
 
   // The chapters this trait is true in, as a writer would say it: "chapters

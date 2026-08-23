@@ -114,6 +114,39 @@ async function ok(res: Response, fallback: string): Promise<unknown> {
 
 // ── profiles/ -- what this screen has always done ────────────────────────────
 
+/**
+ * The backend's own shape, made to agree with this screen's.
+ *
+ * The codex path builds its profile field by field (see sectionsFromThread), so
+ * a field the Weave never wrote simply is not there. The profiles path does
+ * not: it hands the backend's Pydantic model straight through, and FastAPI
+ * serialises an unset `true_in` as JSON `null` rather than omitting it.
+ *
+ * `null` and `undefined` both mean "the writer never set a window", but they
+ * are not the same value, and one control compared with `===`. So on this path
+ * every trait's "True all the way through" switch rendered OFF, with the "not
+ * sent to AI at all" warning beneath it -- and turning it back on was undone by
+ * the very response the save returned. See TraitWindow.tsx.
+ *
+ * Healed HERE as well as in the control, because a wire shape that disagrees
+ * with its own TypeScript type will find the next `===` on its own.
+ */
+function healProfileWire<T extends Profile>(body: T): T {
+  for (const section of Object.values(body.sections ?? {})) {
+    for (const block of section.trait_blocks ?? []) {
+      // Deleted rather than assigned undefined: absent is the state the type
+      // describes, and nothing downstream should be able to tell them apart.
+      // The cast is the point of the function -- TypeScript believes this can
+      // never be null, and the wire is what proved otherwise.
+      if ((block as { true_in?: string[] | null }).true_in === null) {
+        delete block.true_in;
+      }
+    }
+  }
+  return body;
+}
+
+
 export function profilesSource(rootPath: string): ProfileSource {
   return {
     home: "profiles",
@@ -135,7 +168,8 @@ export function profilesSource(rootPath: string): ProfileSource {
         await fetch(`${API_BASE}/api/profiles/profile?${params}`),
         "Failed to load profile.") as Profile & { profile_id?: string };
       // One name for the id across the screen, whichever folder it came from.
-      return { ...body, entity_id: body.entity_id || body.profile_id || "" };
+      return healProfileWire(
+        { ...body, entity_id: body.entity_id || body.profile_id || "" });
     },
 
     async save(profile) {
@@ -148,7 +182,8 @@ export function profilesSource(rootPath: string): ProfileSource {
           profile: { ...profile, profile_id: profile.entity_id },
         }),
       }), "Save failed.") as Profile & { profile_id?: string };
-      return { ...body, entity_id: body.entity_id || body.profile_id || "" };
+      return healProfileWire(
+        { ...body, entity_id: body.entity_id || body.profile_id || "" });
     },
 
     async remove(item) {
@@ -169,7 +204,8 @@ export function profilesSource(rootPath: string): ProfileSource {
           character_kind: type === "character" ? characterKind : "main",
         }),
       }), "Failed to create profile.") as Profile & { profile_id?: string };
-      return { ...body, entity_id: body.entity_id || body.profile_id || "" };
+      return healProfileWire(
+        { ...body, entity_id: body.entity_id || body.profile_id || "" });
     },
 
     async importFile(sourcePath) {
@@ -178,7 +214,8 @@ export function profilesSource(rootPath: string): ProfileSource {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ folder_path: rootPath, source_path: sourcePath }),
       }), "Import failed.") as Profile & { profile_id?: string };
-      return { ...body, entity_id: body.entity_id || body.profile_id || "" };
+      return healProfileWire(
+        { ...body, entity_id: body.entity_id || body.profile_id || "" });
     },
   };
 }

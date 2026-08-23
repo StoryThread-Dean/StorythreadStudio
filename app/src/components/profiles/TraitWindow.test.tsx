@@ -37,6 +37,33 @@ describe("the default", () => {
     expect(screen.queryByTestId("trait-window-picker")).toBeNull();
   });
 
+  it("reads a null window as always, because that is what the wire sends", () => {
+    // THE BUG THIS EXISTS FOR, and it shipped. `always` was `trueIn ===
+    // undefined`. The profiles/ path returns the backend's Pydantic model
+    // straight to the screen and FastAPI writes an unset `true_in` as JSON
+    // `null`, so every trait on that path rendered with the switch OFF and the
+    // "not sent to AI at all" warning under it. The writer turned it on, saved,
+    // and the save's own response turned it back off.
+    //
+    // Reinstate `=== undefined` above and this test fails; nothing else does.
+    mount({ trueIn: null });
+    expect((screen.getByTestId("trait-window-always") as HTMLInputElement)
+      .checked).toBe(true);
+    expect(screen.queryByTestId("trait-window-picker")).toBeNull();
+    // And the alarming sentence in particular must not be on screen: a trait
+    // nobody has touched is not a trait that has been switched off.
+    expect(screen.queryByTestId("trait-window-empty")).toBeNull();
+  });
+
+  it("still tells a real empty window apart from an absent one", () => {
+    // The other half of the same rule. `[]` is a DECISION -- true nowhere --
+    // and the fix above must not have swallowed it into "always".
+    mount({ trueIn: [] });
+    expect((screen.getByTestId("trait-window-always") as HTMLInputElement)
+      .checked).toBe(false);
+    expect(screen.getByTestId("trait-window-empty")).toBeTruthy();
+  });
+
   it("explains itself, like every other feature", () => {
     mount();
     expect(within(screen.getByTestId("trait-window"))
