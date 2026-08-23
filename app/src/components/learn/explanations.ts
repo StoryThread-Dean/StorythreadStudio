@@ -661,9 +661,14 @@ export const EXPLAIN: Record<string, Explains> = {
     needed: "optional",
     cost: FREE,
     how: [
-      "Tick anything that is fine unconnected and say so in one go.",
-      "For one that DOES need a connection, go one at a time instead: the "
-        + "connector needs the other end and a reason, which is a real decision.",
+      "Tick anything that is fine unconnected and say so in one go. That is "
+        + "what the ticking is for: the batch answer here is the no.",
+      "For one that DOES need a connection, press Connect on its row. It "
+        + "cannot be a tick, because a connection carries the other end AND a "
+        + "reason, and a reason is a sentence only you can write.",
+      "Connect leaves the list on that one entry, so you keep your place "
+        + "instead of starting the kind again. Rows you ticked but have not "
+        + "saved yet are dropped.",
     ],
     endpoint: "/api/codex/run/answer",
   },

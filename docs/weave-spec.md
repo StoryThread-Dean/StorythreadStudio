@@ -1087,6 +1087,31 @@ The Weave — a story-aware world model, and Model Roles
  Lists them all at once with what each would need to earn its place. On the map they sit at the rim
  with nothing attached, which is the clearest possible statement of the problem.
 
+ AMENDED 2026-08-23, from live testing. "All at once" above means LISTED all at once. It does not
+ mean CONNECTED all at once, and the difference had never been written down, so the build and the
+ writer read the same words two ways: the screen shipped as a batch dismissal, and the button
+ offering it said "Work through all 7 at once", which reads as a promise to make the connections
+ there. The writer's report: "there doesn't appear to be any purpose or reason for this section
+ except to not connect them".
+
+ THE RULE, stated per kind, because the batch answer is not the same shape for all three:
+
+ - Unplaced   the batch does the POSITIVE action. One list, a chapter each, placed in one go.
+ - Presence   the batch does the POSITIVE action. The chapters the scan found, accepted in one go.
+ - Loose      the batch answer is the NO. "These are fine unconnected" is one sentence about thirty
+              entries, and that is the whole reason the list exists for this kind.
+
+ A connection can never be a tick, and this is a consequence of an existing rule rather than a
+ limitation of the screen: a Tie is REFUSED without a reason line (see the connections section --
+ "A -- connected to -- B" spends brief budget to say nothing the prose did not already show). A
+ reason is a sentence only the writer can write, so seven connections need seven sentences. The
+ headline therefore says what the list DOES for that kind rather than one generic phrase.
+
+ What the list must also offer, on every kind: a per-row way to leave the list on THAT entry and
+ deal with it properly, keeping the writer's place. Two of the three header sentences already told
+ the writer to do this and no control did it -- the only exit abandoned the list and dropped the
+ walk back at the top of the kind. A screen that names an action must have that action on it.
+
  Resuming a session — the findings ledger
 
  - Deterministic stops are never stored. They re-derive every run from source and destination
