@@ -3514,7 +3514,12 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
         {/* Only once it is on. Before that the eye's tooltip is enough, and a
             second control on every trait row would be noise; after it, the
             writer has just made a decision they may want explained. */}
-        {block.subtext && <Explain of="character.subtext" compact align="right" />}
+        {/* Left-anchored: this sits near the LEFT of a trait card, so the
+            panel has to open rightwards. It was align="right", which anchors
+            the panel's right edge here and sent 30rem of it off the side of
+            the window. Explain now clamps itself to the viewport as well, so
+            this is the correct hint rather than the only thing saving it. */}
+        {block.subtext && <Explain of="character.subtext" compact />}
 
         {/* Trait name */}
         <input

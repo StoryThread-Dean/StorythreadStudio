@@ -125,7 +125,9 @@ export function TraitWindow({ trueIn, chapters, onChange, unavailable }: Props) 
           />
           True all the way through
         </label>
-        <Explain of="character.traitWindow" compact align="right" />
+        {/* Same card, same reason as the Hidden control above it: this trigger
+            is near the left edge, so the panel opens rightwards. */}
+        <Explain of="character.traitWindow" compact />
       </div>
 
       {!always && (

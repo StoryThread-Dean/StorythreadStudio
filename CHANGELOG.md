@@ -32,6 +32,12 @@ entry while working on a feature, append it under Unreleased.
 
 ### Fixed
 
+- **"What's this?" popups could open off the side of the screen.** On a trait's
+  Hidden (eyeball) control and its "True all the way through" switch, the help
+  popup opened leftwards from a button already near the left edge, so most of it
+  was off-screen and unreadable. Those two now open the other way, and every
+  help popup in the app will now slide itself back into view rather than hang
+  off an edge, so this cannot happen anywhere else either.
 - **Local models: AI actions failed if you picked "Ollama native".** Setting up
   a local model, choosing Ollama's own API and pressing Test Connection told you
   everything was fine and filled in your model list -- and then every Draft,
