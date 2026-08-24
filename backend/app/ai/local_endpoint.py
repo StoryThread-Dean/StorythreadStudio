@@ -34,12 +34,30 @@ from urllib.parse import urlparse, urlunparse
 LOCAL_CONNECT_TIMEOUT = 3.0
 LOCAL_LIST_TIMEOUT = 10.0
 
-# The two shapes a local runtime can speak. This is stored as a setting and
-# chosen explicitly by the writer -- never guessed. Sniffing would mean
-# firing requests at an unknown port and inferring from what comes back,
-# which is slow, occasionally wrong, and impossible to explain in an error
-# message. Test Connection tries the chosen style, and if the OTHER one
-# answers instead it says so and offers to switch.
+# The two shapes a local runtime can speak.
+#
+# NARROWED 2026-08-23, and the narrowing is the fix for a shipped bug. This
+# setting used to choose the CHAT transport as well as the model list, and the
+# chat half could not work: for "ollama" the address stayed at the bare root
+# while run_completion and run_chat POST to a hardcoded {base}/chat/completions,
+# which Ollama does not serve. So a writer who picked Ollama native got a
+# passing Test Connection, a full model dropdown, and a 404 on every single AI
+# action. Nothing announced it, because listing and generation used the same
+# address for different things.
+#
+# It is now a MODEL LISTING choice and nothing else -- which is the only thing
+# it ever controlled correctly. The two runtimes really do list models in
+# different places (`/api/tags` vs `/v1/models`), and Ollama's `/api/tags` is
+# also where the parameter size, quantization and family of each model come
+# from, so the choice earns its keep. CHAT always goes to the
+# OpenAI-compatible `/v1/chat/completions`, which Ollama's compatibility layer,
+# LM Studio, llama.cpp and vLLM all serve. See chat_base_url below.
+#
+# Still never guessed up front: sniffing would mean firing requests at an
+# unknown port and inferring from what comes back, which is slow, occasionally
+# wrong, and impossible to explain in an error message. Test Connection tries
+# the writer's choice, and if the OTHER one answers it CORRECTS the setting and
+# says it did.
 LOCAL_API_STYLES = ("openai", "ollama")
 
 # Shown to the writer whenever an address is rejected, so the message
@@ -123,7 +141,11 @@ def validate_local_base_url(raw: str) -> str:
 
 def normalize_base_url(raw: str, style: str) -> str:
     """
-    The URL to actually send requests to, for a given API style.
+    The URL to LIST MODELS at, for a given API style.
+
+    Chat does not come through here any more -- see chat_base_url. This
+    function answers one question: given the writer's declared runtime, where
+    does its model catalog live?
 
     The two runtimes disagree about where their API lives, and writers
     reasonably paste whichever URL their tool showed them:
@@ -143,3 +165,25 @@ def normalize_base_url(raw: str, style: str) -> str:
         return base
     # openai style (the default): ensure exactly one /v1 on the end.
     return base if base.endswith("/v1") else base + "/v1"
+
+
+def chat_base_url(raw: str) -> str:
+    """
+    Where to send a CHAT request, whatever the writer chose for listing.
+
+    Always the OpenAI-compatible root. Ollama's compatibility layer has served
+    /v1/chat/completions for a long time, and it is the only shape LM Studio,
+    llama.cpp and vLLM all speak -- so there is exactly one chat transport and
+    no setting that can point it somewhere that does not answer.
+
+    This is deliberately NOT style-aware, and that is the whole point: the
+    style setting used to reach generation, where its "ollama" value resolved
+    to a path Ollama does not serve. A writer could not have diagnosed that,
+    because the same setting was making the model list work correctly at the
+    same time.
+
+    Kept as its own function rather than a flag on normalize_base_url so the
+    two questions cannot be confused again at a call site: "where do I list
+    models" and "where do I send a prompt" now have different names.
+    """
+    return normalize_base_url(raw, "openai")

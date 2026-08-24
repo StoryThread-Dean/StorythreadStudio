@@ -95,3 +95,105 @@ def test_test_connection_reports_missing_key_per_provider(client):
     data = resp.json()
     assert data["ok"] is False
     assert "OpenRouter" in data["error"]
+
+
+# ── Test Connection APPLIES the fix instead of describing it ─────────────────
+#
+# Spec: docs/local-model-spec.md sections 4.2 and 10.4.
+#
+# _test_local_connection already worked out which dialect a server really
+# speaks and returned it as `suggested_style`. That value appeared NOWHERE in
+# app/src/, so the writer read a sentence naming the dropdown to change and
+# changed it by hand. Same shape as R8.1 and R8.7: the backend computed the
+# right answer and no screen rendered it.
+#
+# It is safe to apply silently only because the style now chooses where models
+# are LISTED and nothing else (a wrong value costs an empty dropdown, never a
+# wrong answer or a charge) -- and it is still said out loud, because a setting
+# that changes itself without mentioning it is its own bug.
+
+def _probe_answers_only(monkeypatch, working_style: str):
+    """Make the model-list probe succeed for exactly one API style."""
+    from app.routers import settings as settings_router
+
+    dead = {"ok": False, "error": "Nothing answered at that address."}
+
+    async def fake_test_connection(_key, provider=None):
+        if working_style not in ("openai", "ollama"):
+            return dead          # nothing is listening at all
+        base = getattr(provider, "base_url", "")
+        # The ollama catalog hangs off the bare root; everything else off /v1.
+        shaped = "ollama" if not base.endswith("/v1") else "openai"
+        return {"ok": True, "model_count": 3} if shaped == working_style else dead
+
+    monkeypatch.setattr(settings_router, "test_connection", fake_test_connection)
+
+
+def test_a_wrong_api_style_is_corrected_and_persisted(client, monkeypatch):
+    # The writer says OpenAI-compatible; the server is really Ollama.
+    client.put("/api/settings", json={
+        "ai_provider": "local",
+        "local_base_url": "http://localhost:11434",
+        "local_api_style": "openai",
+    })
+    _probe_answers_only(monkeypatch, "ollama")
+
+    data = client.post("/api/settings/test-connection",
+                       json={"provider": "local"}).json()
+
+    # It connected, rather than reporting a dead server it had just reached.
+    assert data["ok"] is True
+    assert data["corrected_style"] == "ollama"
+    # PERSISTED. The whole point: the writer does not go and change a dropdown.
+    assert client.get("/api/settings").json()["local_api_style"] == "ollama"
+
+
+def test_the_correction_is_said_out_loud_in_the_writer_s_words(client, monkeypatch):
+    client.put("/api/settings", json={
+        "ai_provider": "local",
+        "local_base_url": "http://localhost:11434",
+        "local_api_style": "openai",
+    })
+    _probe_answers_only(monkeypatch, "ollama")
+
+    notice = client.post("/api/settings/test-connection",
+                         json={"provider": "local"}).json()["notice"]
+    # The label the writer actually sees in the dropdown, not the wire value.
+    assert "Ollama native" in notice
+    assert "switched for you" in notice
+
+
+def test_a_correct_api_style_is_left_alone(client, monkeypatch):
+    # Nothing to correct: the setting must not be rewritten, and no notice
+    # should appear. A "we fixed it for you" on a working setup teaches the
+    # writer to distrust the message.
+    client.put("/api/settings", json={
+        "ai_provider": "local",
+        "local_base_url": "http://localhost:11434",
+        "local_api_style": "ollama",
+    })
+    _probe_answers_only(monkeypatch, "ollama")
+
+    data = client.post("/api/settings/test-connection",
+                       json={"provider": "local"}).json()
+    assert data["ok"] is True
+    assert "corrected_style" not in data
+    assert "notice" not in data
+    assert client.get("/api/settings").json()["local_api_style"] == "ollama"
+
+
+def test_a_dead_server_is_not_reported_as_a_style_problem(client, monkeypatch):
+    # Neither style answers. The writer needs "start the server", not "flip a
+    # dropdown" -- and nothing may be written to settings on the way.
+    client.put("/api/settings", json={
+        "ai_provider": "local",
+        "local_base_url": "http://localhost:11434",
+        "local_api_style": "openai",
+    })
+    _probe_answers_only(monkeypatch, "neither")
+
+    data = client.post("/api/settings/test-connection",
+                       json={"provider": "local"}).json()
+    assert data["ok"] is False
+    assert "corrected_style" not in data
+    assert client.get("/api/settings").json()["local_api_style"] == "openai"

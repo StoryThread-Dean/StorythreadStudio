@@ -122,38 +122,53 @@ Test Connection **passes**, the model dropdown **fills**, and then every Draft,
 Advisor pass and summary fails. No test in the repository has ever POSTed a
 completion as the local provider.
 
-### 3.2 RULING: one dialect. The app speaks OpenAI-compatible only.
+### 3.2 RULING (the writer's, 2026-08-23): the setting stays, and it chooses where MODELS ARE LISTED. Chat is always OpenAI-compatible.
 
-The style choice is **retired**. `local_api_style` stops selecting a chat
-transport; `normalize_base_url` appends `/v1` for every local address.
+Three options were put up: retire the dropdown, build a real `/api/chat`
+transport, or keep the dropdown and have Test Connection correct it. **The
+writer chose to keep it and correct it.**
 
-Reasoning. Ollama has shipped `/v1/chat/completions` for a long time and it is
-the only shape LM Studio, llama.cpp, vLLM and every other candidate server all
-speak. Keeping two transports means maintaining a second request and response
-shape (`/api/chat` takes `{model, messages, stream:false, options:{temperature},
-format:"json"}` and returns `{message:{content}, done_reason,
-prompt_eval_count, eval_count}`) for zero capability the compat layer does not
-already provide. More decisively: it is a setting the writer can get **wrong in
-a way the app cannot detect until an AI action fails**, which is exactly the
-defect above.
+Implementing that literally would not have fixed 3.1, and the reason is worth
+recording. "Ollama native" had no working chat transport at all, so any
+correction that verified generation would move every writer off it whatever
+server they were running -- the option would exist only to be corrected away
+from, which is the retire option with extra steps. And a writer who never
+pressed Test Connection would still have hit the 404.
 
-This overrules the argument at `local_endpoint.py:37-41`, which reasoned that
-sniffing is guesswork and the writer should declare the dialect. That reasoning
-is sound about *sniffing* and wrong about *needing two*. The comment is replaced
-with this ruling, not deleted.
+So the ruling is honoured by **narrowing what the setting means** rather than by
+removing it. The dropdown chooses where the MODEL CATALOG is read from, which is
+the only thing it ever controlled correctly: Ollama lists at `/api/tags` off the
+bare root, everything else at `/v1/models`. That is a real difference and earns
+a setting -- and `/api/tags` is also the sole source of the parameter size,
+quantization and family in 5.2. **Chat always resolves to
+`/v1/chat/completions`**, which Ollama's compatibility layer, LM Studio,
+llama.cpp and vLLM all serve.
+
+The consequence that makes the whole thing safe: the setting can no longer break
+generation. Getting it wrong costs an empty model dropdown, never a wrong answer
+and never a charge. That is also what makes the automatic correction in 4.2
+acceptable rather than presumptuous.
+
+This does **not** overrule `local_endpoint.py:37-41`, which argued that sniffing
+is guesswork and the writer should declare the dialect. That argument stands and
+the declaration stays. What changed is that the declaration no longer reaches
+the transport.
+
+**Mechanically:** `base_url_for()` answers "where do I send a prompt" and is
+style-blind; `list_base_url_for()` answers "where do I read the catalog" and is
+style-aware. Two names, because one function answering both questions is
+precisely how 3.1 hid for a release.
 
 ### 3.3 What happens to a writer who already chose "Ollama native"
 
-Their setting is read once and healed: `local_api_style` is dropped from
-settings, and their stored `local_base_url` gains its `/v1` through the ordinary
-`normalize_base_url` path, which is idempotent. **Nothing they type again.**
-Their setup begins working where it previously 404'd on every AI action, so the
-heal is a silent repair of a broken state, not a change to a working one.
+Nothing they must do, and nothing they retype. Their stored `local_api_style`
+keeps working for the model list, and their generation starts resolving to
+`/v1/chat/completions` where it previously 404'd on every AI action -- a silent
+repair of a broken state, not a change to a working one.
 
-`LOCAL_API_STYLES` and the style dropdown are removed from `ProviderPanel.tsx`.
-Model listing keeps its Ollama-native branch: `/api/tags` is where the
-descriptions in 5.2 come from, and that is a LISTING concern, not a transport
-one.
+The dropdown stays in `ProviderPanel.tsx`. Its LABEL changes, because "API
+style" is no longer what it is: it reads "Where to read your model list", and
+the help text says Test Connection will correct a wrong pick.
 
 ### 3.4 Timeouts
 
@@ -205,9 +220,25 @@ value appears **nowhere in `app/src/`** (`ProviderPanel.tsx:101-106` renders
 only `{ok, message}`) -- the same shape as R8.1 and R8.7: the backend worked out
 the right answer and no screen read it.
 
-With the style choice retired (3.2) the wrong-dialect case becomes "this address
-answered, but not as an OpenAI-compatible endpoint", and whatever the probe
-learns is rendered. **A diagnosis the writer cannot see is not a diagnosis.**
+So the probe now **applies the fix rather than describing it**: when the other
+dialect answers, the setting is corrected, saved, and the correction is stated in
+the same breath ("That address answers as Ollama native rather than
+OpenAI-compatible, so the API style has been switched for you"). The dropdown on
+screen moves with it, and the cached settings move too, or the screen would read
+as edited-but-unsaved over a change the backend has already written.
+
+Correcting silently is acceptable only because of 3.2: the value decides where
+models are listed, so a wrong one costs an empty dropdown rather than a wrong
+answer or a charge, and the probe has just established which value is right. It
+is still said out loud, because **a setting that changes itself without
+mentioning it is its own bug.**
+
+Two bounds, both tested. A CORRECT setting is left alone and produces no notice
+-- a "we fixed it for you" on a working setup teaches the writer to distrust the
+message. And a dead server is never reported as a style problem, because "start
+the server" and "flip a dropdown" are different instructions.
+
+**A diagnosis the writer cannot see is not a diagnosis.**
 
 ---
 
@@ -251,9 +282,11 @@ The `:latest` suffix is stripped for display only. The stored id keeps it.
 `providerMeta.ts:87-89` already tells the writer local models are "a good
 pairing for Prose or experimenting, less so for critique". That is a quality
 claim about models the app has never seen, in prose, with nothing checking it.
-It is softened to describe the *variance* rather than assign roles. If any
-capability hint survives, it gets the `test_explain_costs.py` treatment -- a
-claim worth keeping is worth a test that cites it.
+It is softened to describe the *variance* rather than assign roles, and the same
+sentence now carries 7.3's answer: no cost, but time and the writer's own GPU, so
+replies can take minutes rather than seconds. If any capability hint survives, it
+gets the `test_explain_costs.py` treatment -- a claim worth keeping is worth a
+test that cites it.
 
 ---
 
@@ -378,14 +411,16 @@ A claim worth keeping is worth a test that cites it.
    The absence of this test is why 3.1 shipped. It is the most important item
    here. `tests/` currently contains `chat/completions` only in two hosted error
    fixtures.
-2. The retired style heals: a stored `local_api_style: "ollama"` plus a
-   bare-root address resolves to a working `/v1` URL, and the writer retypes
-   nothing (3.3).
+2. Listing stays style-aware while chat does not: `list_base_url_for` keeps the
+   bare root for ollama, `base_url_for` returns `/v1` for BOTH styles, and a
+   stored `local_api_style: "ollama"` needs no retyping (3.2, 3.3). The public
+   address rule must hold for both questions, or the narrowing has loosened
+   what "local" means.
 3. Test Connection fails when the address lists models but cannot generate
    (4.1) -- the exact shape of the shipped defect.
-4. `suggested_style` (or its successor) is RENDERED. A source-read test, in the
-   style of `test_explain_costs.py`, because "computed and never rendered" is a
-   whole class of bug in this codebase.
+4. A wrong style is CORRECTED, persisted and said out loud in the writer's own
+   words; a correct one is left alone with no notice; and a dead server is not
+   reported as a style problem (4.2).
 5. A model with `context_length: 0` is OFFERED by the Extractor picker and
    labelled unknown (6.2). Verified by reinstating the filter.
 6. `parameter_size`, `quantization_level`, `family` and `size` survive
@@ -403,7 +438,12 @@ A claim worth keeping is worth a test that cites it.
 ## 11. Deliberately not built
 
 - **Bundling, downloading or updating a model or runtime** (1.2).
-- **Sniffing the dialect** -- 3.2 removes the need rather than guessing.
+- **Sniffing the dialect up front.** The writer still declares it, and 3.2 takes
+  the declaration out of the transport so a wrong one cannot break generation.
+  Test Connection probes the alternative only AFTER the declared one has failed,
+  which is checking rather than guessing.
+- **A second chat transport.** `/api/chat` is not implemented and is not
+  planned; 3.2 records why, and why "Ollama native" is a listing choice only.
 - **Ranking local models against each other** (5.3).
 - **Streaming.** Backburnered app-wide, and the editor-pass path structurally
   cannot stream because it must parse one complete JSON object.

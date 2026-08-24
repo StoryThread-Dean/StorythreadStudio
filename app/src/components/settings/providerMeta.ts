@@ -73,17 +73,22 @@ export const PROVIDER_META: ProviderMeta[] = [
     instructions: [
       "Install Ollama (ollama.com) or LM Studio, then start it.",
       "Pull at least one model -- for example: ollama pull llama3",
-      "Enter its address below (usually http://localhost:11434) and pick the API style.",
+      "Enter its address below (usually http://localhost:11434). Test Connection sorts out the rest.",
       "Test Connection to load the list of models you have downloaded.",
     ],
     keyPlaceholder: "",
     requiresKey: false,
     supportsTiers: false,
     supportsCaching: false,
+    // WHAT IT SPENDS IS TIME, not money, and that is the honest answer here
+    // (local-model-spec 7.3). The old wording also assigned local models to
+    // Prose and away from critique, which is a quality claim about models this
+    // app has never seen, with nothing checking it -- so it now describes the
+    // VARIANCE and leaves the choice to the writer, whose hardware decides.
     note: "Only addresses on your own machine or local network are accepted. "
-        + "Local reasoning models can be noticeably slower than hosted ones, and "
-        + "their quality varies a lot by model -- a good pairing for Prose or "
-        + "experimenting, less so for critique.",
+        + "Nothing you send leaves your machine and there is no cost -- what "
+        + "it spends is time and your own GPU, so replies can take minutes "
+        + "rather than seconds. Quality varies a lot from model to model.",
   },
 ];
 

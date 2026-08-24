@@ -1054,6 +1054,13 @@ Still open:
 **Two DEFECTS this list did not mention, found 2026-08-23 by reading the code
 against it.** Both fail quietly, which is why neither was ever reported.
 
+> **D1 and D3 are FIXED (2026-08-23).** On the writer's ruling the API-style
+> setting was KEPT but narrowed to a model-listing choice, so chat always
+> resolves to `/v1/chat/completions` and the setting can no longer break
+> generation; Test Connection now CORRECTS a wrong pick and says so, which is
+> D3. `base_url_for` is style-blind, `list_base_url_for` is style-aware. See
+> `docs/local-model-spec.md` 3.2 and 4.2. D2 and D4 are still open.
+
 **D1 -- the `ollama` API style cannot generate at all.** `normalize_base_url`
 keeps the bare root for that style (`ai/local_endpoint.py:140-145`), but
 `run_completion` and `run_chat` both POST to a hardcoded

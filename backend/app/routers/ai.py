@@ -17,7 +17,8 @@ from pydantic import BaseModel
 
 from app.settings_store import load_settings
 from app.ai.openrouter import run_completion, run_chat, list_models
-from app.ai.providers import ProviderConfig, OPENROUTER, PROVIDERS, active_provider, base_url_for
+from app.ai.providers import (ProviderConfig, OPENROUTER, PROVIDERS,
+                              active_provider, base_url_for, list_base_url_for)
 from app.ai.roles import resolve_role_model, role_api_key
 from app.ai.sanitizer import sanitize
 from app.ai.prompts import (
@@ -322,7 +323,10 @@ async def get_models(provider: str | None = None):
         try:
             chosen = dataclasses.replace(
                 chosen,
-                base_url=base_url_for(chosen, settings),
+                # LISTING, so the writer's API-style choice applies here.
+                # Generation uses base_url_for, which is always
+                # OpenAI-compatible -- see providers.base_url_for.
+                base_url=list_base_url_for(chosen, settings),
                 model_list_style=("ollama_tags"
                                   if settings.get("local_api_style") == "ollama"
                                   else "openai"),

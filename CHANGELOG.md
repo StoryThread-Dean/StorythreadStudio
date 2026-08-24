@@ -32,6 +32,19 @@ entry while working on a feature, append it under Unreleased.
 
 ### Fixed
 
+- **Local models: AI actions failed if you picked "Ollama native".** Setting up
+  a local model, choosing Ollama's own API and pressing Test Connection told you
+  everything was fine and filled in your model list -- and then every Draft,
+  Smart Advisor pass and summary failed, because prompts were being sent to an
+  address Ollama does not answer on. Prompts now always go to the right place
+  whatever you picked, so this cannot happen. If you had chosen Ollama native,
+  it simply starts working; there is nothing to change.
+- **Local models: Test Connection now fixes the setting instead of telling you
+  to.** If your server turns out to speak the other API, the app switches the
+  setting for you and says that it did, rather than printing a sentence naming a
+  dropdown for you to go and change. The setting is also relabelled to what it
+  actually does now -- it chooses where your model LIST is read from, which is
+  also where Ollama tells us each model's size and quantization.
 - **Character profiles: "True all the way through" would not stay switched on.**
   On a trait, turning the switch on and saving put it straight back to off, with
   a warning underneath saying the trait was not being sent to AI at all. It
