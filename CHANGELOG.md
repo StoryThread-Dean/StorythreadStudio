@@ -24,7 +24,26 @@ entry while working on a feature, append it under Unreleased.
 
 ### Changed
 
+- **The Weave: "work through all of these at once" now says what it will
+  actually do.** The button used one phrase for three different jobs. Where the
+  list really does the work in one go it says so ("Place all 7 in one list",
+  "Record all 7 in one list"); where the batch answer is "these are all fine" it
+  says that instead of implying it will connect them for you.
+
 ### Fixed
+
+- **Character profiles: "True all the way through" would not stay switched on.**
+  On a trait, turning the switch on and saving put it straight back to off, with
+  a warning underneath saying the trait was not being sent to AI at all. It
+  affected every trait in every project that has not been brought into the
+  Weave, and the trait was in fact being sent the whole time -- the switch was
+  reading the wrong answer, not changing one. Nothing on disk was wrong and
+  nothing needs redoing.
+- **The Weave: you can now deal with one entry properly without losing your
+  place.** On a list of unconnected entries, the screen told you to handle any
+  that need a real connection on their own, and there was no way to do it: the
+  only way out started the whole section again. Every row now has a Connect
+  button that takes you to that one entry and brings you back to where you were.
 
 ---
 
