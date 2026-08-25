@@ -178,7 +178,7 @@ export interface Profile {
    * stage. All three point at one profile, or a mention of two of them finds
    * nothing. Not characters only: a place is "Ashfall" and "the burned city".
    *
-   * See docs/alias-spec.md.
+   * See docs/weave-spec.md, appendix 2.
    */
   aliases?: string[];
   /**

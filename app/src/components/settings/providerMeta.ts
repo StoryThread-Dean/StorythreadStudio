@@ -10,7 +10,7 @@
 // so each connection gets a distinct, self-documenting panel without new
 // layout code.
 //
-// Planned future entries (see docs/research-multi-provider.md) -- NOT built:
+// Planned future entries (see docs/local-model-spec.md, appendix) -- NOT built:
 //   - custom: any OpenAI-compatible URL, deliberately separate from "local".
 //     Every local runtime speaks the same API as a hosted one, so without
 //     that separation the local entry would quietly become a way to connect

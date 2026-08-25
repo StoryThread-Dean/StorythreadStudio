@@ -1,6 +1,6 @@
 // components/profiles/AliasEditor.tsx -- every word this entry answers to
 // =======================================================================
-// Spec: docs/alias-spec.md section 4.
+// Spec: docs/weave-spec.md, appendix 2, section A4.
 //
 // The report, 2026-08-25: "We need to build a way for A) writer can manually
 // type in the known Aliases before even going to Weaving walkthrough."

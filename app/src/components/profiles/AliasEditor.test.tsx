@@ -1,6 +1,6 @@
 // components/profiles/AliasEditor.test.tsx -- typing in the other names
 // ======================================================================
-// Spec: docs/alias-spec.md section 4.
+// Spec: docs/weave-spec.md, appendix 2, section A4.
 //
 // The report: the alias machinery has existed since v2.0.0 and only Weaving
 // could reach it, because every route started from a word the scan found in the

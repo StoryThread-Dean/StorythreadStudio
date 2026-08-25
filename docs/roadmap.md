@@ -73,7 +73,8 @@ rule is about what the writer can SEE, not about where the plumbing reaches.
 A three-pass audit of all 806 lines of `docs/weave-spec.md` against the build
 found the programme substantially off its own specification -- because the spec
 had never been in the repository, so nothing was ever compared to it. Findings:
-`docs/weave-spec-gaps.md`. Repair plan, 107 tasks: `docs/weave-recovery-plan.md`.
+`docs/weave-spec.md`, appendix 1 (folded in 2026-08-25; the 107-task repair
+plan is retired -- see the note below).
 
 **In v2.0.0** (recovery-plan phases 1-6, 8, 10): undo the contradictions
 introduced while the spec was unreferenced; give characters, relationships,
@@ -99,6 +100,31 @@ findings; release hygiene.
     `check-snags`, and the spec calls it "the reason the frame system exists".
     Shipping frames without it is defensible only if the product does not claim
     the check exists.
+- **Frayed's Quick Fill filling "from what the prose already says"**
+  (recovery-plan R11.4). Half of ruling 9. It needs one of the AI passes above,
+  so it moves with them rather than separately.
+
+**Blocked on ONE decision, which is the writer's:** does `profiles/` stop being
+a live home for unconverted projects?
+
+- **Delete `merge_profile_with_arc`** (recovery-plan R1.5b). The ruling
+  sequenced it "when that route goes"; R2.1 then kept `profiles/` as a live
+  home, so the route is still doing real work for exactly the projects the
+  ruling was protecting.
+- **Delete the second `influence` parser** (the blocked half of R11.3). The
+  legacy scale is ported into `codex/normalize.py` and read by both dialects;
+  what remains is removing the duplicate, which cannot happen while both
+  dialects are live.
+
+Neither is an oversight and neither is effort. They are one ruling, and both go
+the day it is made.
+
+> **`docs/weave-recovery-plan.md` is RETIRED (2026-08-25).** It was a work
+> ledger with ids R0.1 to R11.7 and every in-scope task shipped in v2.0.0 and
+> v2.0.1. Its fourteen unchecked items are the ones above plus phases 7 and 9,
+> which this section already carried in more useful form. Deleting it rather
+> than keeping a 1,032-line file that reads like a work queue and is not one --
+> the shipped detail lives in CLAUDE.md's ledger and in the commit history.
 
 Two more, surfaced by the 2026-08-11 head-to-tail sweep and stated in
 `features.md` as not-yet-behaviour so the docs stay honest:
@@ -1042,7 +1068,8 @@ Worth building, prioritization not yet committed.
 
 ### Local model providers -- MOSTLY SHIPPED (v1.1.1)
 
-Shipped: the `local` provider entry, address + API-style settings restricted to loopback / private / `.local` destinations (`backend/app/ai/local_endpoint.py`), Ollama's native `GET /api/tags` via `model_list_style`, `<think>` stripping in the sanitizer, and a Test Connection that tells a bad address, a dead server, and a wrong-API-style server apart. See `docs/research-multi-provider.md` for the original research.
+Shipped: the `local` provider entry, address + API-style settings restricted to loopback / private / `.local` destinations (`backend/app/ai/local_endpoint.py`), Ollama's native `GET /api/tags` via `model_list_style`, `<think>` stripping in the sanitizer, and a Test Connection that tells a bad address, a dead server, and a wrong-API-style server apart. See `docs/local-model-spec.md` for the contract, and its appendix for the
+original research.
 
 Still open:
 
@@ -1127,7 +1154,8 @@ Long-planned. Storythread Studio is aimed at beginning writers, and editing your
 - **DEFAULT is a locked, uneditable prompt** — exactly what the backend uses today. It always exists and cannot be broken.
 - An **Advanced** option unlocks custom prompts. Each promptable feature gets its own section in Settings with a pull-down: **DEFAULT** (default), then **Custom <edited name>**, **Custom <edited name 2>**, etc.
 - Custom prompts are named, per-feature, and swappable at any time; picking DEFAULT always restores stock behavior.
-- Scope ideas for the Advanced side: `{{variable}}` placeholders, per-prompt sampling settings, and JSON import/export packs (see [`research-multi-provider.md`](research-multi-provider.md)).
+- Scope ideas for the Advanced side: `{{variable}}` placeholders, per-prompt sampling settings, and JSON import/export packs (see the appendix to
+  [`local-model-spec.md`](local-model-spec.md)).
 
 ### "Show me how this works" everywhere
 

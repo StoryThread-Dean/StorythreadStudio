@@ -321,7 +321,7 @@ def test_both_dialects_carry_the_type():
 
 # ── Aliases: every word an entry answers to ──────────────────────────────────
 #
-# Spec: docs/alias-spec.md section 3.1.
+# Spec: docs/weave-spec.md, appendix 2, section A3.1.
 #
 # The Weave has carried aliases since v2.0.0 and profiles/ never did, so a
 # writer on an unconverted project had nowhere to put a nickname. The writer's

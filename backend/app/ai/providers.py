@@ -10,7 +10,7 @@
 # openrouter.py is the phone that can call anyone, and the card tells it
 # which number to dial and how formal to be.
 #
-# Adding a future provider (see docs/research-multi-provider.md) is meant
+# Adding a future provider (see docs/local-model-spec.md, appendix) is meant
 # to be exactly this:
 #   1. Add a ProviderConfig instance below + register it in PROVIDERS.
 #   2. Add its settings keys (API key / base URL) to settings_store.py.
