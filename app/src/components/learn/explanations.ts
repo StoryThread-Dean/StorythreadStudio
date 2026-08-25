@@ -235,18 +235,44 @@ export const EXPLAIN: Record<string, Explains> = {
     ],
   },
   "spine.what": {
-    what: "Two cheat sheets: a personality pattern and a story role.",
-    why: "A starting point rather than a label. Both insert a few sentences of "
-      + "ordinary text into the profile, written to be argued with -- the point "
-      + "is to have something on the page to react to.",
+    what: "A personality pattern to build a character out from.",
+    why: "A starting point rather than a label. Most characters only want part "
+      + "of a type, so you choose which lines land -- the point is to have "
+      + "something on the page to react to, not a description to accept.",
     needed: "optional",
     cost: FREE,
     how: [
-      "Pick one. The text goes into the profile straight away.",
-      "The dropdown clears itself afterwards, because it is not a field being "
-        + "set -- nothing remembers which one you chose.",
-      "Picking a story role also fills in the Role field and adds a few tags.",
-      "Edit or delete what it inserted like any other text.",
+      "Pick a type. The character remembers it, so you can come back and take "
+        + "more later.",
+      "Then choose which lines fit. Nothing is added until you say so.",
+      "Lines you have already taken are greyed, so a second visit only offers "
+        + "what is new.",
+      "Everything it adds is ordinary text you can edit or delete.",
+    ],
+  },
+  // THE PICK-AND-CHOOSE SCREEN. Its own entry rather than more steps on
+  // spine.what, because it is the answer to a different question: not "what is
+  // this control" but "why am I being asked line by line".
+  "spine.facets": {
+    what: "The parts of a personality type, offered one at a time.",
+    why: "A type describes a pattern, not a person, so a lot of any type will "
+      + "not fit the character in front of you. A recurring shopkeeper can "
+      + "want to be beyond reproach without noticing the crooked picture "
+      + "frame in every room. Taking the whole paragraph meant editing most "
+      + "of it back out.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Tick the lines that fit. Nothing starts ticked, because this writes "
+        + "into your own profile.",
+      "Essentials takes what they want, what they dread and how they talk. "
+        + "Everything takes the lot.",
+      "Those two only move the ticks -- nothing is written until you press "
+        + "Add.",
+      "A line already in this character is greyed and says so. Edit that "
+        + "sentence yourself and it will be offered again.",
+      "Come back any time to take more. Changing the type never deletes what "
+        + "you already added.",
     ],
   },
   "names.what": {

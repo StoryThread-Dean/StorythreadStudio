@@ -299,6 +299,13 @@ function profileFromThread(thread: WeaveThread,
     created_at: String(thread.created_at ?? ""),
     updated_at: String(thread.updated_at ?? ""),
     character_kind: (thread.character_kind === "side" ? "side" : "main"),
+    // THE PERSONALITY TYPE. Surfaced for the same reason `run` and
+    // `appears_in` are: a screen edits it, so it needs a field rather than
+    // living only in the pass-through blob. Read AND written below -- this
+    // module is the third carrier of the field after the two Python parsers,
+    // and a control wired to something the round trip does not carry is the
+    // bug the `subtext` switch already was.
+    enneagram: String(thread.enneagram ?? ""),
     // The Run, editable on screen as of R2.5. Still carried in `weave` as well,
     // so a screen that does not touch it hands it back untouched -- this field
     // is what the editor reads and writes, and threadFromProfile prefers it.
@@ -379,6 +386,7 @@ function threadFromProfile(profile: Profile,
     tags: profile.tags,
     filename: profile.filename,
     character_kind: profile.character_kind === "side" ? "side" : "",
+    enneagram: profile.enneagram ?? "",
     full_ai_summary: profile.full_ai_summary,
     sections: out,
   };

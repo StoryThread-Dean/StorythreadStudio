@@ -308,6 +308,11 @@ def parse_thread(raw: str, registry: dict | None = None,
         # Only written when "side" -- same rule the profile format uses, so
         # a Main character's file stays byte-identical through migration.
         "character_kind": str(front.get("character_kind") or ""),
+        # The Enneagram type id. Read and written by BOTH dialects: a
+        # field one parser knows and the other drops is the bug R11.3 and
+        # the `subtext` round trip were each an instance of, and it is
+        # invisible because a lost string looks exactly like one never set.
+        "enneagram": str(front.get("enneagram") or ""),
         "full_ai_summary": "",
         "sections": {},
         "ties": [],
@@ -604,6 +609,8 @@ def render_thread(
         lines.append(f"ai_scope: {scope}")
     if thread.get("character_kind") == "side":
         lines.append("character_kind: side")
+    if thread.get("enneagram"):
+        lines.append(f"enneagram: {thread['enneagram']}")
 
     if thread.get("display_name") and thread["display_name"] != thread.get("name"):
         lines.append(f"display_name: {_scalar(thread['display_name'])}")

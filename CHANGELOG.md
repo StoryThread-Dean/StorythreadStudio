@@ -24,6 +24,26 @@ entry while working on a feature, append it under Unreleased.
 
 ### Changed
 
+- **Character profiles: pick the parts of a personality that actually fit.**
+  Choosing an Enneagram type used to drop one long paragraph into Personality
+  Traits, and most of it usually described somebody else. Now the character
+  remembers its type, and a **Pick what fits** button opens the type split into
+  separate lines you tick one at a time. **Essentials** takes what they want,
+  what they dread and how they talk; **Everything** takes the lot; neither
+  writes anything until you press Add. Lines already in the character are greyed
+  so a second visit only offers what is new. Side characters keep a record of
+  their type now, which they never did.
+- **Character profiles: adding a story role no longer erases the ones already
+  there.** A character can be a Merchant and a Red Herring and an Everyman, and
+  picking the third keeps the first two. Picking one twice does nothing instead
+  of listing it again.
+- **Character profiles: one Role control instead of two, and it explains
+  itself.** The second dropdown is gone. The list beside the Role field now
+  covers around sixty roles grouped by what you are looking for -- Leads,
+  Opposition, Trade and community, Mystery and misdirection, and five more --
+  rather than by how common they are, which is why Merchant, Innkeeper, Healer,
+  Guard, Suspect and Witness were missing entirely. Every role explains what it
+  does in a story, and the ones with writing guidance offer to add it.
 - **The Weave: "work through all of these at once" now says what it will
   actually do.** The button used one phrase for three different jobs. Where the
   list really does the work in one go it says so ("Place all 7 in one list",

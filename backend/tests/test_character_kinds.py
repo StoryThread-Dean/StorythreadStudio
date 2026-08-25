@@ -259,3 +259,61 @@ type: character
     back = _parse_profile_markdown(already, "newton.md", "character")
     assert back.sections["personality_traits"].trait_blocks[0].trait \
         == "Story role: Comic Relief"
+
+
+# ── The Enneagram type, stored ───────────────────────────────────────────────
+#
+# Spec: docs/character-spine-spec.md section 5.
+#
+# The writer's report was "the functionality and purpose of picking the
+# ennegram never stays put". It did not: the control was a fire-and-forget
+# inserter, and on a SIDE character it appended the paragraph with no label at
+# all, so nothing on disk recorded that a type had ever been chosen. The
+# character in the report was a side character.
+#
+# The type is a field now, and it has to survive both dialects. A field one
+# parser knows and the other drops is the shape of R11.3 and of the `subtext`
+# round trip, and it is invisible: a lost string looks exactly like one never
+# set.
+
+def _typed(name: str, filename: str, enneagram: str, kind: str = "main") -> Profile:
+    p = _make_empty_profile("character", name, "", filename, character_kind=kind)
+    p.enneagram = enneagram
+    return p
+
+
+def test_the_type_survives_a_profiles_round_trip():
+    back = _roundtrip(_typed("Saki Murakami", "saki.md", "e1", kind="side"))
+    assert back.enneagram == "e1"
+    assert back.character_kind == "side"
+
+
+def test_absent_stays_absent_and_writes_nothing():
+    # Every profile ever written is in this state and must stay in it -- and an
+    # ordinary profile must resave with no diff, so the key is not written at
+    # all rather than written empty.
+    p = _make_empty_profile("character", "Nobody", "", "n.md")
+    md = _generate_profile_markdown(p, "character")
+    assert "enneagram:" not in md
+    assert _roundtrip(p).enneagram == ""
+
+
+def test_an_unknown_id_is_kept_rather_than_dropped():
+    # A hand edit, or a newer release. Dropping it to look tidy would destroy
+    # the writer's answer; the SCREEN decides what it can render.
+    assert _roundtrip(_typed("Odd", "o.md", "e99")).enneagram == "e99"
+
+
+def test_both_dialects_carry_the_type():
+    # THE CONTRACT THAT MATTERS. profiles.py and codex/threads.py must agree,
+    # or bringing a project into the Weave silently loses every type.
+    from app.codex.threads import parse_thread, render_thread
+
+    profiles_md = _generate_profile_markdown(
+        _typed("Saki Murakami", "saki.md", "e4"), "character")
+    assert "enneagram: e4" in profiles_md
+
+    thread = parse_thread(profiles_md)
+    assert thread.get("enneagram") == "e4", "threads.py dropped the type"
+    assert "enneagram: e4" in render_thread(thread), "render_thread dropped it"
+    assert parse_thread(render_thread(thread))["enneagram"] == "e4"
