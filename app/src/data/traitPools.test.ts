@@ -108,7 +108,16 @@ describe("rollTraitOptions -- archetype flavor", () => {
     expect(flavor).toContain(rolled[0]);
   });
 
-  it("flavor never applies to the NSFW tiers (writer already opted in role-neutral)", () => {
+  it("flavor never applies to the NSFW tiers, so the tier stays what was asked for", () => {
+    // The reason, which this test used to assert without giving: every line in
+    // ARCHETYPE_FLAVOR is written for the NORMAL pools. Mixing them in here
+    // would return two role lines and two NSFW ones, so a writer who
+    // deliberately turned the tier on would get half of what they asked for.
+    // Weakening the switch they just set is worse than not weighting the roll.
+    //
+    // Kept after being challenged 2026-08-25. What WAS wrong is that nothing
+    // said so: the Story Role control sat there looking active. QuickBuildPanel
+    // now states it, and QuickBuildPanel.test.tsx pins that it does.
     const rolled = rollTraitOptions(
       "mannerism", 4, { nsfw: true, archetypeId: "comic_relief" }, seededRng(),
     );

@@ -12,6 +12,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { SpineFacetPicker } from "./SpineFacetPicker";
 import { SpinePickers } from "./SpinePickers";
 import { RolePicker } from "./RolePicker";
+import { QuickBuildPanel } from "./QuickBuildPanel";
 import { ENNEAGRAM_OPTIONS, addRole, splitRoles } from "../../data/characterSpines";
 
 afterEach(cleanup);
@@ -258,5 +259,30 @@ describe("the role help is a genuine popout", () => {
     expect(screen.queryByTestId("role-help")).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByTestId("role-help")).toBeNull();
+  });
+});
+
+describe("Quick Build's Story Role", () => {
+  function showQuickBuild() {
+    render(<QuickBuildPanel onInsert={vi.fn()} onInsertRoleSummary={vi.fn()} />);
+  }
+
+  it("says what it does instead of saying 'weights the rolls'", () => {
+    // The report was a question: "what does the text above it mean {weights the
+    // rolls}? Does it physically effect the [Reroll] below it? if so, for which
+    // section? how does it effect the reroll?" Jargon that raises four
+    // questions is not a label.
+    showQuickBuild();
+    const panel = screen.getByTestId("quick-build-panel");
+    expect(panel.textContent).not.toContain("weights the rolls");
+    expect(panel.textContent).toMatch(/mixes lines that suit this role/i);
+    // Answers "which section" and "does it affect reroll" on the label itself.
+    expect(panel.textContent).toMatch(/every row below/i);
+    expect(panel.textContent).toMatch(/re-rolls straight away/i);
+  });
+
+  it("stays quiet about the tier until a tier is actually on", () => {
+    showQuickBuild();
+    expect(screen.queryByTestId("quickbuild-role-inactive")).toBeNull();
   });
 });

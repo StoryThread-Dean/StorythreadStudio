@@ -582,44 +582,130 @@ function hiddenPool(): TraitPool {
 // Keyed by SpineOption.id from characterSpines.ts ARCHETYPE_OPTIONS. These
 // get shuffled to the FRONT of the normal pool when that role is selected.
 
+/**
+ * Role-specific lines mixed into the Quick Build deal.
+ *
+ * COMPLETED 2026-08-25, and the gap it closed is the point. Seven of the
+ * fifteen roles in the dropdown had lines; eight had none at all, and `physical`
+ * had none for anybody. So "Story Role (weights the rolls)" was simply false
+ * for Hero, Explorer, Rebel, Lover, Creator, Jester, Innocent and Everyman --
+ * picking one re-dealt the rows and weighted nothing, with nothing on screen
+ * saying so. Reported as a question about the wording, which is how a writer
+ * experiences a promise the data does not keep.
+ *
+ * Every role now covers every row, so the label can be honest.
+ *
+ * HOUSE STYLE, same as the pools these mix into: a concrete image rather than
+ * an adjective, one clause with a turn in it, no invented proper nouns (a model
+ * would adopt one as canon and the Weave would raise it as a planned name), and
+ * no em dashes. A line has to read as something a person DOES, not as a summary
+ * of the archetype -- the summary already exists in characterSpines.ts.
+ */
 export const ARCHETYPE_FLAVOR: Partial<Record<string, Partial<Record<TraitSection, string[]>>>> = {
-  comic_relief: {
-    mannerism: [
-      "enters every scene one beat after the perfect setup line, as if summoned by it",
-      "mimes along behind authority figures with uncanny, career-endangering accuracy",
-    ],
-    voice: [
-      "quips that land hardest when everything is falling apart -- the darker the night, the better the timing",
-      "puns so committed and so terrible that the groan has become the town's applause",
-    ],
-    want: ["wants one real laugh from the person who never laughs, and is playing the long game to get it"],
+  hero: {
+    physical: ["stands like somebody expecting to be asked to carry something, because they usually are"],
+    mannerism: ["steps between people and trouble before working out whether they can win"],
+    voice: ["plain and unhedged, and never quite manages to talk about themselves"],
+    want: ["wants to be worth the trust everyone keeps handing them, and has never once felt it"],
+    hidden: ["kept going after the moment they knew they should have stopped, and somebody else paid for it"],
   },
   mentor: {
+    physical: ["moves carefully, favouring something that healed wrong a long time ago"],
     mannerism: ["answers questions by handing you a task instead, and the task turns out to be the answer"],
     voice: ["parables first, instructions only if you fail the parable twice"],
     want: ["wants the student to surpass them, and quietly dreads the actual day it happens"],
+    hidden: ["gave this same advice once before, to somebody who died taking it"],
   },
   caregiver: {
+    physical: ["hands marked by the work of looking after people, and never once mentioned"],
     mannerism: ["feeds everyone within reach; refusing a plate is treated as a formal declaration of war"],
+    voice: ["asks three questions about you before allowing one about themselves"],
     want: ["wants one person to notice they are running on empty before the tank actually reads it"],
+    hidden: ["has been quietly going without something so that the household does not have to"],
   },
-  rival: {
-    mannerism: ["keeps score out loud, in everything, including things that are demonstrably not competitions"],
-    want: ["wants to finally beat their rival at something that counts, having beaten them at everything that doesn't"],
+  explorer: {
+    physical: ["dressed for leaving, always, including at dinner"],
+    mannerism: ["drifts to the window in any room and reads the weather like a timetable"],
+    voice: ["talks in distances and directions, and describes people by where they are from"],
+    want: ["wants to see the far side of something before anybody can tell them what is there"],
+    hidden: ["did not leave home so much as fail to go back, and has never said which it was"],
+  },
+  rebel: {
+    physical: ["wears one thing that is deliberately against the local rules, and never the same thing twice"],
+    mannerism: ["takes the chair facing the door and puts their feet on the furniture of whoever is in charge"],
+    voice: ["answers authority with a question that is technically polite"],
+    want: ["wants the rule broken publicly rather than privately, because private does not count"],
+    hidden: ["obeyed once, when it mattered most, and has been overcorrecting ever since"],
+  },
+  lover: {
+    physical: ["looks at whoever is speaking as though nobody else came to the room"],
+    mannerism: ["remembers the small thing you said in passing and hands it back weeks later"],
+    voice: ["warm and unhurried, and drops to something quieter when it matters"],
+    want: ["wants to be chosen out loud, in front of people, at least once"],
+    hidden: ["has already decided to forgive something the other person has not confessed yet"],
+  },
+  creator: {
+    physical: ["always marked by the work: ink, sawdust, flour, something under the nails"],
+    mannerism: ["rearranges other people's belongings into an order only they can defend"],
+    voice: ["describes what a thing could be instead of what it is, halfway through the sentence"],
+    want: ["wants to make the one piece that outlasts them, and has started it nine times"],
+    hidden: ["destroyed their best work and let everyone believe it was lost"],
+  },
+  jester: {
+    physical: ["a face built for exaggeration, and every inch of it gets used"],
+    mannerism: ["says the unsayable thing in a voice that lets the room pretend it was a joke"],
+    voice: ["mockery aimed upward and never down, always with a smile that is doing work"],
+    want: ["wants the powerful person in the room to hear one true sentence and be unable to punish it"],
+    hidden: ["read the situation correctly before anyone else and decided nobody would believe it said straight"],
+  },
+  innocent: {
+    physical: ["an open face that has not learned how to close yet"],
+    mannerism: ["asks the direct question everyone else has silently agreed to talk around"],
+    voice: ["unguarded, literal, and accidentally devastating"],
+    want: ["wants the world to be the way it was described to them, and is quietly checking"],
+    hidden: ["has already seen the thing that would end the innocence, and filed it as a misunderstanding"],
+  },
+  everyman: {
+    physical: ["the kind of ordinary that is genuinely hard to describe afterwards"],
+    mannerism: ["does the sensible obvious thing while everyone around them is being remarkable"],
+    voice: ["plain speech, no flourishes, and one line a week that stops the room"],
+    want: ["wants to get through this without becoming somebody they would not recognise"],
+    hidden: ["is far more capable than they let on, and has good reasons for the disguise"],
+  },
+  ruler: {
+    physical: ["carries themselves as though the room is already arranged around them, because it usually is"],
+    mannerism: ["decides in the doorway and announces it sitting down, so it sounds considered"],
+    voice: ["states rather than suggests, and lets the silence afterwards do the rest"],
+    want: ["wants the thing they built to hold without them, and cannot test it without letting go"],
+    hidden: ["the claim to the seat has a flaw in it, and exactly one other person knows"],
   },
   shadow: {
+    physical: ["well kept in a way that reads as control rather than vanity"],
+    mannerism: ["listens completely, without once interrupting, and it is the most unnerving thing about them"],
     voice: ["reasonable, patient, and always exactly three sentences away from a threat"],
     want: ["wants the hero to admit they were right about one thing, and would trade the victory for the admission"],
     hidden: ["already knows the hero's secret and is saving it for the moment it buys the most"],
   },
-  ruler: {
-    mannerism: ["rearranges any table they sit at to face the door, including other people's tables"],
-    want: ["wants a successor and trusts no candidate, including -- especially -- family"],
+  comic_relief: {
+    physical: ["a body that seems to arrive in a room slightly before its owner intended"],
+    mannerism: ["enters every scene one beat after the perfect setup line, as if summoned by it"],
+    voice: ["quips that land hardest when everything is falling apart -- the darker the night, the better the timing"],
+    want: ["wants one real laugh from the person who never laughs, and is playing the long game to get it"],
+    hidden: ["uses the timing to stop anybody asking a follow-up question"],
   },
   confidant: {
-    mannerism: ["pours the drink before the confession starts, having read the walk-in correctly again"],
-    want: ["wants to unburden the one secret they were never meant to be given"],
-    hidden: ["keeps one confession in writing, sealed, addressed, and unsent -- insurance or mercy, even they aren't sure"],
+    physical: ["unremarkable in a crowded room, which is exactly why people end up telling them things"],
+    mannerism: ["repeats your own words back slightly rearranged, and the rearrangement is the advice"],
+    voice: ["asks the second question, the one nobody else thought to ask"],
+    want: ["wants to be told something first, once, instead of always being told it best"],
+    hidden: ["is holding a secret that would cost them the friendship if it ever came out how they got it"],
+  },
+  rival: {
+    physical: ["always turned out slightly better than the occasion actually requires"],
+    mannerism: ["keeps score out loud, in everything, including things that are demonstrably not competitions"],
+    voice: ["compliments that take something away on the way past"],
+    want: ["wants to finally beat their rival at something that counts, having beaten them at everything that does not"],
+    hidden: ["would be devastated to actually win, and has never let that thought finish"],
   },
 };
 
@@ -674,6 +760,20 @@ export function rollTraitOptions(
     return a;
   };
 
+  // ROLE FLAVOUR IS NORMAL-TIER ONLY, and that is deliberate rather than an
+  // oversight -- but it was never SAID anywhere the writer could see it, which
+  // is the part that was wrong. Reported as a question about the label.
+  //
+  // Every line in ARCHETYPE_FLAVOR is written for the normal pools. Mixing
+  // them into an NSFW deal would hand back two role lines and two NSFW ones,
+  // so a writer who deliberately turned the tier on would get half of what
+  // they asked for. Weakening the switch they just set is worse than not
+  // weighting the roll.
+  //
+  // The fix is therefore in the UI, not here: QuickBuildPanel says the role is
+  // not shaping the deal while a spicier tier is on. Giving the roles their
+  // own NSFW lines would remove the trade entirely and is the real answer if
+  // this ever matters enough.
   if (!opts.nsfw && opts.archetypeId) {
     const flavorAll = ARCHETYPE_FLAVOR[opts.archetypeId]?.[section] ?? [];
     const flavor = exclude ? flavorAll.filter(o => !exclude.has(o)) : flavorAll;
