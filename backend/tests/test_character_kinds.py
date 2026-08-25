@@ -317,3 +317,71 @@ def test_both_dialects_carry_the_type():
     assert thread.get("enneagram") == "e4", "threads.py dropped the type"
     assert "enneagram: e4" in render_thread(thread), "render_thread dropped it"
     assert parse_thread(render_thread(thread))["enneagram"] == "e4"
+
+
+# ── Aliases: every word an entry answers to ──────────────────────────────────
+#
+# Spec: docs/alias-spec.md section 3.1.
+#
+# The Weave has carried aliases since v2.0.0 and profiles/ never did, so a
+# writer on an unconverted project had nowhere to put a nickname. The writer's
+# own example: Gwendolyn Barksdale is Gwen to everyone who knows her and Willow
+# on stage, and all three have to point at one profile.
+
+def _named(name: str, filename: str, aliases: list[str],
+           ptype: str = "character") -> Profile:
+    p = _make_empty_profile(ptype, name, "", filename)
+    p.aliases = aliases
+    return p
+
+
+def test_aliases_survive_the_profiles_round_trip():
+    back = _roundtrip(_named("Gwendolyn Barksdale", "gwen.md", ["Gwen", "Willow"]))
+    assert back.aliases == ["Gwen", "Willow"]
+
+
+def test_no_aliases_writes_nothing_and_stays_empty():
+    # Every profile written before this is in that state and must resave with
+    # no diff.
+    p = _make_empty_profile("character", "Nobody", "", "n.md")
+    assert "aliases:" not in _generate_profile_markdown(p, "character")
+    assert _roundtrip(p).aliases == []
+
+
+def test_an_alias_with_a_colon_does_not_break_the_frontmatter():
+    # The same hazard a trait name had: a colon turns the line into a mapping
+    # and takes the whole list down with it.
+    back = _roundtrip(_named("The Guild", "guild.md",
+                             ["Weavers: the old name"], ptype="lore"))
+    assert back.aliases == ["Weavers: the old name"]
+
+
+def test_blank_aliases_are_dropped_rather_than_stored():
+    back = _roundtrip(_named("Ashfall", "ash.md", ["the Ash", "   ", ""],
+                             ptype="location"))
+    assert back.aliases == ["the Ash"]
+
+
+def test_both_dialects_carry_aliases():
+    # THE CONTRACT. profiles.py and codex/threads.py must agree, or converting
+    # a project silently loses every nickname the writer typed.
+    from app.codex.threads import parse_thread, render_thread
+
+    md = _generate_profile_markdown(
+        _named("Gwendolyn Barksdale", "gwen.md", ["Gwen", "Willow"]), "character")
+    thread = parse_thread(md)
+    assert thread.get("aliases") == ["Gwen", "Willow"], "threads.py dropped them"
+    assert parse_thread(render_thread(thread))["aliases"] == ["Gwen", "Willow"]
+
+
+def test_aliases_are_not_a_character_only_idea():
+    # A place is "Ashfall" and "the burned city" as readily as a person is
+    # "Gwendolyn" and "Gwen". build_alias_map walks every Thread regardless of
+    # kind, so restricting this to characters would be a limit invented by one
+    # screen and contradicted by the index behind it.
+    for ptype in ("location", "lore", "relationship"):
+        back = _parse_profile_markdown(
+            _generate_profile_markdown(
+                _named("Ashfall", "a.md", ["the Ash"], ptype=ptype), ptype),
+            "a.md", ptype)
+        assert back.aliases == ["the Ash"], ptype

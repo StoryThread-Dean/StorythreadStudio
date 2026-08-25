@@ -22,6 +22,16 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **Type in the other names a character goes by, without waiting for Weaving.**
+  Gwendolyn Barksdale is Gwen to the people who know her and Willow on stage,
+  and the app needs all three pointing at one profile or two of them find
+  nothing when it reads your chapters. Until now the only way to record that was
+  to let Weaving find the word in a chapter first, which is no use if you are
+  building the world before you write a line. There is an **Also known as**
+  field on every profile now -- characters, places, factions, anything. A word
+  that already means another entry is refused and says which one, because one
+  word cannot mean two things. Nothing is guessed for you.
+
 ### Changed
 
 - **Character profiles: pick the parts of a personality that actually fit.**

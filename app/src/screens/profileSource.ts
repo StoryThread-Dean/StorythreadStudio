@@ -306,6 +306,10 @@ function profileFromThread(thread: WeaveThread,
     // and a control wired to something the round trip does not carry is the
     // bug the `subtext` switch already was.
     enneagram: String(thread.enneagram ?? ""),
+    // Surfaced rather than left in the pass-through blob, because this screen
+    // now EDITS them. A control wired to a field the round trip does not carry
+    // is the bug the subtext switch already was.
+    aliases: ((thread.aliases ?? []) as unknown[]).map(String),
     // The Run, editable on screen as of R2.5. Still carried in `weave` as well,
     // so a screen that does not touch it hands it back untouched -- this field
     // is what the editor reads and writes, and threadFromProfile prefers it.
@@ -387,6 +391,7 @@ function threadFromProfile(profile: Profile,
     filename: profile.filename,
     character_kind: profile.character_kind === "side" ? "side" : "",
     enneagram: profile.enneagram ?? "",
+    aliases: profile.aliases ?? [],
     full_ai_summary: profile.full_ai_summary,
     sections: out,
   };

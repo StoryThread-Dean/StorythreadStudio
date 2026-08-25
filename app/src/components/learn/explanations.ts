@@ -234,6 +234,30 @@ export const EXPLAIN: Record<string, Explains> = {
       "Turn it off to get the ordinary options back.",
     ],
   },
+  // ALIASES. Its own entry because the question a writer has here is not "what
+  // is this field" but "why does it matter that I type these in".
+  "profile.aliases": {
+    what: "Every other word this entry answers to.",
+    why: "A character is rarely called one thing. Gwendolyn Barksdale is Gwen "
+      + "to the people who know her and Willow on stage, and all three have to "
+      + "point at this one profile -- otherwise two of them find nothing when "
+      + "the app reads your chapters, and she looks like three different "
+      + "people. Places and factions have the same problem.",
+    needed: "recommended",
+    cost: FREE,
+    how: [
+      "Type a name and press Enter. Nothing is saved until you save the "
+        + "profile, like every other field here.",
+      "Add them before you write, if you know them. The app only asks about a "
+        + "name once your chapters actually use it.",
+      "A word that already means another entry is refused, and says which one: "
+        + "one word cannot mean two things, or a mention of it would match "
+        + "neither.",
+      "Nothing is guessed for you. Gwen is not offered just because the name "
+        + "is Gwendolyn -- a nickname you did not choose is one you would "
+        + "never notice was wrong.",
+    ],
+  },
   "spine.what": {
     what: "A personality pattern to build a character out from.",
     why: "A starting point rather than a label. Most characters only want part "

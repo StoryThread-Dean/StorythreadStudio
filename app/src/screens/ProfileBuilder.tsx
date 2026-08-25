@@ -55,6 +55,7 @@ import { QuickBuildPanel } from "../components/profiles/QuickBuildPanel";
 import { NameGeneratorPanel } from "../components/profiles/NameGeneratorPanel";
 import { Dices } from "lucide-react";
 import { RolePicker } from "../components/profiles/RolePicker";
+import { AliasEditor } from "../components/profiles/AliasEditor";
 import type { CharacterKind } from "../types/profile";
 // WHERE THIS PROJECT'S ENTRIES LIVE. A converted project keeps them in
 // codex/ and an unconverted one in profiles/; the screen asks rather than
@@ -2084,6 +2085,31 @@ export function ProfileBuilder({
                     </div>
                   </div>
                 </div>
+                {/* EVERY OTHER WORD THIS ENTRY ANSWERS TO. On every kind, not
+                    characters only: a place is "Ashfall" and "the burned city"
+                    as readily as a person is "Gwendolyn" and "Gwen", and
+                    build_alias_map walks every Thread regardless of kind.
+
+                    Buffer-edited and manually saved like the rest of this
+                    screen. Weaving's own alias route writes immediately, which
+                    is right for a walkthrough answering one question at a time
+                    and wrong here, where the locked rule is manual save. */}
+                <div className="mb-3">
+                  <AliasEditor
+                    aliases={profile.aliases ?? []}
+                    name={profile.name}
+                    onChange={next => updateProfileField("aliases", next)}
+                    // The entries this screen has loaded, which is the current
+                    // KIND only. It catches the common collision -- two people
+                    // both called Gwen -- and cannot see across kinds, so the
+                    // backend refusal stays the authority when an alias reaches
+                    // it through the Weave.
+                    taken={new Map(profileList
+                      .filter(item => item.filename !== profile.filename)
+                      .map(item => [item.name.toLowerCase(), item.name]))}
+                  />
+                </div>
+
                 {/* SEX AND AGE, characters only -- the two facts a writer
                     states plainly about a person and then stops thinking about.
                     They belong up here with the name rather than buried in

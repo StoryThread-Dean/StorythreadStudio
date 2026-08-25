@@ -172,6 +172,16 @@ export interface Profile {
    */
   enneagram?: string;
   /**
+   * Every other word this entry answers to.
+   *
+   * Gwendolyn Barksdale is Gwen to everyone who knows her and Willow on
+   * stage. All three point at one profile, or a mention of two of them finds
+   * nothing. Not characters only: a place is "Ashfall" and "the burned city".
+   *
+   * See docs/alias-spec.md.
+   */
+  aliases?: string[];
+  /**
    * What the file looked like when it was opened (codex/ entries only).
    *
    * Sent back with a save so the backend can refuse one that would overwrite
