@@ -117,7 +117,12 @@ export function AliasEditor({ aliases, onChange, name, taken }: AliasEditorProps
           onKeyDown={e => {
             if (e.key === "Enter") { e.preventDefault(); add(); }
           }}
-          placeholder="Jim"
+          // INSTRUCTION, NOT AN EXAMPLE. It read "Jim", and a placeholder
+          // that looks like a filled-in value is one a writer reads as data:
+          // "why does the character I just made already have the alias Jim?"
+          // The name field above it is the writer's own, so a plausible name
+          // sitting under it reads as something the app decided.
+          placeholder="Alias or nickname used"
           aria-label="Add another name"
           className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
         />

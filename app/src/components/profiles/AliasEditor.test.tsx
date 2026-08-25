@@ -126,3 +126,18 @@ describe("what it deliberately will not do", () => {
     expect(screen.getByLabelText("What's this?")).toBeTruthy();
   });
 });
+
+describe("the empty state", () => {
+  it("instructs rather than showing a plausible name", () => {
+    // Reported: the placeholder read "Jim", and a placeholder that looks like a
+    // filled-in value is one a writer reads as data -- "why does the character
+    // I just created already have the alias Jim?" The name field directly above
+    // is the writer's own, so a plausible name under it reads as something the
+    // app decided for them.
+    show([]);
+    const input = screen.getByLabelText("Add another name") as HTMLInputElement;
+    expect(input.placeholder).toBe("Alias or nickname used");
+    // And the field really is empty, not merely showing grey text.
+    expect(input.value).toBe("");
+  });
+});

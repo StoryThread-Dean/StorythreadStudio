@@ -2085,31 +2085,6 @@ export function ProfileBuilder({
                     </div>
                   </div>
                 </div>
-                {/* EVERY OTHER WORD THIS ENTRY ANSWERS TO. On every kind, not
-                    characters only: a place is "Ashfall" and "the burned city"
-                    as readily as a person is "Gwendolyn" and "Gwen", and
-                    build_alias_map walks every Thread regardless of kind.
-
-                    Buffer-edited and manually saved like the rest of this
-                    screen. Weaving's own alias route writes immediately, which
-                    is right for a walkthrough answering one question at a time
-                    and wrong here, where the locked rule is manual save. */}
-                <div className="mb-3">
-                  <AliasEditor
-                    aliases={profile.aliases ?? []}
-                    name={profile.name}
-                    onChange={next => updateProfileField("aliases", next)}
-                    // The entries this screen has loaded, which is the current
-                    // KIND only. It catches the common collision -- two people
-                    // both called Gwen -- and cannot see across kinds, so the
-                    // backend refusal stays the authority when an alias reaches
-                    // it through the Weave.
-                    taken={new Map(profileList
-                      .filter(item => item.filename !== profile.filename)
-                      .map(item => [item.name.toLowerCase(), item.name]))}
-                  />
-                </div>
-
                 {/* SEX AND AGE, characters only -- the two facts a writer
                     states plainly about a person and then stops thinking about.
                     They belong up here with the name rather than buried in
@@ -2181,16 +2156,45 @@ export function ProfileBuilder({
                   </div>
                 )}
 
-                <div className="mb-3 w-1/2 pr-1.5">
-                  <label className="mb-1 block text-xs text-text-muted">Status</label>
-                  <select
-                    value={profile.status}
-                    onChange={e => updateProfileField("status", e.target.value)}
-                    className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
-                  >
-                    <option value="active">Active</option>
-                    <option value="archived">Archived</option>
-                  </select>
+                {/* STATUS AND THE OTHER NAMES, side by side. Requested there:
+                    the aliases belong beside Status rather than above Sex/Age,
+                    where they pushed the two facts about a person down the card.
+
+                    EVERY KIND gets the alias control, not characters only: a
+                    place is "Ashfall" and "the burned city" as readily as a
+                    person is "James" and "Jim", and build_alias_map walks every
+                    Thread regardless of kind. Status is on every kind too, so
+                    the row is never half empty.
+
+                    Buffer-edited and manually saved like the rest of this
+                    screen. Weaving's own alias route writes immediately, which
+                    is right for a walkthrough answering one question at a time
+                    and wrong here, where the locked rule is manual save. */}
+                <div className="mb-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-text-muted">Status</label>
+                    <select
+                      value={profile.status}
+                      onChange={e => updateProfileField("status", e.target.value)}
+                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
+                    >
+                      <option value="active">Active</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
+                  <AliasEditor
+                    aliases={profile.aliases ?? []}
+                    name={profile.name}
+                    onChange={next => updateProfileField("aliases", next)}
+                    // The entries this screen has loaded, which is the current
+                    // KIND only. It catches the common collision -- two people
+                    // both called Jim -- and cannot see across kinds, so the
+                    // backend refusal stays the authority when an alias reaches
+                    // it through the Weave.
+                    taken={new Map(profileList
+                      .filter(item => item.filename !== profile.filename)
+                      .map(item => [item.name.toLowerCase(), item.name]))}
+                  />
                 </div>
 
                 {/* Name generator -- opened by the dice button beside Name.
