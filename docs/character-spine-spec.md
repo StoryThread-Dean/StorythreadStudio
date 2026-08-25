@@ -166,10 +166,24 @@ behaviour as one facet would have failed the report it was written for.
 
 ### 3.4 The old `summary` field
 
-Kept, and kept in sync: it is the concatenation of every facet. Deleting it
-would break `insertPrefilledTraitBlock` call sites and the existing tests for no
-gain, and having it derived means the two cannot disagree. A contract test
-asserts `summary === facets.map(f => f.text).join(" ")`.
+Kept, and DERIVED rather than authored beside the facets, so the paragraph and
+the pieces cannot disagree. Authoring both is how a paragraph came to exist that
+nothing could take apart. A contract test asserts
+`summary === facets.map(f => f.text).join(" ")`.
+
+**Only where facets exist.** `facets` is optional, and archetypes do not have
+them (section 8: their guidance is two or three sentences, so there is nothing
+to trim). Their `summary` is authored directly, as before, and is what the
+Role help panel offers to insert. Amended after building, because the first
+draft of this section said "every option in both lists" and that would have
+required a decomposition section 8 rules out.
+
+One consequence worth recording: the facet split changes the summary's
+punctuation. `"...beyond reproach; dreads being corrupt..."` becomes two
+sentences, so a test matching lowercase `/dreads /` had to become
+`/[Dd]reads /`. Splitting a paragraph into standalone sentences necessarily
+recapitalises some of them; that is the cost of every facet reading correctly
+alone (3.3), and it is worth it.
 
 ---
 
@@ -323,6 +337,28 @@ test pins it.
 
 Saki Murakami's three roles -- Merchant, Red Herring, Everyman -- are now all
 pickable, from three different groups. That is the acceptance case.
+
+**Amended after building: `Everyman` has to be a role NAME.** The first build
+attached that archetype to `Neighbor` and shipped no role called Everyman, which
+fails the acceptance case, since the writer named it explicitly. A second
+contract test now pins that **every archetype is reachable by some role name** --
+otherwise retiring the archetype dropdown really would have lost content, which
+is the thing 6.2 exists to prevent.
+
+### 6.4 `archetypeIdForRole` reads each part
+
+Recorded because the multi-role change would have CREATED this bug rather than
+found it. The function compared the whole Role field against an archetype label,
+so `Merchant, Red Herring, Everyman` matched nothing and Quick Build's Story
+Role default silently stopped working -- for precisely the writer who used the
+new feature. It walks the comma parts now, first match wins, and it also reads
+an archetype off a plain role name so the guidance stays reachable.
+
+One deliberate consequence: `Protagonist` resolves to `hero` where it used to
+resolve to nothing, because the catalog maps role names to archetypes now. A
+character marked Protagonist gets the Hero default instead of none. The old test
+used "protagonist" as its example of an unrecognised role and now uses a role
+the catalog genuinely does not know.
 
 ---
 
