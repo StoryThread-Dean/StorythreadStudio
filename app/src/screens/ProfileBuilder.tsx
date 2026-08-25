@@ -2050,17 +2050,25 @@ export function ProfileBuilder({
                       )}
                     </div>
                   </div>
+                  {/* The Role label moved INSIDE the row so it sits on the
+                      same line as the picker's own label, which is where the
+                      writer asked for it:
+
+                        Name            Role          What's this?
+                        [         ]     [       ]     [Add role... ] */}
                   <div>
-                    <label className="mb-1 block text-xs text-text-muted">Role</label>
                     <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={profile.role}
-                        onChange={e => updateProfileField("role", e.target.value)}
-                        placeholder="e.g. protagonist"
-                        data-pb-field="role"
-                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
-                      />
+                      <div className="min-w-0 flex-1">
+                        <label className="mb-1 block text-xs text-text-muted">Role</label>
+                        <input
+                          type="text"
+                          value={profile.role}
+                          onChange={e => updateProfileField("role", e.target.value)}
+                          placeholder="e.g. protagonist"
+                          data-pb-field="role"
+                          className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
+                        />
+                      </div>
                       {/* THE ONE Role control. Grouped by what the writer is
                           looking for rather than by frequency, help on every
                           option, and it APPENDS -- picking a role used to erase

@@ -588,11 +588,105 @@ export const ROLE_CATALOG: { group: string; options: RoleOption[] }[] = [
       { name: "Everyman", help: "Ordinary and likable, so the reader trusts them.", archetype: "everyman" },
     ],
   },
+  // ── ADULT ROLES, last on purpose ───────────────────────────────────────────
+  //
+  // Requested 2026-08-25: "add some [NSFW] roles starting from Mild not safe
+  // for work roles to increasingly more hardcore to explicit to
+  // graphic/fetish/bdsm/kink roles ... just want there to be the option for it
+  // in the drop down, but at the bottom."
+  //
+  // Adult fiction is a genre this app is for, and a writer working in it needs
+  // the same vocabulary as anyone else. Three rules held here:
+  //
+  //   LAST, AND LABELLED. Four groups at the end of the list, each named so a
+  //   writer working on a general-audience book scrolls past them without
+  //   reading any of it. Nothing above this comment changed position.
+  //
+  //   STORY FUNCTION, NOT DESCRIPTION. Every help line answers "what does this
+  //   character DO in the book", exactly as the groups above do. These are
+  //   labels for a character's part in a plot, not content.
+  //
+  //   ADULTS, AND CONSENT IS PART OF THE CRAFT. The power-exchange group names
+  //   the roles that real practice treats as load-bearing (negotiation,
+  //   safewords, aftercare) because leaving them out is how fiction in this
+  //   space reads as written by someone who has not thought about it.
+  {
+    group: "Adult: attraction and tension",
+    options: [
+      { name: "Seducer", help: "Pursues deliberately, and enjoys the pursuit." },
+      { name: "Forbidden Love Interest", help: "Wanted, and costly to want." },
+      { name: "Illicit Affair Partner", help: "The relationship that has to stay hidden." },
+      { name: "Slow Burn", help: "Wanted for a long time before anything happens." },
+      { name: "Tease", help: "Offers and withdraws, and knows they are doing it." },
+      { name: "Unavailable Object of Desire", help: "Wanted by someone who cannot have them." },
+      { name: "Morning After", help: "The consequences, with a face." },
+    ],
+  },
+  {
+    group: "Adult: explicit",
+    options: [
+      { name: "Casual Lover", help: "No claim on each other, by agreement." },
+      { name: "One-Night Encounter", help: "Present for one scene and changes something." },
+      { name: "Friend With Benefits", help: "The friendship is the part at risk." },
+      { name: "Experienced Initiator", help: "Knows what they are doing and sets the pace." },
+      { name: "First Time Partner", help: "For whom this is new, and matters more than they say." },
+      { name: "Rekindled Ex", help: "Knows the body and the arguments both." },
+      { name: "Paid Companion", help: "Sells intimacy and keeps their own life separate." },
+    ],
+  },
+  {
+    group: "Adult: power exchange",
+    options: [
+      { name: "Dominant", help: "Holds the control that the other one hands over." },
+      { name: "Submissive", help: "Gives up control on purpose, and sets the terms of it." },
+      { name: "Switch", help: "Takes either side, which is its own kind of tension." },
+      { name: "Brat", help: "Resists in order to be met, not to be obeyed." },
+      { name: "Service Partner", help: "Devotion expressed as usefulness." },
+      { name: "Negotiator", help: "The scene gets discussed before it happens, and they run that." },
+      { name: "Safeword Keeper", help: "Watches for the limit the other one will not admit to." },
+      { name: "Aftercare Partner", help: "Handles the comedown, which is where the character shows." },
+      { name: "Rigger", help: "The craft is the point as much as the effect." },
+    ],
+  },
+  {
+    group: "Adult: fetish and taboo",
+    options: [
+      { name: "Fetishist", help: "One specific thing, and the story treats it seriously." },
+      { name: "Voyeur", help: "Watches, and is changed by watching." },
+      { name: "Exhibitionist", help: "Needs an audience, and chooses one." },
+      { name: "Degradation Partner", help: "Words are the instrument; the trust underneath is the story." },
+      { name: "Praise Partner", help: "Undone by approval rather than by force." },
+      { name: "Roleplay Partner", help: "Plays someone else on purpose, and the mask slips." },
+      { name: "Pet Play Partner", help: "A persona held between two people who both chose it." },
+      { name: "Boundary Pusher", help: "Wants past a limit, and the story decides what that costs." },
+      { name: "Procurer", help: "Arranges what others want and stays outside it." },
+    ],
+  },
 ];
+
+/** The groups that carry adult content, named once so nothing has to guess. */
+export const ADULT_ROLE_GROUPS = new Set([
+  "Adult: attraction and tension",
+  "Adult: explicit",
+  "Adult: power exchange",
+  "Adult: fetish and taboo",
+]);
 
 /** Every role name, flat -- for contract tests and lookups. */
 export const ALL_ROLE_NAMES: string[] =
   ROLE_CATALOG.flatMap(g => g.options.map(o => o.name));
+
+/**
+ * The catalog with the adult groups left out.
+ *
+ * Not used by the picker today -- the writer asked for the groups to be
+ * present and last, not gated. It exists because the app already has a
+ * content_mode per project (general / mature / explicit), so gating is a
+ * one-line change if that is ever wanted, and having the boundary NAMED here
+ * beats rediscovering which groups counted.
+ */
+export const WORK_SAFE_ROLE_CATALOG = ROLE_CATALOG
+  .filter(g => !ADULT_ROLE_GROUPS.has(g.group));
 
 /** Look a role up by name, case-insensitively. */
 export function roleOptionByName(name: string): RoleOption | undefined {

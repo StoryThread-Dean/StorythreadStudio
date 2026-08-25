@@ -214,3 +214,49 @@ describe("the one Role control", () => {
     expect((option as HTMLOptionElement).disabled).toBe(true);
   });
 });
+
+describe("the role help is a genuine popout", () => {
+  function showRoles(role = "") {
+    const onChange = vi.fn();
+    render(<RolePicker role={role} onChange={onChange}
+                       onInsertGuidance={vi.fn()} />);
+    return { onChange };
+  }
+
+  it("floats out of the flow instead of growing the card", () => {
+    // THE REPORT: "the What'sThis opens within the entire card for
+    // Name/Role/Sex/age/Status causing a massive distortion of the box/card."
+    // It was mt-1.5 in the flow, inside the header grid, so opening it
+    // stretched the card -- the exact mistake Explain.tsx documents at the top
+    // of its own file.
+    showRoles();
+    fireEvent.click(screen.getByTestId("role-help-toggle"));
+    const panel = screen.getByTestId("role-help");
+    expect(panel.className).toContain("absolute");
+    expect(panel.className).toContain("z-50");
+    // A floating panel over other content needs its own ground, or the card
+    // shows through it.
+    expect(panel.className).toMatch(/bg-bg-panel/);
+  });
+
+  it("puts its label where the other field labels are", () => {
+    // Requested: "Reposition the What'sThis? text to be above the Dropdown
+    // just like how Name is above the fillin box."
+    showRoles();
+    const trigger = screen.getByTestId("role-help-toggle");
+    const select = screen.getByTestId("role-add");
+    // The trigger comes BEFORE the control in document order, which is what
+    // puts it on the label line.
+    expect(trigger.compareDocumentPosition(select)
+           & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(trigger.className).toContain("mb-1");
+  });
+
+  it("closes on Escape, like every other floating panel", () => {
+    showRoles();
+    fireEvent.click(screen.getByTestId("role-help-toggle"));
+    expect(screen.queryByTestId("role-help")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("role-help")).toBeNull();
+  });
+});

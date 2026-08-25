@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import {
   ENNEAGRAM_OPTIONS, ARCHETYPE_OPTIONS, spineOptionById, archetypeIdForRole,
   ESSENTIAL_KINDS, FACET_KIND_LABELS, ROLE_CATALOG, ALL_ROLE_NAMES,
-  roleOptionByName,
+  roleOptionByName, ADULT_ROLE_GROUPS, WORK_SAFE_ROLE_CATALOG,
 } from "./characterSpines";
 
 describe("ENNEAGRAM_OPTIONS", () => {
@@ -338,5 +338,71 @@ describe("finding an archetype in a multi-role field", () => {
     expect(archetypeIdForRole("Merchant, Innkeeper")).toBe("");
     expect(archetypeIdForRole("")).toBe("");
     expect(archetypeIdForRole(undefined)).toBe("");
+  });
+});
+
+
+describe("adult roles", () => {
+  it("puts every adult group last, after every ordinary one", () => {
+    // Requested explicitly: "at the bottom". A writer working on a
+    // general-audience book scrolls past them and reads none of it.
+    const groups = ROLE_CATALOG.map(g => g.group);
+    const firstAdult = groups.findIndex(g => ADULT_ROLE_GROUPS.has(g));
+    expect(firstAdult).toBeGreaterThan(0);
+    for (const g of groups.slice(firstAdult)) {
+      expect(ADULT_ROLE_GROUPS.has(g), `${g} sits below an adult group`).toBe(true);
+    }
+  });
+
+  it("escalates rather than arriving all at once", () => {
+    // "starting from Mild not safe for work roles to increasingly more
+    // hardcore to explicit to graphic/fetish/bdsm/kink roles."
+    const adult = ROLE_CATALOG.map(g => g.group).filter(g => ADULT_ROLE_GROUPS.has(g));
+    expect(adult).toEqual([
+      "Adult: attraction and tension",
+      "Adult: explicit",
+      "Adult: power exchange",
+      "Adult: fetish and taboo",
+    ]);
+  });
+
+  it("names every one of them so they can be skipped unread", () => {
+    // The group label is the whole opt-out. One that did not say what it was
+    // would put this content in front of a writer who did not want it.
+    for (const g of ADULT_ROLE_GROUPS) expect(g.startsWith("Adult:")).toBe(true);
+  });
+
+  it("describes story function, exactly like every other role", () => {
+    // These are labels for a character's part in a plot. A help line that
+    // described content rather than function would be a different thing in a
+    // list that is not for that.
+    for (const group of ROLE_CATALOG.filter(g => ADULT_ROLE_GROUPS.has(g.group))) {
+      expect(group.options.length).toBeGreaterThan(3);
+      for (const o of group.options) {
+        expect(o.help.trim().endsWith("."), o.name).toBe(true);
+        expect(o.help.length, o.name).toBeLessThan(90);
+      }
+    }
+  });
+
+  it("keeps the consent vocabulary that power exchange actually runs on", () => {
+    // Leaving negotiation, safewords and aftercare out is how fiction in this
+    // space reads as written by somebody who has not thought about it.
+    const names = ROLE_CATALOG
+      .find(g => g.group === "Adult: power exchange")!.options.map(o => o.name);
+    for (const n of ["Negotiator", "Safeword Keeper", "Aftercare Partner"]) {
+      expect(names).toContain(n);
+    }
+  });
+
+  it("offers a work-safe view of the catalog for later gating", () => {
+    // Not used by the picker today -- the ask was present-and-last, not gated.
+    // It exists because the app already has a per-project content_mode, so the
+    // boundary is worth NAMING rather than rediscovering.
+    expect(WORK_SAFE_ROLE_CATALOG.length)
+      .toBe(ROLE_CATALOG.length - ADULT_ROLE_GROUPS.size);
+    for (const g of WORK_SAFE_ROLE_CATALOG) {
+      expect(ADULT_ROLE_GROUPS.has(g.group)).toBe(false);
+    }
   });
 });

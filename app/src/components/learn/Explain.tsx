@@ -30,10 +30,11 @@
 // `compact` exists for toolbars, where even one worded button is too wide: the
 // trigger becomes a single question mark and the panel is unchanged.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HelpCircle, Coins, CircleCheck, ListOrdered } from "lucide-react";
 
 import { EXPLAIN, NEED_WORDING, type Explains } from "./explanations";
+import { useKeepOnScreen } from "../../hooks/useKeepOnScreen";
 
 interface ExplainProps {
   /** Key into the registry. Preferred, so the text lives in one place. */
@@ -54,16 +55,15 @@ interface ExplainProps {
   align?: "left" | "right";
 }
 
-/** How much clear space to leave between the panel and the window edge. */
-const EDGE_MARGIN = 8;
-
 export function Explain({ of, entry, label, compact, align = "left" }: ExplainProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  // How far the panel has to move sideways to stay on screen, in pixels.
-  const [shift, setShift] = useState(0);
   const info = entry ?? (of ? EXPLAIN[of] : undefined);
+  // Keeps the panel readable when the trigger sits near a window edge. Shared
+  // with the Role help panel, which needed the identical correction -- see
+  // hooks/useKeepOnScreen.ts for the reasoning and the reported bugs.
+  const { ref: panelRef, style: fitStyle } = useKeepOnScreen<HTMLDivElement>(
+    open, [info]);
 
   // Escape and a click elsewhere both close it. A floating panel that can only
   // be dismissed by finding the button again is a panel people leave open.
@@ -82,59 +82,6 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
       window.removeEventListener("mousedown", onDown);
     };
   }, [open]);
-
-  // ── KEEP IT ON SCREEN, whatever the call site declared ────────────────────
-  //
-  // Reported from live testing, on the Hidden (eyeball) trait control: "the
-  // popup ... is not readable as its positioned off the screen."
-  //
-  // The panel is up to 30rem wide and absolutely positioned against a trigger
-  // that is often a 13px icon. `align="right"` anchors its RIGHT edge to the
-  // icon, so it extends leftwards -- which is correct for a trigger near the
-  // right of the window and puts the whole panel out of view for one near the
-  // left. A trait card's eye button is near the left, so the panel had nowhere
-  // to go.
-  //
-  // Fixing the two call sites would have fixed the report. This fixes the
-  // CLASS: the panel measures itself once it is open and slides back inside
-  // the viewport if either edge is out. So `align` stays a hint about where the
-  // panel prefers to sit, and can no longer be the reason a writer cannot read
-  // an explanation. There are 46 entries and any of them can be dropped into a
-  // new row tomorrow.
-  //
-  // Measured AFTER paint rather than computed from the trigger, because the
-  // real width depends on the text, the font size the writer chose, and the
-  // 80vw cap. In jsdom every rect is zero, so the shift stays 0 and no test
-  // sees a difference.
-  useLayoutEffect(() => {
-    if (!open) { setShift(0); return; }
-
-    // Corrects RELATIVE to whatever shift is already applied, so this is safe
-    // to run more than once on the same open panel -- which is what makes the
-    // resize listener below correct rather than cumulative.
-    function fit() {
-      const panel = panelRef.current;
-      if (!panel) return;
-      const rect = panel.getBoundingClientRect();
-      if (rect.width === 0) return;        // jsdom, or not laid out yet
-
-      const overLeft = EDGE_MARGIN - rect.left;
-      const overRight = rect.right - (window.innerWidth - EDGE_MARGIN);
-
-      // The LEFT edge wins when the panel is too wide for the window. Clipping
-      // the far end costs the last few words; clipping the near end costs the
-      // start of the sentence, which is the difference between hard to read and
-      // useless.
-      if (overLeft > 0) setShift(s => s + overLeft);
-      else if (overRight > 0) setShift(s => s - overRight);
-    }
-
-    fit();
-    // A writer who resizes or maximises with the panel open would otherwise be
-    // left with a correction computed for a window that no longer exists.
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, [open, info]);
 
   // A missing key is a bug, not something to paper over with an empty box --
   // but it must not take the screen down with it. A contract test catches these
@@ -163,9 +110,9 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
           data-testid="explain-panel"
           role="note"
           // The nudge that keeps it readable. translateX rather than a left
-          // offset so the anchoring above stays the thing that decides where
+          // offset so the anchoring below stays the thing that decides where
           // the panel sits, and this only corrects it.
-          style={shift ? { transform: `translateX(${shift}px)` } : undefined}
+          style={fitStyle}
           className={`absolute top-full z-50 mt-1.5 w-[min(30rem,80vw)] overflow-hidden rounded-lg border border-border-strong bg-bg-panel text-micro leading-relaxed text-text-muted shadow-e3 ${
             align === "right" ? "right-0" : "left-0"
           }`}

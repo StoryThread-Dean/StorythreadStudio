@@ -26,8 +26,10 @@
 // It lives in the help panel now, and inserting it is an explicit press --
 // picking a role writes the role name and nothing else.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HelpCircle, Plus } from "lucide-react";
+
+import { useKeepOnScreen } from "../../hooks/useKeepOnScreen";
 
 import {
   ROLE_CATALOG, addRole, splitRoles, spineOptionById,
@@ -43,7 +45,30 @@ interface RolePickerProps {
 
 export function RolePicker({ role, onChange, onInsertGuidance }: RolePickerProps) {
   const [showHelp, setShowHelp] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const taken = new Set(splitRoles(role).map(r => r.toLowerCase()));
+  // Shared with Explain. See hooks/useKeepOnScreen.ts: this panel is ~22rem
+  // wide and hangs off a control at the right-hand edge of a two-column grid,
+  // so without the correction it runs off the window.
+  const { ref: panelRef, style: fitStyle } =
+    useKeepOnScreen<HTMLDivElement>(showHelp);
+
+  // Escape and a click elsewhere close it, like every other floating panel in
+  // the app. A panel that can only be dismissed by finding its button again is
+  // one people leave open.
+  useEffect(() => {
+    if (!showHelp) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowHelp(false); };
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setShowHelp(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown);
+    };
+  }, [showHelp]);
 
   const add = (option: RoleOption) => onChange(addRole(role, option.name));
 
@@ -53,7 +78,31 @@ export function RolePicker({ role, onChange, onInsertGuidance }: RolePickerProps
   };
 
   return (
-    <>
+    // relative, so the panel below can hang off this without joining the flow.
+    <div className="relative shrink-0" ref={wrapRef}>
+      {/* THE LABEL SITS WHERE Name AND Role SIT. Requested: the help belongs
+          above the dropdown, on the same line as the other field labels, rather
+          than tucked beside the control.
+
+              Name              Role            What's this?
+              [           ]     [         ]     [Add role... ]
+
+          It doubles as the trigger, which is why it is a button in a label's
+          position rather than a label with a button after it. */}
+      <button
+        type="button"
+        onClick={() => setShowHelp(h => !h)}
+        data-testid="role-help-toggle"
+        aria-expanded={showHelp}
+        className={`mb-1 flex items-center gap-0.5 text-xs transition-colors ${
+          showHelp ? "text-accent" : "text-text-muted hover:text-accent"
+        }`}
+        title="What do these roles mean?"
+      >
+        <HelpCircle size={11} />
+        What's this?
+      </button>
+
       <div className="flex gap-1.5">
         <select
           value=""
@@ -82,25 +131,26 @@ export function RolePicker({ role, onChange, onInsertGuidance }: RolePickerProps
             </optgroup>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={() => setShowHelp(h => !h)}
-          data-testid="role-help-toggle"
-          aria-expanded={showHelp}
-          className={`flex shrink-0 items-center gap-0.5 rounded px-1 text-mini transition-colors ${
-            showHelp ? "text-accent" : "text-faint hover:text-accent"
-          }`}
-          title="What do these roles mean?"
-        >
-          <HelpCircle size={12} />
-          What's this?
-        </button>
       </div>
 
       {showHelp && (
+        // OUT OF FLOW. Reported: "the What'sThis opens within the entire card
+        // for Name/Role/Sex/age/Status causing a massive distortion of the
+        // box/card. This particular What's this needs to be a genuine popout."
+        //
+        // Exactly right, and it is the mistake Explain.tsx documents at the top
+        // of its own file: a disclosure inside a layout row grows the row and
+        // rearranges everything around it. This panel was mt-1.5 in the flow,
+        // inside the header grid, so opening it stretched the card.
+        //
+        // absolute + z-50 + a background of its own. right-0 because the
+        // control sits at the right of a two-column grid, and useKeepOnScreen
+        // slides it back if that still puts an edge off the window.
         <div
+          ref={panelRef}
+          style={fitStyle}
           data-testid="role-help"
-          className="mt-1.5 max-h-72 overflow-y-auto rounded border border-accent-fill/40 bg-accent-soft/20 p-2"
+          className="absolute right-0 top-full z-50 mt-1.5 max-h-80 w-[min(24rem,80vw)] overflow-y-auto rounded-lg border border-border-strong bg-bg-panel p-2 shadow-e3"
         >
           <p className="mb-1.5 text-mini text-text-muted">
             A character can hold several of these at once. Adding one keeps the
@@ -154,6 +204,6 @@ export function RolePicker({ role, onChange, onInsertGuidance }: RolePickerProps
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }
