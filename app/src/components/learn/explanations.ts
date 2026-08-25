@@ -238,11 +238,11 @@ export const EXPLAIN: Record<string, Explains> = {
   // is this field" but "why does it matter that I type these in".
   "profile.aliases": {
     what: "Every other word this entry answers to.",
-    why: "A character is rarely called one thing. Gwendolyn Barksdale is Gwen "
-      + "to the people who know her and Willow on stage, and all three have to "
-      + "point at this one profile -- otherwise two of them find nothing when "
-      + "the app reads your chapters, and she looks like three different "
-      + "people. Places and factions have the same problem.",
+    why: "A character is rarely called one thing. James is Jim to everyone "
+      + "who knows him, and both names have to point at this one profile -- "
+      + "otherwise one of them finds nothing when the app reads your "
+      + "chapters, and he looks like two different people. Places and "
+      + "factions have the same problem.",
     needed: "recommended",
     cost: FREE,
     how: [
@@ -253,9 +253,9 @@ export const EXPLAIN: Record<string, Explains> = {
       "A word that already means another entry is refused, and says which one: "
         + "one word cannot mean two things, or a mention of it would match "
         + "neither.",
-      "Nothing is guessed for you. Gwen is not offered just because the name "
-        + "is Gwendolyn -- a nickname you did not choose is one you would "
-        + "never notice was wrong.",
+      "Nothing is guessed for you. Jim is not offered just because the name "
+        + "is James -- a nickname you did not choose is one you would never "
+        + "notice was wrong.",
     ],
   },
   "spine.what": {

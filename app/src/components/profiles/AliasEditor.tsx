@@ -117,7 +117,7 @@ export function AliasEditor({ aliases, onChange, name, taken }: AliasEditorProps
           onKeyDown={e => {
             if (e.key === "Enter") { e.preventDefault(); add(); }
           }}
-          placeholder="Gwen"
+          placeholder="Jim"
           aria-label="Add another name"
           className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
         />
