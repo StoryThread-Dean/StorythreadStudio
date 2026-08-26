@@ -76,11 +76,25 @@ book arrives identical -- entries, connections with their reason lines, facts
 still anchored to the right chapters, the map's layout, and the Weaving sessions
 including what was retired, muted and put off. Open it and carry on.
 
-This works because **no absolute path is ever stored in project data**. Paths are
-arguments passed in per request, never written into a file or a row, so nothing
-in a project knows or cares which machine wrote it. The one exception is
-`project.json`'s `root_path`, which is stamped at creation and **overwritten from
-the folder actually opened**, so the stale copy is never trusted.
+This works because **no absolute path in project data is ever trusted**. Paths
+are arguments passed in per request, never written into a file or a row, so
+nothing in a project knows or cares which machine wrote it. There are TWO
+exceptions, both in `project.json`, and both are healed from where the folder
+actually is:
+
+- **`root_path`** is stamped at creation and overwritten from the folder actually
+  opened.
+- **`series_path`**, for a book in a series, is derived from the book's own
+  parent folder when the stored value no longer holds a `series.json`. **Added
+  2026-08-25**: it was stored and simply trusted, so renaming a series folder by
+  hand or moving the vault left thirty read sites pointed at a folder that was
+  not there, and the writer saw "Folder not found". Unlike `root_path` the repair
+  is WRITTEN BACK, because those thirty sites read `project.json` off disk for
+  themselves and an in-memory patch would fix one screen and no others.
+
+  A book whose parent holds no `series.json` is left exactly as found: "the
+  series folder moved" and "this book is not in a series any more" are different
+  states, and only the writer knows which happened.
 
 Two consequences worth stating, because both are easy to assume backwards:
 
@@ -103,7 +117,9 @@ you move the app's own state**, and it is lossless.
 
 Pinned by `backend/tests/test_project_portability.py`, whose root-cause test
 fails the build if any file in a moved project still contains the old machine's
-path. `tests/manual-smoke.md` scenario 24 covers the human half.
+path, and by `backend/tests/test_series_path_healing.py` for the series half --
+which the portability suite did not cover, since its fixture is a project with
+`series_path: None`. `tests/manual-smoke.md` scenario 24 covers the human half.
 
 
 

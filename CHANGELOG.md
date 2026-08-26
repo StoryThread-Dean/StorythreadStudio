@@ -92,6 +92,13 @@ entry while working on a feature, append it under Unreleased.
 
 ### Fixed
 
+- **A book in a series could lose track of its series folder.** If you renamed
+  the series folder by hand, or moved your whole Storythread folder somewhere
+  else, the book kept pointing at the old location -- so Book Details reported
+  "Folder not found" and the series name, genre and tone stopped reaching AI as
+  story context. The app now works out where the series really is from where the
+  book actually sits, and writes the correction back so everything else finds it
+  too. Nothing for you to fix; open the book once and it repairs itself.
 - **The Role help popup stretched the profile card open.** It opened inside the
   Name / Role / Sex / Age / Status card instead of floating over it, so the
   whole box distorted. It is a proper popout now, closes on Escape or a click

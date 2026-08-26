@@ -14,12 +14,14 @@
 
 import os
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 
 import re
 from fastapi import APIRouter, HTTPException
 from app.recent_projects import load_recent, track_project, remove_project
+from app.utils.atomic import replace_atomic
 from app.outline_worksheet import (
     OutlineMetadata, write_worksheet,
     read_project_targets, set_target_chapter_count, set_target_word_count,
@@ -233,6 +235,64 @@ class ProjectResponse(BaseModel):
 
 
 # --- Helper: read project.json ---
+def _heal_series_path(data: dict, folder_path: str) -> dict:
+    """
+    Make `series_path` agree with where the book actually is.
+
+    THE SECOND ABSOLUTE PATH IN PROJECT DATA, and the one nothing was healing.
+    `root_path` has always been patched on open because a project folder can be
+    moved or renamed; `series_path` is exactly the same kind of value and was
+    simply trusted. Reported when a writer hit "Folder not found:
+    C:/Users/<name>/Documents/Storythread Studio/the-living-code-sata".
+
+    Two things wrong in one string. The folder had been renamed by hand early on
+    to fix a typo (sata to saga), and the whole vault had since moved to
+    C:/Storythread Studio. Neither is unusual and neither is the writer's
+    mistake: a stored absolute path is wrong the moment anything moves.
+
+    IT IS DERIVABLE, which is why trusting the stored copy was the error. A book
+    in a series lives INSIDE the series folder (see routers/series.py), so the
+    series folder is the book folder's parent. If that parent holds a
+    series.json, it is the series, whatever the file happens to say.
+
+    Healed rather than guessed: the parent must actually contain a series.json.
+    A book moved OUT of its series keeps its stored path and is left alone,
+    because "the series folder moved" and "this is not in a series any more" are
+    different states and only the writer knows which happened.
+    """
+    if not data.get("series_id"):
+        return data
+
+    stored = str(data.get("series_path") or "")
+    if stored and os.path.isfile(os.path.join(stored, "series.json")):
+        return data                      # still true, nothing to do
+
+    parent = os.path.dirname(os.path.abspath(folder_path))
+    if not os.path.isfile(os.path.join(parent, "series.json")):
+        return data                      # no series here; leave it as found
+
+    data["series_path"] = parent
+
+    # PERSISTED, unlike the root_path heal, and deliberately. Thirty places in
+    # this backend read project.json off disk for themselves -- the story
+    # context AI receives, the audiobook prefill, series-level canonical
+    # profiles -- so an in-memory patch would fix this one screen and leave
+    # every one of them still pointed at a folder that does not exist.
+    #
+    # Best-effort: a project that cannot be written to is still a project that
+    # should open.
+    try:
+        tmp = os.path.join(folder_path, "project.json.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        replace_atomic(tmp, os.path.join(folder_path, "project.json"))
+    except OSError:
+        logging.getLogger(__name__).warning(
+            "Could not persist the healed series_path for %s", folder_path)
+
+    return data
+
+
 def _read_project_json(folder_path: str) -> dict:
     """
     Reads and parses the project.json file inside a project folder.
@@ -253,12 +313,14 @@ def _read_project_json(folder_path: str) -> dict:
 
     try:
         with open(project_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
     except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=400,
             detail=f"project.json is malformed (invalid JSON): {e}"
         )
+
+    return _heal_series_path(data, folder_path)
 
 
 # --- POST /api/projects/create ---
