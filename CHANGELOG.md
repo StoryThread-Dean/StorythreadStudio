@@ -32,6 +32,14 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+- **Rename a series, and your book, from Book Details.** The series name could
+  only ever be set in the "Make this a series" checkbox when you created the
+  first book -- typed once, before you had written a word of the thing you were
+  naming, and then permanent. Book Details now shows the series name and lets
+  you change it, and the book's own title is clearly labelled beside it.
+  Renaming either one does not move any folder on disk, so nothing you have
+  backed up changes name.
+
 - **Type in the other names a character goes by, without waiting for Weaving.**
   James is Jim to everyone who knows him, and both names have to point at the
   same profile or one of them finds nothing when the app reads your chapters.

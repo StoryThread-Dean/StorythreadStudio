@@ -309,6 +309,9 @@ GET    /inspect-folder
 POST   /create
 POST   /open
 POST   /list-books
+PUT    /settings               (rename a series; writes series.json, never
+                                moves the folder -- every book's series_path
+                                points at it)
 ```
 
 ### Documents — `/api/documents`
