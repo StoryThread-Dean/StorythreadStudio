@@ -22,15 +22,29 @@ entry while working on a feature, append it under Unreleased.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+---
+
+## [2.0.3] - 2026-08-25
+
+### Added
+
 - **Type in the other names a character goes by, without waiting for Weaving.**
-  Gwendolyn Barksdale is Gwen to the people who know her and Willow on stage,
-  and the app needs all three pointing at one profile or two of them find
-  nothing when it reads your chapters. Until now the only way to record that was
-  to let Weaving find the word in a chapter first, which is no use if you are
-  building the world before you write a line. There is an **Also known as**
-  field on every profile now -- characters, places, factions, anything. A word
-  that already means another entry is refused and says which one, because one
-  word cannot mean two things. Nothing is guessed for you.
+  James is Jim to everyone who knows him, and both names have to point at the
+  same profile or one of them finds nothing when the app reads your chapters.
+  Until now the only way to record that was to let Weaving find the word in a
+  chapter first, which is no use if you are building the world before you write
+  a line. There is an **Also known as** field on every profile now --
+  characters, places, factions, anything. A word that already means another
+  entry is refused and says which one, because one word cannot mean two things.
+  Nothing is guessed for you.
+- **Adult story roles, for anyone writing them.** Four groups at the bottom of
+  the role list, from attraction and tension through to fetish and taboo. They
+  are last and every one is labelled, so if you are not writing that you scroll
+  past and never read a word of it.
 
 ### Changed
 
@@ -54,6 +68,14 @@ entry while working on a feature, append it under Unreleased.
   rather than by how common they are, which is why Merchant, Innkeeper, Healer,
   Guard, Suspect and Witness were missing entirely. Every role explains what it
   does in a story, and the ones with writing guidance offer to add it.
+- **Quick Build: the Story Role dropdown now does what it says.** It was
+  labelled "weights the rolls", which was jargon and, for eight of the fifteen
+  roles, simply untrue -- they had no lines behind them, so picking one rerolled
+  and changed nothing. Every role now has lines for every row, and the label
+  says what happens: it mixes lines that suit the role into every row below, and
+  choosing one rerolls straight away. It also tells you when a spicier tier is
+  on, because the role lines are written for the ordinary ones and are held back
+  rather than watering down the tier you asked for.
 - **The Weave: "work through all of these at once" now says what it will
   actually do.** The button used one phrase for three different jobs. Where the
   list really does the work in one go it says so ("Place all 7 in one list",
@@ -62,6 +84,10 @@ entry while working on a feature, append it under Unreleased.
 
 ### Fixed
 
+- **The Role help popup stretched the profile card open.** It opened inside the
+  Name / Role / Sex / Age / Status card instead of floating over it, so the
+  whole box distorted. It is a proper popout now, closes on Escape or a click
+  outside, and its label sits above the dropdown with the others.
 - **"What's this?" popups could open off the side of the screen.** On a trait's
   Hidden (eyeball) control and its "True all the way through" switch, the help
   popup opened leftwards from a button already near the left edge, so most of it
