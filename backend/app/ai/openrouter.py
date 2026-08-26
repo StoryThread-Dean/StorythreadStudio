@@ -215,7 +215,7 @@ def _normalize_generic_models(data) -> list[dict]:
     Providers other than OpenRouter publish much thinner catalogs -- NanoGPT
     returns {data: [{id, name, context_length}]} with no pricing, moderation,
     or modality info, and local runtimes are even more inconsistent. So this
-    is deliberately tolerant (per docs/research-multi-provider.md):
+    is deliberately tolerant (per docs/local-model-spec.md, appendix):
       - the list may live under "data", "models", or be the bare response
       - the id may be under "id", "name", or "model"
       - entries with no usable id are skipped, never raised on

@@ -159,6 +159,29 @@ export interface Profile {
   updated_at: string;
   character_kind?: CharacterKind;  // characters only; absent/main for non-characters
   /**
+   * The character's Enneagram type, as an OPTION ID ("e1"), never a label.
+   *
+   * An id survives a relabelling and a label does not: "1 -- The Reformer" on
+   * disk means the next wording change silently orphans every profile that
+   * used it.
+   *
+   * Absent means not set, which is where every profile ever written already is
+   * and stays. See docs/character-spine-spec.md section 5 -- and note that no
+   * facet SELECTION is stored: the sentences are text in the Personality
+   * section, which is their only master.
+   */
+  enneagram?: string;
+  /**
+   * Every other word this entry answers to.
+   *
+   * Gwendolyn Barksdale is Gwen to everyone who knows her and Willow on
+   * stage. All three point at one profile, or a mention of two of them finds
+   * nothing. Not characters only: a place is "Ashfall" and "the burned city".
+   *
+   * See docs/weave-spec.md, appendix 2.
+   */
+  aliases?: string[];
+  /**
    * What the file looked like when it was opened (codex/ entries only).
    *
    * Sent back with a save so the backend can refuse one that would overwrite

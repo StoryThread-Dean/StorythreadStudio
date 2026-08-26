@@ -256,28 +256,47 @@ error, not a bare HTTP code.
 
 ## 9. Character creation tools (spine dropdowns, Quick Build, Interview Me)
 
-**Touches:** the personality-spine dropdowns, the Quick Build randomizer +
-NSFW tier toggles, trait-block insertion + save round-trip, and the
-Interview Me chat mode (needs a real API key).
+**Touches:** the personality spine, the one Role control, Also known as,
+the Quick Build randomizer + NSFW tier toggles, trait-block insertion +
+save round-trip, and the Interview Me chat mode (needs a real API key).
+
+REWRITTEN for v2.0.3. Steps 1 and 2 described behaviour that no longer
+exists -- two spine dropdowns, a Story Role that overwrote the Role field
+and merged Tags, and a Popular / Less Common / Niche list. Walking that
+against this build would mark a correct app as broken.
 
 Steps:
-1. Create a MAIN character (template radio in the + New form). In the
-   header under Status/Tags, pick an Enneagram type -- a [core] trait
-   block appears in Personality Traits and a note confirms it; pick a
-   Story Role -- a second block stacks, the Role field fills, and its
-   key-aspect Tags merge in. The Role field's own Pick... list (Popular /
-   Less Common / Niche) also fills the field.
-2. Create a SIDE character. Every section is a single text field (no
+1. Create a MAIN character (template radio in the + New form). Pick an
+   Enneagram type in the header: the dropdown KEEPS showing it and no
+   text is written yet. Press Pick what fits -- the type opens as
+   individual lines with nothing ticked. Press Essentials (three tick),
+   then Add: one [core] block appears in Personality Traits. Reopen it --
+   the lines you took are greyed and say "already added". Tick one more
+   and Add: the SAME block grows rather than a second one appearing.
+2. Roles: the Role field has ONE list beside it. Add Merchant, then Red
+   Herring, then Everyman -- the field reads "Merchant, Red Herring,
+   Everyman" and nothing is erased. Add Merchant again: nothing happens
+   and it shows as "(added)". Open What's this? -- it floats OVER the
+   card without stretching it, closes on Escape, and every role has a
+   line of help. Scroll to the bottom: four groups prefixed "Adult:".
+3. Also known as, beside Status: add Jim and Jimbob, remove one, save,
+   reopen -- both survive. Try a name another character already uses: it
+   is refused and names that character. The empty box reads "Alias or
+   nickname used", not a name.
+4. Create a SIDE character. Every section is a single text field (no
    trait blocks, no Importance Audit). Quick Build opens on top: reroll a
    row twice -- no repeats -- and click options; each lands in the
-   matching section as a new line. Pick a Story Role and confirm rolls
-   lean toward it.
-3. NSFW semantics: Explicit checkbox starts greyed out. Toggle NSFW on --
+   matching section as a new line. Pick a Story Role: every row re-deals
+   at once and roughly half of each deal suits that role. Turn NSFW on
+   with a role chosen -- a line appears saying the role is not shaping
+   the rolls while a spicier tier is on.
+5. NSFW semantics: Explicit checkbox starts greyed out. Toggle NSFW on --
    options go red and adult, Explicit becomes clickable. Check Explicit --
    options become fill-in-the-blank. Toggle NSFW off -- back to normal AND
    Explicit unchecks itself.
-4. Save (Ctrl+S) both profiles, reopen -- main's blocks keep importance
-   levels; side's plain-text sections survive the markdown round-trip.
+6. Save (Ctrl+S) both profiles, reopen -- main's blocks keep importance
+   levels; side's plain-text sections survive the markdown round-trip;
+   the Enneagram type and every alias are still there.
    The left list shows Main and Side / Background groups (collapsible);
    the chat attachment picker shows the same grouping.
 5. Switch the chat to Interview Me, send "Start the interview." Expect

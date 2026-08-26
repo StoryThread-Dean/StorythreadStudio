@@ -2701,8 +2701,30 @@ describe("working through a whole kind at once", () => {
   it("offers the list when there is more than one of the kind", async () => {
     mockApi({ stops: unplacedStops });
     await start();
+    // The headline names the ACTION the list performs, per kind. It used to
+    // read "Work through all 3 at once" for every kind, which was true for
+    // Unplaced and Place and a broken promise for Loose threads, where the
+    // batch answer is the no. Reported from live testing.
     expect(screen.getByTestId("sweep-offer").textContent)
-      .toContain("all 3 at once");
+      .toContain("Place all 3 in one list");
+  });
+
+  it("does not promise a batch connection it cannot make", async () => {
+    // THE REPORTED BUG. A Tie carries a required reason line, so N connections
+    // cannot be N ticks -- and the button must not imply they can.
+    mockApi({ stops: [1, 2, 3].map(n => stop({
+      kind: "loose_thread", key: `loose|e-${n}`, entity_id: `e-${n}`,
+      title: `Person ${n} connects to nothing`, quote: "",
+      why: "Nothing links this to anything else.",
+      detail: { name: `Person ${n}`, type: "character" },
+    })) });
+    await start();
+    const offer = screen.getByTestId("sweep-offer").textContent ?? "";
+    expect(offer).toContain("See all 3 in one list");
+    expect(offer).not.toMatch(/work through/i);
+    // And it says both halves: the batch no, and the per-row connection.
+    expect(offer).toMatch(/need no connection/i);
+    expect(offer).toMatch(/connect it properly/i);
   });
 
   it("stays quiet for a single one", async () => {

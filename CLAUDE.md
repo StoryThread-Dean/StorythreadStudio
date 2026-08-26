@@ -91,7 +91,7 @@ exist refuses rather than creating one.
 
 **The Weave recovery is CLOSED as a work queue.** Every in-scope phase shipped
 in v2.0.0 and v2.0.1; phase 7 (scene identity) and phase 9 (the remaining AI
-passes) are deferred to v2.1.0, so `docs/weave-recovery-plan.md` is history now
+passes) are deferred to v2.1.0, so the recovery plan is history now
 rather than a list to work from. Two items stay blocked on the same ruling and
 are not oversights: R1.5b and the R11.3 deletion both wait on `profiles/`
 ceasing to be a live home for unconverted projects, which is the writer's
@@ -106,14 +106,13 @@ step that removes the writer's world from chips, exports and search at once.
 
 | Document | What it is |
 |---|---|
-| `docs/weave-spec.md` | **Source of truth.** The writer's design document |
-| `docs/weave-spec-gaps.md` | Scope addendum: findings, how it happened, what got better |
-| `docs/weave-recovery-plan.md` | **The work ledger.** Ids R0.1-R10.6; the plan's own progress table is the count, since live testing keeps adding tasks |
+| `docs/weave-spec.md` | **Source of truth.** The writer's design document, plus appendix 1 (how the spec came to be checked in) and appendix 2 (aliases) |
 
-**Progress is checked off in TWO places, in the same commit: the task's
-checkbox in the recovery plan, and the ledger line below.** This exists so a
-session interrupted mid-task, or forced into a long debugging detour, can find
-its place without relying on memory or conversation history.
+**`weave-spec-gaps.md` and `weave-recovery-plan.md` were RETIRED 2026-08-25.**
+The gap list was resolved and its lesson is appendix 1 of the spec; the recovery
+plan was a work ledger whose in-scope tasks all shipped, and whose fourteen
+unchecked items now live in `docs/roadmap.md` under the v2.1.0 deferrals. The
+ledger below is kept as the shipped record.
 
 > **LEDGER — last updated 2026-08-14.** 93 of 107 tasks done.
 > **Phase 0 COMPLETE** — spec promoted, audited, addendum written, all ten
@@ -1104,7 +1103,9 @@ evidence of drift.
 
 | File | Contains |
 |---|---|
-| `docs/weave-spec.md` | **Source of truth for the Weave** (v2.0.0): the world model, anchors, Ties, stop kinds, Weaving, context assembly, Model Roles |
+| `docs/weave-spec.md` | **Source of truth for the Weave** (v2.0.0): the world model, anchors, Ties, stop kinds, Weaving, context assembly, Model Roles. Appendix 1: why a spec must be checked in. Appendix 2: aliases |
+| `docs/local-model-spec.md` | Source of truth for local model support: the transport, model discovery, context windows, what a local role spends. Appendix: the 2026-07-13 provider research |
+| `docs/character-spine-spec.md` | Source of truth for the Profile Builder's spines: personality facets, story roles, what is stored |
 | `docs/audiobook-converter-spec.md` | Source of truth for the Audiobook Converter (shipped v1.1.0); tests cite it by section number |
 | `docs/outline-spec.md` | Source of truth for the Outline (shipped v2.0.2): the worksheet format and parse rules, the ruling that Book Details stays the master, the preset catalog, the greying rule, the healing contract, the gauge weights |
 | `docs/product-scope.md` | Core goals, writing philosophy, locked product rules, in/out-of-scope |

@@ -354,11 +354,73 @@ describe("the place sweep", () => {
       .toMatch(/Do not place/);
   });
 
-  it("says to deal with one alone to change its chapters", () => {
+  it("says to open one alone to change its chapters", () => {
     // The sweep accepts a suggestion wholesale. Editing which chapters is a
     // real decision and belongs where each chapter is individually tickable.
     openPlace();
     expect(screen.getByTestId("sweep").textContent)
-      .toMatch(/deal with that one on its own/i);
+      .toMatch(/open that one on its own/i);
+  });
+});
+
+// ── DEALING WITH ONE PROPERLY, FROM THE LIST ────────────────────────────────
+//
+// Reported from live testing, about the Loose thread sweep: the writer read the
+// screen as having no purpose, because the only two answers were "these need no
+// connection" and "go one at a time instead" -- while the button that opened it
+// said "Work through all 7 at once" and the text told them to "deal with one
+// properly".
+//
+// The batch answer for a Loose thread really is the NO, and that is not a bug:
+// a Tie carries a REQUIRED reason line, so seven connections can never be seven
+// ticks. What was missing is the other half the words already promised.
+describe("dealing with one properly", () => {
+  const STOPS = [loose(1, "Chelsea"), loose(2, "Steel Beam")];
+
+  function showLoose(onDealWith?: (stop: Stop) => void) {
+    render(
+      <Sweep stops={STOPS} kind="loose_thread" chapters={CHAPTERS}
+             onPlace={vi.fn()} onDismiss={vi.fn().mockResolvedValue(undefined)}
+             onDone={vi.fn()} onClose={vi.fn()} onDealWith={onDealWith} />,
+    );
+  }
+
+  it("offers it on every row, and hands back that exact stop", () => {
+    const onDealWith = vi.fn();
+    showLoose(onDealWith);
+    const buttons = screen.getAllByTestId("sweep-deal-with");
+    expect(buttons.length).toBe(STOPS.length);
+    fireEvent.click(buttons[1]);
+    expect(onDealWith).toHaveBeenCalledTimes(1);
+    // The STOP, not an index -- the caller finds its own position from the key,
+    // so a list ordered or filtered differently cannot send the walk to the
+    // wrong screen.
+    expect(onDealWith.mock.calls[0][0].key).toBe(STOPS[1].key);
+  });
+
+  it("says what it is for in this kind's own words", () => {
+    // "Connect" on a Loose thread, because that is the thing the batch cannot
+    // do. A generic "Open" would leave the writer where they started: unsure
+    // whether this screen can make a connection at all.
+    showLoose(vi.fn());
+    expect(screen.getAllByTestId("sweep-deal-with")[0].textContent)
+      .toMatch(/connect/i);
+  });
+
+  it("names the reason a connection is one at a time", () => {
+    // Not "deal with one properly" with no explanation. The writer asked what
+    // this screen was FOR; the answer is that ticking is the batch no, and a
+    // connection carries a reason of its own, so it cannot be a tick.
+    showLoose(vi.fn());
+    expect(screen.getByTestId("sweep").textContent)
+      .toMatch(/reason of its own/i);
+  });
+
+  it("is absent when the caller offers no way to take one on", () => {
+    // The prop is optional, so a caller that cannot land the walk on a stop
+    // must not render a button that does nothing -- which is the whole class of
+    // bug this change is fixing.
+    showLoose();
+    expect(screen.queryByTestId("sweep-deal-with")).toBeNull();
   });
 });

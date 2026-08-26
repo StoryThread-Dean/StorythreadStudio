@@ -1,141 +1,126 @@
-// components/profiles/SpinePickers.tsx -- Personality-spine dropdowns
-// =====================================================================
-// Two selects in the profile HEADER card (under Status/Tags) of a CHARACTER
-// profile: "Personality (Enneagram)" and "Story Role (Archetype)". Picking
-// an option inserts that option's fiction-first summary into the
-// Personality Traits section -- as an editable [core] trait block on the
-// main template, or appended text on the side template (the caller decides;
-// this component just reports the pick). Writer-initiated insertion of
-// canned text, zero AI calls.
+// components/profiles/SpinePickers.tsx -- the personality spine
+// ==============================================================
+// Spec: docs/character-spine-spec.md.
 //
-// Picking a Story Role ALSO fills the profile's Role field and adds a few
-// key-aspect tags (via onRolePicked) -- one pick wires up the whole header.
+// ONE control now, not two. It shows the character's personality type and opens
+// the pick-and-choose screen; the Story Role select that used to sit beside it
+// is gone, because there were two Role controls and this was the weaker of them
+// (spec 1.5). Role now lives entirely next to the Role field, where it always
+// belonged.
 //
-// The selects are cheat-sheet inserters, not stored fields: after inserting
-// they snap back to blank, a confirmation note shows where the text went,
-// and the inserted content is normal profile text the writer edits or
-// deletes like any other.
+// ── WHAT CHANGED, AND WHY THE OLD SHAPE WAS WRONG ───────────────────────────
+//
+// It was a select that rendered `value=""` forever, so picking a type snapped
+// it straight back to "Pick to insert a starting point...". The old comment in
+// this file said that "looks broken until you know that, which is exactly the
+// kind of thing 'show me how' is for" -- documenting around the problem instead
+// of fixing it. Reported as "the functionality and purpose of picking the
+// ennegram never stays put", which is the correct reading: a control that
+// forgets is a control that has no state to show.
+//
+// So the type is a STORED FIELD and this shows it. Insertion is a separate,
+// explicit act on a separate screen.
 
-import { useEffect, useRef, useState } from "react";
-import { HelpCircle } from "lucide-react";
+import { useState } from "react";
+import { Sparkles } from "lucide-react";
+
+import { Explain } from "../learn/Explain";
+import { SpineFacetPicker } from "./SpineFacetPicker";
 import {
-  ENNEAGRAM_OPTIONS, ARCHETYPE_OPTIONS, spineOptionById, type SpineOption,
+  ENNEAGRAM_OPTIONS, spineOptionById, type SpineFacet,
 } from "../../data/characterSpines";
-import { Explain } from "../../components/learn/Explain";
 
 interface SpinePickersProps {
-  // Called with (traitName, description) -- the caller inserts into the
-  // Personality Traits section (trait block or appended text per template).
-  onInsert: (trait: string, description: string) => void;
-  // Story Role picks also report the option so the caller can fill the
-  // Role field and merge the archetype's key-aspect tags.
-  onRolePicked?: (option: SpineOption) => void;
+  /** The stored type id, or "" for not set. */
+  enneagram: string;
+  onEnneagramChange: (id: string) => void;
+  /** Insert the chosen facets into Personality Traits. */
+  onInsertFacets: (typeLabel: string, facets: SpineFacet[]) => void;
+  /**
+   * The Personality section as the writer currently sees it, unsaved edits
+   * included -- so an already-taken line greys the moment it lands and un-greys
+   * on undo. Spec 4.3.
+   */
+  personalityText: string;
 }
 
-// One labeled select + a "What's this?" toggle listing every option's
-// one-line definition (same per-group help pattern as Book Details chips).
-function SpineSelect({
-  label, options, onPick,
-}: {
-  label: string;
-  options: SpineOption[];
-  onPick: (option: SpineOption) => void;
-}) {
-  const [showHelp, setShowHelp] = useState(false);
-
-  return (
-    <div className="flex-1">
-      <div className="mb-1 flex items-center gap-1.5">
-        <label className="text-xs text-text-muted">{label}</label>
-        <button
-          type="button"
-          onClick={() => setShowHelp(h => !h)}
-          className={`flex items-center gap-0.5 text-mini transition-colors ${
-            showHelp ? "text-accent" : "text-faint hover:text-accent"
-          }`}
-          title={`What do the ${label} options mean?`}
-        >
-          <HelpCircle size={11} />
-          What's this?
-        </button>
-      </div>
-
-      {showHelp && (
-        <div className="mb-2 rounded border border-accent-fill/40 bg-accent-soft/20 p-2">
-          {options.map(o => (
-            <p key={o.id} className="mb-1 text-mini leading-snug text-text-muted">
-              <span className="font-medium text-accent">{o.label}:</span> {o.help}
-            </p>
-          ))}
-        </div>
-      )}
-
-      <select
-        // Always renders the blank placeholder: this is an insert action,
-        // not a stored value, so it snaps back after each pick.
-        value=""
-        onChange={e => {
-          const picked = spineOptionById(options, e.target.value);
-          if (picked) onPick(picked);
-        }}
-        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
-      >
-        <option value="">Pick to insert a starting point...</option>
-        {options.map(o => (
-          <option key={o.id} value={o.id}>{o.label}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-export function SpinePickers({ onInsert, onRolePicked }: SpinePickersProps) {
-  // Confirmation note ("Added to Personality Traits") shown briefly after a
-  // pick, so the writer knows where the text landed without scrolling.
-  const [notice, setNotice] = useState<string | null>(null);
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
-
-  const showNotice = (text: string) => {
-    setNotice(text);
-    if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 5000);
-  };
+export function SpinePickers({
+  enneagram, onEnneagramChange, onInsertFacets, personalityText,
+}: SpinePickersProps) {
+  const [picking, setPicking] = useState(false);
+  const chosen = spineOptionById(ENNEAGRAM_OPTIONS, enneagram);
 
   return (
     <div data-testid="spine-pickers">
-      {/* These are cheat sheets, not fields. The dropdown clearing itself after
-          inserting looks broken until you know that, which is exactly the kind
-          of thing "show me how" is for. */}
-      <div className="mb-1.5">
-        <Explain of="spine.what" />
+      <div className="mb-1.5 flex items-center gap-2">
+        <label className="text-xs text-text-muted"
+               htmlFor="spine-enneagram-select">
+          Personality (Enneagram)
+        </label>
+        <Explain of="spine.what" compact />
       </div>
-      <div className="flex gap-3">
-        <SpineSelect
-          label="Personality (Enneagram)"
-          options={ENNEAGRAM_OPTIONS}
-          onPick={picked => {
-            onInsert(`Enneagram: ${picked.label}`, picked.summary);
-            showNotice(`${picked.label} added to Personality Traits below.`);
-          }}
-        />
-        <SpineSelect
-          label="Story Role (Archetype)"
-          options={ARCHETYPE_OPTIONS}
-          onPick={picked => {
-            onInsert(`Story role: ${picked.label}`, picked.summary);
-            onRolePicked?.(picked);
-            showNotice(`${picked.label} added to Personality Traits -- Role and Tags updated above.`);
-          }}
-        />
+
+      <div className="flex flex-wrap items-center gap-2">
+        {/* A REAL FIELD. It shows what is stored and keeps showing it. */}
+        <select
+          id="spine-enneagram-select"
+          value={enneagram}
+          onChange={e => onEnneagramChange(e.target.value)}
+          aria-label="Personality type"
+          className="flex-1 rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
+        >
+          <option value="">Not set</option>
+          {ENNEAGRAM_OPTIONS.map(o => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
+
+        {/* Choosing a type writes NOTHING into the profile text on its own.
+            That separation is the whole fix: the type is a fact about the
+            character, and the sentences are a decision about the page. */}
+        <button
+          type="button"
+            onClick={() => setPicking(true)}
+          disabled={!chosen}
+          data-testid="spine-open-facets"
+          title={chosen
+            ? "Choose which lines of this type fit this character"
+            : "Pick a type first"}
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-accent-fill/50 px-2 py-1.5 text-xs text-accent hover:border-accent-fill disabled:opacity-40"
+        >
+          <Sparkles size={11} />
+          Pick what fits
+        </button>
       </div>
-      {notice ? (
-        <p className="mt-1.5 text-mini text-success-muted">{notice}</p>
-      ) : (
-        <p className="mt-1.5 text-mini text-faint">
-          Starting points, not verdicts -- fill in the blanks and ask what
-          makes this character NOT a textbook type.
-        </p>
+
+      <p className="mt-1.5 text-mini text-faint">
+        {chosen
+          ? "A starting point, not a verdict. Take the lines that fit and ask "
+            + "what makes this character NOT a textbook type."
+          : "Optional. Pick a pattern if you want somewhere to start; a "
+            + "character written without one is not missing anything."}
+      </p>
+
+      {picking && chosen && (
+        // A dialog over the page rather than an expanding panel, so opening it
+        // does not shove the profile form around underneath the writer.
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-6 pt-16"
+          // Backdrop closes it. Nothing here is unsaved work: ticks are not
+          // writes, and the writer would have to press Add to change anything.
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setPicking(false);
+          }}
+        >
+          <div className="w-full max-w-xl rounded-lg border border-border-strong bg-bg-panel p-3 shadow-e3">
+            <SpineFacetPicker
+              option={chosen}
+              existingText={personalityText}
+              onInsert={facets => onInsertFacets(chosen.label, facets)}
+              onClose={() => setPicking(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

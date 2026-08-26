@@ -234,19 +234,69 @@ export const EXPLAIN: Record<string, Explains> = {
       "Turn it off to get the ordinary options back.",
     ],
   },
+  // ALIASES. Its own entry because the question a writer has here is not "what
+  // is this field" but "why does it matter that I type these in".
+  "profile.aliases": {
+    what: "Every other word this entry answers to.",
+    why: "A character is rarely called one thing. James is Jim to everyone "
+      + "who knows him, and both names have to point at this one profile -- "
+      + "otherwise one of them finds nothing when the app reads your "
+      + "chapters, and he looks like two different people. Places and "
+      + "factions have the same problem.",
+    needed: "recommended",
+    cost: FREE,
+    how: [
+      "Type a name and press Enter. Nothing is saved until you save the "
+        + "profile, like every other field here.",
+      "Add them before you write, if you know them. The app only asks about a "
+        + "name once your chapters actually use it.",
+      "A word that already means another entry is refused, and says which one: "
+        + "one word cannot mean two things, or a mention of it would match "
+        + "neither.",
+      "Nothing is guessed for you. Jim is not offered just because the name "
+        + "is James -- a nickname you did not choose is one you would never "
+        + "notice was wrong.",
+    ],
+  },
   "spine.what": {
-    what: "Two cheat sheets: a personality pattern and a story role.",
-    why: "A starting point rather than a label. Both insert a few sentences of "
-      + "ordinary text into the profile, written to be argued with -- the point "
-      + "is to have something on the page to react to.",
+    what: "A personality pattern to build a character out from.",
+    why: "A starting point rather than a label. Most characters only want part "
+      + "of a type, so you choose which lines land -- the point is to have "
+      + "something on the page to react to, not a description to accept.",
     needed: "optional",
     cost: FREE,
     how: [
-      "Pick one. The text goes into the profile straight away.",
-      "The dropdown clears itself afterwards, because it is not a field being "
-        + "set -- nothing remembers which one you chose.",
-      "Picking a story role also fills in the Role field and adds a few tags.",
-      "Edit or delete what it inserted like any other text.",
+      "Pick a type. The character remembers it, so you can come back and take "
+        + "more later.",
+      "Then choose which lines fit. Nothing is added until you say so.",
+      "Lines you have already taken are greyed, so a second visit only offers "
+        + "what is new.",
+      "Everything it adds is ordinary text you can edit or delete.",
+    ],
+  },
+  // THE PICK-AND-CHOOSE SCREEN. Its own entry rather than more steps on
+  // spine.what, because it is the answer to a different question: not "what is
+  // this control" but "why am I being asked line by line".
+  "spine.facets": {
+    what: "The parts of a personality type, offered one at a time.",
+    why: "A type describes a pattern, not a person, so a lot of any type will "
+      + "not fit the character in front of you. A recurring shopkeeper can "
+      + "want to be beyond reproach without noticing the crooked picture "
+      + "frame in every room. Taking the whole paragraph meant editing most "
+      + "of it back out.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Tick the lines that fit. Nothing starts ticked, because this writes "
+        + "into your own profile.",
+      "Essentials takes what they want, what they dread and how they talk. "
+        + "Everything takes the lot.",
+      "Those two only move the ticks -- nothing is written until you press "
+        + "Add.",
+      "A line already in this character is greyed and says so. Edit that "
+        + "sentence yourself and it will be offered again.",
+      "Come back any time to take more. Changing the type never deletes what "
+        + "you already added.",
     ],
   },
   "names.what": {
@@ -661,9 +711,14 @@ export const EXPLAIN: Record<string, Explains> = {
     needed: "optional",
     cost: FREE,
     how: [
-      "Tick anything that is fine unconnected and say so in one go.",
-      "For one that DOES need a connection, go one at a time instead: the "
-        + "connector needs the other end and a reason, which is a real decision.",
+      "Tick anything that is fine unconnected and say so in one go. That is "
+        + "what the ticking is for: the batch answer here is the no.",
+      "For one that DOES need a connection, press Connect on its row. It "
+        + "cannot be a tick, because a connection carries the other end AND a "
+        + "reason, and a reason is a sentence only you can write.",
+      "Connect leaves the list on that one entry, so you keep your place "
+        + "instead of starting the kind again. Rows you ticked but have not "
+        + "saved yet are dropped.",
     ],
     endpoint: "/api/codex/run/answer",
   },

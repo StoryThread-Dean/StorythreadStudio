@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from app.settings_store import load_settings, mask_key, save_settings, get_vault_root
 from app.ai.openrouter import test_connection
 from app.ai.local_endpoint import LOCAL_API_STYLES, validate_local_base_url
-from app.ai.providers import PROVIDERS, active_provider, base_url_for
+from app.ai.providers import PROVIDERS, active_provider, list_base_url_for
 from app.ai.roles import ROLE_INFO, ROLES
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -297,12 +297,25 @@ async def _test_local_connection(settings: dict, provider) -> dict:
     Three failures are worth telling apart, because the fix differs:
       - the address is not a valid local one    -> fix the address
       - nothing is listening                    -> start the server
-      - it answers, but on the OTHER API shape  -> flip one setting
+      - it answers, but on the OTHER API shape  -> CORRECTED here, and said
 
     That last case is the reason this does not sniff the style up front.
     Guessing would hide the mismatch; testing the writer's choice and then
-    checking the alternative lets the app say "you picked Ollama, but it
-    answered as OpenAI-compatible -- switch?" and hand back the fix.
+    checking the alternative means the app can be specific.
+
+    AND IT NOW APPLIES THE FIX RATHER THAN DESCRIBING IT (2026-08-23). This
+    function already worked out which dialect the server really speaks and
+    returned it as `suggested_style` -- a value that appeared nowhere in
+    app/src/, so the writer read a sentence telling them which dropdown to
+    change and changed it by hand. Same shape as R8.1 and R8.7: the backend
+    computed the right answer and no screen rendered it.
+
+    The correction is safe to make silently BECAUSE the style now only chooses
+    where to list models (see local_endpoint.LOCAL_API_STYLES). Getting it
+    wrong costs an empty model dropdown, never a wrong answer or a charge, and
+    the right value is a fact the probe just established rather than a guess.
+    It is still reported out loud in the same breath -- a setting that changes
+    itself without saying so is its own bug.
     """
     import dataclasses
 
@@ -312,7 +325,7 @@ async def _test_local_connection(settings: dict, provider) -> dict:
     async def _try(style: str) -> dict:
         probe = dict(settings, local_api_style=style)
         candidate = dataclasses.replace(
-            provider, base_url=base_url_for(provider, probe),
+            provider, base_url=list_base_url_for(provider, probe),
             model_list_style="ollama_tags" if style == "ollama" else "openai",
         )
         return await test_connection("", provider=candidate)
@@ -339,15 +352,26 @@ async def _test_local_connection(settings: dict, provider) -> dict:
     except ValueError:
         alt = {"ok": False}
     if alt.get("ok"):
-        return {
-            "ok": False,
-            "style": other,
-            "suggested_style": other,
-            "error": (
-                f"That address answered, but as a {other} endpoint rather than "
-                f"{chosen}. Switch the API style to {other}."
-            ),
-        }
+        # THE FIX IS APPLIED, not recommended. See the docstring: this only
+        # moves where models are listed, and the probe has just proved which
+        # value is right.
+        settings["local_api_style"] = other
+        save_settings(settings)
+        readable = {"openai": "OpenAI-compatible", "ollama": "Ollama native"}
+        alt["style"] = other
+        alt["suggested_style"] = other
+        alt["corrected_style"] = other
+        alt["notice"] = (
+            f"That address answers as {readable.get(other, other)} rather than "
+            f"{readable.get(chosen, chosen)}, so the API style has been "
+            f"switched for you. Your models are listed below."
+        )
+        if not alt.get("model_count"):
+            alt["error"] = (
+                "Connected, but no models are loaded. Pull or load a model in "
+                "your local runtime first."
+            )
+        return alt
 
     return {
         "ok": False,

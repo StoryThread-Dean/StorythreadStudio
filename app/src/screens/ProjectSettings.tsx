@@ -508,6 +508,11 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
   // Editable fields (initialized from current project)
   const [title, setTitle]             = useState(project.title);
+  // THE SERIES NAME. Loaded from series.json rather than from `project`,
+  // which only carries series_id and series_path -- the name itself was never
+  // on this screen at all, so there was nothing to show and nothing to edit.
+  const [seriesName, setSeriesName]   = useState("");
+  const [seriesLoaded, setSeriesLoaded] = useState("");
   const [description, setDescription] = useState(project.description);
   const [genre, setGenre]             = useState("");
   const [tone, setTone]               = useState("");
@@ -635,6 +640,34 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
     }
 
     try {
+      // THE SERIES NAME FIRST, and only when it actually changed. It lives in
+      // a different file (series.json, one level up) so it is a separate
+      // request -- but it saves on the same button, because to the writer it is
+      // one screen and one Save.
+      //
+      // Before the project settings, deliberately: if the series write fails,
+      // the writer is told and nothing else has moved yet.
+      if (project.series_path && seriesName.trim() !== seriesLoaded) {
+        if (!seriesName.trim()) {
+          setError("A series needs a name. It is how you find it again.");
+          setSaving(false);
+          return;
+        }
+        const sres = await fetch(`${API_BASE}/api/series/settings`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            folder_path: project.series_path,
+            name: seriesName.trim(),
+          }),
+        });
+        if (!sres.ok) {
+          const e = await sres.json().catch(() => ({}));
+          throw new Error(e.detail ?? "Could not rename the series.");
+        }
+        setSeriesLoaded(seriesName.trim());
+      }
+
       const res = await fetch(`${API_BASE}/api/projects/settings`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -688,6 +721,29 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
 
 
 
+
+  // Read the series name once, for a book that belongs to one. It lives in
+  // series.json beside the book folder, not in project.json.
+  useEffect(() => {
+    if (!project.series_path) return;
+    let cancelled = false;
+    fetch(`${API_BASE}/api/series/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_path: project.series_path }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        // A series folder that has gone missing is not an error worth blocking
+        // the whole settings screen over -- the field just stays empty and the
+        // path below it still tells the writer where it was.
+        if (cancelled || !data?.name) return;
+        setSeriesName(String(data.name));
+        setSeriesLoaded(String(data.name));
+      })
+      .catch(() => { /* same reasoning */ });
+    return () => { cancelled = true; };
+  }, [project.series_path]);
 
   // ── Dynamic guide text generators ────────────────────────────────────────
   const costs = COST_ESTIMATES[costTier] ?? COST_ESTIMATES.standard;
@@ -793,13 +849,25 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
               </h3>
 
               <div className="mb-4">
-                <label className="mb-1 block text-xs font-medium text-text-primary">Title</label>
+                {/* "Book title", not "Title": with a Series name on the same
+                    screen, a bare Title is ambiguous about which of the two it
+                    means. */}
+                <label className="mb-1 block text-xs font-medium text-text-primary"
+                       htmlFor="book-title">
+                  Book title
+                </label>
                 <input
+                  id="book-title"
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
+                  data-testid="book-title"
                   className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-fill"
                 />
+                <p className="mt-1 text-mini text-faint">
+                  Renaming does not move the folder on disk, so nothing you have
+                  backed up changes name.
+                </p>
               </div>
 
               <div className="mb-4">
@@ -994,14 +1062,33 @@ export function ProjectSettings({ project, onClose, onProjectUpdated }: ProjectS
                 <SuggestionPicker value={targetAudience} onChange={setTargetAudience} groups={AUDIENCE_SUGGESTIONS} nsfwGroups={AUDIENCE_NSFW} />
               </div>
 
-              {/* Series info (read-only if applicable) */}
+              {/* THE SERIES NAME, editable. It used to be a read-only box
+                  showing a folder path and not even the name -- and the only
+                  place the name could EVER be set was the "Make this a series"
+                  checkbox on the new-book form, typed once before the writer
+                  had written a word of the thing they were naming. */}
               {project.series_id && (
                 <div className="rounded border border-secondary-fill/40 bg-secondary-soft/20 p-3">
-                  <p className="text-xs text-secondary-muted">
-                    Part of a series
+                  <label className="mb-1 block text-xs font-medium text-secondary-muted"
+                         htmlFor="series-name">
+                    Series name
+                  </label>
+                  <input
+                    id="series-name"
+                    type="text"
+                    value={seriesName}
+                    onChange={e => setSeriesName(e.target.value)}
+                    placeholder="The name this series goes by"
+                    data-testid="series-name"
+                    className="w-full rounded border border-border bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
+                  />
+                  <p className="mt-1 text-mini text-faint">
+                    Shared by every book in this series, and sent to AI as part
+                    of the story context. Renaming it here does not move the
+                    folder on disk, so nothing you have backed up changes name.
                   </p>
-                  <p className="text-xs text-text-muted">
-                    Series path: {project.series_path}
+                  <p className="mt-1 text-mini text-faint">
+                    Folder: {project.series_path}
                   </p>
                 </div>
               )}

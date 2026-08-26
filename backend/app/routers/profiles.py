@@ -253,6 +253,31 @@ class Profile(BaseModel):
     # where every section is a single free-text field. Older files have no
     # character_kind in frontmatter and parse as "main".
     character_kind: str = "main"
+    # THE ENNEAGRAM TYPE, as an option id ("e1"), never a label.
+    #
+    # Absent means not set, which is where every profile written before
+    # this already is. An id survives a relabelling; storing
+    # "1 -- The Reformer" would mean the next wording change silently
+    # orphaned every profile that used it.
+    #
+    # Carried through UNVALIDATED on purpose: an id this version does not
+    # know is either a hand edit or a newer release, and dropping it would
+    # destroy the writer's answer in order to look tidy. The SCREEN decides
+    # what it can render (an unknown id shows as not set); the file keeps
+    # what it was given. Same direction normalize_trait_window refuses in.
+    enneagram: str = ""
+    # EVERY OTHER WORD THIS ENTRY ANSWERS TO.
+    #
+    # Gwendolyn Barksdale is Gwen to everyone who knows her and Willow on
+    # stage. All three are her, and the app has to keep all three pointing
+    # at one profile or a mention of two of them finds nothing.
+    #
+    # The Weave has carried this since v2.0.0 and profiles/ never did, so a
+    # writer on an unconverted project had nowhere to put a nickname. Same
+    # field name and same meaning in both dialects, bound by a contract
+    # test: a field one parser knows and the other drops is the bug R11.3
+    # and the subtext round trip were each an instance of.
+    aliases: list[str] = []
 
 
 # The two character templates. Kept tiny on purpose -- "background" was
@@ -647,6 +672,9 @@ def _parse_profile_markdown(raw: str, filename: str, profile_type: str) -> Profi
         created_at=str(meta.get("created_at", "")),
         updated_at=str(meta.get("updated_at", "")),
         character_kind=kind,
+        enneagram=str(meta.get("enneagram", "") or ""),
+        aliases=[str(a).strip() for a in (meta.get("aliases") or [])
+                 if str(a).strip()],
     )
 
 
@@ -685,6 +713,14 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
     # files byte-stable on resave.
     if profile_type == "character" and profile.character_kind == "side":
         lines += ["character_kind: side"]
+    # Only when set, so an ordinary profile resaves with no diff.
+    if profile_type == "character" and profile.enneagram:
+        lines += [f"enneagram: {profile.enneagram}"]
+    # Every kind can have them: a place is "Ashfall" and "the burned city"
+    # as readily as a person is "Gwendolyn" and "Gwen".
+    if profile.aliases:
+        lines += ["aliases:"]
+        lines += [f"  - {_yaml_scalar(a)}" for a in profile.aliases]
     if profile.tags:
         lines += ["tags:"]
         for tag in profile.tags:

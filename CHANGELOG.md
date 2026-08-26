@@ -28,6 +28,115 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
+## [2.0.3] - 2026-08-25
+
+### Added
+
+- **Rename a series, and your book, from Book Details.** The series name could
+  only ever be set in the "Make this a series" checkbox when you created the
+  first book -- typed once, before you had written a word of the thing you were
+  naming, and then permanent. Book Details now shows the series name and lets
+  you change it, and the book's own title is clearly labelled beside it.
+  Renaming either one does not move any folder on disk, so nothing you have
+  backed up changes name.
+
+- **Type in the other names a character goes by, without waiting for Weaving.**
+  James is Jim to everyone who knows him, and both names have to point at the
+  same profile or one of them finds nothing when the app reads your chapters.
+  Until now the only way to record that was to let Weaving find the word in a
+  chapter first, which is no use if you are building the world before you write
+  a line. There is an **Also known as** field on every profile now --
+  characters, places, factions, anything. A word that already means another
+  entry is refused and says which one, because one word cannot mean two things.
+  Nothing is guessed for you.
+- **Adult story roles, for anyone writing them.** Four groups at the bottom of
+  the role list, from attraction and tension through to fetish and taboo. They
+  are last and every one is labelled, so if you are not writing that you scroll
+  past and never read a word of it.
+
+### Changed
+
+- **Character profiles: pick the parts of a personality that actually fit.**
+  Choosing an Enneagram type used to drop one long paragraph into Personality
+  Traits, and most of it usually described somebody else. Now the character
+  remembers its type, and a **Pick what fits** button opens the type split into
+  separate lines you tick one at a time. **Essentials** takes what they want,
+  what they dread and how they talk; **Everything** takes the lot; neither
+  writes anything until you press Add. Lines already in the character are greyed
+  so a second visit only offers what is new. Side characters keep a record of
+  their type now, which they never did.
+- **Character profiles: adding a story role no longer erases the ones already
+  there.** A character can be a Merchant and a Red Herring and an Everyman, and
+  picking the third keeps the first two. Picking one twice does nothing instead
+  of listing it again.
+- **Character profiles: one Role control instead of two, and it explains
+  itself.** The second dropdown is gone. The list beside the Role field now
+  covers around sixty roles grouped by what you are looking for -- Leads,
+  Opposition, Trade and community, Mystery and misdirection, and five more --
+  rather than by how common they are, which is why Merchant, Innkeeper, Healer,
+  Guard, Suspect and Witness were missing entirely. Every role explains what it
+  does in a story, and the ones with writing guidance offer to add it.
+- **Quick Build: the Story Role dropdown now does what it says.** It was
+  labelled "weights the rolls", which was jargon and, for eight of the fifteen
+  roles, simply untrue -- they had no lines behind them, so picking one rerolled
+  and changed nothing. Every role now has lines for every row, and the label
+  says what happens: it mixes lines that suit the role into every row below, and
+  choosing one rerolls straight away. It also tells you when a spicier tier is
+  on, because the role lines are written for the ordinary ones and are held back
+  rather than watering down the tier you asked for.
+- **The Weave: "work through all of these at once" now says what it will
+  actually do.** The button used one phrase for three different jobs. Where the
+  list really does the work in one go it says so ("Place all 7 in one list",
+  "Record all 7 in one list"); where the batch answer is "these are all fine" it
+  says that instead of implying it will connect them for you.
+
+### Fixed
+
+- **A book in a series could lose track of its series folder.** If you renamed
+  the series folder by hand, or moved your whole Storythread folder somewhere
+  else, the book kept pointing at the old location -- so Book Details reported
+  "Folder not found" and the series name, genre and tone stopped reaching AI as
+  story context. The app now works out where the series really is from where the
+  book actually sits, and writes the correction back so everything else finds it
+  too. Nothing for you to fix; open the book once and it repairs itself.
+- **The Role help popup stretched the profile card open.** It opened inside the
+  Name / Role / Sex / Age / Status card instead of floating over it, so the
+  whole box distorted. It is a proper popout now, closes on Escape or a click
+  outside, and its label sits above the dropdown with the others.
+- **"What's this?" popups could open off the side of the screen.** On a trait's
+  Hidden (eyeball) control and its "True all the way through" switch, the help
+  popup opened leftwards from a button already near the left edge, so most of it
+  was off-screen and unreadable. Those two now open the other way, and every
+  help popup in the app will now slide itself back into view rather than hang
+  off an edge, so this cannot happen anywhere else either.
+- **Local models: AI actions failed if you picked "Ollama native".** Setting up
+  a local model, choosing Ollama's own API and pressing Test Connection told you
+  everything was fine and filled in your model list -- and then every Draft,
+  Smart Advisor pass and summary failed, because prompts were being sent to an
+  address Ollama does not answer on. Prompts now always go to the right place
+  whatever you picked, so this cannot happen. If you had chosen Ollama native,
+  it simply starts working; there is nothing to change.
+- **Local models: Test Connection now fixes the setting instead of telling you
+  to.** If your server turns out to speak the other API, the app switches the
+  setting for you and says that it did, rather than printing a sentence naming a
+  dropdown for you to go and change. The setting is also relabelled to what it
+  actually does now -- it chooses where your model LIST is read from, which is
+  also where Ollama tells us each model's size and quantization.
+- **Character profiles: "True all the way through" would not stay switched on.**
+  On a trait, turning the switch on and saving put it straight back to off, with
+  a warning underneath saying the trait was not being sent to AI at all. It
+  affected every trait in every project that has not been brought into the
+  Weave, and the trait was in fact being sent the whole time -- the switch was
+  reading the wrong answer, not changing one. Nothing on disk was wrong and
+  nothing needs redoing.
+- **The Weave: you can now deal with one entry properly without losing your
+  place.** On a list of unconnected entries, the screen told you to handle any
+  that need a real connection on their own, and there was no way to do it: the
+  only way out started the whole section again. Every row now has a Connect
+  button that takes you to that one entry and brings you back to where you were.
+
+---
+
 ## [2.0.2] - 2026-08-21
 
 ### Added

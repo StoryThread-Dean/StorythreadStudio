@@ -521,11 +521,35 @@ export function Settings({ onClose }: SettingsProps) {
       const data = await res.json();
 
       if (data.ok) {
+        // THE CORRECTION, RENDERED. The backend has always worked out which
+        // dialect the server really speaks; it now also applies the fix, and
+        // this is the half that was missing -- `suggested_style` was computed
+        // and appeared nowhere in the UI, so the writer read a sentence naming
+        // a dropdown and changed it by hand. Same shape as R8.1 and R8.7.
+        if (data.corrected_style) {
+          // The stored value moved, so the control has to move with it or the
+          // screen would show the old choice and the next Save would put the
+          // broken one back.
+          setLocalApiStyle(String(data.corrected_style));
+          // And the CACHED settings move too, or the screen would read as
+          // edited-but-unsaved over a change the backend has already written.
+          // `localEdited` above compares the two to decide whether to save
+          // before testing; leaving them disagreeing would make every later
+          // Test Connection perform a pointless save first.
+          setSettings(prev => prev
+            ? { ...prev, local_api_style: String(data.corrected_style) }
+            : prev);
+        }
         // A local server that answers but has nothing loaded is "connected"
         // and still unusable, so the backend sends an error alongside ok.
         setTestResult(data.error
           ? { ok: false, message: data.error }
-          : { ok: true, message: `Connected. ${data.model_count} models available.` });
+          : {
+              ok: true,
+              message: data.notice
+                ? `${data.notice} ${data.model_count} models available.`
+                : `Connected. ${data.model_count} models available.`,
+            });
         // /api/ai/models serves the SAVED provider, so only refetch when the
         // tested provider is (now) the active one -- either it already was,
         // or the save above just made it so.
@@ -665,18 +689,28 @@ export function Settings({ onClose }: SettingsProps) {
                           />
                         </div>
                         <div>
+                          {/* A MODEL LISTING choice, and the label says so.
+                              It used to read "API style" and used to choose the
+                              chat transport too, where its Ollama value pointed
+                              at a path Ollama does not serve -- so picking it
+                              gave a passing Test Connection and a 404 on every
+                              AI action. Chat is now always OpenAI-compatible;
+                              this only decides where the model list is read
+                              from, which is a real difference worth a setting
+                              and cannot break generation. */}
                           <label className="mb-1 block text-xs font-medium text-text-primary">
-                            API style
+                            Where to read your model list
                           </label>
                           <p className="mb-2 text-xs text-faint">
-                            Ollama offers both; LM Studio and llama.cpp use the
-                            OpenAI-compatible one. If you pick wrong, Test Connection
-                            says so and offers to switch.
+                            Ollama keeps its own list, which also tells us each
+                            model's size and quantization. LM Studio and
+                            llama.cpp use the OpenAI-compatible list. If you
+                            pick wrong, Test Connection corrects it for you.
                           </p>
                           <select
                             value={localApiStyle}
                             onChange={e => setLocalApiStyle(e.target.value)}
-                            aria-label="Local API style"
+                            aria-label="Where to read your model list"
                             className="rounded border border-border bg-bg-surface px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-fill"
                           >
                             <option value="openai">OpenAI-compatible</option>

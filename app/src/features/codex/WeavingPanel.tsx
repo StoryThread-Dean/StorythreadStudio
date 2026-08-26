@@ -913,6 +913,18 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
             recordSwept(settled, "Done in the list");
           }}
           onClose={() => setSweeping(null)}
+          onDealWith={target => {
+            // Leave the list ON this stop rather than at the top of the kind.
+            // "Go one at a time instead" already existed and abandons the
+            // writer's place, which is why the header's "deal with one
+            // properly" read as an instruction with nothing behind it.
+            //
+            // Nothing here leaves the panel: the walk's own index moves, so the
+            // closed-world rule is untouched.
+            const i = stops.findIndex(s => s.key === target.key);
+            setSweeping(null);
+            if (i >= 0) setAt(i);
+          }}
         />
       </Shell>
     );
@@ -1366,13 +1378,32 @@ export function WeavingPanel({ projectPath, onClose }: WeavingPanelProps) {
           data-testid="sweep-offer"
           className="mt-2 w-full rounded border border-weave-fill bg-weave-soft/25 px-2.5 py-1.5 text-left text-mini text-weave-strong hover:border-weave-fill"
         >
+          {/* THE HEADLINE SAYS WHAT THE LIST ACTUALLY DOES, per kind.
+              "Work through all 7 at once" was reported as a broken promise on
+              Loose threads, and fairly: for Unplaced and Place the list really
+              does perform the positive action in a batch, but a connection
+              carries a reason line, so seven of them can never be seven ticks.
+              On that kind the batch answer is the NO, and the headline now says
+              so instead of implying otherwise.
+
+              The subtitle's two-way test was also wrong for `place`, which fell
+              to the else branch and was advertised with the Loose thread
+              wording. Three kinds, three sentences. */}
           <span className="font-medium">
-            Work through all {sweepable[stop.kind].length} at once
+            {stop.kind === "unplaced"
+              ? `Place all ${sweepable[stop.kind].length} in one list`
+              : stop.kind === "place"
+                ? `Record all ${sweepable[stop.kind].length} in one list`
+                : `See all ${sweepable[stop.kind].length} in one list`}
           </span>
           <span className="block text-micro text-faint">
             {stop.kind === "unplaced"
               ? "one list, a chapter each, rather than one screen each"
-              : "tick the ones that are fine unconnected and say so in one go"}
+              : stop.kind === "place"
+                ? "the chapters your writing found for each, ticked and "
+                  + "recorded in one go"
+                : "tick the ones that need no connection, or open any one of "
+                  + "them to connect it properly"}
           </span>
         </button>
       )}

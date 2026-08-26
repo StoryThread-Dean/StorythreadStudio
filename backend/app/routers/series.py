@@ -33,6 +33,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+# Windows will refuse a replace while a sync client, an indexer or the
+# writer's own editor holds the file for a moment. See utils/atomic.py.
+from app.utils.atomic import replace_atomic
+
 
 router = APIRouter(prefix="/api/series", tags=["series"])
 
@@ -232,6 +236,88 @@ async def open_series(request: OpenSeriesRequest):
 
     # Patch root_path in case the series was moved
     data["root_path"] = folder
+
+    return SeriesResponse(**data)
+
+
+class UpdateSeriesRequest(BaseModel):
+    """
+    Rename a series, or correct anything else set when it was created.
+
+    THE GAP THIS FILLS. Until now the ONLY place a series name could be set was
+    the "Make this a series" checkbox on the new-book form. Every other name in
+    the app can be corrected; this one was typed once, in a hurry, before the
+    writer had written a word of the thing they were naming, and then it was
+    permanent. Reported as an oversight and it is one.
+
+    Every field is optional and only what is sent is written, so this cannot
+    blank a value by omitting it -- the same rule
+    UpdateProjectSettingsRequest follows.
+    """
+    folder_path: str          # which series
+    name: str | None = None
+    genre: str | None = None
+    subgenre: str | None = None
+    tone: str | None = None
+    pacing: str | None = None
+    target_audience: str | None = None
+    content_mode: str | None = None
+    keywords: list[str] | None = None
+
+
+@router.put("/settings", response_model=SeriesResponse)
+async def update_series_settings(request: UpdateSeriesRequest):
+    """
+    Write changed fields back into series.json.
+
+    THE FOLDER IS NOT RENAMED, deliberately, and this is the same stance the
+    book title takes. A series folder name is a slug made once at creation, and
+    every book inside carries `series_path` pointing at it; moving it would
+    invalidate all of them, plus the recents list and any project.json whose
+    root_path sits underneath. Renaming a thing the writer can see should not
+    silently rearrange the folders they back up.
+
+    So the NAME changes and the folder keeps its slug. The screen says so
+    rather than leaving the writer to discover it.
+    """
+    folder = request.folder_path
+    if not os.path.exists(folder):
+        raise HTTPException(status_code=400, detail=f"Folder not found: {folder}")
+
+    data = _read_series_json(folder)
+
+    # Only what was actually sent. A field left out is a field left alone.
+    for field in ("name", "genre", "subgenre", "tone", "pacing",
+                  "target_audience", "content_mode"):
+        value = getattr(request, field)
+        if value is not None:
+            data[field] = value.strip() if isinstance(value, str) else value
+    if request.keywords is not None:
+        data["keywords"] = [k.strip() for k in request.keywords if k.strip()]
+
+    # A series with no name is a series the writer cannot find again in the
+    # picker, so it is refused rather than accepted and worked around later.
+    if not str(data.get("name") or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="A series needs a name. It is how you find it again.",
+        )
+
+    data["root_path"] = folder
+    data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    series_file = os.path.join(folder, "series.json")
+    tmp = series_file + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        # Retried rather than bare: on Windows a replace fails while a sync
+        # client, the indexer or the writer's own editor holds the file for a
+        # moment, so a save would fail at random with no diagnosable cause.
+        replace_atomic(tmp, series_file)
+    except OSError as e:
+        raise HTTPException(status_code=500,
+                            detail=f"Could not save the series: {e}")
 
     return SeriesResponse(**data)
 

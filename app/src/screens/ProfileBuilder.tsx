@@ -54,7 +54,8 @@ import { SpinePickers } from "../components/profiles/SpinePickers";
 import { QuickBuildPanel } from "../components/profiles/QuickBuildPanel";
 import { NameGeneratorPanel } from "../components/profiles/NameGeneratorPanel";
 import { Dices } from "lucide-react";
-import { ROLE_SUGGESTIONS } from "../data/characterSpines";
+import { RolePicker } from "../components/profiles/RolePicker";
+import { AliasEditor } from "../components/profiles/AliasEditor";
 import type { CharacterKind } from "../types/profile";
 // WHERE THIS PROJECT'S ENTRIES LIVE. A converted project keeps them in
 // codex/ and an unconverted one in profiles/; the screen asks rather than
@@ -1089,29 +1090,57 @@ export function ProfileBuilder({
   // quick-build randomizer. Unlike addTraitBlock (which adds an empty block
   // for hand-typing), this one arrives with canned text already in place;
   // it is still a perfectly normal block the writer edits or deletes.
-  function insertPrefilledTraitBlock(
-    sectionKey: string, trait: string, description: string, importance: ImportanceLevel,
-  ) {
-    const newBlock: TraitBlock = {
-      id: uuidv4(),
-      trait,
-      description,
-      importance,
-    };
+  /**
+   * Add chosen personality facets to the Personality Traits section.
+   *
+   * EXTENDS an existing block for the same type rather than making a second
+   * one (spec 4.4). Two blocks both called "Enneagram: 1 -- The Reformer" is
+   * the kind of duplicate that makes a writer stop trusting a feature.
+   *
+   * The side template gets a LABELLED paragraph, which is the bug from the
+   * report: it used to append the text with no label at all, so a side
+   * character kept no record that a type had ever been chosen -- and the
+   * character in the report was a side character.
+   */
+  function insertSpineText(traitName: string, text: string) {
+    if (!text.trim()) return;
+    const sectionKey = "personality_traits";
+
+    if (isSideCharacter) {
+      appendToSectionContent(sectionKey, `${traitName} -- ${text}`, "\n\n");
+      return;
+    }
+
     setProfile(prev => {
       if (!prev) return prev;
+      const section = prev.sections[sectionKey];
+      if (!section) return prev;
+      const existing = section.trait_blocks.find(b => b.trait === traitName);
+      const blocks = existing
+        ? section.trait_blocks.map(b => b === existing
+            ? { ...b, description: `${b.description} ${text}`.trim() }
+            : b)
+        : [...section.trait_blocks, {
+            id: uuidv4(), trait: traitName, description: text,
+            importance: "core" as ImportanceLevel,
+          }];
       return {
         ...prev,
-        sections: {
-          ...prev.sections,
-          [sectionKey]: {
-            ...prev.sections[sectionKey],
-            trait_blocks: [...prev.sections[sectionKey].trait_blocks, newBlock],
-          },
-        },
+        sections: { ...prev.sections, [sectionKey]: { ...section, trait_blocks: blocks } },
       };
     });
     setIsDirty(true);
+  }
+
+  /** Everything the writer can currently SEE in Personality Traits.
+   *
+   *  Read from the live buffer rather than the file, so a facet greys the
+   *  moment it is inserted and un-greys if the writer undoes it (spec 4.3). */
+  function personalityBufferText(): string {
+    const section = profile?.sections?.["personality_traits"];
+    if (!section) return "";
+    return [section.content ?? "",
+            ...section.trait_blocks.map(b => b.description ?? "")].join("\n");
   }
 
   function updateTraitBlock(sectionKey: string, blockId: string, updates: Partial<TraitBlock>) {
@@ -2022,37 +2051,36 @@ export function ProfileBuilder({
                       )}
                     </div>
                   </div>
+                  {/* The Role label moved INSIDE the row so it sits on the
+                      same line as the picker's own label, which is where the
+                      writer asked for it:
+
+                        Name            Role          What's this?
+                        [         ]     [       ]     [Add role... ] */}
                   <div>
-                    <label className="mb-1 block text-xs text-text-muted">Role</label>
                     <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={profile.role}
-                        onChange={e => updateProfileField("role", e.target.value)}
-                        placeholder="e.g. protagonist"
-                        data-pb-field="role"
-                        className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
-                      />
-                      {/* Role quick-pick: grouped Popular / Less Common /
-                          Niche story functions. Picking fills the field;
-                          hand-typing always works. Snaps back to blank --
-                          it's an inserter, not a stored value. */}
+                      <div className="min-w-0 flex-1">
+                        <label className="mb-1 block text-xs text-text-muted">Role</label>
+                        <input
+                          type="text"
+                          value={profile.role}
+                          onChange={e => updateProfileField("role", e.target.value)}
+                          placeholder="e.g. protagonist"
+                          data-pb-field="role"
+                          className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
+                        />
+                      </div>
+                      {/* THE ONE Role control. Grouped by what the writer is
+                          looking for rather than by frequency, help on every
+                          option, and it APPENDS -- picking a role used to erase
+                          the roles already there. */}
                       {profile.type === "character" && (
-                        <select
-                          value=""
-                          onChange={e => { if (e.target.value) updateProfileField("role", e.target.value); }}
-                          className="w-24 shrink-0 rounded border border-border bg-bg-surface px-1 py-1.5 text-xs text-text-muted outline-none focus:border-accent-fill"
-                          title="Pick a common story role"
-                        >
-                          <option value="">Pick...</option>
-                          {ROLE_SUGGESTIONS.map(group => (
-                            <optgroup key={group.group} label={group.group}>
-                              {group.options.map(o => (
-                                <option key={o} value={o}>{o}</option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
+                        <RolePicker
+                          role={profile.role}
+                          onChange={next => updateProfileField("role", next)}
+                          onInsertGuidance={(roleName, text) =>
+                            insertSpineText(`Story role: ${roleName}`, text)}
+                        />
                       )}
                     </div>
                   </div>
@@ -2128,16 +2156,45 @@ export function ProfileBuilder({
                   </div>
                 )}
 
-                <div className="mb-3 w-1/2 pr-1.5">
-                  <label className="mb-1 block text-xs text-text-muted">Status</label>
-                  <select
-                    value={profile.status}
-                    onChange={e => updateProfileField("status", e.target.value)}
-                    className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
-                  >
-                    <option value="active">Active</option>
-                    <option value="archived">Archived</option>
-                  </select>
+                {/* STATUS AND THE OTHER NAMES, side by side. Requested there:
+                    the aliases belong beside Status rather than above Sex/Age,
+                    where they pushed the two facts about a person down the card.
+
+                    EVERY KIND gets the alias control, not characters only: a
+                    place is "Ashfall" and "the burned city" as readily as a
+                    person is "James" and "Jim", and build_alias_map walks every
+                    Thread regardless of kind. Status is on every kind too, so
+                    the row is never half empty.
+
+                    Buffer-edited and manually saved like the rest of this
+                    screen. Weaving's own alias route writes immediately, which
+                    is right for a walkthrough answering one question at a time
+                    and wrong here, where the locked rule is manual save. */}
+                <div className="mb-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-text-muted">Status</label>
+                    <select
+                      value={profile.status}
+                      onChange={e => updateProfileField("status", e.target.value)}
+                      className="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-fill"
+                    >
+                      <option value="active">Active</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
+                  <AliasEditor
+                    aliases={profile.aliases ?? []}
+                    name={profile.name}
+                    onChange={next => updateProfileField("aliases", next)}
+                    // The entries this screen has loaded, which is the current
+                    // KIND only. It catches the common collision -- two people
+                    // both called Jim -- and cannot see across kinds, so the
+                    // backend refusal stays the authority when an alias reaches
+                    // it through the Weave.
+                    taken={new Map(profileList
+                      .filter(item => item.filename !== profile.filename)
+                      .map(item => [item.name.toLowerCase(), item.name]))}
+                  />
                 </div>
 
                 {/* Name generator -- opened by the dice button beside Name.
@@ -2158,20 +2215,12 @@ export function ProfileBuilder({
                 {profile.type === "character" && (
                   <div className="mt-1 border-t border-border pt-3">
                     <SpinePickers
-                      onInsert={(trait, description) => {
-                        if (isSideCharacter) {
-                          appendToSectionContent("personality_traits", description, "\n\n");
-                        } else {
-                          insertPrefilledTraitBlock("personality_traits", trait, description, "core");
-                        }
-                      }}
-                      onRolePicked={picked => {
-                        // Fills the Role and nothing else. It used to merge the
-                        // archetype's key-aspect tags in as well -- writing data
-                        // that no part of the app ever read, into a field the
-                        // writer could not tell was inert.
-                        updateProfileField("role", picked.label);
-                      }}
+                      enneagram={profile.enneagram ?? ""}
+                      onEnneagramChange={id => updateProfileField("enneagram", id)}
+                      onInsertFacets={(typeLabel, facets) =>
+                        insertSpineText(`Enneagram: ${typeLabel}`,
+                                        facets.map(f => f.text).join(" "))}
+                      personalityText={personalityBufferText()}
                     />
                   </div>
                 )}
@@ -3514,7 +3563,12 @@ function TraitBlockCard({ block, borderClass, open, onToggle, profileName, profi
         {/* Only once it is on. Before that the eye's tooltip is enough, and a
             second control on every trait row would be noise; after it, the
             writer has just made a decision they may want explained. */}
-        {block.subtext && <Explain of="character.subtext" compact align="right" />}
+        {/* Left-anchored: this sits near the LEFT of a trait card, so the
+            panel has to open rightwards. It was align="right", which anchors
+            the panel's right edge here and sent 30rem of it off the side of
+            the window. Explain now clamps itself to the viewport as well, so
+            this is the correct hint rather than the only thing saving it. */}
+        {block.subtext && <Explain of="character.subtext" compact />}
 
         {/* Trait name */}
         <input

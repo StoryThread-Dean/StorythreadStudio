@@ -148,11 +148,37 @@ export function QuickBuildPanel({ onInsert, onInsertRoleSummary, initialRoleLabe
       {open && (
         <div className="border-t border-border p-3">
 
-          {/* Role picker -- weights the rolls toward the chosen archetype */}
+          {/* WHAT IT DOES, in the writer's terms. It used to read "Story Role
+              (weights the rolls)", which is jargon AND was untrue for eight of
+              the fifteen roles, because they carried no lines. Asked about
+              directly: "what does the text above it mean {weights the rolls}?
+              Does it physically effect the [Reroll] below it? if so, for which
+              section?"
+
+              Every role covers every row now, so the answer fits on one line:
+              it mixes lines that suit the role into every deal, and choosing
+              one re-deals immediately. */}
           <div className="mb-3">
             <label className="mb-1 block text-xs font-medium text-text-primary">
-              Story Role (weights the rolls)
+              Story Role
             </label>
+            <p className="mb-1 text-mini text-faint">
+              Mixes lines that suit this role into every row below, about half
+              of each deal. Choosing one re-rolls straight away.
+            </p>
+            {/* SAID OUT LOUD. The role lines are written for the normal pools,
+                so they are held back while a spicier tier is on rather than
+                handing back half a deal the writer did not ask for. That was
+                already true and was never stated, which left the control
+                sitting there looking active. */}
+            {nsfw && archetypeId && (
+              <p className="mb-1 text-mini text-warn-strong"
+                 data-testid="quickbuild-role-inactive">
+                Not shaping the rolls right now: these role lines are written
+                for the normal pools, and NSFW is on. The role still fills the
+                Role field and the summary button below.
+              </p>
+            )}
             <div className="flex items-center gap-2">
               <select
                 value={archetypeId}

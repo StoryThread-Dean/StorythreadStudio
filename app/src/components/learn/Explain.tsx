@@ -34,6 +34,7 @@ import { useEffect, useRef, useState } from "react";
 import { HelpCircle, Coins, CircleCheck, ListOrdered } from "lucide-react";
 
 import { EXPLAIN, NEED_WORDING, type Explains } from "./explanations";
+import { useKeepOnScreen } from "../../hooks/useKeepOnScreen";
 
 interface ExplainProps {
   /** Key into the registry. Preferred, so the text lives in one place. */
@@ -58,6 +59,11 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const info = entry ?? (of ? EXPLAIN[of] : undefined);
+  // Keeps the panel readable when the trigger sits near a window edge. Shared
+  // with the Role help panel, which needed the identical correction -- see
+  // hooks/useKeepOnScreen.ts for the reasoning and the reported bugs.
+  const { ref: panelRef, style: fitStyle } = useKeepOnScreen<HTMLDivElement>(
+    open, [info]);
 
   // Escape and a click elsewhere both close it. A floating panel that can only
   // be dismissed by finding the button again is a panel people leave open.
@@ -100,8 +106,13 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
 
       {open && (
         <div
+          ref={panelRef}
           data-testid="explain-panel"
           role="note"
+          // The nudge that keeps it readable. translateX rather than a left
+          // offset so the anchoring below stays the thing that decides where
+          // the panel sits, and this only corrects it.
+          style={fitStyle}
           className={`absolute top-full z-50 mt-1.5 w-[min(30rem,80vw)] overflow-hidden rounded-lg border border-border-strong bg-bg-panel text-micro leading-relaxed text-text-muted shadow-e3 ${
             align === "right" ? "right-0" : "left-0"
           }`}

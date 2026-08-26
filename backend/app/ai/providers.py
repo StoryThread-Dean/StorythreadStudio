@@ -10,7 +10,7 @@
 # openrouter.py is the phone that can call anyone, and the card tells it
 # which number to dial and how formal to be.
 #
-# Adding a future provider (see docs/research-multi-provider.md) is meant
+# Adding a future provider (see docs/local-model-spec.md, appendix) is meant
 # to be exactly this:
 #   1. Add a ProviderConfig instance below + register it in PROVIDERS.
 #   2. Add its settings keys (API key / base URL) to settings_store.py.
@@ -142,14 +142,35 @@ def active_provider(settings: dict) -> ProviderConfig:
     return PROVIDERS.get(settings.get("ai_provider", "openrouter"), OPENROUTER)
 
 
+def _local_raw_address(settings: dict) -> str:
+    """The writer's stored local address, or a writer-facing refusal."""
+    raw = str(settings.get("local_base_url") or "")
+    if not raw.strip():
+        raise ValueError(
+            "No address is set for your local model. Add it in "
+            "Settings > AI Provider."
+        )
+    return raw
+
+
 def base_url_for(provider: ProviderConfig, settings: dict) -> str:
     """
-    The address to send this provider's requests to.
+    The address to send this provider's PROMPTS to.
 
     Hosted providers carry their own fixed base_url. The local provider's
-    address belongs to the writer's machine, so it comes from settings and
-    is normalized for the chosen API style (Ollama's native API and the
-    OpenAI-compatible one live at different paths).
+    address belongs to the writer's machine, so it comes from settings.
+
+    SPLIT FROM LISTING 2026-08-23, and the split is a bug fix rather than
+    tidying. This function used to be style-aware, so a writer who chose
+    "Ollama native" had generation pointed at the bare root -- and every AI
+    call POSTs to {base}/chat/completions, which Ollama does not serve there.
+    Result: a passing Test Connection, a full model dropdown, and a 404 on
+    every Draft, Advisor pass and summary. Nothing could announce it, because
+    the same setting was simultaneously making the model list work.
+
+    Chat is now always OpenAI-compatible, which every candidate runtime
+    speaks. Model LISTING is still style-aware and lives in
+    list_base_url_for() below.
 
     Raises ValueError with a writer-facing message when a local address is
     missing or is not actually local -- see ai/local_endpoint.py for why
@@ -158,13 +179,27 @@ def base_url_for(provider: ProviderConfig, settings: dict) -> str:
     if not provider.endpoint_from_settings:
         return provider.base_url
 
+    from app.ai.local_endpoint import chat_base_url
+
+    return chat_base_url(_local_raw_address(settings))
+
+
+def list_base_url_for(provider: ProviderConfig, settings: dict) -> str:
+    """
+    The address to ask this provider for its MODEL CATALOG.
+
+    The one place the writer's API-style choice still matters: Ollama lists
+    models at /api/tags off the bare root, everything else at /v1/models. That
+    is a real difference and worth a setting, which is why the dropdown stays
+    -- and /api/tags is also the only source of each model's parameter size,
+    quantization and family.
+
+    Same refusals as base_url_for; only the path differs.
+    """
+    if not provider.endpoint_from_settings:
+        return provider.base_url
+
     from app.ai.local_endpoint import normalize_base_url
 
-    raw = str(settings.get("local_base_url") or "")
-    if not raw.strip():
-        raise ValueError(
-            "No address is set for your local model. Add it in "
-            "Settings > AI Provider."
-        )
     style = str(settings.get("local_api_style") or "openai")
-    return normalize_base_url(raw, style)
+    return normalize_base_url(_local_raw_address(settings), style)

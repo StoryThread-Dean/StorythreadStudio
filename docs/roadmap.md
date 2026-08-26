@@ -73,7 +73,8 @@ rule is about what the writer can SEE, not about where the plumbing reaches.
 A three-pass audit of all 806 lines of `docs/weave-spec.md` against the build
 found the programme substantially off its own specification -- because the spec
 had never been in the repository, so nothing was ever compared to it. Findings:
-`docs/weave-spec-gaps.md`. Repair plan, 107 tasks: `docs/weave-recovery-plan.md`.
+`docs/weave-spec.md`, appendix 1 (folded in 2026-08-25; the 107-task repair
+plan is retired -- see the note below).
 
 **In v2.0.0** (recovery-plan phases 1-6, 8, 10): undo the contradictions
 introduced while the spec was unreferenced; give characters, relationships,
@@ -99,6 +100,31 @@ findings; release hygiene.
     `check-snags`, and the spec calls it "the reason the frame system exists".
     Shipping frames without it is defensible only if the product does not claim
     the check exists.
+- **Frayed's Quick Fill filling "from what the prose already says"**
+  (recovery-plan R11.4). Half of ruling 9. It needs one of the AI passes above,
+  so it moves with them rather than separately.
+
+**Blocked on ONE decision, which is the writer's:** does `profiles/` stop being
+a live home for unconverted projects?
+
+- **Delete `merge_profile_with_arc`** (recovery-plan R1.5b). The ruling
+  sequenced it "when that route goes"; R2.1 then kept `profiles/` as a live
+  home, so the route is still doing real work for exactly the projects the
+  ruling was protecting.
+- **Delete the second `influence` parser** (the blocked half of R11.3). The
+  legacy scale is ported into `codex/normalize.py` and read by both dialects;
+  what remains is removing the duplicate, which cannot happen while both
+  dialects are live.
+
+Neither is an oversight and neither is effort. They are one ruling, and both go
+the day it is made.
+
+> **`docs/weave-recovery-plan.md` is RETIRED (2026-08-25).** It was a work
+> ledger with ids R0.1 to R11.7 and every in-scope task shipped in v2.0.0 and
+> v2.0.1. Its fourteen unchecked items are the ones above plus phases 7 and 9,
+> which this section already carried in more useful form. Deleting it rather
+> than keeping a 1,032-line file that reads like a work queue and is not one --
+> the shipped detail lives in CLAUDE.md's ledger and in the commit history.
 
 Two more, surfaced by the 2026-08-11 head-to-tail sweep and stated in
 `features.md` as not-yet-behaviour so the docs stay honest:
@@ -317,10 +343,18 @@ smaller and different gap from the one this paragraph described.
 
 Also open before release: the manual-smoke additions for each milestone.
 
-### Who is IN this chapter -- declared presence (proposed 2026-08-15)
+### Who is IN this chapter -- declared presence -- SHIPPED in v2.0.1
 
-**Raised by the writer, not scoped yet.** Recorded the day it was made, because
-an unrecorded decision is the failure this whole programme exists to remember.
+**SHIPPED. Corrected 2026-08-23**, where this section still read "raised by the
+writer, not scoped yet" for a release after it went out. `appears_in` is
+authored rather than derived, written by one route
+(`backend/app/routers/codex.py:1983-1991`), carried through the Thread
+(`codex/threads.py:289,618-620`) and read by both the scan (`scan.py:1050`) and
+the brief (`context.py:356`); the screen is `features/codex/AppearsIn.tsx`. A
+shipped feature listed as unscoped is the same drift as an unbuilt one listed as
+done -- it invites a second implementation of a thing that already works.
+
+The record below is kept as written, because the reasoning is the useful part.
 
 **The ask, in their words:** "I want to make sure to include is where Profiles
 can be TAGGED within the story in Scenes and Chapters. Example: Serena the main
@@ -1009,9 +1043,33 @@ Two open items on the Formatting Walkthrough, both raised by walking a real 22,0
 
 Worth building, prioritization not yet committed.
 
+> **AUDIT 2026-08-23 -- nine places in this file were wrong, and they are
+> corrected inline below rather than quietly rewritten.** Every correction says
+> what the line used to claim, because the drift is the useful part: this file
+> is the only place some of these decisions are recorded, and a roadmap nothing
+> is compared against goes stale exactly the way the Weave's spec did.
+>
+> The dangerous one was **per-book role overrides**, which claimed the resolver
+> "already implements and tests precedence level 1" -- R8.6 *deleted* that level
+> on the writer's ruling, so a session reading that line would have gone hunting
+> for the dead code and might have put it back. Two more were the same class in
+> both directions: **declared presence** was listed as unscoped four months after
+> it shipped, and **stable scene IDs** was listed as unbuilt while its consumer
+> is already built and reading a `manuscript/scenes.json` that nothing writes.
+>
+> The rest: the GuidedWalk path and consumer count, three of the character-
+> creation follow-ups, the Book Details receiving end, long-context budgeting
+> (a working reference implementation with one caller), the series rollup being
+> an N-database fan-out rather than one query, and four undocumented defects in
+> the local-model provider.
+>
+> Verified by reading the code, not this file. Sizings and line numbers below
+> are from that pass.
+
 ### Local model providers -- MOSTLY SHIPPED (v1.1.1)
 
-Shipped: the `local` provider entry, address + API-style settings restricted to loopback / private / `.local` destinations (`backend/app/ai/local_endpoint.py`), Ollama's native `GET /api/tags` via `model_list_style`, `<think>` stripping in the sanitizer, and a Test Connection that tells a bad address, a dead server, and a wrong-API-style server apart. See `docs/research-multi-provider.md` for the original research.
+Shipped: the `local` provider entry, address + API-style settings restricted to loopback / private / `.local` destinations (`backend/app/ai/local_endpoint.py`), Ollama's native `GET /api/tags` via `model_list_style`, `<think>` stripping in the sanitizer, and a Test Connection that tells a bad address, a dead server, and a wrong-API-style server apart. See `docs/local-model-spec.md` for the contract, and its appendix for the
+original research.
 
 Still open:
 
@@ -1020,6 +1078,75 @@ Still open:
 - **Strip the `:latest` suffix for display** in the model picker.
 - **A `custom` provider** for arbitrary OpenAI-compatible URLs. Deliberately separate from `local`, which refuses non-local addresses on purpose -- see the note in `providerMeta.ts`.
 
+**Two DEFECTS this list did not mention, found 2026-08-23 by reading the code
+against it.** Both fail quietly, which is why neither was ever reported.
+
+> **D1 and D3 are FIXED (2026-08-23).** On the writer's ruling the API-style
+> setting was KEPT but narrowed to a model-listing choice, so chat always
+> resolves to `/v1/chat/completions` and the setting can no longer break
+> generation; Test Connection now CORRECTS a wrong pick and says so, which is
+> D3. `base_url_for` is style-blind, `list_base_url_for` is style-aware. See
+> `docs/local-model-spec.md` 3.2 and 4.2. D2 and D4 are still open.
+
+**D1 -- the `ollama` API style cannot generate at all.** `normalize_base_url`
+keeps the bare root for that style (`ai/local_endpoint.py:140-145`), but
+`run_completion` and `run_chat` both POST to a hardcoded
+`f"{provider.base_url}/chat/completions"` (`ai/openrouter.py:362,525`). For
+ollama style that resolves to `http://localhost:11434/chat/completions`, which
+Ollama does not serve -- it serves `/api/chat` natively and
+`/v1/chat/completions` through its compatibility layer. So every AI action 404s.
+The reason it looks fine right up to the failure: `model_list_style` is patched
+in only on the two LISTING paths (`routers/ai.py:326`,
+`routers/settings.py:316`), never by `_resolve_model_and_key`, because listing
+is the only thing that needed it. Test Connection **passes**, the model dropdown
+**fills**, and then Draft, Advisor and every summary fail. No test has ever
+POSTed a completion as the local provider.
+
+**D2 -- a local model is invisible to the Profile Extractor's own picker.**
+Local catalogs carry no `context_length` (`/api/tags` does not return one and
+`_normalize_generic_models` defaults it to 0). The backend is honest about that
+-- `routers/extractor.py:170-185` treats 0 as "could not find out", and the
+oversize refusal is gated `if context_tokens and ...` so 0 never refuses. The
+frontend is **stricter than the backend** and hides them:
+`ExtractorModelPicker.tsx:84` filters on `m.context_length >= needed / 0.8`, so
+with `needed > 0` every local model drops out of the list and can only be
+reached by typing into the search box. A local model assigned to Long-context
+analysis cannot be chosen on the screen that chooses it.
+
+**D3 -- `suggested_style` is computed and rendered nowhere.**
+`_test_local_connection` works out which dialect the server actually speaks and
+returns `suggested_style` (`routers/settings.py:344`), and the string appears
+nowhere in `app/src/` -- `ProviderPanel.tsx:101-106` renders only `{ok,
+message}`. Same shape as R8.1 and R8.7: the backend computed the right answer
+and no screen read it.
+
+**D4 -- a hazard rather than a bug yet.** The character caps are sized for
+hosted context windows: a "full chapter" may be 100,000 characters
+(`routers/ai.py:1922`) plus up to 60k of Weave brief. Sent to an 8k-window local
+model, Ollama's default is to **trim the prompt silently and answer anyway** --
+a plausible reply about a third of the chapter, with nothing in a position to
+notice. This is why long-context budgeting is the right companion work.
+
+Also worth a spec line: `run_completion` sends `response_format: {"type":
+"json_object"}` unconditionally (`ai/openrouter.py:329`). Ollama's compat layer
+and LM Studio accept it; older llama.cpp builds 400 on it. The app already has
+the pattern for that -- the audiobook's self-healing 400 retry.
+
+**And the data for "basic level descriptions" is already arriving and being
+discarded.** Ollama's `/api/tags` returns a `details` object per model carrying
+`family`, `parameter_size` ("8B") and `quantization_level` ("Q4_K_M"), plus an
+on-disk `size`. `_normalize_generic_models` (`ai/openrouter.py:240-258`) reads
+only id / name / model / context_length and drops `details` on the floor.
+Surfacing size, quantization and family is enough for an honest description
+without a curated list -- and the app must not RANK local models, because
+recommending one over another on the writer's own disk is a claim about their
+hardware, not about the model. `recommendedPicks` (`modelFiltering.ts:199-225`)
+matches OpenRouter slugs and buckets by price tier, so for a local catalog
+nothing matches and the Recommended group does not render at all -- which is the
+correct outcome, not a gap to fill.
+
+The spec for this work is `docs/local-model-spec.md`.
+
 ### User-editable prompt templates (Default + Custom)
 
 Long-planned. Storythread Studio is aimed at beginning writers, and editing your own prompts is an advanced skill in itself — so the design keeps beginners safe by default:
@@ -1027,7 +1154,8 @@ Long-planned. Storythread Studio is aimed at beginning writers, and editing your
 - **DEFAULT is a locked, uneditable prompt** — exactly what the backend uses today. It always exists and cannot be broken.
 - An **Advanced** option unlocks custom prompts. Each promptable feature gets its own section in Settings with a pull-down: **DEFAULT** (default), then **Custom <edited name>**, **Custom <edited name 2>**, etc.
 - Custom prompts are named, per-feature, and swappable at any time; picking DEFAULT always restores stock behavior.
-- Scope ideas for the Advanced side: `{{variable}}` placeholders, per-prompt sampling settings, and JSON import/export packs (see [`research-multi-provider.md`](research-multi-provider.md)).
+- Scope ideas for the Advanced side: `{{variable}}` placeholders, per-prompt sampling settings, and JSON import/export packs (see the appendix to
+  [`local-model-spec.md`](local-model-spec.md)).
 
 ### "Show me how this works" everywhere
 
@@ -1044,7 +1172,28 @@ Built first for the audiobook Cast panel (Stage G) and now the standard for ever
 
 Sections that need one: **Character profiles** (needed? no -- but here is what the AI can do with one that it cannot do without), **Relationships**, **Locations**, **Lore**, **Chapter and scene summaries**, **the Outline**, **Smart Advisor**, **Writing Companion** (Draft and Enhance especially), **Series/arcs**, **Export**, and the **audiobook** sections beyond Cast (markers, pronunciation, generation, print pass).
 
-**Done: the shared component exists.** `app/src/features/audiobook/GuidedWalk.tsx` renders the numbered card (steps, examples, Back/Next, tone), so a new one is a list of steps and nothing else. Two use it today -- the Cast workbench and the Formatting Walkthrough. Copy `InsertWalkthroughHelp.tsx` as the template.
+**Done: the shared component exists.** `app/src/components/learn/GuidedWalk.tsx`
+renders the numbered card (steps, examples, Back/Next, tone), so a new one is a
+list of steps and nothing else. **THREE** use it today -- the Cast workbench
+(`CastTutorial.tsx`), the Formatting Walkthrough (`InsertWalkthroughHelp.tsx`)
+and the Weave's Run editor (`RunWalk.tsx`). Copy `InsertWalkthroughHelp.tsx` as
+the template. (Path and count corrected 2026-08-23; R8.8 moved the file out of
+`features/audiobook/` and this line was never updated.)
+
+**More is built than this section implies, and some of it duplicates the
+component.** Four bespoke paged walkthroughs do GuidedWalk's job with their own
+code and could be absorbed into it: `screens/ProfilePageGuide.tsx`,
+`screens/SubtextGuide.tsx`, `features/codex/ExtractorGuide.tsx` and
+`UnwovenGuide.tsx` (+ `GuideBody.tsx`), plus `audiobook/MarkerHelpPanel.tsx`.
+
+**The reference half is further along than the walkthrough half.**
+`components/learn/explanations.ts` holds 46 entries, but the coverage is lopsided:
+Character profiles (9 keys), Relationships (5) and Smart Advisor (5) are done;
+the Outline and Export have one key each; and there are **ZERO** keys for
+Locations, Lore, chapter/scene summaries, Writing Companion Draft/Enhance,
+Series/arcs, and the whole audiobook -- audiobook panels pass inline JSX to
+`WhatsThis` instead of using the registry. `components/learn/registries.test.ts`
+is the binding contract any new key must satisfy.
 
 ### Book Details: Author + Publication Year fields
 
@@ -1058,17 +1207,58 @@ in `project.json` and the Book Details settings UI, include them in
 `project_prefill()` (`backend/app/audiobook/workspace.py`) to read them
 -- the prefill side is already built and one dict entry per field.
 
+**Noted 2026-08-23: the receiving end is built ENTIRELY, and further than this
+section says.** `METADATA_TEXT_FIELDS` carries both fields
+(`audiobook/workspace.py:267-271`), `MetadataRequest` carries both
+(`routers/audiobook.py:362,367`), `BookDetailsPanel.tsx` renders both, and
+`audiobook/assembly.py` already writes them into ID3 tags and M4B metadata. The
+import extractor even reads `data.get("author")` from `project.json` already
+(`audiobook/extraction/storythread_project_extractor.py:35-46`), so an `author`
+key is picked up the moment one exists, with no backend change.
+
+**One thing to change in the same commit:** the docstring at
+`audiobook/workspace.py:330-332` states that Book Details has nothing to give
+for these two fields. It becomes false with this work, and per the spec-
+discipline rule it changes alongside rather than being left as a quiet lie.
+
 ### Character creation follow-ups
 
 Polish on the v1.0.10 character overhaul, deferred deliberately:
 
 - **Build-speed selection at creation time** -- the "+ New" character form offers Main / Supporting / Background, pre-expanding the right tool (spine dropdowns, Quick Build, or a single-roll minimal template). Today all tools are available on every character profile; the speed choice is a flow refinement, not a capability gap.
 - **Structured "apply" from Interview/Extract output** -- a one-click path from the interview's copy/paste block into real trait blocks (today the writer pastes by hand, per the review-before-use rule; an explicit per-section Apply button would stay inside the write boundary).
+  **HALF BUILT, on a different surface (noted 2026-08-23).** The Profile
+  Extractor already ships exactly the per-item Apply described here, with a
+  four-verb action vocabulary -- `overwrite` / `merge` / `add` / `merge_trait`
+  (`backend/app/routers/extractor.py:746-855`, UI
+  `features/codex/ExtractorReview.tsx`). **Reuse those verbs; do not invent a
+  second vocabulary** -- one idea with two vocabularies is the failure the Weave
+  recovery kept finding. The remaining gap is only the Profile Builder
+  **Interview** block, where `ai/prompts.py:1078-1085` still tells the model to
+  emit a copy/paste block and no parser exists.
 - **Big Five (OCEAN) sliders** as a third, dimensional spine option for writers who want flaw-first variety beyond the 9 + 15 discrete types.
+  **NOT built**, confirmed 2026-08-23. Existing spines are
+  `characterSpines.ts:28` (Enneagram) and `:153` (Jungian + story roles).
+  `SpineOption` is text-only, so numeric sliders need a shape change, and the
+  header comment at `:13-15` forbids MBTI-style naming.
 
 ### Stable scene IDs + scene move between chapters
 
-Follow-up to the acts/beats release. Today scene identity is positional (scene 2 = the second `---` section; sidecars are `scene-NN.md`), so inserting a scene break mid-chapter re-pairs every later sidecar, and moving a scene between chapters would be destructive text surgery with positional renumbering on both sides. The safe order of work:
+Follow-up to the acts/beats release. Today scene identity is positional (scene 2 = the second `---` section; sidecars are `scene-NN.md`), so inserting a scene break mid-chapter re-pairs every later sidecar, and moving a scene between chapters would be destructive text surgery with positional renumbering on both sides.
+
+**Cheaper than it looks, and noted 2026-08-23: the CONSUMER is already built.**
+The Weave already parses and formats `c-xxx/s-yyy` scene anchors, and already
+reads scene order from `manuscript/scenes.json`
+(`backend/app/codex/anchors.py:91-115`) -- **and nothing in the repo writes that
+file.** So every scene-level anchor silently degrades to chapter level today:
+this programme's own recurring shape, a capability whose condition can never be
+true, raising nothing. The minting toolkit exists as well
+(`backend/app/utils/stable_ids.py`, template at
+`utils/structure_store.py:275-327`), and `backend/app/db.py:181` already carries
+a `scene_id` column. Step 1 is smaller than this section implies; step 2 is
+where the real risk lives.
+
+The safe order of work:
 
 1. **Stable scene IDs first** -- a short anchor comment at each scene top (e.g. `<!-- scene:ab12cd -->`) that sidecars key on instead of position. Auto-inserted on first summarize; tolerated absent everywhere.
 2. **Then scene move** -- cut the `---` section from the source chapter, splice into the target, move the sidecar by ID, with a pre-move snapshot of both chapter files so a partial failure can never lose prose.
@@ -1094,11 +1284,59 @@ A fifth top-level category for cross-passage critique passes that do not fit Rea
 
 **Partly delivered by Model Roles (v1.1.1)**, which routes by *assistant type* -- every AI call site declares its role and the writer assigns a model per role. What remains is the automatic half: choosing an eligible model based on **content size** and **content mode** rather than only on the kind of job, falling back on ambiguity. That classifier would sit between `resolve_role_model()` and the existing allowlist / content-mode validation.
 
-Also still open from the roles work: **per-book role overrides.** The resolver already implements and tests precedence level 1 (`project.json` → `model_roles[role]`); it has no UI, so today roles are app-wide.
+**CORRECTED 2026-08-23.** This section used to say the resolver "already
+implements and tests precedence level 1 (`project.json` -> `model_roles[role]`)"
+and only wanted a UI. That is not true and has not been since **R8.6 deleted
+that level on the writer's ruling**. `resolve_role_model` has exactly two
+levels, and level 1 reads SETTINGS, not `project.json`
+(`backend/app/ai/roles.py:229-256`). The old line was the dangerous kind of
+drift: a session reading it would go hunting for dead code and might reinstate
+it. `test_model_roles.py:135-151` now pins the opposite.
+
+So **per-book role overrides are NOT partly built -- they are not built at
+all**, and the roles docstring argues against a half-measure: `_resolve_model_
+and_key` never opens `project.json`, it synthesises `{"default_model":
+override}` from one frontend field, so a per-book assignment could not arrive
+however faithfully `projects.py` stored one. Building it properly means
+threading `project_path` through about thirteen request models across ~34 call
+sites, every frontend caller, and a new per-book screen. Roles are app-wide.
+
+**On the automatic half:** the two functions named above are **validators that
+reject, never selectors that choose** -- `_validate_model_content_mode`
+(`routers/ai.py:475`, raises 400) and `_validate_model_allowed` (`:519`), both
+running AFTER `_resolve_model_and_key`. That empty seam is real, and the data a
+classifier needs is already plumbed (`context_length` at `openrouter.py:157`).
+Content-size awareness exists in exactly one place and **refuses rather than
+routes**: `routers/extractor.py:515-536`.
 
 ### Long-context handling: priority pinning + summary swap
 
 When a request would exceed the model's context window, the materials builder pins Outline + Style Guide first and swaps full chapter prose for chapter summaries before truncating older scene text. Engages automatically; no user toggle.
+
+**PARTLY BUILT, and the built half is a working reference implementation
+(noted 2026-08-23).** Everything this section describes exists for the Weave's
+brief and nowhere else: a `Budget` dataclass reserving output / system / user /
+overhead / pinned (`backend/app/codex/context.py:86-120`), a four-rung relevance
+ladder that doubles as prune order (`:60-64`), and `_fit()` splitting required
+from optional and **refusing rather than truncating** when the pinned content
+alone will not fit (`:370-410`), with first-class `refused` / `refusal` /
+`budget` reporting. It has exactly one caller (`routers/codex.py:2522-2534`).
+
+What does not exist is any budgeting in the builder that carries the writer's
+actual prose: `_build_materials_message` (`routers/ai.py:1807-1908`) simply
+concatenates chips, surrounding context, brief and passage. In its place are
+flat character caps that 400 the request (`:1922` 100k/30k, `:1936` 30k, `:1946`
+60k, `:2239`, `:1542`) plus one **silent** truncation --
+`_RELATIONSHIP_SNIPPET_CAP = 400` (`:631,745-751`), which should come under the
+budget while anyone is in there.
+
+So this is largely extending a proven mechanism to a second caller rather than
+greenfield work. Two hazards: every cap replaced is currently load-bearing as a
+400, so removing one before the budget is in place lets an oversize request
+through; and this is where a small-window LOCAL model stops being silently
+truncated by the runtime (see the local-provider section -- a local catalog
+reports `context_length` 0, and Ollama's default is to trim the prompt and
+answer anyway).
 
 ### Cloud-sync path detection
 
@@ -1115,6 +1353,16 @@ The Project Completion gauge shipped in v1.0.3 does not apply to serial fiction.
 ### Cross-book series progress rollup
 
 Aggregate Project Completion and Daily Goal tracking across all books in a series at the series-home level. The `progress_event` table from v1.0.3 already stores `project_path` per row so each book's data is identifiable; the rollup query and the series-home UI are the main remaining work.
+
+**Corrected 2026-08-23: it is not one query.** `app.db` lives **per project**
+(`backend/app/db.py:44` -- `Path(project_path)/".storythread"/"app.db"`), and
+every progress read is scoped `async with open_db(project_path)`. So a
+cross-book rollup is an N-database fan-out in Python, not a single SQL statement;
+the `project_path` column distinguishes rows *within* one book's database, which
+is a different job from telling books apart. `list_books`
+(`routers/series.py:240`) is the natural iterator and `_daily_totals` /
+`get_summary` (`routers/progress.py:377,585-627`) are reusable per book.
+`routers/series.py` has three routes and no progress endpoint at all.
 
 ---
 

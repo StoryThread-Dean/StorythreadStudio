@@ -33,7 +33,7 @@
 // House style: no em dashes anywhere a writer reads.
 
 import { useState } from "react";
-import { Check, Loader, X } from "lucide-react";
+import { ArrowRight, Check, Loader, X } from "lucide-react";
 
 import { Explain } from "../../components/learn/Explain";
 import { TONE_CLASSES, threadTypeEntry } from "./lexicon";
@@ -72,6 +72,30 @@ interface SweepProps {
   onDone: (settled: string[]) => void;
   /** Back to one at a time, having changed nothing. */
   onClose: () => void;
+  /**
+   * Deal with THIS one properly: leave the list and land the walk on this
+   * exact stop.
+   *
+   * Reported from live testing, about the Loose thread sweep: the writer
+   * expected the batch screen to be where connections get made, found it
+   * offered only "these need no connection" and a way out, and read the whole
+   * screen as purposeless.
+   *
+   * The batch answer really is the NO -- see the header of this file, and note
+   * that a Tie REQUIRES a reason line, so seven connections cannot be seven
+   * ticks without seven reasons. But two of the three header sentences here
+   * already told the writer to "deal with one properly" / "deal with that one
+   * on its own", and there was no control that did it. The only way out was
+   * "Go one at a time instead", which abandons the list and drops the walk
+   * back at the top of the kind.
+   *
+   * Same shape as R8.1 and R11.6: words describing an action with nothing
+   * behind them. This is the something.
+   *
+   * Stays INSIDE the closed world -- it moves the walk's own position and
+   * calls nothing that could send the writer out of the panel.
+   */
+  onDealWith?: (stop: Stop) => void;
 }
 
 /** What a row says it is, per kind. Unplaced carries the fact's own words; a
@@ -87,7 +111,7 @@ function describe(stop: Stop, kind: string): string {
 }
 
 export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
-                        onDismiss, onDone, onClose }: SweepProps) {
+                        onDismiss, onDone, onClose, onDealWith }: SweepProps) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [rows, setRows] = useState<Row[]>(
     () => stops.map(stop => ({ stop, what: describe(stop, kind), at: "" })));
@@ -161,6 +185,11 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
     }
   }
 
+  // What the per-row escape is FOR, in the writer's terms rather than one
+  // generic word. On a Loose thread it is the action the batch cannot do at
+  // all; on the other two it is the exception to a batch that usually fits.
+  const rowAction = unplaced ? "Open" : placing ? "Change" : "Connect";
+
   const label = unplaced ? "unplaced fact"
     : placing ? "entry to place"
     : "unconnected entry";
@@ -191,9 +220,11 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
           : placing
             ? "Your writing puts each of these in the chapters listed beside "
               + "it. Tick the ones that look right and record them in one go. "
-              + "To change which chapters, deal with that one on its own."
-            : "These entries connect to nothing yet. Tick any that are fine as "
-              + "they are and say so in one go, or deal with one properly."}
+              + "To change which chapters, open that one on its own."
+            : "These entries connect to nothing yet. Ticking is how you say a "
+              + "batch of them are fine unconnected. A connection needs a "
+              + "reason of its own, so it is made one at a time -- open any "
+              + "row to make one now."}
       </p>
 
       {settled.size > 0 && (
@@ -249,6 +280,26 @@ export function Sweep({ stops, kind, chapters, onPlace, onRecordPlace,
                     <option key={c.anchor} value={c.anchor}>{c.title}</option>
                   ))}
                 </select>
+              )}
+              {/* DEAL WITH THIS ONE PROPERLY. On every row, because all three
+                  header sentences send the writer here for the case the batch
+                  cannot answer, and until now none of them could be obeyed.
+                  For a Loose thread that case is the whole point: a connection
+                  carries a reason, so it is made on its own screen. */}
+              {onDealWith && (
+                <button
+                  type="button"
+                  onClick={() => onDealWith(row.stop)}
+                  disabled={busy}
+                  data-testid="sweep-deal-with"
+                  aria-label={`${rowAction} ${row.what}`}
+                  title={"Leave the list on this one and deal with it properly."
+                         + " The rows you have ticked but not yet saved are"
+                         + " dropped."}
+                  className="inline-flex shrink-0 items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-micro text-text-muted hover:border-weave-fill hover:text-text-primary disabled:opacity-40"
+                >
+                  {rowAction} <ArrowRight size={9} />
+                </button>
               )}
             </li>
           );

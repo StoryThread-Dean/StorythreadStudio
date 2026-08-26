@@ -354,3 +354,111 @@ describe("the rule is applied, not merely available", () => {
   });
 
 });
+
+
+// ── STAYING ON SCREEN ────────────────────────────────────────────────────────
+//
+// Reported from live testing, on the Hidden (eyeball) control in a trait card:
+// "Clicking it produces a popup that is not readable as its positioned off the
+// screen."
+//
+// The panel is up to 30rem wide, absolutely positioned against a 13px icon.
+// `align="right"` anchors its right edge to the trigger so it opens leftwards,
+// which is right for a trigger near the right of the window and puts the whole
+// panel out of view for one near the left.
+//
+// Fixing the two call sites would have closed the report. The component clamps
+// itself instead, so the next Explain dropped into a crowded row cannot
+// reproduce it. jsdom reports every rect as zero, so the geometry has to be
+// stubbed for these to mean anything -- which is the point: without a stub, a
+// test here would pass whatever the maths did.
+
+/** Pretend the panel is `width` wide with its left edge at `left`. */
+function stubGeometry(width: number, left: number, viewport = 1000) {
+  const original = Element.prototype.getBoundingClientRect;
+  window.innerWidth = viewport;
+  Element.prototype.getBoundingClientRect = function () {
+    if ((this as HTMLElement).getAttribute?.("data-testid") === "explain-panel") {
+      return { width, height: 200, left, right: left + width,
+               top: 0, bottom: 200, x: left, y: 0, toJSON: () => ({}) } as DOMRect;
+    }
+    return original.call(this);
+  };
+  return () => { Element.prototype.getBoundingClientRect = original; };
+}
+
+describe("the panel stays where it can be read", () => {
+  it("slides back in when the call site points it off the left edge", async () => {
+    // THE REPORTED BUG, as geometry: a 480px panel whose left edge is at -300.
+    const restore = stubGeometry(480, -300);
+    try {
+      render(<Explain of="character.subtext" compact align="right" />);
+      await userEvent.click(screen.getByLabelText("What's this?"));
+      const panel = screen.getByTestId("explain-panel");
+      // Moved right by enough to clear the edge, plus the 8px margin.
+      expect(panel.style.transform).toBe("translateX(308px)");
+    } finally {
+      restore();
+    }
+  });
+
+  it("slides back in when it would overflow the right edge", async () => {
+    const restore = stubGeometry(480, 700);   // right edge at 1180, viewport 1000
+    try {
+      render(<Explain of="character.subtext" compact />);
+      await userEvent.click(screen.getByLabelText("What's this?"));
+      expect(screen.getByTestId("explain-panel").style.transform)
+        .toBe("translateX(-188px)");
+    } finally {
+      restore();
+    }
+  });
+
+  it("leaves a panel that already fits completely alone", async () => {
+    // No transform at all, rather than translateX(0px): a correction that
+    // always fires is a correction nobody can reason about.
+    const restore = stubGeometry(480, 200);
+    try {
+      render(<Explain of="character.subtext" compact />);
+      await userEvent.click(screen.getByLabelText("What's this?"));
+      expect(screen.getByTestId("explain-panel").style.transform).toBe("");
+    } finally {
+      restore();
+    }
+  });
+
+  it("favours the near edge when the panel cannot fit at all", async () => {
+    // Narrower window than the panel. The start of the sentence has to be
+    // visible; losing the far end costs a few words, losing the near end makes
+    // the whole thing useless.
+    const restore = stubGeometry(480, -50, 300);
+    try {
+      render(<Explain of="character.subtext" compact />);
+      await userEvent.click(screen.getByLabelText("What's this?"));
+      const shift = Number(/translateX\((-?\d+)px\)/
+        .exec(screen.getByTestId("explain-panel").style.transform)?.[1]);
+      expect(shift).toBe(58);          // left edge lands on the 8px margin
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("the two triggers inside a trait card", () => {
+  it("do not anchor their panels to the left of the window", async () => {
+    // Both live near the LEFT of a narrow card, so both must open rightwards.
+    // A source read, because the geometry that made this wrong is real-browser
+    // layout that jsdom does not reproduce.
+    const profileBuilder = (await import("../../screens/ProfileBuilder.tsx?raw"))
+      .default as string;
+    const traitWindow = (await import("../profiles/TraitWindow.tsx?raw"))
+      .default as string;
+    expect(profileBuilder).toContain('<Explain of="character.subtext" compact />');
+    expect(traitWindow).toContain('<Explain of="character.traitWindow" compact />');
+    for (const [name, source] of [["ProfileBuilder", profileBuilder],
+                                  ["TraitWindow", traitWindow]] as const) {
+      expect(/character\.(subtext|traitWindow)" compact align="right"/.test(source),
+             `${name} still right-anchors a trait-card explanation`).toBe(false);
+    }
+  });
+});
