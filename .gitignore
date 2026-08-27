@@ -65,7 +65,6 @@ Thumbs.db
 # The .storythread folder inside each writing project holds the SQLite database,
 # cache files, and logs. These are generated at runtime, not source code.
 **/.storythread/
-.claude/
 
 # ── Local developer reference material (not source) ──────────────────────────
 # .test-files/ holds local screenshots and scratch files used for planning
@@ -74,6 +73,10 @@ Thumbs.db
 # backend/app/ai/prompts.py as CHAPTER_SUMMARY_INSTRUCTIONS.
 .test-files/
 chapter_summary_ai_instructions.md
+# Only the LOCAL settings file is private: it holds the permission allowlist for
+# this machine. .claude/commands/ and .claude/agents/ ARE tracked on purpose -- a
+# procedure nothing can compare against is the failure this repo keeps finding,
+# and both are read every session.
 .claude/settings.local.json
 
 # local/ holds private planning drafts (spec drafts, notes) that stay on this
