@@ -254,7 +254,7 @@ error, not a bare HTTP code.
 
 ---
 
-## 9. Character creation tools (spine dropdowns, Quick Build, Interview Me)
+## 9. Character creation tools (personality spine, story roles, aliases, Quick Build, Interview Me)
 
 **Touches:** the personality spine, the one Role control, Also known as,
 the Quick Build randomizer + NSFW tier toggles, trait-block insertion +
@@ -299,12 +299,12 @@ Steps:
    the Enneagram type and every alias are still there.
    The left list shows Main and Side / Background groups (collapsible);
    the chat attachment picker shows the same grouping.
-5. Switch the chat to Interview Me, send "Start the interview." Expect
+7. Switch the chat to Interview Me, send "Start the interview." Expect
    5-8 numbered basics, NOT invented character facts. Answer briefly;
    expect a full copy/paste skeleton. Check two section chips above the
    input, send -- expect 2-4 questions per checked section, ending in the
    full updated block.
-6. Name generator: in + New, click "Need a name?" -- pick British /
+8. Name generator: in + New, click "Need a name?" -- pick British /
    Medieval / Female, deal, select a given name only, Use -- the Name
    field fills with just the given name. On an open character, click the
    dice by Name -- pick American South + Medieval/Renaissance and confirm

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## CURRENT STATE: v2.0.2 SHIPPED 2026-08-21
+## CURRENT STATE: v2.0.3 SHIPPED 2026-08-25
 
 **v2.0.0 shipped 2026-08-14** (115 commits, tag v2.0.0, installer live). The
 recovery plan is 93 of 107 with the rest deferred by scope or blocked on a
@@ -78,6 +78,36 @@ to 53 and nothing raises anything. The vocabulary is frozen to
 `backend/app/data/retired_outline_vocabulary.txt` and unioned in permanently, in
 the same commit as the deletion. Re-extracting it instead of freezing it lost a
 third of the list on the first attempt.
+
+**v2.0.3 shipped 2026-08-25** (tag v2.0.3, installer live). A maintenance and
+live-testing release: every item in it came from the writer using the app rather
+than from a plan. The character spine was redesigned -- an Enneagram type is a
+STORED field now, and its description is taken a facet at a time (Essentials =
+what they want, what they dread, how they talk) rather than dropping one
+paragraph that mostly described somebody else. The two Role dropdowns became one
+APPENDING control over about sixty roles grouped by what the writer is looking
+for, which is why Merchant, Innkeeper, Healer, Guard, Suspect and Witness had
+been missing entirely; four adult groups sit last and every one is labelled.
+`aliases` -- Also known as -- landed in both profile dialects with a writer-facing
+editor, so a name no longer has to be found in a chapter by Weaving before the
+app knows James is Jim. Series rename arrived in Book Details, and a book now
+heals its own `series_path` from where it actually sits. Specs:
+`docs/character-spine-spec.md`, `docs/local-model-spec.md`, `docs/weave-spec.md`
+appendix 2.
+
+**Four of the fixes were silent, and one was wrong in every unconverted project.**
+Choosing `ollama` as the API style listed models perfectly and then failed every
+prompt, because listing and chat resolved to the same base URL; they are split
+now and chat is always OpenAI-compatible, so the choice can cost an empty model
+dropdown and can never break generation. `true_in: null` off the wire read as
+"not true anywhere", so "True all the way through" flipped itself off on save and
+warned that the trait was being withheld -- it was being sent the whole time; the
+switch was reading the wrong answer rather than changing one. Two What's this?
+panels opened off the left edge or inside a layout card, and rather than moving
+those two, every help popup now slides itself back into view. And a Loose thread
+list told the writer to connect the entries needing a real connection while
+offering no way to do it -- the same closed-world rule the Weave keeps breaking
+in new places.
 
 **The Profile Extractor, for reference.** Reads the manuscript
 and proposes what each entry should say. Its ten decisions and the reasoning
@@ -552,7 +582,7 @@ ledger below is kept as the shipped record.
 
 ## Project Status
 
-**Status: shipped.** The current release is **v2.0.2** (2026-08-21) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+**Status: shipped.** The current release is **v2.0.3** (2026-08-25) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
 
 **Versioning is a three-tier rule, not semver.** Tier 3 (`v1.1.x`) = enhancements to existing features. Tier 2 (`v1.x.0`) = additions, like the Audiobook Converter. Tier 1 (`vX.0.0`) = major restructuring -- a change needing its own dashboard, or one that alters multiple existing features at once. Judge the tier by what the RELEASE delivers, not by the size of the programme it belongs to.
 
