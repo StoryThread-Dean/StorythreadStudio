@@ -90,10 +90,10 @@ export function VoicePicker({
   axes, voices, value, onChange, ariaLabel, verified = true, tone = "violet",
 }: VoicePickerProps) {
   const border = tone === "violet"
-    ? "border-violet-800 focus:border-violet-500"
-    : "border-zinc-700 focus:border-blue-500";
-  const labelColor = tone === "violet" ? "text-violet-300" : "text-zinc-400";
-  const select = `w-full rounded border bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none ${border}`;
+    ? "border-weave-fill focus:border-weave-fill"
+    : "border-border focus:border-secondary-fill";
+  const labelColor = tone === "violet" ? "text-weave" : "text-text-muted";
+  const select = `w-full rounded border bg-bg-primary px-2 py-1.5 text-xs text-text-primary outline-none ${border}`;
 
   const parts = useMemo(
     () => (axes ? decomposeVoiceId(axes, value) : null),
@@ -146,7 +146,7 @@ export function VoicePicker({
             ))}
           </select>
           {accent?.note && (
-            <p className="mt-1 text-micro leading-relaxed text-zinc-500">
+            <p className="mt-1 text-micro leading-relaxed text-faint">
               {accent.note}
             </p>
           )}
@@ -182,7 +182,7 @@ export function VoicePicker({
       placeholder={verified
         ? "Leave blank for the model's default voice"
         : "Type a voice id, or leave blank for the default"}
-      className={`${select} placeholder:text-zinc-600`}
+      className={`${select} placeholder:text-faint`}
     />
   );
 }

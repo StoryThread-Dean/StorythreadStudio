@@ -28,7 +28,7 @@ Renders the entire UI. Communicates with the backend over `fetch` to `http://127
 
 There is no component library and no state-management library. This paragraph claimed Zustand and shadcn/ui for a long time and neither has ever been a dependency; shared state is a handful of module-level stores with subscriber sets (`hooks/useTheme.ts`, `useUiScale.ts`, `useEditorSpacing.ts`), and components are styled directly.
 
-Colour lives in one place: `app/src/App.css` defines `--st-*` role tokens for the dark and light themes, bridges them into Tailwind, and scopes the Audiobook Converter's separate charcoal palette behind `.audiobook-theme`. Theme support (light + dark) is application-wide and swaps at runtime via `data-theme` on `<html>`.
+Colour lives in one place: `app/src/App.css` defines `--st-*` role tokens for the dark and light themes, bridges them into Tailwind, and scopes the Audiobook Converter's separate charcoal palette behind `.audiobook-theme`. Theme support (light + dark) is application-wide and swaps at runtime via `data-theme` on `<html>`. Every ink token must clear WCAG AA (4.5:1) on every surface it is painted on, computed from the stylesheet at build time; the three-level ink ladder, the one declared exemption, and the rules for text sizing are specified in [`appearance-spec.md`](appearance-spec.md).
 
 ### Backend — Python + FastAPI (managed by uv)
 
@@ -601,7 +601,9 @@ Adding a new browser-style runtime requires updating this allowlist.
 |---|---|
 | User-authored prose, profiles, notes | Markdown files in the project folder |
 | Generated AI summaries, examples | Designated Markdown fields only |
-| App settings (API key, model picks, allowlists) | `~/.storythread/settings.json` |
+| App settings (API key, model picks, allowlists, theme, appearance, custom palettes) | `~/.storythread/settings.json` |
+
+A note on the custom palettes, because the obvious home is the wrong one: a writer's own theme (`custom_theme`, and `audiobook_custom_theme` for the Converter) lives in `settings.json` rather than `app.db`. `app.db` is per-project, is documented as safe to delete, and holds only what can be rebuilt from Markdown. A palette is global, is not derivable from anything, and losing an evening of colour choices to a cache clear would be a real loss. See [`appearance-spec.md`](appearance-spec.md).
 | Weave graph index, progress log, model registry | Per-project `.storythread/app.db` (rebuildable) |
 | Weaving answers (applied / deferred / retired / muted) | `.storythread/weave/runs/*.json` -- NOT rebuildable, never in app.db |
 | Project state (current chapter, scroll, etc.) | In-memory only; no autosave |

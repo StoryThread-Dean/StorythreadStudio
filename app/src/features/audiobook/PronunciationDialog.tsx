@@ -73,17 +73,17 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
   ) => (
     <div className="mb-5">
       <div className="mb-1 flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-300">{label}</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-secondary">{label}</h3>
         <button
           onClick={() => setRules([...rules, { ...EMPTY_ROW }])}
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300"
+          className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-mini text-text-primary hover:border-accent-fill hover:text-accent"
         >
           <Plus size={11} /> Add
         </button>
       </div>
-      <p className="mb-2 text-mini text-zinc-600">{hint}</p>
+      <p className="mb-2 text-mini text-faint">{hint}</p>
       {rules.length === 0 ? (
-        <p className="rounded border border-dashed border-zinc-800 px-3 py-2 text-xs text-zinc-600">
+        <p className="rounded border border-dashed border-border px-3 py-2 text-xs text-faint">
           No rules yet.
         </p>
       ) : (
@@ -96,18 +96,18 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
                 value={rule.display_text}
                 placeholder="Displayed text (Kaelith)"
                 onChange={e => setRules(rules.map((r, n) => n === i ? { ...r, display_text: e.target.value } : r))}
-                className="w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500"
+                className="w-0 flex-1 rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
               />
-              <span className="text-zinc-600">→</span>
+              <span className="text-faint">→</span>
               <input
                 aria-label={`${label} spoken as ${i + 1}`}
                 type="text"
                 value={rule.spoken_text}
                 placeholder="Spoken as (KAY-lith)"
                 onChange={e => setRules(rules.map((r, n) => n === i ? { ...r, spoken_text: e.target.value } : r))}
-                className="w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500"
+                className="w-0 flex-1 rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-primary placeholder-faint outline-none focus:border-accent-fill"
               />
-              <label className="flex shrink-0 items-center gap-1 text-micro text-zinc-500" title="Match uppercase and lowercase exactly">
+              <label className="flex shrink-0 items-center gap-1 text-micro text-faint" title="Match uppercase and lowercase exactly">
                 <input
                   type="checkbox"
                   checked={rule.case_sensitive}
@@ -118,7 +118,7 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
               <button
                 onClick={() => setRules(rules.filter((_, n) => n !== i))}
                 title="Delete this rule"
-                className="shrink-0 rounded p-1 text-zinc-600 hover:text-rose-400"
+                className="shrink-0 rounded p-1 text-faint hover:text-danger-muted"
               >
                 <Trash2 size={13} />
               </button>
@@ -131,14 +131,14 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
-      <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-950 p-5 shadow-xl">
+      <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-lg border border-border bg-bg-primary p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-100">Pronunciation Dictionary</h2>
-          <button onClick={onClose} className="rounded p-1 text-zinc-500 hover:text-zinc-200">
+          <h2 className="text-sm font-semibold text-text-primary">Pronunciation Dictionary</h2>
+          <button onClick={onClose} className="rounded p-1 text-faint hover:text-text-primary">
             <X size={16} />
           </button>
         </div>
-        <p className="mb-4 text-mini text-zinc-500">
+        <p className="mb-4 text-mini text-faint">
           Rules change only what the narrator SAYS -- your text on screen never
           changes. For a single spot, select the word in the editor and use the
           [say] toolbar button instead. Where both apply, [say] wins: the
@@ -146,7 +146,7 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
         </p>
 
         {loading ? (
-          <p className="text-sm text-zinc-500">Loading...</p>
+          <p className="text-sm text-faint">Loading...</p>
         ) : (
           <>
             {ruleTable("This Audiobook", "Applies everywhere in this audiobook.",
@@ -157,7 +157,7 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
         )}
 
         {error && (
-          <p className="mb-3 rounded border border-rose-800 bg-rose-950/60 px-3 py-2 text-xs text-rose-300">
+          <p className="mb-3 rounded border border-danger-fill bg-danger-soft px-3 py-2 text-xs text-danger">
             {error}
           </p>
         )}
@@ -165,14 +165,14 @@ export function PronunciationDialog({ workspacePath, onClose }: PronunciationDia
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded border border-zinc-700 px-4 py-2 text-xs text-zinc-300 hover:border-zinc-500"
+            className="rounded border border-border px-4 py-2 text-xs text-text-primary hover:border-border-strong"
           >
             Cancel
           </button>
           <button
             onClick={() => void handleSave()}
             disabled={saving || loading}
-            className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded bg-accent-fill px-4 py-2 text-xs font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
           >
             {saving && <Loader2 size={12} className="animate-spin" />}
             Save Rules

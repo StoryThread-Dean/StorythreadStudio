@@ -25,6 +25,7 @@ import { tags as t } from "@lezer/highlight";
 import type { FontValue } from "./EditorToolbar";
 import { useTheme } from "../hooks/useTheme";
 import { useEditorSpacing } from "../hooks/useEditorSpacing";
+import { useEditorFontSize } from "../hooks/useEditorFontSize";
 import { issueOverlayExtension } from "./editor/issueOverlay";
 import { ThesaurusPopover } from "./editor/ThesaurusPopover";
 
@@ -42,14 +43,36 @@ const fontCompartment = new Compartment();
 // here, and var(--st-...) is a plain CSS value.
 function buildFontTheme(
   fontFamily: string,
+  fontSizePx: number,
   lineHeight: number,
   spaceBefore: number,
   spaceAfter: number,
 ) {
   return EditorView.theme({
     // The root editor element. font-size inherits all the way down from here.
+    //
+    // FONT-SIZE BELONGS HERE AND LINE-HEIGHT DOES NOT, AND THAT IS A CHECKED
+    // FACT ABOUT CODEMIRROR RATHER THAN A PREFERENCE. Read the line-height
+    // comment below first -- it explains that `.cm-scroller` sits between this
+    // element and the text and declares its own `lineHeight: 1.4`, which
+    // blocks inheritance from here.
+    //
+    // The obvious next thought is that font-size must have the same problem
+    // and should move to .cm-content by symmetry. It does not. @codemirror/
+    // view's baseTheme declares `display`, `alignItems`, `fontFamily`,
+    // `lineHeight`, `height` and `position` on .cm-scroller and NO font-size
+    // anywhere between the root and .cm-line, so nothing interrupts the
+    // cascade. Checked in the installed baseTheme, not assumed -- and stated
+    // here so the next reader does not "fix" it by symmetry and land the size
+    // on an element that .cm-line would then override.
+    //
+    // This value was the literal string "16px" from the day the editor was
+    // written until 2026-09-01. Being absolute, it ignored useUiScale (which
+    // moves rem utilities via html { font-size }), so the writer's prose was
+    // the one thing in the app that no size setting could touch. It took a
+    // report of "the maximum font size is way too small" to surface it.
     "&": {
-      fontSize: "16px",
+      fontSize: `${fontSizePx}px`,
     },
     // The typing area -- minimal styling here so CodeMirror's coordinate
     // system stays accurate. Centering is handled by the wrapper div in JSX.
@@ -264,7 +287,7 @@ const searchPanelTheme = EditorView.theme({
   },
   ".cm-search": {
     padding: "6px 10px",
-    fontSize: "12px",
+    fontSize: "0.75rem",
   },
   ".cm-search input.cm-textfield": {
     backgroundColor: "var(--st-bg-surface)",
@@ -274,7 +297,7 @@ const searchPanelTheme = EditorView.theme({
     padding:         "3px 6px",
     margin:          "2px 4px 2px 0",
     outline:         "none",
-    fontSize:        "12px",
+    fontSize:        "0.75rem",
   },
   ".cm-search input.cm-textfield:focus": {
     borderColor: "var(--st-accent)",
@@ -287,7 +310,7 @@ const searchPanelTheme = EditorView.theme({
     borderRadius:    "3px",
     padding:         "2px 8px",
     margin:          "0 2px",
-    fontSize:        "12px",
+    fontSize:        "0.75rem",
     cursor:          "pointer",
   },
   ".cm-search button.cm-button:hover": {
@@ -296,7 +319,7 @@ const searchPanelTheme = EditorView.theme({
   ".cm-search label": {
     color:       "var(--st-text-muted)",
     margin:      "0 6px 0 0",
-    fontSize:    "12px",
+    fontSize:    "0.75rem",
   },
   ".cm-search br": {
     // Give the line-break a little vertical breathing room so the Replace
@@ -313,7 +336,7 @@ const searchPanelTheme = EditorView.theme({
     background: "transparent",
     border: "none",
     color: "var(--st-text-muted)",
-    fontSize: "14px",
+    fontSize: "0.875rem",
     cursor: "pointer",
   },
 });
@@ -539,6 +562,10 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
   // exactly what we want when the palette changes.
   const [appTheme]    = useTheme();
   const { lineHeight, before: spaceBefore, after: spaceAfter } = useEditorSpacing();
+  // Size of the writer's prose. A SECOND hook rather than a field on the one
+  // above, because size and spacing are different measurements -- see the
+  // header of useEditorFontSize.ts for why that distinction is kept.
+  const { px: fontSizePx } = useEditorFontSize();
   const editorTheme   = appTheme === "light" ? storythreadLightTheme : storythreadDarkTheme;
 
   // When the font OR the line spacing changes, hot-swap only that compartment.
@@ -549,10 +576,10 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
   useEffect(() => {
     if (editorViewRef.current) {
       editorViewRef.current.dispatch({
-        effects: fontCompartment.reconfigure(buildFontTheme(font, lineHeight, spaceBefore, spaceAfter)),
+        effects: fontCompartment.reconfigure(buildFontTheme(font, fontSizePx, lineHeight, spaceBefore, spaceAfter)),
       });
     }
-  }, [font, lineHeight, spaceBefore, spaceAfter]);
+  }, [font, fontSizePx, lineHeight, spaceBefore, spaceAfter]);
 
   // Static extensions -- built once, never change.
   //
@@ -569,7 +596,7 @@ export function MarkdownEditor({ defaultValue, onChange, font, onEditorReady, on
       autocorrect: "off",
       autocapitalize: "off",
     }),
-    fontCompartment.of(buildFontTheme(font, lineHeight, spaceBefore, spaceAfter)),
+    fontCompartment.of(buildFontTheme(font, fontSizePx, lineHeight, spaceBefore, spaceAfter)),
     // HR scene-break decoration: paints a horizontal stripe across any line
     // that is just `---` (or `***`). The text remains editable; only the
     // visual presentation changes.

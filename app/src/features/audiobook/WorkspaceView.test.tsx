@@ -6,12 +6,18 @@
 // chapter rail re-derives from the save response.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 
 import { WorkspaceView } from "./WorkspaceView";
 import type { AudiobookProjectPayload } from "./types";
+import {
+  resolveEditorFontPx, EDITOR_PT_DEFAULT, setEditorFontSize,
+} from "../../hooks/useEditorFontSize";
+import {
+  resolveLineHeight, setLineSpacing, currentLineHeight,
+} from "../../hooks/useEditorSpacing";
 
 const NARRATION = "# Chapter 1\n\nFirst prose.\n\n# Chapter 2\n\nSecond prose.\n";
 
@@ -131,6 +137,68 @@ async function renderLoaded() {
     expect((screen.getByLabelText("Narration text") as HTMLTextAreaElement).value).toBe(NARRATION));
   return screen.getByLabelText("Narration text") as HTMLTextAreaElement;
 }
+
+describe("the narration editor is sized by the writer, not by a utility class", () => {
+  // THE REPORT: "I have the font side one way but it appears visibly
+  // different in the Audiobook generator ... It should be the same font size
+  // editor, a mirror of the other one."
+  //
+  // This textarea carried `text-sm leading-relaxed`, so it rendered at a
+  // fixed 14px equivalent no matter what Editor text size said. It is the
+  // writer's own manuscript prose -- the same words they edit in the main
+  // editor -- so it follows the same two stores.
+  //
+  // It is NOT a MarkdownEditor (the marker grammar needs raw text and stable
+  // character offsets), which is exactly why it was missed: wiring the six
+  // MarkdownEditor surfaces to the setting did not reach this one.
+
+  it("renders at the default editor size, not at a hardcoded one", async () => {
+    const ta = await renderLoaded();
+    expect(ta.style.fontSize).toBe(`${resolveEditorFontPx(EDITOR_PT_DEFAULT)}px`);
+  });
+
+  it("does not fix its size with a Tailwind text-* class", async () => {
+    // A leftover class would win or lose depending on rule order, which is
+    // the kind of ambiguity that hid the line-height bug in MarkdownEditor.
+    const ta = await renderLoaded();
+    expect(ta.className).not.toMatch(/text-(2xs|micro|mini|xs|sm|base|lg)/);
+  });
+
+  it("follows the setting when the writer changes it", async () => {
+    const ta = await renderLoaded();
+    await act(async () => { await setEditorFontSize(18); });
+    await waitFor(() =>
+      expect(ta.style.fontSize).toBe(`${resolveEditorFontPx(18)}px`));
+    // Put it back: this store is module-level and outlives the test.
+    await act(async () => { await setEditorFontSize(EDITOR_PT_DEFAULT); });
+  });
+
+  it("takes its line spacing from the same setting as the manuscript", async () => {
+    // "at the very least the linespacing effect should extend over to the
+    // Audiobook Generator's text editor side." It does: the line-height is
+    // the resolved number from useEditorSpacing, not `leading-relaxed`, which
+    // is what this textarea carried before.
+    const ta = await renderLoaded();
+    expect(ta.style.lineHeight).toBe(String(currentLineHeight()));
+    expect(ta.className).not.toMatch(/leading-/);
+  });
+
+  it("follows a line spacing change", async () => {
+    const ta = await renderLoaded();
+    await act(async () => { await setLineSpacing("double"); });
+    await waitFor(() =>
+      expect(ta.style.lineHeight).toBe(String(resolveLineHeight("double", 1.15))));
+    // Module-level store: put it back or the next test inherits Double.
+    await act(async () => { await setLineSpacing("one_half"); });
+  });
+
+  it("keeps the monospace face, which the marker grammar depends on", async () => {
+    // Only the SIZE was the complaint. [pause], [say:...] and [voice:NAME]
+    // are bracket-dense and a fixed pitch keeps them scannable.
+    const ta = await renderLoaded();
+    expect(ta.className).toContain("font-mono");
+  });
+});
 
 describe("WorkspaceView", () => {
   it("loads the narration copy and lists chapters", async () => {

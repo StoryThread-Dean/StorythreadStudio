@@ -29,6 +29,18 @@ import { NarrationEngineSection } from "./NarrationEngineSection";
 import { NarrationKeysSection } from "./NarrationKeysSection";
 import { NarrationPacingSection } from "./NarrationPacingSection";
 import type { NarratorVoice } from "./types";
+// The SAME component the Settings screen renders, not a copy of it. The
+// Converter is a full-screen world with no route back to app Settings, so a
+// writer who wanted the narration text bigger had to leave it entirely.
+// Rendering the real control here keeps one setting with one implementation;
+// it themes itself to the charcoal ramp because it names roles, not shades.
+import { TextSizeControls } from "../../components/settings/TextSizeControls";
+// Line spacing too: the narration editor already OBEYS this setting (it takes
+// its line-height from the same store), but the knob lived only on a screen
+// you had to leave the Converter to reach. Paragraph spacing is deliberately
+// NOT brought over -- it pads per-paragraph elements and a textarea has none.
+import { LineSpacingControl } from "../../components/settings/LineSpacingControl";
+import { AudiobookThemeSection } from "./AudiobookThemeSection";
 
 interface AudiobookSettingsDialogProps {
   workspacePath: string;
@@ -180,17 +192,17 @@ export function AudiobookSettingsDialog({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
-      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-5 py-3">
-          <SettingsIcon size={15} className="text-blue-300" />
-          <h2 className="flex-1 text-sm font-semibold text-zinc-100">
+      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3">
+          <SettingsIcon size={15} className="text-secondary" />
+          <h2 className="flex-1 text-sm font-semibold text-text-primary">
             Audiobook Settings
           </h2>
           <button
             ref={closeRef}
             onClick={attemptClose}
             aria-label="Close audiobook settings"
-            className="rounded p-1 text-zinc-500 hover:text-zinc-100"
+            className="rounded p-1 text-faint hover:text-text-primary"
           >
             <X size={15} />
           </button>
@@ -198,7 +210,7 @@ export function AudiobookSettingsDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {!settings || !pacing ? (
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-text-muted">
               <Loader2 size={12} className="mr-1 inline animate-spin" />
               Loading settings...
             </p>
@@ -237,33 +249,56 @@ export function AudiobookSettingsDialog({
                 saved={saved && !pacingDirty}
                 onChange={next => { setPacing(next); setSaved(false); }}
               />
+
+              {/* Text size, LAST on purpose. Everything above belongs to this
+                  audiobook; these two are app-wide, and the section says so
+                  itself. Placed after the book's own settings rather than
+                  before them so the dialog reads book-first.
+
+                  These save themselves the moment they are clicked -- they go
+                  through the same stores as the writing app, which persist on
+                  change. They are deliberately NOT part of this dialog's
+                  dirty/Save flow, or a writer could resize their text, hit
+                  Cancel, and be surprised twice. */}
+              <div className="space-y-6 border-t border-border pt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                  Look and feel
+                </h3>
+                {/* The Converter's own theme sits with the size controls
+                    rather than with the narration settings above: these are
+                    all look-and-feel choices, and the two that are app-wide
+                    say so themselves. */}
+                <AudiobookThemeSection />
+                <TextSizeControls context="audiobook" />
+                <LineSpacingControl context="audiobook" />
+              </div>
             </div>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800 px-5 py-3">
+        <div className="flex shrink-0 items-center gap-3 border-t border-border px-5 py-3">
           {error && (
-            <p className="min-w-0 flex-1 truncate text-mini text-rose-300" title={error}>
+            <p className="min-w-0 flex-1 truncate text-mini text-danger" title={error}>
               {error}
             </p>
           )}
           {!error && saved && !dirty && (
-            <p className="flex-1 text-mini text-emerald-300">Settings saved.</p>
+            <p className="flex-1 text-mini text-accent">Settings saved.</p>
           )}
           {!error && !saved && dirty && (
-            <p className="flex-1 text-mini text-amber-300">Unsaved changes.</p>
+            <p className="flex-1 text-mini text-warn">Unsaved changes.</p>
           )}
           {!error && !saved && !dirty && <span className="flex-1" />}
           <button
             onClick={attemptClose}
-            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
+            className="rounded border border-border px-3 py-1.5 text-xs text-text-primary hover:border-border-strong"
           >
             Close
           </button>
           <button
             onClick={() => void handleSave()}
             disabled={!dirty || saving}
-            className="inline-flex items-center gap-2 rounded bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded bg-accent-fill px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
           >
             {saving && <Loader2 size={12} className="animate-spin" />}
             Save Settings

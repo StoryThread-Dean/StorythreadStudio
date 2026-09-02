@@ -119,22 +119,28 @@ describe("Multiple -- a custom multiplier, bounded", () => {
   });
 });
 
-describe("the Settings screen actually offers it", () => {
+describe("the one control actually offers it", () => {
   // A source read, for the same reason Explain.test.tsx reads screens rather
   // than rendering them: mounting the whole Settings modal needs its entire
   // API surface mocked, and a test that expensive gets skipped rather than
   // extended. What matters here is narrow and checkable as text -- that the
   // control is wired to the shared arithmetic instead of hardcoding numbers
   // of its own, which is exactly how the label and the editor would drift.
+  //
+  // The markup moved out of Settings.tsx into LineSpacingControl on
+  // 2026-09-01, so that both the Settings screen and the Audiobook Converter's
+  // dialog could render it. The Converter's narration editor already obeyed
+  // this setting; the knob was the part that lived somewhere you had to leave
+  // the Converter to reach.
   const SOURCE = Object.values(
-    import.meta.glob("../screens/Settings.tsx", {
+    import.meta.glob("../components/settings/LineSpacingControl.tsx", {
       query: "?raw",
       import: "default",
       eager: true,
     }) as Record<string, string>,
   )[0];
 
-  it("read the screen at all", () => {
+  it("read the control at all", () => {
     expect(SOURCE?.length ?? 0).toBeGreaterThan(1000);
   });
 
@@ -154,6 +160,54 @@ describe("the Settings screen actually offers it", () => {
 
   it("keeps the custom input for Multiple only", () => {
     expect(SOURCE).toContain('spacing === "multiple" &&');
+  });
+
+  it("names colour ROLES only, so it themes itself inside the audiobook", () => {
+    // The Converter is charcoal in both app themes. This renders there
+    // unchanged, which only works because every colour it names is a role
+    // that .audiobook-theme redefines.
+    expect(SOURCE).not.toMatch(
+      /(bg|text|border|ring)-(indigo|violet|emerald|amber|rose|red|blue|teal|sky|zinc|pink|cyan|lime|fuchsia)-[0-9]{2,3}/,
+    );
+  });
+
+  it("is rendered by BOTH screens rather than copied into either", () => {
+    const screens = {
+      "Settings.tsx": Object.values(
+        import.meta.glob("../screens/Settings.tsx", {
+          query: "?raw", import: "default", eager: true,
+        }) as Record<string, string>,
+      )[0],
+      "AudiobookSettingsDialog.tsx": Object.values(
+        import.meta.glob("../features/audiobook/AudiobookSettingsDialog.tsx", {
+          query: "?raw", import: "default", eager: true,
+        }) as Record<string, string>,
+      )[0],
+    };
+    for (const [name, source] of Object.entries(screens)) {
+      expect(source?.length ?? 0, `${name} did not load`).toBeGreaterThan(1000);
+      expect(source, `${name} must render <LineSpacingControl />`)
+        .toContain("<LineSpacingControl");
+      expect(
+        source,
+        `${name} builds its own spacing buttons instead of using the shared ` +
+          "control -- that is the drift this extraction exists to prevent",
+      ).not.toContain("LINE_SPACING_OPTIONS.map");
+    }
+  });
+
+  it("does NOT carry paragraph spacing into the audiobook", () => {
+    // Not an oversight, a fact about the surface: paragraph spacing works by
+    // padding per-paragraph elements, and the narration editor is one plain
+    // textarea with none to pad. A control that saves a value and changes
+    // nothing visible is worse than an absent one.
+    const dialog = Object.values(
+      import.meta.glob("../features/audiobook/AudiobookSettingsDialog.tsx", {
+        query: "?raw", import: "default", eager: true,
+      }) as Record<string, string>,
+    )[0];
+    expect(dialog).not.toContain("PARAGRAPH_BEFORE_DEFAULT");
+    expect(dialog).not.toContain("setParagraph");
   });
 });
 
@@ -213,13 +267,41 @@ describe("the editor puts line-height where CodeMirror will honour it", () => {
   });
 
   it("takes the spacing as arguments rather than hardcoding it", () => {
-    // Four now: the font, the line height, and the two paragraph gaps.
+    // Five now: the font, its SIZE, the line height, and the two paragraph
+    // gaps. Size joined the list on 2026-09-01, when it stopped being the
+    // literal "16px" that no setting could reach.
     expect(SOURCE).toMatch(/function buildFontTheme\(/);
-    for (const arg of ["lineHeight: number", "spaceBefore: number", "spaceAfter: number"]) {
+    for (const arg of [
+      "fontSizePx: number", "lineHeight: number",
+      "spaceBefore: number", "spaceAfter: number",
+    ]) {
       expect(SOURCE, `buildFontTheme should take ${arg}`).toContain(arg);
     }
     // And re-applies all of them when a setting changes, or the writer would
     // have to reopen the chapter to see their own choice.
-    expect(SOURCE).toContain("}, [font, lineHeight, spaceBefore, spaceAfter]);");
+    expect(SOURCE).toContain(
+      "}, [font, fontSizePx, lineHeight, spaceBefore, spaceAfter]);",
+    );
+  });
+
+  it("puts font-size on the root, and NOT as a literal", () => {
+    // The mirror of the lineHeight pair above, and the reason the two rules
+    // differ is a fact about CodeMirror's baseTheme rather than a preference:
+    // .cm-scroller declares line-height (so a line-height on "&" dies) and
+    // declares no font-size (so a font-size on "&" inherits cleanly).
+    const root = rootBlock();
+    expect(root, "font-size should be set on the editor root").toContain("fontSize");
+    expect(
+      root,
+      'a hardcoded pixel size here is what made the editor ignore every size ' +
+        'setting for its entire life -- it must come from useEditorFontSize',
+    ).not.toMatch(/fontSize:\s*["'`]\d/);
+  });
+
+  it("does not set font-size on .cm-content or .cm-line, which would shadow it", () => {
+    // A size on either of these wins over the root, so the setting would move
+    // the root and change nothing visible -- the same silent shape as the
+    // line-height bug, in the opposite direction.
+    expect(contentBlock()).not.toContain("fontSize");
   });
 });

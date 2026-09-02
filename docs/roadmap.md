@@ -31,9 +31,13 @@ nineteen opt-in sections, and the five whole-document templates are gone.
 Every existing outline is converted on first open, subtractively, with a
 backup and a post-condition that aborts rather than write a shorter file.
 
-Still open at the time of writing: the shared UI primitives, converting the
-remaining raw palette call sites onto role tokens, the icon set, and deleting
-the bridge once nothing needs it.
+Still open at the time of writing: the shared UI primitives and the icon set.
+The bridge is gone. **Converting the remaining raw palette call sites onto role
+tokens finished in v2.0.4** -- the last 940 of them were in the Audiobook
+Converter, and they had to go before that side could have a light theme at all,
+since a literal `bg-zinc-900` cannot follow anything. `features/audiobook/` is
+no longer exempt from the palette gate, so the app now has no raw shade classes
+anywhere.
 ### The Weave -- the v2.0.0 feature
 
 One linked, time-aware world model, replacing the four hardcoded profile folders.
@@ -1373,6 +1377,19 @@ Lower priority. May ship eventually, may never; no harm if they don't.
 ### Streaming responses (SSE) — backburner
 
 Replace blocking AI calls with server-sent events so chat replies and Smart Advisor passes render character-by-character. Affects the Writing Companion chat, Profile Builder chat, and the editor-pass endpoint. OpenRouter supports SSE natively; the work is on the FastAPI streaming layer and the React reader. **Deliberately parked (2026-07-13): not convinced streaming is more efficient, more effective, or a good use of tokens. Needs a fully convincing case before any implementation starts.** Note: provider work (NanoGPT, local models) does not depend on this.
+
+### Icons that follow Interface size
+
+Lucide icons take a numeric `size=` prop, which is pixels, so they do not scale
+with the root font-size the way every rem-based utility does. It went unnoticed
+while Interface size topped out at 19px (+19%); at the 24px Maximum added in
+v2.0.4 the gap is visible, and icons sit beside 18px text looking a size small.
+
+The fix is a `useIconSize()` deriving from the active scale, applied at several
+hundred call sites -- mechanical, but large, and it touches nearly every
+component. Deliberately kept out of the appearance work rather than smuggled in
+under a find-and-replace. `tests/manual-smoke.md` scenario 27 tells the tester
+this is known so it is not filed as a bug.
 
 ### Interaction log table
 

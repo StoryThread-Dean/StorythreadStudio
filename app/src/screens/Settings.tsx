@@ -14,16 +14,16 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { X, CheckCircle, Star, Folder, Sun, Moon } from "lucide-react";
+import { X, CheckCircle, Star, Folder, Sun, Moon, Palette } from "lucide-react";
 import type { AppSettings, ModelInfo } from "../types/ai";
 import { useTheme } from "../hooks/useTheme";
-import { useUiScale, UI_SCALE_PX, type UiScale } from "../hooks/useUiScale";
 import {
-  useEditorSpacing, LINE_SPACING_OPTIONS, resolveLineHeight, clampMultiple,
-  MULTIPLE_MIN, MULTIPLE_MAX, clampParagraphPt,
+  useEditorSpacing, clampParagraphPt,
   PARAGRAPH_PT_MIN, PARAGRAPH_PT_MAX,
   PARAGRAPH_BEFORE_DEFAULT, PARAGRAPH_AFTER_DEFAULT,
 } from "../hooks/useEditorSpacing";
+import { TextSizeControls } from "../components/settings/TextSizeControls";
+import { LineSpacingControl } from "../components/settings/LineSpacingControl";
 // Content-mode filter, cost tiers, media filter, and the curated recommended
 // list all live in a shared util so Settings and ProjectSettings can't drift
 // apart (see utils/modelFiltering.ts).
@@ -63,10 +63,19 @@ export function providerIsReady(settings: AppSettings | null, providerId: string
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface SettingsProps {
   onClose: () => void;
+  /**
+   * Hand over to the custom colour editor.
+   *
+   * Optional so every existing render of this screen keeps working unchanged;
+   * where it is not supplied the Custom button simply does nothing rather
+   * than half-switching the theme. App.tsx owns both windows, so it is the
+   * only place that can close one and open the other.
+   */
+  onOpenCustomTheme?: () => void;
 }
 
 // ── Settings Component ────────────────────────────────────────────────────────
-export function Settings({ onClose }: SettingsProps) {
+export function Settings({ onClose, onOpenCustomTheme }: SettingsProps) {
 
   // Loaded settings from backend
   const [settings, setSettings]           = useState<AppSettings | null>(null);
@@ -133,18 +142,13 @@ export function Settings({ onClose }: SettingsProps) {
   // backend, so there's no separate "save" step for theme like other fields.
   const [theme, setTheme] = useTheme();
 
-  // UI font scale: same global-store pattern as theme. Applies to chrome
-  // (menus, chat box, Settings, About, profile labels). The manuscript
-  // editor has its own font picker and is unaffected by this control.
-  const [uiScale, setUiScaleLocal] = useUiScale();
-  // Line spacing. `multipleDraft` is the text in the number box while the
-  // writer is still typing it; the applied value only changes on blur, so
-  // typing "2" on the way to "2.5" does not reflow the manuscript twice.
+  // Paragraph spacing only. Line spacing moved into LineSpacingControl, which
+  // this screen and the Audiobook Converter both render -- paragraph spacing
+  // did NOT, because it pads per-paragraph elements and the Converter's
+  // narration box is one plain textarea with none to pad.
   const {
-    spacing, multiple: spacingMultiple, set: setSpacing,
     before: paraBefore, after: paraAfter, setParagraph,
   } = useEditorSpacing();
-  const [multipleDraft, setMultipleDraft] = useState(String(spacingMultiple));
   // Paragraph gaps are drafted the same way as the custom multiple: typing
   // "1" on the way to "12" must not reflow the manuscript at 1pt.
   const [beforeDraft, setBeforeDraft] = useState(String(paraBefore));
@@ -160,14 +164,6 @@ export function Settings({ onClose }: SettingsProps) {
     setAfterDraft(String(nextAfter));
     setParagraph(nextBefore, nextAfter);
   }, [beforeDraft, afterDraft, paraBefore, paraAfter, setParagraph]);
-  // Keep the draft in step when the stored value arrives or changes from
-  // elsewhere. initLineSpacing() resolves AFTER this screen can mount, so
-  // without this the box would show the default while the editor was
-  // already using the writer's saved number.
-  useEffect(() => {
-    setMultipleDraft(String(spacingMultiple));
-  }, [spacingMultiple]);
-
   useEffect(() => {
     setBeforeDraft(String(paraBefore));
     setAfterDraft(String(paraAfter));
@@ -1034,7 +1030,7 @@ export function Settings({ onClose }: SettingsProps) {
                   <label className="mb-2 block text-xs font-medium text-text-primary">
                     Theme
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {/* Each card is its own button, styled so the active one
                         gets an indigo border + accent text. Reads like a
                         segmented control without the visual heaviness of one. */}
@@ -1064,145 +1060,53 @@ export function Settings({ onClose }: SettingsProps) {
                       <span className="font-medium">Light</span>
                       <span className="text-text-muted">— warm paper</span>
                     </button>
+                    {/* The third option, and the only one that opens a second
+                        screen. Two dark/light answers are not enough for
+                        somebody who wants their own; this hands over all
+                        fifty-six role colours.
+
+                        The flow is the one the writer asked for: choosing it
+                        SAVES the theme choice, closes Settings, and opens the
+                        colour editor. Leaving Settings open behind a
+                        full-width editor would put two Appearance screens on
+                        top of each other, and the editor repaints the app
+                        live -- which cannot be judged through a dialog
+                        covering it. */}
+                    <button
+                      onClick={() => onOpenCustomTheme?.()}
+                      type="button"
+                      className={`flex flex-1 items-center gap-2 rounded border px-3 py-2 text-xs transition-colors ${
+                        theme === "custom"
+                          ? "border-accent-fill bg-bg-surface text-text-primary"
+                          : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
+                      }`}
+                    >
+                      <Palette size={14} />
+                      <span className="font-medium">Custom</span>
+                      <span className="text-text-muted">— assign your colors</span>
+                    </button>
                   </div>
                   <p className="mt-2 text-xs text-faint">
-                    Switches the entire app between dark and light modes.
+                    Switches the entire app between dark and light modes, or
+                    your own palette. <strong>Custom</strong> closes this window
+                    and opens a colour editor listing every part of the app you
+                    can set, starting from whichever theme you are using now.
                     Saved globally, so the choice carries across all projects.
                   </p>
                 </div>
 
-                {/* ── Interface size ──────────────────────────────────────
-                    Subtle scale of all chrome text -- menus, chat box,
-                    Settings, About, profile labels, etc. The manuscript
-                    editor uses its own font picker (in the editor toolbar)
-                    and is intentionally NOT affected by this control. */}
-                <div className="mt-6">
-                  <label className="mb-2 block text-xs font-medium text-text-primary">
-                    Interface size
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {([
-                      { id: "default",     label: "Default" },
-                      { id: "larger",      label: "Larger" },
-                      { id: "larger_plus", label: "Larger+" },
-                      { id: "largest",     label: "Largest" },
-                    ] satisfies { id: UiScale; label: string }[]).map(opt => (
-                      <button
-                        key={opt.id}
-                        onClick={() => setUiScaleLocal(opt.id)}
-                        type="button"
-                        className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
-                          uiScale === opt.id
-                            ? "border-accent-fill bg-bg-surface text-text-primary"
-                            : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
-                        }`}
-                      >
-                        <span className="font-medium">{opt.label}</span>
-                        <span className="text-text-muted">{UI_SCALE_PX[opt.id]}px</span>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-faint">
-                    Scales menus, chat, Settings, and other interface text. The
-                    manuscript editor's font is controlled separately by the
-                    font picker in the editor toolbar. Saved globally.
-                  </p>
-                </div>
+                {/* Interface size + Editor text size. EXTRACTED, not inlined:
+                    the Audiobook Converter renders the same component in its
+                    own settings dialog, and a second copy of these controls
+                    would be a second place for them to drift. */}
+                <TextSizeControls />
 
-                {/* ── Line spacing ────────────────────────────────────────
-                    Sits beside Interface size and does a DIFFERENT job, which
-                    the help text has to make obvious or the two get confused:
-                    Interface size sizes the app's chrome, this spaces the
-                    writer's own prose. Wanting compact menus above a roomy
-                    manuscript is an ordinary preference, so they are separate
-                    controls rather than one.
-
-                    Named the way a word processor names it. A writer who has
-                    spent years in Word knows what "1.5 lines" looks like; they
-                    have no feel at all for "1.75". The number is shown anyway,
-                    in brackets, because it is the thing actually applied and
-                    hiding it would make Multiple impossible to reason about. */}
-                <div className="mt-6">
-                  <label className="mb-2 block text-xs font-medium text-text-primary">
-                    Line spacing
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {LINE_SPACING_OPTIONS.map(opt => (
-                      <button
-                        key={opt.id}
-                        onClick={() => setSpacing(opt.id, spacingMultiple)}
-                        type="button"
-                        aria-pressed={spacing === opt.id}
-                        className={`flex flex-col items-start gap-0.5 rounded border px-3 py-2 text-xs transition-colors ${
-                          spacing === opt.id
-                            ? "border-accent-fill bg-bg-surface text-text-primary"
-                            : "border-border bg-bg-panel text-text-muted hover:border-accent-fill"
-                        }`}
-                      >
-                        <span className="font-medium">{opt.label}</span>
-                        {/* The resolved line-height, to two decimals. Same
-                            number the editor is handed, so what this says and
-                            what the page does cannot drift. */}
-                        <span className="text-text-muted">
-                          {resolveLineHeight(opt.id, spacingMultiple).toFixed(2)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* The custom multiplier. Only meaningful for Multiple, so it
-                      only appears then -- a permanently visible input that does
-                      nothing three times out of four is a question the writer
-                      has to answer and then discover was irrelevant. */}
-                  {spacing === "multiple" && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <label
-                        htmlFor="line-spacing-multiple"
-                        className="text-xs text-text-muted"
-                      >
-                        Multiple of a single line
-                      </label>
-                      <input
-                        id="line-spacing-multiple"
-                        type="number"
-                        min={MULTIPLE_MIN}
-                        max={MULTIPLE_MAX}
-                        step={0.05}
-                        value={multipleDraft}
-                        onChange={e => setMultipleDraft(e.target.value)}
-                        /* Committed on blur rather than per keystroke: typing
-                           "2" on the way to "2.5" would otherwise apply 2 and
-                           reflow the manuscript underneath the writer. */
-                        onBlur={() => {
-                          const parsed = Number(multipleDraft);
-                          if (!Number.isFinite(parsed)) {
-                            // Not a number: put the live value back rather than
-                            // silently substituting one, so nothing is applied
-                            // that the writer did not ask for.
-                            setMultipleDraft(String(spacingMultiple));
-                            return;
-                          }
-                          const clamped = clampMultiple(parsed);
-                          setMultipleDraft(String(clamped));
-                          setSpacing("multiple", clamped);
-                        }}
-                        className="w-20 rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
-                      />
-                      <span className="text-xs text-faint">
-                        = {resolveLineHeight("multiple", spacingMultiple).toFixed(2)} line height
-                      </span>
-                    </div>
-                  )}
-
-                  <p className="mt-2 text-xs text-faint">
-                    Spaces the lines in the manuscript, outline, notes and
-                    summary editors -- your writing, not the app around it.
-                    Measured the way a word processor measures it, so Single is
-                    the font's own natural line height rather than a flat 1.0.
-                    Interface size above is the separate control for menus and
-                    labels. Saved globally.
-                  </p>
-                </div>
+                {/* Line spacing. EXTRACTED, not inlined: the Audiobook
+                    Converter renders the same component in its own settings
+                    dialog, because its narration editor obeys this setting
+                    and the knob used to live only on a screen you had to
+                    leave the Converter to reach. */}
+                <LineSpacingControl />
 
                 {/* ── Paragraph spacing ───────────────────────────────────
                     A SEPARATE MEASUREMENT FROM LINE SPACING, and the reason

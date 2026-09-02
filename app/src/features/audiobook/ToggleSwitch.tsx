@@ -21,9 +21,9 @@ interface ToggleSwitchProps {
 }
 
 const TONES = {
-  amber:   { track: "bg-amber-500", text: "text-amber-200" },
-  violet:  { track: "bg-violet-500", text: "text-violet-200" },
-  emerald: { track: "bg-emerald-500", text: "text-emerald-200" },
+  amber:   { track: "bg-warn-fill", text: "text-warn-strong" },
+  violet:  { track: "bg-weave-fill", text: "text-weave-strong" },
+  emerald: { track: "bg-accent-fill", text: "text-accent-strong" },
 } as const;
 
 export function ToggleSwitch({
@@ -47,7 +47,7 @@ export function ToggleSwitch({
       <span
         aria-hidden
         className={"mt-0.5 flex h-4 w-8 shrink-0 items-center rounded-full p-0.5 transition-colors "
-          + (checked ? lit.track : "bg-zinc-700")}
+          + (checked ? lit.track : "bg-bg-raised")}
       >
         <span
           className={"h-3 w-3 rounded-full bg-white shadow transition-transform "
@@ -56,11 +56,11 @@ export function ToggleSwitch({
       </span>
       <span className="min-w-0">
         <span className={"block text-mini font-medium transition-colors "
-          + (checked ? lit.text : "text-zinc-400")}>
+          + (checked ? lit.text : "text-text-muted")}>
           {label}
         </span>
         {hint && (
-          <span className="block text-micro leading-relaxed text-zinc-500">
+          <span className="block text-micro leading-relaxed text-faint">
             {hint}
           </span>
         )}

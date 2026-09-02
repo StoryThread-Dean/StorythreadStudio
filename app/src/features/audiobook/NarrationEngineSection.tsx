@@ -35,10 +35,10 @@ interface NarrationEngineSectionProps {
 }
 
 const TIER_BADGE: Record<string, string> = {
-  free:     "bg-emerald-600 text-white",
-  budget:   "bg-sky-500 text-zinc-950",
-  standard: "bg-violet-500 text-white",
-  pro:      "bg-red-500 text-white",
+  free:     "bg-accent-fill text-white",
+  budget:   "bg-secondary-fill text-on-accent",
+  standard: "bg-weave-fill text-white",
+  pro:      "bg-danger-fill text-white",
 };
 
 export function NarrationEngineSection({
@@ -90,32 +90,32 @@ export function NarrationEngineSection({
           onClick={() => onChoose(tier)}
           className={"flex w-full items-start gap-2 rounded border px-2.5 py-2 text-left transition-colors "
             + (picked
-              ? "border-blue-500 bg-blue-950/40"
-              : "border-zinc-700 hover:border-blue-600")}
+              ? "border-secondary-fill bg-secondary-soft"
+              : "border-border hover:border-secondary-fill")}
         >
           <span className={"mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold uppercase "
-            + (TIER_BADGE[tier.tier] ?? "bg-zinc-600 text-white")}>
+            + (TIER_BADGE[tier.tier] ?? "bg-bg-raised text-white")}>
             {tier.tier_label}
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
-              <span className="text-mini font-medium text-zinc-100">
+              <span className="text-mini font-medium text-text-primary">
                 {tier.model_label}
               </span>
-              {picked && <Check size={11} className="shrink-0 text-blue-300" />}
+              {picked && <Check size={11} className="shrink-0 text-secondary" />}
             </span>
-            <span className="block text-micro text-zinc-400">
+            <span className="block text-micro text-text-muted">
               {tier.requires_key
                 ? `${tier.provider_label} -- $${tier.price_per_million_chars} per million characters`
                 : tier.blurb}
             </span>
             {tier.requires_key && tier.voices_same_as_local && (
-              <span className="block text-micro text-emerald-400">
+              <span className="block text-micro text-accent-muted">
                 Keeps every voice your free narrator has.
               </span>
             )}
             {tier.requires_key && !tier.voices_verified && (
-              <span className="block text-micro text-zinc-500">
+              <span className="block text-micro text-faint">
                 Voice ids for this engine are unconfirmed -- type one, or
                 leave it blank for the model's own default.
               </span>
@@ -126,7 +126,7 @@ export function NarrationEngineSection({
                 notices it in the audio. */}
             {tier.requires_key && tier.pace_baseline !== undefined
               && tier.pace_baseline !== 1 && (
-              <span className="block text-micro text-sky-300/80">
+              <span className="block text-micro text-secondary/80">
                 Reads {tier.pace_baseline < 1 ? "slower" : "faster"} than the
                 free narrator by nature, so your pace settings are re-scaled
                 to sound the same here.
@@ -135,7 +135,7 @@ export function NarrationEngineSection({
             {/* The reason it was demoted, always on the card -- not buried
                 in a tooltip a writer finds after paying. */}
             {tier.caveat && (
-              <span className="mt-1 block text-micro leading-relaxed text-amber-300/80">
+              <span className="mt-1 block text-micro leading-relaxed text-warn/80">
                 {tier.caveat}
               </span>
             )}
@@ -144,18 +144,18 @@ export function NarrationEngineSection({
 
         {/* AMBER: a real engine with no way to pay for it yet. */}
         {needsKey && picked && (
-          <div className="mt-1 rounded border border-amber-800 bg-amber-950/40 px-2.5 py-2">
-            <p className="flex items-start gap-1.5 text-mini font-medium text-amber-300">
+          <div className="mt-1 rounded border border-warn-fill bg-warn-soft px-2.5 py-2">
+            <p className="flex items-start gap-1.5 text-mini font-medium text-warn">
               <AlertTriangle size={11} className="mt-0.5 shrink-0" />
               No {tier.provider_label} API key is connected, so this
               engine cannot narrate yet.
             </p>
             {tier.signup_steps.length > 0 && (
-              <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-micro leading-relaxed text-amber-200/90">
+              <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-micro leading-relaxed text-warn-strong/90">
                 {tier.signup_steps.map(step => <li key={step}>{step}</li>)}
               </ol>
             )}
-            <p className="mt-1.5 text-micro text-amber-200/80">
+            <p className="mt-1.5 text-micro text-warn-strong/80">
               Add the key under Narration API Keys below.
             </p>
           </div>
@@ -166,10 +166,10 @@ export function NarrationEngineSection({
 
   return (
     <section>
-      <h3 className="mb-1 border-b border-zinc-800 pb-2 text-mini font-semibold uppercase tracking-wider text-zinc-500">
+      <h3 className="mb-1 border-b border-border pb-2 text-mini font-semibold uppercase tracking-wider text-faint">
         Narration Engine
       </h3>
-      <p className="mb-3 mt-2 text-mini leading-relaxed text-zinc-400">
+      <p className="mb-3 mt-2 text-mini leading-relaxed text-text-muted">
         These are the engines Storythread knows how to narrate with.
         Drafting on the free local narrator is unlimited; the paid tiers
         are for the final pass, and you always see the price before
@@ -179,13 +179,13 @@ export function NarrationEngineSection({
       <div className="space-y-1.5">
         {shelf.map(renderTier)}
         {!catalog && (
-          <p className="text-mini text-zinc-500">Loading engines...</p>
+          <p className="text-mini text-faint">Loading engines...</p>
         )}
       </div>
 
       {/* An empty price tier, named out loud. */}
       {emptyTiers.length > 0 && (
-        <p className="mt-2 text-micro leading-relaxed text-zinc-500">
+        <p className="mt-2 text-micro leading-relaxed text-faint">
           No {emptyTiers.join(" or ")} engine has earned a recommendation
           yet -- the ones we auditioned are below, each with what it does
           wrong. Any of them still narrates if you want it.
@@ -198,13 +198,13 @@ export function NarrationEngineSection({
         <div className="mt-2">
           <button
             onClick={() => setShowOthers(v => !v)}
-            className="flex w-full items-center gap-1 text-micro text-zinc-500 hover:text-zinc-300"
+            className="flex w-full items-center gap-1 text-micro text-faint hover:text-text-primary"
           >
             {othersOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
             Other engines we tested but do not recommend ({demoted.length})
           </button>
           {othersOpen && (
-            <div className="mt-1.5 space-y-1.5 border-l border-zinc-800 pl-2">
+            <div className="mt-1.5 space-y-1.5 border-l border-border pl-2">
               {demoted.map(renderTier)}
             </div>
           )}
@@ -214,7 +214,7 @@ export function NarrationEngineSection({
       {chosen?.requires_key && (
         <div className="mt-3">
           <span className="mb-1 flex items-center justify-between gap-2">
-            <span className="text-micro text-zinc-400">
+            <span className="text-micro text-text-muted">
               Default voice for {chosen.model_label}
             </span>
           </span>

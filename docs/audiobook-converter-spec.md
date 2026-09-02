@@ -186,6 +186,101 @@ app's palette is untouched and both themes coexist in one window. The
 light variant keeps the same jewel accent meanings on light surfaces; its
 exact values are decided when the dashboard UI is built.
 
+**The light variant, built 2026-09-02.** The paragraph above deferred it --
+"its exact values are decided when the dashboard UI is built" -- so this
+fulfils a part of 5.0 that was specified and left open, rather than reversing
+it. What IS amended is the opening sentence: the Converter no longer always
+looks different from the writing app, because the writer can now choose.
+
+The Converter carries **Dark (charcoal), Light (warm paper) and Custom**, set
+in Audiobook Settings under "Look and feel". Charcoal remains the default, and
+the "always know which side you are on" argument is why.
+
+**It is independent of the writing app's theme**, keyed on its own
+`data-ab-theme` attribute rather than nested under `[data-theme="light"]`. Two
+reasons: coupling them would make the app's theme switch silently restyle a
+feature the writer was not looking at, and it would forbid a dark editor beside
+a paper Converter, which is a combination somebody can reasonably want.
+
+Light surfaces are the writing app's paper exactly (`#F5F2EC` / `#FBF9F4` /
+`#EDE9E0`), on instruction. The jewel MEANINGS are unchanged -- emerald is
+still primary action and success, sapphire still information, ruby still cost
+and failure -- each family simply moved down its ramp until it reads on cream.
+A jewel tone chosen for charcoal is a pastel on paper, and pastels on cream are
+the complaint that started this work. Every text variant clears 6.7:1 and every
+`-fill` takes white text at 5:1 or better. One deviation from the charcoal half:
+the inset RECEDES rather than floating, because a lighter-than-panel inset on
+paper reads as a tile sitting on a card rather than a well you type into.
+
+Three consequences worth recording:
+
+- **940 raw Tailwind shade classes across 25 files were converted onto role
+  tokens** to make any of this possible. A literal `bg-zinc-900` cannot follow
+  a theme. The conversion was near zero-delta in charcoal because this theme
+  was built FROM those shades (`--st-bg-panel` IS zinc-900, `--st-accent` IS
+  emerald-300) -- the same argument the writing app's facelift used with its
+  temporary bridge. `features/audiobook/` is **no longer exempt** from the
+  palette gate in `App.css.test.ts`, which is what stops the next component
+  added here from being invisible to the light theme.
+- **The light half's ink is deliberately stronger than the AA floor**, on
+  instruction: "the faded colors for smaller text should be more contrast
+  popping rather than faded." It targets roughly 14 / 9.5 / 7 against the
+  writing app's light 14 / 8 / 5, because this side is dense with 10 and 11px
+  labels. It is held to the contrast contract on all FOUR surfaces, since it
+  declares its own warm `bg-raised` and the exemption below does not apply.
+- **A custom palette is applied as an inline style on the audiobook root
+  element**, not on `<html>` as the writing app's is. It has to be: this theme
+  declares its own `--st-*` on a descendant, and an element's own declaration
+  beats an inherited one -- which is precisely what keeps the Converter
+  charcoal while the writing app goes light.
+
+**Contrast obligation (amended 2026-09-01).** This theme is separate from the
+writing app's palette in colour, but NOT in legibility. Every ink token
+(`--st-text-primary`, `--st-text-muted`, `--st-faint`) must clear the WCAG AA
+floor of 4.5:1 against every surface body text is painted on --
+`--st-bg-primary`, `--st-bg-panel` and `--st-bg-surface`. `App.css.test.ts`
+computes this from the stylesheet and fails the build, so a jewel-tone
+retune cannot quietly cost readability.
+
+`--st-faint` moved from `#71717a` (zinc-500) to `#94949c` under this rule; at
+zinc-500 it measured 4.12 / 3.67 / 3.08 on those three surfaces, all under the
+floor. `--st-text-primary` and `--st-text-muted` were already clear and are
+unchanged, so the theme looks as specified.
+
+**Type ramp (amended 2026-09-01).** This theme also declares its own font-size
+steps, one pixel above the writing app's at every step (9/10/11/12/14 becomes
+10/11/12/13/15). The converter was built a full step smaller than the rest of
+the app -- 72% of its size classes were 11px or under against 41% elsewhere,
+with `CastPanel` at 48 of 52 -- so a writer who set Interface size for the
+writing side arrived here and found everything a notch smaller.
+
+Nothing caught it because every size here is a legitimate rem step that scales
+with Interface size correctly. It was a different design, not a broken control.
+
+The override works because Tailwind v4 reads `--text-*` at use time, so
+redefining a step inside this scope moves every call site in the subtree
+without editing one. The consequence to know: `text-mini` means 11px in the
+writing app and 12px in here, so a shared component (`GuidedWalk`, `WhatsThis`)
+renders a shade larger on this side. That is intended -- it should match its
+surroundings, the same argument that justifies overriding colour here.
+
+**The narration editor is exempt from both ramps.** It holds the writer's own
+manuscript prose, so it is sized by **Editor text size** like every other
+editing surface in the app, plus the shared line-spacing setting. It keeps
+`font-mono`: the marker grammar is bracket-dense and a fixed pitch keeps it
+scannable. See `docs/appearance-spec.md` 1.4.
+
+**`--st-bg-raised` (#3f3f46, zinc-700) is an explicit exemption**, and this is
+where that is recorded rather than left in a test file. No plausible grey clears
+4.5:1 against it: `--st-faint` would have to reach `#b0b0b8`, lighter than
+`--st-text-muted`, which inverts the ladder and destroys the three-level
+hierarchy this section depends on. Darkening raised to `#2d2d33` only reaches
+4.54. It is a hover tint painted behind a row, not a surface body copy rests on
+-- today's muted manages only 4.07 there, so this predates the retune. **If a
+resting surface is ever painted `--st-bg-raised` in this theme, this exemption
+becomes wrong and the token ladder must be redesigned rather than the floor
+lowered.**
+
 ### 5.1 Primary Actions
 
 - New Audiobook

@@ -192,17 +192,17 @@ export function PremiumNarrationPanel({
   const settingsLink = (label: string) => (
     <button
       onClick={onOpenSettings}
-      className="inline-flex items-center gap-1 rounded border border-violet-700 px-2 py-1 text-micro text-violet-200 hover:border-violet-400 hover:text-violet-100"
+      className="inline-flex items-center gap-1 rounded border border-weave-fill px-2 py-1 text-micro text-weave-strong hover:border-weave-muted hover:text-weave-strong"
     >
       <SettingsIcon size={10} /> {label}
     </button>
   );
 
   return (
-    <div className="rounded-lg border border-violet-800/70 bg-violet-950/20 p-3">
+    <div className="rounded-lg border border-weave-fill/70 bg-weave-soft p-3">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex w-full items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-violet-300"
+        className="flex w-full items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-weave"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <Crown size={12} /> Premium Narration
@@ -210,7 +210,7 @@ export function PremiumNarrationPanel({
 
       {open && (
         <div className="mt-3">
-          <p className="mb-3 text-mini leading-relaxed text-zinc-400">
+          <p className="mb-3 text-mini leading-relaxed text-text-muted">
             The narration section above is the free path, and drafting there
             is unlimited. When the book sounds the way you hear it, narrate
             the final version with a hosted premium voice. You always see
@@ -218,7 +218,7 @@ export function PremiumNarrationPanel({
           </p>
 
           {!selection && !error && (
-            <p className="text-mini text-zinc-500">
+            <p className="text-mini text-faint">
               <Loader2 size={11} className="mr-1 inline animate-spin" />
               Reading the narration engine...
             </p>
@@ -226,8 +226,8 @@ export function PremiumNarrationPanel({
 
           {/* ── The engine: reported here, chosen in Settings ── */}
           {selection && selection.source === "none" && (
-            <div className="rounded border border-zinc-700 bg-zinc-950/60 px-2.5 py-2">
-              <p className="text-mini text-zinc-300">
+            <div className="rounded border border-border bg-bg-primary/60 px-2.5 py-2">
+              <p className="text-mini text-text-primary">
                 No premium engine chosen, so narration stays free and local.
               </p>
               <div className="mt-1.5">{settingsLink("Choose an engine in Settings")}</div>
@@ -237,12 +237,12 @@ export function PremiumNarrationPanel({
           {selection && selection.source === "writing-fallback" && (
             /* Deliberately a DIFFERENT colour from a usable engine: this is
                the writing model, and it will not narrate. */
-            <div className="rounded border border-rose-800 bg-rose-950/50 px-2.5 py-2">
-              <p className="flex items-start gap-1.5 text-mini font-medium text-rose-300">
+            <div className="rounded border border-danger-fill bg-danger-soft px-2.5 py-2">
+              <p className="flex items-start gap-1.5 text-mini font-medium text-danger">
                 <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                 {selection.model_label} ({selection.provider_label})
               </p>
-              <p className="mt-1 text-micro leading-relaxed text-rose-200/90">
+              <p className="mt-1 text-micro leading-relaxed text-danger-strong/90">
                 {selection.fallback_note}
               </p>
               <div className="mt-1.5">{settingsLink("Pick a narration engine")}</div>
@@ -251,22 +251,22 @@ export function PremiumNarrationPanel({
 
           {selection && (selection.source === "settings" || selection.source === "book") && (
             <>
-              <div className="rounded border border-violet-800 bg-zinc-950/60 px-2.5 py-2">
+              <div className="rounded border border-weave-fill bg-bg-primary/60 px-2.5 py-2">
                 <p className="flex items-center gap-1.5">
-                  <span className="rounded bg-violet-600 px-1.5 py-0.5 text-2xs font-bold uppercase text-white">
+                  <span className="rounded bg-weave-fill px-1.5 py-0.5 text-2xs font-bold uppercase text-white">
                     {selection.tier_label}
                   </span>
-                  <span className="text-mini font-medium text-zinc-100">
+                  <span className="text-mini font-medium text-text-primary">
                     {selection.model_label}
                   </span>
                 </p>
-                <p className="mt-0.5 text-micro text-zinc-400">
+                <p className="mt-0.5 text-micro text-text-muted">
                   {selection.provider_label}
                   {selection.price_per_million_chars
                     && ` -- $${selection.price_per_million_chars} per million characters`}
                 </p>
                 <p className="mt-1 flex items-center gap-2">
-                  <span className="text-micro italic text-zinc-500">
+                  <span className="text-micro italic text-faint">
                     {selection.source === "book"
                       ? "Chosen for this book"
                       : "Chosen in Audiobook Settings"}
@@ -278,7 +278,7 @@ export function PremiumNarrationPanel({
                     it belongs HERE, beside the price, not only back in
                     Settings where it was chosen days ago. */}
                 {selection.caveat && (
-                  <p className="mt-1.5 flex items-start gap-1.5 border-t border-zinc-800 pt-1.5 text-micro leading-relaxed text-amber-300/80">
+                  <p className="mt-1.5 flex items-start gap-1.5 border-t border-border pt-1.5 text-micro leading-relaxed text-warn/80">
                     <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                     <span>{selection.caveat}</span>
                   </p>
@@ -287,13 +287,13 @@ export function PremiumNarrationPanel({
 
               {/* No key: instructions, never buttons. */}
               {selection.warning && (
-                <div className="mt-2 rounded border border-amber-800 bg-amber-950/40 px-2.5 py-2">
-                  <p className="flex items-start gap-1.5 text-mini font-medium text-amber-300">
+                <div className="mt-2 rounded border border-warn-fill bg-warn-soft px-2.5 py-2">
+                  <p className="flex items-start gap-1.5 text-mini font-medium text-warn">
                     <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                     {selection.warning}
                   </p>
                   {selection.signup_steps.length > 0 && (
-                    <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-micro leading-relaxed text-amber-200/90">
+                    <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-micro leading-relaxed text-warn-strong/90">
                       {selection.signup_steps.map(step => <li key={step}>{step}</li>)}
                     </ol>
                   )}
@@ -306,7 +306,7 @@ export function PremiumNarrationPanel({
                   {/* The voice for THIS book: an ear decision, so it lives
                       beside the sample rather than in Settings. */}
                   <div className="mt-3">
-                    <span className="mb-1 block text-micro text-violet-300">
+                    <span className="mb-1 block text-micro text-weave">
                       Voice for this book
                     </span>
                     <VoicePicker
@@ -318,7 +318,7 @@ export function PremiumNarrationPanel({
                       verified={selection.voices_verified}
                       tone="violet"
                     />
-                    <p className="mt-1 text-micro text-zinc-500">
+                    <p className="mt-1 text-micro text-faint">
                       The default comes from Settings; this book can differ.
                       {selection.voices_are_fallback
                         && " Install the local narrator to see its full voice list here."}
@@ -329,7 +329,7 @@ export function PremiumNarrationPanel({
                     onClick={() => void handleAudition()}
                     disabled={busy !== null}
                     title="Hear this paid voice on your selected passage (or a short sample). Costs a fraction of a cent."
-                    className="mt-2 inline-flex items-center gap-1.5 rounded border border-violet-600 bg-violet-900/40 px-3 py-1.5 text-mini font-medium text-violet-100 hover:border-violet-400 hover:bg-violet-900/70 disabled:opacity-40"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded border border-weave-fill bg-weave-soft px-3 py-1.5 text-mini font-medium text-weave-strong hover:border-weave-muted hover:bg-weave-soft disabled:opacity-40"
                   >
                     {busy === "preview"
                       ? <Loader2 size={11} className="animate-spin" />
@@ -337,7 +337,7 @@ export function PremiumNarrationPanel({
                     Sample This Voice
                   </button>
                   {lastPreviewCost && (
-                    <p className="mt-1 text-micro text-zinc-400">
+                    <p className="mt-1 text-micro text-text-muted">
                       {/* Say WHICH words were read. This button falls back
                           to a demo sentence when nothing is highlighted,
                           and hearing an unexpected sentence after paying
@@ -350,24 +350,24 @@ export function PremiumNarrationPanel({
                   )}
 
                   {busy === "estimate" && (
-                    <p className="mt-2 text-mini text-violet-300">
+                    <p className="mt-2 text-mini text-weave">
                       <Loader2 size={11} className="mr-1 inline animate-spin" />
                       Pricing this book...
                     </p>
                   )}
                   {estimate && (
-                    <div className="mt-2 rounded border border-violet-800 bg-zinc-950/60 px-2.5 py-2">
-                      <p className="text-xs font-semibold text-violet-200">
+                    <div className="mt-2 rounded border border-weave-fill bg-bg-primary/60 px-2.5 py-2">
+                      <p className="text-xs font-semibold text-weave-strong">
                         Narrating with {estimate.model_label}: about $
                         {estimate.estimate_usd}
                       </p>
-                      <p className="mt-0.5 text-micro leading-relaxed text-zinc-400">
+                      <p className="mt-0.5 text-micro leading-relaxed text-text-muted">
                         {estimate.characters.toLocaleString()} characters across{" "}
                         {estimate.segments} passages in {estimate.chapters} chapter
                         {estimate.chapters === 1 ? "" : "s"}.
                       </p>
                       {estimate.note && (
-                        <p className="mt-1 text-micro leading-relaxed text-amber-300">
+                        <p className="mt-1 text-micro leading-relaxed text-warn">
                           {estimate.note}
                         </p>
                       )}
@@ -379,17 +379,17 @@ export function PremiumNarrationPanel({
                     <button
                       onClick={() => setConfirming(true)}
                       disabled={!estimate || busy !== null}
-                      className="mt-2 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                      className="mt-2 inline-flex items-center gap-2 rounded-lg bg-weave-fill px-4 py-2 text-xs font-semibold text-white hover:bg-weave-fill disabled:opacity-40"
                     >
                       <Sparkles size={13} /> Narrate the Final Version
                     </button>
                   ) : (
-                    <div className="mt-2 rounded border border-violet-600 bg-violet-950/60 px-3 py-2.5">
-                      <p className="mb-1 text-sm font-semibold text-violet-100">
+                    <div className="mt-2 rounded border border-weave-fill bg-weave-soft px-3 py-2.5">
+                      <p className="mb-1 text-sm font-semibold text-weave-strong">
                         Spend about ${estimate?.estimate_usd} narrating this book
                         with {estimate?.model_label}?
                       </p>
-                      <p className="mb-2 text-sm leading-relaxed text-violet-200/90">
+                      <p className="mb-2 text-sm leading-relaxed text-weave-strong/90">
                         This re-narrates every passage with the paid voice.
                         Your free local audio stays on disk until the new
                         audio replaces it, and the run can be paused at any
@@ -400,14 +400,14 @@ export function PremiumNarrationPanel({
                         <button
                           onClick={() => void handleNarrate()}
                           disabled={busy !== null}
-                          className="inline-flex items-center gap-1.5 rounded bg-violet-500 px-3 py-1.5 text-mini font-semibold text-white hover:bg-violet-400 disabled:opacity-40"
+                          className="inline-flex items-center gap-1.5 rounded bg-weave-fill px-3 py-1.5 text-mini font-semibold text-white hover:bg-weave-muted disabled:opacity-40"
                         >
                           {busy === "narrate" && <Loader2 size={11} className="animate-spin" />}
                           Yes, narrate it
                         </button>
                         <button
                           onClick={() => setConfirming(false)}
-                          className="rounded border border-zinc-600 px-3 py-1.5 text-mini text-zinc-200 hover:border-zinc-400"
+                          className="rounded border border-border-strong px-3 py-1.5 text-mini text-text-primary hover:border-border-strong"
                         >
                           Keep drafting free
                         </button>
@@ -422,14 +422,14 @@ export function PremiumNarrationPanel({
           {/* Coming later: the premium-only vocal controls. */}
           <button
             onClick={() => setFutureOpen(v => !v)}
-            className="mt-3 flex items-center gap-1 text-mini text-violet-400 hover:text-violet-300"
+            className="mt-3 flex items-center gap-1 text-mini text-weave-muted hover:text-weave"
           >
             {futureOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
             <Lock size={10} /> Premium voice controls
           </button>
           {futureOpen && (
-            <ul className="mt-1 space-y-1 rounded border border-zinc-800 bg-zinc-950/60 p-2">
-              <li className="mb-1 text-micro leading-relaxed text-zinc-500">
+            <ul className="mt-1 space-y-1 rounded border border-border bg-bg-primary/60 p-2">
+              <li className="mb-1 text-micro leading-relaxed text-faint">
                 These need an engine that takes direction beyond pace and
                 pauses. Reserved here so you can see where narration is
                 heading; none are wired yet.
@@ -439,12 +439,12 @@ export function PremiumNarrationPanel({
                   key={control.label}
                   title="Future development"
                   aria-disabled
-                  className="cursor-not-allowed select-none rounded border border-zinc-800 px-2 py-1 opacity-50"
+                  className="cursor-not-allowed select-none rounded border border-border px-2 py-1 opacity-50"
                 >
-                  <span className="block text-mini font-medium text-zinc-400">
+                  <span className="block text-mini font-medium text-text-muted">
                     {control.label}
                   </span>
-                  <span className="block text-micro text-zinc-500">
+                  <span className="block text-micro text-faint">
                     {control.detail}
                   </span>
                 </li>
@@ -453,7 +453,7 @@ export function PremiumNarrationPanel({
           )}
 
           {error && (
-            <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-micro text-rose-300">
+            <p className="mt-2 rounded border border-danger-fill bg-danger-soft px-2 py-1.5 text-micro text-danger">
               {error}
             </p>
           )}

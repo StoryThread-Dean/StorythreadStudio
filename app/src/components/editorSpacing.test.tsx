@@ -27,6 +27,7 @@ import { MarkdownEditor } from "./MarkdownEditor";
 import {
   resolveLineHeight, PARAGRAPH_BEFORE_DEFAULT, PARAGRAPH_AFTER_DEFAULT,
 } from "../hooks/useEditorSpacing";
+import { resolveEditorFontPx, EDITOR_PT_DEFAULT } from "../hooks/useEditorFontSize";
 
 afterEach(cleanup);
 
@@ -72,7 +73,12 @@ describe("line height reaches the prose", () => {
   it("does not leave a line-height on the root, where it would be dead", () => {
     mount();
     const root = injectedRules().find(
-      r => /^\.\S+ \{/.test(r) && r.includes("font-size: 16px"),
+      // Found by the DEFAULT size rather than by a literal 16. It is the same
+      // number, but asserting it as resolveEditorFontPx(EDITOR_PT_DEFAULT)
+      // makes this an intentional pin on "12pt is 16px" instead of a match
+      // that happened to keep working.
+      r => /^\.\S+ \{/.test(r)
+        && r.includes(`font-size: ${resolveEditorFontPx(EDITOR_PT_DEFAULT)}px`),
     );
     expect(root, "no root rule found").toBeTruthy();
     expect(root, "a line-height here is overridden by .cm-scroller").not.toContain("line-height");

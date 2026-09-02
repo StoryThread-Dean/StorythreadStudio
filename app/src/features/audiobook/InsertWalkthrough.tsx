@@ -275,16 +275,16 @@ export function InsertWalkthrough({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col rounded-lg border border-blue-900 bg-zinc-900 shadow-2xl">
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-5 py-3">
-          <Wand2 size={15} className="text-blue-300" />
-          <h2 className="text-sm font-semibold text-zinc-100">
+      <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col rounded-lg border border-secondary-fill bg-bg-panel shadow-2xl">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3">
+          <Wand2 size={15} className="text-secondary" />
+          <h2 className="text-sm font-semibold text-text-primary">
             Formatting Walkthrough
           </h2>
           {/* Progress only. When the walk is empty the panel below says so
               in full -- saying it in both places is one sentence too many
               in a window this size. */}
-          <span className="flex-1 text-mini text-zinc-500">
+          <span className="flex-1 text-mini text-faint">
             {visible.length > 0
               && `stop ${index + 1} of ${visible.length}`
                  + (applied > 0 ? ` -- ${applied} applied` : "")}
@@ -293,13 +293,13 @@ export function InsertWalkthrough({
             onClick={() => setShowHelp(v => !v)}
             className={"inline-flex items-center gap-1 rounded border px-2 py-0.5 text-mini transition-colors "
               + (showHelp
-                ? "border-blue-500 bg-blue-900/40 text-blue-100"
-                : "border-blue-800 text-blue-200 hover:border-blue-500")}
+                ? "border-secondary-fill bg-secondary-soft text-secondary-strong"
+                : "border-secondary-fill text-secondary-strong hover:border-secondary-fill")}
           >
             <GraduationCap size={11} /> Show me how this works
           </button>
           <button onClick={onClose} aria-label="Close walkthrough"
-                  className="rounded p-1 text-zinc-500 hover:text-zinc-100">
+                  className="rounded p-1 text-faint hover:text-text-primary">
             <X size={15} />
           </button>
         </div>
@@ -312,13 +312,13 @@ export function InsertWalkthrough({
       )}
 
       {confirmingAuto && (
-        <div className="mb-2 rounded border border-amber-800 bg-amber-950/50 px-3 py-2">
+        <div className="mb-2 rounded border border-warn-fill bg-warn-soft px-3 py-2">
           {/* Warning sized just under the manuscript's text-sm -- this
               is the one strip that must actually get READ. */}
-          <p className="mb-1.5 text-sm font-semibold text-amber-200">
+          <p className="mb-1.5 text-sm font-semibold text-warn-strong">
             Add all {autoBeatCount} pauses without listening to each one?
           </p>
-          <p className="mb-2 text-sm leading-relaxed text-amber-300/90">
+          <p className="mb-2 text-sm leading-relaxed text-warn/90">
             Some of them will be wrong for the scene. A pause where the
             line should push forward, or a gap inside a run you wrote to
             tumble. Listen to the chapter with the free narrator on your
@@ -336,13 +336,13 @@ export function InsertWalkthrough({
           <div className="flex gap-2">
             <button
               onClick={autoApply}
-              className="rounded bg-amber-600 px-3 py-1 text-mini font-semibold text-white hover:bg-amber-500"
+              className="rounded bg-warn-fill px-3 py-1 text-mini font-semibold text-white hover:bg-warn-fill"
             >
               Yes, add all {autoBeatCount}
             </button>
             <button
               onClick={() => setConfirmingAuto(false)}
-              className="rounded border border-zinc-700 px-3 py-1 text-mini text-zinc-300 hover:border-zinc-500"
+              className="rounded border border-border px-3 py-1 text-mini text-text-primary hover:border-border-strong"
             >
               No, let me go one at a time
             </button>
@@ -356,14 +356,14 @@ export function InsertWalkthrough({
             label the writer cannot interpret is a toggle they will never
             touch. */}
         <div className="shrink-0 sm:w-56">
-          <p className="mb-1.5 text-micro font-semibold uppercase tracking-wider text-zinc-500">
+          <p className="mb-1.5 text-micro font-semibold uppercase tracking-wider text-faint">
             What to look for
           </p>
-          <div className="overflow-hidden rounded border border-zinc-800">
+          <div className="overflow-hidden rounded border border-border">
             {ALL_KINDS.map(kind => (
               <label
                 key={kind}
-                className="flex cursor-pointer items-start gap-2 border-b border-zinc-800/60 px-2 py-1.5 last:border-b-0 hover:bg-zinc-800/30"
+                className="flex cursor-pointer items-start gap-2 border-b border-border/60 px-2 py-1.5 last:border-b-0 hover:bg-bg-surface/30"
               >
                 <input
                   type="checkbox"
@@ -372,11 +372,11 @@ export function InsertWalkthrough({
                   onChange={() => toggleKind(kind)}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-1 text-mini font-medium text-zinc-200">
+                  <span className="flex items-baseline gap-1 text-mini font-medium text-text-primary">
                     <span className="flex-1">{STOP_KIND_LABELS[kind]}</span>
-                    <span className="text-micro text-zinc-500">{countOf(kind)}</span>
+                    <span className="text-micro text-faint">{countOf(kind)}</span>
                   </span>
-                  <span className="block text-micro leading-tight text-zinc-500">
+                  <span className="block text-micro leading-tight text-faint">
                     {STOP_KIND_HINTS[kind]}
                   </span>
                 </span>
@@ -387,7 +387,7 @@ export function InsertWalkthrough({
             <button
               onClick={() => setConfirmingAuto(true)}
               title="Adds every pause still being suggested, at the shorter length. Marker fixes and word readings stay here for you to decide."
-              className="mt-2 w-full rounded border border-amber-700 px-2 py-1 text-mini text-amber-300 hover:border-amber-500"
+              className="mt-2 w-full rounded border border-warn-fill px-2 py-1 text-mini text-warn hover:border-warn-fill"
             >
               {/* Was "Auto-apply N beats". Read by a first-time writer,
                   "N" is a letter and "beats" is music -- the button
@@ -402,23 +402,23 @@ export function InsertWalkthrough({
         <div className="min-w-0 flex-1">
       {current && context && (
         <>
-          <p className="mb-1 text-xs font-medium text-zinc-200">{current.title}</p>
-          <p className="mb-2 text-mini leading-relaxed text-zinc-400">{current.detail}</p>
+          <p className="mb-1 text-xs font-medium text-text-primary">{current.title}</p>
+          <p className="mb-2 text-mini leading-relaxed text-text-muted">{current.detail}</p>
           {/* The sentence in context. A word-reading stop shows the word
               itself standing where it is -- there is no proposal to
               preview until the writer picks a reading. */}
-          <p className="mb-2 max-h-52 overflow-y-auto whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs leading-relaxed text-zinc-400">
+          <p className="mb-2 max-h-52 overflow-y-auto whitespace-pre-wrap rounded border border-border bg-bg-primary px-3 py-2 text-xs leading-relaxed text-text-muted">
             {context.truncatedStart && "... "}{context.before}
             {isHeteronymKind(current.kind) ? (
-              <span className="rounded bg-blue-950 px-0.5 font-semibold text-blue-300">
+              <span className="rounded bg-secondary-soft px-0.5 font-semibold text-secondary">
                 {context.replaced}
               </span>
             ) : (
               <>
                 {context.replaced
-                  ? <s className="text-rose-400">{context.replaced}</s>
+                  ? <s className="text-danger-muted">{context.replaced}</s>
                   : null}
-                <span className="rounded bg-blue-950 px-0.5 font-semibold text-blue-300">
+                <span className="rounded bg-secondary-soft px-0.5 font-semibold text-secondary">
                   {current.options[0].text || "(removed)"}
                 </span>
               </>
@@ -432,20 +432,20 @@ export function InsertWalkthrough({
               trust; two Play buttons ask them to use their ear, and that
               takes about two seconds. */}
           {isHeteronymKind(current.kind) && current.readings && (
-            <div className="mb-2 overflow-hidden rounded border border-zinc-800">
+            <div className="mb-2 overflow-hidden rounded border border-border">
               {current.readings.map(reading => {
                 const isEngine = reading.spoken === null;
                 const option = current.options.find(
                   o => o.reading?.sense === reading.sense);
                 return (
                   <div key={reading.sense}
-                       className="flex flex-wrap items-center gap-2 border-b border-zinc-800/60 bg-zinc-950/60 px-2 py-1.5 last:border-b-0">
+                       className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-bg-primary/60 px-2 py-1.5 last:border-b-0">
                     <button
                       onClick={() => void playReading(current, reading)}
                       disabled={playing !== null}
                       aria-label={`Play "${reading.sense}"`}
                       title={`Hear this sentence with the "${reading.sense}" reading`}
-                      className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                      className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-0.5 text-mini text-text-primary hover:border-accent-fill hover:text-accent disabled:opacity-40"
                     >
                       {playing === reading.sense
                         ? <Loader2 size={11} className="animate-spin" />
@@ -453,9 +453,9 @@ export function InsertWalkthrough({
                       Play
                     </button>
                     <span className="min-w-0 flex-1 text-mini leading-tight">
-                      <span className="font-medium text-zinc-200">{reading.sense}</span>
-                      <span className="text-zinc-500"> -- {reading.example}</span>
-                      <span className="block text-micro text-zinc-600">
+                      <span className="font-medium text-text-primary">{reading.sense}</span>
+                      <span className="text-faint"> -- {reading.example}</span>
+                      <span className="block text-micro text-faint">
                         sounds like "{reading.sounds}"
                         {isEngine && " -- what you get today"}
                       </span>
@@ -463,14 +463,14 @@ export function InsertWalkthrough({
                     {option ? (
                       <button
                         onClick={() => applyOption(option)}
-                        className="shrink-0 rounded bg-emerald-600 px-2.5 py-0.5 text-mini font-semibold text-white hover:bg-emerald-500"
+                        className="shrink-0 rounded bg-accent-fill px-2.5 py-0.5 text-mini font-semibold text-white hover:bg-accent-fill"
                       >
                         Use this
                       </button>
                     ) : (
                       // The engine's own reading needs no marker. Saying so
                       // is kinder than an inert button.
-                      <span className="shrink-0 text-micro text-zinc-600">
+                      <span className="shrink-0 text-micro text-faint">
                         already how it reads -- Skip keeps it
                       </span>
                     )}
@@ -484,7 +484,7 @@ export function InsertWalkthrough({
             // No bulk apply, by design: the next "read" may be the other
             // sense entirely, and a wrong batch is worse than a skip
             // because the writer then believes it is handled.
-            <p className="mb-2 text-micro text-zinc-500">
+            <p className="mb-2 text-micro text-faint">
               {remainingSameWord} more "{current.word}"
               {remainingSameWord === 1 ? " lies" : " lie"} ahead -- each one
               gets its own ask.
@@ -492,7 +492,7 @@ export function InsertWalkthrough({
           )}
 
           {previewError && (
-            <p className="mb-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-micro text-rose-300">
+            <p className="mb-2 rounded border border-danger-fill bg-danger-soft px-2 py-1 text-micro text-danger">
               {previewError}
             </p>
           )}
@@ -507,23 +507,23 @@ export function InsertWalkthrough({
                 key={option.label}
                 onClick={() => applyOption(option)}
                 className={i === 0
-                  ? "inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-1 text-mini font-semibold text-white hover:bg-emerald-500"
-                  : "rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300"}
+                  ? "inline-flex items-center gap-1 rounded bg-accent-fill px-3 py-1 text-mini font-semibold text-white hover:bg-accent-fill"
+                  : "rounded border border-border px-2.5 py-1 text-mini text-text-primary hover:border-accent-fill hover:text-accent"}
                 title={i === 0 ? "Apply (Ctrl+Enter)" : "Apply this instead"}
               >
                 {i === 0 && <Check size={11} />}
                 {option.label}
               </button>
             ))}
-            <span className="mx-1 h-4 w-px bg-zinc-800" />
+            <span className="mx-1 h-4 w-px bg-bg-surface" />
             <button onClick={back} disabled={index === 0}
                     title="Back (Ctrl+Left)"
-                    className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-400 hover:border-zinc-500 disabled:opacity-40">
+                    className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:border-border-strong disabled:opacity-40">
               <ChevronLeft size={11} /> Back
             </button>
             <button onClick={skip} disabled={index >= visible.length - 1}
                     title="Skip (Ctrl+Right)"
-                    className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40">
+                    className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary disabled:opacity-40">
               Skip <ChevronRight size={11} />
             </button>
           </div>
@@ -533,7 +533,7 @@ export function InsertWalkthrough({
               which put the least important thing in this feature on equal
               footing with why any of it exists. Reference belongs beside
               the thing it describes. */}
-          <p className="mt-2 text-micro leading-relaxed text-zinc-600">
+          <p className="mt-2 text-micro leading-relaxed text-faint">
             Keyboard: Ctrl+Enter adds the first choice, Ctrl+Right skips,
             Ctrl+Left goes back, Esc closes.
           </p>
@@ -544,13 +544,13 @@ export function InsertWalkthrough({
         // The panel used to be a strip that simply went quiet here. As a
         // window it has to say what happened and offer a way out, or the
         // writer is looking at an empty box wondering what they broke.
-        <div className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-4 text-center">
-          <p className="text-xs text-zinc-300">
+        <div className="rounded border border-border bg-bg-primary/60 px-3 py-4 text-center">
+          <p className="text-xs text-text-primary">
             {applied > 0
               ? `Nothing further from here -- ${applied} applied.`
               : "Nothing to suggest from here."}
           </p>
-          <p className="mt-1 text-mini leading-relaxed text-zinc-500">
+          <p className="mt-1 text-mini leading-relaxed text-faint">
             {muted.size > 0
               ? "The walk starts at your cursor and runs to the end of the "
                 + "chapter. Switch a kind back on beside this, or close and "
@@ -561,7 +561,7 @@ export function InsertWalkthrough({
           </p>
           <button
             onClick={onClose}
-            className="mt-3 rounded bg-blue-600 px-3 py-1 text-mini font-semibold text-white hover:bg-blue-500"
+            className="mt-3 rounded bg-secondary-fill px-3 py-1 text-mini font-semibold text-white hover:bg-secondary-fill"
           >
             Close
           </button>

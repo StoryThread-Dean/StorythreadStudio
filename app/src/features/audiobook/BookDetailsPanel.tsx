@@ -126,15 +126,15 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
   }, [workspacePath]);
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+    <div className="rounded-lg border border-border bg-bg-panel/40 p-3">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex w-full items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-blue-300"
+        className="flex w-full items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-secondary"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <BookOpen size={12} /> Book Details
         {dirty && (
-          <span className="ml-auto rounded bg-amber-900/60 px-1.5 py-0.5 text-2xs font-normal normal-case tracking-normal text-amber-300"
+          <span className="ml-auto rounded bg-warn-soft px-1.5 py-0.5 text-2xs font-normal normal-case tracking-normal text-warn"
                 title="Edited but not saved">
             unsaved
           </span>
@@ -143,7 +143,7 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
 
       {open && meta && (
         <div className="mt-3">
-          <p className="mb-2 text-micro text-zinc-500">
+          <p className="mb-2 text-micro text-faint">
             What the exported files say about themselves: tags, chapter
             markers, and the cover shown in audiobook players.
           </p>
@@ -151,7 +151,7 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
           <div className="mb-3 grid grid-cols-2 gap-2">
             {TEXT_FIELDS.map(([key, label, wide]) => (
               <div key={key} className={wide ? "col-span-2" : ""}>
-                <span className="mb-0.5 flex items-center justify-between text-micro text-zinc-400">
+                <span className="mb-0.5 flex items-center justify-between text-micro text-text-muted">
                   <label htmlFor={`book-detail-${key}`}>{label}</label>
                   {key === "narrator" && currentVoiceLabel && (
                     <button
@@ -161,7 +161,7 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
                         // the tag wants the name, not the parenthetical.
                         edit("narrator", currentVoiceLabel.replace(/\s*\(.*\)$/, ""));
                       }}
-                      className="cursor-pointer text-micro text-blue-400 hover:text-blue-300 hover:underline"
+                      className="cursor-pointer text-micro text-secondary-muted hover:text-secondary hover:underline"
                       title={`Fill with the selected voice: ${currentVoiceLabel}`}
                     >
                       Use current voice
@@ -174,7 +174,7 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
                     value={meta[key] as string}
                     onChange={e => edit(key, e.target.value)}
                     rows={3}
-                    className="w-full resize-y rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-mini text-zinc-200 focus:border-blue-600 focus:outline-none"
+                    className="w-full resize-y rounded border border-border bg-bg-primary px-2 py-1 text-mini text-text-primary focus:border-secondary-fill focus:outline-none"
                   />
                 ) : (
                   <input
@@ -182,7 +182,7 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
                     type="text"
                     value={meta[key] as string}
                     onChange={e => edit(key, e.target.value)}
-                    className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-mini text-zinc-200 focus:border-blue-600 focus:outline-none"
+                    className="w-full rounded border border-border bg-bg-primary px-2 py-1 text-mini text-text-primary focus:border-secondary-fill focus:outline-none"
                   />
                 )}
               </div>
@@ -191,16 +191,16 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
 
           {/* Cover art */}
           <div className="mb-3">
-            <span className="mb-1 block text-micro text-zinc-400">Cover image</span>
+            <span className="mb-1 block text-micro text-text-muted">Cover image</span>
             <div className="flex items-start gap-3">
               {meta.cover_file ? (
                 <img
                   src={coverImageUrl(workspacePath, coverBust)}
                   alt="Cover preview"
-                  className="h-20 w-20 rounded border border-zinc-700 object-cover"
+                  className="h-20 w-20 rounded border border-border object-cover"
                 />
               ) : (
-                <div className="flex h-20 w-20 items-center justify-center rounded border border-dashed border-zinc-700 text-zinc-600">
+                <div className="flex h-20 w-20 items-center justify-center rounded border border-dashed border-border text-faint">
                   <ImagePlus size={18} />
                 </div>
               )}
@@ -208,7 +208,7 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
                 <button
                   onClick={() => void pickCover()}
                   disabled={coverBusy}
-                  className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary disabled:opacity-40"
                 >
                   {coverBusy ? <Loader2 size={11} className="animate-spin" /> : <ImagePlus size={11} />}
                   {meta.cover_file ? "Replace Cover" : "Choose Cover"}
@@ -216,16 +216,16 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
                 {meta.cover_file && (
                   <button
                     onClick={() => void handleRemoveCover()}
-                    className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-400 hover:border-rose-600 hover:text-rose-300"
+                    className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:border-danger-fill hover:text-danger"
                   >
                     <X size={11} /> Remove
                   </button>
                 )}
-                <span className="text-2xs text-zinc-500">JPG or PNG, square recommended</span>
+                <span className="text-2xs text-faint">JPG or PNG, square recommended</span>
               </div>
             </div>
             {coverHint && (
-              <p className="mt-1.5 rounded border border-amber-800 bg-amber-950/50 px-2 py-1 text-micro text-amber-300">
+              <p className="mt-1.5 rounded border border-warn-fill bg-warn-soft px-2 py-1 text-micro text-warn">
                 {coverHint}
               </p>
             )}
@@ -234,7 +234,7 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
           {/* Options */}
           <div className="mb-3 space-y-1">
             {OPTIONS.map(([key, label, hint]) => (
-              <label key={key} className="flex cursor-pointer items-start gap-2 text-mini text-zinc-300"
+              <label key={key} className="flex cursor-pointer items-start gap-2 text-mini text-text-primary"
                      title={hint}>
                 <input
                   type="checkbox"
@@ -250,14 +250,14 @@ export function BookDetailsPanel({ workspacePath, currentVoiceLabel }: BookDetai
           <button
             onClick={() => void handleSave()}
             disabled={!dirty || saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
           >
             {saving && <Loader2 size={12} className="animate-spin" />}
             Save Details
           </button>
 
           {error && (
-            <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-micro text-rose-300">
+            <p className="mt-2 rounded border border-danger-fill bg-danger-soft px-2 py-1.5 text-micro text-danger">
               {error}
             </p>
           )}

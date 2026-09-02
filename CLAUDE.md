@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## CURRENT STATE: v2.0.2 SHIPPED 2026-08-21
+## CURRENT STATE: v2.0.3 SHIPPED 2026-08-25
 
 **v2.0.0 shipped 2026-08-14** (115 commits, tag v2.0.0, installer live). The
 recovery plan is 93 of 107 with the rest deferred by scope or blocked on a
@@ -78,6 +78,36 @@ to 53 and nothing raises anything. The vocabulary is frozen to
 `backend/app/data/retired_outline_vocabulary.txt` and unioned in permanently, in
 the same commit as the deletion. Re-extracting it instead of freezing it lost a
 third of the list on the first attempt.
+
+**v2.0.3 shipped 2026-08-25** (tag v2.0.3, installer live). A maintenance and
+live-testing release: every item in it came from the writer using the app rather
+than from a plan. The character spine was redesigned -- an Enneagram type is a
+STORED field now, and its description is taken a facet at a time (Essentials =
+what they want, what they dread, how they talk) rather than dropping one
+paragraph that mostly described somebody else. The two Role dropdowns became one
+APPENDING control over about sixty roles grouped by what the writer is looking
+for, which is why Merchant, Innkeeper, Healer, Guard, Suspect and Witness had
+been missing entirely; four adult groups sit last and every one is labelled.
+`aliases` -- Also known as -- landed in both profile dialects with a writer-facing
+editor, so a name no longer has to be found in a chapter by Weaving before the
+app knows James is Jim. Series rename arrived in Book Details, and a book now
+heals its own `series_path` from where it actually sits. Specs:
+`docs/character-spine-spec.md`, `docs/local-model-spec.md`, `docs/weave-spec.md`
+appendix 2.
+
+**Four of the fixes were silent, and one was wrong in every unconverted project.**
+Choosing `ollama` as the API style listed models perfectly and then failed every
+prompt, because listing and chat resolved to the same base URL; they are split
+now and chat is always OpenAI-compatible, so the choice can cost an empty model
+dropdown and can never break generation. `true_in: null` off the wire read as
+"not true anywhere", so "True all the way through" flipped itself off on save and
+warned that the trait was being withheld -- it was being sent the whole time; the
+switch was reading the wrong answer rather than changing one. Two What's this?
+panels opened off the left edge or inside a layout card, and rather than moving
+those two, every help popup now slides itself back into view. And a Loose thread
+list told the writer to connect the entries needing a real connection while
+offering no way to do it -- the same closed-world rule the Weave keeps breaking
+in new places.
 
 **The Profile Extractor, for reference.** Reads the manuscript
 and proposes what each entry should say. Its ten decisions and the reasoning
@@ -552,7 +582,7 @@ ledger below is kept as the shipped record.
 
 ## Project Status
 
-**Status: shipped.** The current release is **v2.0.2** (2026-08-21) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+**Status: shipped.** The current release is **v2.0.3** (2026-08-25) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
 
 **Versioning is a three-tier rule, not semver.** Tier 3 (`v1.1.x`) = enhancements to existing features. Tier 2 (`v1.x.0`) = additions, like the Audiobook Converter. Tier 1 (`vX.0.0`) = major restructuring -- a change needing its own dashboard, or one that alters multiple existing features at once. Judge the tier by what the RELEASE delivers, not by the size of the programme it belongs to.
 
@@ -768,6 +798,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_nanogpt_models.py` -- tolerant /models normalization for thin catalogs
   - `test_provider_errors.py` -- provider-templated error translation (NanoGPT messages)
   - `test_settings_routes.py` -- ai_provider / NanoGPT key / prompt_caching over the Settings API
+  - `test_custom_theme.py` -- what a writer's own palette may contain. Every value goes straight into a `style` attribute on `<html>`, and the way in is not only the colour picker: `settings.json` is hand-editable and a "theme pack" shared as JSON is an obvious next step for people. So a colour must be `#RGB`/`#RRGGBB`/`#RRGGBBAA`/`rgb(R G B / A)` and a key must look like `--st-*`, checked on the way in AND out. Malformed entries drop INDIVIDUALLY -- the screen has 56 inputs and one typo must not cost the other 55. The backend deliberately does not hold the list of 56 token names; that would be a second cross-language list to keep in step, and the frontend's registry is already pinned to App.css
+  - `test_appearance_bounds.py` -- the three appearance numbers that live in two languages, every one of which fails SILENTLY on drift. The PUT ignores an unknown `ui_scale` rather than rejecting it (so an older backend is not broken by a newer client), which means a step the frontend offers and `_UI_SCALES` omits returns 200 and stores NOTHING -- the writer picks it, watches it apply, restarts, and it is gone with nothing to diagnose. Python reads `useUiScale.ts` and `useEditorFontSize.ts` and pins the scale list, the 9-24pt clamp and the 12pt default. Also pins that `parseUiScale` tests membership against `UI_SCALE_PX` rather than a hand-written list, which is the shape the old ternary-chain bug had
   - `test_prompt_caching.py` -- cache_control payload shapes, provider gating, NanoGPT headers
   - `test_editor_chat_materials_flow.py` -- materials echo + placement, stance persistence, temperature split
   - `test_profile_chat_prompts.py` -- profile-chat prompt builder incl. Interview mode contract (interviewer-not-inventor, triggers/origins, full-block rounds)
@@ -825,9 +857,14 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_world_rules.py` -- the Unwoven corpus: every unlock and crosslink resolves, a crosslink always leaves its domain, every answer lands somewhere the app understands
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
-  - `src/App.css.test.ts` -- the design system's own contract: both themes declare the same `--st-*` tokens, the audiobook block overrides every one of them, an inset surface is never lighter than the panel holding it, and NO raw Tailwind palette class survives outside `features/audiobook/`. It reads App.css off disk with `readFileSync` rather than `import.meta.glob(..., "?raw")`, which returns an empty string for stylesheets and would have passed every assertion vacuously
+  - `src/App.css.test.ts` -- the design system's own contract: both themes declare the same `--st-*` tokens, the audiobook block overrides every one of them, an inset surface is never lighter than the panel holding it, and NO raw Tailwind palette class survives ANYWHERE -- `features/audiobook/` was exempt for two releases and is not any more, because giving the Converter a theme switch meant converting its 940 shade classes onto role tokens (a literal `bg-zinc-900` cannot follow a theme; the conversion was near zero-delta because `.audiobook-theme` was built FROM those shades). Since v2.0.4 it also **computes WCAG contrast from the stylesheet** -- every ink token against every surface it is painted on, in all three palettes, failing the build under 4.5:1, with `.audiobook-theme`'s `bg-raised` a named and reasoned exemption (no grey clears it without inverting the ladder). Plus two gates for the ways a colour goes wrong silently: a `text-<role>` class whose `--color-<role>` does not exist emits NO rule and inherits its parent (eight such call sites shipped in DialogueCheck), and an unprefixed `opacity-` on already-dim ink multiplies a measured token into something no check can see -- `disabled:` and `group-hover:` variants are deliberately allowed, because low contrast is the correct rendering of a control you cannot use. It reads App.css off disk with `readFileSync` rather than `import.meta.glob(..., "?raw")`, which returns an empty string for stylesheets and would have passed every assertion vacuously
+  - `src/hooks/useEditorFontSize.test.ts` -- the size of the writer's own prose. The pin that matters is `resolveEditorFontPx(12) === 16`: the editor hardcoded `fontSize: "16px"` in its CodeMirror theme from the day it was written, which no setting could reach (useUiScale moves rem utilities via `html { font-size }`), so the manuscript rendered at one size forever while three separate comments claimed the toolbar's font picker handled it -- that picker chooses a FAMILY and does not persist. 12pt is exactly 16px, which is what lets the control ship without reflowing a single existing book. Also: Infinity clamps and NaN falls back to the DEFAULT, and Settings is read as source to prove it uses the shared arithmetic
   - `src/components/editorSpacing.test.tsx` -- line spacing and paragraph spacing reach the editor: each named option maps to its documented multiplier, Multiple clamps at both ends and rejects garbage, and the values land on `.cm-content` and `.cm-line` rather than the editor root, where CodeMirror's own baseTheme overrides them
   - `src/components/icons/icons.test.tsx` -- the app's own marks keep lucide's contract (24x24, `fill="none"`, `stroke="currentColor"`, `aria-hidden`), so they drop into the existing tinting call sites unchanged. Also pins that the favicon and the `NeedleThread` component draw the same paths -- two copies of one drawing, because a favicon is a static file and cannot import a component
+  - `src/features/audiobook/AudiobookThemeSection.test.tsx` -- the Converter's own Dark / Light / Custom, which spec 5.0 originally forbade (charcoal in both app themes, so the writer always knew which side they were on) and the writer has since ruled is a default rather than a rule. Pins the part that would rot: the two sides stay INDEPENDENT -- switching the Converter writes `audiobook_theme` and never `theme`, so it cannot drag the editor into light mode with it. Also that opening the colour editor does NOT switch the theme first (switching repaints from an empty palette, which is charcoal, so a writer on Paper would be seeded from the wrong theme) and that a custom palette lands as an inline style on the audiobook ROOT -- it cannot go on `<html>` like the app's, because `.audiobook-theme` declares its own `--st-*` on a descendant and an element's own declaration beats an inherited one
+  - `src/features/theme/themeTokens.test.ts` -- the custom theme editor knows about every colour the app has, both directions. A token in App.css and not the registry is unreachable, so it silently keeps the shipped dark value in the middle of a writer's palette with nothing on screen to explain it; one in the registry and not App.css is a control writing a property nothing reads. Also pins that the alpha flag matches exactly the eleven tokens written as `rgb(R G B / A)` -- alpha is how the three inks stay readable on four different surfaces, and flattening one would pick a background and be wrong on the rest
+  - `src/features/theme/color.test.ts` -- both written colour shapes round-trip UNCHANGED (a writer who opens the editor and saves without touching anything must not rewrite their palette), an unparseable value returns null rather than guessing (the hex box applies per keystroke, so a half-typed `#12` must leave the previous colour alone), and the contrast maths agrees to 1dp with the figures `App.css.test.ts` enforces -- otherwise the editor's warnings and the build gate would be measuring different things
+  - `src/features/theme/CustomThemeEditor.test.tsx` -- the screen that repaints the app while it is open: live preview with nothing saved, revert on cancel (a cancelled edit must not leave a palette that vanishes on restart), the ink rows' live contrast, a warning that does NOT refuse, and a COMPLETE palette on save rather than a sparse set of overrides. Its `beforeEach` empties the module-level store on purpose -- a saved palette leaked into the next test and showed up as a wheel reading a colour a different test had chosen
   - `src/features/outline/outline.test.tsx` -- the Outline toolbar: presets grey from the buffer and un-grey on undo, a greyed one scrolls rather than dead-ends, insertion appends in one transaction, and Fill from Book Details touches only blank lines
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
   - `src/components/sidebar/ActGroup.test.tsx` -- acts tree pieces (ActGroup + RowMenu)

@@ -23,4 +23,4 @@
 # they disagree. Two copies bound by a test, which is the pattern this repo
 # already uses where one copy is genuinely not possible.
 
-__version__ = "2.0.3"
+__version__ = "2.0.4"

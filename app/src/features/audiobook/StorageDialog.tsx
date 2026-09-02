@@ -140,16 +140,16 @@ export function StorageDialog({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-5 py-3">
-          <HardDrive size={15} className="text-sky-300" />
-          <h2 className="flex-1 text-sm font-semibold text-zinc-100">
+      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-lg border border-border bg-bg-panel shadow-2xl">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3">
+          <HardDrive size={15} className="text-secondary" />
+          <h2 className="flex-1 text-sm font-semibold text-text-primary">
             Storage and Cleanup
           </h2>
           <button
             onClick={onClose}
             aria-label="Close storage"
-            className="rounded p-1 text-zinc-500 hover:text-zinc-100"
+            className="rounded p-1 text-faint hover:text-text-primary"
           >
             <X size={15} />
           </button>
@@ -157,15 +157,15 @@ export function StorageDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {!report ? (
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-text-muted">
               <Loader2 size={12} className="mr-1 inline animate-spin" />
               Measuring this audiobook...
             </p>
           ) : (
             <div className="space-y-5">
-              <p className="text-mini leading-relaxed text-zinc-400">
+              <p className="text-mini leading-relaxed text-text-muted">
                 This audiobook is using{" "}
-                <span className="font-semibold text-zinc-200">
+                <span className="font-semibold text-text-primary">
                   {formatBytes(report.total_bytes)}
                 </span>
                 . Everything below can be deleted, but only some of it can be
@@ -175,12 +175,12 @@ export function StorageDialog({
               {/* Spec 25.3: the state a workspace falls into when its
                   audio is gone but the finished book is not. */}
               {report.export_only && (
-                <div className="rounded border border-amber-800 bg-amber-950/40 px-3 py-2">
-                  <p className="flex items-start gap-1.5 text-mini font-medium text-amber-300">
+                <div className="rounded border border-warn-fill bg-warn-soft px-3 py-2">
+                  <p className="flex items-start gap-1.5 text-mini font-medium text-warn">
                     <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                     Export only
                   </p>
-                  <p className="mt-1 text-micro leading-relaxed text-amber-200/90">
+                  <p className="mt-1 text-micro leading-relaxed text-warn-strong/90">
                     {report.export_only_note}
                   </p>
                 </div>
@@ -194,33 +194,33 @@ export function StorageDialog({
                       key={category.key}
                       className={"flex items-start gap-2.5 rounded border px-2.5 py-2 "
                         + (empty
-                          ? "border-zinc-800 opacity-50"
+                          ? "border-border opacity-50"
                           : selected.has(category.key)
-                            ? "cursor-pointer border-sky-700 bg-sky-950/30"
-                            : "cursor-pointer border-zinc-700 hover:border-zinc-600")}
+                            ? "cursor-pointer border-secondary-fill bg-secondary-soft"
+                            : "cursor-pointer border-border hover:border-border-strong")}
                     >
                       <input
                         type="checkbox"
-                        className="mt-0.5 accent-sky-500"
+                        className="mt-0.5 accent-secondary-fill"
                         checked={selected.has(category.key)}
                         disabled={empty || busy}
                         onChange={() => toggle(category.key)}
                       />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
-                          <span className="text-mini font-medium text-zinc-100">
+                          <span className="text-mini font-medium text-text-primary">
                             {category.label}
                           </span>
-                          <span className="shrink-0 text-micro tabular-nums text-zinc-400">
+                          <span className="shrink-0 text-micro tabular-nums text-text-muted">
                             {empty ? "nothing here" : formatBytes(category.bytes)}
                           </span>
                         </span>
-                        <span className="block text-micro leading-relaxed text-zinc-400">
+                        <span className="block text-micro leading-relaxed text-text-muted">
                           {category.description}
                         </span>
                         {category.consequence && (
                           <span className={"mt-0.5 block text-micro leading-relaxed "
-                            + (category.protected ? "text-rose-300/90" : "text-amber-300/80")}>
+                            + (category.protected ? "text-danger/90" : "text-warn/80")}>
                             {category.consequence}
                           </span>
                         )}
@@ -231,10 +231,10 @@ export function StorageDialog({
               </div>
 
               <section>
-                <h3 className="mb-1 border-b border-zinc-800 pb-2 text-mini font-semibold uppercase tracking-wider text-zinc-500">
+                <h3 className="mb-1 border-b border-border pb-2 text-mini font-semibold uppercase tracking-wider text-faint">
                   Intermediate Audio
                 </h3>
-                <p className="mb-2 mt-2 text-mini leading-relaxed text-zinc-400">
+                <p className="mb-2 mt-2 text-mini leading-relaxed text-text-muted">
                   What should happen to the segment files once this book
                   exports successfully?
                 </p>
@@ -242,20 +242,20 @@ export function StorageDialog({
                   {RETENTION_LABELS.map(option => (
                     <label
                       key={option.value}
-                      className="flex cursor-pointer items-start gap-2 rounded px-1 py-1 hover:bg-zinc-800/50"
+                      className="flex cursor-pointer items-start gap-2 rounded px-1 py-1 hover:bg-bg-surface/50"
                     >
                       <input
                         type="radio"
                         name="retention"
-                        className="mt-0.5 accent-sky-500"
+                        className="mt-0.5 accent-secondary-fill"
                         checked={report.retention === option.value}
                         onChange={() => void changeRetention(option.value)}
                       />
                       <span>
-                        <span className="block text-mini text-zinc-200">
+                        <span className="block text-mini text-text-primary">
                           {option.label}
                         </span>
-                        <span className="block text-micro leading-relaxed text-zinc-500">
+                        <span className="block text-micro leading-relaxed text-faint">
                           {option.hint}
                         </span>
                       </span>
@@ -277,17 +277,17 @@ export function StorageDialog({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800 px-5 py-3">
+        <div className="flex shrink-0 items-center gap-3 border-t border-border px-5 py-3">
           {error && (
-            <p className="min-w-0 flex-1 truncate text-mini text-rose-300" title={error}>
+            <p className="min-w-0 flex-1 truncate text-mini text-danger" title={error}>
               {error}
             </p>
           )}
           {!error && note && (
-            <p className="min-w-0 flex-1 text-mini text-emerald-300">{note}</p>
+            <p className="min-w-0 flex-1 text-mini text-accent">{note}</p>
           )}
           {!error && !note && (
-            <p className="min-w-0 flex-1 text-mini text-zinc-500">
+            <p className="min-w-0 flex-1 text-mini text-faint">
               {chosen.length === 0
                 ? "Nothing selected."
                 : `Frees about ${formatBytes(freeing)}.`}
@@ -295,14 +295,14 @@ export function StorageDialog({
           )}
           <button
             onClick={onClose}
-            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
+            className="rounded border border-border px-3 py-1.5 text-xs text-text-primary hover:border-border-strong"
           >
             Close
           </button>
           <button
             onClick={() => void handleDelete()}
             disabled={chosen.length === 0 || busy}
-            className="inline-flex items-center gap-2 rounded bg-rose-700 px-4 py-1.5 text-xs font-semibold text-white hover:bg-rose-600 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded bg-danger-fill px-4 py-1.5 text-xs font-semibold text-white hover:bg-danger-fill disabled:opacity-40"
           >
             {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
             Delete selected

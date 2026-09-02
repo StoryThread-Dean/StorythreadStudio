@@ -125,13 +125,15 @@ DEFAULT_SETTINGS: dict = {
     # Documents-folder backups, and never asks where to put a new project.
     # Writers can change this in the Settings screen.
     "vault_root":          _default_vault_root(),
-    # theme: UI color theme. "dark" (default charcoal/navy) or "light"
-    # (warm off-white "paper" feel). Persisted globally so the writer's
-    # preference applies across all projects.
+    # theme: UI color theme. "dark" (default charcoal/navy), "light" (warm
+    # off-white "paper" feel), or "custom" -- the writer's own palette, held
+    # in custom_theme below. Persisted globally so the choice applies across
+    # all projects.
     "theme":               "dark",
-    # ui_scale: interface font size step. One of:
-    # "default" | "larger" | "larger_plus" | "largest"
-    # Drives the root <html> font-size so Tailwind rem utilities scale.
+    # ui_scale: interface font size step. The accepted values are _UI_SCALES
+    # in routers/settings.py, which is pinned to the frontend's UiScale union
+    # by tests/test_appearance_bounds.py. Seven steps as of v2.0.4, 16px to
+    # 24px. Drives the root <html> font-size so Tailwind rem utilities scale.
     "ui_scale":            "default",
     # line_spacing: how far apart lines sit in the Markdown editors, named
     # the way a word processor names it. One of:
@@ -149,7 +151,52 @@ DEFAULT_SETTINGS: dict = {
     # line-height of 1.8 for its whole life, and 1.5 lines works out at 1.75,
     # so nobody's manuscript reflows on upgrade. It also means the default is
     # a name a writer recognises instead of a number nobody chose.
+    # custom_theme: the writer's own palette, used when theme == "custom".
+    # One entry per --st-* role token, e.g. {"--st-bg-panel": "#23232D"}.
+    #
+    # HERE AND NOT IN app.db, deliberately. app.db is per-PROJECT, documented
+    # as safe to delete, and holds only what can be rebuilt from Markdown. A
+    # theme is none of those things: it is global, it is not derivable from
+    # anything, and a writer who cleared a cache should not lose the palette
+    # they spent an evening on.
+    #
+    # Empty by default. The editor seeds every token from whichever theme is
+    # active when the writer first opens it, so a saved palette is always
+    # complete rather than a sparse set of overrides.
+    "custom_theme":           {},
+    # audiobook_theme / audiobook_custom_theme: the Audiobook Converter's own
+    # look, INDEPENDENT of the writing app's theme above.
+    #
+    # Spec 5.0 originally fixed the Converter at charcoal in both app themes,
+    # so the writer would always know which side of the app they were standing
+    # in. That is still the default; it is now a choice rather than a rule, on
+    # the writer's ruling. Independent rather than inherited because one switch
+    # restyling a feature the writer is not looking at is worse than two
+    # switches, and a dark editor beside a paper Converter is a combination
+    # somebody can reasonably want.
+    "audiobook_theme":        "dark",
+    "audiobook_custom_theme": {},
     "line_spacing":           "one_half",
+    # editor_font_pt: how big the writer's own prose is, in TYPOGRAPHY POINTS,
+    # in the manuscript / outline / notes / summary editors. Clamped 9-24 at
+    # the edge.
+    #
+    # Points for the same reason paragraph spacing below is in points: this is
+    # the writer's document, and 12pt is the size they already know standard
+    # manuscript to be. It also happens to be exact -- 12pt is 16px at CSS's
+    # 96dpi.
+    #
+    # Default 12.0 is load-bearing, not a shrug. The editor hardcoded
+    # `fontSize: "16px"` for its entire life, which no setting could reach, so
+    # 12pt reproduces the app the writer had yesterday. Same rule as
+    # line_spacing defaulting to "one_half" above: an upgrade must never
+    # silently reflow somebody's book.
+    #
+    # Separate from ui_scale because the writer asked for it separately: chrome
+    # is "more difficult to freely change without triggering other
+    # window/tile/card issues", while prose in a wrapping editor has no layout
+    # to break.
+    "editor_font_pt":         12.0,
     # line_spacing_multiple: the custom multiplier used when line_spacing is
     # "multiple". Read for that value alone and otherwise left sitting, so
     # switching to Double and back does not lose what was typed. Clamped

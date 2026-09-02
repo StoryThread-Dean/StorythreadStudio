@@ -218,13 +218,13 @@ export function DialogueCheck({
             Passage / Dialogue Check
           </h2>
           <button onClick={onClose} aria-label="Close dialogue check"
-                  className="rounded p-1 text-text-secondary hover:text-text-primary">
+                  className="rounded p-1 text-text-muted hover:text-text-primary">
             <X size={15} />
           </button>
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <p className="text-xs leading-relaxed text-text-secondary">
+          <p className="text-xs leading-relaxed text-text-muted">
             Hear this passage read aloud. Your ear catches what your eye
             skims.
           </p>
@@ -241,7 +241,7 @@ export function DialogueCheck({
               What's this for?
             </button>
             {showWhy && (
-              <div className="mt-1.5 space-y-2 rounded border border-border bg-bg-surface px-3 py-2 text-mini leading-relaxed text-text-secondary">
+              <div className="mt-1.5 space-y-2 rounded border border-border bg-bg-surface px-3 py-2 text-mini leading-relaxed text-text-muted">
                 <p>
                   Reading your own words silently hides their rhythm. You
                   supply the pauses and the emphasis without noticing, so it
@@ -267,7 +267,7 @@ export function DialogueCheck({
           </div>
 
           {!hadSelection && (
-            <p className="rounded border border-border bg-bg-surface px-3 py-2 text-mini leading-relaxed text-text-secondary">
+            <p className="rounded border border-border bg-bg-surface px-3 py-2 text-mini leading-relaxed text-text-muted">
               Nothing was selected, so this is the whole chapter. Select a
               scene or a passage first and it will read just that -- faster
               to prepare, and easier to judge.
@@ -297,7 +297,7 @@ export function DialogueCheck({
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <label className="text-mini text-text-secondary" htmlFor="dc-voice">
+                <label className="text-mini text-text-muted" htmlFor="dc-voice">
                   Read by
                 </label>
                 <select
@@ -317,7 +317,7 @@ export function DialogueCheck({
                   onClick={() => void speak(
                     "The road disappeared beneath the gathering snow.", "sample")}
                   disabled={busy !== null || engine !== "ready"}
-                  className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-mini text-text-secondary hover:text-text-primary disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-mini text-text-muted hover:text-text-primary disabled:opacity-40"
                 >
                   {busy === "sample"
                     ? <Loader2 size={11} className="animate-spin" />
@@ -326,7 +326,7 @@ export function DialogueCheck({
                 </button>
               </div>
 
-              <p className="text-mini text-text-secondary">
+              <p className="text-mini text-text-muted">
                 {chars.toLocaleString()} characters selected -- around{" "}
                 {estimateWait(chars)} to prepare.
                 {long && (
@@ -351,7 +351,7 @@ export function DialogueCheck({
                 {url && (
                   <button
                     onClick={() => { playerRef.current?.pause(); }}
-                    className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-secondary hover:text-text-primary"
+                    className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-2 text-xs text-text-muted hover:text-text-primary"
                   >
                     <Square size={12} /> Stop
                   </button>

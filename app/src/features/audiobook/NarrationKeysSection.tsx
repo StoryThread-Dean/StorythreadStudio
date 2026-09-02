@@ -39,7 +39,7 @@ export function NarrationKeysSection({
 }: NarrationKeysSectionProps) {
   return (
     <section>
-      <h3 className="mb-1 border-b border-zinc-800 pb-2 text-mini font-semibold uppercase tracking-wider text-zinc-500">
+      <h3 className="mb-1 border-b border-border pb-2 text-mini font-semibold uppercase tracking-wider text-faint">
         Narration API Keys
       </h3>
 
@@ -54,8 +54,8 @@ export function NarrationKeysSection({
       </div>
 
       {settings.use_writing_keys ? (
-        <div className="mt-2 space-y-1 rounded border border-zinc-800 bg-zinc-950/60 px-2.5 py-2">
-          <p className="text-micro leading-relaxed text-zinc-400">
+        <div className="mt-2 space-y-1 rounded border border-border bg-bg-primary/60 px-2.5 py-2">
+          <p className="text-micro leading-relaxed text-text-muted">
             Narration borrows whichever key the engine needs from your
             writing settings.
           </p>
@@ -65,10 +65,10 @@ export function NarrationKeysSection({
               : settings.writing_nanogpt_key_set;
             return (
               <p key={provider.id} className="text-micro">
-                <span className="text-zinc-300">{provider.label}: </span>
+                <span className="text-text-primary">{provider.label}: </span>
                 {connected
-                  ? <span className="text-emerald-400">writing key connected</span>
-                  : <span className="text-amber-400">
+                  ? <span className="text-accent-muted">writing key connected</span>
+                  : <span className="text-warn-muted">
                       no writing key saved yet -- add one in the main Settings,
                       or give narration its own below
                     </span>}
@@ -78,7 +78,7 @@ export function NarrationKeysSection({
         </div>
       ) : (
         <div className="mt-2 space-y-3">
-          <p className="text-micro leading-relaxed text-zinc-400">
+          <p className="text-micro leading-relaxed text-text-muted">
             Narration will use only the keys below. Your writing key is
             deliberately not a fallback, so a narration run can never
             spend from the wrong account.
@@ -91,12 +91,12 @@ export function NarrationKeysSection({
             return (
               <div key={provider.id}>
                 <label
-                  className="mb-1 block text-micro font-medium text-zinc-300"
+                  className="mb-1 block text-micro font-medium text-text-primary"
                   htmlFor={`audiobook-key-${provider.id}`}
                 >
                   {provider.label} key for narration
                 </label>
-                <p className="mb-1 text-micro text-zinc-500">
+                <p className="mb-1 text-micro text-faint">
                   {isSet
                     ? `Current key: ${masked} -- enter a new key to replace it`
                     : `No key saved. Get one at ${provider.hint}`}
@@ -108,13 +108,13 @@ export function NarrationKeysSection({
                     value={keyInputs[provider.id]}
                     onChange={e => onKeyInput(provider.id, e.target.value)}
                     placeholder={`Paste your ${provider.label} key`}
-                    className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 pr-8 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-blue-500"
+                    className="w-full rounded border border-border bg-bg-primary px-2 py-1.5 pr-8 text-xs text-text-primary placeholder:text-faint outline-none focus:border-secondary-fill"
                   />
                   <button
                     type="button"
                     onClick={onToggleShowKey}
                     aria-label={showKey ? "Hide keys" : "Show keys"}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-500 hover:text-zinc-200"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-faint hover:text-text-primary"
                   >
                     {showKey ? <EyeOff size={12} /> : <Eye size={12} />}
                   </button>
@@ -123,7 +123,7 @@ export function NarrationKeysSection({
                   <button
                     type="button"
                     onClick={() => onClearKey(provider.id)}
-                    className="mt-1 text-micro text-rose-400 hover:text-rose-300 hover:underline"
+                    className="mt-1 text-micro text-danger-muted hover:text-danger hover:underline"
                   >
                     Remove this key
                   </button>

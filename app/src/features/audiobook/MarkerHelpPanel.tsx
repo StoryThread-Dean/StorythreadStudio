@@ -124,8 +124,8 @@ export function MarkerHelpPanel() {
   }, [loadingKind, nowPlaying]);
 
   return (
-    <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <p className="mb-2 text-mini text-zinc-500">
+    <div className="shrink-0 border-b border-border bg-bg-panel/60 px-4 py-3">
+      <p className="mb-2 text-mini text-faint">
         Every example below is generated live by the free local narrator
         (Heart voice), exactly the way your book will sound. The narrator is
         quite good at standard pronunciations on its own -- you don't need to
@@ -135,13 +135,13 @@ export function MarkerHelpPanel() {
       </p>
       <div className="grid gap-2 md:grid-cols-2">
         {HELP_ITEMS.map(item => (
-          <div key={item.kind} className="rounded border border-zinc-800 bg-zinc-950/60 p-2.5">
+          <div key={item.kind} className="rounded border border-border bg-bg-primary/60 p-2.5">
             <div className="mb-1 flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-zinc-200">{item.label}</p>
+              <p className="text-xs font-semibold text-text-primary">{item.label}</p>
               <span className="flex shrink-0 items-center gap-1.5">
                 {/* Writers used to metered AI need to know this button is
                     free -- it runs on their own machine, no tokens spent. */}
-                <span className="text-2xs text-zinc-600" title="Generated on your computer -- no tokens or credits are spent">
+                <span className="text-2xs text-faint" title="Generated on your computer -- no tokens or credits are spent">
                   local &middot; free
                 </span>
                 <button
@@ -152,8 +152,8 @@ export function MarkerHelpPanel() {
                     : "Play the example"}
                   className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-micro disabled:opacity-40 ${
                     nowPlaying?.kind === item.kind
-                      ? "border-emerald-600 text-emerald-300"
-                      : "border-zinc-700 text-zinc-300 hover:border-emerald-600 hover:text-emerald-300"
+                      ? "border-accent-fill text-accent"
+                      : "border-border text-text-primary hover:border-accent-fill hover:text-accent"
                   }`}
                 >
                   {loadingKind === item.kind ? (
@@ -171,12 +171,12 @@ export function MarkerHelpPanel() {
                 </button>
               </span>
             </div>
-            <p className="text-mini leading-relaxed text-zinc-500">{item.body}</p>
+            <p className="text-mini leading-relaxed text-faint">{item.body}</p>
           </div>
         ))}
       </div>
       {error && (
-        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-3 py-1.5 text-mini text-rose-300">
+        <p className="mt-2 rounded border border-danger-fill bg-danger-soft px-3 py-1.5 text-mini text-danger">
           {error}
         </p>
       )}
