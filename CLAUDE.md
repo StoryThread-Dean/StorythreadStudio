@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## CURRENT STATE: v2.0.3 SHIPPED 2026-08-25
+## CURRENT STATE: v2.0.4 SHIPPED 2026-09-02
 
 **v2.0.0 shipped 2026-08-14** (115 commits, tag v2.0.0, installer live). The
 recovery plan is 93 of 107 with the rest deferred by scope or blocked on a
@@ -108,6 +108,70 @@ those two, every help popup now slides itself back into view. And a Loose thread
 list told the writer to connect the entries needing a real connection while
 offering no way to do it -- the same closed-world rule the Weave keeps breaking
 in new places.
+
+**v2.0.4 shipped 2026-09-02** (tag v2.0.4, installer live, updater endpoint
+verified serving 2.0.4 with the per-release notes at 1,785 characters). An
+appearance release, and every item in it came from one prospective user who
+could not evaluate the app: the text was too small and the light theme gave
+them a headache. Both were defects rather than taste.
+
+**THE WRITING AREA HAD NO FONT SIZE AND NEVER HAD.** `buildFontTheme` contained
+`"&": { fontSize: "16px" }` -- absolute pixels, so `useUiScale` (which sets
+font-size on `<html>` and therefore moves only rem utilities) could not touch
+it. The manuscript rendered at exactly 16px at every Interface size step for the
+editor's entire life. It survived because THREE PLACES DOCUMENTED A CONTROL THAT
+DID NOT EXIST, all naming the toolbar's font picker, which chooses a FAMILY and
+does not persist. Same shape as the v2.0.2 line-height bug: a plausible
+declaration connected to nothing, plus docs asserting the capability. Editor
+text size is its own control now, in points, defaulting to 12pt because 12pt at
+96dpi is EXACTLY the 16px that was hardcoded -- pinned in both languages,
+because that equality is what let it ship without reflowing a manuscript.
+
+**`--st-faint` FAILED WCAG AA ON EVERY SURFACE IN ALL THREE PALETTES** -- 2.78
+at worst, in light, which is why light caused strain fastest, on the token this
+app leans on hardest for small text (504 call sites, 183 at 9-11px). All three
+ink levels retuned in all three palettes, and the floor is a GATE now:
+`App.css.test.ts` parses the tokens, composites their alpha onto each surface
+and fails the build under 4.5:1, with one declared and dated exemption.
+
+**Two silent colour bugs, both now gated.** `text-text-secondary` existed at
+eight DialogueCheck sites with no token behind it, so Tailwind emitted no rule
+and those elements inherited whatever surrounded them. And an unprefixed
+`opacity-` on dim ink multiplies a measured token invisibly -- `disabled:` and
+`group-hover:` stay allowed, because low contrast IS the right rendering of a
+control you cannot use.
+
+**The Interface ceiling went to 24px, and two silent failures stood in the way.**
+`initUiScale`'s ternary chain fell through to "default" for an unknown value and
+`settings.py`'s tuple dropped one, so a new step would have saved, applied, and
+vanished on the next launch with nothing erroring. `parseUiScale` is driven by
+`UI_SCALE_PX` now; `test_appearance_bounds.py` pins the two languages.
+
+**Custom themes, one per side, and the mechanism is the interesting part.**
+There is NO `[data-theme="custom"]` block: `:root` matches `<html>` whatever the
+attribute says, so custom starts from dark for free and the writer's values land
+as inline custom properties, leaving no second copy of 56 values to drift.
+`appliedProps` tracks what was written and clears it first on every change, or
+switching back to Dark leaves the inline values winning and there is no way out
+short of a restart. Stored in `settings.json`, deliberately NOT `app.db`, which
+is per-project and documented as safe to delete. Preview is live, saving is not.
+
+**The Audiobook Converter got its own theme, and it cost 940 class conversions.**
+A light theme could reach none of it, because its colours were literal shades and
+a literal cannot follow anything. Safe to do mechanically only because
+`.audiobook-theme` was BUILT from those shades -- `--st-bg-panel` IS zinc-900,
+`--st-accent` IS emerald-300 -- the facelift's bridge argument again.
+`features/audiobook` is no longer exempt from the palette gate, and it passes:
+that is the proof the conversion is complete. Its narration editor is a
+`<textarea>` rather than a MarkdownEditor, which is exactly why wiring the six
+MarkdownEditor surfaces missed the seventh.
+
+Known and deliberately unfixed: lucide icons take numeric pixel `size` props and
+do not scale with Interface size. `useIconSize()` across several hundred call
+sites is the honest fix; it is on the roadmap and smoke 27 tells the tester so it
+is not filed as a bug. Branch health at the cut: 2233 backend tests, 1834
+frontend across 83 files, ruff and tsc clean. Spec: `docs/appearance-spec.md`,
+plus `docs/audiobook-converter-spec.md` 5.0 amended.
 
 **The Profile Extractor, for reference.** Reads the manuscript
 and proposes what each entry should say. Its ten decisions and the reasoning
@@ -582,7 +646,7 @@ ledger below is kept as the shipped record.
 
 ## Project Status
 
-**Status: shipped.** The current release is **v2.0.3** (2026-08-25) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+**Status: shipped.** The current release is **v2.0.4** (2026-09-02) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
 
 **Versioning is a three-tier rule, not semver.** Tier 3 (`v1.1.x`) = enhancements to existing features. Tier 2 (`v1.x.0`) = additions, like the Audiobook Converter. Tier 1 (`vX.0.0`) = major restructuring -- a change needing its own dashboard, or one that alters multiple existing features at once. Judge the tier by what the RELEASE delivers, not by the size of the programme it belongs to.
 
